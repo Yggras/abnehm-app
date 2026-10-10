@@ -13,17 +13,17 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 
 ## Session-Start
 
-Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte und macht beim nächsten Ticket weiter.
+Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte, greift sich das nächste freie Ticket und bearbeitet es in einem eigenen Worktree – ohne Neustart, mehrere Sessions parallel möglich.
 
 ## Parallele Sessions und Git-Worktrees
 
 - Der primäre Repo-Checkout bleibt auf `main`. Dort **niemals den Branch wechseln**, wenn eine weitere Session laufen könnte.
 - Jede parallele Session, die Dateien ändert oder auf einem eigenen Branch arbeitet, bekommt **vor Arbeitsbeginn einen eigenen Git-Worktree außerhalb des Repo-Verzeichnisses**. Beispiel:
   `git worktree add ../abnehm-app-worktrees/<ticket> -b <branch> origin/main`
-- Den Agenten anschließend aus diesem Worktree starten. Alle Dateiänderungen, Commits und Branch-Operationen dieser Session finden nur dort statt.
+- Den Agenten anschließend aus diesem Worktree starten oder die laufende Session dorthin verlegen. Alle Dateiänderungen, Commits und Branch-Operationen dieser Session finden nur dort statt.
 - Vor `git switch`, `git checkout`, Rebase, Merge oder dem Entfernen eines Worktrees immer `pwd`, `git status --short --branch` und `git worktree list` prüfen.
 - Niemals Änderungen, Branch oder Worktree einer anderen Session zurücksetzen, verschieben oder entfernen. Bei unklarer Zuordnung zuerst mit dem Nutzer abstimmen.
-- Neue Ticket-Worktrees werden im primären Checkout mit `scripts/start-ticket-worktree <ticketnummer> <kurzname>` angelegt. `scripts/require-ticket-worktree` ist vor der Ticketarbeit die verbindliche maschinelle Prüfung. Der `start`-Skill muss im primären Checkout nach dem Anlegen stoppen; die Arbeit beginnt erst in einer neuen Session aus dem erzeugten Worktree.
+- Neue Ticket-Worktrees werden im primären Checkout mit `scripts/start-ticket-worktree <ticketnummer> <kurzname>` angelegt. `scripts/require-ticket-worktree` ist vor der Ticketarbeit die verbindliche maschinelle Prüfung. Der `start`-Skill claimt das Ticket, legt den Worktree an und verlegt **dieselbe Session** hinein (Claude Code: `EnterWorktree` mit `path`; andere Harnesses: Befehle per `cd <worktree> && …`); erst danach beginnt die Ticketarbeit. Das Skript sperrt pro Ticketnummer (Exit-Code 3 = von einer parallelen Session belegt).
 
 ### Technische Git-Schranken
 
