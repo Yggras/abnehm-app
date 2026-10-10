@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYP – Momos Insel</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="device"><main id="app" aria-live="polite"></main><div id="sheet-root"></div></div>
+
+  <aside class="lab collapsed" id="lab">
+    <button class="lab__toggle" id="lab-toggle" aria-expanded="false">Simulation &amp; Regeln <span>⌄</span></button>
+    <div class="lab__body" id="lab-body"></div>
+  </aside>
+
+  <nav class="switcher" aria-label="Prototyp-Varianten">
+    <button id="previous" aria-label="Vorherige Variante">←</button>
+    <span id="variant-label"></span>
+    <button id="next" aria-label="Nächste Variante">→</button>
+  </nav>
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
