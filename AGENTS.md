@@ -23,6 +23,14 @@ Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `
 - Den Agenten anschließend aus diesem Worktree starten. Alle Dateiänderungen, Commits und Branch-Operationen dieser Session finden nur dort statt.
 - Vor `git switch`, `git checkout`, Rebase, Merge oder dem Entfernen eines Worktrees immer `pwd`, `git status --short --branch` und `git worktree list` prüfen.
 - Niemals Änderungen, Branch oder Worktree einer anderen Session zurücksetzen, verschieben oder entfernen. Bei unklarer Zuordnung zuerst mit dem Nutzer abstimmen.
+- Neue Ticket-Worktrees werden im primären Checkout mit `scripts/start-ticket-worktree <ticketnummer> <kurzname>` angelegt. `scripts/require-ticket-worktree` ist vor der Ticketarbeit die verbindliche maschinelle Prüfung. Der `start`-Skill muss im primären Checkout nach dem Anlegen stoppen; die Arbeit beginnt erst in einer neuen Session aus dem erzeugten Worktree.
+
+### Technische Git-Schranken
+
+- Nach dem Klonen einmal `scripts/install-git-guards` ausführen. Die installierten Hooks sperren Commits, Rebases und Merge-Commits im primären Checkout sowie direkte Pushes auf `main`.
+- Ticket-Branches werden per Pull Request zusammengeführt; nicht direkt auf `main` pushen.
+- Die Sperre darf nur in einem bewusst geprüften Notfall einmalig mit `ABNEHM_APP_ALLOW_PRIMARY_WRITE=I_KNOW_WHAT_I_AM_DOING` übergangen werden. Bequemlichkeit ist kein Notfall.
+- Git-Hooks sind lokale Schutzmechanismen. Sie ersetzen weder den Ticket-Worktree noch die Prüfung von Arbeitsort und Status.
 
 ## Regeln
 

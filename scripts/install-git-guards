@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "Fehler: Nicht in einem Git-Repository." >&2
+  exit 1
+}
+source_dir="$root/.githooks"
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+target_dir="$common_dir/hooks"
+managed="abnehm-app-guard pre-commit pre-rebase pre-merge-commit pre-push"
+
+for name in $managed; do
+  source="$source_dir/$name"
+  target="$target_dir/$name"
+  [ -f "$source" ] || {
+    echo "Fehler: $source fehlt." >&2
+    exit 1
+  }
+  if [ -e "$target" ] && ! grep -q 'abnehm-app managed hook\|abnehm_app_override_enabled' "$target"; then
+    echo "Fehler: Bestehender, nicht verwalteter Hook wird nicht überschrieben: $target" >&2
+    exit 1
+  fi
+done
+
+mkdir -p "$target_dir"
+for name in $managed; do
+  install -m 0755 "$source_dir/$name" "$target_dir/$name"
+done
+
+echo "Git-Schutzmechanismen installiert in $target_dir"

@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+current=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "Fehler: Nicht in einem Git-Repository." >&2
+  exit 1
+}
+primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+
+if [ "$current" = "$primary" ]; then
+  echo "ABGEBROCHEN: Diese Session läuft im primären Checkout: $primary" >&2
+  echo "Erstelle zuerst mit scripts/start-ticket-worktree einen Ticket-Worktree." >&2
+  exit 1
+fi
+
+if [ -z "$branch" ] || [ "$branch" = "main" ]; then
+  echo "ABGEBROCHEN: Der Worktree hat keinen eigenen Ticket-Branch." >&2
+  exit 1
+fi
+
+printf 'Ticket-Worktree bestätigt: %s [%s]\n' "$current" "$branch"

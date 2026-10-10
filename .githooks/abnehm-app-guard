@@ -1,0 +1,37 @@
+#!/bin/sh
+
+abnehm_app_override_enabled() {
+  [ "${ABNEHM_APP_ALLOW_PRIMARY_WRITE:-}" = "I_KNOW_WHAT_I_AM_DOING" ]
+}
+
+abnehm_app_primary_worktree() {
+  git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1
+}
+
+abnehm_app_current_worktree() {
+  git rev-parse --show-toplevel 2>/dev/null
+}
+
+abnehm_app_reject_primary_operation() {
+  operation=$1
+
+  if abnehm_app_override_enabled; then
+    return 0
+  fi
+
+  current=$(abnehm_app_current_worktree) || return 0
+  primary=$(abnehm_app_primary_worktree)
+  if [ "$current" = "$primary" ]; then
+    cat >&2 <<EOF
+ABGEBROCHEN: $operation im primären Checkout ist gesperrt.
+
+Primärer Checkout: $primary
+Erstelle stattdessen einen Ticket-Worktree:
+  scripts/start-ticket-worktree <ticketnummer> <kurzname>
+
+Nur für einen bewusst geprüften Notfall kann die Sperre einmalig mit
+ABNEHM_APP_ALLOW_PRIMARY_WRITE=I_KNOW_WHAT_I_AM_DOING übergangen werden.
+EOF
+    exit 1
+  fi
+}
