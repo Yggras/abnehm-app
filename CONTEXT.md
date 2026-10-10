@@ -62,6 +62,36 @@ _Avoid_: Trainingstag
 Ein im Wochenplan markierter Wochentag, an dem der Baustein Gewogen gilt.
 _Avoid_: Messtag
 
+## Momos Insel
+
+**Insel**:
+Die gemeinsame Spielwelt des Paars, in der Momo lebt; entsteht beim Schlüpfen und wird beim Entkoppeln zusammen mit Momo archiviert.
+_Avoid_: Welt, Garten, Spielfeld
+
+**Energie**:
+Die persönliche Spielwährung einer Person, die nur aus erfüllten Tageszielen und dem Tagesbonus entsteht, nie verfällt und nicht übertragbar ist.
+_Avoid_: Punkte, Münzen, Coins
+
+**Rolle**:
+Die beim Schlüpfen gewählte Zuständigkeit einer Person auf der Insel: Bauen (Häuser, Wege, Brücken) oder Natur (Pflanzen, Bäume, Tiere); tauschbar nur mit Zustimmung beider.
+_Avoid_: Klasse, Beruf
+
+**Eigene Ecke**:
+Der Inselbereich einer Person, den sie unabhängig von ihrer Rolle allein frei gestalten kann.
+_Avoid_: Privatbereich, Inselhälfte
+
+**Bauplan**:
+Ein durch Levelaufstieg, Gebiet oder Insel-Ereignis freigeschaltetes Objekt, das mit Energie gebaut werden kann.
+_Avoid_: Rezept, Item
+
+**Gemeinschaftsprojekt**:
+Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Person mit eigener Energie ohne Frist füllt; fertig, wenn beide Anteile voll sind.
+_Avoid_: Challenge, Gruppenquest
+
+**Insel-Ereignis**:
+Ein freiwilliges, nicht verfallendes Vorkommnis auf der Insel (z. B. Besucher, Fundstück), das Baupläne oder Deko bringt.
+_Avoid_: Event, Quest, Mission
+
 ## Partner
 
 **Partner**:
