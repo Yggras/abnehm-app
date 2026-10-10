@@ -75,3 +75,33 @@ _Avoid_: Verknüpfung, Pairing, Freundschaft
 **Einladungscode**:
 Ein kurzlebiger, einmal verwendbarer Code, mit dem eine Person eine Kopplung herstellt.
 _Avoid_: Einladungslink, Partnercode
+
+## Ernährungserfassung
+
+**Tagesprotokoll**:
+Die nach Mahlzeiten gegliederte Übersicht aller Ernährungseinträge eines Kalendertags.
+_Avoid_: Tagebuch, Tagesansicht
+
+**Mahlzeit**:
+Eine Kategorie des Tagesprotokolls: Frühstück, Mittagessen, Abendessen oder Snacks.
+_Avoid_: Essenszeit, Mahlzeitenart
+
+**Ernährungseintrag**:
+Ein einer Mahlzeit zugeordnetes Lebensmittel oder Gericht mit erfasster Menge und Nährwerten.
+_Avoid_: Kalorieneintrag, Essen
+
+**Eigenes Lebensmittel**:
+Ein vom Nutzer angelegter oder korrigierter Nährwertdatensatz, der unabhängig von den externen Quelldaten gespeichert wird.
+_Avoid_: Benutzerprodukt, korrigiertes Produkt
+
+**Fotoentwurf**:
+Eine noch nicht gespeicherte KI-Schätzung, die eine fotografierte Mahlzeit in einzeln änderbare Bestandteile mit Mengen und Nährwerten zerlegt.
+_Avoid_: KI-Eintrag, Fotoergebnis
+
+**Lebensmittelfavorit**:
+Ein als häufig verwendet markiertes einzelnes Lebensmittel.
+_Avoid_: Favorit, sofern dadurch eine Zusammenstellung gemeint sein könnte
+
+**Mahlzeitenfavorit**:
+Eine benannte, wiederverwendbare Zusammenstellung mehrerer Lebensmittel mit ihren üblichen Mengen. Das Übernehmen erzeugt unabhängige Ernährungseinträge und verändert den Favoriten nicht.
+_Avoid_: Rezept, Vorlage
