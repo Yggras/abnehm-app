@@ -11,6 +11,10 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 - Tickets: Sub-Issues der Karte; Abhängigkeiten über GitHubs native „blocked by“-Beziehung
 - Recherche-Ergebnisse: `research/<name>.md` auf Branches `research/<name>`
 
+## Session-Start
+
+Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte und macht beim nächsten Ticket weiter.
+
 ## Regeln
 
 - **Keine unbelegten Aussagen.** Jede Faktenbehauptung braucht eine Quelle (bevorzugt Primärquelle, mit URL). Nicht Belegbares ausdrücklich als „nicht belegt“ kennzeichnen.
