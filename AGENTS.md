@@ -15,6 +15,15 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 
 Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte und macht beim nächsten Ticket weiter.
 
+## Parallele Sessions und Git-Worktrees
+
+- Der primäre Repo-Checkout bleibt auf `main`. Dort **niemals den Branch wechseln**, wenn eine weitere Session laufen könnte.
+- Jede parallele Session, die Dateien ändert oder auf einem eigenen Branch arbeitet, bekommt **vor Arbeitsbeginn einen eigenen Git-Worktree außerhalb des Repo-Verzeichnisses**. Beispiel:
+  `git worktree add ../abnehm-app-worktrees/<ticket> -b <branch> origin/main`
+- Den Agenten anschließend aus diesem Worktree starten. Alle Dateiänderungen, Commits und Branch-Operationen dieser Session finden nur dort statt.
+- Vor `git switch`, `git checkout`, Rebase, Merge oder dem Entfernen eines Worktrees immer `pwd`, `git status --short --branch` und `git worktree list` prüfen.
+- Niemals Änderungen, Branch oder Worktree einer anderen Session zurücksetzen, verschieben oder entfernen. Bei unklarer Zuordnung zuerst mit dem Nutzer abstimmen.
+
 ## Regeln
 
 - **Keine unbelegten Aussagen.** Jede Faktenbehauptung braucht eine Quelle (bevorzugt Primärquelle, mit URL). Nicht Belegbares ausdrücklich als „nicht belegt“ kennzeichnen.
