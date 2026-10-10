@@ -35,18 +35,20 @@ branch="work/$ticket-$slug"
 worktrees_dir="$(dirname "$primary")/$(basename "$primary")-worktrees"
 destination="$worktrees_dir/$ticket-$slug"
 
-if git show-ref --verify --quiet "refs/heads/$branch"; then
-  echo "Fehler: Branch $branch existiert bereits." >&2
-  exit 1
-fi
-if [ -e "$destination" ]; then
-  echo "Fehler: Ziel $destination existiert bereits." >&2
-  exit 1
+git fetch origin main
+
+# Sperre pro Ticketnummer (unabhängig vom Kurznamen): Exit-Code 3 = Ticket ist
+# bereits von einer anderen Session belegt, nächstes Frontier-Ticket nehmen.
+taken_branches=$(git for-each-ref --format='%(refname:short)' "refs/heads/work/$ticket-*")
+taken_dirs=$(ls -d "$worktrees_dir/$ticket-"* 2>/dev/null || true)
+if [ -n "$taken_branches$taken_dirs" ]; then
+  echo "Belegt: Ticket $ticket hat bereits einen Branch oder Worktree:" >&2
+  printf '%s\n%s\n' "$taken_branches" "$taken_dirs" | sed '/^$/d; s/^/  /' >&2
+  exit 3
 fi
 
 mkdir -p "$worktrees_dir"
-git fetch origin main
 git worktree add "$destination" -b "$branch" origin/main
 
-printf '\nWorktree erstellt:\n  %s\nBranch:\n  %s\n\nAgent dort neu starten und ausführen:\n  /skill:start %s\n' \
-  "$destination" "$branch" "$ticket"
+printf '\nWorktree erstellt:\n  %s\nBranch:\n  %s\n\nSession jetzt in diesen Worktree verlegen und dort weiterarbeiten.\n' \
+  "$destination" "$branch"
