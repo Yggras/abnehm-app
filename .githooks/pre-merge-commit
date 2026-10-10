@@ -1,0 +1,6 @@
+#!/bin/sh
+# abnehm-app managed hook
+set -eu
+HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$HOOK_DIR/abnehm-app-guard"
+abnehm_app_reject_primary_operation "Merge-Commit"

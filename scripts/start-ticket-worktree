@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  echo "Verwendung: $0 <ticketnummer> <kurzname>" >&2
+  echo "Beispiel: $0 13 kalorientracker" >&2
+  exit 2
+}
+
+[ "$#" -eq 2 ] || usage
+
+ticket=$1
+slug=$2
+case "$ticket" in
+  ''|*[!0-9]*) usage ;;
+esac
+case "$slug" in
+  ''|*[!a-z0-9-]*) usage ;;
+esac
+
+current=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "Fehler: Nicht in einem Git-Repository." >&2
+  exit 1
+}
+primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+
+if [ "$current" != "$primary" ]; then
+  echo "Fehler: Dieses Skript wird nur im primären Checkout ausgeführt." >&2
+  echo "Aktuell: $current" >&2
+  echo "Primär:  $primary" >&2
+  exit 1
+fi
+
+branch="work/$ticket-$slug"
+worktrees_dir="$(dirname "$primary")/$(basename "$primary")-worktrees"
+destination="$worktrees_dir/$ticket-$slug"
+
+if git show-ref --verify --quiet "refs/heads/$branch"; then
+  echo "Fehler: Branch $branch existiert bereits." >&2
+  exit 1
+fi
+if [ -e "$destination" ]; then
+  echo "Fehler: Ziel $destination existiert bereits." >&2
+  exit 1
+fi
+
+mkdir -p "$worktrees_dir"
+git fetch origin main
+git worktree add "$destination" -b "$branch" origin/main
+
+printf '\nWorktree erstellt:\n  %s\nBranch:\n  %s\n\nAgent dort neu starten und ausführen:\n  /skill:start %s\n' \
+  "$destination" "$branch" "$ticket"
