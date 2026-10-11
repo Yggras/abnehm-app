@@ -1,43 +1,38 @@
-// PROTOTYP: Drei Designvarianten beantworten die Frage, welche Punkteverteilung,
-// Levelkurve und Entwicklungsabfolge über unterschiedliche Wochenverläufe
-// motivierend wirkt. Alle Werte sind Designvorschläge, keine belegten Fakten.
+// PROTOTYP (Runde 2): Kette Tagesziele → Energie → Bauen → Levelbalken.
+// Momo levelt nur durch selbst verbaute Energie (auch Einzahlung in Gemeinschaftsprojekte),
+// siehe Entscheidung „Momos Insel prototypen“ (Issue #28). Kurve B aus Runde 1 ist die Ausgangsrichtung.
+// Alle Zahlen (Energie je Ziel, Levelbedarf, Baukosten, Felder, Gebiete) sind Designvorschläge, nicht belegt.
+
+const FORM_LEVELS = [4, 8, 13, 19, 26, 34, 43]; // große Formen aus Kurve B; jede öffnet ein neues Gebiet
+const START_PLANS = [1, 2, 3]; // Startbaupläne je Rolle (Kosten), z. B. Weg/Bank/Hütte bzw. Blume/Busch/Baum
 
 const VARIANTS = {
-  A: {
-    key: "A",
-    name: "Kurze, feste Level",
-    tagline: "Ein gleichmäßiger Takt: Jedes Level braucht gleich viel.",
-    goalPoints: 10,
-    dayBonus: 10,
-    requirement(level) { return 200; },
-    formAt(level) { return level === 1 || level % 10 === 0; },
-    formLabel(level) { return level === 1 ? "Momo schlüpft" : `Große Form ${level / 10 + 1}`; },
-    explanation: "Maximal 40 Punkte pro Person und Tag. Jede Hälfte braucht immer 200 Punkte. Eine große Entwicklung kommt alle 10 Level.",
-    tradeoff: "Sehr leicht zu verstehen, kann aber nach Monaten eintönig werden und erzeugt sehr viele Level."
+  B1: {
+    key: "B1",
+    name: "Kurve B, kleine feste Preise",
+    tagline: "Kurve B direkt übertragen; neue Baupläne bleiben immer billig (1–6 Energie).",
+    need(level) { return Math.min(10 + 2 * level, 40); },
+    planCost(level) { return 1 + (level % 6); },
+    explanation: "Je Hälfte 10 + 2 × Level verbaute Energie, höchstens 40 (ab Level 15). Jedes Level schaltet einen Bauplan je Rolle frei, der zwischen 1 und 6 Energie kostet. Jede große Form öffnet ein Gebiet mit zwei Entdeckungs-Bauplänen je Rolle.",
+    tradeoff: "Man baut fast täglich etwas, aber neue Baupläne fühlen sich nicht größer an, und die Insel füllt sich sehr schnell."
   },
-  B: {
-    key: "B",
-    name: "Sanft ansteigend",
-    tagline: "Schneller Anfang, danach werden die Etappen allmählich länger.",
-    goalPoints: 10,
-    dayBonus: 10,
-    requirement(level) { return Math.min(120 + (level - 1) * 20, 400); },
-    formAt(level) { return [1, 4, 8, 13, 19, 26, 34, 43].includes(level); },
-    formLabel(level) { return level === 1 ? "Momo schlüpft" : `Große Form ${[1, 4, 8, 13, 19, 26, 34, 43].indexOf(level) + 1}`; },
-    explanation: "Maximal 40 Punkte pro Person und Tag. Die erste Hälfte braucht 120 Punkte; der Bedarf steigt je Level um 20 bis maximal 400. Große Formen liegen zunehmend weiter auseinander.",
-    tradeoff: "Der Einstieg belohnt schnell und die Kurve hält länger, spätere Level können sich aber zäher anfühlen."
+  B2: {
+    key: "B2",
+    name: "Kurve B, Preise wachsen mit",
+    tagline: "Gleiche Levelkurve, aber spätere Baupläne kosten mehr; man baut seltener, dafür Größeres.",
+    need(level) { return Math.min(10 + 2 * level, 40); },
+    planCost(level) { return Math.round(3 + 0.6 * level); },
+    explanation: "Levelbedarf wie B1. Ein Bauplan, der mit Level L kommt, kostet etwa 3 + 0,6 × L Energie (Level 10: 9, Level 20: 15). Die Startbaupläne (1–3 Energie) bleiben für Kleinigkeiten.",
+    tradeoff: "Neue Baupläne wirken wertvoller und die Insel füllt sich langsamer. Wer nur das Neueste will, muss mehrere Tage sparen, und solange bewegt sich der Levelbalken nicht."
   },
-  C: {
-    key: "C",
-    name: "Entwicklung in Kapiteln",
-    tagline: "Sechs unterschiedlich lange Level bilden jeweils eine erkennbare Entwicklungsphase.",
-    goalPoints: 10,
-    dayBonus: 10,
-    requirement(level) { return [120, 160, 200, 240, 280, 320][(level - 1) % 6]; },
-    formAt(level) { return level === 1 || (level - 1) % 6 === 0; },
-    formLabel(level) { return level === 1 ? "Momo schlüpft" : `Große Form ${Math.floor((level - 1) / 6) + 1}`; },
-    explanation: "Maximal 40 Punkte pro Person und Tag. Ein Kapitel hat sechs Level von 120 bis 320 Punkten; danach entwickelt sich Momo groß und die kurze Kurve beginnt erneut.",
-    tradeoff: "Große Entwicklungen bleiben regelmäßig erreichbar; der Neustart der Kurve muss als neues Kapitel verständlich erklärt werden."
+  B3: {
+    key: "B3",
+    name: "Kurve B flacher, Preise wachsen mit",
+    tagline: "Wie B2, aber der Levelbedarf steigt nur halb so schnell (höchstens 30).",
+    need(level) { return Math.min(10 + level, 30); },
+    planCost(level) { return Math.round(3 + 0.6 * level); },
+    explanation: "Je Hälfte 10 + Level verbaute Energie, höchstens 30 (ab Level 20). Preise wie B2. Dadurch kommen Level, Baupläne und Gebiete auch später noch zügig.",
+    tradeoff: "Mehr Freischaltungen pro Jahr bedeuten mehr Inhalte, die gezeichnet werden müssen. Die großen Formen und Gebiete sind früher erreicht und danach ausgeschöpft."
   }
 };
 
@@ -68,89 +63,138 @@ const SCENARIOS = {
   }
 };
 
+const STRATEGIES = {
+  instant: { name: "Sofort bauen", description: "Baut täglich das neueste Bauwerk, das bezahlbar ist." },
+  save: { name: "Auf Neues sparen", description: "Baut nur den neuesten Bauplan und spart so lange darauf." }
+};
+
+// Felder (Annahme, nicht belegt): eigene Ecke + Rollenbereich zum Start, jedes Gebiet bringt weitere.
+const FIELDS = { start: 30, perArea: 20 };
+
 const appState = {
   variant: readVariant(),
   scenario: "everyday",
-  weeks: 12
+  weeks: 12,
+  bonus: 1,
+  strategy: "instant",
+  projectShare: 0
 };
 
 function readVariant() {
   const requested = new URLSearchParams(location.search).get("variant")?.toUpperCase();
-  return VARIANTS[requested] ? requested : "A";
+  return VARIANTS[requested] ? requested : "B1";
 }
 
-function pointsForDay(completedGoals, variant) {
-  return completedGoals * variant.goalPoints + (completedGoals === 3 ? variant.dayBonus : 0);
+function energyForDay(goals, bonus) {
+  return goals + (goals === 3 ? bonus : 0);
 }
 
-function simulate(variant, scenario, weeks) {
-  const state = {
-    level: 1,
-    philippBank: 0,
-    partnerBank: 0,
-    totalPhilipp: 0,
-    totalPartner: 0,
-    completedLevels: 0,
-    events: [],
-    weekly: []
+function createPerson() {
+  return {
+    energy: 0, xp: 0, earned: 0, spent: 0, toProject: 0, builds: 0, projectCarry: 0,
+    plans: START_PLANS.map(cost => ({ cost, level: 1 })), buildDays: []
   };
+}
 
-  const totalDays = weeks * 7;
+// Ein Tag einer Person: Energie verdienen, Anteil ins Gemeinschaftsprojekt, Rest verbauen.
+function playDay(person, earned, day, settings) {
+  person.energy += earned;
+  person.earned += earned;
+
+  person.projectCarry += earned * settings.projectShare;
+  const toProject = Math.min(Math.floor(person.projectCarry), person.energy);
+  person.projectCarry -= toProject;
+  spend(person, toProject);
+  person.toProject += toProject;
+
+  const newest = person.plans[person.plans.length - 1];
+  while (true) {
+    const plan = settings.strategy === "save"
+      ? (person.energy >= newest.cost ? newest : null)
+      : [...person.plans].reverse().find(candidate => candidate.cost <= person.energy);
+    if (!plan) break;
+    spend(person, plan.cost);
+    person.builds += 1;
+    person.buildDays.push(day);
+  }
+}
+
+function spend(person, amount) {
+  person.energy -= amount;
+  person.spent += amount;
+  person.xp += amount;
+}
+
+function simulate(variant, scenario, settings) {
+  const p = createPerson();
+  const q = createPerson();
+  const state = { level: 1, areas: 0, events: [], weekly: [] };
+
+  const totalDays = settings.weeks * 7;
   for (let day = 0; day < totalDays; day += 1) {
-    const pGoals = scenario.philipp[day % scenario.philipp.length];
-    const qGoals = scenario.partner[day % scenario.partner.length];
-    const pPoints = pointsForDay(pGoals, variant);
-    const qPoints = pointsForDay(qGoals, variant);
-    state.philippBank += pPoints;
-    state.partnerBank += qPoints;
-    state.totalPhilipp += pPoints;
-    state.totalPartner += qPoints;
+    playDay(p, energyForDay(scenario.philipp[day % scenario.philipp.length], settings.bonus), day, settings);
+    playDay(q, energyForDay(scenario.partner[day % scenario.partner.length], settings.bonus), day, settings);
 
-    let requirement = variant.requirement(state.level);
-    while (state.philippBank >= requirement && state.partnerBank >= requirement) {
-      state.philippBank -= requirement;
-      state.partnerBank -= requirement;
-      state.completedLevels += 1;
+    let need = variant.need(state.level);
+    while (p.xp >= need && q.xp >= need) {
+      p.xp -= need;
+      q.xp -= need;
       state.level += 1;
-      const isForm = variant.formAt(state.level);
+      const cost = variant.planCost(state.level);
+      const isForm = FORM_LEVELS.includes(state.level);
+      for (const person of [p, q]) {
+        person.plans.push({ cost, level: state.level });
+        if (isForm) {
+          // Entdeckung im neuen Gebiet: zwei zusätzliche Baupläne je Rolle
+          person.plans.push({ cost: cost + 1, level: state.level }, { cost: cost + 2, level: state.level });
+        }
+        person.plans.sort((a, b) => a.level - b.level || a.cost - b.cost);
+      }
+      if (isForm) state.areas += 1;
       state.events.push({
         day: day + 1,
         week: Math.floor(day / 7) + 1,
         level: state.level,
         type: isForm ? "form" : "change",
-        label: isForm ? variant.formLabel(state.level) : "Kleine Veränderung"
+        label: isForm
+          ? `Große Form ${FORM_LEVELS.indexOf(state.level) + 2} · Gebiet ${state.areas} offen · 3 Baupläne je Rolle (${cost}–${cost + 2} ⚡)`
+          : `Kleine Veränderung · 1 Bauplan je Rolle (${cost} ⚡)`
       });
-      requirement = variant.requirement(state.level);
+      need = variant.need(state.level);
     }
 
     if ((day + 1) % 7 === 0) {
-      const currentRequirement = variant.requirement(state.level);
-      state.weekly.push({
-        week: (day + 1) / 7,
-        level: state.level,
-        philipp: Math.min(state.philippBank / currentRequirement, 1),
-        partner: Math.min(state.partnerBank / currentRequirement, 1)
-      });
+      state.weekly.push({ week: (day + 1) / 7, level: state.level });
     }
   }
 
-  return state;
+  const fields = FIELDS.start + FIELDS.perArea * state.areas;
+  return { ...state, philipp: p, partner: q, fields };
 }
 
-function formatDays(points, variant) {
-  const max = variant.goalPoints * 3 + variant.dayBonus;
-  return `${Math.ceil(points / max)} perfekte Tage`;
+function recentRate(list, totalDays, windowDays = 28) {
+  const from = Math.max(totalDays - windowDays, 0);
+  const days = totalDays - from;
+  return list.filter(day => day >= from).length / days * 7;
+}
+
+function daysPerLevel(events, totalDays) {
+  const recent = events.filter(event => event.day > totalDays - 56);
+  if (recent.length < 2) return null;
+  return (recent[recent.length - 1].day - recent[0].day) / (recent.length - 1);
 }
 
 function render() {
   const variant = VARIANTS[appState.variant];
   const scenario = SCENARIOS[appState.scenario];
-  const result = simulate(variant, scenario, appState.weeks);
-  const requirement = variant.requirement(result.level);
-  const nextForms = [];
-  for (let level = result.level + 1; nextForms.length < 2 && level < result.level + 60; level += 1) {
-    if (variant.formAt(level)) nextForms.push(level);
-  }
+  const result = simulate(variant, scenario, appState);
+  const totalDays = appState.weeks * 7;
+  const need = variant.need(result.level);
+  const nextForm = FORM_LEVELS.find(level => level > result.level);
+  const pace = daysPerLevel(result.events, totalDays);
+  const levelDays = result.events.map(event => event.day - 1);
+  const fullAt = fieldsFullWeek(result);
+  const sinceLast = totalDays - (result.events.at(-1)?.day ?? 0);
 
   document.getElementById("variant-label").textContent = `${variant.key} — ${variant.name}`;
   document.getElementById("app").innerHTML = `
@@ -161,10 +205,13 @@ function render() {
         <p class="tagline">${variant.tagline}</p>
       </div>
       <div class="formula">
-        <strong>${variant.goalPoints}</strong><span>Punkte je Ziel</span>
-        <strong>+${variant.dayBonus}</strong><span>Bonus bei 3 von 3</span>
+        <strong>1</strong><span>Energie je Tagesziel</span>
+        <strong>+${appState.bonus}</strong><span>Tagesbonus bei 3 von 3</span>
+        <strong>${variant.need(1)}→${variant.need(60)}</strong><span>verbaute Energie je Hälfte</span>
       </div>
     </section>
+
+    ${renderChain()}
 
     <section class="controls panel">
       <div>
@@ -174,10 +221,16 @@ function render() {
         </select>
         <p>${scenario.description}</p>
       </div>
-      <fieldset>
-        <legend>Zeitraum</legend>
-        ${[4, 12, 26, 52].map(weeks => `<button class="period ${weeks === appState.weeks ? "active" : ""}" data-weeks="${weeks}">${weeks} Wochen</button>`).join("")}
-      </fieldset>
+      <div>
+        <label for="strategy">Bauverhalten (beide)</label>
+        <select id="strategy">
+          ${Object.entries(STRATEGIES).map(([key, value]) => `<option value="${key}" ${key === appState.strategy ? "selected" : ""}>${value.name}</option>`).join("")}
+        </select>
+        <p>${STRATEGIES[appState.strategy].description}</p>
+      </div>
+      ${segmented("Zeitraum", "weeks", [4, 12, 26, 52], value => `${value} Wo.`)}
+      ${segmented("Tagesbonus", "bonus", [1, 2], value => `+${value} ⚡`)}
+      ${segmented("Ins Gemeinschaftsprojekt", "projectShare", [0, 0.25, 0.5], value => `${Math.round(value * 100)} %`)}
     </section>
 
     <section class="result-grid">
@@ -189,22 +242,23 @@ function render() {
         <div>
           <span class="eyebrow">Nach ${appState.weeks} Wochen</span>
           <h3>Level ${result.level}</h3>
-          <p>${result.completedLevels} Levelaufstiege · ${result.events.filter(event => event.type === "form").length} große Entwicklungen</p>
+          <p>${result.events.length} Levelaufstiege · ${result.areas} von ${FORM_LEVELS.length} Gebieten offen</p>
+          <p>${result.philipp.plans.length} Baupläne je Rolle freigeschaltet</p>
         </div>
       </article>
 
       <article class="progress-card panel">
-        <div class="progress-title"><strong>Aktueller 50/50-Balken</strong><span>${requirement} Punkte je Hälfte</span></div>
-        ${personProgress("Philipp", result.philippBank, requirement, "philipp")}
-        ${personProgress("Partnerin", result.partnerBank, requirement, "partner")}
-        <p class="bank-note">Überschüssige Punkte bleiben erhalten. Sichtbar ist höchstens eine volle Hälfte; der Rest wartet auf das nächste Level.</p>
+        <div class="progress-title"><strong>Aktueller 50/50-Balken</strong><span>${need} verbaute Energie je Hälfte</span></div>
+        ${personProgress("Philipp", result.philipp.xp, need, "philipp", result.philipp.energy)}
+        ${personProgress("Partnerin", result.partner.xp, need, "partner", result.partner.energy)}
+        <p class="bank-note">Der Balken füllt sich nur beim Bauen und Einzahlen. Überschuss über eine volle Hälfte bleibt für das nächste Level erhalten; ungenutzte Energie im Lager verfällt nie.</p>
       </article>
     </section>
 
     <section class="panel chart-panel">
       <div class="section-heading">
-        <div><span class="eyebrow">Verlauf</span><h3>Momos Level über die Zeit</h3></div>
-        <div class="legend"><span><i class="dot change"></i>Kleine Veränderung</span><span><i class="dot form"></i>Große Form</span></div>
+        <div><span class="eyebrow">Verlauf</span><h3>Momos Level und Freischaltungen</h3></div>
+        <div class="legend"><span><i class="dot change"></i>Level: neuer Bauplan</span><span><i class="dot form"></i>Große Form: neues Gebiet</span></div>
       </div>
       ${renderChart(result, appState.weeks)}
     </section>
@@ -216,18 +270,45 @@ function render() {
         <p class="tradeoff"><strong>Spannung:</strong> ${variant.tradeoff}</p>
       </article>
       <article class="panel">
-        <span class="eyebrow">Nächste Etappen</span>
+        <span class="eyebrow">Tempo zuletzt</span>
         <dl class="metrics">
-          <div><dt>Nächstes Level</dt><dd>${requirement} Punkte je Person<br><small>${formatDays(requirement, variant)} ab leerem Balken</small></dd></div>
-          <div><dt>Nächste große Formen</dt><dd>${nextForms.length ? nextForms.map(level => `Level ${level}`).join(" und ") : "—"}</dd></div>
-          <div><dt>Gesammelte Punkte</dt><dd>${result.totalPhilipp.toLocaleString("de-DE")} / ${result.totalPartner.toLocaleString("de-DE")}<br><small>Philipp / Partnerin</small></dd></div>
+          <div><dt>Tage je Level</dt><dd>${pace ? `≈ ${fmt(pace)} Tage` : "unter 2 Aufstiege in 8 Wochen"}<br><small>Durchschnitt der letzten 8 Wochen · letzter Aufstieg vor ${sinceLast} Tagen</small></dd></div>
+          <div><dt>Bauen pro Woche</dt><dd>${fmt(recentRate(result.philipp.buildDays, totalDays))} / ${fmt(recentRate(result.partner.buildDays, totalDays))}<br><small>Philipp / Partnerin, letzte 4 Wochen</small></dd></div>
+          <div><dt>Levelaufstiege pro Woche</dt><dd>${fmt(recentRate(levelDays, totalDays))} zuletzt · ${fmt(recentRate(levelDays, totalDays, totalDays))} im Schnitt<br><small>je Aufstieg mindestens 1 neuer Bauplan je Rolle</small></dd></div>
+          <div><dt>Nächste große Form</dt><dd>${nextForm ? `Level ${nextForm} (Gebiet ${result.areas + 1})` : "alle Gebiete offen"}</dd></div>
         </dl>
       </article>
     </section>
 
+    <section class="detail-grid">
+      <article class="panel">
+        <span class="eyebrow">Energie</span>
+        <dl class="metrics">
+          <div><dt>Verdient</dt><dd>${result.philipp.earned} / ${result.partner.earned}<br><small>Philipp / Partnerin</small></dd></div>
+          <div><dt>Gebaut</dt><dd>${result.philipp.builds} / ${result.partner.builds} Objekte<br><small>${result.philipp.spent - result.philipp.toProject} / ${result.partner.spent - result.partner.toProject} Energie</small></dd></div>
+          <div><dt>Ins Gemeinschaftsprojekt</dt><dd>${result.philipp.toProject} / ${result.partner.toProject} Energie</dd></div>
+          <div><dt>Im Lager</dt><dd>${result.philipp.energy} / ${result.partner.energy} Energie</dd></div>
+        </dl>
+      </article>
+      <article class="panel">
+        <span class="eyebrow">Platz auf der Insel (Annahme)</span>
+        <dl class="metrics">
+          <div><dt>Felder je Person</dt><dd>${result.fields}<br><small>${FIELDS.start} zum Start + ${FIELDS.perArea} je Gebiet</small></dd></div>
+          <div><dt>Belegt</dt><dd>${pct(result.philipp.builds, result.fields)} / ${pct(result.partner.builds, result.fields)}<br><small>Philipp / Partnerin</small></dd></div>
+          <div><dt>Insel voll</dt><dd>${fullAt ? `ab Woche ${fullAt}` : "nicht im Zeitraum"}<br><small>danach fehlt Platz zum Bauen, solange es kein Abreißen oder Aufwerten gibt</small></dd></div>
+        </dl>
+      </article>
+    </section>
+
+    <section class="panel milestone-panel">
+      <span class="eyebrow">Freischaltungen</span>
+      <h3>Was wann dazukommt</h3>
+      ${renderMilestones(result)}
+    </section>
+
     <details class="state panel">
       <summary>Vollständigen Simulationszustand anzeigen</summary>
-      <pre>${escapeHtml(JSON.stringify({ variant: variant.key, scenario: appState.scenario, weeks: appState.weeks, ...result }, null, 2))}</pre>
+      <pre>${escapeHtml(JSON.stringify({ settings: appState, ...result }, null, 2))}</pre>
     </details>
   `;
 
@@ -235,19 +316,66 @@ function render() {
     appState.scenario = event.target.value;
     render();
   });
-  document.querySelectorAll("[data-weeks]").forEach(button => button.addEventListener("click", () => {
-    appState.weeks = Number(button.dataset.weeks);
+  document.getElementById("strategy").addEventListener("change", event => {
+    appState.strategy = event.target.value;
+    render();
+  });
+  document.querySelectorAll("[data-key]").forEach(button => button.addEventListener("click", () => {
+    appState[button.dataset.key] = Number(button.dataset.value);
     render();
   }));
 }
 
-function personProgress(name, bank, requirement, className) {
-  const visible = Math.min(bank, requirement);
-  const percent = Math.round(visible / requirement * 100);
-  const overflow = Math.max(bank - requirement, 0);
+function renderChain() {
+  return `
+    <section class="chain panel" aria-label="Fortschrittskette">
+      <div><b>Tagesziele</b><small>3 je Person</small></div><span>→</span>
+      <div><b>Energie</b><small>persönlich, verfällt nie</small></div><span>→</span>
+      <div><b>Bauen / Einzahlen</b><small>verbaut eigene Energie</small></div><span>→</span>
+      <div><b>Eigene Hälfte</b><small>des 50/50-Balkens</small></div><span>→</span>
+      <div><b>Level</b><small>Baupläne, Gebiete</small></div>
+    </section>`;
+}
+
+function segmented(label, key, values, format) {
+  return `
+    <fieldset>
+      <legend>${label}</legend>
+      ${values.map(value => `<button class="period ${value === appState[key] ? "active" : ""}" data-key="${key}" data-value="${value}">${format(value)}</button>`).join("")}
+    </fieldset>`;
+}
+
+function fieldsFullWeek(result) {
+  // Erste Woche, in der eine Person mehr Objekte gebaut hat, als ihr bis dahin Felder offenstehen.
+  const areaDays = result.events.filter(event => event.type === "form").map(event => event.day - 1);
+  const weeks = [result.philipp, result.partner].map(person => {
+    const index = person.buildDays.findIndex((day, i) =>
+      i + 1 > FIELDS.start + FIELDS.perArea * areaDays.filter(areaDay => areaDay <= day).length);
+    return index === -1 ? null : Math.floor(person.buildDays[index] / 7) + 1;
+  }).filter(Boolean);
+  return weeks.length ? Math.min(...weeks) : null;
+}
+
+function renderMilestones(result) {
+  if (!result.events.length) return `<p class="muted">Noch kein Levelaufstieg im Zeitraum.</p>`;
+  const forms = result.events.filter(event => event.type === "form");
+  const firstLevels = result.events.slice(0, 6);
+  const rows = [...new Map([...firstLevels, ...forms].map(event => [event.level, event])).values()]
+    .sort((a, b) => a.level - b.level);
+  return `<table class="milestones">
+    <thead><tr><th>Woche</th><th>Tag</th><th>Level</th><th>Was neu ist</th></tr></thead>
+    <tbody>${rows.map(event => `<tr class="${event.type}"><td>${event.week}</td><td>${event.day}</td><td>${event.level}</td><td>${event.label}</td></tr>`).join("")}</tbody>
+  </table>
+  <p class="muted">Gezeigt: die ersten sechs Level und alle großen Formen. Jedes weitere Level bringt einen Bauplan je Rolle.</p>`;
+}
+
+function personProgress(name, xp, need, className, stored) {
+  const visible = Math.min(xp, need);
+  const percent = Math.round(visible / need * 100);
+  const overflow = Math.max(xp - need, 0);
   return `
     <div class="person-progress ${className}">
-      <div><strong>${name}</strong><span>${visible} / ${requirement}${overflow ? ` · +${overflow} vorgemerkt` : ""}</span></div>
+      <div><strong>${name}</strong><span>${visible} / ${need}${overflow ? ` · +${overflow} vorgemerkt` : ""} · ${stored} ⚡ im Lager</span></div>
       <div class="bar"><i style="width:${percent}%"></i></div>
     </div>`;
 }
@@ -259,16 +387,29 @@ function renderChart(result, weeks) {
   const maxLevel = Math.max(...result.weekly.map(point => point.level), 2);
   const x = week => pad.left + (week / weeks) * (width - pad.left - pad.right);
   const y = level => height - pad.bottom - ((level - 1) / Math.max(maxLevel - 1, 1)) * (height - pad.top - pad.bottom);
-  const points = [{ week: 0, level: 1 }, ...result.weekly].map(point => `${x(point.week)},${y(point.level)}`).join(" ");
+  const steps = [{ week: 0, level: 1 }];
+  for (const event of result.events) {
+    steps.push({ week: event.day / 7, level: event.level - 1 }, { week: event.day / 7, level: event.level });
+  }
+  steps.push({ week: weeks, level: result.level });
+  const points = steps.map(point => `${x(point.week)},${y(point.level)}`).join(" ");
   const gridLevels = [...new Set([1, Math.ceil(maxLevel / 2), maxLevel])];
   const grid = gridLevels.map(level => `<g><line x1="${pad.left}" x2="${width - pad.right}" y1="${y(level)}" y2="${y(level)}"/><text x="${pad.left - 8}" y="${y(level) + 4}">${level}</text></g>`).join("");
-  const markers = result.events.map(event => `<circle class="${event.type}" cx="${x(event.week)}" cy="${y(event.level)}" r="${event.type === "form" ? 6 : 3}"><title>Woche ${event.week}: ${event.label}, Level ${event.level}</title></circle>`).join("");
+  const markers = result.events.map(event => `<circle class="${event.type}" cx="${x(event.day / 7)}" cy="${y(event.level)}" r="${event.type === "form" ? 6 : 3}"><title>Woche ${event.week}: Level ${event.level} – ${event.label}</title></circle>`).join("");
   return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Levelverlauf über ${weeks} Wochen">
     <g class="grid">${grid}</g>
     <polyline points="${points}"/>
     <g class="markers">${markers}</g>
     <text class="axis-label" x="${width / 2}" y="${height - 4}">Wochen</text>
   </svg>`;
+}
+
+function fmt(value) {
+  return value.toFixed(1).replace(".", ",");
+}
+
+function pct(value, total) {
+  return `${Math.round(value / total * 100)} %`;
 }
 
 function switchVariant(direction) {
