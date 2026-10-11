@@ -89,8 +89,24 @@ Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Pers
 _Avoid_: Challenge, Gruppenquest
 
 **Insel-Ereignis**:
-Ein freiwilliges, nicht verfallendes Vorkommnis auf der Insel (z. B. Besucher, Fundstück), das Baupläne oder Deko bringt.
-_Avoid_: Event, Quest, Mission
+Ein freiwilliges, nicht verfallendes Vorkommnis auf der Insel – Besucher mit Wunsch, Momos Wunsch, Inselwetter oder Entdeckung –, das Baupläne, Deko oder ein Momo-Accessoire bringt.
+_Avoid_: Event, Quest, Mission, Fundstück
+
+**Wunsch**:
+Ein Insel-Ereignis, das erst belohnt wird, wenn ein bestimmtes Objekt gebaut oder etwas in die eigene Ecke gestellt wurde; bleibt ohne Frist offen.
+_Avoid_: Auftrag, Aufgabe
+
+**Deko**:
+Ein Inselobjekt aus einem Insel-Ereignis, das ohne Energie platziert wird und als einziges Inselobjekt an den Partner verschenkt werden kann.
+_Avoid_: Item, Geschenk
+
+**Jahreszeiten-Deko**:
+Deko aus dem Inselwetter einer Jahreszeit; kommt jedes Jahr wieder, sodass Verpasstes nachgeholt werden kann.
+_Avoid_: Saison-Item, Limited Edition
+
+**Level**:
+Momos gemeinsame Entwicklungsstufe; steigt, wenn beide Personen ihre Hälfte des Levelbalkens mit selbst verbauter Energie gefüllt haben, und schaltet Baupläne und Gebiete frei.
+_Avoid_: XP, Erfahrungspunkte, Stufe
 
 ## Partner
 
