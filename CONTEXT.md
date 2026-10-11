@@ -84,6 +84,18 @@ _Avoid_: Privatbereich, Inselhälfte
 Ein durch Levelaufstieg, Gebiet oder Insel-Ereignis freigeschaltetes Objekt, das mit Energie gebaut werden kann.
 _Avoid_: Rezept, Item
 
+**Feld**:
+Ein Platz auf der Insel, auf dem genau ein gebautes Objekt steht; jede Person hat eine begrenzte Zahl, die mit jedem Gebiet wächst.
+_Avoid_: Kachel, Tile, Slot
+
+**Gebiet**:
+Ein Inselbereich, den eine große Form von Momo freischaltet; bringt neue Felder und Entdeckungs-Baupläne. Nach dem siebten Gebiet folgt alle sechs Level ein weiteres.
+_Avoid_: Zone, Region, Welt
+
+**Aufwerten**:
+Ein gebautes Objekt mit Energie auf die nächste Stufe heben (höchstens Stufe 3), ohne ein neues Feld zu belegen; zählt wie Bauen für den Levelbalken.
+_Avoid_: Upgrade, Ausbauen
+
 **Gemeinschaftsprojekt**:
 Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Person mit eigener Energie ohne Frist füllt; fertig, wenn beide Anteile voll sind.
 _Avoid_: Challenge, Gruppenquest
