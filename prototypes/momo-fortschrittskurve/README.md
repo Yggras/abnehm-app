@@ -20,6 +20,17 @@ Umschaltbar sind außerdem der Wochenverlauf (4 Szenarien aus Runde 1), der Zeit
 
 **Alle Zahlen sind Designvorschläge und nicht belegt.**
 
+## Runde 3: Motivation über das erste Jahr hinaus
+
+Nutzerentscheidung vom 2026-10-11: **Preise aus B2 mit dem Tempo aus B3**. Das entspricht Variante B3, die jetzt die Voreinstellung ist (Preisdeckel 24 Energie). Der Zeitraum reicht bis 104 Wochen, eine Tabelle vergleicht das erste mit dem zweiten Jahr. Die Feldgrenze wird jetzt durchgesetzt: Ist kein Feld frei, kann man nicht neu bauen.
+
+Neue Schalter:
+- **Nach dem siebten Gebiet:** *Nichts* · *Endlose Gebiete* (alle 6 Level eine neue Landschaft, +Felder, ein wiederverwendeter Bauplan je Rolle) · *Inselkapitel* (6 Level nach dem siebten Gebiet eine Nachbarinsel; Levelbedarf und Preise beginnen wieder klein, die alte Insel bleibt)
+- **Platz je Person:** *Knapp* (30 + 20 je Gebiet) · *Großzügig* (60 + 40 je Gebiet) · *Unbegrenzt*
+- **Aufwerten:** Ist kein Feld frei, wird Gebautes aufgewertet (Stufe 2 kostet das 2-Fache, Stufe 3 das 3-Fache des Grundpreises)
+
+Alle Zahlen bleiben Designvorschläge und sind nicht belegt.
+
 ## Start
 
 Im Repo-Root:
@@ -28,7 +39,7 @@ Im Repo-Root:
 python3 -m http.server 4180 --directory prototypes/momo-fortschrittskurve
 ```
 
-Dann <http://localhost:4180/?variant=B1> öffnen. Die Varianten lassen sich über die Leiste unten oder mit den Pfeiltasten wechseln.
+Dann <http://localhost:4180/?variant=B3> öffnen. Die Varianten lassen sich über die Leiste unten oder mit den Pfeiltasten wechseln.
 
 ## Runde 1
 

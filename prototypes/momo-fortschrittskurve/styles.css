@@ -94,6 +94,12 @@ main { padding: 28px 0 120px; }
 .metrics dt { color: var(--muted); }
 .metrics dd { margin: 0; font-weight: 750; }
 .metrics small { color: var(--muted); font-weight: 400; }
+.dot.island { background: var(--coral); }
+.chart circle.island { fill: var(--coral); stroke: #fff; stroke-width: 2; }
+.chart .year line { stroke: var(--coral); stroke-dasharray: 3 5; }
+.chart .year text { fill: var(--coral); font-size: 11px; }
+.late-controls fieldset { white-space: normal; }
+.years td:not(:first-child), .years th:not(:first-child) { text-align: right; }
 .chain { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 18px; margin-bottom: 18px; }
 .chain > div { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 12px; background: rgba(79, 128, 104, 0.08); }
 .chain b { display: block; font-size: 0.92rem; }
