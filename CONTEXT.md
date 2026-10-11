@@ -106,6 +106,14 @@ _Avoid_: Verknüpfung, Pairing, Freundschaft
 Ein kurzlebiger, einmal verwendbarer Code, mit dem eine Person eine Kopplung herstellt.
 _Avoid_: Einladungslink, Partnercode
 
+**Partnerfreigabe**:
+Die Einstellung einer Person, ob ihr Partner für einen Gesundheitsbereich eine Zusammenfassung sehen darf. Mahlzeitenfotos werden davon unabhängig freigegeben.
+_Avoid_: Berechtigung, Sichtbarkeit, Zugriffsstufe
+
+**Zusammenfassung**:
+Die für den Partner sichtbare verdichtete Darstellung eines Gesundheitsbereichs ohne einzelne Einträge; beim Gewicht umfasst sie nur Trend und Veränderung, nie den absoluten Wert.
+_Avoid_: Detailansicht, Rohdaten
+
 ## Ernährungserfassung
 
 **Tagesprotokoll**:
