@@ -80,6 +80,18 @@ _Avoid_: Klasse, Beruf
 Der Inselbereich einer Person, den sie unabhängig von ihrer Rolle allein frei gestalten kann.
 _Avoid_: Privatbereich, Inselhälfte
 
+**Energiebuchung**:
+Ein unveränderlicher Eintrag in der Energie-Buchungsliste einer Person: eine Gutschrift für ein Tagesziel bzw. den Tagesbonus oder eine Ausgabe für Bauen, Aufwerten oder Einzahlen; der Kontostand ist die Summe aller Buchungen. Eine Gutschrift bleibt bestehen, auch wenn das Tagesziel durch eine Korrektur wieder unerfüllt ist.
+_Avoid_: Transaktion, Punktestand
+
+**Tagesende-Gutschrift**:
+Die Energie-Gutschrift für ein Tagesziel, das sich erst nach Ablauf des Kalendertags entscheiden lässt (Im Kalorienbudget), und für den Tagesbonus an solchen Tagen; alle übrigen Tagesziele werden sofort beim Erfüllen gutgeschrieben.
+_Avoid_: Nachgutschrift, Abrechnung
+
+**Lager**:
+Der persönliche Vorrat einer Person an Inselobjekten, die gerade auf keinem Feld stehen, z. B. erhaltene Deko oder ein bei einem Sync-Konflikt verdrängtes Objekt; Platzieren aus dem Lager kostet keine Energie.
+_Avoid_: Inventar, Rucksack
+
 **Bauplan**:
 Ein durch Levelaufstieg, Gebiet oder Insel-Ereignis freigeschaltetes Objekt, das mit Energie gebaut werden kann.
 _Avoid_: Rezept, Item
@@ -105,7 +117,7 @@ Ein freiwilliges, nicht verfallendes Vorkommnis auf der Insel – Besucher mit W
 _Avoid_: Event, Quest, Mission, Fundstück
 
 **Wunsch**:
-Ein Insel-Ereignis, das erst belohnt wird, wenn ein bestimmtes Objekt gebaut oder etwas in die eigene Ecke gestellt wurde; bleibt ohne Frist offen.
+Ein Insel-Ereignis, das erst belohnt wird, wenn ein bestimmtes Objekt gebaut oder etwas in die eigene Ecke gestellt wurde; gehört genau einer Person, die es allein erfüllen kann, und bleibt ohne Frist offen.
 _Avoid_: Auftrag, Aufgabe
 
 **Deko**:
