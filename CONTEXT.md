@@ -150,6 +150,28 @@ _Avoid_: Saison-Item, Limited Edition
 Momos gemeinsame Entwicklungsstufe; steigt, wenn beide Personen ihre Hälfte des Levelbalkens mit selbst verbauter Energie gefüllt haben, und schaltet Baupläne und Gebiete frei.
 _Avoid_: XP, Erfahrungspunkte, Stufe
 
+## Gemeinsame Challenges
+
+**Gemeinsame Challenge**:
+Ein freiwillig von beiden bestätigtes, zeitlich begrenztes und rein kooperatives Gesundheitsvorhaben des Paars. Es startet mit der Annahme, läuft höchstens sieben Tage und endet bei Zielerreichung sofort. Beiträge entstehen ausschließlich aus während der Laufzeit erfüllten persönlichen Tageszielen; es gibt weder Rangliste noch Gewinner oder Vergleich untereinander.
+_Avoid_: Wettbewerb, Duell, Gemeinschaftsprojekt
+
+**Challenge-Vorschlag**:
+Die Einladung einer Person an ihren Partner, gemeinsam eine bestimmte Challenge-Vorlage zu starten. Sie benötigt die Zustimmung beider, verfällt nach 48 Stunden und ist auf höchstens einen offenen Vorschlag begrenzt.
+_Avoid_: Zuweisung, Aufforderung
+
+**Challenge-Vorlage**:
+Eine vorgegebene, automatisch messbare Art gemeinsamer Challenge. Der V1-Katalog umfasst Gemeinsam dranbleiben, Ernährung im Blick, Gut getrunken und Aktive Woche.
+_Avoid_: freie Challenge, eigene Challenge
+
+**Challenge-Anteil**:
+Die beim Start festgeschriebene Hälfte des Challenge-Ziels, die eine Person mit ihren eigenen Tageszielen erfüllt und die der Partner nicht übernehmen kann.
+_Avoid_: Partnerquote, Einzelwertung
+
+**Challenge-Deko**:
+Ein zur Challenge-Vorlage passendes, rein kosmetisches Inselobjekt, das nach einem gemeinsamen Erfolg in das Insel-Inventar gelegt und bei Wiederholungen erneut verdient wird.
+_Avoid_: Preis, Bonus, Spielvorteil
+
 ## Partner
 
 **Partner**:
