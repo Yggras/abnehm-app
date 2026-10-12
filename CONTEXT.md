@@ -154,6 +154,16 @@ _Avoid_: Berechtigung, Sichtbarkeit, Zugriffsstufe
 Die für den Partner sichtbare verdichtete Darstellung eines Gesundheitsbereichs ohne einzelne Einträge; beim Gewicht umfasst sie nur Trend und Veränderung, nie den absoluten Wert.
 _Avoid_: Detailansicht, Rohdaten
 
+**Anfeuern**:
+Die einzige Partner-Aktion: eine aus festen Kurzbotschaften gewählte Ermutigung an den Partner, die höchstens dreimal am Tag als Push ankommt und keine Energie bringt.
+_Avoid_: Stupsen, Stupser, Nudge, Erinnern
+
+## Benachrichtigungen
+
+**Tages-Check-in**:
+Eine von zwei täglichen, lokal geplanten Benachrichtigungen (Mittag und Abend), die alle gerade hinterherhinkenden Tracker bündelt und entfällt, wenn nichts offen ist.
+_Avoid_: Reminder, Erinnerung, Push
+
 ## Ernährungserfassung
 
 **Tagesprotokoll**:
