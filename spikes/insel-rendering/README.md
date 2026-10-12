@@ -12,6 +12,8 @@ Wegwerfbarer Expo-SDK-57-Spike für [„Spike: Inselansicht im Release-Build auf
 
 Das Lastprofil bildet Anzahl und Bewegungslast des Web-Prototyps nach, nicht dessen endgültige Grafik. Die Elementzahlen stammen aus [Recherche: Isometrische Inselansicht in Expo/React Native](https://github.com/Yggras/abnehm-app/blob/research/insel-rendering/research/insel-rendering.md).
 
+Die protokollierten Gerätetests stehen in [`RESULTS.md`](RESULTS.md).
+
 ## Testprotokoll
 
 Auf **jedem** Zielgerät und mit **jedem** Renderer:
