@@ -2,6 +2,16 @@
 
 Gemeinsame Sprache für die fachlichen Konzepte der Abnehm-App.
 
+## Konto und Person
+
+**Konto**:
+Die serverseitige Anmeldeidentität mit E-Mail, Passwort und Sitzungen. Ein Konto gehört genau einer Person, ist aber von deren Fachdaten getrennt.
+_Avoid_: Nutzer, Profil
+
+**Person**:
+Der fachliche Akteur mit Anzeigename, Körperdaten, Zielen, Einträgen und Einstellungen.
+_Avoid_: Konto, Nutzer
+
 ## Ziele und Onboarding
 
 **Kalorienbudget**:
@@ -36,6 +46,10 @@ _Avoid_: Wunschgewicht, Endgewicht
 Eine aus dem Gewichtstrend abgeleitete Anpassung des Kalorienbudgets, die erst nach Bestätigung gilt.
 _Avoid_: Auto-Anpassung, Nachjustierung
 
+**Zielversion**:
+Eine ab einem lokalen Kalendertag geltende Fassung der persönlichen Ziele. Änderungen erzeugen eine neue Fassung, statt frühere Zielwerte zu überschreiben.
+_Avoid_: Zielstand, Zieleinstellung
+
 **Sicherheits-Check**:
 Die Onboarding-Fragen, die bei einem Risiko (Schwangerschaft/Stillzeit, Essstörung, Untergewicht) den Haltemodus statt eines Defizits erzwingen.
 _Avoid_: Gesundheitsfragebogen, Ausschlusskriterien
@@ -47,11 +61,15 @@ Eine Art von Tagesziel aus einem festen Katalog (Ernährung erfasst, Im Kalorien
 _Avoid_: Zieltyp, Aufgabe
 
 **Tagesziel**:
-Ein Baustein auf einem der drei Momo-Plätze einer Person an einem bestimmten Tag.
+Ein für einen lokalen Kalendertag festgeschriebener Baustein auf einem der drei Momo-Plätze einer Person. Es bewahrt die an diesem Tag geltenden Zielwerte; spätere Änderungen wirken nicht rückwirkend.
 _Avoid_: Quest, Mission, Challenge
 
+**Tageszielerfüllung**:
+Das dauerhaft festgehaltene erstmalige Erfüllen eines Tagesziels. Spätere Korrekturen können den aktuellen Zielzustand ändern, nehmen aber weder Tageszielerfüllung noch daraus entstandene Belohnungen zurück.
+_Avoid_: aktueller Zielzustand, Energiegutschrift
+
 **Wochenplan**:
-Die persönliche Belegung der drei Momo-Plätze für jeden Wochentag.
+Die persönliche Belegung der drei Momo-Plätze für jeden Wochentag. Änderungen gelten ab dem nächsten lokalen Kalendertag.
 _Avoid_: Trainingsplan, Zeitplan
 
 **Sporttag**:
@@ -139,7 +157,7 @@ Die eine andere Person, mit der ein Konto gekoppelt ist und Momo teilt.
 _Avoid_: Freund, Kontakt, Mitglied
 
 **Kopplung**:
-Die feste Verbindung zweier Konten zu einem Paar, Voraussetzung dafür, dass Momo schlüpft.
+Die archivierungsfähige Verbindung genau zweier Personen, Voraussetzung dafür, dass Momo schlüpft. Nach einer Entkopplung reaktiviert eine erneute Kopplung derselben Personen ihre bisherige Insel; mit einer anderen Person entsteht eine neue Kopplung und Insel.
 _Avoid_: Verknüpfung, Pairing, Freundschaft
 
 **Einladungscode**:
@@ -173,13 +191,17 @@ Ein vom Nutzer angelegter oder korrigierter Nährwertdatensatz, der unabhängig 
 _Avoid_: Benutzerprodukt, korrigiertes Produkt
 
 **Fotoentwurf**:
-Eine noch nicht gespeicherte KI-Schätzung, die eine fotografierte Mahlzeit in einzeln änderbare Bestandteile mit Mengen und Nährwerten zerlegt.
+Eine noch nicht bestätigte, kurzlebige KI-Schätzung, die eine fotografierte Mahlzeit in einzeln änderbare Bestandteile mit Mengen und Nährwerten zerlegt.
 _Avoid_: KI-Eintrag, Fotoergebnis
 
+**Mahlzeitenfoto**:
+Das nach Bestätigung eines Fotoentwurfs aufbewahrte Bild. Es kann mehreren daraus erzeugten Ernährungseinträgen zugeordnet und unabhängig von ihnen gelöscht werden.
+_Avoid_: Fotoentwurf, Ernährungseintrag
+
 **Lebensmittelfavorit**:
-Ein als häufig verwendet markiertes einzelnes Lebensmittel.
+Ein als häufig verwendet markiertes einzelnes Lebensmittel. Er folgt Änderungen am referenzierten Lebensmittel, bleibt durch seine letzte bekannte Fassung aber auch ohne die Quelle nutzbar.
 _Avoid_: Favorit, sofern dadurch eine Zusammenstellung gemeint sein könnte
 
 **Mahlzeitenfavorit**:
-Eine benannte, wiederverwendbare Zusammenstellung mehrerer Lebensmittel mit ihren üblichen Mengen. Das Übernehmen erzeugt unabhängige Ernährungseinträge und verändert den Favoriten nicht.
+Eine benannte, wiederverwendbare Zusammenstellung mehrerer Lebensmittel mit ihren üblichen Mengen. Seine Bestandteile folgen Änderungen an den referenzierten Lebensmitteln, bleiben durch ihre letzte bekannte Fassung aber auch ohne die Quellen nutzbar. Das Übernehmen erzeugt unabhängige Ernährungseinträge und verändert den Favoriten nicht.
 _Avoid_: Rezept, Vorlage
