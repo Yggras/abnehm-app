@@ -237,3 +237,25 @@ _Avoid_: Favorit, sofern dadurch eine Zusammenstellung gemeint sein könnte
 **Mahlzeitenfavorit**:
 Eine benannte, wiederverwendbare Zusammenstellung mehrerer Lebensmittel mit ihren üblichen Mengen. Seine Bestandteile folgen Änderungen an den referenzierten Lebensmitteln, bleiben durch ihre letzte bekannte Fassung aber auch ohne die Quellen nutzbar. Das Übernehmen erzeugt unabhängige Ernährungseinträge und verändert den Favoriten nicht.
 _Avoid_: Rezept, Vorlage
+
+## Wasser, Sport und Gewicht
+
+**Herkunft**:
+Die Quelle eines Wasser-, Sport- oder Gewichtseintrags: manuell, Apple Health oder Health Connect. Importierte Einträge sind in ihren Werten schreibgeschützt; korrigiert wird in der Quell-App.
+_Avoid_: Quelle (für den Eintrag), Datenquelle
+
+**Ausgeblendeter Eintrag**:
+Ein importierter Eintrag, den die Person aus der App entfernt hat. Er zählt nicht mehr und wird beim nächsten Import nicht wieder angelegt.
+_Avoid_: gelöschter Import
+
+**Ersetzter Eintrag**:
+Ein manueller Sporteintrag, der sich zu mindestens 50 % mit einem importierten Training überschneidet und deshalb nicht mehr zählt; er bleibt sichtbar und kann reaktiviert werden.
+_Avoid_: Duplikat, zusammengeführter Eintrag
+
+**Tagesgewicht**:
+Die früheste Gewichtsmessung eines lokalen Kalendertags; Grundlage für Gewichtstrend, Verlauf und Budgetvorschlag. Weitere Messungen desselben Tags bleiben gespeichert.
+_Avoid_: Tageswert (ohne Bezug), Durchschnittsgewicht
+
+**Gewichtstrend**:
+Das zeitgewichtet exponentiell geglättete Tagesgewicht (Glättungskonstante 0,9 je Tag); wird ab drei Tagesgewichten angezeigt und ist Grundlage der Wochenveränderung.
+_Avoid_: Durchschnitt, Trendgewicht (nur als UI-Beschriftung)
