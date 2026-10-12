@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Momos Insel Rendering-Spike",
+    "slug": "abnehm-app-insel-rendering-spike",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "de.yggras.abnehmapp.inselspike",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "de.yggras.abnehmapp.inselspike",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#173D68",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "51463260-93b7-4f63-9c92-98befe9844af"
+      }
+    },
+    "owner": "yggras"
+  }
+}
