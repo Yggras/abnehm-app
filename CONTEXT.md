@@ -173,7 +173,7 @@ Die für den Partner sichtbare verdichtete Darstellung eines Gesundheitsbereichs
 _Avoid_: Detailansicht, Rohdaten
 
 **Anfeuern**:
-Die einzige Partner-Aktion: eine aus festen Kurzbotschaften gewählte Ermutigung an den Partner, die höchstens dreimal am Tag als Push ankommt und keine Energie bringt.
+Die einzige Partner-Ermutigungsaktion: eine aus festen Kurzbotschaften gewählte Ermutigung an den Partner, die höchstens dreimal am Tag als Push ankommt und keine Energie bringt.
 _Avoid_: Stupsen, Stupser, Nudge, Erinnern
 
 ## Benachrichtigungen
