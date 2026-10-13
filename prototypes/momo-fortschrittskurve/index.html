@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYP – Momos Fortschrittskurve</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="prototype-header">
+    <div>
+      <span class="prototype-badge">WEGWERF-PROTOTYP</span>
+      <h1>Momos Fortschrittslabor</h1>
+      <p>Runde 2: Tagesziele → Energie → Bauen → Levelbalken. Drei Varianten auf Basis von Kurve B, simuliert über typische Wochen.</p>
+    </div>
+  </header>
+
+  <main id="app" aria-live="polite"></main>
+
+  <nav class="switcher" aria-label="Kurvenvarianten">
+    <button id="previous" aria-label="Vorherige Variante">←</button>
+    <span id="variant-label"></span>
+    <button id="next" aria-label="Nächste Variante">→</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
