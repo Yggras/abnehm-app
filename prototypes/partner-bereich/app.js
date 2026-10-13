@@ -1,6 +1,6 @@
 // PROTOTYP — wegwerfbar. Drei Varianten für Tab „Wir“ und Einstellungen, switchbar über ?variant=A|B|C.
 const variants = {
-  A: "Überblick · alles Wichtige zuerst",
+  A: "Ausgewählt · Überblick + Verlauf",
   B: "Miteinander · Aktivitätsstrom",
   C: "Zwei Welten · Gesundheit & Insel"
 };
@@ -72,7 +72,7 @@ function sharedActivity() {
 
 // A: ausgewählte Grundstruktur; ergänzt um den gemeinsamen Verlauf aus B
 function renderA() {
-  return `${appHeader()}<div class="scroll a">${proposal()}${partnerSummary()}<h3 class="section-title">Gemeinsam</h3>${challengeCard()}${projectCard()}${sharedActivity()}</div>${bottomTabs()}`;
+  return `${appHeader()}<div class="selected-note">✓ Ausgewählt: Überblick mit gemeinsamem Verlauf</div><div class="scroll a">${proposal()}${partnerSummary()}<h3 class="section-title">Gemeinsam</h3>${challengeCard()}${projectCard()}${sharedActivity()}</div>${bottomTabs()}`;
 }
 
 // B: sozialer Aktivitätsstrom; Aktionen und Neuigkeiten bestimmen die Hierarchie
