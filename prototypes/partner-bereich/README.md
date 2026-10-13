@@ -12,6 +12,10 @@ Drei strukturell unterschiedliche Varianten auf einer Route, wechselbar über `?
 
 Die Einstellungen sind in allen Varianten identisch, damit nur die Struktur des Tabs „Wir“ verglichen wird. Zahnrad öffnen; besonders vollständig sind **Partner & Freigaben** und **Benachrichtigungen**.
 
+## Ausgewählte Kombination
+
+Nach Nutzerfeedback ist **A – Überblick** die Grundstruktur. Aus B übernimmt sie den Verlauf **„Neu bei euch“** mit drei ausschließlich gemeinsamen Ereignissen und einer nach Wochen gruppierten Gesamtansicht. Individuelle Tracker-Aktivitäten des Partners erscheinen dort nicht. Vorgänge, die eine Antwort brauchen, stehen oben; die Partnerübersicht zeigt die Aktualität als „Stand vor …“ statt den letzten App-Besuch.
+
 ## Start
 
 Im Repo-Root:

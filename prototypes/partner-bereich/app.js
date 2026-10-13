@@ -42,7 +42,7 @@ function cheerButton(text = "Anna anfeuern") { return `<button class="primary" d
 function partnerSummary(compact = false) {
   if (state.solo) return `<section class="empty"><div>🥚</div><h2>Momo wartet noch im Ei</h2><p>Lade deinen Partner mit einem einmaligen Code ein. Deine Tracker bleiben auch allein vollständig nutzbar.</p><button class="primary" data-act="invite">Partner einladen</button><button class="quiet" data-act="code">Code eingeben</button></section>`;
   return `<section class="partner-summary ${compact ? "compact" : ""}">
-    <div class="partner-title">${avatar()}<div><h2>Anna</h2><p>2 von 3 Tageszielen · zuletzt vor 12 Min.</p></div><span class="online">●</span></div>
+    <div class="partner-title">${avatar()}<div><h2>Anna</h2><p>2 von 3 Tageszielen · Stand vor 12 Min.</p></div></div>
     <div class="summary-grid"><div><span>🍽️ Ernährung</span><b>3 Mahlzeiten</b></div><div><span>💧 Wasser</span><b>80 %</b></div><div><span>🏃 Sport</span><b>90 / 150 Min.</b></div><div><span>⚖️ Gewicht</span><b>Privat</b></div></div>
     ${cheerButton()}
   </section>`;
@@ -61,14 +61,18 @@ function projectCard() {
   const p = state.project;
   return `<section class="card project"><div class="card-head"><span>GEMEINSCHAFTSPROJEKT</span><button data-act="island">Zur Insel ›</button></div><h2>🌉 ${p.title}</h2><div class="roles"><div><span>Dein Bau-Anteil</span>${progress(70)}<b>${p.mine}/${p.mineGoal} Energie</b></div><div><span>Annas Natur-Anteil</span>${progress(55)}<b>${p.partnerStage}</b></div></div><p class="soft">Ohne Frist · Eingezahlte Energie bleibt.</p></section>`;
 }
-function cheerHistory() {
+function sharedActivity() {
   if (state.solo) return "";
-  return `<section class="card"><div class="card-head"><span>ANFEUERN</span><button data-act="cheer-history">Alle ›</button></div><div class="message in">Anna · 10:14<br><b>Gemeinsam für Momo 🐣</b>${state.cheersIn ? `<button data-act="thanks">Danke ❤️</button>` : ""}</div><div class="message out">Du · gestern<br><b>Du schaffst das! 💪</b></div></section>`;
+  return `<section class="card activity"><div class="card-head"><span>NEU BEI EUCH</span><button data-act="activity-all">Alle anzeigen ›</button></div>
+    <div class="activity-row"><i>💛</i><div><b>Anna feuert dich an</b><small>„Gemeinsam für Momo 🐣“ · heute, 10:14</small></div>${state.cheersIn ? `<button data-act="thanks">Danke ❤️</button>` : ""}</div>
+    <div class="activity-row"><i>💧</i><div><b>Challenge gut unterwegs</b><small>„Gut getrunken“ · gestern</small></div></div>
+    <div class="activity-row"><i>🌉</i><div><b>Ihr habt die Brücke begonnen</b><small>Gemeinschaftsprojekt · Montag</small></div></div>
+  </section>`;
 }
 
-// A: klassischer Überblick mit klaren Arbeitskarten
+// A: ausgewählte Grundstruktur; ergänzt um den gemeinsamen Verlauf aus B
 function renderA() {
-  return `${appHeader()}<div class="scroll a">${proposal()}${partnerSummary()}<h3 class="section-title">Gemeinsam</h3>${challengeCard()}${projectCard()}${cheerHistory()}</div>${bottomTabs()}`;
+  return `${appHeader()}<div class="scroll a">${proposal()}${partnerSummary()}<h3 class="section-title">Gemeinsam</h3>${challengeCard()}${projectCard()}${sharedActivity()}</div>${bottomTabs()}`;
 }
 
 // B: sozialer Aktivitätsstrom; Aktionen und Neuigkeiten bestimmen die Hierarchie
@@ -115,6 +119,7 @@ function renderSheet() {
   if (!state.sheet) return "";
   if (state.sheet === "cheer") return `<div class="backdrop" data-act="sheet-close"></div><section class="sheet"><h2>Anna anfeuern</h2><p>Eine feste Nachricht, ohne Bezug auf offene Ziele.</p>${["Du schaffst das! 💪", "Ich denk an dich ❤️", "Stark heute! 🎉", "Gemeinsam für Momo 🐣", "Kleiner Stups: Trink was 💧"].map(x => `<button data-act="cheer-send">${x}</button>`).join("")}<small>${state.cheersSent} von 3 Pushes heute gesendet</small><button class="quiet" data-act="sheet-close">Abbrechen</button></section>`;
   if (state.sheet === "proposal") return `<div class="backdrop" data-act="sheet-close"></div><section class="sheet"><p class="eyebrow">CHALLENGE-VORSCHLAG</p><h2>🏃 Aktive Woche</h2><p>Jeder erfüllt mindestens 80 % seiner geplanten Sporteinheiten. Eure persönlichen Zielwerte bleiben privat.</p><div class="sheet-actions"><button class="quiet" data-act="proposal-decline">Neutral ablehnen</button><button class="primary" data-act="proposal-accept">Annehmen</button></div><small>Der Vorschlag verfällt morgen um 18:20.</small></section>`;
+  if (state.sheet === "activity") return `<div class="backdrop" data-act="sheet-close"></div><section class="sheet activity-sheet"><h2>Neu bei euch</h2><p class="eyebrow">DIESE WOCHE</p><div class="activity-row"><i>💛</i><div><b>Anna feuert dich an</b><small>Heute, 10:14</small></div></div><div class="activity-row"><i>💧</i><div><b>Challenge gut unterwegs</b><small>Gestern</small></div></div><div class="activity-row"><i>🌉</i><div><b>Ihr habt die Brücke begonnen</b><small>Montag</small></div></div><p class="eyebrow history-group">LETZTE WOCHE</p><div class="activity-row"><i>🎉</i><div><b>Challenge gemeinsam geschafft</b><small>„Ernährung im Blick“</small></div></div><div class="activity-row"><i>🎁</i><div><b>Du hast Anna Deko geschenkt</b><small>Blumenlaterne</small></div></div><button class="quiet" data-act="sheet-close">Schließen</button></section>`;
   return "";
 }
 function render() {
@@ -137,6 +142,7 @@ document.addEventListener("click", e => {
   if (d.act === "cheer-send") { state.cheersSent++; state.sheet = null; toast("Anfeuerung an Anna gesendet 💛"); }
   if (d.act === "thanks") { state.cheersIn = 0; toast("Danke ❤️ an Anna gesendet – ohne Push"); }
   if (d.act === "proposal-open") state.sheet = "proposal";
+  if (d.act === "activity-all") state.sheet = "activity";
   if (d.act === "proposal-accept") { state.proposal = false; state.sheet = null; toast("Challenge startet jetzt gemeinsam"); }
   if (d.act === "proposal-decline") { state.proposal = false; state.sheet = null; toast("Vorschlag neutral abgelehnt"); }
   if (d.act === "sheet-close") state.sheet = null;
