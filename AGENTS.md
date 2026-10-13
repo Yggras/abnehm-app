@@ -9,7 +9,8 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 **Aktuelle Phase: Planung.** Ziel ist eine umsetzungsreife V1-Spezifikation. Die Planung läuft als Wayfinder-Karte auf GitHub:
 - Karte: [Wayfinder: Abnehm-App V1-Spezifikation](https://github.com/Yggras/abnehm-app/issues/1) (Label `wayfinder:map`)
 - Tickets: Sub-Issues der Karte; Abhängigkeiten über GitHubs native „blocked by“-Beziehung
-- Recherche-Ergebnisse: `research/<name>.md` auf Branches `research/<name>`
+- Recherche-Ergebnisse: `research/<name>.md` auf Branches `research/<name>`; werden dauerhaft nach `research/` auf `main` übernommen, Prototypen nach `prototypes/`
+- Übergabe an die Umsetzung ([Entscheidung](https://github.com/Yggras/abnehm-app/issues/42)): Die Spezifikation entsteht per `/to-spec` als sechs eigenständige Spezifikations-Issues (0 Fundament & Verträge blockiert 1–5). `/to-tickets` macht daraus Umsetzungstickets als Sub-Issues der jeweiligen Spezifikation. Bereichsübergreifende Blocker nur gezielt auf das Fundament-Ticket, das den benötigten Vertrag liefert. `CONTEXT.md` bleibt das einzige Glossar.
 
 ## Session-Start
 
