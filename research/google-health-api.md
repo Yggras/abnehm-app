@@ -204,7 +204,7 @@ Abgerufen am 12.10.2026.
 
 1. Ticket #38, Erfassung von Wasser, Sport und Gewicht festlegen: https://github.com/Yggras/abnehm-app/issues/38 *(Projekt)*
 2. Wayfinder-Karte #1 (Geräte, Decisions zu #6, #35, #38): https://github.com/Yggras/abnehm-app/issues/1 *(Projekt)*
-3. Recherche #45, `research/health-background.md`: https://github.com/Yggras/abnehm-app/blob/research/health-background/research/health-background.md *(Projekt)*
+3. Recherche #45, `research/health-background.md`: https://github.com/Yggras/abnehm-app/blob/main/research/health-background.md *(Projekt)*
 4. Google Health API, Newsletter (Abschaltungs-Hinweis, August 2026): https://developers.google.com/health/newsletters *(Doku)*
 5. Google Health API, Migration „Data Access and Authorization“: https://developers.google.com/health/migration/data-access *(Doku)*
 6. Google Health API, „Set up Google Cloud and OAuth“ (Stand 09.10.2026): https://developers.google.com/health/setup *(Doku)*

@@ -147,7 +147,7 @@ Abgerufen am 11.10.2026.
 1. Ticket #45, Recherche: Hintergrund-Import von Health-Daten in Expo: https://github.com/Yggras/abnehm-app/issues/45 *(Projekt)*
 2. Ticket #35, Offline-Verhalten und Sync festlegen (Abschnitt 5): https://github.com/Yggras/abnehm-app/issues/35 *(Projekt)*
 3. Ticket #10, Tech-Stack festlegen: https://github.com/Yggras/abnehm-app/issues/10 *(Projekt)*
-4. Health-Recherche (#6), `research/health-data.md` auf Branch `research/health-data`: https://github.com/Yggras/abnehm-app/blob/research/health-data/research/health-data.md *(Projekt)*
+4. Health-Recherche (#6), `research/health-data.md`: https://github.com/Yggras/abnehm-app/blob/main/research/health-data.md *(Projekt)*
 5. Apple, `enableBackgroundDelivery(for:frequency:withCompletion:)`: https://developer.apple.com/documentation/healthkit/hkhealthstore/enablebackgrounddelivery(for:frequency:withcompletion:) (JSON: https://developer.apple.com/tutorials/data/documentation/healthkit/hkhealthstore/enablebackgrounddelivery(for:frequency:withcompletion:).json) *(Doku)*
 6. Apple, Entitlement `com.apple.developer.healthkit.background-delivery`: https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.healthkit.background-delivery *(Doku)*
 7. Apple, `HKObserverQuery`: https://developer.apple.com/documentation/healthkit/hkobserverquery *(Doku)*

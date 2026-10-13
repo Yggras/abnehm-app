@@ -30,4 +30,4 @@ Dann [http://localhost:4173/?variant=A](http://localhost:4173/?variant=A) öffne
 
 Die Mechaniken folgen den Empfehlungen aus der Projektrecherche: Fortschritt sichtbar machen, Ermutigung statt Partnerdruck, verfehlte Ziele nicht hart bestrafen und unterbrochene Serien abfedern. Primärquellen und Evidenzbewertung sind im vollständigen Recherchebericht verlinkt:
 
-- [Recherche: Studienlage zu Gamification und Motivation beim Abnehmen](https://github.com/Yggras/abnehm-app/blob/research/gamification-evidence/research/gamification-evidence.md)
+- [Recherche: Studienlage zu Gamification und Motivation beim Abnehmen](https://github.com/Yggras/abnehm-app/blob/main/research/gamification-evidence.md)

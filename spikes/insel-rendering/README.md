@@ -10,7 +10,7 @@ Wegwerfbarer Expo-SDK-57-Spike für [„Spike: Inselansicht im Release-Build auf
 - Ziehen und Pinch-Zoom über Gesture Handler
 - Umschaltbar zwischen `@shopify/react-native-skia` 2.6.2 und `react-native-svg` 15.15.4 (die von Expo SDK 57 gebündelten Versionen)
 
-Das Lastprofil bildet Anzahl und Bewegungslast des Web-Prototyps nach, nicht dessen endgültige Grafik. Die Elementzahlen stammen aus [Recherche: Isometrische Inselansicht in Expo/React Native](https://github.com/Yggras/abnehm-app/blob/research/insel-rendering/research/insel-rendering.md).
+Das Lastprofil bildet Anzahl und Bewegungslast des Web-Prototyps nach, nicht dessen endgültige Grafik. Die Elementzahlen stammen aus [Recherche: Isometrische Inselansicht in Expo/React Native](https://github.com/Yggras/abnehm-app/blob/main/research/insel-rendering.md).
 
 Die protokollierten Gerätetests stehen in [`RESULTS.md`](RESULTS.md).
 

@@ -12,7 +12,7 @@ Recherche · Stand: 10.10.2026
 - Abschnitte mit **„Einordnung“** sind meine Ableitungen aus den Quellen, keine Befunde.
 - Apps wurden nicht installiert. Mechaniken reichen nur so weit, wie die Quellen sie beschreiben.
 - Außerhalb des Rahmens: Aufwandsschätzungen und rechtliche Themen.
-- Ergänzt die Berichte `research/gamification-evidence.md` (Branch `research/gamification-evidence`) und `research/partner-fitness-gamification.md` (Branch `research/partner-fitness-gamification`). Paar-Apps, die dort schon beschrieben sind, werden hier nur kurz aufgegriffen.
+- Ergänzt die Berichte `research/gamification-evidence.md` und `research/partner-fitness-gamification.md`. Paar-Apps, die dort schon beschrieben sind, werden hier nur kurz aufgegriffen.
 
 ---
 

@@ -235,7 +235,7 @@ Die App hat drei Arten von Zustand. Dafür braucht es unterschiedliche Werkzeuge
 43. Weiterleitung https://docs.expo.dev/build-reference/e2e-tests/ → https://docs.expo.dev/eas/workflows/examples/e2e-tests/ (abgerufen 11.10.2026) *(Expo)*
 44. Expo-Doku „Using e2e by TesterArmy“: https://docs.expo.dev/guides/using-e2e/ *(Doku)*
 45. Expo `llms.txt` (u. a. Abschnitte Testing, Maestro Insights, Color Themes): https://docs.expo.dev/llms.txt; Color Themes: https://docs.expo.dev/develop/user-interface/color-themes/ *(Doku)*
-46. Recherche Inselansicht (#29): https://github.com/Yggras/abnehm-app/blob/research/insel-rendering/research/insel-rendering.md *(Projekt)*
+46. Recherche Inselansicht (#29): https://github.com/Yggras/abnehm-app/blob/main/research/insel-rendering.md *(Projekt)*
 47. Commit „test(expo-sqlite): Replace better-sqlite3 with node:sqlite“: https://github.com/expo/expo/commit/b85691550a991139ecb1b50e656328fd54621ecb; Inhalt von `npm pack expo-sqlite@57.0.4` (ohne `__mocks__`, geprüft 11.10.2026) *(GitHub/npm)*
 48. Maestro-Release `cli-2.11.0`: https://github.com/mobile-dev-inc/Maestro/releases/tag/cli-2.11.0 *(GitHub)*
 49. Expo-Doku „AI agents and Expo“: https://docs.expo.dev/agents/ *(Doku)*

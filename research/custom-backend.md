@@ -1,6 +1,6 @@
 # Recherche: Selbst geschriebenes Backend als Alternative zu Supabase
 
-Ticket: #20 · Stand der Recherche und aller Preisangaben: **2026-10-10**. Quellen-Nummern [n] verweisen auf die Liste am Ende. Aussagen ohne Quelle sind ausdrücklich als *Annahme*, *eigene Einschätzung* oder *eigene Rechnung* markiert. Vergleichsbasis ist die Vorrecherche `research/backend.md` (Branch `research/backend`, Ticket #3), deren Supabase-Angaben hier nicht erneut recherchiert, sondern mit „[VR]“ referenziert werden.
+Ticket: #20 · Stand der Recherche und aller Preisangaben: **2026-10-10**. Quellen-Nummern [n] verweisen auf die Liste am Ende. Aussagen ohne Quelle sind ausdrücklich als *Annahme*, *eigene Einschätzung* oder *eigene Rechnung* markiert. Vergleichsbasis ist die Vorrecherche `research/backend.md` (Ticket #3), deren Supabase-Angaben hier nicht erneut recherchiert, sondern mit „[VR]“ referenziert werden.
 
 ## Zusammenfassung
 
@@ -152,4 +152,4 @@ Hinweis: Dollar-Preise wurden nicht in Euro umgerechnet (Wechselkurs nicht gepr�
 46. Caddy: Automatic HTTPS – https://caddyserver.com/docs/automatic-https
 47. Supabase: Connecting to Postgres – https://supabase.com/docs/guides/database/connecting-to-postgres
 48. Cloudflare Hyperdrive Pricing – https://developers.cloudflare.com/hyperdrive/platform/pricing/
-- [VR] Vorrecherche „Backend-Optionen für Sync, Auth und Push“ – https://github.com/Yggras/abnehm-app/blob/research/backend/research/backend.md
+- [VR] Vorrecherche „Backend-Optionen für Sync, Auth und Push“ – https://github.com/Yggras/abnehm-app/blob/main/research/backend.md

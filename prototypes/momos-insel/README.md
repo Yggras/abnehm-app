@@ -30,7 +30,7 @@ Dann <http://localhost:4176/?variant=A> öffnen.
 - Kernschleife, Energie (persönlich, verfällt nie, nicht verschenkbar, max. 3 Ziele + Tagesbonus pro Tag), Rollen Bauen/Natur, eigene Ecke, Gemeinschaftsprojekte ohne Frist, Ereignisse freiwillig/nie verfallend/pro Tag gedeckelt/Ansehen kostenlos, kein „Partner fehlt“: [Spielkonzept festlegen](https://github.com/Yggras/abnehm-app/issues/26)
 - Momo, 50/50-Levelbalken: [Gamification-Konzept prototypen](https://github.com/Yggras/abnehm-app/issues/12)
 - Tab-Leiste Heute · Protokoll · ＋ · Momo · Wir: [Hauptbildschirm und Navigation prototypen](https://github.com/Yggras/abnehm-app/issues/15)
-- Vorbilder für Ereignisse (Saison-Events, Geschenke): [Recherche Spielformen](https://github.com/Yggras/abnehm-app/blob/research/spielformen-gesundheitsspiel/research/spielformen-gesundheitsspiel.md), Abschnitte 1, 2.1, 2.4, 2.9
+- Vorbilder für Ereignisse (Saison-Events, Geschenke): [Recherche Spielformen](https://github.com/Yggras/abnehm-app/blob/main/research/spielformen-gesundheitsspiel.md), Abschnitte 1, 2.1, 2.4, 2.9
 - three.js r160 und OrbitControls: <https://threejs.org/docs/#examples/en/controls/OrbitControls>
 
 **Nicht belegt (Entwurfsannahmen):** alle Zahlen (1 Energie pro Tagesziel, Baukosten 1–6, Levelbedarf 10 + 2 × Level pro Hälfte, Projektanteile, Tagesdeckel 2), Inselgrundriss, Besucher/Belohnungen, die Bildstile selbst. Ob sich einer der Stile mit Expo/React Native in vergleichbarer Qualität umsetzen lässt, ist **nicht geprüft**.

@@ -17,7 +17,7 @@ Quellen-Nummern in eckigen Klammern [n] verweisen auf die Liste am Ende. Mit *ei
 
 ## Ausgangslage: Was der Prototyp zeichnet
 
-Quelle: `prototypes/momos-insel/island-iso.js` und `styles.css` auf Branch `prototype/momos-insel` [34].
+Quelle: `prototypes/momos-insel/island-iso.js` und `styles.css` [34].
 
 - **Raster:** 9×9-Karte, davon 46 Landfelder (nicht ~60). Jedes Feld besteht aus 3–5 Polygonen (Seiten, Kante, Oberseite). Darauf liegen Objekte aus Kreisen, Ellipsen, Polygonen und Pfaden, Deko und Momo als Emoji-`<text>`.
 - **Neuzeichnen:** Bei jeder Zustandsänderung entsteht das komplette SVG neu als String (`innerHTML`).
@@ -198,6 +198,6 @@ Begründung:
 31. React Three Fiber, Installation (React Native): https://r3f.docs.pmnd.rs/getting-started/installation *(Doku)*
 32. npm-Registry und npm-Downloads-API (abgerufen 11.10.2026), z. B. https://registry.npmjs.org/react-native-svg, https://registry.npmjs.org/@shopify/react-native-skia, https://registry.npmjs.org/react-native-skia, https://registry.npmjs.org/react-native-webview, https://registry.npmjs.org/react-native-gesture-handler, https://registry.npmjs.org/react-native-reanimated, https://registry.npmjs.org/expo-gl, https://registry.npmjs.org/@react-three/fiber, https://api.npmjs.org/downloads/point/last-week/react-native-svg *(npm)*
 33. GitHub-REST-API, Repository-Daten (abgerufen 11.10.2026), z. B. https://api.github.com/repos/software-mansion/react-native-svg, https://api.github.com/repos/Shopify/react-native-skia (→ wcandillon/react-native-skia), https://api.github.com/repos/react-native-webview/react-native-webview *(GitHub)*
-34. Web-Prototyp „Momos Insel“, Variante A: `prototypes/momos-insel/island-iso.js`, `app.js`, `styles.css` auf Branch `prototype/momos-insel`: https://github.com/Yggras/abnehm-app/tree/prototype/momos-insel/prototypes/momos-insel *(Repo)*
-35. Recherche Tech-Stack (#2), Hinweis zu Development Builds: https://github.com/Yggras/abnehm-app/blob/research/tech-stack/research/tech-stack.md *(Repo)*
+34. Web-Prototyp „Momos Insel“, Variante A: `prototypes/momos-insel/island-iso.js`, `app.js`, `styles.css`: https://github.com/Yggras/abnehm-app/tree/main/prototypes/momos-insel *(Repo)*
+35. Recherche Tech-Stack (#2), Hinweis zu Development Builds: https://github.com/Yggras/abnehm-app/blob/main/research/tech-stack.md *(Repo)*
 36. GeekyAnts-Blog, „Optimizing SVG Rendering in React Native: From React-Native-SVG to Expo-Image“ (20.11.2024): https://geekyants.com/en-ca/blog/optimizing-svg-rendering-in-react-native-from-react-native-svg-to-expo-image *(Drittquelle, Blog)*

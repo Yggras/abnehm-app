@@ -234,7 +234,7 @@ Replicache (Wartungsmodus [30]), TinyBase und Legend-State (keine Rechteprüfung
 
 1. Ticket #34 (Fragestellung, Verweis auf Sicherheit der Gesundheitsdaten #22): https://github.com/Yggras/abnehm-app/issues/34 *(Repo)*
 2. Wayfinder-Karte, Entscheidungen „Tech-Stack festlegen“ (#10) und „Backend festlegen“ (#11): https://github.com/Yggras/abnehm-app/issues/1 *(Repo)*
-3. Recherche Tech-Stack (#2), „Expo Go reicht nicht“: https://github.com/Yggras/abnehm-app/blob/research/tech-stack/research/tech-stack.md *(Repo)*
+3. Recherche Tech-Stack (#2), „Expo Go reicht nicht“: https://github.com/Yggras/abnehm-app/blob/main/research/tech-stack.md *(Repo)*
 4. Expo SDK 57, `bundledNativeModules.json` (`expo@57.0.27`): https://unpkg.com/expo@57.0.27/bundledNativeModules.json *(Expo/npm)*
 5. Expo-Doku `expo-sqlite` (v57): https://docs.expo.dev/versions/latest/sdk/sqlite/ *(Doku)*
 6. Drizzle ORM, Expo SQLite: https://orm.drizzle.team/docs/connect-expo-sqlite *(Doku)*
