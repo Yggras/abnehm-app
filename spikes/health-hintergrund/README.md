@@ -61,6 +61,18 @@ android/gradlew -p android :app:assembleRelease
 - `plugins/without-push-entitlement.js` entfernt `aps-environment`, das `expo-notifications` automatisch setzt. Der Spike braucht nur lokale Mitteilungen.
 - Laut [Recherche: Private Verteilung](https://github.com/Yggras/abnehm-app/issues/8) muss eine mit kostenlosem Konto signierte App nach 7 Tagen neu installiert werden. Für einen Spike von wenigen Tagen reicht das.
 
+## Protokoll auslesen
+
+iPhone per Kabel am Mac (geht, weil die App mit dem Entwicklerzertifikat signiert ist):
+
+```sh
+xcrun devicectl device copy from --device <UDID> --domain-type appDataContainer \
+  --domain-identifier de.yggras.abnehmapp.healthspike \
+  --source Documents/health-spike-log.jsonl --destination ./ios-log.jsonl
+```
+
+Android per USB-Debugging: `adb shell run-as de.yggras.abnehmapp.healthspike cat files/health-spike-log.jsonl > android-log.jsonl` (nicht geprüft; ohne Kabel: „Protokoll teilen“).
+
 ## Bekannte Grenzen der Messung
 
 - Auf iOS gibt HealthKit keinen Zeitpunkt „in Apple Health geschrieben“ heraus. Mit „sofort“ ist der Weck-Zeitpunkt die beste Näherung. Der Abstand Uhr → Google Health → Apple Health lässt sich daher nur zusammen mit der Weckverzögerung messen, ergänzt um die notierte „synchronisiert“-Zeit aus Google Health.

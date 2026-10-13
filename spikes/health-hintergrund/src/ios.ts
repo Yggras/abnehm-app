@@ -44,6 +44,7 @@ const SLEEP = 'HKCategoryTypeIdentifierSleepAnalysis' as const;
 export async function requestIosPermissions() {
   await requestAuthorization({ toRead: [WORKOUT, ...INVENTORY_QUANTITY, SLEEP] });
   log('info', { msg: 'HealthKit-Leserechte angefragt' });
+  registerIosSubscriptions();
 }
 
 export async function enableIosBackground(frequency: 'immediate' | 'hourly') {
@@ -51,6 +52,7 @@ export async function enableIosBackground(frequency: 'immediate' | 'hourly') {
   const ok = await configureBackgroundTypes(BACKGROUND_TYPES, freq);
   writeState({ iosFrequency: frequency });
   log('info', { msg: 'Background Delivery konfiguriert', frequency, ok });
+  registerIosSubscriptions();
 }
 
 // Läuft bei jedem Wecken durch HealthKit (auch nach Kaltstart im Hintergrund)
@@ -72,7 +74,7 @@ export async function importIosChanges(typeId: string, trigger: string) {
     const firstRun = !anchor;
 
     if (typeId === WORKOUT) {
-      const res = await queryWorkoutSamplesWithAnchor({ limit: firstRun ? 20 : 0, anchor });
+      const res = await queryWorkoutSamplesWithAnchor({ limit: 0, anchor });
       for (const w of res.workouts) {
         logSample(typeId, trigger, firstRun, {
           startDate: w.startDate,
@@ -88,7 +90,7 @@ export async function importIosChanges(typeId: string, trigger: string) {
       writeState({ [anchorKey]: res.newAnchor });
     } else {
       const res = await queryQuantitySamplesWithAnchor(typeId as QuantityTypeIdentifier, {
-        limit: firstRun ? 20 : 0,
+        limit: 0,
         anchor,
       });
       for (const s of res.samples) {
@@ -123,6 +125,8 @@ function logSample(
   firstRun: boolean,
   s: { startDate: Date; endDate: Date; source: { name: string; bundleIdentifier: string }; [k: string]: unknown },
 ) {
+  // Erster Lauf = Historie: nur gezählt (siehe „import“), nicht einzeln protokolliert.
+  if (firstRun) return;
   const { startDate, endDate, source, ...rest } = s;
   log('sample', {
     platform: 'ios',
@@ -142,17 +146,24 @@ function logSample(
 // Muss beim Laden des JS-Bundles laufen (Modul-Ebene in index.ts), damit
 // Wecken nach Kaltstart nicht verloren geht. Die Bibliothek puffert Ereignisse
 // bis zur Registrierung.
+// Erneut aufrufbar: Vor erteilten Rechten scheitern die Beobachter mit
+// „Authorization not determined“, deshalb nach Rechten/Konfiguration neu anmelden.
+let subscriptions: { remove: () => boolean }[] = [];
+
 export function registerIosSubscriptions() {
-  for (const typeId of BACKGROUND_TYPES) {
+  for (const sub of subscriptions) sub.remove();
+  subscriptions = BACKGROUND_TYPES.map((typeId) =>
     subscribeToChanges(typeId, (args) => {
       if (args.errorMessage) {
         log('error', { where: `observer ${typeId}`, error: args.errorMessage });
         return;
       }
-      const trigger = AppState.currentState === 'active' ? 'observer-foreground' : 'background';
+      // Beim Start im Vordergrund meldet HealthKit einmal alle Typen; der Zustand ist
+      // dann noch „inactive“. Nur „background“ ist ein echtes Wecken im Hintergrund.
+      const trigger = AppState.currentState === 'background' ? 'background' : 'observer-foreground';
       void importIosChanges(typeId, trigger);
-    });
-  }
+    }),
+  );
 }
 
 export async function importAllIos(trigger: string) {
