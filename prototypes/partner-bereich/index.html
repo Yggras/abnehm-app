@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYP – Partner-Bereich und Einstellungen</title>
+  <link rel="stylesheet" href="styles.css?v=cc310cd">
+</head>
+<body>
+  <div class="device"><main id="app" aria-live="polite"></main><div id="sheet-root"></div></div>
+
+  <aside class="lab collapsed" id="lab">
+    <button class="lab__toggle" id="lab-toggle" aria-expanded="false">Simulation <span>⌄</span></button>
+    <div class="lab__body">
+      <p>Andere Zustände ausprobieren</p>
+      <button data-sim="solo">Partner entkoppeln/koppeln</button>
+      <button data-sim="proposal">Challenge-Vorschlag an/aus</button>
+      <button data-sim="cheer">Anfeuerung empfangen</button>
+      <button data-sim="reset">Zurücksetzen</button>
+      <details><summary>Zustand</summary><pre id="state-output"></pre></details>
+    </div>
+  </aside>
+
+  <nav class="switcher" aria-label="Prototyp-Varianten">
+    <button id="previous" aria-label="Vorherige Variante">←</button>
+    <span id="variant-label"></span>
+    <button id="next" aria-label="Nächste Variante">→</button>
+  </nav>
+  <div class="toast" id="toast"></div>
+  <script src="app.js?v=cc310cd"></script>
+</body>
+</html>
