@@ -33,6 +33,22 @@ Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `
 - Die Sperre darf nur in einem bewusst geprüften Notfall einmalig mit `ABNEHM_APP_ALLOW_PRIMARY_WRITE=I_KNOW_WHAT_I_AM_DOING` übergangen werden. Bequemlichkeit ist kein Notfall.
 - Git-Hooks sind lokale Schutzmechanismen. Sie ersetzen weder den Ticket-Worktree noch die Prüfung von Arbeitsort und Status.
 
+## Agent skills
+
+Konfiguration für die Engineering-Skills (`to-spec`, `to-tickets`, `triage`, `wayfinder`, …), angelegt mit `/setup-matt-pocock-skills`.
+
+### Issue tracker
+
+GitHub-Issues in Yggras/abnehm-app über die `gh`-CLI; Spezifikationen als eigenständige Issues, Umsetzungstickets als deren Sub-Issues. Siehe `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Standard-Vokabular: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. Siehe `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Ein Kontext: `CONTEXT.md` + `docs/adr/` im Repo-Root, bis zur Umsetzung ergänzt durch die Entscheidungen der Wayfinder-Karte. Siehe `docs/agents/domain.md`.
+
 ## Regeln
 
 - **Keine unbelegten Aussagen.** Jede Faktenbehauptung braucht eine Quelle (bevorzugt Primärquelle, mit URL). Nicht Belegbares ausdrücklich als „nicht belegt“ kennzeichnen.
