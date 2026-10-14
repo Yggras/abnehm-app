@@ -12,7 +12,12 @@ Einstellung: Background Delivery „sofort“ für Workout, Gewicht, Schritte, a
 | 14.10. 00:18 | **ja** | 2 (Schritte, aktive kcal) | 25,9 min | < 1,1 s | 5/5 ok |
 | 14.10. 08:10 | **ja** | 5 (Schritte, aktive kcal) | 4,8–29,7 min | < 1,1 s | 5/5 ok |
 
+| 14.10. 09:23 | **ja – nach Force-Quit** (weggewischt ca. 08:00–08:10) | 13 (Schritte, aktive kcal) | 18–76 min | < 1,1 s | ok |
+
 Beobachtungen:
+
+- **Wecken nach Force-Quit funktioniert:** Die App wurde zwischen 08:00 und 08:10 weggewischt und um 09:23 von iOS im Hintergrund kaltgestartet; Import und Upload liefen.
+- Zwischen 08:10 und 09:23 kam kein Wecken, obwohl ab 08:04 neue Schritte entstanden. Die Einträge waren beim Import bis zu 76 min alt – vereinbar mit Apples „höchstens stündlich“ für Schritte, aber die Schreibzeit des iPhones in HealthKit ist nicht messbar.
 
 - **Wecken aus dem beendeten Zustand funktioniert:** Zweimal hat iOS die App ohne laufenden Prozess im Hintergrund gestartet (`jsStart` zeitgleich mit dem Wecken). Das war in der [Recherche](https://github.com/Yggras/abnehm-app/blob/main/research/health-background.md) für Version 16.x als „nicht belegt“ markiert.
 - Bei jedem Wecken melden alle fünf Beobachter gleichzeitig, auch Typen ohne neue Daten.
@@ -20,4 +25,4 @@ Beobachtungen:
 - Lesen + Speichern + Upload brauchten höchstens 1,1 s, der längste Upload 962 ms – weit unter dem 25-s-Fenster der Bibliothek.
 - Alle Weckungen hatten Zugriff auf geschützte Daten; das Szenario „gesperrtes Gerät“ ist noch nicht getroffen.
 
-Offen: Fitbit-Daten über Google Health (ab 14.10. abends), Force-Quit, gesperrtes Gerät, Einstellung „stündlich“, Android.
+Offen: Fitbit-Daten über Google Health (ab 14.10. abends), gesperrtes Gerät, Einstellung „stündlich“, Android.
