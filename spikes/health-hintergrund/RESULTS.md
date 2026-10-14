@@ -27,7 +27,7 @@ Beobachtungen:
 
 ## iPhone + Fitbit Sense 2 über Google Health, ab 14.10.2026 abends
 
-**Einrichtung:** Die Kopplung Uhr ↔ Google Health allein reicht nicht. Bis Philipp in Google Health zusätzlich die Verbindung zu Apple Health eingerichtet hatte, schrieb Google Health nichts nach HealthKit (unter „Datenquellen & Zugriff“ stand nur die Spike-App). Das war nicht offensichtlich → Onboarding muss diesen zweiten Schritt ausdrücklich anleiten und prüfen.
+**Einrichtung:** Die Kopplung Uhr ↔ Google Health allein reicht nicht. Bis Philipp in Google Health zusätzlich die Verbindung zu Apple Health eingerichtet hatte, schrieb Google Health nichts nach HealthKit (unter „Datenquellen & Zugriff“ stand nur die Spike-App). Das war nicht offensichtlich → Onboarding muss diesen zweiten Schritt ausdrücklich anleiten und prüfen. Pfad laut Philipp (Google Health, 14.10.2026): **Profil → Partner apps → Apple Health**; die Freigabe selbst war klar.
 
 **Inventur 19:37** (Quelle „Google Health“, `bundleIdentifier` **`com.fitbit.FitbitMobile`** – bestätigt die Erwartung aus [Recherche #53](https://github.com/Yggras/abnehm-app/issues/53)):
 
