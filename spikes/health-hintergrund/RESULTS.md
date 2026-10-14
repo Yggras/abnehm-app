@@ -44,4 +44,9 @@ Beobachtungen:
 
 **Doppelte Quellen:** iPhone und Google Health schreiben Schritte, aktive Energie und Strecke für dieselben Zeiträume. Summen dürfen nicht über alle Einträge gebildet werden; Apple-Statistikabfragen berücksichtigen die Quellenpriorität ([HKStatisticsQuery](https://developer.apple.com/documentation/healthkit/hkstatisticsquery)). V1 importiert laut [#38](https://github.com/Yggras/abnehm-app/issues/38) nur Trainings und Gewicht; dort ist die Doppelung noch zu prüfen.
 
-Offen: Fitbit-Workout-Latenz (ab 14.10. abends), gesperrtes Gerät, Einstellung „stündlich“, Android.
+**Workout-Latenz (Kernmessung):** Testtraining auf der Uhr (Dauer 20 s, 0 Schritte), Ende 20:01:52 → als `HKWorkout` (Quelle Google Health `com.fitbit.FitbitMobile`, Gerät „Sense 2“, `workoutActivityType` 52, keine Kalorien) **im Hintergrund importiert um 20:02:31 – gesamte Kette Uhr → Google Health → HealthKit → App ≈ 40 s**. iPhone war entsperrt.
+
+- Auch ein 0-Minuten-Training wird übertragen → V1 sollte Kleinst-Trainings nicht als Sport werten (Hinweis für die Spezifikation).
+- Google Health schreibt mehrere Typen in derselben Sekunde; das löste 7 fast gleichzeitige Weckungen aus, Uploads bis 4 s, alle erfolgreich. Die echte App sollte Importe serialisieren.
+
+Offen: Workout mit realer Dauer (Dauer/Kalorien prüfen) (ab 14.10. abends), gesperrtes Gerät, Einstellung „stündlich“, Android.
