@@ -25,4 +25,23 @@ Beobachtungen:
 - Lesen + Speichern + Upload brauchten höchstens 1,1 s, der längste Upload 962 ms – weit unter dem 25-s-Fenster der Bibliothek.
 - Alle Weckungen hatten Zugriff auf geschützte Daten; kein Wecken fand bei gesperrtem Gerät statt. Philipp beobachtet, dass die Spike-Mitteilungen beim Aufwecken bzw. Entsperren des iPhones erscheinen. Passend dazu laut Apple: HealthKit-Daten liegen in der Klasse „Protected Unless Open“, „Access to the data is relinquished 10 minutes after the device locks“, und „Temporary journal files store health records that are generated when the device is locked“ ([Apple Platform Security](https://support.apple.com/guide/security/protecting-access-to-users-health-data-sec88be9900f/web)). Dass die Beobachter deshalb erst nach dem Entsperren feuern, ist eine Schlussfolgerung, nicht von Apple belegt. Gegenprobe: > 10 min gesperrt gehen, dann entsperren, ohne die App zu öffnen.
 
-Offen: Fitbit-Daten über Google Health (ab 14.10. abends), gesperrtes Gerät, Einstellung „stündlich“, Android.
+## iPhone + Fitbit Sense 2 über Google Health, ab 14.10.2026 abends
+
+**Einrichtung:** Die Kopplung Uhr ↔ Google Health allein reicht nicht. Bis Philipp in Google Health zusätzlich die Verbindung zu Apple Health eingerichtet hatte, schrieb Google Health nichts nach HealthKit (unter „Datenquellen & Zugriff“ stand nur die Spike-App). Das war nicht offensichtlich → Onboarding muss diesen zweiten Schritt ausdrücklich anleiten und prüfen.
+
+**Inventur 19:37** (Quelle „Google Health“, `bundleIdentifier` **`com.fitbit.FitbitMobile`** – bestätigt die Erwartung aus [Recherche #53](https://github.com/Yggras/abnehm-app/issues/53)):
+
+| Typ | von Google Health |
+|---|---|
+| Schritte, aktive Energie, Strecke, Stockwerke | ja, als Minutenwerte |
+| Herzfrequenz | ja |
+| Gewicht | ja (ein Eintrag) |
+| Workouts | noch keins aufgezeichnet |
+| Schlaf, Ruhepuls | noch keine Nacht |
+| HRV, SpO₂, Atemfrequenz | nein (HRV fehlt laut [TechTimes](https://www.techtimes.com/articles/322971/20260804/fitbit-reaches-apple-health-new-google-health-update-hrv-still-blocked.htm)) |
+
+**Wecken:** Die erste Übertragung nach dem Verbinden weckte die App um 19:35 im Hintergrund; neuester Fitbit-Eintrag beim Import 4,5 min alt (Erstübertragung, kein Normalbetrieb).
+
+**Doppelte Quellen:** iPhone und Google Health schreiben Schritte, aktive Energie und Strecke für dieselben Zeiträume. Summen dürfen nicht über alle Einträge gebildet werden; Apple-Statistikabfragen berücksichtigen die Quellenpriorität ([HKStatisticsQuery](https://developer.apple.com/documentation/healthkit/hkstatisticsquery)). V1 importiert laut [#38](https://github.com/Yggras/abnehm-app/issues/38) nur Trainings und Gewicht; dort ist die Doppelung noch zu prüfen.
+
+Offen: Fitbit-Workout-Latenz (ab 14.10. abends), gesperrtes Gerät, Einstellung „stündlich“, Android.
