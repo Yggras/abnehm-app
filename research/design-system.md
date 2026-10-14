@@ -13,7 +13,7 @@ Das Artifact enthält außerdem die Vorschauen aller Komponenten und die Referen
 - **Farbe = Person:** Kategorien (Wasser, Sport …) erkennt man an Icon und Name, nicht an eigenen Farben. Es gibt **kein „Fehler-Rot“ für Ziele**; `problem` gilt nur für Technik und ungültige Eingaben.
 - **Tokens:** 60 Farben, 11 Textstile, 8 Abstände, 6 Radien, 10 Elevationen, 20 Größen, 6 Deckkräfte, 5 Dauern, 3 Kurven, 2 Federn – als `tokens.json` und als typisierte `code/tokens.ts` für `StyleSheet` ([#41](https://github.com/Yggras/abnehm-app/issues/41)).
 - **Komponenten:** Fast alles ist gebrandet (eigene Komponente mit `StyleSheet` und Tokens). Über `@expo/ui` kommen nur Sheet-Container, Schalter, Picker (Datum/Uhrzeit) und Kontextmenüs. Momo und Insel zeichnet Skia, den Gewichtsverlauf Victory Native.
-- **Offen:** 8 Designfragen (u. a. Momos Gestalt, Dunkelmodus, App-Name) und 15 Annahmen, siehe Ende der Datei.
+- **Offen:** 15 Annahmen und 8 Designfragen. Momos Gestalt ([#69](https://github.com/Yggras/abnehm-app/issues/69)) und App-Name/Icon ([#70](https://github.com/Yggras/abnehm-app/issues/70)) sind eigene Tickets; Dunkelmodus und Insel-Bedienung ohne Sehen sind nicht in V1; die übrigen vier sind entschieden oder einer Spezifikation zugewiesen (siehe Ende der Datei).
 
 ## Gewählte Richtung: A · Lagune
 
@@ -532,16 +532,24 @@ Die Annahmen 9, 10 und 11 sind technische Prüfpunkte für [#56](https://github.
 
 ## Offene Designfragen
 
-Diese Fragen braucht eine Entscheidung des Nutzers oder ein Ticket auf der Karte; das Design-System entscheidet sie nicht.
+Diese Fragen hat das Design-System nicht entschieden. Der Nutzer hat am 14.10.2026 über ihren Verbleib entschieden ([Kommentar in #65](https://github.com/Yggras/abnehm-app/issues/65#issuecomment-6177664253)).
 
 1. **Wie sieht Momo aus?** Wesen, Merkmale, die großen Entwicklungsformen ab Level 4 ([#18](https://github.com/Yggras/abnehm-app/issues/18)) und der Katalog der Accessoires sind nirgends festgelegt. Die Figur im Design-System ist ein Platzhalter.
+   → Ticket [Momos Gestalt und Entwicklungsformen festlegen (#69)](https://github.com/Yggras/abnehm-app/issues/69), blockiert [Spezifikation 4 (#60)](https://github.com/Yggras/abnehm-app/issues/60).
 2. **Dunkelmodus in V1?** Das System liefert nur die helle Fassung. Die semantischen Namen erlauben ein zweites Theme ohne Umbenennung.
+   → **Nein**, nur hell; auf der Karte unter *Out of scope*.
 3. **App-Name und App-Icon.** Bis zu einer Entscheidung heißt das System „Abnehm-App“.
+   → Ticket [App-Name und App-Icon festlegen (#70)](https://github.com/Yggras/abnehm-app/issues/70), ohne Blocker auf die Spezifikationen.
 4. **Haptik bei Erfolgen?** Ein kurzes Vibrieren beim Erfüllen eines Tagesziels würde zur federnden Bewegung passen; eine Haptik-Bibliothek gehört nicht zum festgelegten Stack ([#10](https://github.com/Yggras/abnehm-app/issues/10), [#41](https://github.com/Yggras/abnehm-app/issues/41)).
+   → **Ja, dezent** bei erfülltem Tagesziel, Tagesbonus und Levelaufstieg; die Bibliothek (z. B. [`expo-haptics`](https://docs.expo.dev/versions/latest/sdk/haptics/)) wählt [Spezifikation 0 (#56)](https://github.com/Yggras/abnehm-app/issues/56).
 5. **Insel ohne Sehen bedienen.** Die Skia-Insel ist für Screenreader ein Bild. Braucht V1 eine Liste der eigenen Felder und Objekte als Alternative? Das wäre eine neue Funktion.
+   → **Nicht in V1**; die Insel bleibt ein Bild mit beschreibendem `accessibilityLabel`. Auf der Karte unter *Out of scope*.
 6. **Form der Rückmeldung beim Erfüllen eines Tagesziels.** [#12](https://github.com/Yggras/abnehm-app/issues/12) verlangt eine kleine positive Reaktion; das System schlägt Momo „freut sich“ plus die Meldung „Wasserziel erfüllt · +1 Energie“ vor.
+   → **Vorschlag übernommen**; Vorgabe für [Spezifikation 4 (#60)](https://github.com/Yggras/abnehm-app/issues/60).
 7. **Schwellen der Challenge-Stufen.** „gestartet · gut unterwegs · fast geschafft · geschafft“ stehen in [#19](https://github.com/Yggras/abnehm-app/issues/19) nur als Beispiele, ohne Grenzen in Prozent.
+   → legt [Spezifikation 4 (#60)](https://github.com/Yggras/abnehm-app/issues/60) fest, kein eigenes Ticket.
 8. **Zeigt der Hinweis auf „Heute“ den Text der Anfeuerung?** [#15](https://github.com/Yggras/abnehm-app/issues/15) nennt nur „Partner feuert dich an“; der Entwurf zeigt zusätzlich die zuletzt erhaltene Kurzbotschaft.
+   → **Ja**, mit der zuletzt erhaltenen festen Kurzbotschaft; Vorgabe für [Spezifikation 5 (#61)](https://github.com/Yggras/abnehm-app/issues/61).
 
 ## Später
 
