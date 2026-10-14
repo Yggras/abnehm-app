@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'de.yggras.healthspike'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.hcfeature"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // Gleiche Version wie react-native-health-connect 4.1.3 (android/build.gradle).
+  implementation "androidx.health.connect:connect-client:1.1.0"
+}

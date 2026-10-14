@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Health-Hintergrund-Spike",
+    "slug": "abnehm-app-health-hintergrund-spike",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "de.yggras.abnehmapp.healthspike",
+      "buildNumber": "1",
+      "appleTeamId": "926DZQS4VN"
+    },
+    "android": {
+      "package": "de.yggras.abnehmapp.healthspike",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#173D68",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.READ_TOTAL_CALORIES_BURNED",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_RESTING_HEART_RATE",
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Der Spike liest Trainings, Schritte, Kalorien und Gewicht, um den Hintergrund-Import zu testen.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": true
+        }
+      ],
+      "react-native-health-connect",
+      "expo-background-task",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "./plugins/without-push-entitlement"
+    ]
+  }
+}
