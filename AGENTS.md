@@ -52,6 +52,8 @@ Ein Kontext: `CONTEXT.md` + `docs/adr/` im Repo-Root, bis zur Umsetzung ergänzt
 ## Regeln
 
 - **Keine unbelegten Aussagen.** Jede Faktenbehauptung braucht eine Quelle (bevorzugt Primärquelle, mit URL). Nicht Belegbares ausdrücklich als „nicht belegt“ kennzeichnen.
+- **Entscheidungen selbstständig treffen:** Wenn der Nutzer keine abweichende Präferenz nennt, die begründete Empfehlung wählen und weiterarbeiten; nur bei echter Produktpräferenz, fehlender Information oder schwer reversibler externer Wirkung nachfragen.
+- **Codebase-Qualität priorisieren:** Eine hervorragende, erweiterbare Codebasis mit tiefen Modulen und kleinen Interfaces bauen; Seams nur für echte Varianten oder Test-Adapter einführen, Fachdaten nicht zwischen Bibliotheks-Stores duplizieren und Verhalten an Modul-Interfaces testen.
 - **Selbstständig committen**, ohne nachzufragen.
 - **Niemals einen Agenten/eine KI als Co-Author eintragen** – keine `Co-Authored-By`-Zeile, keine KI-Attribution in Commits oder PRs. Gilt auch für Subagenten.
 - **Nicht betrachtet (vorerst):** Aufwandsschätzungen und rechtliche Themen (Legal, z. B. DSGVO, Datenschutzerklärung, Lizenzrecht).
