@@ -2,6 +2,10 @@
 
 > Wegwerfbarer UI-Prototyp zu [Momos Gestalt und Entwicklungsformen festlegen](https://github.com/Yggras/abnehm-app/issues/69). Drei Gestaltvarianten auf einer Seite, umschaltbar über `?variant=`.
 
+## Status: verworfene Runde 1
+
+Nutzerfeedback vom 15.10.2026: Die drei Optionen variieren zu wenig in ihrer Grundgestalt; die Entwicklungsstufen verändern fast nur Größe und Details. Diese Runde entscheidet deshalb **keine** Richtung und bleibt nur als Negativbeispiel erhalten. Runde 2 beginnt neu mit deutlich verschiedenen Körperbauten und echten Metamorphosen. Die Produktionsstrategie dafür steht in [Recherche: Produktionsstrategie für Momos Animation und Assets](../../research/momo-animation-assets.md).
+
 ## Frage dieser Runde
 
 Welche **Grundgestalt** soll Momo bekommen? Die drei Entwürfe prüfen bewusst unterschiedliche Silhouetten:

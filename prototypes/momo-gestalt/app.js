@@ -294,11 +294,11 @@ function render() {
   app.innerHTML = `<div class="page"><div class="page__inner">
     <header class="page-header">
       <div class="page-header__copy">
-        <p class="eyebrow">Prototyp · Runde 1 von 2</p>
+        <p class="eyebrow">Verworfener Prototyp · Runde 1</p>
         <h1>Welche Grundgestalt soll Momo haben?</h1>
-        <p class="lede">Drei bewusst unterschiedliche Silhouetten im Design-System „Lagune“. Wechsle unten zwischen A, B und C; Stimmung, Form und Accessoire lassen sich direkt ausprobieren.</p>
+        <p class="lede">Diese Runde bleibt als Negativbeispiel erhalten: Die drei Silhouetten und ihre Entwicklungsstufen unterscheiden sich nicht deutlich genug.</p>
       </div>
-      <span class="status-chip">Unbelegte Designvorschläge</span>
+      <span class="status-chip">Verworfen · zu wenig Varianz</span>
     </header>
 
     <section class="hero-card">
