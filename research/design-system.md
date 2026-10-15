@@ -1,6 +1,6 @@
 # Design-System „Lagune“
 
-Ticket: [#65](https://github.com/Yggras/abnehm-app/issues/65) · Stand: 14.10.2026 · Quelle: das veröffentlichte Design-System-Artifact [„Abnehm-App“](https://claude.ai/artifact/FXrPV237YtYXY4ARRSGiic) (Claude Design, Phase 2), am 14.10.2026 gelesen (Artifact-Version `1792007765-af36`).
+Ticket: [#65](https://github.com/Yggras/abnehm-app/issues/65) · Stand: 14.10.2026 · Quelle: das veröffentlichte Design-System-Artifact [„Abnehm-App“](https://claude.ai/artifact/FXrPV237YtYXY4ARRSGiic) (Claude Design, Phase 2), am 14.10.2026 gelesen (Artifact-Version `1792007765-af36`); am 15.10.2026 um Momos Gestalt aus [#69](https://github.com/Yggras/abnehm-app/issues/69) ergänzt (Artifact-Version `1792091707-ba6e`).
 
 Diese Datei hält das Ergebnis von #65 im Repo fest, damit [Spezifikation 0: Fundament & Verträge (#56)](https://github.com/Yggras/abnehm-app/issues/56) die Tokens übernehmen kann, statt sie zu erfinden. Die Token-Tabellen sind maschinell aus `project/tokens.json` des Artifacts erzeugt. Alles andere ist aus `project/README.md`, `project/1-tokens.md` bis `project/6-annahmen-und-offene-fragen.md` und den Komponenten-READMEs zusammengefasst. Mit *eigene Rechnung* markierte Stellen stammen nicht aus dem Artifact.
 
@@ -201,7 +201,7 @@ Nur eine Fassung: **hell**. Die semantischen Namen erlauben ein zweites Theme oh
 | `momo-body` | `#FFC56E` | Skia: Momos Körper (Lagunenling, [#69](https://github.com/Yggras/abnehm-app/issues/69)). |
 | `momo-belly` | `#FFEBC4` | Skia: Momos Bauch. |
 | `momo-cheek` | `#F48C73` | Skia: Wangen, mit opacity-cheek. |
-| `momo-frond` | `#F48C73` (Alias auf `momo-cheek`) | Skia: Kiemenwedel, Flossen, Kamm und Flügel, volle Deckkraft. *Ergänzung aus [#69](https://github.com/Yggras/abnehm-app/issues/69), im Artifact noch nicht nachgezogen.* |
+| `momo-frond` | `#F48C73` (Alias auf `momo-cheek`) | Skia: Kiemenwedel, Flossen, Kamm und Flügel, volle Deckkraft; nie Türkis ([#69](https://github.com/Yggras/abnehm-app/issues/69)). |
 | `momo-stage` | `#DDF0EE` (Alias auf `primary-soft`) | Fläche hinter Momo im Momo-Bereich auf „Heute“. |
 
 #### Insel (Skia)
@@ -482,7 +482,7 @@ Momo und die Insel werden mit Skia gezeichnet ([#41](https://github.com/Yggras/a
 
 ### Momo
 
-- **Gestalt:** Momo ist ein **Lagunenling**, ein langes, amphibisches Lagunenwesen ([#72](https://github.com/Yggras/abnehm-app/issues/72), [#69](https://github.com/Yggras/abnehm-app/issues/69); Vorlagen in [prototypes/momo-lagunenling](../prototypes/momo-lagunenling/README.md)). Die Figur im Artifact ist noch der frühere Platzhalter mit Blattspross.
+- **Gestalt:** Momo ist ein **Lagunenling**, ein langes, amphibisches Lagunenwesen ([#72](https://github.com/Yggras/abnehm-app/issues/72), [#69](https://github.com/Yggras/abnehm-app/issues/69); Vorlagen in [prototypes/momo-lagunenling](../prototypes/momo-lagunenling/README.md)). Die Vorschauen des Artifacts zeichnen Form 1, die Kaulquappe; die Vorlagen aller acht Formen liegen dort als Asset-Gruppe **Momo**.
 - **Konstante Merkmale auf jeder Form:** je drei runde, gewellte Kiemenwedel in `momo-frond` an beiden Kopfseiten; ein durchgehender Bauchstreifen in `momo-belly` vom Kinn bis zur Schwanzspitze; dasselbe Gesicht mit Wangen.
 - **Zeichenstil:** flächig ohne Kontur (`momo-body`, `momo-belly`, `momo-frond`, `momo-cheek` mit `opacity-cheek`, Augen und Mund in `ink` mit weißem Lichtpunkt); zweitönig schattiert mit Licht von links oben (rechte Körperhälfte 10 % Schwarz, Glanz oben links 45 % Weiß), keine Verläufe; weich und rund, keine Zähne, keine Krallen. **Flossen, Kamm und Flügel in `momo-frond`, nie in Türkis**, damit Momo vor `momo-stage` und über der Lagune sichtbar bleibt (*eigene Einschätzung aus #69*).
 - **Größen:** `momo-today` (104 dp) auf „Heute“, auf der Insel etwa ein Feld hoch, in Leerzuständen 80–96 dp. Jede Form ist etwa so breit wie hoch oder höher als breit, damit das Gesicht bei 104 dp lesbar bleibt; einzige Ausnahme ist der Krabbler.
@@ -535,7 +535,7 @@ Festgelegt in [#69](https://github.com/Yggras/abnehm-app/issues/69):
 
 ## Annahmen
 
-1. Momos Gestalt im Artifact (rundes Wesen mit Blattspross) dient nur dem Stilvergleich; die festgelegte Gestalt ist der Lagunenling aus [#69](https://github.com/Yggras/abnehm-app/issues/69).
+1. Die Vorschauen zeichnen Momo als Kaulquappe (Form 1) im Raster 120 × 120; die übrigen Formen gibt es nur als Vorlagenbilder ([#69](https://github.com/Yggras/abnehm-app/issues/69)). Die Vektorfassung aller Formen entsteht mit Spezifikation 4.
 2. Beispieldaten sind erfunden – Philipp und Anna (Name aus `prototypes/partner-bereich`), Mittwoch, 14. Oktober, Mittwoch als Sporttag, Kalorienbudget 1.850 kcal, Wasserziel 1,5 l, Sportziel 150 min, Level 6, 23 Energie, Gemeinschaftsprojekt „Leuchtturm“, Challenge „Gut getrunken“.
 3. Beide Hälften des Levelbalkens füllen sich von außen zur Mitte; das Level steht als Abzeichen in der Mitte.
 4. Der Überschuss über dem Kalorienbudget wird als zweiter Bogen in `neutral` gezeigt, höchstens 30 % des Rings.
