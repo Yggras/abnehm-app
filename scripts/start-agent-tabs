@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+# Startet je Ticket eine eigenständige Claude-Code-Session in einem eigenen
+# Herdr-Tab. Jede Session beginnt im primären Checkout mit `/start <ticket>`;
+# der Skill `start` claimt das Ticket, legt den Worktree an und verlegt die
+# Session hinein. Herdr-Mechanik wie bei Firstmate (`tab create` + `pane run`):
+# https://github.com/kunchenguid/firstmate/blob/main/bin/backends/herdr.sh
+
+usage() {
+  echo "Verwendung: $0 <ticket> [<ticket> …] [-- <zusätzliche claude-Optionen>]" >&2
+  echo "Beispiel:   $0 57 58 59 61 -- --effort xhigh" >&2
+  exit 2
+}
+
+repo=Yggras/abnehm-app
+
+tickets=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --) shift; break ;;
+    ''|*[!0-9]*) usage ;;
+    *) tickets="$tickets $1"; shift ;;
+  esac
+done
+[ -n "$tickets" ] || usage
+
+# Shell-sicheres Quoting für den Befehl, den Herdr in den Tab tippt.
+quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+extra_args=
+for arg in "$@"; do
+  extra_args="$extra_args $(quote "$arg")"
+done
+
+[ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || {
+  echo "Fehler: Nicht in Herdr gestartet (HERDR_ENV/HERDR_WORKSPACE_ID fehlen)." >&2
+  exit 1
+}
+for tool in herdr gh jq claude; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "Fehler: '$tool' ist nicht installiert." >&2
+    exit 1
+  }
+done
+
+primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+[ -n "$primary" ] || {
+  echo "Fehler: Nicht in einem Git-Repository." >&2
+  exit 1
+}
+worktrees_dir="$(dirname "$primary")/$(basename "$primary")-worktrees"
+
+# Erst alle Tickets prüfen, dann starten: entweder alle Tabs oder keiner.
+problems=
+for ticket in $tickets; do
+  info=$(gh api "repos/$repo/issues/$ticket" \
+    --jq '[.state, (.assignees | length), (.issue_dependencies_summary.blocked_by // 0),
+      ([.labels[].name] | index("wayfinder:map") != null)] | @tsv') || {
+    problems="$problems\n  #$ticket: nicht abrufbar"
+    continue
+  }
+  state=$(printf '%s' "$info" | cut -f1)
+  assignees=$(printf '%s' "$info" | cut -f2)
+  blocked=$(printf '%s' "$info" | cut -f3)
+  is_map=$(printf '%s' "$info" | cut -f4)
+  [ "$is_map" = false ] || problems="$problems\n  #$ticket: ist die Karte selbst, kein Ticket"
+  [ "$state" = open ] || problems="$problems\n  #$ticket: nicht offen ($state)"
+  [ "$assignees" = 0 ] || problems="$problems\n  #$ticket: bereits zugewiesen (von einer anderen Session belegt)"
+  [ "$blocked" = 0 ] || problems="$problems\n  #$ticket: noch durch $blocked offene(s) Ticket(s) blockiert"
+  if git -C "$primary" for-each-ref --format='%(refname)' "refs/heads/work/$ticket-*" | grep -q . \
+    || ls -d "$worktrees_dir/$ticket-"* >/dev/null 2>&1; then
+    problems="$problems\n  #$ticket: hat bereits einen Branch oder Worktree"
+  fi
+done
+if [ -n "$problems" ]; then
+  printf 'Abgebrochen, kein Tab gestartet:%b\n' "$problems" >&2
+  exit 1
+fi
+
+for ticket in $tickets; do
+  title=$(gh issue view "$ticket" --repo "$repo" --json title --jq .title)
+  short=$(printf '%s' "$title" | sed 's/^Spezifikation erstellen: //')
+  label="#$ticket $short"
+
+  created=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$primary" \
+    --label "$label" --no-focus)
+  tab=$(printf '%s' "$created" | jq -r '.result.tab.tab_id // empty')
+  pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
+  [ -n "$tab" ] && [ -n "$pane" ] || {
+    echo "Fehler: Herdr lieferte keine Tab-/Pane-ID für #$ticket: $created" >&2
+    exit 1
+  }
+
+  herdr pane run "$pane" \
+    "claude --permission-mode auto -n $(quote "$label")$extra_args $(quote "/start $ticket")" >/dev/null
+  printf 'Gestartet: %s  (Tab %s)\n' "$label" "$tab"
+done
