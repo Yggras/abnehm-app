@@ -103,8 +103,12 @@ Die persönliche Spielwährung einer Person, die nur aus erfüllten Tageszielen 
 _Avoid_: Punkte, Münzen, Coins
 
 **Rolle**:
-Die beim Schlüpfen gewählte Zuständigkeit einer Person auf der Insel: Bauen (Häuser, Wege, Brücken) oder Natur (Pflanzen, Bäume, Tiere); tauschbar nur mit Zustimmung beider.
+Die in der Rollenwahl festgelegte Zuständigkeit einer Person auf der Insel: Bauen (Häuser, Wege, Brücken) oder Natur (Pflanzen, Bäume, Tiere); tauschbar nur mit Zustimmung beider.
 _Avoid_: Klasse, Beruf
+
+**Rollenwahl**:
+Der Vorschlag einer Person, welche Rolle sie und welche ihr Partner übernimmt, den der Partner annehmen oder ablehnen kann; mit der Annahme schlüpft Momo. Der Vorschlag hat keine Frist.
+_Avoid_: Rollenzuweisung, Rollentausch
 
 **Eigene Ecke**:
 Der Inselbereich einer Person, den sie unabhängig von ihrer Rolle allein frei gestalten kann.
@@ -139,8 +143,16 @@ Ein gebautes Objekt mit Energie auf die nächste Stufe heben (höchstens Stufe 3
 _Avoid_: Upgrade, Ausbauen
 
 **Gemeinschaftsprojekt**:
-Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Person mit eigener Energie ohne Frist füllt; fertig, wenn beide Anteile voll sind.
+Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Person mit eigener Energie ohne Frist füllt; fertig, wenn beide Anteile voll sind. Es gibt immer genau eines; die Projekte folgen einer festen Reihenfolge.
 _Avoid_: Challenge, Gruppenquest
+
+**Wahrzeichen**:
+Das auf der Insel sichtbare Bauwerk eines fertigen Gemeinschaftsprojekts.
+_Avoid_: Monument, Trophäe
+
+**Gemeinschaftsplatz**:
+Der gemeinsame Inselbereich, auf dem Gemeinschaftsprojekte entstehen und ihre Wahrzeichen stehen; dort baut keine Person einzeln.
+_Avoid_: Marktplatz, Gemeinschaftsfeld
 
 **Insel-Ereignis**:
 Ein freiwilliges, nicht verfallendes Vorkommnis auf der Insel – Besucher mit Wunsch, Momos Wunsch, Inselwetter oder Entdeckung –, das Baupläne, Deko oder ein Momo-Accessoire bringt.
