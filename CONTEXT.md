@@ -202,6 +202,10 @@ _Avoid_: Einladungslink, Partnercode
 Die Einstellung einer Person, ob ihr Partner für einen Gesundheitsbereich eine Zusammenfassung sehen darf. Mahlzeitenfotos werden davon unabhängig freigegeben.
 _Avoid_: Berechtigung, Sichtbarkeit, Zugriffsstufe
 
+**Fotofreigabe**:
+Die Einstellung einer Person, ob ihr Partner ihre geteilten Mahlzeitenfotos des aktuellen Tages sehen darf; unabhängig von der Partnerfreigabe für Ernährung. Einzelne Mahlzeitenfotos lassen sich zusätzlich vom Teilen ausnehmen.
+_Avoid_: Fotoberechtigung, Bildfreigabe
+
 **Zusammenfassung**:
 Die für den Partner sichtbare verdichtete Darstellung eines Gesundheitsbereichs ohne einzelne Einträge; beim Gewicht umfasst sie nur Trend und Veränderung, nie den absoluten Wert.
 _Avoid_: Detailansicht, Rohdaten
