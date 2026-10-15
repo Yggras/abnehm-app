@@ -1,0 +1,149 @@
+{
+  "name": "egg-a-s601",
+  "file": "egg-a-s601.png",
+  "sha256": "e4d3e119bef035c1bbf1b0a9374368c47b9a4d3b38a05ef91f8704df4de3a30e",
+  "seconds_execution": 126.2,
+  "prompt_id": "aaa43775-cd98-4ac5-be67-7469ef874cdc",
+  "mode": "t2i",
+  "job": "egg-a",
+  "seed": 601,
+  "prompt": "A single egg standing upright, slightly taller than wide and very round, light cream (#FFEBC4) with a few soft round apricot (#FFC56E) spots, flat 2D shape without outlines, two-tone shading: one darker flat shade on its right side and one small flat highlight at the upper left; no gradients, no texture. Centered with generous margin on a plain flat pale mint background (#DDF0EE), no ground, no shadow, no text.",
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "default"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "prompt": "A single egg standing upright, slightly taller than wide and very round, light cream (#FFEBC4) with a few soft round apricot (#FFC56E) spots, flat 2D shape without outlines, two-tone shading: one darker flat shade on its right side and one small flat highlight at the upper left; no gradients, no texture. Centered with generous margin on a plain flat pale mint background (#DDF0EE), no ground, no shadow, no text.",
+        "negative_prompt": "",
+        "resolution": 1024
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 768,
+        "height": 768,
+        "batch_size": 1
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 601
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "latent",
+          0
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo69/egg-a-s601"
+      }
+    }
+  }
+}
