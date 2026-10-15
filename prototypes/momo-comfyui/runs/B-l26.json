@@ -1,0 +1,162 @@
+{
+  "name": "B-l26-edit-s312",
+  "file": "B-l26-edit-s312.png",
+  "sha256": "257fb4d679f2414300c4b98ba81094a979df359aacf2b77521b040d835a17675",
+  "seconds_execution": 140.8,
+  "prompt_id": "2467b5a0-377f-43db-90e4-d91013b9903e",
+  "mode": "edit",
+  "family": "B",
+  "form": "l26",
+  "seed": 312,
+  "prompt": "<image1> shows a creature at its young stage. Draw the same creature grown into its adult stage. Body change: the body becomes twice as long and sinuous, the flippers become long flowing fin-wings, a frilly turquoise fin crest grows along the entire back, and the body coils into a loose spiral. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, three feathery coral gill fronds on each side of the head like an axolotl, and one continuous cream belly stripe running from the chin to the tip of the tail, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+  "references": [
+    {
+      "file": "B-l13-edit-s211.png",
+      "sha256": "4bf8375a497b603d9db678cd681ad3ca497aca0a9e167748b0774cd611a61490"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature at its young stage. Draw the same creature grown into its adult stage. Body change: the body becomes twice as long and sinuous, the flippers become long flowing fin-wings, a frilly turquoise fin crest grows along the entire back, and the body coils into a loose spiral. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, three feathery coral gill fronds on each side of the head like an axolotl, and one continuous cream belly stripe running from the chin to the tip of the tail, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 312
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo/B-l26-edit-s312"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_4bf8375a497b.png"
+      }
+    }
+  }
+}

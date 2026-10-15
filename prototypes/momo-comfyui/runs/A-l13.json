@@ -1,0 +1,162 @@
+{
+  "name": "A-l13-edit-s201-v2",
+  "file": "A-l13-edit-s201-v2.png",
+  "sha256": "c2f5e07d075c74073048450a97a88e550e31edf87ac9b8dc2f8a3521ebdc54c5",
+  "seconds_execution": 173.2,
+  "prompt_id": "8febfdc0-5359-47f7-9b25-5ebaf0a90797",
+  "mode": "edit",
+  "family": "A",
+  "form": "l13",
+  "seed": 201,
+  "prompt": "<image1> shows a creature at its newborn stage. Draw the same creature grown into its young stage. Body change: make the head much smaller in relation to the body; the body becomes long and low like a young badger; it now stands and trots on four clearly visible sturdy legs; a short fluffy tail points up. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+  "references": [
+    {
+      "file": "A-hatchling-t2i-s103.png",
+      "sha256": "dbf467a26f7bbc992ba5d0c82e6158da6b0c2c3c099db352948ade2b049cdefa"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature at its newborn stage. Draw the same creature grown into its young stage. Body change: make the head much smaller in relation to the body; the body becomes long and low like a young badger; it now stands and trots on four clearly visible sturdy legs; a short fluffy tail points up. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 201
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo/A-l13-edit-s201-v2"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_dbf467a26f7b.png"
+      }
+    }
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "name": "A-l43-edit-s403-v2",
+  "file": "A-l43-edit-s403-v2.png",
+  "sha256": "dd0a04aff8670e8e4e6a8b944b746e00de4ac2789fe32303acbacae2aa3a023a",
+  "seconds_execution": 168.2,
+  "prompt_id": "42994198-cd47-406b-b509-c5f902eb7ce3",
+  "mode": "edit",
+  "family": "A",
+  "form": "l43",
+  "seed": 403,
+  "prompt": "<image1> shows a creature at its adult stage. Draw the same creature grown into its elder stage. Body change: the whole silhouette changes into a wide low dome like a gentle giant tortoise crossed with a bison: the body becomes much wider than tall, the four legs become short thick pillars, the head is carried low in front, and a big rounded sand-colored shell dome covers the whole back, carrying a tiny moss garden with two round shrubs; the mossy mane becomes a soft collar. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+  "references": [
+    {
+      "file": "A-l26-edit-s301.png",
+      "sha256": "c8a0a9dd624c07777e5b0534379bbf717f440ccb4c10bb1f91c0ae5bb8381665"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature at its adult stage. Draw the same creature grown into its elder stage. Body change: the whole silhouette changes into a wide low dome like a gentle giant tortoise crossed with a bison: the body becomes much wider than tall, the four legs become short thick pillars, the head is carried low in front, and a big rounded sand-colored shell dome covers the whole back, carrying a tiny moss garden with two round shrubs; the mossy mane becomes a soft collar. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 403
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo/A-l43-edit-s403-v2"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_c8a0a9dd624c.png"
+      }
+    }
+  }
+}

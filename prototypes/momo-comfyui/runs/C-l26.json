@@ -1,0 +1,162 @@
+{
+  "name": "C-l26-edit-s321",
+  "file": "C-l26-edit-s321.png",
+  "sha256": "3b3675bd3d7c5c51b7b092d6258f3ff9df367f112b97a36bd2f204f08745a7c9",
+  "seconds_execution": 166.4,
+  "prompt_id": "676fc2b9-dc8d-49ea-a7f5-e03829bda579",
+  "mode": "edit",
+  "family": "C",
+  "form": "l26",
+  "seed": 321,
+  "prompt": "<image1> shows a creature at its young stage. Draw the same creature grown into its adult stage. Body change: it becomes very broad: the wing-fins turn into wide drapes with scalloped edges, a small mound of green grass with one tiny round tree grows on its back, and short soft tendrils dangle underneath. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, very wide-set eyes in a broad flat face, and wing-like side fins, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+  "references": [
+    {
+      "file": "C-l13-edit-s221.png",
+      "sha256": "25532ad1a8b0b3909f4bfef5458e5cac2cbb7aec44487c7e212aa76af2a90595"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature at its young stage. Draw the same creature grown into its adult stage. Body change: it becomes very broad: the wing-fins turn into wide drapes with scalloped edges, a small mound of green grass with one tiny round tree grows on its back, and short soft tendrils dangle underneath. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, very wide-set eyes in a broad flat face, and wing-like side fins, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 321
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo/C-l26-edit-s321"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_25532ad1a8b0.png"
+      }
+    }
+  }
+}
