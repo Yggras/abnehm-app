@@ -1,0 +1,149 @@
+{
+  "name": "acc-sheet-s601",
+  "file": "acc-sheet-s601.png",
+  "sha256": "2c65adacf4ac896682344d945e54f88bffb50d6b903119d3e27705c44813b40a",
+  "seconds_execution": 124.9,
+  "prompt_id": "ca3174a0-4e6f-483e-8945-ec8ccd010f52",
+  "mode": "t2i",
+  "job": "acc-sheet",
+  "seed": 601,
+  "prompt": "A sticker sheet of twelve small accessories for a cute lagoon creature, arranged in a neat grid of four columns and three rows with space between them, each item alone: a tiny round straw hat, a coral starfish hair clip, a hibiscus flower, a small water-lily-leaf hat, a little flower crown, a hair bow; a seashell necklace, a neckerchief, a flower lei garland, a bow tie, a pearl necklace, a knitted scarf. Flat 2D shapes, no outlines, two-tone shading with light from the upper left, soft rounded friendly forms, palette of cream, apricot, coral, sand, leaf green and deep lagoon teal. Plain flat pale mint background, no text.",
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "default"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "prompt": "A sticker sheet of twelve small accessories for a cute lagoon creature, arranged in a neat grid of four columns and three rows with space between them, each item alone: a tiny round straw hat, a coral starfish hair clip, a hibiscus flower, a small water-lily-leaf hat, a little flower crown, a hair bow; a seashell necklace, a neckerchief, a flower lei garland, a bow tie, a pearl necklace, a knitted scarf. Flat 2D shapes, no outlines, two-tone shading with light from the upper left, soft rounded friendly forms, palette of cream, apricot, coral, sand, leaf green and deep lagoon teal. Plain flat pale mint background, no text.",
+        "negative_prompt": "",
+        "resolution": 1024
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 768,
+        "height": 768,
+        "batch_size": 1
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 601
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "latent",
+          0
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo69/acc-sheet-s601"
+      }
+    }
+  }
+}

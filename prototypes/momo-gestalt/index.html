@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FBF4E6">
+  <title>PROTOTYP – Momos Gestalt</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app" aria-live="polite"></main>
+
+  <aside class="prototype-note collapsed" id="prototype-note">
+    <button class="prototype-note__toggle" id="note-toggle" aria-expanded="false">
+      <span>Was soll ich beurteilen?</span><span aria-hidden="true">⌃</span>
+    </button>
+    <div class="prototype-note__body">
+      <p>Erste Runde: Bitte nur die <strong>Grundgestalt</strong> wählen – oder Merkmale mischen. Die Formen nach Level 13, alle sieben Stimmungen und der endgültige Accessoire-Katalog folgen nach deiner Wahl.</p>
+      <details>
+        <summary>Vollständiger Prototyp-Zustand</summary>
+        <pre id="state-output"></pre>
+      </details>
+    </div>
+  </aside>
+
+  <nav class="switcher" aria-label="Gestaltvarianten">
+    <button id="previous" aria-label="Vorherige Gestalt">←</button>
+    <span id="variant-label"></span>
+    <button id="next" aria-label="Nächste Gestalt">→</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

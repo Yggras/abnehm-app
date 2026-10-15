@@ -1,0 +1,162 @@
+{
+  "name": "mood-f1-schlaeft-s605",
+  "file": "mood-f1-schlaeft-s605.png",
+  "sha256": "67321c76f0da9788114319a68c5328f46881d6a42d1f314519335e24d5be12fc",
+  "seconds_execution": 160.4,
+  "prompt_id": "63c81cc5-4018-4ce6-8b8b-47409f121f90",
+  "mode": "edit",
+  "job": "mood:f1:schlaeft",
+  "seed": 605,
+  "prompt": "<image1> shows a creature. Change only its facial expression and the pose of its arms or front fins: fast asleep: eyes closed, the body curled up a little, and a small pale yellow crescent moon above the head; peaceful and content, not sad. Keep the body shape, the pose, all colors, the gill fronds and the flat two-tone style without outlines exactly the same. Plain flat pale mint background.",
+  "references": [
+    {
+      "job": "f1",
+      "file": "fix-f1-shade-s602.png",
+      "sha256": "f411c10e97930a5f2cdf13974fbe25f44222ae651229c4ddd011e016112cc18b"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature. Change only its facial expression and the pose of its arms or front fins: fast asleep: eyes closed, the body curled up a little, and a small pale yellow crescent moon above the head; peaceful and content, not sad. Keep the body shape, the pose, all colors, the gill fronds and the flat two-tone style without outlines exactly the same. Plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 605
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo69/mood-f1-schlaeft-s605"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_f411c10e9793.png"
+      }
+    }
+  }
+}

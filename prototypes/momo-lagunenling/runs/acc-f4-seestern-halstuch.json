@@ -1,0 +1,162 @@
+{
+  "name": "acc-f4-seestern-halstuch-s612",
+  "file": "acc-f4-seestern-halstuch-s612.png",
+  "sha256": "9f0ea5e1a64cf22bac7ab4382a72568272c2c3e6bd97654f8406be6644f0c09f",
+  "seconds_execution": 163.1,
+  "prompt_id": "a31fdaa8-b503-4c9b-978b-09d6da052c31",
+  "mode": "edit",
+  "job": "acc:f4:seestern+halstuch",
+  "seed": 612,
+  "prompt": "<image1> shows a creature. Add a small coral-pink starfish hair clip on top of the head and a deep lagoon-teal neckerchief tied around the neck. The accessories never cover the eyes, mouth or cheeks and use the same flat two-tone style without outlines, light from the upper left. Keep the creature, its pose and its colors exactly the same. Plain flat pale mint background.",
+  "references": [
+    {
+      "job": "f4",
+      "file": "f4-s607.png",
+      "sha256": "279391c38fefabe54551cd6106d2038cbd7a1f0cf0d934cc91a97dc84cf91163"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature. Add a small coral-pink starfish hair clip on top of the head and a deep lagoon-teal neckerchief tied around the neck. The accessories never cover the eyes, mouth or cheeks and use the same flat two-tone style without outlines, light from the upper left. Keep the creature, its pose and its colors exactly the same. Plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 612
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo69/acc-f4-seestern-halstuch-s612"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_279391c38fef.png"
+      }
+    }
+  }
+}

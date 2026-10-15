@@ -1,0 +1,162 @@
+{
+  "name": "f6-s610",
+  "file": "f6-s610.png",
+  "sha256": "41ba9e4ab670d693a93eee65b3f79682e833f81c537bdd63140bd092db4e5406",
+  "seconds_execution": 160.8,
+  "prompt_id": "e01fa3e8-4895-4856-be6a-cb19cd487e5e",
+  "mode": "edit",
+  "job": "f6",
+  "seed": 610,
+  "prompt": "<image1> shows a creature. Draw the same creature at its next, more grown-up stage. The whole silhouette changes: the body grows twice as long and coils into a loose upright spiral like a seahorse; a frilly coral fin crest runs along the entire back; the front fins become long flowing fin-wings. Keep the face, the coral cheeks, the three soft coral gill fronds on each side of the head, the cream belly stripe from chin to tail tip and the flat style without outlines; the body is light warm apricot (#FFC56E), not orange. Fins and wings are coral, never turquoise or green. No teeth, no claws. Full body, plain flat pale mint background.",
+  "references": [
+    {
+      "job": "f5",
+      "file": "f5-s608.png",
+      "sha256": "4d14477276c4ac55dd37336258aba84a39269274e0722735f2af53995c157305"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature. Draw the same creature at its next, more grown-up stage. The whole silhouette changes: the body grows twice as long and coils into a loose upright spiral like a seahorse; a frilly coral fin crest runs along the entire back; the front fins become long flowing fin-wings. Keep the face, the coral cheeks, the three soft coral gill fronds on each side of the head, the cream belly stripe from chin to tail tip and the flat style without outlines; the body is light warm apricot (#FFC56E), not orange. Fins and wings are coral, never turquoise or green. No teeth, no claws. Full body, plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 610
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo69/f6-s610"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_4d14477276c4.png"
+      }
+    }
+  }
+}

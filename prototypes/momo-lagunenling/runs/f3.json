@@ -1,0 +1,162 @@
+{
+  "name": "fix-f3-color-s607",
+  "file": "fix-f3-color-s607.png",
+  "sha256": "e7220338b6632d47059181f996080501b7c88c7aeb5475f91956ddc7f4d82929",
+  "seconds_execution": 159.7,
+  "prompt_id": "5d140ba9-dc82-4322-a54c-5fa134a29d18",
+  "mode": "edit",
+  "job": "fix:f3:color",
+  "seed": 607,
+  "prompt": "<image1> shows a creature. Recolor only: the orange body becomes a lighter, warm apricot yellow (#FFC56E) with one slightly darker apricot shade on the right side; the belly stays light cream (#FFEBC4) and the gill fronds stay coral. Remove the shadow on the ground. Keep all shapes, the pose and the face exactly the same. Plain flat pale mint background.",
+  "references": [
+    {
+      "job": "f3",
+      "file": "f3-s604.png",
+      "sha256": "1789233c53e9dce3cbf0fef29c62e715389b40c83a4f4cce8d14d34a4274627f"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "<image1> shows a creature. Recolor only: the orange body becomes a lighter, warm apricot yellow (#FFC56E) with one slightly darker apricot shade on the right side; the belly stays light cream (#FFEBC4) and the gill fronds stay coral. Remove the shadow on the ground. Keep all shapes, the pose and the face exactly the same. Plain flat pale mint background.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 607
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "prompt",
+          2
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo69/fix-f3-color-s607"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_1789233c53e9.png"
+      }
+    }
+  }
+}
