@@ -1,0 +1,22 @@
+{
+  "families": {
+    "A": {
+      "hatchling": "A-hatchling-t2i-s103",
+      "l13": "A-l13-edit-s201-v2",
+      "l26": "A-l26-edit-s301",
+      "l43": "A-l43-edit-s403-v2"
+    },
+    "B": {
+      "hatchling": {"run": "B-hatchling-edit-s111-smile", "note": "Mund per Edit aus s101 bf16"},
+      "l13": "B-l13-edit-s211",
+      "l26": "B-l26-edit-s312",
+      "l43": "B-l43-edit-s414-v2"
+    },
+    "C": {
+      "hatchling": "C-hatchling-t2i-s113",
+      "l13": "C-l13-edit-s221",
+      "l26": "C-l26-edit-s321",
+      "l43": "C-l43-edit-s421"
+    }
+  }
+}
