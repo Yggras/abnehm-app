@@ -1,0 +1,150 @@
+{
+  "name": "A-hatchling-t2i-s103",
+  "file": "A-hatchling-t2i-s103.png",
+  "sha256": "dbf467a26f7bbc992ba5d0c82e6158da6b0c2c3c099db352948ade2b049cdefa",
+  "seconds_wall": 101.0,
+  "prompt_id": "48204e43-bdd7-4f29-becd-e081be634196",
+  "mode": "t2i",
+  "family": "A",
+  "form": "hatchling",
+  "seed": 103,
+  "prompt": "A creature design: a newborn, ground-hugging four-legged creature: a small round body lying low on its belly, oversized head, four short stubby legs splayed to the sides, soft round paws without claws, a tiny nub tail. Signature features: wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead. Flat 2D character concept art for a calm, friendly health app. Style rules: flat filled shapes with no outlines and no line art; two-tone cel shading only with light from the upper left: every body part has its base color plus one slightly darker flat shade on its right side, and one small flat highlight at the upper left; no gradients, no texture, no 3D rendering. Palette: body warm apricot yellow (#FFC56E), belly and inner surfaces light cream (#FFEBC4), round blush cheeks coral (#F48C73), small simple eyes and mouth very dark teal-black (#1D3332) with one tiny white highlight dot in each eye; small accent areas may use lagoon turquoise (#3FB7D0), leaf green (#5FA44A) or sand (#F3D9A4). Soft, rounded, friendly forms; no teeth, no claws, no sharp spikes. Playful in the details, but calm, graceful and grown-up overall, not babyish and not a plush toy. One single creature, full body, centered with generous margin, three-quarter front view, on a plain flat pale mint background (#DDF0EE), no ground, no cast shadow, no text, no frame.",
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_bf16.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "default"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "prompt": "A creature design: a newborn, ground-hugging four-legged creature: a small round body lying low on its belly, oversized head, four short stubby legs splayed to the sides, soft round paws without claws, a tiny nub tail. Signature features: wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead. Flat 2D character concept art for a calm, friendly health app. Style rules: flat filled shapes with no outlines and no line art; two-tone cel shading only with light from the upper left: every body part has its base color plus one slightly darker flat shade on its right side, and one small flat highlight at the upper left; no gradients, no texture, no 3D rendering. Palette: body warm apricot yellow (#FFC56E), belly and inner surfaces light cream (#FFEBC4), round blush cheeks coral (#F48C73), small simple eyes and mouth very dark teal-black (#1D3332) with one tiny white highlight dot in each eye; small accent areas may use lagoon turquoise (#3FB7D0), leaf green (#5FA44A) or sand (#F3D9A4). Soft, rounded, friendly forms; no teeth, no claws, no sharp spikes. Playful in the details, but calm, graceful and grown-up overall, not babyish and not a plush toy. One single creature, full body, centered with generous margin, three-quarter front view, on a plain flat pale mint background (#DDF0EE), no ground, no cast shadow, no text, no frame.",
+        "negative_prompt": "",
+        "resolution": 1024
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 768,
+        "height": 768,
+        "batch_size": 1
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 103
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "latent",
+          0
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "momo/A-hatchling-t2i-s103"
+      }
+    }
+  }
+}

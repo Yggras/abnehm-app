@@ -1,0 +1,58 @@
+{
+  "style": "Flat 2D character concept art for a calm, friendly health app. Style rules: flat filled shapes with no outlines and no line art; two-tone cel shading only with light from the upper left: every body part has its base color plus one slightly darker flat shade on its right side, and one small flat highlight at the upper left; no gradients, no texture, no 3D rendering. Palette: body warm apricot yellow (#FFC56E), belly and inner surfaces light cream (#FFEBC4), round blush cheeks coral (#F48C73), small simple eyes and mouth very dark teal-black (#1D3332) with one tiny white highlight dot in each eye; small accent areas may use lagoon turquoise (#3FB7D0), leaf green (#5FA44A) or sand (#F3D9A4). Soft, rounded, friendly forms; no teeth, no claws, no sharp spikes. Playful in the details, but calm, graceful and grown-up overall, not babyish and not a plush toy.",
+  "framing": "One single creature, full body, centered with generous margin, three-quarter front view, on a plain flat pale mint background (#DDF0EE), no ground, no cast shadow, no text, no frame.",
+  "families": {
+    "A": {
+      "name": "Dünenläufer",
+      "body_plan": "bodennaher, kräftiger Vierbeiner",
+      "constants": ["breite, seitlich hängende Blattohren", "cremefarbene Blesse von der Nase über die Stirn"],
+      "constants_en": "wide rounded leaf-shaped ears that hang slightly sideways, and a cream blaze running from the nose up over the forehead",
+      "forms": {
+        "hatchling": "a newborn, ground-hugging four-legged creature: a small round body lying low on its belly, oversized head, four short stubby legs splayed to the sides, soft round paws without claws, a tiny nub tail",
+        "l13": "a young, sturdy four-legged creature standing firmly on four short strong legs, body now longer and lower like a young badger or capybara, head in proportion to the body, a short fluffy tail held up, trotting forward",
+        "l26": "an adult, powerful, low-slung four-legged creature striding forward with a broad deep chest and thick legs, a soft mossy mane in leaf green over neck and shoulders, a longer bushy tail swept back",
+        "l43": "a majestic, very large elder four-legged creature, broad and heavy like a gentle bison crossed with a tortoise, a soft rounded shell plate in sand color covers its back and carries a tiny moss garden with two round shrubs, head held calm and proud"
+      },
+      "changes": {
+        "l13": "make the head much smaller in relation to the body; the body becomes long and low like a young badger; it now stands and trots on four clearly visible sturdy legs; a short fluffy tail points up",
+        "l26": "make it a powerful adult: a much bigger, longer body with a broad deep chest, thick strong legs in a confident striding pose, a soft leaf-green mossy mane now covers the neck and shoulders, and a long bushy tail sweeps back",
+        "l43": "the whole silhouette changes into a wide low dome like a gentle giant tortoise crossed with a bison: the body becomes much wider than tall, the four legs become short thick pillars, the head is carried low in front, and a big rounded sand-colored shell dome covers the whole back, carrying a tiny moss garden with two round shrubs; the mossy mane becomes a soft collar"
+      }
+    },
+    "B": {
+      "name": "Lagunenling",
+      "body_plan": "langes, geschwungenes Lagunenwesen",
+      "constants": ["je drei gefiederte Kiemenwedel in Koralle am Kopf", "durchgehender cremefarbener Bauchstreifen vom Kinn bis zur Schwanzspitze"],
+      "constants_en": "three feathery coral gill fronds on each side of the head like an axolotl, and one continuous cream belly stripe running from the chin to the tip of the tail",
+      "forms": {
+        "hatchling": "a newborn tadpole-like lagoon creature: a big round head, a short wiggly tail with a soft tail fin, no legs at all, floating in the air as if swimming",
+        "l13": "a young slender lagoon creature like a mix of otter and axolotl: a long flexible body, four small paddle flippers, rearing up on its tail in a playful S-curve",
+        "l26": "an adult long sinuous lagoon creature, the body twice as long, the flippers have become flowing fin-wings, a soft frilly turquoise fin crest runs along the whole back, the body coils in a loose spiral",
+        "l43": "a majestic, very long and graceful lagoon dragon without teeth, the body forming one big elegant S-curve floating in the air, long flowing turquoise fin ribbons, the gill fronds have grown into a soft crown"
+      },
+      "changes": {
+        "l13": "the head becomes much smaller in relation to the body; the body grows three times longer and slender like an otter, with a clear neck; four small paddle flippers grow out; it rears up on its tail in a playful S-curve",
+        "l26": "the body becomes twice as long and sinuous, the flippers become long flowing fin-wings, a frilly turquoise fin crest grows along the entire back, and the body coils into a loose spiral",
+        "l43": "the whole silhouette changes into a majestic, very long lagoon dragon without teeth flying sideways: the body stretches horizontally across the whole image in one big wave-like S-curve, the head becomes smaller in relation to the long body, the fin-wings become two pairs of wide flowing turquoise fins, the turquoise crest becomes long trailing ribbons, and the gill fronds have grown into a soft crown"
+      }
+    },
+    "C": {
+      "name": "Wolkenschweber",
+      "body_plan": "breites, schwebendes Inselwesen",
+      "constants": ["sehr weit auseinanderstehende Augen in einem breiten, flachen Gesicht", "seitliche Flügelflossen"],
+      "constants_en": "very wide-set eyes in a broad flat face, and wing-like side fins",
+      "forms": {
+        "hatchling": "a newborn floating creature shaped like a wide flat cushion, about twice as wide as tall, hovering in the air; very wide-set eyes near the outer edges of its broad face; two small wing-like side fins; a tiny tail; no legs",
+        "l13": "a young broad and flat floating creature shaped like a soft manta ray, wide spread wing-fins, a short tail, gliding calmly",
+        "l26": "an adult very broad floating creature, the wing-fins have become wide drapes with soft scalloped edges, a small mound of leaf-green grass with one tiny round tree grows on its back, short soft tendrils dangle underneath",
+        "l43": "a huge majestic floating island creature like a gentle sky whale: a very wide body carrying a whole little island landscape on its back with grass, two round trees and a tiny waterfall, long trailing soft roots underneath, enormous wing-fins"
+      },
+      "changes": {
+        "l13": "the round puff flattens and widens into a soft manta-ray shape at least twice as wide as tall, with wide spread wing-fins and a short tail, gliding calmly; the face sits at the front edge of the wide flat body",
+        "l26": "it becomes very broad: the wing-fins turn into wide drapes with scalloped edges, a small mound of green grass with one tiny round tree grows on its back, and short soft tendrils dangle underneath",
+        "l43": "it becomes a huge floating island creature like a gentle sky whale: a very wide body carrying a little island landscape with grass, two round trees and a tiny waterfall on its back, long soft roots trailing underneath, enormous wing-fins"
+      }
+    }
+  },
+  "evolve": "<image1> shows a creature at its {from_stage} stage. Draw the same creature grown into its {stage} stage. Body change: {change}. Keep from <image1>: the face with its eyes, small mouth and coral cheeks, {constants}, the apricot and cream colors and the flat two-tone style without outlines. One creature, full body, three-quarter front view, plain flat pale mint background."
+}
