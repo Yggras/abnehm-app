@@ -191,7 +191,7 @@ Die eine andere Person, mit der ein Konto gekoppelt ist und Momo teilt.
 _Avoid_: Freund, Kontakt, Mitglied
 
 **Kopplung**:
-Die archivierungsfähige Verbindung genau zweier Personen, Voraussetzung dafür, dass Momo schlüpft. Nach einer Entkopplung reaktiviert eine erneute Kopplung derselben Personen ihre bisherige Insel; mit einer anderen Person entsteht eine neue Kopplung und Insel.
+Die archivierungsfähige Verbindung genau zweier Personen, Voraussetzung dafür, dass Momo schlüpft. Jede der beiden Personen kann sie jederzeit allein beenden (Entkopplung), ohne Zustimmung des Partners. Nach einer Entkopplung reaktiviert eine erneute Kopplung derselben Personen ihre bisherige Insel; mit einer anderen Person entsteht eine neue Kopplung und Insel.
 _Avoid_: Verknüpfung, Pairing, Freundschaft
 
 **Einladungscode**:
@@ -199,8 +199,12 @@ Ein kurzlebiger, einmal verwendbarer Code, mit dem eine Person eine Kopplung her
 _Avoid_: Einladungslink, Partnercode
 
 **Partnerfreigabe**:
-Die Einstellung einer Person, ob ihr Partner für einen Gesundheitsbereich eine Zusammenfassung sehen darf. Mahlzeitenfotos werden davon unabhängig freigegeben.
+Die Einstellung einer Person, ob ihr Partner für einen Gesundheitsbereich eine Zusammenfassung sehen darf. Mahlzeitenfotos werden davon unabhängig über die Fotofreigabe freigegeben.
 _Avoid_: Berechtigung, Sichtbarkeit, Zugriffsstufe
+
+**Fotofreigabe**:
+Die Einstellung einer Person, ob ihr Partner ihre Mahlzeitenfotos sehen darf, unabhängig von den Partnerfreigaben. Einzelne Mahlzeitenfotos lassen sich zusätzlich vom Teilen ausnehmen; sichtbar ist ein Foto nur, wenn beides es erlaubt.
+_Avoid_: Fotoberechtigung, Fotosichtbarkeit
 
 **Zusammenfassung**:
 Die für den Partner sichtbare verdichtete Darstellung eines Gesundheitsbereichs ohne einzelne Einträge; beim Gewicht umfasst sie nur Trend und Veränderung, nie den absoluten Wert.
