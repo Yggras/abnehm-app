@@ -35,6 +35,23 @@ branch="work/$ticket-$slug"
 worktrees_dir="$(dirname "$primary")/$(basename "$primary")-worktrees"
 destination="$worktrees_dir/$ticket-$slug"
 
+# Parallele Sessions (z. B. aus scripts/start-agent-tabs) legen Worktrees
+# nacheinander an: Das Skript läuft sich selbst erneut unter einer exklusiven
+# Dateisperre im gemeinsamen Git-Verzeichnis, damit gleichzeitige
+# `git fetch`/`git worktree add` nicht um dieselben Refs konkurrieren.
+if [ "${ABNEHM_APP_WORKTREE_LOCK_HELD:-}" != 1 ]; then
+  lockfile="$(git rev-parse --path-format=absolute --git-common-dir)/abnehm-app-worktree.lock"
+  ABNEHM_APP_WORKTREE_LOCK_HELD=1
+  export ABNEHM_APP_WORKTREE_LOCK_HELD
+  if command -v lockf >/dev/null 2>&1; then
+    exec lockf -k -t 600 "$lockfile" "$0" "$@"
+  elif command -v flock >/dev/null 2>&1; then
+    exec flock -w 600 "$lockfile" "$0" "$@"
+  fi
+  echo "Fehler: Weder lockf noch flock gefunden; parallele Worktree-Anlage wäre ungeschützt." >&2
+  exit 1
+fi
+
 git fetch origin main
 
 # Sperre pro Ticketnummer (unabhängig vom Kurznamen): Exit-Code 3 = Ticket ist

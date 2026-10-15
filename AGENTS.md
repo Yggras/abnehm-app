@@ -16,6 +16,8 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 
 Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte, greift sich das nächste freie Ticket und bearbeitet es in einem eigenen Worktree – ohne Neustart, mehrere Sessions parallel möglich.
 
+Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58 59 61`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session, die `/start <ticket>` ausführt.
+
 ## Parallele Sessions und Git-Worktrees
 
 - Der primäre Repo-Checkout bleibt auf `main`. Dort **niemals den Branch wechseln**, wenn eine weitere Session laufen könnte.
@@ -24,7 +26,8 @@ Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `
 - Den Agenten anschließend aus diesem Worktree starten oder die laufende Session dorthin verlegen. Alle Dateiänderungen, Commits und Branch-Operationen dieser Session finden nur dort statt.
 - Vor `git switch`, `git checkout`, Rebase, Merge oder dem Entfernen eines Worktrees immer `pwd`, `git status --short --branch` und `git worktree list` prüfen.
 - Niemals Änderungen, Branch oder Worktree einer anderen Session zurücksetzen, verschieben oder entfernen. Bei unklarer Zuordnung zuerst mit dem Nutzer abstimmen.
-- Neue Ticket-Worktrees werden im primären Checkout mit `scripts/start-ticket-worktree <ticketnummer> <kurzname>` angelegt. `scripts/require-ticket-worktree` ist vor der Ticketarbeit die verbindliche maschinelle Prüfung. Der `start`-Skill claimt das Ticket, legt den Worktree an und verlegt **dieselbe Session** hinein (Claude Code: `EnterWorktree` mit `path`; andere Harnesses: Befehle per `cd <worktree> && …`); erst danach beginnt die Ticketarbeit. Das Skript sperrt pro Ticketnummer (Exit-Code 3 = von einer parallelen Session belegt).
+- Neue Ticket-Worktrees werden im primären Checkout mit `scripts/start-ticket-worktree <ticketnummer> <kurzname>` angelegt. `scripts/require-ticket-worktree` ist vor der Ticketarbeit die verbindliche maschinelle Prüfung. Der `start`-Skill claimt das Ticket, legt den Worktree an und verlegt **dieselbe Session** hinein (Claude Code: `EnterWorktree` mit `path`; andere Harnesses: Befehle per `cd <worktree> && …`); erst danach beginnt die Ticketarbeit. Das Skript sperrt pro Ticketnummer (Exit-Code 3 = von einer parallelen Session belegt) und legt gleichzeitig angeforderte Worktrees nacheinander an (Dateisperre im gemeinsamen Git-Verzeichnis), weil parallele `git worktree add -b` sonst an der Sperre von `.git/config` scheitern.
+- Den Text der Karte (#1) ändern Agenten nur mit `scripts/update-map` (frisch laden, eine Zeile ändern, zurückschreiben – unter Sperre), weil `gh issue edit --body` den ganzen Text ersetzt und parallele Sessions sich sonst gegenseitig Zeilen löschen.
 
 ### Technische Git-Schranken
 
