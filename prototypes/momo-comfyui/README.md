@@ -2,6 +2,8 @@
 
 Ticket: [Momo-Konzepttafeln mit ComfyUI prototypen (#72)](https://github.com/Yggras/abnehm-app/issues/72) · Vorarbeit für [Momos Gestalt und Entwicklungsformen festlegen (#69)](https://github.com/Yggras/abnehm-app/issues/69) · Stand: 15.10.2026
 
+**Nutzerentscheidung (15.10.2026):** Das Ergebnis reicht als Auswahlgrundlage für #69. Ausgearbeitet wird **Familie B · Lagunenling** ([Kommentar in #72](https://github.com/Yggras/abnehm-app/issues/72)).
+
 **Wegwerf-Prototyp.** Alle Gestalten, Namen und Merkmale sind unbelegte Designvorschläge zur Auswahl in #69. Verbindliche Farben und Stilregeln kommen aus dem [Design-System „Lagune“](../../research/design-system.md#momo-und-insel).
 
 ## Tafeln
