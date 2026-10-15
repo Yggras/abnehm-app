@@ -198,9 +198,10 @@ Nur eine Fassung: **hell**. Die semantischen Namen erlauben ein zweites Theme oh
 
 | Token | Wert | Zweck |
 | --- | --- | --- |
-| `momo-body` | `#FFC56E` | Skia: Momos Körper (Platzhalterfigur, Gestalt offen). |
+| `momo-body` | `#FFC56E` | Skia: Momos Körper (Lagunenling, [#69](https://github.com/Yggras/abnehm-app/issues/69)). |
 | `momo-belly` | `#FFEBC4` | Skia: Momos Bauch. |
 | `momo-cheek` | `#F48C73` | Skia: Wangen, mit opacity-cheek. |
+| `momo-frond` | `#F48C73` (Alias auf `momo-cheek`) | Skia: Kiemenwedel, Flossen, Kamm und Flügel, volle Deckkraft. *Ergänzung aus [#69](https://github.com/Yggras/abnehm-app/issues/69), im Artifact noch nicht nachgezogen.* |
 | `momo-stage` | `#DDF0EE` (Alias auf `primary-soft`) | Fläche hinter Momo im Momo-Bereich auf „Heute“. |
 
 #### Insel (Skia)
@@ -481,23 +482,45 @@ Momo und die Insel werden mit Skia gezeichnet ([#41](https://github.com/Yggras/a
 
 ### Momo
 
-- **Platzhalter:** Die gezeigte Figur – ein rundes Wesen mit Blattspross – legt nur den Zeichenstil fest; Momos Gestalt ist offen (offene Frage 1). Die Stilregeln gelten für jede Gestalt.
-- **Zeichenstil:** flächig ohne Kontur (`momo-body`, `momo-belly`, `momo-cheek` mit `opacity-cheek`, Augen und Mund in `ink` mit weißem Lichtpunkt); zweitönig schattiert mit Licht von links oben (rechte Körperhälfte 10 % Schwarz, Glanz oben links 45 % Weiß), keine Verläufe; weich und rund, keine Zähne, keine Krallen.
-- **Größen:** `momo-today` (104 dp) auf „Heute“, auf der Insel etwa ein Feld hoch, in Leerzuständen 80–96 dp.
-- **Accessoires** ([#28](https://github.com/Yggras/abnehm-app/issues/28)) sitzen am Hals oder Kopf, folgen derselben Lichtregel und verdecken nie das Gesicht.
-- **Entwicklungsformen** (Level 4, 8, 13, 19, 26, 34, 43, danach alle 6 Level, [#18](https://github.com/Yggras/abnehm-app/issues/18)) bleiben in Konstruktion, Licht und Farbwelt gleich und werden größer und detailreicher; entworfen sind sie noch nicht.
+- **Gestalt:** Momo ist ein **Lagunenling**, ein langes, amphibisches Lagunenwesen ([#72](https://github.com/Yggras/abnehm-app/issues/72), [#69](https://github.com/Yggras/abnehm-app/issues/69); Vorlagen in [prototypes/momo-lagunenling](../prototypes/momo-lagunenling/README.md)). Die Figur im Artifact ist noch der frühere Platzhalter mit Blattspross.
+- **Konstante Merkmale auf jeder Form:** je drei runde, gewellte Kiemenwedel in `momo-frond` an beiden Kopfseiten; ein durchgehender Bauchstreifen in `momo-belly` vom Kinn bis zur Schwanzspitze; dasselbe Gesicht mit Wangen.
+- **Zeichenstil:** flächig ohne Kontur (`momo-body`, `momo-belly`, `momo-frond`, `momo-cheek` mit `opacity-cheek`, Augen und Mund in `ink` mit weißem Lichtpunkt); zweitönig schattiert mit Licht von links oben (rechte Körperhälfte 10 % Schwarz, Glanz oben links 45 % Weiß), keine Verläufe; weich und rund, keine Zähne, keine Krallen. **Flossen, Kamm und Flügel in `momo-frond`, nie in Türkis**, damit Momo vor `momo-stage` und über der Lagune sichtbar bleibt (*eigene Einschätzung aus #69*).
+- **Größen:** `momo-today` (104 dp) auf „Heute“, auf der Insel etwa ein Feld hoch, in Leerzuständen 80–96 dp. Jede Form ist etwa so breit wie hoch oder höher als breit, damit das Gesicht bei 104 dp lesbar bleibt; einzige Ausnahme ist der Krabbler.
+- **Accessoires** ([#28](https://github.com/Yggras/abnehm-app/issues/28)) sitzen am Kopf oder Hals, folgen derselben Lichtregel und verdecken nie das Gesicht; Einzelheiten siehe unten.
+- **Entwicklungsformen:** acht feste Formen, jede ab Level 4 mit einem neuen Gebiet ([#18](https://github.com/Yggras/abnehm-app/issues/18)). Jede Form wechselt Körperbau und Umriss, nicht nur Größe und Details. Ab Level 43 bleibt Momo in der Endform; weitere Gebiete alle 6 Level kommen ohne neue Form.
+
+| Level | Form | Körperbau und Umriss |
+| --- | --- | --- |
+| 1 | Kaulquappe | großer runder Kopf, kurzer Flossenschwanz, keine Gliedmaßen; schwebt |
+| 4 | Hüpfer | sitzt auf zwei Hinterbeinchen, winzige Ärmchen, Schwanz um die Füße |
+| 8 | Krabbler | waagerecht auf vier kurzen Beinen wie ein junger Axolotl |
+| 13 | Aufrechter | steht aufrecht wie ein Otter, Paddelflossen vor der Brust |
+| 19 | Springer | C-Bogen wie ein springender Delfin, lange Flossen, Rückensaum, Schwanzfluke |
+| 26 | Spirale | aufrechte Spirale wie ein Seepferdchen, gekräuselter Flossenkamm |
+| 34 | Flügling | schwebt unter zwei rundlichen Flügelpaaren, Schwanz hängt in einer Welle |
+| 43 | Lagunendrache | sitzt wie eine Katze, Flügelfächer hinter dem Rücken, Schwanz um die Füße, Kiemenwedel zur Krone gewachsen |
 
 | Stimmung | Auslöser | Ausdruck |
 | --- | --- | --- |
 | zufrieden | Standard | offene Augen, kleines Lächeln |
-| freut sich | ein Tagesziel erfüllt | Lachaugen, offener Mund, Ärmchen hoch, kurzer Hüpfer (`spring-bouncy`) |
+| freut sich | ein Tagesziel erfüllt | Lachaugen, offener Mund, Ärmchen hoch (Formen ohne Arme: Kiemenwedel hoch, Schwanz schwingt), kurzer Hüpfer (`spring-bouncy`) |
 | begeistert | alle drei Tagesziele (Tagesbonus), Levelaufstieg | großes Lachen, Sprung, drei Energie-Funken (`duration-celebrate`) |
 | neugierig | ein Insel-Ereignis wartet | große Augen, Brauen hoch, Fragezeichen in `hint` |
 | döst | Pause, länger nichts erfasst | geschlossene Augen, „z z“ in `ink-muted` – neutral, nie traurig |
 | schläft | Abend auf der Insel | geschlossene Augen, kleiner Mond |
-| wartet im Ei | ohne Kopplung ([#14](https://github.com/Yggras/abnehm-app/issues/14)) | Ei in `momo-belly` mit Tupfen in `momo-body`, leichtes Wippen |
+| wartet im Ei | ohne Kopplung ([#14](https://github.com/Yggras/abnehm-app/issues/14)) | **Laichkugel**: runde Gallertkugel in `momo-belly`, darin die schlafende Kaulquappe in `momo-body` mit `momo-frond`-Kiemenwedeln; leichtes Wippen ([#69](https://github.com/Yggras/abnehm-app/issues/69)) |
 
 **Nie:** traurig, krank, hungrig, enttäuscht, schwächer, weinend, schimpfend ([#12](https://github.com/Yggras/abnehm-app/issues/12)). Momo verliert nichts, wenn Ziele offen bleiben.
+
+#### Momo-Accessoires
+
+Festgelegt in [#69](https://github.com/Yggras/abnehm-app/issues/69):
+
+- **Zwei Stellen:** Kopf (am Scheitel zwischen den Kiemenwedeln, bei Level 43 vor der Krone) und Hals (bei der Kaulquappe am Übergang von Kopf zu Körper). Höchstens ein Accessoire je Stelle.
+- **Jedes Accessoire passt auf alle acht Formen.** Es wird einmal gezeichnet und je Form nur über Lage, Drehung und Größe angepasst, bei Bedarf mit Vorder- und Hinterteil ([Produktionsstrategie, Abschnitt 7.2](momo-animation-assets.md)).
+- **Farbe:** Kopf-Accessoires nicht in `momo-frond`, damit sie sich von Kiemenwedeln und Krone abheben (*eigene Einschätzung*: Hibiskus in Koralle verschwand in der Probe auf dem Drachen).
+- **Gemeinsamer Schrank:** Jedes Accessoire gehört dem Paar; beide können es Momo an- und ablegen, die letzte Änderung gilt, beide sehen denselben Momo (Nutzerentscheidung 15.10.2026).
+- **V1-Katalog** (zwölf Stücke, Designvorschlag ohne Beleg): Kopf: Strohhütchen, Seestern-Spange, Hibiskusblüte, Seerosenblatt-Hut, Blütenkranz, Haarschleife. Hals: Muschelkette, Halstuch, Blumenkette, Halsglöckchen, Perlenkette, Strickschal.
 
 ### Insel
 
@@ -512,7 +535,7 @@ Momo und die Insel werden mit Skia gezeichnet ([#41](https://github.com/Yggras/a
 
 ## Annahmen
 
-1. Momos Gestalt (rundes Wesen mit Blattspross) dient nur dem Stilvergleich.
+1. Momos Gestalt im Artifact (rundes Wesen mit Blattspross) dient nur dem Stilvergleich; die festgelegte Gestalt ist der Lagunenling aus [#69](https://github.com/Yggras/abnehm-app/issues/69).
 2. Beispieldaten sind erfunden – Philipp und Anna (Name aus `prototypes/partner-bereich`), Mittwoch, 14. Oktober, Mittwoch als Sporttag, Kalorienbudget 1.850 kcal, Wasserziel 1,5 l, Sportziel 150 min, Level 6, 23 Energie, Gemeinschaftsprojekt „Leuchtturm“, Challenge „Gut getrunken“.
 3. Beide Hälften des Levelbalkens füllen sich von außen zur Mitte; das Level steht als Abzeichen in der Mitte.
 4. Der Überschuss über dem Kalorienbudget wird als zweiter Bogen in `neutral` gezeigt, höchstens 30 % des Rings.
@@ -535,7 +558,7 @@ Die Annahmen 9, 10 und 11 sind technische Prüfpunkte für [#56](https://github.
 Diese Fragen hat das Design-System nicht entschieden. Der Nutzer hat am 14.10.2026 über ihren Verbleib entschieden ([Kommentar in #65](https://github.com/Yggras/abnehm-app/issues/65#issuecomment-6177664253)).
 
 1. **Wie sieht Momo aus?** Wesen, Merkmale, die großen Entwicklungsformen ab Level 4 ([#18](https://github.com/Yggras/abnehm-app/issues/18)) und der Katalog der Accessoires sind nirgends festgelegt. Die Figur im Design-System ist ein Platzhalter.
-   → Ticket [Momos Gestalt und Entwicklungsformen festlegen (#69)](https://github.com/Yggras/abnehm-app/issues/69), blockiert [Spezifikation 4 (#60)](https://github.com/Yggras/abnehm-app/issues/60).
+   → **Entschieden** in [Momos Gestalt und Entwicklungsformen festlegen (#69)](https://github.com/Yggras/abnehm-app/issues/69): Lagunenling mit acht Entwicklungsformen, Laichkugel, Accessoires an Kopf und Hals (siehe [Momo](#momo)).
 2. **Dunkelmodus in V1?** Das System liefert nur die helle Fassung. Die semantischen Namen erlauben ein zweites Theme ohne Umbenennung.
    → **Nein**, nur hell; auf der Karte unter *Out of scope*.
 3. **App-Name und App-Icon.** Bis zu einer Entscheidung heißt das System „Abnehm-App“.

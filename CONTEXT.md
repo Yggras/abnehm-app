@@ -82,6 +82,18 @@ _Avoid_: Messtag
 
 ## Momos Insel
 
+**Momo**:
+Das gemeinsame Wesen des Paars, ein Lagunenling; wartet ohne Kopplung als Laichkugel, schlüpft mit der Kopplung und wächst mit dem Level durch seine Entwicklungsformen. Momo zeigt Stimmungen, ist aber nie traurig, krank oder schwächer.
+_Avoid_: Pet, Haustier, Avatar, Maskottchen
+
+**Entwicklungsform**:
+Eine der acht festen Gestalten von Momo, jeweils ab Level 1, 4, 8, 13, 19, 26, 34 und 43; jede neue Form ab Level 4 schaltet ein Gebiet frei. Ab Level 43 behält Momo seine Endform.
+_Avoid_: Evolution, Stufe, Skin
+
+**Momo-Accessoire**:
+Ein rein kosmetisches Stück, das Momo am Kopf oder Hals trägt, höchstens eines je Stelle; kommt aus Momos Wunsch, gehört dem Paar gemeinsam und kann von jeder Person an- oder abgelegt werden.
+_Avoid_: Item, Kleidung, Deko
+
 **Insel**:
 Die gemeinsame Spielwelt des Paars, in der Momo lebt; entsteht beim Schlüpfen und wird beim Entkoppeln zusammen mit Momo archiviert.
 _Avoid_: Welt, Garten, Spielfeld
@@ -119,7 +131,7 @@ Ein Platz auf der Insel, auf dem genau ein gebautes Objekt steht; jede Person ha
 _Avoid_: Kachel, Tile, Slot
 
 **Gebiet**:
-Ein Inselbereich, den eine große Form von Momo freischaltet; bringt neue Felder und Entdeckungs-Baupläne. Nach dem siebten Gebiet folgt alle sechs Level ein weiteres.
+Ein Inselbereich, den Momo mit einer neuen Entwicklungsform freischaltet; bringt neue Felder und Entdeckungs-Baupläne. Nach dem siebten Gebiet (Level 43) folgt ohne neue Entwicklungsform alle sechs Level ein weiteres.
 _Avoid_: Zone, Region, Welt
 
 **Aufwerten**:
