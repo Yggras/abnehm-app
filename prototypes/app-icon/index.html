@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYP — App-Icon „Gemeinsam leichter“</title>
+  <style>
+    :root { color-scheme: light; font-family: Rubik, system-ui, sans-serif; color: #1d3332; background: #fbf4e6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 32px 20px 112px; }
+    main { max-width: 920px; margin: 0 auto; }
+    .eyebrow { color: #0b7470; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1 { margin: 8px 0 6px; font-size: clamp(28px, 5vw, 44px); }
+    .intro { margin: 0 0 28px; color: #55625e; max-width: 68ch; }
+    .stage { background: #fffcf6; border-radius: 24px; padding: clamp(20px, 5vw, 48px); box-shadow: 0 4px 0 #e4d2b0; display: grid; gap: 32px; grid-template-columns: minmax(240px, 1fr) minmax(220px, .8fr); align-items: center; }
+    .hero { width: min(100%, 480px); aspect-ratio: 1; display: block; border-radius: 22.5%; }
+    h2 { margin: 0 0 8px; font-size: 26px; }
+    .description { color: #55625e; line-height: 1.55; margin: 0 0 24px; }
+    .previews { display: flex; align-items: end; gap: 20px; flex-wrap: wrap; }
+    figure { margin: 0; text-align: center; color: #55625e; font-size: 12px; }
+    figure img { display: block; margin: 0 auto 7px; object-fit: cover; }
+    .ios { width: 96px; height: 96px; border-radius: 22.5%; }
+    .circle { width: 96px; height: 96px; border-radius: 50%; }
+    .tiny { width: 48px; height: 48px; border-radius: 22.5%; }
+    .switcher { position: fixed; z-index: 10; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 999px; color: #fff; background: #1d3332; box-shadow: 0 12px 24px #1d333259; white-space: nowrap; }
+    .switcher button { width: 44px; height: 44px; border: 0; border-radius: 50%; background: #0b7470; color: #fff; font-size: 22px; cursor: pointer; }
+    .switcher span { min-width: min(58vw, 250px); text-align: center; font-weight: 700; }
+    @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } .hero { margin: auto; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Wegwerf-Prototyp · Ticket 70</div>
+    <h1>Gemeinsam leichter</h1>
+    <p class="intro">Drei KI-generierte Icon-Richtungen. Die Masken sind nur Vorschauen; die gewählte Richtung wird anschließend als saubere, tokengetreue Grafik neu gezeichnet.</p>
+    <section class="stage">
+      <img class="hero" id="hero" alt="">
+      <div>
+        <h2 id="title"></h2>
+        <p class="description" id="description"></p>
+        <div class="previews">
+          <figure><img class="ios preview" alt="Vorschau mit abgerundeter quadratischer Maske"><figcaption>abgerundet</figcaption></figure>
+          <figure><img class="circle preview" alt="Vorschau mit runder Maske"><figcaption>rund</figcaption></figure>
+          <figure><img class="tiny preview" alt="kleine Vorschau"><figcaption>48 px</figcaption></figure>
+        </div>
+      </div>
+    </section>
+  </main>
+  <nav class="switcher" aria-label="Varianten wechseln">
+    <button id="previous" aria-label="Vorige Variante">←</button>
+    <span id="label"></span>
+    <button id="next" aria-label="Nächste Variante">→</button>
+  </nav>
+  <script>
+    const variants = [
+      { key: 'A', name: 'Porträt', image: 'images/a-portrait.png', description: 'Momo groß vor zwei überlappenden Farbflächen. Die Personfarben tragen die Gemeinsamkeit, während Momos Gesicht auch klein im Mittelpunkt bleibt.' },
+      { key: 'B', name: 'Gemeinsamer Weg', image: 'images/b-path.png', description: 'Zwei farbige Wege laufen unter Momo zusammen. Die Richtung erzählt den gemeinsamen Weg am deutlichsten und zeigt Momo als Begleiter.' },
+      { key: 'C', name: 'Umarmung', image: 'images/c-embrace.png', description: 'Zwei farbige Bänder umfassen Momo und bilden zusammen ein offenes Herz. Die Richtung betont Unterstützung und Zuneigung.' },
+    ];
+    const params = new URLSearchParams(location.search);
+    let index = Math.max(0, variants.findIndex(v => v.key === (params.get('variant') || 'A').toUpperCase()));
+    function render() {
+      const variant = variants[index];
+      document.querySelector('#hero').src = variant.image;
+      document.querySelector('#hero').alt = `Variante ${variant.key}: ${variant.name}`;
+      document.querySelector('#title').textContent = `${variant.key} · ${variant.name}`;
+      document.querySelector('#description').textContent = variant.description;
+      document.querySelector('#label').textContent = `${variant.key} — ${variant.name}`;
+      document.querySelectorAll('.preview').forEach(image => image.src = variant.image);
+      const url = new URL(location.href); url.searchParams.set('variant', variant.key); history.replaceState({}, '', url);
+    }
+    function move(delta) { index = (index + delta + variants.length) % variants.length; render(); }
+    document.querySelector('#previous').addEventListener('click', () => move(-1));
+    document.querySelector('#next').addEventListener('click', () => move(1));
+    addEventListener('keydown', event => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
+      if (event.key === 'ArrowLeft') move(-1);
+      if (event.key === 'ArrowRight') move(1);
+    });
+    render();
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Design-System „Lagune“
 
-Ticket: [#65](https://github.com/Yggras/abnehm-app/issues/65) · Stand: 14.10.2026 · Quelle: das veröffentlichte Design-System-Artifact [„Abnehm-App“](https://claude.ai/artifact/FXrPV237YtYXY4ARRSGiic) (Claude Design, Phase 2), am 14.10.2026 gelesen (Artifact-Version `1792007765-af36`); am 15.10.2026 um Momos Gestalt aus [#69](https://github.com/Yggras/abnehm-app/issues/69) ergänzt (Artifact-Version `1792091707-ba6e`).
+Ticket: [#65](https://github.com/Yggras/abnehm-app/issues/65) · Stand: 16.10.2026 · Quelle: das veröffentlichte Design-System-Artifact [„Abnehm-App“](https://claude.ai/artifact/FXrPV237YtYXY4ARRSGiic) (Claude Design, Phase 2), am 14.10.2026 gelesen (Artifact-Version `1792007765-af36`); am 15.10.2026 um Momos Gestalt aus [#69](https://github.com/Yggras/abnehm-app/issues/69) ergänzt (Artifact-Version `1792091707-ba6e`) und am 16.10.2026 um Name und Icon aus [#70](https://github.com/Yggras/abnehm-app/issues/70).
 
 Diese Datei hält das Ergebnis von #65 im Repo fest, damit [Spezifikation 0: Fundament & Verträge (#56)](https://github.com/Yggras/abnehm-app/issues/56) die Tokens übernehmen kann, statt sie zu erfinden. Die Token-Tabellen sind maschinell aus `project/tokens.json` des Artifacts erzeugt. Alles andere ist aus `project/README.md`, `project/1-tokens.md` bis `project/6-annahmen-und-offene-fragen.md` und den Komponenten-READMEs zusammengefasst. Mit *eigene Rechnung* markierte Stellen stammen nicht aus dem Artifact.
 
@@ -13,7 +13,7 @@ Das Artifact enthält außerdem die Vorschauen aller Komponenten und die Referen
 - **Farbe = Person:** Kategorien (Wasser, Sport …) erkennt man an Icon und Name, nicht an eigenen Farben. Es gibt **kein „Fehler-Rot“ für Ziele**; `problem` gilt nur für Technik und ungültige Eingaben.
 - **Tokens:** 60 Farben, 11 Textstile, 8 Abstände, 6 Radien, 10 Elevationen, 20 Größen, 6 Deckkräfte, 5 Dauern, 3 Kurven, 2 Federn – als `tokens.json` und als typisierte `code/tokens.ts` für `StyleSheet` ([#41](https://github.com/Yggras/abnehm-app/issues/41)).
 - **Komponenten:** Fast alles ist gebrandet (eigene Komponente mit `StyleSheet` und Tokens). Über `@expo/ui` kommen nur Sheet-Container, Schalter, Picker (Datum/Uhrzeit) und Kontextmenüs. Momo und Insel zeichnet Skia, den Gewichtsverlauf Victory Native.
-- **Offen:** 15 Annahmen und 8 Designfragen. Momos Gestalt ([#69](https://github.com/Yggras/abnehm-app/issues/69)) und App-Name/Icon ([#70](https://github.com/Yggras/abnehm-app/issues/70)) sind eigene Tickets; Dunkelmodus und Insel-Bedienung ohne Sehen sind nicht in V1; die übrigen vier sind entschieden oder einer Spezifikation zugewiesen (siehe Ende der Datei).
+- **Annahmen und frühere offene Fragen:** 15 Annahmen; alle 8 Designfragen haben einen entschiedenen Verbleib. Momo ist der Lagunenling aus [#69](https://github.com/Yggras/abnehm-app/issues/69), die App heißt **„Gemeinsam leichter“** und trägt das Umarmungs-Icon aus [#70](https://github.com/Yggras/abnehm-app/issues/70); Dunkelmodus und Insel-Bedienung ohne Sehen sind nicht in V1 (siehe Ende der Datei).
 
 ## Gewählte Richtung: A · Lagune
 
@@ -469,6 +469,20 @@ Ziel ist WCAG 2.2 Stufe AA, übertragen auf Mobil-Apps.
 | `energy-edge` auf `surface-card` / `energy` | Kontur | 5,73 / 3,16 |
 | `line-strong` auf `surface-card` / `surface-base` | Rahmen | 3,99 / 3,73 |
 
+## App-Name und App-Icon
+
+Die App heißt **„Gemeinsam leichter“** (Nutzerentscheidung vom 16.10.2026 in [#70](https://github.com/Yggras/abnehm-app/issues/70)). Der Name verbindet das Gesundheits- und Abnehmziel mit der Unterstützung als Paar, ohne „Abnehmen“ oder „Gewicht“ ausdrücklich zu nennen.
+
+Das App-Icon folgt **C · Umarmung** aus dem [ComfyUI-Prototyp](../prototypes/app-icon/README.md):
+
+- Momo als freudige Kaulquappe in der Mitte;
+- ein breites Band in `self` von links und eines in `partner` von rechts, die Momo als offenes Herz umfassen;
+- ein einzelner Funke in `energy` über Momo;
+- vollflächiger Hintergrund in `primary-soft`;
+- kein Text und keine weiteren Symbole.
+
+Das offene Herz steht nach der Nutzerentscheidung zugleich für partnerschaftliche Unterstützung und Fitness. Der Funke verbindet das Motiv mit Momos Energie-System. Der KI-generierte Entwurf ist eine Auswahlreferenz, kein Produktionsasset; die Umsetzung zeichnet ihn mit den festgelegten Token-Farben neu.
+
 ## iOS und Android
 
 Grundsatz: **Alles Gebrandete ist auf beiden Plattformen gleich, alles Systemnahe folgt der Plattform.** Beide sehen dieselbe App und dieselbe Insel, bedienen sie aber mit den Gesten und Systemelementen, die sie kennen.
@@ -561,8 +575,8 @@ Diese Fragen hat das Design-System nicht entschieden. Der Nutzer hat am 14.10.20
    → **Entschieden** in [Momos Gestalt und Entwicklungsformen festlegen (#69)](https://github.com/Yggras/abnehm-app/issues/69): Lagunenling mit acht Entwicklungsformen, Laichkugel, Accessoires an Kopf und Hals (siehe [Momo](#momo)).
 2. **Dunkelmodus in V1?** Das System liefert nur die helle Fassung. Die semantischen Namen erlauben ein zweites Theme ohne Umbenennung.
    → **Nein**, nur hell; auf der Karte unter *Out of scope*.
-3. **App-Name und App-Icon.** Bis zu einer Entscheidung heißt das System „Abnehm-App“.
-   → Ticket [App-Name und App-Icon festlegen (#70)](https://github.com/Yggras/abnehm-app/issues/70), ohne Blocker auf die Spezifikationen.
+3. **App-Name und App-Icon.** Bis zu einer Entscheidung hieß das System „Abnehm-App“.
+   → **Entschieden** in [App-Name und App-Icon festlegen (#70)](https://github.com/Yggras/abnehm-app/issues/70): **„Gemeinsam leichter“**, Icon **C · Umarmung** mit Momo, zweifarbigem offenen Herz und goldenem Energie-Funken (siehe [App-Name und App-Icon](#app-name-und-app-icon)).
 4. **Haptik bei Erfolgen?** Ein kurzes Vibrieren beim Erfüllen eines Tagesziels würde zur federnden Bewegung passen; eine Haptik-Bibliothek gehört nicht zum festgelegten Stack ([#10](https://github.com/Yggras/abnehm-app/issues/10), [#41](https://github.com/Yggras/abnehm-app/issues/41)).
    → **Ja, dezent** bei erfülltem Tagesziel, Tagesbonus und Levelaufstieg; die Bibliothek (z. B. [`expo-haptics`](https://docs.expo.dev/versions/latest/sdk/haptics/)) wählt [Spezifikation 0 (#56)](https://github.com/Yggras/abnehm-app/issues/56).
 5. **Insel ohne Sehen bedienen.** Die Skia-Insel ist für Screenreader ein Bild. Braucht V1 eine Liste der eigenen Felder und Objekte als Alternative? Das wäre eine neue Funktion.
