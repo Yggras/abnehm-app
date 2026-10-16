@@ -68,6 +68,10 @@ _Avoid_: Quest, Mission, Challenge
 Das dauerhaft festgehaltene erstmalige Erfüllen eines Tagesziels. Spätere Korrekturen können den aktuellen Zielzustand ändern, nehmen aber weder Tageszielerfüllung noch daraus entstandene Belohnungen zurück.
 _Avoid_: aktueller Zielzustand, Energiegutschrift
 
+**Tagesbonus**:
+Die zusätzliche Energie-Gutschrift, wenn an einem lokalen Kalendertag alle drei Tagesziele einer Person erfüllt sind; hängt eine Erfüllung vom Tagesende ab, folgt auch der Bonus erst dann.
+_Avoid_: Streak-Bonus, Tagesprämie
+
 **Wochenplan**:
 Die persönliche Belegung der drei Momo-Plätze für jeden Wochentag. Änderungen gelten ab dem nächsten lokalen Kalendertag.
 _Avoid_: Trainingsplan, Zeitplan
@@ -103,8 +107,12 @@ Die persönliche Spielwährung einer Person, die nur aus erfüllten Tageszielen 
 _Avoid_: Punkte, Münzen, Coins
 
 **Rolle**:
-Die beim Schlüpfen gewählte Zuständigkeit einer Person auf der Insel: Bauen (Häuser, Wege, Brücken) oder Natur (Pflanzen, Bäume, Tiere); tauschbar nur mit Zustimmung beider.
+Die in der Rollenwahl festgelegte Zuständigkeit einer Person auf der Insel: Bauen (Häuser, Wege, Brücken) oder Natur (Pflanzen, Bäume, Tiere); tauschbar nur mit Zustimmung beider.
 _Avoid_: Klasse, Beruf
+
+**Rollenwahl**:
+Der Vorschlag einer Person, welche Rolle sie und welche ihr Partner übernimmt, den der Partner annehmen oder ablehnen kann; mit der Annahme schlüpft Momo. Der Vorschlag hat keine Frist und lässt sich zurückziehen.
+_Avoid_: Rollenzuweisung, Rollentausch
 
 **Eigene Ecke**:
 Der Inselbereich einer Person, den sie unabhängig von ihrer Rolle allein frei gestalten kann.
@@ -139,8 +147,16 @@ Ein gebautes Objekt mit Energie auf die nächste Stufe heben (höchstens Stufe 3
 _Avoid_: Upgrade, Ausbauen
 
 **Gemeinschaftsprojekt**:
-Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Person mit eigener Energie ohne Frist füllt; fertig, wenn beide Anteile voll sind.
+Ein großes Inselprojekt mit je einem Bau- und einem Natur-Anteil, die jede Person mit eigener Energie ohne Frist füllt; fertig, wenn beide Anteile voll sind. Es gibt immer genau eines; die Projekte folgen einer festen Reihenfolge.
 _Avoid_: Challenge, Gruppenquest
+
+**Wahrzeichen**:
+Das auf der Insel sichtbare Bauwerk eines fertigen Gemeinschaftsprojekts.
+_Avoid_: Monument, Trophäe
+
+**Gemeinschaftsplatz**:
+Der gemeinsame Inselbereich, auf dem Gemeinschaftsprojekte entstehen und ihre Wahrzeichen stehen; dort baut keine Person einzeln.
+_Avoid_: Marktplatz, Gemeinschaftsfeld
 
 **Insel-Ereignis**:
 Ein freiwilliges, nicht verfallendes Vorkommnis auf der Insel – Besucher mit Wunsch, Momos Wunsch, Inselwetter oder Entdeckung –, das Baupläne, Deko oder ein Momo-Accessoire bringt.
@@ -191,16 +207,24 @@ Die eine andere Person, mit der ein Konto gekoppelt ist und Momo teilt.
 _Avoid_: Freund, Kontakt, Mitglied
 
 **Kopplung**:
-Die archivierungsfähige Verbindung genau zweier Personen, Voraussetzung dafür, dass Momo schlüpft. Nach einer Entkopplung reaktiviert eine erneute Kopplung derselben Personen ihre bisherige Insel; mit einer anderen Person entsteht eine neue Kopplung und Insel.
+Die archivierungsfähige Verbindung genau zweier Personen, Voraussetzung dafür, dass Momo schlüpft. Jede der beiden Personen kann sie jederzeit allein beenden (Entkopplung), ohne Zustimmung des Partners. Nach einer Entkopplung reaktiviert eine erneute Kopplung derselben Personen ihre bisherige Insel; mit einer anderen Person entsteht eine neue Kopplung und Insel.
 _Avoid_: Verknüpfung, Pairing, Freundschaft
+
+**Gemeinsame Aktion**:
+Ein Vorgang einer Person, der die Kopplung betrifft: Rollenwahl, Rollentausch oder Deko schenken, über die der Partner entscheidet, oder die Entkopplung, die ohne Zustimmung sofort wirkt.
+_Avoid_: Anfrage (für die Entkopplung), Request
 
 **Einladungscode**:
 Ein kurzlebiger, einmal verwendbarer Code, mit dem eine Person eine Kopplung herstellt.
 _Avoid_: Einladungslink, Partnercode
 
 **Partnerfreigabe**:
-Die Einstellung einer Person, ob ihr Partner für einen Gesundheitsbereich eine Zusammenfassung sehen darf. Mahlzeitenfotos werden davon unabhängig freigegeben.
+Die Einstellung einer Person, ob ihr Partner für einen Gesundheitsbereich eine Zusammenfassung sehen darf. Mahlzeitenfotos werden davon unabhängig über die Fotofreigabe freigegeben.
 _Avoid_: Berechtigung, Sichtbarkeit, Zugriffsstufe
+
+**Fotofreigabe**:
+Die Einstellung einer Person, ob ihr Partner ihre Mahlzeitenfotos des aktuellen Tages sehen darf, unabhängig von den Partnerfreigaben. Einzelne Mahlzeitenfotos lassen sich zusätzlich vom Teilen ausnehmen; sichtbar ist ein Foto nur, wenn beides es erlaubt.
+_Avoid_: Fotoberechtigung, Fotosichtbarkeit, Bildfreigabe
 
 **Zusammenfassung**:
 Die für den Partner sichtbare verdichtete Darstellung eines Gesundheitsbereichs ohne einzelne Einträge; beim Gewicht umfasst sie nur Trend und Veränderung, nie den absoluten Wert.
