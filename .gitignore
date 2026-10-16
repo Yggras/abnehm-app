@@ -3,3 +3,10 @@
 .DS_Store
 .pi/remote-pi/
 __pycache__/
+
+# Impeccable: Critique-Snapshots bleiben lokal (Ergebnis steht im Pull Request, siehe research/impeccable-review.md)
+.impeccable/critique/
+
+# Impeccable-Engine (16 MB je Plattform): der Launcher lädt sie bei Bedarf nach ~/.impeccable/bin/
+.claude/skills/impeccable/scripts/bin/
+.pi/skills/impeccable/scripts/bin/
