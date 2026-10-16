@@ -1,0 +1,169 @@
+{
+  "name": "b-path",
+  "file": "b-path.png",
+  "sha256": "ef3c419d1b3470222da1b160ca89934e4f8e3b84c495127b06390949f2f461a5",
+  "seconds_execution": 258.4,
+  "prompt_id": "f787e9f6-aeb8-438a-b430-eebc83a9f4d8",
+  "mode": "reference-edit-fresh-latent",
+  "variant": "b-path",
+  "seed": 702,
+  "prompt": "Use <image1> as the exact character reference for Momo: preserve the same warm apricot tadpole body, cream belly stripe, coral three-lobed gill fronds on both sides, dark teal eyes, cheeks, friendly face and flat contour-free shape language. Create a polished 1024 by 1024 mobile app icon for a German health and weight-loss app for two partners named Gemeinsam leichter. Full-bleed square artwork with all important content safely inside the central 70 percent for iOS and Android masks. No words, no letters, no numbers, no logo mockup, no device, no transparency, no already-rounded app-icon frame, no thin outlines, no gradients, no shadows, no texture. Flat clean vector-like shapes. Adult-friendly and warm, playful only in detail. Exact palette: sand #FBF4E6, deep lagoon teal #0B7470, self teal #0E8580, partner orange #C9662B, gold #F2B33D, ink #1D3332, Momo apricot #FFC56E, cream #FFEBC4, coral #F48C73. Composition: show the complete little Momo floating upward in the center. Two broad curved paths start separately at the lower left and lower right, one lagoon teal and one partner orange, then join beneath Momo into one rising sand-and-gold path. The joined path communicates two partners moving toward a healthier goal. Keep Momo large enough to read at 60 pixels. Minimal geometry, no landscape details.",
+  "references": [
+    {
+      "file": "mood-f1-freut.webp",
+      "sha256": "08d4d26d4965e09b8ef80eaba818e3d5505e14544984ba36a6f0a367a620d269"
+    }
+  ],
+  "api_graph": {
+    "unet": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "cache": {
+      "class_type": "QwenImage21Cache",
+      "inputs": {
+        "model": [
+          "unet",
+          0
+        ],
+        "device": "auto",
+        "dtype": "int8"
+      }
+    },
+    "clip": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "vae": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    "prompt": {
+      "class_type": "TextEncodeQwenImage21",
+      "inputs": {
+        "clip": [
+          "clip",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ],
+        "prompt": "Use <image1> as the exact character reference for Momo: preserve the same warm apricot tadpole body, cream belly stripe, coral three-lobed gill fronds on both sides, dark teal eyes, cheeks, friendly face and flat contour-free shape language. Create a polished 1024 by 1024 mobile app icon for a German health and weight-loss app for two partners named Gemeinsam leichter. Full-bleed square artwork with all important content safely inside the central 70 percent for iOS and Android masks. No words, no letters, no numbers, no logo mockup, no device, no transparency, no already-rounded app-icon frame, no thin outlines, no gradients, no shadows, no texture. Flat clean vector-like shapes. Adult-friendly and warm, playful only in detail. Exact palette: sand #FBF4E6, deep lagoon teal #0B7470, self teal #0E8580, partner orange #C9662B, gold #F2B33D, ink #1D3332, Momo apricot #FFC56E, cream #FFEBC4, coral #F48C73. Composition: show the complete little Momo floating upward in the center. Two broad curved paths start separately at the lower left and lower right, one lagoon teal and one partner orange, then join beneath Momo into one rising sand-and-gold path. The joined path communicates two partners moving toward a healthier goal. Keep Momo large enough to read at 60 pixels. Minimal geometry, no landscape details.",
+        "negative_prompt": "",
+        "resolution": 0,
+        "images.image_1": [
+          "ref_1",
+          0
+        ]
+      }
+    },
+    "sigmas": {
+      "class_type": "ManualSigmas",
+      "inputs": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+      }
+    },
+    "sampler_select": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "noise": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 702
+      }
+    },
+    "guider": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "cache",
+          0
+        ],
+        "positive": [
+          "prompt",
+          0
+        ],
+        "negative": [
+          "prompt",
+          1
+        ],
+        "cfg": 1.0
+      }
+    },
+    "sampler": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "noise",
+          0
+        ],
+        "guider": [
+          "guider",
+          0
+        ],
+        "sampler": [
+          "sampler_select",
+          0
+        ],
+        "sigmas": [
+          "sigmas",
+          0
+        ],
+        "latent_image": [
+          "latent",
+          0
+        ]
+      }
+    },
+    "decode": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "sampler",
+          0
+        ],
+        "vae": [
+          "vae",
+          0
+        ]
+      }
+    },
+    "save": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "decode",
+          0
+        ],
+        "filename_prefix": "app-icon-70/b-path"
+      }
+    },
+    "ref_1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "momo_08d4d26d4965.webp"
+      }
+    },
+    "latent": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 1024,
+        "height": 1024,
+        "batch_size": 1
+      }
+    }
+  }
+}
