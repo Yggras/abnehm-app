@@ -4,6 +4,8 @@ Ticket: [App-Name und App-Icon festlegen (#70)](https://github.com/Yggras/abnehm
 
 **Frage:** Welche Bildidee verbindet Momo mit Gesundheit und partnerschaftlicher Unterstützung und bleibt als kleines App-Icon verständlich?
 
+**Nutzerentscheidung (16.10.2026):** **C · Umarmung** wird das App-Icon. Das offene Herz steht für partnerschaftliche Unterstützung und Fitness; Momo schafft die Wiedererkennung. Der goldene Energie-Funke bleibt und verbindet das Motiv mit Momos Energie-System.
+
 **Wegwerf-Prototyp.** Die Bilder sind KI-generierte Auswahlentwürfe, keine Produktionsgrafiken. Farben, Abstände und Momos Anatomie sind nicht pixelgenau gegen das [Design-System „Lagune“](../../research/design-system.md) geprüft. Qualitätsurteile sind visuelle Einschätzungen, keine Messungen.
 
 ## Ansehen
@@ -39,4 +41,14 @@ Die Seite zeigt jeden Entwurf vollformatig, mit abgerundeter und runder Vorschau
 - **B** übersetzt den Namen am direktesten in ein Wegmotiv. Momo ist kleiner und die drei statt zwei Bodenfarben machen die Aussage unruhiger als beabsichtigt.
 - **C** macht gegenseitige Unterstützung am deutlichsten. Das Herz-/Umarmungsmotiv ist leichter verständlich, aber weniger eigenständig als A.
 
-**Empfehlung vor Nutzerfeedback:** A als stärkster App-Icon-Ausgangspunkt; die Überlappung der beiden Farbflächen kann in der Reinzeichnung subtil zu einem gemeinsamen Weg oder einer Umarmung geschärft werden.
+## Gewählte Richtung
+
+**C · Umarmung** wird tokengetreu neu gezeichnet:
+
+- Momo als freudige Kaulquappe in der Mitte;
+- ein breites Band in `self` von links und eines in `partner` von rechts, die Momo als offenes Herz umfassen;
+- ein einzelner Funke in `energy` über Momo;
+- ruhiger vollflächiger Hintergrund in `primary-soft`;
+- kein Text und keine weiteren Symbole.
+
+Die konkrete Geometrie des KI-Entwurfs ist Referenz, nicht verbindliches Produktionsasset.
