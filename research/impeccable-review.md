@@ -30,7 +30,7 @@ Quellen-Nummern in eckigen Klammern [n] verweisen auf die Liste am Ende. Mit *ei
 
 **Installationsweg:**
 
-- **Geplant** war `npx impeccable install --scope=global --no-hooks` [1]. Der Installer kennt `--providers=<names>` [1]; ausgeführt werden sollte er für Claude Code und pi (`--providers=claude,pi`).
+- **Geplant** war `npx impeccable install --scope=global --no-hooks` [1]. Der Installer kennt `--providers=<names>` [1]. `pi` ist ein gültiger Provider und installiert global nach `~/.pi/agent/skills`, `claude` nach `~/.claude/skills` [20]. Ausgeführt werden sollte er also mit `--providers=claude,pi`.
 - **In dieser Session nicht ausgeführt:** Die Sicherheitsprüfung des Auto-Modus von Claude Code lehnte den Befehl als „Self-Modification“ ab, weil er in `~/.claude/skills` schreibt. Der Nutzer führt ihn selbst aus; der Ausgang steht im Resolution-Kommentar von #91.
 - **Für die Prüfung genutzt:** der Skill-Inhalt aus dem Git-Tag `skill-v4.6.0` (`.claude/skills/impeccable/`, gelesen, nicht installiert). Der Kontext-Lader lief mit dem Engine-Binärprogramm aus dem npm-Paket (`impeccable context`). Er fand `docs/PRODUCT.md`, meldete die Plattform `adaptive` und lud die iOS- und die Android-Referenz.
 
@@ -497,3 +497,4 @@ Als Kommentar an Spezifikation 0:
 17. Spezifikation 4 · Momo, Insel & Challenges: https://github.com/Yggras/abnehm-app/issues/83
 18. Spezifikation 5 · Partner & Benachrichtigungen: https://github.com/Yggras/abnehm-app/issues/87
 19. Spike Insel-Rendering, Zielgeräte iPhone SE (3. Generation) und Fairphone 6: https://github.com/Yggras/abnehm-app/blob/main/spikes/insel-rendering/RESULTS.md
+20. Impeccable, `docs/CLI-CONTRACT.md` (Provider-Aliase und Zielordner von `install`), Tag `skill-v4.6.0`: https://github.com/pbakaus/impeccable/blob/skill-v4.6.0/docs/CLI-CONTRACT.md
