@@ -8,12 +8,12 @@ Quellen-Nummern in eckigen Klammern [n] verweisen auf die Liste am Ende. Mit *ei
 
 - **Kein P0.** Jede geprüfte Hauptaufgabe ist mit dem spezifizierten Verhalten erledigbar.
 - **Fünf P1-Befunde**, die vor `/to-tickets` in die Spezifikationen gehören:
-  - **B1** „+250 ml“ liegt auf „Heute“ unterhalb des sichtbaren Bereichs. → Produktfrage an den Nutzer.
+  - **B1** „+250 ml“ liegt auf „Heute“ unterhalb des sichtbaren Bereichs. → Nutzerentscheidung vom 16.10.2026: Direktaktion „+250 ml Wasser“ im ＋-Sheet (Spezifikationen 0 und 3).
   - **B2** Löst ein Tipp mehrere Meldungen aus, gibt es keine Regel. Dadurch kann „Rückgängig“ genau dann verloren gehen, wenn ein Tagesziel erfüllt wird. → entschieden, Ergänzung an Spezifikation 0.
-  - **B3** Ein ausgeblendeter Import ist nach 5 Sekunden unwiederbringlich. → Produktfrage an den Nutzer.
+  - **B3** Ein ausgeblendeter Import ist nach 5 Sekunden unwiederbringlich. → Nutzerentscheidung vom 16.10.2026: Liste „Ausgeblendete Einträge“ mit „Wieder einblenden“ auf der Einstellungsseite Health (Spezifikation 3).
   - **B4** Die Referenzentwürfe widersprechen den Spezifikationen an sechs Stellen, unter anderem mit der Kurzbotschaft „Kleiner Stups: Trink was 💧“. → entschieden: Vorrangregel in Spezifikation 0, Hinweis in `research/design-system.md`.
   - **B5** Nirgends wird erklärt, dass Momo nur durch *verbaute* Energie wächst. → entschieden, Ergänzung an Spezifikation 4.
-- **Elf P2- und acht P3-Befunde.** Sie stehen nur in dieser Datei.
+- **Elf P2- und acht P3-Befunde.** Sie stehen nur in dieser Datei. Ausnahme ist B7: Per Nutzerentscheidung vom 16.10.2026 zeigt die Partner-Karte auf „Heute“ keine Zahlen mehr (Spezifikationen 0 und 5).
 - **Heuristik-Summen** (je von 40): Heute 26 · Momo 26 · Wir 27 · Schnell eintragen 28 · Onboarding 28 · Anfeuern 29. Die drei Referenzentwürfe liegen damit im Band „Acceptable“ (20–27), die drei Abläufe im Band „Good“ (28–35) [2]. Die Entwürfe schneiden schlechter ab, vor allem weil sie von den Spezifikationen abweichen (B4).
 - **Verbleib der Dateien:** `docs/PRODUCT.md` bleibt als Verweisdatei. `DESIGN.md` gibt es nur als nicht maßgebliche Momentaufnahme unter `spikes/impeccable-review/`. `.impeccable/` kommt nicht ins Repo (siehe [Verbleib](#verbleib-von-productmd-designmd-und-impeccable)).
 
@@ -27,12 +27,18 @@ Quellen-Nummern in eckigen Klammern [n] verweisen auf die Liste am Ende. Mit *ei
 | Skill | `skill-v4.6.0` (Release 15.10.2026) | GitHub-Releases [10]; `SKILL.md` meldet `version: 4.6.0` [7] |
 | Engine | `impeccable-engine 0.1.15` | `engine-probe` des Binärprogramms aus dem npm-Paket |
 | Telemetrie | aus (`"telemetry": false` in `~/.impeccable/config.json`) | `npx impeccable telemetry status` |
+| Installation | Projekt: `.claude/skills/impeccable/`, `.claude/agents/impeccable-*.md`, `.pi/skills/impeccable/` | Ausgabe von `npx impeccable@4.6.0 install` am 16.10.2026 |
 
 **Installationsweg:**
 
-- **Geplant** war `npx impeccable install --scope=global --no-hooks` [1]. Der Installer kennt `--providers=<names>` [1]. `pi` ist ein gültiger Provider und installiert global nach `~/.pi/agent/skills`, `claude` nach `~/.claude/skills` [20]. Ausgeführt werden sollte er also mit `--providers=claude,pi`.
-- **In dieser Session nicht ausgeführt:** Die Sicherheitsprüfung des Auto-Modus von Claude Code lehnte den Befehl als „Self-Modification“ ab, weil er in `~/.claude/skills` schreibt. Der Nutzer führt ihn selbst aus; der Ausgang steht im Resolution-Kommentar von #91.
-- **Für die Prüfung genutzt:** der Skill-Inhalt aus dem Git-Tag `skill-v4.6.0` (`.claude/skills/impeccable/`, gelesen, nicht installiert). Der Kontext-Lader lief mit dem Engine-Binärprogramm aus dem npm-Paket (`impeccable context`). Er fand `docs/PRODUCT.md`, meldete die Plattform `adaptive` und lud die iOS- und die Android-Referenz.
+- **Ticket-Vorgabe** war die globale Installation `npx impeccable install --scope=global --no-hooks` [1]. Die Sicherheitsprüfung des Auto-Modus von Claude Code lehnte sie als „Self-Modification“ ab, weil sie in `~/.claude/skills` schreibt.
+- **Nutzerentscheidung vom 16.10.2026:** Impeccable wird **ins Projekt** installiert, nicht global. Das ist eine Ausnahme von der Regel für allgemeine Skills in `AGENTS.md`.
+- **Befehl:** `npx impeccable@4.6.0 install -y --providers=claude,pi --scope=project --no-hooks`.
+  - `claude` schreibt die Claude-Code-Fassung nach `.claude/skills/impeccable/` und vier Sub-Agenten nach `.claude/agents/`.
+  - `pi` schreibt die pi-Fassung nach `.pi/skills/impeccable/` [20]. Pi liest projektlokal `.pi/skills/` und `.agents/skills/` [21]. Eine dritte Kopie unter `.agents/skills/` würde pi doppelt laden und entfällt deshalb.
+- **Kein Symlink:** Die Fassungen unterscheiden sich in Pfaden und Frontmatter (Vergleich der Ordner `.claude`, `.agents` und `.pi` im Release). Ein Symlink nach der Repo-Konvention würde einer Harness falsche Pfade geben.
+- **Engine-Binaries:** Der Installer legt je Harness 16 MB für darwin-arm64 unter `scripts/bin/` ab. Sie sind per `.gitignore` ausgeschlossen, denn fehlt das Binary, lädt der Launcher es mit Prüfsumme nach `~/.impeccable/bin/<version>/` (`scripts/impeccable` im Skill).
+- **Für die Prüfung selbst** stammte der Skill-Inhalt aus dem Release-Tag `skill-v4.6.0`; die Installation kam erst danach. Der Kontext-Lader (`impeccable context`) fand `docs/PRODUCT.md`, meldete die Plattform `adaptive` und lud die iOS- und die Android-Referenz.
 
 ### Methode
 
@@ -71,13 +77,13 @@ Die Plattformgarantien gelten trotzdem und sind spezifiziert: sichere Bereiche, 
 
 | ID | Stufe | Befund | Quelle | Verbleib |
 | --- | --- | --- | --- | --- |
-| B1 | P1 | „+250 ml“ erst nach Scrollen erreichbar | Entwurf Heute; Spez. 0 §6, Spez. 3 §4 | Frage an den Nutzer |
+| B1 | P1 | „+250 ml“ erst nach Scrollen erreichbar | Entwurf Heute; Spez. 0 §6, Spez. 3 §4 | Nutzerentscheidung → Spez. 0, Spez. 3 |
 | B2 | P1 | Mehrere Meldungen zu einem Tipp ohne Regel; „Rückgängig“ kann verloren gehen | Spez. 0 §6, Spez. 4 §6, Spez. 3 §4 | entschieden → Spez. 0 |
-| B3 | P1 | Ausgeblendeter Import nach 5 s endgültig weg | Spez. 3 §4, „Out of Scope“ | Frage an den Nutzer |
+| B3 | P1 | Ausgeblendeter Import nach 5 s endgültig weg | Spez. 3 §4, „Out of Scope“ | Nutzerentscheidung → Spez. 3 |
 | B4 | P1 | Referenzentwürfe widersprechen den Spezifikationen | Entwürfe Heute/Wir, Mini-Tracker-README; Spez. 0 §5, Spez. 4 §12, Spez. 5 §2–4 | entschieden → Spez. 0, `research/design-system.md` |
 | B5 | P1 | Spielschleife „Tagesziel → Energie → Bauen → Momo wächst“ wird nirgends erklärt | Spez. 1 §9, Spez. 4 §6–7 | entschieden → Spez. 4 |
 | B6 | P2 | Zwei Sportzahlen verschiedener Bedeutung und doppelte Wasseranzeige auf „Heute“ | Entwurf Heute | nur hier |
-| B7 | P2 | Partnerwerte auf „Heute“ in gleicher Form direkt unter den eigenen | Entwurf Heute; Spez. 5 §3 | nur hier, optional Frage an den Nutzer |
+| B7 | P2 | Partnerwerte auf „Heute“ in gleicher Form direkt unter den eigenen | Entwurf Heute; Spez. 5 §3 | Nutzerentscheidung → Spez. 0, Spez. 5 |
 | B8 | P2 | ＋ → „Essen“ verlangt bei jedem Eintrag die Wahl der Mahlzeit | Spez. 2 §6 | nur hier |
 | B9 | P2 | Nach dem Speichern eines Essens über ＋ landet man im Protokoll statt am Ausgangsort | Spez. 2 §6, Spez. 0 §6 | nur hier |
 | B10 | P2 | Bauen ohne „Rückgängig“; Korrektur nur über „Umstellen“ | Spez. 4 §7 | nur hier |
@@ -132,7 +138,7 @@ Die Plattformgarantien gelten trotzdem und sind spezifiziert: sichere Bereiche, 
   - *Messung:* Im eigenen Rahmen des Design-Systems (Bildschirm 800 pt hoch, Tab-Leiste ab 718 pt; gemessen am Entwurf „Momo“) liegt der Button bei 885–929 pt unter der Oberkante, also 167–211 pt unterhalb des sichtbaren Bereichs. Der Kalorienring beginnt bei etwa 600 pt.
   - *Kleinere Geräte:* Das iPhone SE (3. Generation) ist mit 375 × 667 pt kleiner. Der Wert ist hier nicht aus einer Primärquelle belegt, weil Apples Gerätetabelle in dieser Sitzung nicht abrufbar war. Die Höhe des Fairphone 6 in dp ist nicht belegt.
   - *Warum das zählt:* „Ein Tipp genügt“ wird zu „scrollen und tippen“. Der Weg über ＋ braucht drei Tipps (＋ → Wasser → Glas 250 ml), weil „Wasser“ im ＋-Sheet den Detailbildschirm öffnet (Spezifikation 3 §4). Wasser ist die häufigste Eingabe des Tages.
-  - *Behebung:* Die Reihenfolge der Slots legt Spezifikation 0 nach [#15](https://github.com/Yggras/abnehm-app/issues/15) fest, also ist das eine Produktfrage. Empfehlung: Das ＋-Sheet bekommt eine Direktaktion „+250 ml Wasser“, die wie der Mini-Tracker bucht (zwei Tipps von jedem Tab). Die Reihenfolge von „Heute“ bleibt.
+  - *Behebung:* Die Reihenfolge der Slots legt Spezifikation 0 nach [#15](https://github.com/Yggras/abnehm-app/issues/15) fest, also ist das eine Produktfrage. Empfehlung: Das ＋-Sheet bekommt eine Direktaktion „+250 ml Wasser“, die wie der Mini-Tracker bucht (zwei Tipps von jedem Tab). Die Reihenfolge von „Heute“ bleibt. **Nutzerentscheidung vom 16.10.2026: Empfehlung übernommen.**
   - *Befehl:* `/impeccable layout`.
 - **[P1] B2 Mehrere Meldungen zu einem Tipp.**
   - *Was passiert:* Erreicht der vierte Tipp auf „+250 ml“ das Wasserziel von 1,5 l, entstehen gleichzeitig „+250 ml Wasser · Rückgängig“ (Spezifikation 3 §4) und „Wasserziel erfüllt · +1 Energie“ (Spezifikation 4 §6). War es das dritte Tagesziel, kommt „Alle drei geschafft · +1 Energie“ dazu, bei Levelaufstieg auch „Momo ist jetzt auf Level N“.
@@ -149,7 +155,7 @@ Die Plattformgarantien gelten trotzdem und sind spezifiziert: sichere Bereiche, 
 - **[P2] B7 Partnerwerte unter den eigenen.**
   - *Was passiert:* Die Partner-Karte zeigt „Sport 45 von 150 min diese Woche“ (Spezifikation 5 §2–3) etwa 100 pt unter dem eigenen „65 von 150 min“, in derselben Einheit mit demselben Ziel.
   - *Warum das zählt:* „Nie direkt neben eigenen Werten“ (Spezifikation 5, User Story 91) ist formal erfüllt. Prinzip 3 („Miteinander, nie gegeneinander“) wird auf dem täglichen Hauptbildschirm aber praktisch unterlaufen (*eigene Einschätzung*).
-  - *Behebung:* Die Partner-Karte auf „Heute“ zeigt nur Name, groben Tageszielstand und „Anfeuern“. Zahlen gibt es nur in „Wir“. Das berührt [#15](https://github.com/Yggras/abnehm-app/issues/15) und [#43](https://github.com/Yggras/abnehm-app/issues/43) und ist damit eine Produktfrage.
+  - *Behebung:* Die Partner-Karte auf „Heute“ zeigt nur Name, groben Tageszielstand und „Anfeuern“. Zahlen gibt es nur in „Wir“. Das berührt [#15](https://github.com/Yggras/abnehm-app/issues/15) und [#43](https://github.com/Yggras/abnehm-app/issues/43) und ist damit eine Produktfrage. **Nutzerentscheidung vom 16.10.2026: Empfehlung übernommen.**
   - *Befehl:* `/impeccable distill`.
 
 **Persona Red Flags**
@@ -265,7 +271,7 @@ Die Plattformgarantien gelten trotzdem und sind spezifiziert: sichere Bereiche, 
   | „Heute“ und „Wir“: „2 von 3 Tageszielen“ | Spezifikation 0 §5, Spezifikation 5 §2: nur grober Stand („fast geschafft“), „X von 3“ entfällt | exakter Partnerwert gegen [#43](https://github.com/Yggras/abnehm-app/issues/43) |
   | Gewicht „Trend −0,3 kg/Woche“ | Spezifikation 0 §5, Spezifikation 5 §2: „Trend −0,4 kg in 2 Wochen“ | andere Kennzahl als Projektion und Detailbildschirm |
   | „Annas Natur-Anteil · gut gefüllt“ mit Balken | Spezifikation 0 §2, Spezifikation 4 §12: `community_project` enthält nur eigenen Stand und gemeinsame Stufe | Anzeige ohne Datenquelle, Partneranteil sichtbar |
-  | Partner-Karte auf „Heute“ als 2 × 2-Kacheln | Spezifikation 5 §3: einzeilige Kurzformen | abweichende Höhe, verschärft B1 |
+  | Partner-Karte auf „Heute“ als 2 × 2-Kacheln mit Zusammenfassungen | Spezifikation 5 §3 (seit B7): nur Name, grober Tageszielstand und „Anfeuern“ | Partnerwerte unter den eigenen, verschärft B1 |
   | Mini-Tracker-README: „der Button bucht sofort“ [12] | Spezifikation 3 §4: nur Wasser bucht, Sport und Gewicht öffnen Formulare | widersprüchliche Vorgabe |
 
   - *Warum das zählt:* Spezifikation 0 §7 erklärt `research/design-system.md` für verbindlich, und dort sind die Referenzentwürfe beschrieben. Es fehlt eine Regel, was bei Widersprüchen gilt.
@@ -317,7 +323,7 @@ Die Plattformgarantien gelten trotzdem und sind spezifiziert: sichere Bereiche, 
 - **[P1] B3 Ein ausgeblendeter Import ist nach 5 Sekunden unwiederbringlich.**
   - *Was gilt:* Ausgeblendete Einträge verschwinden aus allen Listen und Summen und kommen beim nächsten Import nicht wieder. „Zurücknehmen lässt sich das in V1 nur über ‚Rückgängig‘ in der Meldung“ (Spezifikation 3 §4). „Out of Scope“ derselben Spezifikation nennt „Ausblenden ist endgültig“.
   - *Warum das zählt:* Ein versehentlich ausgeblendetes Fitbit-Training ist nach 5 Sekunden für immer aus der Wochensumme verschwunden. Es lässt sich auch in der Quell-App nicht zurückholen. Wer das merkt, hat keinen Weg mehr (Heuristik 3 und 9).
-  - *Behebung:* Spezifikation 3 hat das bewusst ausgeschlossen, also ist das eine Produktfrage. Empfehlung: Die Einstellungsseite Health bekommt eine Liste „Ausgeblendete Einträge“ mit „Wieder einblenden“. Technisch ist das dieselbe Operation wie das bestehende Undo (`hidden_at` entfernen); Datenmodell und Sync bleiben unverändert.
+  - *Behebung:* Spezifikation 3 hat das bewusst ausgeschlossen, also ist das eine Produktfrage. Empfehlung: Die Einstellungsseite Health bekommt eine Liste „Ausgeblendete Einträge“ mit „Wieder einblenden“. Technisch ist das dieselbe Operation wie das bestehende Undo (`hidden_at` entfernen); Datenmodell und Sync bleiben unverändert. **Nutzerentscheidung vom 16.10.2026: Empfehlung übernommen.**
   - *Befehl:* `/impeccable harden`.
 - **[P2] B8 Wahl der Mahlzeit bei jedem Eintrag über ＋.**
   - *Was gilt:* „Essen“ im ＋-Sheet zeigt zuerst die vier Mahlzeiten (Spezifikation 2 §6).
@@ -454,7 +460,11 @@ Lücken, die dabei auffielen:
 
 ## Ergänzungen an den Spezifikationen
 
-Die entschiedenen P1-Ergänzungen stehen als Kommentare an den Spezifikations-Issues; Links im Resolution-Kommentar von #91.
+Alle Ergänzungen stehen direkt im Text der Spezifikationen. Je betroffener Spezifikation erklärt ein Kommentar die Änderung; die Links stehen im Resolution-Kommentar von #91.
+
+- **B1 → Spezifikation 0, Abschnitt 6, und Spezifikation 3, Abschnitt 4** (Nutzerentscheidung): Das ＋-Sheet zeigt ganz oben die Direktaktion „+250 ml Wasser“. Sie nutzt denselben Quick-Command `water.quick_add` wie der Mini-Tracker. Die Reihenfolge von „Heute“ bleibt.
+- **B3 → Spezifikation 3, Abschnitte 4 und 6** (Nutzerentscheidung): Die Einstellungsseite Health zeigt „Ausgeblendete Einträge“ mit „Wieder einblenden“. Das entfernt `hidden_at` wie das Undo. „Ausblenden ist endgültig“ entfällt aus „Out of Scope“.
+- **B7 → Spezifikation 0, Abschnitt 6, und Spezifikation 5, Abschnitt 3 und User Story 36** (Nutzerentscheidung): Die Partner-Karte auf „Heute“ zeigt Name, groben Tageszielstand und „Anfeuern“; Zusammenfassungen gibt es nur in „Wir“.
 
 - **B2 → Spezifikation 0, Abschnitt 6 „Quick-Commands und Meldungen“:** Regel für mehrere Meldungen.
   - Der Meldungs-Host zeigt immer höchstens eine Meldung.
@@ -498,3 +508,4 @@ Als Kommentar an Spezifikation 0:
 18. Spezifikation 5 · Partner & Benachrichtigungen: https://github.com/Yggras/abnehm-app/issues/87
 19. Spike Insel-Rendering, Zielgeräte iPhone SE (3. Generation) und Fairphone 6: https://github.com/Yggras/abnehm-app/blob/main/spikes/insel-rendering/RESULTS.md
 20. Impeccable, `docs/CLI-CONTRACT.md` (Provider-Aliase und Zielordner von `install`), Tag `skill-v4.6.0`: https://github.com/pbakaus/impeccable/blob/skill-v4.6.0/docs/CLI-CONTRACT.md
+21. pi-coding-agent 0.80.9, README (Skill-Ordner `.pi/skills/` und `.agents/skills/`): https://unpkg.com/@earendil-works/pi-coding-agent@0.80.9/README.md

@@ -442,7 +442,7 @@ Jedes Bedienelement hat mindestens `touch-min` (48 × 48 dp); kleinere sichtbare
 - „Heute“ und „Wir“ zeigen „2 von 3 Tageszielen“. Es gilt der grobe Tageszielstand (Spezifikation 0, Abschnitt 5).
 - Das Gewicht steht als „Trend −0,3 kg/Woche“. Es gilt „Trend −0,4 kg in 2 Wochen“.
 - Das Gemeinschaftsprojekt zeigt „Annas Natur-Anteil · gut gefüllt“ mit Balken. Der Beitrag enthält nur den eigenen Stand und die gemeinsame Stufe.
-- Die Partner-Karte auf „Heute“ besteht aus 2 × 2-Kacheln. Es gelten die einzeiligen Kurzformen aus Spezifikation 5.
+- Die Partner-Karte auf „Heute“ zeigt Zusammenfassungen als 2 × 2-Kacheln. Es gelten nur Name, grober Tageszielstand und „Anfeuern“ (Spezifikation 5, Nutzerentscheidung in #91).
 - Die Mini-Tracker-README sagt „der Button bucht sofort“. Das gilt nur für Wasser.
 
 ## Barrierefreiheit

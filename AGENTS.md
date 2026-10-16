@@ -66,6 +66,12 @@ Ein Kontext: `CONTEXT.md` + `docs/adr/` im Repo-Root, bis zur Umsetzung ergänzt
 
 - Anweisungen gehören in **diese Datei**, nie nur in `CLAUDE.md` o. Ä.
 - Allgemeine Workflow-Skills (u. a. `wayfinder`, `grilling`, `domain-modeling`, `prototype`, `research`) kommen **global** aus `~/.agents/skills/` (von pi direkt gelesen, für Claude Code über Symlinks in `~/.claude/skills/`). Sie werden **nicht** ins Repo kopiert.
+- **Ausnahme Impeccable** (Design-Skill, Nutzerentscheidung 16.10.2026, [#91](https://github.com/Yggras/abnehm-app/issues/91)): Impeccable wird ins Projekt installiert, nicht global.
+  - Installation: `npx impeccable@<version> install -y --providers=claude,pi --scope=project --no-hooks`, danach einmalig `npx impeccable telemetry off`.
+  - Der Installer legt je Harness eine eigene Fassung an, unter `.claude/skills/impeccable/` (dazu `.claude/agents/impeccable-*.md`) und `.pi/skills/impeccable/`. Es gibt keinen Symlink, weil sich die Fassungen in Pfaden und Frontmatter unterscheiden.
+  - Die Engine-Binaries unter `scripts/bin/` sind per `.gitignore` ausgeschlossen. Der Launcher lädt sie beim ersten Aufruf nach `~/.impeccable/bin/`.
+  - Aktualisieren: denselben Befehl mit neuer Version und `--force` ausführen.
+  - Produktkontext liegt in `docs/PRODUCT.md`; Ergebnis und Vorgehen der ersten Prüfung stehen in `research/impeccable-review.md`.
 - Projektspezifische Skills liegen in **`.agents/skills/<name>/SKILL.md`** (Agent-Skills-Standard; pi liest `.agents/skills/` – [pi-Doku](https://unpkg.com/@earendil-works/pi-coding-agent@0.80.9/README.md)).
 - Claude Code liest `.agents/` nicht, folgt aber Symlinks pro Skill-Ordner ([Claude-Code-Doku](https://code.claude.com/docs/en/skills)). Für **jeden** neuen Skill daher einen Symlink anlegen:
   `ln -s ../../.agents/skills/<name> .claude/skills/<name>`
