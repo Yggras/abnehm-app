@@ -1,58 +1,81 @@
 ---
 name: start
-description: Session-Einstieg für die Abnehm-App. Lädt den aktuellen Projektstand (Wayfinder-Karte auf GitHub), fasst ihn kurz zusammen, greift sich das nächste freie Ticket, legt dafür einen eigenen Worktree an und bearbeitet es dort in derselben Session. Verwenden, wenn der Nutzer "start" aufruft oder dort weitermachen will, wo zuletzt aufgehört wurde.
+description: Session-Einstieg für die Abnehm-App in der Umsetzungsphase. Ermittelt die freien Umsetzungstickets der Spezifikationen 0–5, greift sich das nächste (oder das genannte), legt dafür einen eigenen Worktree an und setzt es dort in derselben Session bis zum Pull Request um. Verwenden, wenn der Nutzer "start" aufruft oder dort weitermachen will, wo zuletzt aufgehört wurde.
 ---
 
-# start – nächstes Ticket greifen und im eigenen Worktree bearbeiten
+# start – nächstes Umsetzungsticket greifen und im eigenen Worktree umsetzen
 
-Optionales Argument: ein Ticket (Nummer, Titel oder Stichwort, z. B. `start Gamification`). Ohne Argument wählst du das nächste Ticket. Der Nutzer muss nichts übergeben und keine Session neu starten – mehrere `/start`-Sessions dürfen gleichzeitig laufen und greifen sich jeweils verschiedene Tickets.
+Optionales Argument: ein Ticket (Nummer, Titel oder Stichwort, z. B. `start Projektgerüst`). Ohne Argument wählst du das nächste freie Ticket. Der Nutzer muss nichts übergeben und keine Session neu starten. Mehrere `/start`-Sessions dürfen gleichzeitig laufen und greifen sich jeweils verschiedene Tickets.
 
-Dieser Skill ist nur die **Vorbereitung** (Ticket wählen, claimen, Worktree). Die eigentliche Ticketarbeit macht ausschließlich der Skill `wayfinder` – dessen Regeln (Frontier-Reihenfolge, Claim vor jeder Arbeit, höchstens ein Ticket pro Session außer Recherche, Abschluss mit Resolution-Kommentar + Karten-Update) gelten unverändert und werden hier nicht ersetzt.
+Umsetzungstickets sind die Sub-Issues der sechs Spezifikationen. Spezifikation 0 blockiert 1–5 ([Entscheidung](https://github.com/Yggras/abnehm-app/issues/42)); die Abhängigkeiten sind native „blocked by“-Beziehungen, auch zwischen den Bereichen.
+
+| Nr. | Spezifikation | Issue |
+| --- | --- | --- |
+| 0 | Fundament & Verträge | [#71](https://github.com/Yggras/abnehm-app/issues/71) |
+| 1 | Ziele & Onboarding | [#82](https://github.com/Yggras/abnehm-app/issues/82) |
+| 2 | Ernährung | [#81](https://github.com/Yggras/abnehm-app/issues/81) |
+| 3 | Wasser, Sport, Gewicht & Health | [#86](https://github.com/Yggras/abnehm-app/issues/86) |
+| 4 | Momo, Insel & Challenges | [#83](https://github.com/Yggras/abnehm-app/issues/83) |
+| 5 | Partner & Benachrichtigungen | [#87](https://github.com/Yggras/abnehm-app/issues/87) |
 
 ## Ablauf
 
-1. **Regeln und Arbeitsort prüfen – immer mit echten Dateien/Befehlen, nie nur aus eingeblendetem Kontext:**
+1. **Regeln und Arbeitsort prüfen** – immer mit echten Dateien und Befehlen, nie nur aus eingeblendetem Kontext:
    - `AGENTS.md` vollständig aus dem Repo-Root lesen.
    - `pwd`, `git status --short --branch` und `git worktree list` ausführen.
-   - Läuft die Session bereits in einem Ticket-Worktree (`scripts/require-ticket-worktree` erfolgreich), Schritte 5–7 überspringen: Ticket ist das aus dem Branchnamen `work/<nummer>-…`.
-2. **Karte laden** – nur den Body, nicht alle Tickets:
-   `gh issue view 1 --repo Yggras/abnehm-app`
-3. **Frontier bestimmen:** offene Sub-Issues von #1, die nicht zugewiesen sind und deren „blocked by“-Tickets alle geschlossen sind:
-   - Sub-Issues: `gh api repos/Yggras/abnehm-app/issues/1/sub_issues --jq '.[] | select(.state=="open") | {number, title, assignees: [.assignees[].login], labels: [.labels[].name]}'`
-   - Blocker je Ticket: `gh api repos/Yggras/abnehm-app/issues/<n>/dependencies/blocked_by --jq '.[] | {number, state}'`
-   - Zugewiesene Tickets sind von anderen Sessions belegt – **nie** übernehmen oder „wiederaufnehmen“.
-4. **Ticket auswählen** (wie `wayfinder`): das genannte Ticket bzw. das erste Frontier-Ticket.
-5. **Claimen** (wie `wayfinder`, vor jeder Arbeit): `gh issue edit <nummer> --repo Yggras/abnehm-app --add-assignee @me`
-6. **Worktree anlegen** – im primären Checkout:
-   `scripts/start-ticket-worktree <nummer> <kurzname>` (Kurzname: kleingeschrieben, `a-z0-9-`, z. B. `hauptbildschirm`). Legen parallele Sessions gerade Worktrees an, wartet das Skript still auf seine Sperre – nicht abbrechen.
-   - **Exit-Code 3 = belegt:** Eine parallele Session hat dieses Ticket gerade gegriffen (beide Sessions laufen unter demselben GitHub-Konto, daher ist der Branch die eigentliche Sperre). Den Claim **nicht** zurücknehmen, zum nächsten Frontier-Ticket gehen und ab Schritt 5 wiederholen.
+   - Läuft die Session bereits in einem Ticket-Worktree (`scripts/require-ticket-worktree` erfolgreich), die Schritte 4–6 überspringen. Das Ticket ergibt sich dann aus dem Branchnamen `work/<nummer>-…`.
+2. **Frontier bestimmen:** `scripts/ticket-frontier`. Das Skript listet die offenen Tickets in der Reihenfolge Spezifikation 0–5, innerhalb einer Spezifikation in Sub-Issue-Reihenfolge:
+   - `frei`: offen, nicht zugewiesen, alle Blocker geschlossen, Label `ready-for-agent`.
+   - `belegt`: einer anderen Session oder Person zugewiesen. **Nie** übernehmen oder „wiederaufnehmen“.
+   - `mensch`: frei, aber `ready-for-human`. Nicht von selbst greifen. Nennt der Nutzer ein solches Ticket ausdrücklich, zuerst mit ihm klären, welchen Teil die Session übernimmt.
+   - Blockierte Tickets erscheinen nur als Summe.
+3. **Ticket auswählen:** das genannte Ticket bzw. das erste `frei`.
+   - Ein genanntes Ticket muss ein Sub-Issue einer der sechs Spezifikationen sein (`gh api repos/Yggras/abnehm-app/issues/<n> --jq .parent_issue_url`). Außerdem muss es offen, nicht zugewiesen und ohne offenen Blocker sein (`.issue_dependencies_summary.blocked_by == 0`).
+   - Trifft das nicht zu, die Gründe mit Ticketnamen nennen und stoppen. Eine Spezifikation selbst ist kein Ticket.
+4. **Claimen** (der erste Schreibvorgang der Session): `gh issue edit <nummer> --repo Yggras/abnehm-app --add-assignee @me`
+5. **Worktree anlegen** – im primären Checkout:
+   `scripts/start-ticket-worktree <nummer> <kurzname>`. Der Kurzname ist kleingeschrieben und besteht nur aus `a-z0-9-`, z. B. `projektgeruest`. Legen parallele Sessions gerade Worktrees an, wartet das Skript still auf seine Sperre; nicht abbrechen.
+   - **Exit-Code 3 = belegt:** Eine parallele Session hat dieses Ticket gerade gegriffen. Beide Sessions laufen unter demselben GitHub-Konto, daher ist der Branch die eigentliche Sperre. Den Claim **nicht** zurücknehmen, zum nächsten freien Ticket gehen und ab Schritt 4 wiederholen.
    - Anderer Fehler: stoppen und dem Nutzer melden.
-7. **Session in den Worktree verlegen** – in derselben Session, kein Neustart:
+6. **Session in den Worktree verlegen** – in derselben Session, kein Neustart:
    - Claude Code: Werkzeug `EnterWorktree` mit `path` = ausgegebener Worktree-Pfad.
    - Andere Harnesses (z. B. pi): jeden Befehl mit `cd <worktree-pfad> && …` ausführen und Dateien nur über absolute Pfade im Worktree bearbeiten.
-   - Danach im Worktree `scripts/require-ticket-worktree` ausführen. Nur bei Erfolg weiterarbeiten; sonst stoppen und melden.
-8. **Stand kurz zusammenfassen** (max. ~10 Zeilen): Ziel, Anzahl getroffener Entscheidungen, die Frontier-Tickets **mit Namen** (nie nur Nummern), das gegriffene Ticket, ggf. von anderen Sessions belegte Tickets.
-9. **Weitermachen:** den Skill `wayfinder` im Modus „Work through the map“ mit der Karte https://github.com/Yggras/abnehm-app/issues/1 und dem gegriffenen Ticket ausführen (Auswahl und Claim sind damit bereits erledigt). Alle Dateiänderungen, Commits und Pushes nur im Worktree; Zusammenführung per Pull Request.
+   - Danach im Worktree `scripts/require-ticket-worktree` ausführen. Nur bei Erfolg weiterarbeiten, sonst stoppen und melden.
+7. **Kontext laden, bevor Code entsteht:**
+   - Das Ticket mit Kommentaren: `gh issue view <nummer> --repo Yggras/abnehm-app --comments`.
+   - Die Abschnitte der übergeordneten Spezifikation, auf die das Ticket verweist, dazu die genutzten Verträge aus Spezifikation 0 ([#71](https://github.com/Yggras/abnehm-app/issues/71)) samt Kommentaren. Diese Verträge werden genutzt, nicht neu entworfen.
+   - Die Blocker-Tickets, deren Schnittstellen das Ticket nutzt, und den Code, den ihre Pull Requests geliefert haben.
+   - `CONTEXT.md` (einziges Glossar), `docs/adr/` (falls vorhanden) und die im Ticket verlinkten Dateien unter `research/`, `prototypes/` und `spikes/`.
+   - Gibt es Lücken oder Widersprüche zwischen Ticket, Spezifikation und Code, legst du sie dem Nutzer als Frage mit Empfehlung vor. Verträge aus Spezifikation 0 änderst du nicht eigenmächtig.
+8. **Stand kurz zusammenfassen** (höchstens etwa 10 Zeilen):
+   - das gegriffene Ticket **mit Namen** und was es liefert;
+   - die übrigen freien Tickets mit Namen (nie nur Nummern);
+   - die belegten Tickets.
+9. **Umsetzen** nach dem Muster von `/implement`. Den Skill ruft nur der Nutzer auf, deshalb stehen seine Schritte hier:
+   - Test-first mit dem Skill `tdd` an den Seams, die Ticket und Spezifikation festlegen.
+   - Typecheck und einzelne Testdateien laufen regelmäßig, die komplette Testsuite einmal am Ende.
+   - Jedes Akzeptanzkriterium belegst du so, wie das Ticket es verlangt: mit einem Test, einem Gerätelauf oder der Impeccable-Prüfung aus der Definition of Done bei Tickets mit Bildschirm.
+   - Danach mit dem Skill `code-review` gegen `origin/main` prüfen und die Befunde beheben.
+   - Selbstständig committen, ohne KI als Co-Author.
+10. **Abschließen:**
+    - Branch pushen und einen Pull Request gegen `main` öffnen, ohne KI-Attribution.
+    - In den PR-Text kommt `Closes #<nummer>`. Wird der PR in den Standard-Branch gemergt, schließt GitHub das Ticket automatisch ([GitHub-Doku](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). Erst dann sind die davon blockierten Tickets frei.
+    - Im PR-Text jedes Akzeptanzkriterium mit seinem Nachweis auflisten. Nicht erfüllte Kriterien nennst du ausdrücklich.
+    - Den PR mergt der Nutzer nach seinem Review. Melde ihm den Link. Der Worktree bleibt bis zum Merge stehen und wird danach mit dem Nutzer aufgeräumt.
 
-Im primären Checkout sind ausschließlich lesende Schritte plus `scripts/start-ticket-worktree` erlaubt – auch wenn voraussichtlich nur eine kleine Dokumentationsdatei geändert wird.
+Im primären Checkout sind nur lesende Schritte erlaubt, dazu `scripts/ticket-frontier` und `scripts/start-ticket-worktree`. Das gilt auch, wenn voraussichtlich nur eine kleine Datei geändert wird.
 
-## Karte ändern
+## Wenn das Ticket stecken bleibt
 
-Andere Sessions können gleichzeitig an der Karte arbeiten, und `gh issue edit --body` ersetzt den ganzen Text. Den Text der Karte (#1) daher **nie** direkt bearbeiten, sondern nur mit `scripts/update-map` (lädt frisch unter Sperre, ändert eine Zeile, idempotent):
+Fehlt etwa ein Vertrag aus einem Blocker oder ist eine Produktfrage offen:
 
-- Kontextzeiger anhängen: `scripts/update-map append "Decisions so far" "- [<Tickettitel>](<url>) — <Kurzfassung>"`
-- Zeile ersetzen, z. B. Fog oder Spezifikationsliste: `scripts/update-map replace "<alte Zeile exakt>" "<neue Zeile>"`
+- Den Stand committen und pushen.
+- Im Ticket kommentieren, was fehlt, und eine Empfehlung geben.
+- Den Nutzer fragen.
 
-## Spezifikations-Tickets („Spezifikation erstellen: …“)
-
-Zusätzlich zu den Regeln im Ticket selbst:
-
-1. **Kontext vollständig laden, bevor geschrieben wird:** [Spezifikation 0 · Fundament & Verträge](https://github.com/Yggras/abnehm-app/issues/71) samt Kommentaren, `CONTEXT.md`, die Entscheidungstickets des eigenen Bereichs (aus dem Ticket und den passenden Zeilen unter „Decisions so far“, jeweils mit Resolution-Kommentar) sowie die dort verlinkten Dateien unter `research/`, `prototypes/` und `spikes/`. Die Verträge aus Spezifikation 0 werden genutzt, nicht neu entworfen; Lücken darin als offene Frage an den Nutzer melden.
-2. **`/to-spec` ruft nur der Nutzer auf** (`disable-model-invocation`). Wenn der Kontext steht: in höchstens zehn Zeilen zusammenfassen, was die Spezifikation abdecken wird, dann **„Bereit für /to-spec“** melden und warten. Die Schritte von `/to-spec` nicht auf anderem Weg nachbauen.
-3. **Nach dem Veröffentlichen:** das Spezifikations-Issue per nativer „blocked by“-Beziehung an Spezifikation 0 hängen (siehe `docs/agents/issue-tracker.md`, Blocker), kein Sub-Issue der Karte. In der Karte die Zeile unter „Spezifikationen“ mit `scripts/update-map replace` auf den Link umstellen und den Kontextzeiger mit `scripts/update-map append` anhängen; danach Resolution-Kommentar und Schließen wie bei `wayfinder`.
-4. Entstehen keine Dateiänderungen, gibt es keinen Pull Request; der leere Worktree bleibt bis zur Aufräumung mit dem Nutzer stehen.
+Der Claim bleibt, solange die Session daran arbeitet. Gibt der Nutzer das Ticket frei, entfernst du die Zuweisung: `gh issue edit <nummer> --repo Yggras/abnehm-app --remove-assignee @me`.
 
 ## Wenn kein Ticket frei ist
 
-- **Karte abgeschlossen** (keine offenen Tickets mehr): sag das, nenne den Ort der Spezifikation und frag den Nutzer, wie es weitergehen soll (z. B. Umsetzung). Dieser Skill wird dann auf die nächste Phase umgestellt.
-- **Alle offenen Tickets blockiert oder belegt:** sag das mit Ticketnamen und wer/was blockiert, und lege keinen Worktree an.
+- **Alle Umsetzungstickets geschlossen:** Sag das und frag den Nutzer, wie es weitergeht.
+- **Alle offenen Tickets blockiert, belegt oder `mensch`:** Sag das und nenne die Tickets mit Namen. Bei blockierten Tickets nennst du, worauf sie warten, etwa einen offenen Pull Request, den der Nutzer mergen muss. Leg dann keinen Worktree an.

@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+# Listet die offenen Umsetzungstickets (Sub-Issues der Spezifikationen 0–5)
+# in der Reihenfolge Spezifikation 0–5, innerhalb einer Spezifikation in
+# Sub-Issue-Reihenfolge. Je Zeile: Status, Nummer, Titel (und ggf. Assignee).
+#
+#   frei     offen, nicht zugewiesen, alle Blocker geschlossen, ready-for-agent
+#   belegt   einer Session bzw. Person zugewiesen – nie übernehmen
+#   mensch   frei, aber ready-for-human – nur auf ausdrücklichen Wunsch
+#
+# Blockierte Tickets erscheinen nur als Summe in der letzten Zeile.
+
+repo=Yggras/abnehm-app
+# Spezifikation 0 Fundament, 1 Ziele & Onboarding, 2 Ernährung,
+# 3 Wasser/Sport/Gewicht/Health, 4 Momo/Insel/Challenges, 5 Partner & Benachrichtigungen
+specs="71 82 81 86 83 87"
+
+command -v gh >/dev/null 2>&1 || {
+  echo "Fehler: 'gh' ist nicht installiert." >&2
+  exit 1
+}
+
+blocked=0
+for spec in $specs; do
+  rows=$(gh api --paginate "repos/$repo/issues/$spec/sub_issues?per_page=100" --jq '
+    .[] | select(.state == "open")
+    | (if (.assignees | length) > 0 then "belegt"
+       elif .issue_dependencies_summary.blocked_by > 0 then "blockiert"
+       elif ([.labels[].name] | index("ready-for-human")) != null then "mensch"
+       elif ([.labels[].name] | index("ready-for-agent")) != null then "frei"
+       else "ohne-label" end) as $status
+    | [$status, "#\(.number)", .title, ([.assignees[].login | "@" + .] | join(" "))]
+    | @tsv')
+  [ -n "$rows" ] || continue
+  printf '%s\n' "$rows" | grep -v '^blockiert' || true
+  blocked=$((blocked + $(printf '%s\n' "$rows" | grep -c '^blockiert' || true)))
+done
+printf 'blockiert\t%s Ticket(s) mit offenem Blocker\n' "$blocked"
