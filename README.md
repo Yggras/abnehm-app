@@ -16,4 +16,6 @@ Neue Tickets werden aus dem primären Checkout in einem eigenen Worktree begonne
 scripts/start-ticket-worktree <ticketnummer> <kurzname>
 ```
 
+App, Backend und Datenbank lokal starten: [`docs/entwicklung.md`](docs/entwicklung.md).
+
 Die vollständigen Arbeitsregeln stehen in [`AGENTS.md`](AGENTS.md).

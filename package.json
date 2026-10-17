@@ -1,0 +1,33 @@
+{
+  "name": "abnehm-app",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=26.5.0"
+  },
+  "overrides": {
+    "react": "19.3.0"
+  },
+  "scripts": {
+    "backend": "scripts/dev-secrets && docker compose up --build --watch",
+    "backend:down": "docker compose down",
+    "typecheck": "npm run typecheck --workspaces",
+    "lint": "eslint .",
+    "test": "npm run test:app && npm run test:node",
+    "test:app": "npm test --workspace @abnehm/mobile",
+    "test:node": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~58.0.4",
+    "globals": "^16.5.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
+  }
+}

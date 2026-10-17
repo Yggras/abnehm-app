@@ -1,0 +1,8 @@
+# Der Build-Kontext ist das ganze Repo; ins Image kommt nur, was das Dockerfile ausdrücklich kopiert.
+# Secrets und lokale Umgebungsdateien dürfen nicht einmal im Build-Kontext landen.
+secrets/
+**/.env*
+**/node_modules/
+.git
+apps/mobile/ios/
+apps/mobile/android/

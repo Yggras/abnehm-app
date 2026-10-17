@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.node.json",
+  "compilerOptions": {
+    // Ohne DOM- und Node-Typen: fetch, process, window & Co. sind hier Typfehler.
+    "types": []
+  },
+  "include": ["src"]
+}

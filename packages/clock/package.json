@@ -1,0 +1,17 @@
+{
+  "name": "@abnehm/clock",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/clock.ts",
+    "./testing": "./src/testing.ts",
+    "./conformance": "./src/conformance.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@abnehm/contracts": "*"
+  }
+}
