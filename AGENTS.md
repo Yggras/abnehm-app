@@ -6,7 +6,7 @@ Anweisungen für alle Coding-Agenten in diesem Repo (Claude Code, pi + OpenAI, �
 
 Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Android + Fitbit): Kalorien-, Wasser-, Sport- und Gewichtstracker, Motivation/Gamification, gegenseitige Unterstützung. App-Sprache: nur Deutsch.
 
-**Aktuelle Phase: Planung.** Ziel ist eine umsetzungsreife V1-Spezifikation. Die Planung läuft als Wayfinder-Karte auf GitHub:
+**Aktuelle Phase: Umsetzungstickets schneiden.** Die Planung ist abgeschlossen: Die Wayfinder-Karte ist seit 16.10.2026 geschlossen, die V1-Spezifikation liegt als sechs Spezifikations-Issues vor (Abschnitt „Spezifikationen“ der Karte). Spezifikation 0 ist bereits in Umsetzungstickets zerlegt, die Spezifikationen 1–5 folgen per `/to-tickets`. Die Planung lief als Wayfinder-Karte auf GitHub:
 - Karte: [Wayfinder: Abnehm-App V1-Spezifikation](https://github.com/Yggras/abnehm-app/issues/1) (Label `wayfinder:map`)
 - Tickets: Sub-Issues der Karte; Abhängigkeiten über GitHubs native „blocked by“-Beziehung
 - Recherche-Ergebnisse liegen dauerhaft unter `research/<name>.md`, Prototypen unter `prototypes/<name>/`, Spikes unter `spikes/<name>/` auf `main` ([übernommen](https://github.com/Yggras/abnehm-app/issues/55)). Neue Ergebnisse entstehen auf einem eigenen Branch und kommen per Pull Request nach `main`; Links in Tickets und Dateien zeigen immer auf `main`.
@@ -17,6 +17,8 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte, greift sich das nächste freie Ticket und bearbeitet es in einem eigenen Worktree – ohne Neustart, mehrere Sessions parallel möglich.
 
 Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58 59 61`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session, die `/start <ticket>` ausführt.
+
+Spezifikationen zerlegt der Nutzer parallel mit dem Skill **`to-tickets-parallel`** (Claude Code: `/to-tickets-parallel 82 81 86 83 87`): `scripts/start-to-tickets-tabs` öffnet je Spezifikation einen Herdr-Tab, in dem eine eigenständige Session `/to-tickets` ausführt.
 
 ## Parallele Sessions und Git-Worktrees
 

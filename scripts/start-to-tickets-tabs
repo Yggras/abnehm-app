@@ -1,0 +1,101 @@
+#!/bin/sh
+set -eu
+
+# Startet je Spezifikation eine eigenständige Claude-Code-Session in einem
+# eigenen Herdr-Tab, die die Spezifikation per `/to-tickets` in
+# Umsetzungstickets zerlegt. Zusatzregeln für diese Sessions stehen in
+# .agents/skills/to-tickets-parallel/session.md. Herdr-Mechanik wie in
+# scripts/start-agent-tabs (`tab create` + `pane run`).
+
+usage() {
+  echo "Verwendung: $0 <spezifikation> [<spezifikation> …] [-- <zusätzliche claude-Optionen>]" >&2
+  echo "Beispiel:   $0 82 81 86 83 87 -- --effort xhigh" >&2
+  exit 2
+}
+
+repo=Yggras/abnehm-app
+rules=.agents/skills/to-tickets-parallel/session.md
+
+specs=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --) shift; break ;;
+    ''|*[!0-9]*) usage ;;
+    *) specs="$specs $1"; shift ;;
+  esac
+done
+[ -n "$specs" ] || usage
+
+# Shell-sicheres Quoting für den Befehl, den Herdr in den Tab tippt.
+quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+extra_args=
+for arg in "$@"; do
+  extra_args="$extra_args $(quote "$arg")"
+done
+
+[ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || {
+  echo "Fehler: Nicht in Herdr gestartet (HERDR_ENV/HERDR_WORKSPACE_ID fehlen)." >&2
+  exit 1
+}
+for tool in herdr gh jq claude; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "Fehler: '$tool' ist nicht installiert." >&2
+    exit 1
+  }
+done
+
+primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+[ -n "$primary" ] || {
+  echo "Fehler: Nicht in einem Git-Repository." >&2
+  exit 1
+}
+
+# Erst alle Spezifikationen prüfen, dann starten: entweder alle Tabs oder keiner.
+# Keine Blocker-Prüfung: Spezifikation 0 blockiert 1–5, bis das Fundament
+# umgesetzt ist; das Schneiden der Umsetzungstickets hindert das nicht.
+problems=
+for spec in $specs; do
+  info=$(gh api "repos/$repo/issues/$spec" \
+    --jq '[.state, (.assignees | length), (.title | test("^Spezifikation [0-9]+ · ")),
+      (.sub_issues_summary.total // 0)] | @tsv') || {
+    problems="$problems\n  #$spec: nicht abrufbar"
+    continue
+  }
+  state=$(printf '%s' "$info" | cut -f1)
+  assignees=$(printf '%s' "$info" | cut -f2)
+  is_spec=$(printf '%s' "$info" | cut -f3)
+  sub_issues=$(printf '%s' "$info" | cut -f4)
+  [ "$is_spec" = true ] || problems="$problems\n  #$spec: ist keine Spezifikation"
+  [ "$state" = open ] || problems="$problems\n  #$spec: nicht offen ($state)"
+  [ "$assignees" = 0 ] || problems="$problems\n  #$spec: bereits zugewiesen (von einer anderen Session belegt)"
+  [ "$sub_issues" = 0 ] || problems="$problems\n  #$spec: hat bereits $sub_issues Umsetzungsticket(s)"
+done
+if [ -n "$problems" ]; then
+  printf 'Abgebrochen, kein Tab gestartet:%b\n' "$problems" >&2
+  exit 1
+fi
+
+for spec in $specs; do
+  title=$(gh issue view "$spec" --repo "$repo" --json title --jq .title)
+  label="#$spec $(printf '%s' "$title" | sed 's/^Spezifikation [0-9]* · /Tickets: /')"
+
+  created=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$primary" \
+    --label "$label" --no-focus)
+  tab=$(printf '%s' "$created" | jq -r '.result.tab.tab_id // empty')
+  pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
+  [ -n "$tab" ] && [ -n "$pane" ] || {
+    echo "Fehler: Herdr lieferte keine Tab-/Pane-ID für #$spec: $created" >&2
+    exit 1
+  }
+
+  # Sperre gegen einen zweiten Start; die Session löst sie am Ende selbst.
+  gh issue edit "$spec" --repo "$repo" --add-assignee @me >/dev/null
+
+  prompt="/to-tickets Issue #$spec. Lies zuerst $rules und befolge diese Zusatzregeln für parallele Sessions."
+  herdr pane run "$pane" \
+    "claude --permission-mode auto -n $(quote "$label")$extra_args $(quote "$prompt")" >/dev/null
+  printf 'Gestartet: %s  (Tab %s)\n' "$label" "$tab"
+done
