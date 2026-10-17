@@ -40,7 +40,7 @@ export default async function startTestPostgres(project: TestProject) {
     port: Number(published.port),
     user: 'test',
     password,
-    database: 'test',
+    name: 'test',
   });
 
   return async () => {

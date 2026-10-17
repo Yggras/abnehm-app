@@ -1,0 +1,7 @@
+# Zusätzliche, gezielte Freigabe des Backends im WLAN für Tests mit echten Geräten.
+# Ergänzt die Bindung an 127.0.0.1 aus compose.yaml; Postgres bleibt unveröffentlicht.
+# Start: BACKEND_PUBLISH_ADDRESS=192.168.178.20 npm run backend:lan
+services:
+  backend:
+    ports:
+      - "${BACKEND_PUBLISH_ADDRESS:?LAN-Adresse des Rechners in BACKEND_PUBLISH_ADDRESS angeben}:${BACKEND_PORT:-8787}:8787"

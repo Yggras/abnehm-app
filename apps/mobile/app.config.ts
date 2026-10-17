@@ -27,16 +27,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       bundleIdentifier: identifier,
       supportsTablet: false,
       infoPlist: {
-        // Ersetzt das ATS-Wörterbuch der Expo-Vorlage vollständig, die `NSAllowsLocalNetworking`
-        // in jedem Build setzt. Lokales HTTP (localhost, LAN-IP, .local) nur im Development Build.
+        // Ersetzt das ATS-Wörterbuch der Expo-Vorlage vollständig. Die Vorlage setzt
+        // `NSAllowsLocalNetworking` für alle Builds (https://unpkg.com/expo-template-bare-minimum@58.0.23/ios/HelloWorld/Info.plist).
+        // Lokales HTTP (localhost, LAN-IP, .local) gibt es nur im Development Build.
         NSAppTransportSecurity: development
           ? { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true }
           : { NSAllowsArbitraryLoads: false },
       },
     },
     android: {
-      // Klartext-HTTP erlaubt nur die Debug-Manifest-Vorlage (Development Build);
-      // Release-Builds verbieten ihn ab API 28 standardmäßig.
+      // Klartext-HTTP erlauben nur die Debug-Manifeste der Vorlage (Development Build,
+      // https://unpkg.com/expo-template-bare-minimum@58.0.23/android/app/src/debug/AndroidManifest.xml).
+      // Release-Builds verbieten ihn ab API 28 standardmäßig
+      // (https://developer.android.com/privacy-and-security/security-config).
       package: identifier,
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',

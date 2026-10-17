@@ -14,8 +14,9 @@
   },
   "scripts": {
     "backend": "scripts/dev-secrets && docker compose up --build --watch",
+    "backend:lan": "scripts/dev-secrets && docker compose --file compose.yaml --file compose.lan.yaml up --build --watch",
     "backend:down": "docker compose down",
-    "typecheck": "npm run typecheck --workspaces",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck --workspaces",
     "lint": "eslint .",
     "test": "npm run test:app && npm run test:node",
     "test:app": "npm test --workspace @abnehm/mobile",

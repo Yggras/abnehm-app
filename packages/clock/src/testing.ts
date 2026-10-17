@@ -14,7 +14,10 @@ export type TestClock = Clock & {
   setTimeZone(timeZone: TimeZone): void;
 };
 
-export function createTestClock(start: { instant: Instant; timeZone: TimeZone }): TestClock {
+/** Womit eine Uhr im Test startet: Zeitpunkt und eigene Zone. */
+export type ClockStart = { instant: Instant; timeZone: TimeZone };
+
+export function createTestClock(start: ClockStart): TestClock {
   let epochMilliseconds = Date.parse(Instant.parse(start.instant));
   let ownTimeZone = TimeZone.parse(start.timeZone);
   return {

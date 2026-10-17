@@ -36,7 +36,13 @@ function onlyImports(allowed, message) {
 
 const testOnlyClock = {
   group: ['@abnehm/clock/testing', '@abnehm/clock/conformance'],
-  message: 'Testuhr und Konformitäts-Testkit gibt es nur in Tests und Development-Artefakten.',
+  message: 'Testuhr und Konformitäts-Testkit sind nur in Testdateien erlaubt.',
+};
+
+const backendTypesOnly = {
+  group: ['@abnehm/backend', '@abnehm/backend/*'],
+  allowTypeImports: true,
+  message: 'Die App nutzt vom Backend nur Typen (Hono RPC), nie Laufzeitcode.',
 };
 
 export default defineConfig([
@@ -89,6 +95,7 @@ export default defineConfig([
   },
   {
     // Bereichscode liest Zeitpunkt, Zone und lokalen Tag nur über die Uhr (`@abnehm/clock`).
+    // Einzige Ausnahme ist der Geräteadapter der App, der Systemzeit und Gerätezone kapselt.
     files: ['apps/*/src/**'],
     ignores: ['**/*.test.{ts,tsx}', 'apps/mobile/src/clock/**'],
     rules: {
@@ -99,29 +106,38 @@ export default defineConfig([
           message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus Date.now().',
         },
         {
-          selector: "NewExpression[callee.name='Date'][arguments.length=0]",
-          message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus new Date().',
+          selector: "NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date']",
+          message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus Date().',
+        },
+        {
+          selector: "CallExpression[callee.property.name='resolvedOptions']",
+          message: 'Die Zeitzone kommt aus der Uhr (reading.timeZone), nicht aus Intl.',
+        },
+      ],
+    },
+  },
+  // Die App: vom Backend nur Typen; Testuhr nur in Tests; die Gerätezone nur im Geräteadapter.
+  // Spätere Blöcke ersetzen die Regel der früheren für dieselbe Datei vollständig.
+  {
+    files: ['apps/mobile/src/**'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock] }] },
+  },
+  {
+    files: ['apps/mobile/src/**'],
+    ignores: ['apps/mobile/src/clock/**', '**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'expo-localization', message: 'Die Gerätezone kommt aus der Uhr (useClock()).' }],
+          patterns: [backendTypesOnly, testOnlyClock],
         },
       ],
     },
   },
   {
-    files: ['apps/mobile/src/**'],
-    ignores: ['**/*.test.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            testOnlyClock,
-            {
-              group: ['@abnehm/backend', '@abnehm/backend/*'],
-              allowTypeImports: true,
-              message: 'Die App nutzt vom Backend nur Typen (Hono RPC), nie Laufzeitcode.',
-            },
-          ],
-        },
-      ],
-    },
+    // Tests dürfen Testuhr und Testkit nutzen und expo-localization mocken.
+    files: ['apps/mobile/src/**/*.test.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly] }] },
   },
 ]);

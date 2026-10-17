@@ -38,7 +38,7 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
     database: {
       host: required('DATABASE_HOST'),
       port: port('DATABASE_PORT'),
-      database: required('DATABASE_NAME'),
+      name: required('DATABASE_NAME'),
       user: required('DATABASE_USER'),
       password: secret('DATABASE_PASSWORD_FILE'),
     },

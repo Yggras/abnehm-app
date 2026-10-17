@@ -6,3 +6,7 @@ secrets/
 .git
 apps/mobile/ios/
 apps/mobile/android/
+
+# Testuhr und Konformitäts-Testkit gibt es nur in Tests, nie im Produktions-Image.
+packages/clock/src/testing.ts
+packages/clock/src/conformance.ts

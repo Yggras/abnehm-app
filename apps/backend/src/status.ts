@@ -4,7 +4,8 @@ import { Hono } from 'hono';
 import { Instant } from '@abnehm/contracts/base';
 import type { StatusResponse } from '@abnehm/contracts/status';
 
-import { errorCode, type Database } from './database.ts';
+import type { Database } from './database.ts';
+import { errorCodeForLog } from './log.ts';
 
 type Ok = Extract<StatusResponse, { type: 'ok' }>;
 type Unavailable = Extract<StatusResponse, { type: 'database_unavailable' }>;
@@ -19,7 +20,7 @@ export function statusRoutes({ database }: { database: Database }) {
       );
       databaseTime = Instant.parse(result.rows[0]?.database_time);
     } catch (error) {
-      console.error('[status] Datenbank nicht erreichbar:', errorCode(error));
+      console.error('[status] Datenbank nicht erreichbar:', errorCodeForLog(error));
       return c.json({ type: 'database_unavailable' } satisfies Unavailable, 503);
     }
     return c.json({ type: 'ok', databaseTime } satisfies Ok, 200);

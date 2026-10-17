@@ -1,6 +1,7 @@
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 
 import type { Clock, ClockReading } from './clock.ts';
+import type { ClockStart } from './testing.ts';
 
 /**
  * Steuert einen Uhr-Adapter für das Konformitäts-Testkit. Der Adapter startet
@@ -12,7 +13,7 @@ export type ClockHarness = {
   setTimeZone(timeZone: TimeZone): void;
 };
 
-export type ClockHarnessFactory = (start: { instant: Instant; timeZone: TimeZone }) => ClockHarness;
+export type ClockHarnessFactory = (start: ClockStart) => ClockHarness;
 
 export type ClockConformanceCase = { name: string; run(): void };
 

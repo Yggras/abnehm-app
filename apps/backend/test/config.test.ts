@@ -30,7 +30,7 @@ describe('readConfig', () => {
 
     expect(config).toEqual({
       port: 8787,
-      database: { host: 'postgres', port: 5432, database: 'abnehm', user: 'abnehm', password: 'geheim-123' },
+      database: { host: 'postgres', port: 5432, name: 'abnehm', user: 'abnehm', password: 'geheim-123' },
     });
   });
 

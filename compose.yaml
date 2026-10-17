@@ -13,7 +13,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      # Über TCP prüfen: Während der Erstinitialisierung lauscht Postgres nur am Unix-Socket.
+      # Über TCP prüfen: Der Initialisierungslauf des Images startet Postgres mit listen_addresses=''
+      # (https://github.com/docker-library/postgres/blob/master/docker-entrypoint.sh).
       test: ["CMD-SHELL", "pg_isready --host 127.0.0.1 --username \"$$POSTGRES_USER\" --dbname \"$$POSTGRES_DB\""]
       interval: 2s
       timeout: 3s
@@ -37,9 +38,8 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      # Standard nur auf 127.0.0.1. Für echte Geräte im WLAN gezielt eine Adresse freigeben:
-      # BACKEND_PUBLISH_ADDRESS=192.168.178.20 npm run backend
-      - "${BACKEND_PUBLISH_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8787}:8787"
+      # Nur auf 127.0.0.1. Für echte Geräte im WLAN ergänzt compose.lan.yaml gezielt eine Adresse.
+      - "127.0.0.1:${BACKEND_PORT:-8787}:8787"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8787/v1/status"]
       interval: 5s

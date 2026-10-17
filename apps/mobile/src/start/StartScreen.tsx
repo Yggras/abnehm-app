@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { backendBaseUrl } from '../backend/client';
 import { fetchBackendStatus, type BackendStatus } from '../backend/status';
 import { useClock } from '../clock/clock-context';
 
 // Technischer Startbildschirm des Projektgerüsts (#93): prüft den Weg App → Backend → Postgres
 // und zeigt die Ablesung der Uhr. Die App-Shell (#101) ersetzt ihn durch die Tabs.
 
-const statusText: Record<BackendStatus['type'] | 'checking', string> = {
+type CheckState = BackendStatus | { type: 'checking' };
+
+const statusText: Record<CheckState['type'], string> = {
   checking: 'Prüfe Verbindung …',
   ok: 'Backend und Datenbank erreichbar',
   database_unavailable: 'Backend erreichbar, Datenbank nicht',
@@ -18,26 +21,25 @@ const statusText: Record<BackendStatus['type'] | 'checking', string> = {
 
 export default function StartScreen() {
   const clock = useClock();
-  const [status, setStatus] = useState<BackendStatus | 'checking'>('checking');
+  const [status, setStatus] = useState<CheckState>({ type: 'checking' });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    let current = true;
+    let active = true;
     void fetchBackendStatus().then((result) => {
-      if (current) setStatus(result);
+      if (active) setStatus(result);
     });
     return () => {
-      current = false;
+      active = false;
     };
   }, [attempt]);
 
   const retry = () => {
-    setStatus('checking');
+    setStatus({ type: 'checking' });
     setAttempt((previous) => previous + 1);
   };
 
   const reading = clock.read();
-  const statusType = status === 'checking' ? 'checking' : status.type;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -52,14 +54,13 @@ export default function StartScreen() {
             Backend
           </Text>
           <Text accessibilityLiveRegion="polite" style={styles.body}>
-            {statusText[statusType]}
+            {statusText[status.type]}
           </Text>
-          {status !== 'checking' && status.type === 'ok' ? (
-            <Text style={styles.body}>Datenbankzeit: {status.databaseTime}</Text>
-          ) : null}
+          {status.type === 'ok' ? <Text style={styles.body}>Datenbankzeit: {status.databaseTime}</Text> : null}
+          <Text style={styles.body}>Adresse: {backendBaseUrl() ?? 'nicht konfiguriert'}</Text>
           <Pressable
             accessibilityRole="button"
-            disabled={status === 'checking'}
+            disabled={status.type === 'checking'}
             onPress={retry}
             style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           >

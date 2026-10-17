@@ -25,7 +25,8 @@ Spezifikationen zerlegt der Nutzer parallel mit dem Skill **`to-tickets-parallel
 Aufbau (npm-Workspace mit `apps/mobile`, `apps/backend`, `packages/contracts`, `packages/clock`), Befehle, Secrets und der Ablauf für Simulatoren und echte Geräte stehen in [`docs/entwicklung.md`](docs/entwicklung.md). Für jede Änderung gilt:
 
 - Native App-Abhängigkeiten nur per `npx expo install` aus `apps/mobile`. `ios/` und `android/` werden generiert und nie von Hand bearbeitet. Vor Code gegen Expo- oder React-Native-APIs die Doku der genutzten SDK-Version lesen (`https://docs.expo.dev/versions/v58.0.0/`), nicht aus dem Gedächtnis arbeiten.
-- „Jetzt“ und „heute“ kommen nur aus der `Clock`-Schnittstelle von `@abnehm/clock`, nie aus `Date.now()` oder `new Date()`. Gemeinsame Schemas und Typen liegen nur im Vertragsmodul `@abnehm/contracts`. Beides prüft `npm run lint`.
+- Zeitpunkt, Zeitzone und lokaler Tag kommen nur aus der `Clock`-Schnittstelle von `@abnehm/clock`, nie aus `Date.now()`, `new Date()` oder `Intl`. Das prüft `npm run lint`, ebenso die Importgrenzen des Vertragsmoduls.
+- Zod-Schemas und Typen, die App und Backend teilen, liegen nur im Vertragsmodul `@abnehm/contracts`.
 - Vor dem Pull Request laufen `npm run typecheck`, `npm run lint` und `npm test`; die CI wiederholt sie.
 
 ## Parallele Sessions und Git-Worktrees

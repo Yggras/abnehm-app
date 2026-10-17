@@ -19,14 +19,15 @@ describe('GET /v1/status', () => {
     expect(response.status).toBe(200);
     const body = StatusResponse.parse(await response.json());
     if (body.type !== 'ok') throw new Error(`Unerwartete Antwort: ${body.type}`);
-    // Postgres' now() ist der Beginn der Abfrage-Transaktion, also nicht vor dem Aufruf.
+    // now() ist der Beginn der Abfrage-Transaktion, also nicht vor dem Aufruf
+    // (https://www.postgresql.org/docs/current/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT).
     expect(Date.parse(body.databaseTime)).toBeGreaterThanOrEqual(before - 1_000);
     expect(Date.parse(body.databaseTime)).toBeLessThanOrEqual(Date.now() + 1_000);
   });
 
   it('meldet eine nicht erreichbare Datenbank mit 503 und ohne Fehlertext', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const handle = openDatabase({ ...testServerSettings(), database: 'gibt_es_nicht' });
+    const handle = openDatabase({ ...testServerSettings(), name: 'gibt_es_nicht' });
     onTestFinished(() => handle.close());
     const client = testClient(createApp({ database: handle }));
 

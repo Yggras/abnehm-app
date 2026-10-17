@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 
-import { createSystemClock, localDateAt } from '../src/clock.ts';
-import { clockConformanceCases, type ClockHarness } from '../src/conformance.ts';
+import { createSystemClock } from '../src/clock.ts';
+import { clockConformanceCases, type ClockHarnessFactory } from '../src/conformance.ts';
 import { createTestClock } from '../src/testing.ts';
 
 describe('Konformität der Systemuhr', () => {
@@ -11,7 +11,7 @@ describe('Konformität der Systemuhr', () => {
     vi.useRealTimers();
   });
 
-  const harness = (start: { instant: Instant; timeZone: TimeZone }): ClockHarness => {
+  const harness: ClockHarnessFactory = (start) => {
     // Die Systemuhr liest die echte Systemzeit; der Test verstellt sie über Vitests Fake-Timer.
     vi.useFakeTimers({ now: Date.parse(start.instant) });
     let deviceTimeZone: string = start.timeZone;
@@ -35,7 +35,7 @@ describe('Konformität der Systemuhr', () => {
 });
 
 describe('Konformität der Testuhr', () => {
-  const harness = (start: { instant: Instant; timeZone: TimeZone }): ClockHarness => {
+  const harness: ClockHarnessFactory = (start) => {
     const clock = createTestClock(start);
     return { clock, setInstant: (instant) => clock.set(instant), setTimeZone: (zone) => clock.setTimeZone(zone) };
   };
@@ -43,16 +43,6 @@ describe('Konformität der Testuhr', () => {
   for (const conformanceCase of clockConformanceCases(harness)) {
     it(conformanceCase.name, conformanceCase.run);
   }
-});
-
-describe('localDateAt', () => {
-  it.each([
-    ['2026-10-25T01:30:00.000Z', 'Europe/Berlin', '2026-10-25'],
-    ['2026-10-25T23:00:00.000Z', 'Europe/Berlin', '2026-10-26'],
-    ['2026-10-14T10:00:00.000Z', 'Pacific/Pago_Pago', '2026-10-13'],
-  ])('ordnet %s in %s dem Tag %s zu', (instant, timeZone, localDate) => {
-    expect(localDateAt(Instant.parse(instant), TimeZone.parse(timeZone))).toBe(localDate);
-  });
 });
 
 describe('Testuhr', () => {

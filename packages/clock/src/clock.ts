@@ -21,11 +21,6 @@ export interface Clock {
   read(timeZone?: TimeZone): ClockReading;
 }
 
-/** Der lokale Tag eines Zeitpunkts in einer Zone, einschließlich Sommerzeit. */
-export function localDateAt(instant: Instant, timeZone: TimeZone): LocalDate {
-  return readingAt(Date.parse(instant), timeZone).localDate;
-}
-
 /**
  * Produktionsuhr: Systemzeit plus eine Zonenquelle. Die Quelle wird bei jedem
  * Ablesen neu gefragt, damit ein Zonenwechsel (Reise) sofort wirkt.

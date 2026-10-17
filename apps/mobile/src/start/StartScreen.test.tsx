@@ -39,6 +39,7 @@ test('zeigt die Datenbankzeit, die das Backend nach seiner Postgres-Abfrage lief
 
   expect(await screen.findByText('Backend und Datenbank erreichbar')).toBeOnTheScreen();
   expect(screen.getByText('Datenbankzeit: 2026-10-14T22:29:59.512Z')).toBeOnTheScreen();
+  expect(screen.getByText('Adresse: http://localhost:8787')).toBeOnTheScreen();
   const [url] = fetchMock.mock.calls[0] ?? [];
   expect(String(url)).toBe('http://localhost:8787/v1/status');
 });
