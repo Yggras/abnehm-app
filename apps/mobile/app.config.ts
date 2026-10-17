@@ -49,7 +49,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
       predictiveBackGestureEnabled: false,
     },
-    plugins: ['expo-router', 'expo-localization'],
+    plugins: ['expo-router', 'expo-localization', 'expo-font', 'expo-splash-screen'],
     experiments: {
       reactCompiler: true,
     },

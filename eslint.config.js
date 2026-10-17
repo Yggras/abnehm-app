@@ -2,6 +2,8 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import expoConfig from 'eslint-config-expo/flat.js';
 import tseslint from 'typescript-eslint';
 
+import abnehm from './eslint/abnehm-plugin.js';
+
 // Globale Objekte für Netzwerk, Plattform und Laufzeitumgebung. Im Vertragsmodul und in der Uhr
 // verboten; die tsconfig beider Pakete kennt sie ohnehin nicht (keine DOM- und Node-Typen).
 const platformGlobals = [
@@ -132,6 +134,35 @@ export default defineConfig([
           paths: [{ name: 'expo-localization', message: 'Die Gerätezone kommt aus der Uhr (useClock()).' }],
           patterns: [backendTypesOnly, testOnlyClock],
         },
+      ],
+    },
+  },
+  // Design-System: Farben nur aus den Tokens; Plattformbibliotheken nur hinter ihrem Projektmodul.
+  {
+    files: ['apps/mobile/src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}', 'apps/mobile/src/design/tokens.ts'],
+    plugins: { abnehm },
+    rules: {
+      'abnehm/token-farben': 'error',
+      'abnehm/bibliotheksgrenzen': [
+        'error',
+        [
+          {
+            modules: ['expo-haptics'],
+            allowedIn: ['apps/mobile/src/haptics/'],
+            message: 'Haptik läuft über `Haptics.feedback(kind)` aus apps/mobile/src/haptics/.',
+          },
+          {
+            modules: ['@expo/ui'],
+            allowedIn: ['apps/mobile/src/design/native/'],
+            message: 'Native Elemente kommen als Hüllen aus dem Design-System (Sheet, Switch, DateTimePicker, ContextMenu).',
+          },
+          {
+            modules: ['expo-font', '@expo-google-fonts'],
+            allowedIn: ['apps/mobile/src/design/fonts.ts'],
+            message: 'Schriften lädt `useDesignFonts()`; Texte nutzen `Text` mit einem Textstil.',
+          },
+        ],
       ],
     },
   },
