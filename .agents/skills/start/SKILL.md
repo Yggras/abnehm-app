@@ -1,6 +1,6 @@
 ---
 name: start
-description: Session-Einstieg für die Abnehm-App. Lädt den aktuellen Projektstand (Wayfinder-Karte auf GitHub), fasst ihn kurz zusammen, greift sich das nächste freie Ticket, legt dafür einen eigenen Worktree an und bearbeitet es dort in derselben Session. Mit einer Spezifikation 1–5 als Argument bereitet er stattdessen das Schneiden der Umsetzungstickets per /to-tickets vor. Verwenden, wenn der Nutzer "start" aufruft oder dort weitermachen will, wo zuletzt aufgehört wurde.
+description: Session-Einstieg für die Abnehm-App. Lädt den aktuellen Projektstand (Wayfinder-Karte auf GitHub), fasst ihn kurz zusammen, greift sich das nächste freie Ticket, legt dafür einen eigenen Worktree an und bearbeitet es dort in derselben Session. Verwenden, wenn der Nutzer "start" aufruft oder dort weitermachen will, wo zuletzt aufgehört wurde.
 ---
 
 # start – nächstes Ticket greifen und im eigenen Worktree bearbeiten
@@ -15,7 +15,6 @@ Dieser Skill ist nur die **Vorbereitung** (Ticket wählen, claimen, Worktree). D
    - `AGENTS.md` vollständig aus dem Repo-Root lesen.
    - `pwd`, `git status --short --branch` und `git worktree list` ausführen.
    - Läuft die Session bereits in einem Ticket-Worktree (`scripts/require-ticket-worktree` erfolgreich), Schritte 5–7 überspringen: Ticket ist das aus dem Branchnamen `work/<nummer>-…`.
-   - Ist das Argument eine Spezifikation (Titel „Spezifikation N · …“ mit N = 1–5), gilt nur der Abschnitt „Spezifikation in Umsetzungstickets zerlegen“ weiter unten; die Schritte 2–9 entfallen.
 2. **Karte laden** – nur den Body, nicht alle Tickets:
    `gh issue view 1 --repo Yggras/abnehm-app`
 3. **Frontier bestimmen:** offene Sub-Issues von #1, die nicht zugewiesen sind und deren „blocked by“-Tickets alle geschlossen sind:
@@ -53,26 +52,7 @@ Zusätzlich zu den Regeln im Ticket selbst:
 3. **Nach dem Veröffentlichen:** das Spezifikations-Issue per nativer „blocked by“-Beziehung an Spezifikation 0 hängen (siehe `docs/agents/issue-tracker.md`, Blocker), kein Sub-Issue der Karte. In der Karte die Zeile unter „Spezifikationen“ mit `scripts/update-map replace` auf den Link umstellen und den Kontextzeiger mit `scripts/update-map append` anhängen; danach Resolution-Kommentar und Schließen wie bei `wayfinder`.
 4. Entstehen keine Dateiänderungen, gibt es keinen Pull Request; der leere Worktree bleibt bis zur Aufräumung mit dem Nutzer stehen.
 
-## Spezifikation in Umsetzungstickets zerlegen (`/to-tickets`)
-
-Gilt für die Spezifikationen 1–5. Spezifikation 0 ist bereits zerlegt (Fundament-Tickets = Sub-Issues von [#71](https://github.com/Yggras/abnehm-app/issues/71)). Der Skill `wayfinder` ist hier nicht beteiligt.
-
-1. **Prüfen:** `gh api repos/Yggras/abnehm-app/issues/<n> --jq '{title, state, assignees: [.assignees[].login], tickets: .sub_issues_summary.total}'`. Nur weiter, wenn die Spezifikation offen, nicht zugewiesen und noch ohne Sub-Issues ist; sonst stoppen und melden. Der native Blocker durch Spezifikation 0 bleibt bewusst offen, bis das Fundament umgesetzt ist, und hindert das Schneiden nicht.
-2. **Claimen:** `gh issue edit <n> --repo Yggras/abnehm-app --add-assignee @me` – sperrt die Spezifikation gegen parallele Sessions.
-3. **Kein Worktree:** Die Session liest im primären Checkout und schreibt nur GitHub-Issues. Wird doch eine Dateiänderung nötig (z. B. ein neuer Begriff in `CONTEXT.md`), erst dann wie in den Schritten 6–7 oben einen Worktree anlegen und hineinwechseln; die Änderung kommt per Pull Request.
-4. **Kontext vollständig laden, bevor geschnitten wird:**
-   - die eigene Spezifikation samt Kommentaren;
-   - [Spezifikation 0 · Fundament & Verträge](https://github.com/Yggras/abnehm-app/issues/71): Maßgeblich ist der Text, als „Eingearbeitet“ markierte Kommentare sind nur Historie;
-   - die Fundament-Tickets mit Akzeptanzkriterien (`gh api repos/Yggras/abnehm-app/issues/71/sub_issues --paginate --jq '.[] | {number, title}'`, dann je Ticket `gh issue view <nummer>`), damit jeder bereichsübergreifende Blocker auf genau das Fundament-Ticket zeigt, das den benötigten Vertrag liefert (Zuordnung in Abschnitt 13 von Spezifikation 0);
-   - `CONTEXT.md`, `docs/adr/` und das Format der Umsetzungstickets in `docs/agents/issue-tracker.md`;
-   - die in der eigenen Spezifikation verlinkten Dateien unter `research/`, `prototypes/` und `spikes/`.
-
-   Lücken oder Widersprüche zwischen Spezifikation und Fundament-Tickets als offene Frage an den Nutzer melden, nicht still auflösen.
-5. **`/to-tickets` ruft nur der Nutzer auf** (`disable-model-invocation`). Wenn der Kontext steht: in höchstens zehn Zeilen den geplanten Zuschnitt skizzieren (Tracer-Bullet-Pfade, absehbare Fundament-Blocker), dann **„Bereit für /to-tickets <n>“** melden und warten. Die Schritte von `/to-tickets` nicht auf anderem Weg nachbauen.
-6. **Kanten zwischen den Spezifikationen 1–5:** Die Bereiche hängen nur über Verträge aus Spezifikation 0 zusammen. Gegen Ports eines anderen Bereichs wird mit den Fixtures und Test-Adaptern des Fundaments gebaut. Braucht ein Ticket trotzdem die echte Umsetzung eines anderen Bereichs, keine Ticketnummer raten, denn die anderen Bereiche werden gleichzeitig geschnitten. Stattdessen die Kante nach dem Veröffentlichen als Kommentar an der eigenen Spezifikation unter der Überschrift „Offene Kanten zu anderen Bereichen“ festhalten: eigenes Ticket → benötigtes Verhalten und Spezifikation. Gesetzt werden diese Kanten, sobald alle Spezifikationen zerlegt sind (Skill `start-parallel`, Schritt 6).
-7. **Abschließen:** die eigene Zuweisung wieder entfernen (`gh issue edit <n> --repo Yggras/abnehm-app --remove-assignee @me`). Die Spezifikation bleibt offen. Kurz melden: Anzahl der Tickets, sofort startbare Tickets mit Namen und offene Kanten.
-
 ## Wenn kein Ticket frei ist
 
-- **Karte abgeschlossen** (seit 16.10.2026 der Fall): Die aktuelle Phase ist das Schneiden der Umsetzungstickets. Die Spezifikationen aus dem Abschnitt „Spezifikationen“ der Karte prüfen wie im vorigen Abschnitt, Schritt 1, und die erste offene, nicht zugewiesene ohne Sub-Issues dort zerlegen. Haben alle Spezifikationen Umsetzungstickets: sag das und frag den Nutzer, wie es weitergehen soll (Umsetzung). Dieser Skill wird dann auf die Umsetzung umgestellt.
+- **Karte abgeschlossen** (keine offenen Tickets mehr): sag das, nenne den Ort der Spezifikation und frag den Nutzer, wie es weitergehen soll (z. B. Umsetzung). Dieser Skill wird dann auf die nächste Phase umgestellt.
 - **Alle offenen Tickets blockiert oder belegt:** sag das mit Ticketnamen und wer/was blockiert, und lege keinen Worktree an.

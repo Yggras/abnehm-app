@@ -16,7 +16,9 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 
 Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er lädt den Stand der Karte, greift sich das nächste freie Ticket und bearbeitet es in einem eigenen Worktree – ohne Neustart, mehrere Sessions parallel möglich.
 
-Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58 59 61`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session, die `/start <ticket>` ausführt. Zum Schneiden der Umsetzungstickets übergibt er statt Ticketnummern die Spezifikationen (`/start-parallel 82 81 86 83 87`); jede Session lädt den Kontext und wartet auf `/to-tickets <n>`.
+Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58 59 61`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session, die `/start <ticket>` ausführt.
+
+Spezifikationen zerlegt der Nutzer parallel mit dem Skill **`to-tickets-parallel`** (Claude Code: `/to-tickets-parallel 82 81 86 83 87`): `scripts/start-to-tickets-tabs` öffnet je Spezifikation einen Herdr-Tab, in dem eine eigenständige Session `/to-tickets` ausführt.
 
 ## Parallele Sessions und Git-Worktrees
 
