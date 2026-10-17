@@ -1,3 +1,9 @@
+node_modules/
+
+# Lokale Secrets der Entwicklungsumgebung (scripts/dev-secrets) und lokale Umgebungsdateien
+secrets/
+.env*.local
+
 .claude/worktrees/
 .claude/settings.local.json
 .DS_Store

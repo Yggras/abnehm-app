@@ -1,0 +1,68 @@
+# Lokale Entwicklungsumgebung: Backend und Postgres auf diesem Rechner (#21).
+# Start: `npm run backend` (legt fehlende lokale Secrets an, baut und startet mit Watch-Modus).
+# Ablauf für Simulatoren und echte Geräte: docs/entwicklung.md
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: abnehm
+      POSTGRES_DB: abnehm
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # Über TCP prüfen: Der Initialisierungslauf des Images startet Postgres mit listen_addresses=''
+      # (https://github.com/docker-library/postgres/blob/master/docker-entrypoint.sh).
+      test: ["CMD-SHELL", "pg_isready --host 127.0.0.1 --username \"$$POSTGRES_USER\" --dbname \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    # Bewusst ohne `ports`: Postgres ist nur im Docker-Netz erreichbar, nicht vom Host oder aus dem LAN.
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      PORT: "8787"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: abnehm
+      DATABASE_USER: abnehm
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Nur auf 127.0.0.1. Für echte Geräte im WLAN ergänzt compose.lan.yaml gezielt eine Adresse.
+      - "127.0.0.1:${BACKEND_PORT:-8787}:8787"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8787/v1/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./apps/backend/src
+          target: /app/apps/backend/src
+        - action: sync+restart
+          path: ./packages/contracts/src
+          target: /app/packages/contracts/src
+        - action: sync+restart
+          path: ./packages/clock/src
+          target: /app/packages/clock/src
+        - action: rebuild
+          path: ./package-lock.json
+
+secrets:
+  postgres_password:
+    # Lokal, von Git ignoriert; `scripts/dev-secrets` legt die Datei an.
+    file: ./secrets/postgres_password
+
+volumes:
+  postgres-data:

@@ -1,0 +1,20 @@
+# Flüchtiges Postgres für die Integrationstests des Backends.
+# Übernimmt Image und Healthcheck aus der Entwicklungsumgebung, damit beide dieselbe Version nutzen.
+# Gestartet und abgeräumt wird es von test/support/postgres-server.ts.
+services:
+  postgres:
+    extends:
+      file: ../../../compose.yaml
+      service: postgres
+    environment: !override
+      POSTGRES_USER: test
+      POSTGRES_DB: test
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:?Passwort setzt der Testlauf}
+    command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+    secrets: !reset []
+    volumes: !reset []
+    tmpfs:
+      - /var/lib/postgresql
+    ports: !override
+      # Zufälliger Port, nur auf dem Loopback-Interface.
+      - "127.0.0.1::5432"

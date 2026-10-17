@@ -1,0 +1,118 @@
+import { fileURLToPath } from 'node:url';
+
+import { ESLint } from 'eslint';
+import { describe, expect, it } from 'vitest';
+
+// Prüft, dass eslint.config.js die Grenzen aus docs/entwicklung.md tatsächlich erzwingt.
+
+const eslint = new ESLint({ cwd: fileURLToPath(new URL('..', import.meta.url)) });
+
+/** Lintet Quelltext so, als läge er unter `filePath`, und liefert die verletzten Regeln. */
+async function violations(code: string, filePath: string) {
+  const [result] = await eslint.lintText(code, { filePath });
+  return result?.messages.map((message) => message.ruleId) ?? [];
+}
+
+describe('Importgrenze des Vertragsmoduls', () => {
+  const inContracts = (code: string) => violations(code, 'packages/contracts/src/probe.ts');
+
+  it.each([
+    ["import { useState } from 'react';", 'React'],
+    ["import { View } from 'react-native';", 'React Native'],
+    ["import * as SQLite from 'expo-sqlite';", 'Plattform (Expo)'],
+    ["import { pgTable } from 'drizzle-orm/pg-core';", 'Drizzle'],
+    ["import { hc } from 'hono/client';", 'Netzwerk (Hono)'],
+    ["import { readFileSync } from 'node:fs';", 'Plattform (Node)'],
+    ["import type { Hono } from 'hono';", 'auch reine Typimporte'],
+    ["export { z as zod } from 'zod-mini-fork';", 'ähnlich benannte Pakete'],
+  ])('verbietet %s (%s)', async (code) => {
+    expect(await inContracts(code)).toContain('no-restricted-imports');
+  });
+
+  it('verbietet dynamische Importe', async () => {
+    expect(await inContracts("export const load = () => import('pg');")).toContain('no-restricted-syntax');
+  });
+
+  it.each([
+    "export const x = fetch('https://example.org');",
+    'export const env = process.env;',
+    'export const w = window;',
+  ])('verbietet globale Plattform-APIs: %s', async (code) => {
+    expect(await inContracts(code)).toContain('no-restricted-globals');
+  });
+
+  it.each([
+    "import { z } from 'zod';\nexport const s = z.string();",
+    "import { Instant } from './base.ts';\nexport const i = Instant;",
+  ])('erlaubt Zod und eigene Dateien: %s', async (code) => {
+    expect(await inContracts(code)).toEqual([]);
+  });
+});
+
+describe('Importgrenze der Uhr', () => {
+  it.each(["import { Platform } from 'react-native';", "import * as Localization from 'expo-localization';"])(
+    'verbietet %s',
+    async (code) => {
+      expect(await violations(code, 'packages/clock/src/probe.ts')).toContain('no-restricted-imports');
+    },
+  );
+
+  it('erlaubt das Vertragsmodul', async () => {
+    const code = "import { Instant } from '@abnehm/contracts/base';\nexport const i = Instant;";
+    expect(await violations(code, 'packages/clock/src/probe.ts')).toEqual([]);
+  });
+});
+
+describe('Bereichscode liest Zeit und Zone nur über die Uhr', () => {
+  it.each([
+    'export const t = Date.now();',
+    'export const t = new Date();',
+    'export const t = Date();',
+    'export const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;',
+  ])('verbietet %s in App und Backend', async (code) => {
+    expect(await violations(code, 'apps/mobile/src/probe.ts')).toContain('no-restricted-syntax');
+    expect(await violations(code, 'apps/backend/src/probe.ts')).toContain('no-restricted-syntax');
+  });
+
+  it('verbietet expo-localization außerhalb des Geräteadapters', async () => {
+    const code = "import { getCalendars } from 'expo-localization';\nexport const c = getCalendars;";
+    expect(await violations(code, 'apps/mobile/src/start/probe.ts')).toContain('no-restricted-imports');
+    expect(await violations(code, 'apps/mobile/src/clock/probe.ts')).toEqual([]);
+  });
+
+  it('erlaubt das Umrechnen gespeicherter Zeitpunkte', async () => {
+    const code = "export const t = new Date('2026-10-14T12:00:00.000Z').getTime();";
+    expect(await violations(code, 'apps/backend/src/probe.ts')).toEqual([]);
+  });
+});
+
+describe('Testuhr nur in Tests', () => {
+  const testClockImport = "import { createTestClock } from '@abnehm/clock/testing';\nexport const c = createTestClock;";
+  const conformanceImport =
+    "import { clockConformanceCases } from '@abnehm/clock/conformance';\nexport const c = clockConformanceCases;";
+
+  it.each(['apps/backend/src/probe.ts', 'apps/mobile/src/probe.ts', 'apps/mobile/src/clock/probe.ts'])(
+    'sperrt Testuhr und Testkit in Produktionscode (%s)',
+    async (filePath) => {
+      expect(await violations(testClockImport, filePath)).toContain('no-restricted-imports');
+      expect(await violations(conformanceImport, filePath)).toContain('no-restricted-imports');
+    },
+  );
+
+  it.each(['apps/mobile/src/probe.test.ts', 'apps/backend/test/probe.test.ts'])(
+    'erlaubt sie in Testdateien (%s)',
+    async (filePath) => {
+      expect(await violations(testClockImport, filePath)).toEqual([]);
+    },
+  );
+});
+
+describe('Backend in der App', () => {
+  it('erlaubt nur Typen aus dem Backend', async () => {
+    const typeOnly = "import type { AppType } from '@abnehm/backend/rpc';\nexport type A = AppType;";
+    const runtime = "import { createApp } from '@abnehm/backend/rpc';\nexport const a = createApp;";
+
+    expect(await violations(typeOnly, 'apps/mobile/src/probe.ts')).toEqual([]);
+    expect(await violations(runtime, 'apps/mobile/src/probe.ts')).toContain('no-restricted-imports');
+  });
+});
