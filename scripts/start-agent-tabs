@@ -4,7 +4,9 @@ set -eu
 # Startet je Ticket eine eigenständige Claude-Code-Session in einem eigenen
 # Herdr-Tab. Jede Session beginnt im primären Checkout mit `/start <ticket>`;
 # der Skill `start` claimt das Ticket, legt den Worktree an und verlegt die
-# Session hinein. Herdr-Mechanik wie bei Firstmate (`tab create` + `pane run`):
+# Session hinein. Statt eines Tickets geht auch eine Spezifikation 1–5: Deren
+# Session bereitet das Schneiden der Umsetzungstickets per `/to-tickets` vor.
+# Herdr-Mechanik wie bei Firstmate (`tab create` + `pane run`):
 # https://github.com/kunchenguid/firstmate/blob/main/bin/backends/herdr.sh
 
 usage() {
@@ -58,7 +60,8 @@ problems=
 for ticket in $tickets; do
   info=$(gh api "repos/$repo/issues/$ticket" \
     --jq '[.state, (.assignees | length), (.issue_dependencies_summary.blocked_by // 0),
-      ([.labels[].name] | index("wayfinder:map") != null)] | @tsv') || {
+      ([.labels[].name] | index("wayfinder:map") != null),
+      (.title | test("^Spezifikation [0-9]+ · ")), (.sub_issues_summary.total // 0)] | @tsv') || {
     problems="$problems\n  #$ticket: nicht abrufbar"
     continue
   }
@@ -66,10 +69,18 @@ for ticket in $tickets; do
   assignees=$(printf '%s' "$info" | cut -f2)
   blocked=$(printf '%s' "$info" | cut -f3)
   is_map=$(printf '%s' "$info" | cut -f4)
+  is_spec=$(printf '%s' "$info" | cut -f5)
+  sub_issues=$(printf '%s' "$info" | cut -f6)
   [ "$is_map" = false ] || problems="$problems\n  #$ticket: ist die Karte selbst, kein Ticket"
   [ "$state" = open ] || problems="$problems\n  #$ticket: nicht offen ($state)"
   [ "$assignees" = 0 ] || problems="$problems\n  #$ticket: bereits zugewiesen (von einer anderen Session belegt)"
-  [ "$blocked" = 0 ] || problems="$problems\n  #$ticket: noch durch $blocked offene(s) Ticket(s) blockiert"
+  if [ "$is_spec" = true ]; then
+    # Spezifikation 0 blockiert 1–5, bis das Fundament umgesetzt ist; das
+    # Schneiden der Umsetzungstickets hindert das nicht.
+    [ "$sub_issues" = 0 ] || problems="$problems\n  #$ticket: hat bereits $sub_issues Umsetzungsticket(s)"
+  else
+    [ "$blocked" = 0 ] || problems="$problems\n  #$ticket: noch durch $blocked offene(s) Ticket(s) blockiert"
+  fi
   if git -C "$primary" for-each-ref --format='%(refname)' "refs/heads/work/$ticket-*" | grep -q . \
     || ls -d "$worktrees_dir/$ticket-"* >/dev/null 2>&1; then
     problems="$problems\n  #$ticket: hat bereits einen Branch oder Worktree"
@@ -82,7 +93,7 @@ fi
 
 for ticket in $tickets; do
   title=$(gh issue view "$ticket" --repo "$repo" --json title --jq .title)
-  short=$(printf '%s' "$title" | sed 's/^Spezifikation erstellen: //')
+  short=$(printf '%s' "$title" | sed 's/^Spezifikation erstellen: //; s/^Spezifikation [0-9]* · /Tickets: /')
   label="#$ticket $short"
 
   created=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$primary" \
