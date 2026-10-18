@@ -3,10 +3,15 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
-import { useDesignFonts } from '../design';
+import { color, useDesignFonts } from '../design';
+import { modalScreens } from '../navigation';
 
 // Der Startbildschirm bleibt stehen, bis Rubik geladen ist; sonst blitzt die Systemschrift auf.
 void SplashScreen.preventAutoHideAsync();
+
+// Ein Deep Link direkt auf eine Seite oder einen modalen Ablauf legt die Tabs darunter, damit
+// „Fertig“ und System-Zurück zu „Heute“ führen (https://docs.expo.dev/router/advanced/router-settings/).
+export const unstable_settings = { anchor: '(tabs)' };
 
 export default function RootLayout() {
   const fontsReady = useDesignFonts();
@@ -20,10 +25,15 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        {/* Der Komponentenkatalog ist nur im Development Build erreichbar. */}
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
+        <Stack.Screen name="(tabs)" />
+        {modalScreens.map((name) => (
+          <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
+        ))}
+        {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar. */}
         <Stack.Protected guard={__DEV__}>
           <Stack.Screen name="katalog" />
+          <Stack.Screen name="technik" />
         </Stack.Protected>
       </Stack>
     </>
