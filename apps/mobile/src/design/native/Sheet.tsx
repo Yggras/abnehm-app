@@ -1,7 +1,8 @@
-import { BottomSheet } from '@expo/ui';
+import { BottomSheet, RNHostView } from '@expo/ui';
 import type { ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 
-import { color, space } from '../tokens';
+import { color, size, space } from '../tokens';
 
 export type SheetProps = {
   visible: boolean;
@@ -16,8 +17,14 @@ export type SheetProps = {
 /**
  * Sheet-Container über `@expo/ui`: Griff, Abdunklung und Wischgeste sind nativ, der Inhalt ist
  * gebrandet (https://docs.expo.dev/versions/v58.0.0/sdk/ui/universal/bottomsheet/).
+ *
+ * Der Inhalt steht in einem `RNHostView`: Das Sheet liegt in einem eigenen Fenster, in dem sonst
+ * niemand Berührungen an React Native weitergibt. Bei `content` nimmt der Host die Breite des
+ * Sheets und die Höhe des Inhalts, sodass das Sheet weder zu hoch noch zu schmal wird. Sockelkanten
+ * (`boxShadow`) zählen nicht zur gemessenen Höhe; Platz dafür hält der Host unten frei.
  */
 export function Sheet({ visible, onClose, children, height = 'content' }: SheetProps) {
+  const full = height === 'full';
   return (
     <BottomSheet
       isPresented={visible}
@@ -25,9 +32,16 @@ export function Sheet({ visible, onClose, children, height = 'content' }: SheetP
       containerColor={color.surfaceCard}
       scrimColor={color.surfaceOverlay}
       contentPadding={space[5]}
-      snapPoints={height === 'full' ? ['full'] : undefined}
+      snapPoints={full ? ['full'] : undefined}
     >
-      {children}
+      <RNHostView matchContents={full ? false : { vertical: true }}>
+        <View style={full ? styles.fill : styles.content}>{children}</View>
+      </RNHostView>
     </BottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  content: { paddingBottom: size.plinthDepth },
+});

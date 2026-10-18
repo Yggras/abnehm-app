@@ -58,7 +58,18 @@ Oberflächen entstehen nur aus den Tokens und Primitiven in `apps/mobile/src/des
 
 - **Tokens:** `tokens.ts` übernimmt `research/design-system.md` vollständig; `tokens.test.ts` prüft das gegen die Tabellen dort. Ändert sich das Design-System, schlägt der Test fehl, bis die Tokens nachgezogen sind.
 - **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`.
-- **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf dem Startbildschirm oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
+- **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf „Heute“ oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
+
+### App-Shell und Navigation
+
+Die Navigationshülle liefert [#101](https://github.com/Yggras/abnehm-app/issues/101) nach Abschnitt 6 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71).
+
+- **Tabs:** Heute · Protokoll · ＋ · Momo · Wir unter `apps/mobile/src/app/(tabs)/`. Die eigene Tab-Leiste (`src/shell/TabBar.tsx`) hat das mittige ＋, das das ＋-Sheet öffnet. Den Punkt am Tab „Momo“ liefert `useMomoTabBadge` in `src/shell/tab-badge.ts`; die Quelle setzt Spezifikation 4 ein. Ob eine Route Tab, Seite oder modaler Ablauf ist und welcher Bereich sie liefert, steht in `src/navigation/route-catalog.ts`.
+- **Routen:** Jede Route aus `@abnehm/contracts/routes` hat eine Datei unter `src/app/` an ihrem Pfad: `today` ist `/`, sonst wird aus dem Namen ein Pfad (`capture.food` → `/capture/food`). Parameter stehen in der Abfrage. Einzige Ausnahme sind die Einstellungsseiten (`/settings/goals`).
+- **Navigieren:** Bereiche öffnen Ziele nur über `openTarget(target)` und schließen mit `closeRoute()` aus `src/navigation`; Links baut `hrefFor(target)`. Eigene Pfade setzt niemand von Hand zusammen; Ausnahme sind die Entwicklerwerkzeuge `/katalog` und `/technik`, die nicht im Routenkatalog stehen.
+- **Bildschirm liefern:** Eine Routendatei enthält `export default placeholderRoute('capture.food')`. Ein Bereich ersetzt das durch `export default routeScreen('capture.food', SeinBildschirm)`. `routeScreen` prüft die Parameter mit dem Schema der Route; unbekannte Ziele und ungültige Parameter öffnen „Heute“. Den Rahmen mit „Zurück“ bzw. „Fertig“ gibt `ScreenFrame` aus `src/shell/ScreenFrame.tsx`.
+- **Platzhalter:** Development Builds zeigen für fehlende Bildschirme einen deutschen Platzhalter mit dem liefernden Bereich. In Release-Builds wirft er `MissingContributionError`; ein fehlender Beitrag ist dort ein Integrationsfehler.
+- **Tests:** `renderRouter('src/app', { initialUrl })` aus `expo-router/testing-library` rendert die echte App. Inhalte des nativen `Sheet` erreichen Tipps im Test nur über den Test-Adapter `src/design/testing/inline-sheet.tsx` (siehe `src/shell/AppShell.test.tsx`).
 
 ### Typisierte Endpunkte (Hono RPC)
 
@@ -119,7 +130,7 @@ Zwei Wege, beide nur mit Development Builds:
    EXPO_PUBLIC_API_URL=http://192.168.178.20:8787 npm start --workspace @abnehm/mobile
    ```
 
-   Nach dem Test das Backend wieder mit `npm run backend` starten. Der Startbildschirm zeigt, welche Adresse die App nutzt.
+   Nach dem Test das Backend wieder mit `npm run backend` starten. „Verbindung und Uhr prüfen“ auf „Heute“ (nur Development Build, `abnehmapp-dev://technik`) zeigt, welche Adresse die App nutzt.
 
 2. **Entwicklungstunnel mit HTTPS**, z. B. `ngrok http 8787` ([ngrok](https://ngrok.com/docs/getting-started/)) oder `cloudflared tunnel --url http://localhost:8787` ([Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)). Die ausgegebene `https://`-Adresse kommt in `EXPO_PUBLIC_API_URL`. Über HTTPS braucht die App keine Netzwerkausnahme. Der Tunnel macht den Status-Endpunkt öffentlich erreichbar, solange er läuft.
 
