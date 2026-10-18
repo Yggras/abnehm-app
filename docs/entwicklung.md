@@ -60,6 +60,32 @@ Oberflächen entstehen nur aus den Tokens und Primitiven in `apps/mobile/src/des
 - **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`.
 - **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf dem Startbildschirm oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
 
+### Datenmodell und Migrationen
+
+Das vollständige V1-Schema ([#96](https://github.com/Yggras/abnehm-app/issues/96), Abschnitt 8 der Spezifikation 0) liegt zweimal vor, als Drizzle-Schema je Dialekt:
+
+| Dialekt | Schema | Migrationen | erzeugen |
+| --- | --- | --- | --- |
+| Postgres (Backend) | `apps/backend/src/db/schema/` | `apps/backend/drizzle/` | `npm run db:generate --workspace @abnehm/backend` |
+| SQLite (App) | `apps/mobile/src/local-db/schema/` | `apps/mobile/src/local-db/migrations/` | `npx drizzle-kit generate` in `apps/mobile` |
+
+- **Gleiche Namen, gleiche Constraints:** Tabellen, Spalten, Unique-Keys, partielle Indizes, CHECKs und Fremdschlüssel heißen in beiden Schemas gleich. `test/schema-paritaet.test.ts` vergleicht sie. Erlaubte Abweichungen stehen dort mit Grund, etwa reine Server- und Gerätetabellen oder die Partnerspalten ohne Fremdschlüssel in SQLite (`partnerPersonColumns`).
+- **Typabbildung:** UUIDs in Postgres als `uuid`, in SQLite als TEXT. Lokale Tage sind `date` bzw. `YYYY-MM-DD`, Zeitpunkte `timestamptz` bzw. UTC-ISO-8601. Messwerte sind Ganzzahlen (`milli_kcal`, mg, ml, g, Minuten). `server_version` ist in Postgres `bigint NOT NULL`, lokal eine Dezimalzeichenfolge, die bei unbestätigten Creates leer ist.
+- **Schema ändern:** beide Schemas anpassen, in beiden Workspaces `drizzle-kit generate` ausführen und die erzeugten Dateien einchecken. `test/schema-migrationen.test.ts` scheitert, solange eine Migration fehlt. Migrationen auf `main` ändern sich nie mehr; jede Änderung kommt als neue Migration.
+- **Personenbezug:** Jede Tabelle führt Konto, Person oder Kopplung in einer eigenen Spalte, keine außerhalb der Better-Auth-Tabellen eine E-Mail (`test/schema-personenbezug.test.ts`).
+- **Unveränderliche Entitäten** (Tagesziel, Tageszielerfüllung, Energiebuchung, Projekteinzahlung, Freischaltungen, Inselfeld, Momo-Accessoire, Revocation-Notice): In Postgres verhindern Trigger jedes Update und Delete (Migration `0001_immutable_entities`), Fremdschlüssel darauf sind `ON DELETE RESTRICT`. Lokal ersetzt der Sync ein Duplikat durch den kanonischen Datensatz, deshalb gibt es dort keine Trigger.
+- **Ausführen:** Das Backend migriert beim Start (`src/main.ts`) und per `npm run db:migrate --workspace @abnehm/backend`. Die App bündelt ihre Migrationen (`migrations.js` mit babel-plugin-inline-import, `metro.config.js` kennt `.sql`) und migriert beim Öffnen einer Kontodatenbank.
+
+### Lokale Datenbank der App
+
+`apps/mobile/src/local-db/` kapselt expo-sqlite und Drizzle. Bereichscode kennt nur die Schnittstelle aus `local-db/index.ts`:
+
+- **Je Konto eine Datei** (`konto-<konto-id>.db`). `LocalDatabases.open(kontoId)` öffnet und migriert sie, `lock()` schließt sie bei `401`. Wer ein anderes Konto öffnet oder sperrt, beendet alle Handles und Beobachtungen des bisherigen; sie werfen danach `LocalDatabaseClosedError`.
+- **Transaktionen:** `LocalDatabase.transaction(work)` reicht einen opaken `TransactionContext` an fachliche Repositories und Befehle; `read(work)` einen `ReadContext`, in dem Schreiben scheitert. `work` ist synchron, Verschachteln ist verboten. `tx.afterCommit(callback)` läuft nur nach erfolgreichem Commit; Fehler darin gehen an `onError` und rollen nichts zurück.
+- **Repositories** öffnen den Kontext mit `sqliteOf(tx)` aus `local-db/sqlite.ts` und bauen ihre Abfragen mit Drizzle über `local-db/schema`. Nur sie sehen Drizzle-Typen.
+- **Beobachten:** `observe(read, listener)` liest sofort und nach jedem Commit dieser Datenbank erneut. Drizzles `useLiveQuery` wird nicht verwendet: Der Change-Listener von expo-sqlite meldet Änderungen aller geöffneten Dateien und weiß nichts vom Kontowechsel.
+- **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`).
+
 ### Typisierte Endpunkte (Hono RPC)
 
 Die App ruft das Backend über `hc<AppType>` auf ([Hono RPC](https://hono.dev/docs/guides/rpc)). Fachliche Pfade sind versioniert (`/v1/…`).

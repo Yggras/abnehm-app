@@ -27,6 +27,7 @@ Aufbau (npm-Workspace mit `apps/mobile`, `apps/backend`, `packages/contracts`, `
 - Native App-Abhängigkeiten nur per `npx expo install` aus `apps/mobile`. `ios/` und `android/` werden generiert und nie von Hand bearbeitet. Vor Code gegen Expo- oder React-Native-APIs die Doku der genutzten SDK-Version lesen (`https://docs.expo.dev/versions/v58.0.0/`), nicht aus dem Gedächtnis arbeiten.
 - Zeitpunkt, Zeitzone und lokaler Tag kommen nur aus der `Clock`-Schnittstelle von `@abnehm/clock`, nie aus `Date.now()`, `new Date()` oder `Intl`. Das prüft `npm run lint`, ebenso die Importgrenzen des Vertragsmoduls.
 - Zod-Schemas und Typen, die App und Backend teilen, liegen nur im Vertragsmodul `@abnehm/contracts`.
+- Das Datenmodell ändert sich nur in beiden Drizzle-Schemas zugleich (Postgres und SQLite), samt mit `drizzle-kit generate` erzeugter Migration je Workspace. Bereichscode schreibt lokal nur über `LocalDatabase.transaction` aus `apps/mobile/src/local-db/`.
 - Vor dem Pull Request laufen `npm run typecheck`, `npm run lint` und `npm test`; die CI wiederholt sie.
 
 ## Parallele Sessions und Git-Worktrees

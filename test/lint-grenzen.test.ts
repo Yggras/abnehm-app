@@ -172,6 +172,8 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     ["import { Host } from '@expo/ui';\nexport const h = Host;", 'apps/mobile/src/design/native/probe.tsx'],
     ["import { MenuView } from '@expo/ui/community/menu';\nexport const m = MenuView;", 'apps/mobile/src/design/native/probe.tsx'],
     ["import { useFonts } from 'expo-font';\nexport const f = useFonts;", 'apps/mobile/src/design/fonts.ts'],
+    ["import { openDatabaseSync } from 'expo-sqlite';\nexport const o = openDatabaseSync;", 'apps/mobile/src/local-db/expo-connection.ts'],
+    ["import Database from 'better-sqlite3';\nexport const d = Database;", 'apps/mobile/src/local-db/testing/probe.ts'],
   ])('erlaubt %s in %s', async (code, filePath) => {
     expect(await violations(code, filePath)).toEqual([]);
   });
@@ -183,6 +185,9 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     "import { useFonts } from 'expo-font';\nexport const f = useFonts;",
     "import { Rubik_400Regular } from '@expo-google-fonts/rubik/400Regular';\nexport const r = Rubik_400Regular;",
     "export const h = () => import('expo-haptics');",
+    "import { openDatabaseSync } from 'expo-sqlite';\nexport const o = openDatabaseSync;",
+    "import { useLiveQuery } from 'drizzle-orm/expo-sqlite';\nexport const l = useLiveQuery;",
+    "import Database from 'better-sqlite3';\nexport const d = Database;",
   ])('verbietet im Bereichscode: %s', async (code) => {
     expect(await violations(code, 'apps/mobile/src/start/probe.tsx')).toContain('abnehm/bibliotheksgrenzen');
   });
