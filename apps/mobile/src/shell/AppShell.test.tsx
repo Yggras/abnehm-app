@@ -446,7 +446,7 @@ describe('Schriftfaktor 2,0', () => {
   test('Heute-Vorschau stapelt Momo und Mini-Tracker, deren getrennte Aktionen bedienbar bleiben', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
-    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 750 ml / 1500 ml, teil. Details öffnen'];
+    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 750 ml / 1.500 ml, teil. Details öffnen'];
     for (const name of controls) {
       const control = screen.getByRole('button', { name });
       const area = hitArea(control);

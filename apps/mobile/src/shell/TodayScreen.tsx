@@ -1,6 +1,7 @@
-import { weekdayOf, type LocalDate } from '@abnehm/contracts/base';
+import { weekdayOf, type Instant, type LocalDate } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { UiActionIntent } from '@abnehm/contracts/routes';
+import type { EncouragementKey } from '@abnehm/contracts/partner';
 import type {
   HeaderReady, MomoCharacterReady, MomoDailyGoalsReady, NutritionBudgetReady, NutritionLogReady,
   PartnerCardReady, TopNoticeReady, TrackerSportReady, TrackerWaterReady, TrackerWeightReady, TrackerQuickAction,
@@ -8,7 +9,7 @@ import type {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Button, Card, color, EnergySymbol, Icon, IconButton, size, space, Text, useLargeTextLayout } from '../design';
+import { Button, Card, color, EnergySymbol, Icon, IconButton, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
@@ -16,12 +17,20 @@ import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContri
 
 type Data<S> = S extends ContributionState<infer D, string> ? D : never;
 const weekdays = { montag: 'Montag', dienstag: 'Dienstag', mittwoch: 'Mittwoch', donnerstag: 'Donnerstag', freitag: 'Freitag', samstag: 'Samstag', sonntag: 'Sonntag' } as const;
+const encouragement: Record<EncouragementKey, string> = {
+  du_schaffst_das: 'Du schaffst das! 💪', ich_denk_an_dich: 'Ich denk an dich ❤️',
+  stark_heute: 'Stark heute! 🎉', gemeinsam_fuer_momo: 'Gemeinsam für Momo 🐣', stolz_auf_dich: 'Bin stolz auf dich 🌟',
+};
 const names: Record<TodaySlot, string> = {
   header: 'Kopfbereich', top_notice: 'Anfeuerung', 'momo.character': 'Momo', 'momo.daily_goals': 'Tagesziele',
   'nutrition.budget': 'Kalorienbudget', 'nutrition.log': 'Ernährung', 'trackers.water': 'Wasser',
   'trackers.sport': 'Sport', 'trackers.weight': 'Gewicht', partner: 'Partner',
 };
 function action(intent: UiActionIntent) { openTarget(intent.target); }
+function staleLabel(dataAsOf: Instant): string {
+  const [date, time] = dataAsOf.split('T');
+  return `Stand: ${date!.split('-').reverse().join('.')} · ${time!.slice(0, 5)} UTC`;
+}
 
 /** Jeder Steckplatz beobachtet ausschließlich seine Quelle; auch ungültige neue Daten fallen am Vertragsrand auf. */
 function useContribution<K extends TodaySlot>(registry: TodayRegistry, key: K): TodayState<K> | null {
@@ -47,9 +56,9 @@ function StateView<K extends TodaySlot>({ state, slot, children }: {
 }) {
   if (!state) return <Text tone="inkMuted">{__DEV__ ? `Beitrag für ${names[slot]} fehlt` : 'Lädt …'}</Text>;
   switch (state.type) {
-    case 'loading': return <Text tone="inkMuted">{names[slot]} lädt …</Text>;
+    case 'loading': return <View style={styles.group}><Text tone="inkMuted">{names[slot]} lädt …</Text><Skeleton width="100%" height={48} /></View>;
     case 'ready': return <>{children(state.data as Data<TodayState<K>>)}</>;
-    case 'stale': return <View style={styles.group}><Text tone="inkMuted">Stand zuletzt aktualisiert</Text>{children(state.data as Data<TodayState<K>>)}</View>;
+    case 'stale': return <View style={styles.group}><Text tone="inkMuted">{staleLabel(state.dataAsOf)}</Text>{children(state.data as Data<TodayState<K>>)}</View>;
     case 'empty': return <View style={styles.group}>
       <Text>{state.reasonKey === 'momo_wartet_im_ei' ? 'Momo wartet im Ei' : state.reasonKey === 'rollenwahl_offen' ? 'Momo wartet auf eure Rollenwahl' : state.reasonKey === 'noch_keine_eintraege' ? 'Noch keine Einträge' : 'Hier gibt es noch nichts zu zeigen.'}</Text>
       {state.action ? <Button variant="secondary" label="Jetzt öffnen" onPress={() => action(state.action!)} /> : null}
@@ -79,12 +88,13 @@ const goalNames = {
 } as const;
 const goalStatus = { offen: 'Noch offen', teilweise: 'Unterwegs', erfuellt: 'Erreicht', tagesende: 'Am Tagesende' } as const;
 
-function MomoArea({ character, goals, large }: { character: MomoCharacterReady; goals: MomoDailyGoalsReady; large: boolean }) {
+function MomoArea({ character, goals, large, stale }: { character: MomoCharacterReady; goals: MomoDailyGoalsReady; large: boolean; stale?: Instant }) {
   return <Card><View style={[styles.momo, large && styles.stack]}>
     <View style={styles.momoStage}>
       <MomoAppearanceProvider appearance={character.appearance}><MomoFigure mood={character.appearance.moodKey ?? 'neugierig'} size={size.momoToday} /></MomoAppearanceProvider>
     </View>
     <View style={styles.flex}>
+      {stale ? <Text tone="inkMuted">{staleLabel(stale)}</Text> : null}
       <Text variant="headline" accessibilityRole="header">Momo · Level {character.level}</Text>
       <View style={styles.row}><EnergySymbol /><Text>{character.energy} Energie</Text></View>
       <Text tone="inkMuted">{character.waitingForPartner ? 'Dein Teil ist voll. Momo wartet auf euch beide.' : 'Euer gemeinsamer Fortschritt'}</Text>
@@ -103,12 +113,13 @@ function MomoArea({ character, goals, large }: { character: MomoCharacterReady; 
   </Card>;
 }
 
-function Nutrition({ budget, log }: { budget: NutritionBudgetReady; log: NutritionLogReady }) {
+function Nutrition({ budget, log, stale }: { budget: NutritionBudgetReady; log: NutritionLogReady; stale?: Instant }) {
   const remaining = budget.budgetKcal - log.intakeKcal;
   return <Card>
     <Text variant="headline" accessibilityRole="header">Ernährung</Text>
-    <Text variant="numberXl">{Math.abs(remaining)} kcal {remaining < 0 ? 'drüber' : 'übrig'}</Text>
-    <Text tone="inkMuted">{log.intakeKcal} von {budget.budgetKcal} kcal · {budget.maintenanceReason ? 'Haltemodus' : 'Kalorienbudget'}</Text>
+    {stale ? <Text tone="inkMuted">{staleLabel(stale)}</Text> : null}
+    <Text variant="numberXl">{Math.abs(remaining).toLocaleString('de-DE')} kcal {remaining < 0 ? 'drüber' : 'übrig'}</Text>
+    <Text tone="inkMuted">{log.intakeKcal.toLocaleString('de-DE')} von {budget.budgetKcal.toLocaleString('de-DE')} kcal · {budget.maintenanceReason ? 'Haltemodus' : 'Kalorienbudget'}</Text>
     {budget.notice ? <View style={styles.row}>
       <Icon name="star" tone="hint" />
       <View style={styles.flex}><Text>{budget.notice.type === 'goal_weight_reached' ? 'Zielgewicht erreicht' : `Budgetvorschlag: ${budget.notice.suggestedBudgetKcal} kcal`}</Text></View>
@@ -152,25 +163,28 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
   const large = useLargeTextLayout();
   return <View style={styles.content}>
     <View testID="today-slot-header"><State registry={registry} slot="header">{(data) => <Header data={data as HeaderReady} />}</State></View>
-    <View testID="today-slot-top_notice"><State registry={registry} slot="top_notice">{(data) => <Card><Text>{(data as TopNoticeReady).senderDisplayName} feuert dich an</Text><Button label="Ansehen" variant="text" onPress={() => action((data as TopNoticeReady).action)} /></Card>}</State></View>
-    <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} />}</CardPair></View>
-    <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} />}</CardPair></View>
+    <View testID="today-slot-top_notice"><State registry={registry} slot="top_notice">{(data) => <Card><Text>{(data as TopNoticeReady).senderDisplayName} feuert dich an</Text><Text>{encouragement[(data as TopNoticeReady).encouragementKey]}</Text><Button label="Ansehen" variant="text" onPress={() => action((data as TopNoticeReady).action)} /></Card>}</State></View>
+    <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b, stale) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} stale={stale} />}</CardPair></View>
+    <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b, stale) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} stale={stale} />}</CardPair></View>
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${d.countedMl} ml / ${d.targetMl} ml`} status={d.status} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${d.countedMl.toLocaleString('de-DE')} ml / ${d.targetMl.toLocaleString('de-DE')} ml`} status={d.status} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={d.status} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${(d.value.weightG / 1000).toFixed(1)} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${(d.value.weightG / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>
   </View>;
 }
 
 function CardPair<A extends TodaySlot, B extends TodaySlot>({ registry, first, second, children }: {
-  registry: TodayRegistry; first: A; second: B; children: (a: Data<TodayState<A>>, b: Data<TodayState<B>>) => ReactNode;
+  registry: TodayRegistry; first: A; second: B; children: (a: Data<TodayState<A>>, b: Data<TodayState<B>>, stale?: Instant) => ReactNode;
 }) {
   const a = useContribution(registry, first);
   const b = useContribution(registry, second);
+  if (first === 'momo.character' && a?.type === 'empty') {
+    return <Card><MomoFigure mood="neugierig" size={80} /><StateView slot={first} state={a}>{() => null}</StateView></Card>;
+  }
   if ((a?.type === 'ready' || a?.type === 'stale') && (b?.type === 'ready' || b?.type === 'stale')) {
-    return <>{children(a.data as Data<TodayState<A>>, b.data as Data<TodayState<B>>)}</>;
+    return <>{children(a.data as Data<TodayState<A>>, b.data as Data<TodayState<B>>, a.type === 'stale' ? a.dataAsOf : b.type === 'stale' ? b.dataAsOf : undefined)}</>;
   }
   return <View style={styles.group}>
     {a?.type === 'ready' || a?.type === 'stale' ? null : <StateView slot={first} state={a}>{() => null}</StateView>}

@@ -49,11 +49,36 @@ test('ein beobachteter Pflichtslot zeigt loading, ready, stale, empty und error 
   await act(async () => publish({ type: 'ready', data: solo } as TodayState<'partner'>));
   expect(screen.getByText(/Momo wartet im Ei/)).toBeOnTheScreen();
   await act(async () => publish({ type: 'stale', data: solo, dataAsOf: '2026-10-14T12:00:00.000Z' } as TodayState<'partner'>));
-  expect(screen.getByText('Stand zuletzt aktualisiert')).toBeOnTheScreen();
+  expect(screen.getByText('Stand: 14.10.2026 · 12:00 UTC')).toBeOnTheScreen();
   await act(async () => publish({ type: 'empty', reasonKey: 'nicht_gekoppelt' }));
   expect(screen.getByText('Hier gibt es noch nichts zu zeigen.')).toBeOnTheScreen();
   await act(async () => publish({ type: 'error', code: 'invalid_payload' }));
   expect(screen.getByText('Dieser Bereich ist gerade nicht verfügbar.')).toBeOnTheScreen();
+});
+
+test('eine zusammengesetzte Ernährungskarte kennzeichnet veraltete Teildaten mit Zeitpunkt', async () => {
+  const registry = createTodayRegistry();
+  registry.register('ziele', 'nutrition.budget', { subscribe(listener) {
+    listener({ type: 'stale', data: contractFixtures.today!.NutritionBudgetReady!.valid['Haltemodus ohne Hinweis'] as never, dataAsOf: '2026-10-14T12:00:00.000Z' as never });
+    return () => {};
+  } });
+  registry.register('ernaehrung', 'nutrition.log', { subscribe(listener) {
+    listener({ type: 'ready', data: contractFixtures.today!.NutritionLogReady!.valid['ohne Aufnahme'] as never });
+    return () => {};
+  } });
+  await render(<ClockProvider clock={clock}><MessageHostProvider><TodayContent registry={registry} /></MessageHostProvider></ClockProvider>);
+  expect(screen.getByText('Stand: 14.10.2026 · 12:00 UTC')).toBeOnTheScreen();
+  expect(screen.getByText(/2.120 kcal übrig/)).toBeOnTheScreen();
+});
+
+test('ohne Kopplung ersetzt die Laichkugel den Momo-Bereich', async () => {
+  const registry = createTodayRegistry();
+  registry.register('momo', 'momo.character', { subscribe(listener) {
+    listener({ type: 'empty', reasonKey: 'momo_wartet_im_ei', action: { actionId: 'momo.invite_partner', target: { type: 'partner.invite' } } });
+    return () => {};
+  } });
+  await render(<ClockProvider clock={clock}><MessageHostProvider><TodayContent registry={registry} /></MessageHostProvider></ClockProvider>);
+  expect(screen.getByRole('image', { name: 'Momo wartet im Ei' })).toBeOnTheScreen();
 });
 
 test('ein leerer Unterbeitrag bleibt sichtbar, auch wenn sein Kartenpartner fehlt', async () => {
