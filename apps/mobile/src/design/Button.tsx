@@ -56,6 +56,8 @@ export type ButtonProps = PressState & {
   loading?: boolean;
   /** Volle Breite. */
   block?: boolean;
+  /** Ausführlicher Name für Screenreader, wenn die Beschriftung allein nicht reicht. */
+  accessibilityLabel?: string;
 };
 
 /** Button nach dem Design-System: Pille mit Sockelkante, beim Drücken sinkt er ein. */
@@ -68,6 +70,7 @@ export function Button({
   disabled = false,
   loading = false,
   block = false,
+  accessibilityLabel,
   testOnly_pressed,
 }: ButtonProps) {
   const visibleHeight = compact ? size.buttonHeightCompact : size.buttonHeight;
@@ -76,7 +79,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}

@@ -354,9 +354,11 @@ function NativeElements() {
       </ListGroup>
       <Card>
         <Text variant="label">Datum</Text>
-        <DateTimePicker mode="date" value={when} onChange={setWhen} timeZone={reading.timeZone} />
+        <DateTimePicker label="Datum" mode="date" value={when} onChange={setWhen} timeZone={reading.timeZone} />
         <Text variant="label">Uhrzeit</Text>
-        <DateTimePicker mode="time" value={when} onChange={setWhen} timeZone={reading.timeZone} />
+        <DateTimePicker label="Uhrzeit" mode="time" value={when} onChange={setWhen} timeZone={reading.timeZone} />
+        <Text variant="label">Datum und Uhrzeit</Text>
+        <DateTimePicker label="Beginn" mode="datetime" value={when} onChange={setWhen} timeZone={reading.timeZone} />
       </Card>
       <Button label="Sheet öffnen" variant="secondary" onPress={() => setOpen(true)} />
       <Sheet visible={open} onClose={() => setOpen(false)}>
@@ -398,10 +400,12 @@ function LargeText() {
     <Section title="Große Schrift (Umbruch ab 1,3)">
       <View style={stacked ? styles.stack : styles.columns}>
         {(['drop', 'sport', 'scale'] as const).map((icon) => (
-          <Card key={icon}>
-            <Icon name={icon} />
-            <Text variant="numberM">1,0 l</Text>
-          </Card>
+          <View key={icon} style={stacked ? undefined : styles.column}>
+            <Card>
+              <Icon name={icon} />
+              <Text variant="numberM">1,0 l</Text>
+            </Card>
+          </View>
         ))}
       </View>
       <Text tone="inkMuted" variant="label">
@@ -464,6 +468,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[2] },
   grow: { flex: 1, gap: space[2] },
   columns: { flexDirection: 'row', gap: space[2] },
+  column: { flex: 1 },
   stack: { gap: space[2] },
   icons: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3] },
   sheet: { gap: space[4] },

@@ -129,7 +129,7 @@ export type TypeToken = keyof typeof type;
 export const textScale = {
   max: 2,
   breakpoint: 1.3,
-  limit: { numberXl: 1.4, tabLabel: 1.3 } satisfies Partial<Record<TypeToken, number>>,
+  limit: { display: 1.6, numberXl: 1.4, tabLabel: 1.3 } satisfies Partial<Record<TypeToken, number>>,
 } as const;
 
 export const space = {
