@@ -4,5 +4,5 @@
     // Ohne DOM- und Node-Typen: fetch, process, window & Co. sind hier Typfehler.
     "types": []
   },
-  "include": ["src"]
+  "include": ["src", "fixtures"]
 }

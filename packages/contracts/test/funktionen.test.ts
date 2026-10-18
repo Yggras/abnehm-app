@@ -1,0 +1,97 @@
+import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+
+import { LocalDate, weekdayOf } from '../src/base.ts';
+import { contributionState, type ContributionState } from '../src/contribution.ts';
+import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
+import { needsResponse, WirContribution } from '../src/wir.ts';
+import { notificationFixtures } from '../fixtures/notifications.ts';
+import { wirFixtures } from '../fixtures/wir.ts';
+
+describe('notificationTarget', () => {
+  const intents = Object.values(notificationFixtures.NotificationIntent.valid).map((value) =>
+    NotificationIntent.parse(value),
+  );
+  const targetOf = (type: NotificationIntent['type']) => {
+    const intent = intents.find((candidate) => candidate.type === type);
+    if (intent === undefined) throw new Error(`Kein Fixture für ${type}`);
+    return notificationTarget(intent);
+  };
+
+  it('deckt jede Art des Katalogs mit einem Fixture ab', () => {
+    expect(new Set(intents.map((intent) => intent.type))).toEqual(
+      new Set(NotificationIntent.options.map((option) => option.def.shape.type.value)),
+    );
+  });
+
+  it.each([
+    ['anfeuern', { type: 'partner', focus: 'received_encouragement' }],
+    ['levelaufstieg', { type: 'momo' }],
+    ['gebiet', { type: 'momo' }],
+    ['projektabschluss', { type: 'momo', view: 'projekt' }],
+    ['challenge_vorschlag', { type: 'partner' }],
+    ['challenge_erfolg', { type: 'partner' }],
+    ['rollen_anfrage', { type: 'partner' }],
+    ['deko_geschenk', { type: 'partner' }],
+    ['entkopplung', { type: 'partner' }],
+  ] as const)('%s öffnet %j', (type, target) => {
+    expect(targetOf(type)).toEqual(target);
+  });
+});
+
+describe('needsResponse', () => {
+  const contributions = wirFixtures.WirContribution.valid;
+  const parse = (name: string) => WirContribution.parse(contributions[name]);
+
+  it('gilt für offene gemeinsame Aktionen und fremde Challenge-Vorschläge', () => {
+    expect(needsResponse(parse('Deko-Geschenk'))).toBe(true);
+    expect(needsResponse(parse('fremder Challenge-Vorschlag'))).toBe(true);
+  });
+
+  it('gilt nicht für eigene Vorschläge, aktive Challenges, Projekte und Ereignisse', () => {
+    const own = WirContribution.parse({ ...(contributions['fremder Challenge-Vorschlag'] as object), proposedBySelf: true });
+    expect(needsResponse(own)).toBe(false);
+    expect(needsResponse(parse('aktive Challenge ohne Enddatum'))).toBe(false);
+    expect(needsResponse(parse('Gemeinschaftsprojekt'))).toBe(false);
+    expect(needsResponse(parse('Levelaufstieg'))).toBe(false);
+  });
+});
+
+describe('weekdayOf', () => {
+  it.each([
+    ['2026-10-12', 'montag'],
+    ['2026-10-14', 'mittwoch'],
+    ['2026-10-18', 'sonntag'],
+    ['2028-02-29', 'dienstag'],
+  ] as const)('%s ist ein %s', (date, weekday) => {
+    expect(weekdayOf(LocalDate.parse(date))).toBe(weekday);
+  });
+});
+
+describe('contributionState', () => {
+  const state = contributionState(z.strictObject({ ml: z.int() }), z.enum(['kein_ziel']));
+
+  it('kennt genau die fünf Zustände', () => {
+    expect(state.options.map((option) => option.def.shape.type.value)).toEqual([
+      'loading',
+      'ready',
+      'empty',
+      'stale',
+      'error',
+    ]);
+  });
+
+  it('prüft Daten und Leer-Grund mit den übergebenen Schemas', () => {
+    expect(state.safeParse({ type: 'ready', data: { ml: 250 } }).success).toBe(true);
+    expect(state.safeParse({ type: 'ready', data: { ml: '250' } }).success).toBe(false);
+    expect(state.safeParse({ type: 'empty', reasonKey: 'kein_ziel' }).success).toBe(true);
+    expect(state.safeParse({ type: 'empty', reasonKey: 'anderer_grund' }).success).toBe(false);
+  });
+
+  it('entspricht dem Typ ContributionState', () => {
+    type Inferred = z.infer<typeof state>;
+    type Declared = ContributionState<{ ml: number }, 'kein_ziel'>;
+    const same: [Inferred, Declared] extends [Declared, Inferred] ? true : false = true;
+    expect(same).toBe(true);
+  });
+});

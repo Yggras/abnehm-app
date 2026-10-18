@@ -1,0 +1,126 @@
+import {
+  EncouragementKey,
+  PartnerDailyGoalStage,
+  PartnerDailyGoalStatus,
+  PartnerSummaryEnvelope,
+  RevocationNotice,
+} from '../src/partner.ts';
+import { fixtures } from './define.ts';
+import { anna, coupling, notice, now, philipp, projection, today } from './ids.ts';
+
+const envelopeBase = {
+  id: projection,
+  generation: 1,
+  ownerPersonId: anna,
+  recipientPersonId: philipp,
+  couplingId: coupling,
+  dataAsOf: now,
+  serverVersion: '1834',
+} as const;
+
+const water = {
+  type: 'wasser',
+  ...envelopeBase,
+  period: { type: 'tag', localDate: today },
+  content: { progressPercent: 64 },
+} as const;
+
+const weight = {
+  type: 'gewicht',
+  ...envelopeBase,
+  period: { type: 'vierzehn_tage', from: '2026-10-01', to: today },
+  content: { changeKg: -0.4, direction: 'sinkend' },
+} as const;
+
+const status = {
+  id: projection,
+  ownerPersonId: anna,
+  recipientPersonId: philipp,
+  couplingId: coupling,
+  localDate: today,
+  dataAsOf: now,
+  stage: 'unterwegs',
+  serverVersion: '1835',
+} as const;
+
+const revocation = {
+  id: notice,
+  recipientPersonId: philipp,
+  couplingId: coupling,
+  target: { type: 'partner_summary', projectionId: projection },
+  reason: 'freigabe_entzogen',
+  serverVersion: '1840',
+} as const;
+
+export const partnerFixtures = {
+  PartnerSummaryEnvelope: fixtures(PartnerSummaryEnvelope, {
+    valid: {
+      'Ernährung ohne Mahlzeit': {
+        type: 'ernaehrung',
+        ...envelopeBase,
+        period: { type: 'tag', localDate: today },
+        content: { recordedMealCategories: 0 },
+      },
+      'Wasser': water,
+      'Sport in der Woche': {
+        type: 'sport',
+        ...envelopeBase,
+        period: { type: 'woche', from: '2026-10-12', to: '2026-10-18' },
+        content: { countedMinutes: 45, weeklyTargetMinutes: 150 },
+      },
+      'Gewicht sinkend': weight,
+      'Gewicht stabil': { ...weight, content: { changeKg: 0, direction: 'stabil' } },
+      'Gewicht noch nicht verfügbar': { ...weight, content: { changeKg: null, direction: 'noch_nicht_verfuegbar' } },
+    },
+    invalid: {
+      'absolutes Gewicht': { ...weight, content: { ...weight.content, weightKg: 79.6 } },
+      'Rohdatensatz-ID': { ...water, content: { progressPercent: 64, entryIds: [projection] } },
+      'Wasser über 100 %': { ...water, content: { progressPercent: 120 } },
+      'Woche ab Mittwoch': {
+        type: 'sport',
+        ...envelopeBase,
+        period: { type: 'woche', from: today, to: '2026-10-20' },
+        content: { countedMinutes: 45, weeklyTargetMinutes: 150 },
+      },
+      'Gewicht mit zwei Nachkommastellen': { ...weight, content: { changeKg: -0.45, direction: 'sinkend' } },
+      'Gewicht steigt, Richtung sinkend': { ...weight, content: { changeKg: 0.3, direction: 'sinkend' } },
+      'Gewicht über 13 Tage': { ...weight, period: { type: 'vierzehn_tage', from: '2026-10-02', to: today } },
+      'Wasser mit Wochenzeitraum': { ...water, period: { type: 'woche', from: '2026-10-12', to: '2026-10-18' } },
+      'an sich selbst': { ...water, recipientPersonId: anna },
+    },
+  }),
+  PartnerDailyGoalStage: fixtures(PartnerDailyGoalStage, {
+    valid: { 'eine Erfüllung': 'unterwegs', 'alle drei': 'geschafft' },
+    invalid: { 'exakte Zahl': '1 von 3', 'Zahl': 1 },
+  }),
+  PartnerDailyGoalStatus: fixtures(PartnerDailyGoalStatus, {
+    valid: { 'unterwegs': status, 'noch nichts': { ...status, stage: 'noch_nichts' } },
+    invalid: {
+      'exakte Zahl der Erfüllungen': { ...status, completedCount: 1 },
+      'an sich selbst': { ...status, recipientPersonId: anna },
+    },
+  }),
+  RevocationNotice: fixtures(RevocationNotice, {
+    valid: {
+      'Freigabe entzogen': revocation,
+      'Entkopplung': { ...revocation, target: { type: 'kopplung' }, reason: 'entkopplung' },
+      'Tageszielstand nach Entkopplung': {
+        ...revocation,
+        target: { type: 'partner_daily_goal_status', projectionId: projection },
+        reason: 'entkopplung',
+      },
+    },
+    invalid: {
+      'mit Inhalt': { ...revocation, content: { progressPercent: 64 } },
+      'Freigabeentzug für den Tageszielstand': {
+        ...revocation,
+        target: { type: 'partner_daily_goal_status', projectionId: projection },
+      },
+      'unbekannter Grund': { ...revocation, reason: 'abgelaufen' },
+    },
+  }),
+  EncouragementKey: fixtures(EncouragementKey, {
+    valid: { 'Du schaffst das': 'du_schaffst_das', 'Gemeinsam für Momo': 'gemeinsam_fuer_momo' },
+    invalid: { 'Freitext': 'Kleiner Stups: Trink was 💧' },
+  }),
+};
