@@ -1,6 +1,6 @@
 {
-  "id": "ba250196-d0f1-4e49-8b64-d950e9d53001",
-  "prevId": "3bb05ae6-4e7a-4c1a-b710-1862bcc43bd9",
+  "id": "30009eeb-c134-4aca-827c-49bc9340820b",
+  "prevId": "b771dd68-23cc-47c3-8412-f90fe2357518",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2295,6 +2295,10 @@
         "nutrition_entry_values_check": {
           "name": "nutrition_entry_values_check",
           "value": "\"nutrition_entry\".\"snapshot_reference_amount\" > 0 and \"nutrition_entry\".\"snapshot_milli_kcal\" >= 0 and \"nutrition_entry\".\"snapshot_protein_mg\" >= 0 and \"nutrition_entry\".\"snapshot_carbs_mg\" >= 0 and \"nutrition_entry\".\"snapshot_fat_mg\" >= 0 and \"nutrition_entry\".\"total_milli_kcal\" >= 0 and \"nutrition_entry\".\"total_protein_mg\" >= 0 and \"nutrition_entry\".\"total_carbs_mg\" >= 0 and \"nutrition_entry\".\"total_fat_mg\" >= 0"
+        },
+        "nutrition_entry_macros_check": {
+          "name": "nutrition_entry_macros_check",
+          "value": "\"nutrition_entry\".\"snapshot_base_unit\" <> 'g' or \"nutrition_entry\".\"snapshot_protein_mg\" + \"nutrition_entry\".\"snapshot_carbs_mg\" + \"nutrition_entry\".\"snapshot_fat_mg\" <= \"nutrition_entry\".\"snapshot_reference_amount\""
         }
       },
       "isRLSEnabled": false
@@ -2458,6 +2462,10 @@
         "own_food_values_check": {
           "name": "own_food_values_check",
           "value": "\"own_food\".\"reference_amount\" > 0 and \"own_food\".\"milli_kcal\" >= 0 and \"own_food\".\"protein_mg\" >= 0 and \"own_food\".\"carbs_mg\" >= 0 and \"own_food\".\"fat_mg\" >= 0"
+        },
+        "own_food_macros_check": {
+          "name": "own_food_macros_check",
+          "value": "\"own_food\".\"base_unit\" <> 'g' or \"own_food\".\"protein_mg\" + \"own_food\".\"carbs_mg\" + \"own_food\".\"fat_mg\" <= \"own_food\".\"reference_amount\""
         }
       },
       "isRLSEnabled": false
@@ -6034,7 +6042,7 @@
             "id"
           ],
           "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "restrict"
         },
         "revocation_notice_coupling_id_coupling_id_fk": {
           "name": "revocation_notice_coupling_id_coupling_id_fk",
@@ -6047,7 +6055,7 @@
             "id"
           ],
           "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -6232,7 +6240,30 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "processed_operation_business_key_uq": {
+          "name": "processed_operation_business_key_uq",
+          "columns": [
+            {
+              "expression": "operation_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "business_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"processed_operation\".\"outcome\" <> 'permanently_rejected'",
+          "concurrently": false
+        }
+      },
       "foreignKeys": {
         "processed_operation_person_id_person_id_fk": {
           "name": "processed_operation_person_id_person_id_fk",
@@ -6249,16 +6280,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "processed_operation_business_key_uq": {
-          "name": "processed_operation_business_key_uq",
-          "columns": [
-            "operation_type",
-            "business_key"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
         "processed_operation_outcome_check": {

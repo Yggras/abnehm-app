@@ -33,7 +33,7 @@ export function createReadContext(db: SqliteDatabase): ReadContext {
 export function createTransactionContext(db: SqliteDatabase, afterCommit: (callback: () => void) => void): TransactionContext {
   const context = {
     afterCommit(callback: () => void) {
-      requireOpen(context);
+      sqliteOf(context);
       afterCommit(callback);
     },
   } as TransactionContext;
@@ -47,8 +47,11 @@ export function endContext(context: ReadContext): void {
   if (state) state.open = false;
 }
 
-/** Drizzle-Zugang eines offenen Kontexts; nur für Repositories (über `sqliteOf`). */
-export function requireOpen(context: ReadContext): SqliteDatabase {
+/**
+ * Drizzle-Datenbank der laufenden Transaktion; schlägt fehl, sobald die Transaktion beendet ist.
+ * Nur für fachliche Repositories, die es über `./sqlite` beziehen.
+ */
+export function sqliteOf(context: ReadContext): SqliteDatabase {
   const state = states.get(context);
   if (!state) throw new TypeError('Unbekannter Transaktionskontext');
   if (!state.open) throw new Error('Transaktionskontext ist beendet');

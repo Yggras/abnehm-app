@@ -337,6 +337,9 @@ describe('CHECK-Constraints', () => {
     expectViolation(/nutrition_entry_capture_method_check/, (s) =>
       s.insert(schema.nutritionEntry).values(nutritionEntry({ id: uuid(61), captureMethod: 'raten' })).run(),
     );
+    expectViolation(/nutrition_entry_macros_check/, (s) =>
+      s.insert(schema.nutritionEntry).values(nutritionEntry({ id: uuid(61), snapshotCarbsMg: 90_000 })).run(),
+    );
   });
 
   it('Benachrichtigungseinstellung: Uhrzeiten HH:MM, Abend nach Mittag', () => {

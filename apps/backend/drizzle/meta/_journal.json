@@ -5,22 +5,29 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1792322599885,
+      "when": 1792323466243,
       "tag": "0000_v1_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1792322600557,
+      "when": 1792323466897,
       "tag": "0001_immutable_entities",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1792322601222,
+      "when": 1792323467528,
       "tag": "0002_sync_clock_start",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792323468184,
+      "tag": "0003_integrity_triggers",
       "breakpoints": true
     }
   ]

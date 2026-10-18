@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "64072753-6225-409e-b17a-a021c0d2b266",
+  "id": "9795d0ae-1102-4f82-a325-2975095fa86e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "coupling": {
@@ -2261,6 +2261,10 @@
         "nutrition_entry_values_check": {
           "name": "nutrition_entry_values_check",
           "value": "\"nutrition_entry\".\"snapshot_reference_amount\" > 0 and \"nutrition_entry\".\"snapshot_milli_kcal\" >= 0 and \"nutrition_entry\".\"snapshot_protein_mg\" >= 0 and \"nutrition_entry\".\"snapshot_carbs_mg\" >= 0 and \"nutrition_entry\".\"snapshot_fat_mg\" >= 0 and \"nutrition_entry\".\"total_milli_kcal\" >= 0 and \"nutrition_entry\".\"total_protein_mg\" >= 0 and \"nutrition_entry\".\"total_carbs_mg\" >= 0 and \"nutrition_entry\".\"total_fat_mg\" >= 0"
+        },
+        "nutrition_entry_macros_check": {
+          "name": "nutrition_entry_macros_check",
+          "value": "\"nutrition_entry\".\"snapshot_base_unit\" <> 'g' or \"nutrition_entry\".\"snapshot_protein_mg\" + \"nutrition_entry\".\"snapshot_carbs_mg\" + \"nutrition_entry\".\"snapshot_fat_mg\" <= \"nutrition_entry\".\"snapshot_reference_amount\""
         }
       }
     },
@@ -2513,6 +2517,10 @@
         "own_food_values_check": {
           "name": "own_food_values_check",
           "value": "\"own_food\".\"reference_amount\" > 0 and \"own_food\".\"milli_kcal\" >= 0 and \"own_food\".\"protein_mg\" >= 0 and \"own_food\".\"carbs_mg\" >= 0 and \"own_food\".\"fat_mg\" >= 0"
+        },
+        "own_food_macros_check": {
+          "name": "own_food_macros_check",
+          "value": "\"own_food\".\"base_unit\" <> 'g' or \"own_food\".\"protein_mg\" + \"own_food\".\"carbs_mg\" + \"own_food\".\"fat_mg\" <= \"own_food\".\"reference_amount\""
         }
       }
     },

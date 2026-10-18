@@ -49,17 +49,18 @@ async function expectViolation(constraint: string, work: Promise<unknown>) {
   expect(cause?.constraint ?? cause?.message).toBe(constraint);
 }
 
-async function coupling(db: Db, id: string, low: string, high: string, status: 'aktiv' | 'archiviert' = 'aktiv') {
-  await db
-    .insert(schema.coupling)
-    .values({ id, personLowId: low, personHighId: high, status, startedAt: at, endedAt: status === 'archiviert' ? at : null, ...stamps });
-}
-
-async function member(db: Db, id: string, couplingId: string, personId: string) {
-  const [row] = await db.select({ status: schema.coupling.status }).from(schema.coupling).where(eq(schema.coupling.id, couplingId));
-  return db
-    .insert(schema.couplingMember)
-    .values({ id, couplingId, couplingStatus: row!.status, personId, displayName: 'Anna', ...stamps });
+/** Kopplung samt ihren beiden Mitgliedern in einer Transaktion, wie bei der Annahme einer Einladung. */
+function coupling(db: Db, id: string, low: string, high: string, status: 'aktiv' | 'archiviert' = 'aktiv') {
+  return db.transaction(async (tx) => {
+    await tx
+      .insert(schema.coupling)
+      .values({ id, personLowId: low, personHighId: high, status, startedAt: at, endedAt: status === 'archiviert' ? at : null, ...stamps });
+    for (const personId of [low, high]) {
+      await tx
+        .insert(schema.couplingMember)
+        .values({ id: `${id.slice(0, 24)}${personId.slice(-4)}${id.slice(-8)}`, couplingId: id, couplingStatus: status, personId, displayName: 'Anna', ...stamps });
+    }
+  });
 }
 
 async function dailyGoalWithCompletion(db: Db) {
@@ -141,15 +142,55 @@ describe('natürliche Unique-Keys', () => {
   it('höchstens eine aktive Kopplung je Person, auch bei paralleler Annahme; archivieren gibt frei', async () => {
     const db = await migratedDatabase();
     await coupling(db, uuid(10), ME, PARTNER);
-    await coupling(db, uuid(11), ME, OTHER);
-    await member(db, uuid(20), uuid(10), ME);
-    await expectViolation('coupling_member_active_person_uq', member(db, uuid(21), uuid(11), ME));
+    await expectViolation('coupling_member_active_person_uq', coupling(db, uuid(11), ME, OTHER));
 
     await db.update(schema.coupling).set({ status: 'archiviert', endedAt: at }).where(eq(schema.coupling.id, uuid(10)));
     expect(await db.select({ status: schema.couplingMember.couplingStatus }).from(schema.couplingMember)).toEqual([
       { status: 'archiviert' },
+      { status: 'archiviert' },
     ]);
-    await member(db, uuid(21), uuid(11), ME);
+    await coupling(db, uuid(11), ME, OTHER);
+  });
+
+  it('eine Kopplung hat genau die beiden Personen ihres Paars als Mitglieder', async () => {
+    const db = await migratedDatabase();
+    const couplingRow = { id: uuid(10), personLowId: ME, personHighId: PARTNER, status: 'aktiv', startedAt: at, ...stamps };
+    const memberRow = (n: number, personId: string) => ({
+      id: uuid(n),
+      couplingId: uuid(10),
+      couplingStatus: 'aktiv',
+      personId,
+      displayName: 'Anna',
+      ...stamps,
+    });
+
+    // Ohne Mitglieder, mit nur einem oder mit einer fremden Person scheitert der Commit.
+    await expectViolation('coupling_members_check', db.insert(schema.coupling).values(couplingRow));
+    for (const members of [[memberRow(20, ME)], [memberRow(20, ME), memberRow(21, OTHER)]]) {
+      await expectViolation(
+        'coupling_members_check',
+        db.transaction(async (tx) => {
+          await tx.insert(schema.coupling).values(couplingRow);
+          await tx.insert(schema.couplingMember).values(members);
+        }),
+      );
+    }
+    await coupling(db, uuid(10), ME, PARTNER);
+    await expectViolation('coupling_members_check', db.delete(schema.couplingMember).where(eq(schema.couplingMember.personId, ME)));
+  });
+
+  it('Konto einer Person ist unveränderlich', async () => {
+    const db = await migratedDatabase();
+    const error = await db
+      .update(schema.person)
+      .set({ accountId: 'anderes_konto' })
+      .where(eq(schema.person.id, ME))
+      .then(
+        () => undefined,
+        (failure: { cause?: { code?: string } }) => failure.cause,
+      );
+    expect(error?.code).toBe('23001');
+    await db.update(schema.person).set({ displayName: 'Neu' }).where(eq(schema.person.id, ME));
   });
 
   it('Tagesziel je Person, Tag und Platz sowie je Baustein', async () => {
@@ -270,6 +311,41 @@ describe('CHECK-Constraints', () => {
     };
     await expectViolation('notification_intent_id_check', db.insert(schema.notificationIntent).values({ ...intent, intentId: 'falsch' }));
     await db.insert(schema.notificationIntent).values({ ...intent, intentId: `${uuid(60)}:${ME}:levelaufstieg` });
+
+    // Nur der Zustellstatus ändert sich, der Inhalt nie.
+    await db.update(schema.notificationIntent).set({ status: 'zugestellt', statusChangedAt: at });
+    const error = await db
+      .update(schema.notificationIntent)
+      .set({ payload: { level: 3 } })
+      .then(
+        () => undefined,
+        (failure: { cause?: { code?: string } }) => failure.cause,
+      );
+    expect(error?.code).toBe('23001');
+  });
+
+  it('ein manueller Sporteintrag wird nur durch einen Import derselben Person ersetzt', async () => {
+    const db = await migratedDatabase();
+    const workout = (n: number, values: Partial<typeof schema.sportEntry.$inferInsert>) => ({
+      id: uuid(n),
+      personId: ME,
+      activityType: 'laufen',
+      startedAt: at,
+      durationMinutes: 30,
+      origin: 'manuell',
+      ...day,
+      ...stamps,
+      ...values,
+    });
+    await db.insert(schema.sportEntry).values([
+      workout(40, {}),
+      workout(41, { origin: 'apple_health', externalKey: 'hk-1' }),
+      workout(42, { personId: PARTNER, origin: 'apple_health', externalKey: 'hk-2' }),
+    ]);
+
+    await expectViolation('sport_entry_replaced_by_import_check', db.insert(schema.sportEntry).values(workout(43, { replacedByEntryId: uuid(40) })));
+    await expectViolation('sport_entry_replaced_by_fk', db.insert(schema.sportEntry).values(workout(43, { replacedByEntryId: uuid(42) })));
+    await db.update(schema.sportEntry).set({ replacedByEntryId: uuid(41) }).where(eq(schema.sportEntry.id, uuid(40)));
   });
 });
 

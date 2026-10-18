@@ -57,6 +57,8 @@ export const ownFood = sqliteTable(
       'own_food_values_check',
       sql`${t.referenceAmount} > 0 and ${t.milliKcal} >= 0 and ${t.proteinMg} >= 0 and ${t.carbsMg} >= 0 and ${t.fatMg} >= 0`,
     ),
+    // Makros zusammen höchstens Bezugsmenge (Spezifikation 2, Abschnitt 2); beide in mg nur bei Basiseinheit g.
+    check('own_food_macros_check', sql`${t.baseUnit} <> 'g' or ${t.proteinMg} + ${t.carbsMg} + ${t.fatMg} <= ${t.referenceAmount}`),
   ],
 );
 
@@ -191,6 +193,10 @@ export const nutritionEntry = sqliteTable(
     check(
       'nutrition_entry_values_check',
       sql`${t.snapshotReferenceAmount} > 0 and ${t.snapshotMilliKcal} >= 0 and ${t.snapshotProteinMg} >= 0 and ${t.snapshotCarbsMg} >= 0 and ${t.snapshotFatMg} >= 0 and ${t.totalMilliKcal} >= 0 and ${t.totalProteinMg} >= 0 and ${t.totalCarbsMg} >= 0 and ${t.totalFatMg} >= 0`,
+    ),
+    check(
+      'nutrition_entry_macros_check',
+      sql`${t.snapshotBaseUnit} <> 'g' or ${t.snapshotProteinMg} + ${t.snapshotCarbsMg} + ${t.snapshotFatMg} <= ${t.snapshotReferenceAmount}`,
     ),
   ],
 );

@@ -18,8 +18,9 @@ import type * as schema from './schema';
 export async function migrateLocalDatabase(db: SqliteDatabase): Promise<void> {
   db.run(sql`PRAGMA foreign_keys = OFF`);
   try {
-    // Der Migrator von Drizzle für expo-sqlite nutzt nur Dialekt und Sitzung der Datenbank; beide sind
-    // bei better-sqlite3 (Tests) dieselben synchronen SQLite-Implementierungen.
+    // Der Migrator von Drizzle für expo-sqlite ruft nur `db.dialect.migrate(…, db.session)` auf
+    // (https://unpkg.com/drizzle-orm@0.45.4/expo-sqlite/migrator.js). Bei better-sqlite3 (Tests) sind
+    // das derselbe synchrone SQLite-Dialekt und eine gleichwertige synchrone Sitzung.
     await migrate(db as unknown as ExpoSQLiteDatabase<typeof schema>, bundledMigrations);
     const violations = db.all(sql`PRAGMA foreign_key_check`);
     if (violations.length > 0) throw new Error(`Migration hinterlässt ${violations.length} Fremdschlüsselverletzungen`);

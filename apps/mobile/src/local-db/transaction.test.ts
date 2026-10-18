@@ -185,4 +185,19 @@ describe('read und observe', () => {
     expect(seen).toEqual([0, 1]);
     expect(errors).toEqual([failure, failure]);
   });
+
+  it('meldet Fehler eines Beobachters an `onError`; der Commit bleibt, andere Beobachter laufen weiter', () => {
+    const failure = new Error('Beobachter kaputt');
+    const seen: number[] = [];
+    db.observe(waterCount, (count) => {
+      if (count > 0) throw failure;
+    });
+    db.observe(waterCount, (count) => seen.push(count));
+
+    expect(() => db.transaction((tx) => addWater(tx, 1))).not.toThrow();
+
+    expect(db.read(waterCount)).toBe(1);
+    expect(seen).toEqual([0, 1]);
+    expect(errors).toEqual([failure]);
+  });
 });

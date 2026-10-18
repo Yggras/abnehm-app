@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { bigint, check, pgTable, smallint, unique } from 'drizzle-orm/pg-core';
+import { bigint, check, pgTable, smallint, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { coupling, person } from './accounts.ts';
 import { id, instant, json, oneOf, ref, text } from './columns.ts';
@@ -56,7 +56,10 @@ export const processedOperation = pgTable(
     createdAt: instant('created_at').notNull(),
   },
   (t) => [
-    unique('processed_operation_business_key_uq').on(t.operationType, t.businessKey),
+    // Nur erfolgreiche Ergebnisse belegen den fachlichen Schlüssel; eine Ablehnung sperrt ihn nicht.
+    uniqueIndex('processed_operation_business_key_uq')
+      .on(t.operationType, t.businessKey)
+      .where(sql`${t.outcome} <> 'permanently_rejected'`),
     check('processed_operation_outcome_check', oneOf(t.outcome, ['applied', 'already_applied', 'permanently_rejected'])),
   ],
 );

@@ -73,7 +73,12 @@ export function openLocalDatabase(
       return;
     }
     // Ein Beobachter, der sich beim Lesen abgemeldet hat oder dessen Datenbank geschlossen wurde, bekommt nichts mehr.
-    if (open && observers.has(observer)) observer.listener(value);
+    if (!open || !observers.has(observer)) return;
+    try {
+      observer.listener(value);
+    } catch (error) {
+      onError(error);
+    }
   }
 
   const database: LocalDatabase = {
@@ -105,7 +110,8 @@ export function openLocalDatabase(
           onError(error);
         }
       }
-      for (const observer of [...observers]) notify(observer);
+      // Eine Rückmeldung kann das Konto gesperrt oder gewechselt haben; dann gibt es nichts mehr zu melden.
+      if (open) for (const observer of [...observers]) notify(observer);
       return result;
     },
     read,

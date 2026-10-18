@@ -327,7 +327,8 @@ CREATE TABLE "nutrition_entry" (
 	CONSTRAINT "nutrition_entry_ref_check" CHECK (("nutrition_entry"."food_ref_type" is null) = ("nutrition_entry"."food_ref_key" is null) and ("nutrition_entry"."food_ref_type" is null) = ("nutrition_entry"."snapshot_source" = 'ki') and ("nutrition_entry"."food_ref_type" is null or "nutrition_entry"."food_ref_type" = "nutrition_entry"."snapshot_source")),
 	CONSTRAINT "nutrition_entry_ai_capture_check" CHECK ("nutrition_entry"."snapshot_source" <> 'ki' or "nutrition_entry"."capture_method" = 'foto'),
 	CONSTRAINT "nutrition_entry_amount_check" CHECK ("nutrition_entry"."base_amount" > 0 and "nutrition_entry"."base_amount" <= (case "nutrition_entry"."snapshot_base_unit" when 'g' then 5000000 else 5000 end) and "nutrition_entry"."display_amount_milli" > 0),
-	CONSTRAINT "nutrition_entry_values_check" CHECK ("nutrition_entry"."snapshot_reference_amount" > 0 and "nutrition_entry"."snapshot_milli_kcal" >= 0 and "nutrition_entry"."snapshot_protein_mg" >= 0 and "nutrition_entry"."snapshot_carbs_mg" >= 0 and "nutrition_entry"."snapshot_fat_mg" >= 0 and "nutrition_entry"."total_milli_kcal" >= 0 and "nutrition_entry"."total_protein_mg" >= 0 and "nutrition_entry"."total_carbs_mg" >= 0 and "nutrition_entry"."total_fat_mg" >= 0)
+	CONSTRAINT "nutrition_entry_values_check" CHECK ("nutrition_entry"."snapshot_reference_amount" > 0 and "nutrition_entry"."snapshot_milli_kcal" >= 0 and "nutrition_entry"."snapshot_protein_mg" >= 0 and "nutrition_entry"."snapshot_carbs_mg" >= 0 and "nutrition_entry"."snapshot_fat_mg" >= 0 and "nutrition_entry"."total_milli_kcal" >= 0 and "nutrition_entry"."total_protein_mg" >= 0 and "nutrition_entry"."total_carbs_mg" >= 0 and "nutrition_entry"."total_fat_mg" >= 0),
+	CONSTRAINT "nutrition_entry_macros_check" CHECK ("nutrition_entry"."snapshot_base_unit" <> 'g' or "nutrition_entry"."snapshot_protein_mg" + "nutrition_entry"."snapshot_carbs_mg" + "nutrition_entry"."snapshot_fat_mg" <= "nutrition_entry"."snapshot_reference_amount")
 );
 --> statement-breakpoint
 CREATE TABLE "own_food" (
@@ -350,7 +351,8 @@ CREATE TABLE "own_food" (
 	CONSTRAINT "own_food_base_unit_check" CHECK ("own_food"."base_unit" in ('g', 'ml')),
 	CONSTRAINT "own_food_origin_type_check" CHECK ("own_food"."origin_type" in ('bls', 'off')),
 	CONSTRAINT "own_food_origin_check" CHECK (("own_food"."origin_type" is null) = ("own_food"."origin_key" is null)),
-	CONSTRAINT "own_food_values_check" CHECK ("own_food"."reference_amount" > 0 and "own_food"."milli_kcal" >= 0 and "own_food"."protein_mg" >= 0 and "own_food"."carbs_mg" >= 0 and "own_food"."fat_mg" >= 0)
+	CONSTRAINT "own_food_values_check" CHECK ("own_food"."reference_amount" > 0 and "own_food"."milli_kcal" >= 0 and "own_food"."protein_mg" >= 0 and "own_food"."carbs_mg" >= 0 and "own_food"."fat_mg" >= 0),
+	CONSTRAINT "own_food_macros_check" CHECK ("own_food"."base_unit" <> 'g' or "own_food"."protein_mg" + "own_food"."carbs_mg" + "own_food"."fat_mg" <= "own_food"."reference_amount")
 );
 --> statement-breakpoint
 CREATE TABLE "photo_draft" (
@@ -855,7 +857,6 @@ CREATE TABLE "processed_operation" (
 	"outcome" text NOT NULL,
 	"result" jsonb NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
-	CONSTRAINT "processed_operation_business_key_uq" UNIQUE("operation_type","business_key"),
 	CONSTRAINT "processed_operation_outcome_check" CHECK ("processed_operation"."outcome" in ('applied', 'already_applied', 'permanently_rejected'))
 );
 --> statement-breakpoint
@@ -952,8 +953,8 @@ ALTER TABLE "partner_summary" ADD CONSTRAINT "partner_summary_coupling_id_coupli
 ALTER TABLE "partner_summary" ADD CONSTRAINT "partner_summary_owner_person_id_person_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."person"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "partner_summary" ADD CONSTRAINT "partner_summary_recipient_person_id_person_id_fk" FOREIGN KEY ("recipient_person_id") REFERENCES "public"."person"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projection_invalidation" ADD CONSTRAINT "projection_invalidation_owner_person_id_person_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."person"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "revocation_notice" ADD CONSTRAINT "revocation_notice_recipient_person_id_person_id_fk" FOREIGN KEY ("recipient_person_id") REFERENCES "public"."person"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "revocation_notice" ADD CONSTRAINT "revocation_notice_coupling_id_coupling_id_fk" FOREIGN KEY ("coupling_id") REFERENCES "public"."coupling"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "revocation_notice" ADD CONSTRAINT "revocation_notice_recipient_person_id_person_id_fk" FOREIGN KEY ("recipient_person_id") REFERENCES "public"."person"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "revocation_notice" ADD CONSTRAINT "revocation_notice_coupling_id_coupling_id_fk" FOREIGN KEY ("coupling_id") REFERENCES "public"."coupling"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "change_log" ADD CONSTRAINT "change_log_owner_person_id_person_id_fk" FOREIGN KEY ("owner_person_id") REFERENCES "public"."person"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "change_log" ADD CONSTRAINT "change_log_coupling_id_coupling_id_fk" FOREIGN KEY ("coupling_id") REFERENCES "public"."coupling"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "change_log" ADD CONSTRAINT "change_log_recipient_person_id_person_id_fk" FOREIGN KEY ("recipient_person_id") REFERENCES "public"."person"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -967,4 +968,5 @@ CREATE UNIQUE INDEX "challenge_open_uq" ON "challenge" USING btree ("coupling_id
 CREATE UNIQUE INDEX "community_project_active_uq" ON "community_project" USING btree ("island_id") WHERE "community_project"."status" = 'aktiv';--> statement-breakpoint
 CREATE UNIQUE INDEX "island_object_field_uq" ON "island_object" USING btree ("field_id") WHERE "island_object"."field_id" is not null and "island_object"."deleted_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "partner_daily_goal_status_live_uq" ON "partner_daily_goal_status" USING btree ("coupling_id","owner_person_id","recipient_person_id","local_date") WHERE "partner_daily_goal_status"."deleted_at" is null;--> statement-breakpoint
-CREATE UNIQUE INDEX "partner_summary_live_uq" ON "partner_summary" USING btree ("coupling_id","owner_person_id","recipient_person_id","area","period_from") WHERE "partner_summary"."deleted_at" is null;
+CREATE UNIQUE INDEX "partner_summary_live_uq" ON "partner_summary" USING btree ("coupling_id","owner_person_id","recipient_person_id","area","period_from") WHERE "partner_summary"."deleted_at" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "processed_operation_business_key_uq" ON "processed_operation" USING btree ("operation_type","business_key") WHERE "processed_operation"."outcome" <> 'permanently_rejected';

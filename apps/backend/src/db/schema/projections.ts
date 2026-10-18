@@ -105,10 +105,10 @@ export const revocationNotice = pgTable(
     id: id(),
     recipientPersonId: ref('recipient_person_id')
       .notNull()
-      .references(() => person.id),
+      .references(() => person.id, { onDelete: 'restrict' }),
     couplingId: ref('coupling_id')
       .notNull()
-      .references(() => coupling.id),
+      .references(() => coupling.id, { onDelete: 'restrict' }),
     targetType: text('target_type').notNull(),
     projectionId: ref('projection_id'),
     reason: text('reason').notNull(),

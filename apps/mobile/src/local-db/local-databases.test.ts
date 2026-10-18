@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext, type TransactionContext } from '.';
-import { createLocalDatabases, databaseFileName } from './local-databases';
+import { createLocalDatabases } from './local-databases';
 import * as schema from './schema';
 import { sqliteOf } from './sqlite';
 import { createBetterSqliteFiles } from './testing/better-sqlite';
@@ -94,7 +94,7 @@ describe('kontogetrennte lokale Datenbanken', () => {
     expect(() => b.read(waterMl)).toThrow(LocalDatabaseClosedError);
     expect(seenB).toHaveLength(2);
 
-    expect(files.files()).toEqual(['konto-konto_a.db', 'konto-konto_b.db']);
+    expect(files.openedFileNames()).toEqual(['konto-konto_a.db', 'konto-konto_b.db']);
     expect(errors).toEqual([]);
   });
 
@@ -132,10 +132,36 @@ describe('kontogetrennte lokale Datenbanken', () => {
     expect(databases.current()).toBeNull();
   });
 
-  it('lässt keine Pfadzeichen in den Dateinamen', () => {
-    expect(databaseFileName('abc_DEF-123')).toBe('konto-abc_DEF-123.db');
+  it('wartet bei zwei gleichzeitigen Öffnungen desselben Kontos auf dieselbe Datenbank', async () => {
+    const { databases } = context;
+    const [first, second] = await Promise.all([databases.open('konto_a'), databases.open('konto_a')]);
+
+    expect(second).toBe(first);
+    expect(databases.current()).toBe(first);
+  });
+
+  it('beendet nach einer Sperre in einer Nach-Commit-Rückmeldung die Beobachtungen ohne Fehlermeldung', async () => {
+    const { databases, errors } = context;
+    const a = await databases.open('konto_a');
+    const seen: unknown[] = [];
+    a.observe(waterMl, (value) => seen.push(value));
+
+    a.transaction((tx) => {
+      addPerson(tx, PERSON_A, 'konto_a');
+      addWater(tx, '10000000-0000-4000-8000-000000000001', PERSON_A, 250);
+      tx.afterCommit(() => databases.lock());
+    });
+
+    expect(seen).toEqual([[]]);
+    expect(errors).toEqual([]);
+  });
+
+  it('lässt keine Pfadzeichen in den Dateinamen', async () => {
+    const { databases, files } = context;
+    await databases.open('abc_DEF-123');
     for (const accountId of ['', '../konto', 'a/b', 'a b', 'x'.repeat(129)]) {
-      expect(() => databaseFileName(accountId)).toThrow(TypeError);
+      await expect(databases.open(accountId)).rejects.toThrow(TypeError);
     }
+    expect(files.openedFileNames()).toEqual(['konto-abc_DEF-123.db']);
   });
 });
