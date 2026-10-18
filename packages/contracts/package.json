@@ -5,7 +5,22 @@
   "type": "module",
   "exports": {
     "./base": "./src/base.ts",
-    "./status": "./src/status.ts"
+    "./errors": "./src/errors.ts",
+    "./routes": "./src/routes.ts",
+    "./contribution": "./src/contribution.ts",
+    "./person": "./src/person.ts",
+    "./daily-goals": "./src/daily-goals.ts",
+    "./energy": "./src/energy.ts",
+    "./partner": "./src/partner.ts",
+    "./island": "./src/island.ts",
+    "./wir": "./src/wir.ts",
+    "./notifications": "./src/notifications.ts",
+    "./notification-texts": "./src/notification-texts.ts",
+    "./ports": "./src/ports.ts",
+    "./today": "./src/today.ts",
+    "./onboarding": "./src/onboarding.ts",
+    "./status": "./src/status.ts",
+    "./fixtures": "./fixtures/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"

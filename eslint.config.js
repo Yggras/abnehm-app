@@ -39,6 +39,11 @@ const testOnlyClock = {
   message: 'Testuhr und Konformitäts-Testkit sind nur in Testdateien erlaubt.',
 };
 
+const testOnlyFixtures = {
+  group: ['@abnehm/contracts/fixtures'],
+  message: 'Vertrags-Fixtures sind nur in Testdateien erlaubt.',
+};
+
 const backendTypesOnly = {
   group: ['@abnehm/backend', '@abnehm/backend/*'],
   allowTypeImports: true,
@@ -76,7 +81,7 @@ export default defineConfig([
 
   // Importgrenzen
   {
-    files: ['packages/contracts/src/**'],
+    files: ['packages/contracts/src/**', 'packages/contracts/fixtures/**'],
     rules: onlyImports(
       ['zod'],
       'Das Vertragsmodul ist frameworkarm: nur Zod und eigene Dateien, keine React-, Drizzle-, Netzwerk- oder Plattform-APIs.',
@@ -91,7 +96,7 @@ export default defineConfig([
   },
   {
     files: ['apps/backend/src/**'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock, testOnlyFixtures] }] },
   },
   {
     // Bereichscode liest Zeitpunkt, Zone und lokalen Tag nur über die Uhr (`@abnehm/clock`).
@@ -120,7 +125,7 @@ export default defineConfig([
   // Spätere Blöcke ersetzen die Regel der früheren für dieselbe Datei vollständig.
   {
     files: ['apps/mobile/src/**'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures] }] },
   },
   {
     files: ['apps/mobile/src/**'],
@@ -130,7 +135,7 @@ export default defineConfig([
         'error',
         {
           paths: [{ name: 'expo-localization', message: 'Die Gerätezone kommt aus der Uhr (useClock()).' }],
-          patterns: [backendTypesOnly, testOnlyClock],
+          patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures],
         },
       ],
     },

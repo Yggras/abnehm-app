@@ -107,6 +107,23 @@ describe('Testuhr nur in Tests', () => {
   );
 });
 
+describe('Vertrags-Fixtures nur in Tests', () => {
+  const fixturesImport = "import { fixtureCases } from '@abnehm/contracts/fixtures';\nexport const f = fixtureCases;";
+
+  it.each(['apps/backend/src/probe.ts', 'apps/mobile/src/probe.ts'])('sperrt sie in Produktionscode (%s)', async (filePath) => {
+    expect(await violations(fixturesImport, filePath)).toContain('no-restricted-imports');
+  });
+
+  it.each(['apps/mobile/src/probe.test.ts', 'apps/backend/test/probe.test.ts'])('erlaubt sie in Testdateien (%s)', async (filePath) => {
+    expect(await violations(fixturesImport, filePath)).toEqual([]);
+  });
+
+  it('die Fixtures selbst nutzen wie das Vertragsmodul nur Zod und eigene Dateien', async () => {
+    const code = "import { Hono } from 'hono';\nexport const h = Hono;";
+    expect(await violations(code, 'packages/contracts/fixtures/probe.ts')).toContain('no-restricted-imports');
+  });
+});
+
 describe('Backend in der App', () => {
   it('erlaubt nur Typen aus dem Backend', async () => {
     const typeOnly = "import type { AppType } from '@abnehm/backend/rpc';\nexport type A = AppType;";

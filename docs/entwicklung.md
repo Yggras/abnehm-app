@@ -31,6 +31,16 @@ Node führt die TypeScript-Quellen von Backend und Paketen direkt aus ([Type Str
 - **App → Backend:** nur `import type` aus `@abnehm/backend/rpc`. Laufzeitcode des Backends gelangt nie ins App-Bundle.
 - **Testuhr:** `@abnehm/clock/testing` und `@abnehm/clock/conformance` erlaubt Lint nur in Testdateien. Ins Backend-Image kommen sie nicht (`.dockerignore`). Development-Artefakte wie Seeds registrieren Testfähigkeiten später zentral ([#112](https://github.com/Yggras/abnehm-app/issues/112)).
 
+### Vertragsmodul
+
+`@abnehm/contracts` ist die einzige Quelle für Zod-Schemas und Typen, die App und Backend teilen ([#94](https://github.com/Yggras/abnehm-app/issues/94)).
+
+- **Zuschnitt:** je Fachbereich eine Datei und ein Teilpfad, etwa `@abnehm/contracts/daily-goals` oder `@abnehm/contracts/today`. Ein Paket-Barrel und weitergereichte Exporte gibt es nicht. Bereiche importieren sich nicht im Kreis. `packages/contracts/test/struktur.test.ts` prüft das.
+- **Zeit im Vertragsmodul:** Es liest nie die aktuelle Zeit oder Gerätezone. `Date.UTC` dient nur der zonenfreien Kalenderrechnung auf lokalen Tagen, `Intl` nur der Prüfung, ob eine IANA-Zone existiert.
+- **Regeln für Schemas:** Diskriminierte Unions unterscheiden über `type`. Objekte sind strikt (`z.strictObject`), Optionales steht als `optional()` bzw. `nullable()` im Schema. Ungültige Kombinationen scheitern am Schema, etwa ein falsches Vorzeichen einer Energiebuchung. Sichtbaren Text gibt es im Transport nicht, nur `messageKey` und typisierte Werte.
+- **Fixtures:** Jedes exportierte Schema hat unter `packages/contracts/fixtures/` mindestens ein gültiges und ein ungültiges Beispiel, eingetragen im Register `fixtures/index.ts`. Fehlt ein Eintrag, scheitert `fixtures.test.ts`. Dieselben Fixtures laufen automatisch durch drei Vertragstests: im Paket, in der App (`apps/mobile/src/contracts/fixtures.test.ts`, Jest) und im Backend über die Hono-Validierung `jsonBody` (`apps/backend/test/contract-validation.test.ts`). `@abnehm/contracts/fixtures` ist nur in Testdateien erlaubt.
+- **Neue Endpunkte** validieren ihren Body mit `jsonBody(schema)` aus `apps/backend/src/contract-validation.ts`. Ungültige Nutzlasten beantwortet er mit `400` und dem `ContractError` `invalid_payload`.
+
 ### Uhr und lokaler Tag
 
 Bereichscode liest Zeitpunkt, Zeitzone und lokalen Tag ausschließlich über die Schnittstelle `Clock` aus `@abnehm/clock`:

@@ -1,0 +1,142 @@
+import { z } from 'zod';
+
+import { CatalogKey, EntityId, Instant, ServerVersion } from './base.ts';
+
+// Momo, Insel und gemeinsame Aktionen (Spezifikation 0, Abschnitte 5, 6 und 9). Die Spielregeln
+// selbst liefert Spezifikation 4; hier stehen nur die geteilten Formen.
+
+/** Rolle einer Person auf der Insel. */
+export const IslandRole = z.enum(['bauen', 'natur']);
+export type IslandRole = z.infer<typeof IslandRole>;
+
+/** Gemeinsame Stufe von Gemeinschaftsprojekt und Challenge; exakte Partneranteile gibt es nie. */
+export const CommonStage = z.enum(['gestartet', 'gut_unterwegs', 'fast_geschafft', 'geschafft']);
+export type CommonStage = z.infer<typeof CommonStage>;
+
+/** Status einer gemeinsamen Challenge (Spezifikation 0, Abschnitt 8). */
+export const ChallengeStatus = z.enum([
+  'vorgeschlagen',
+  'aktiv',
+  'geschafft',
+  'abgelaufen',
+  'beendet',
+  'abgelehnt',
+  'zurueckgezogen',
+  'verfallen',
+]);
+export type ChallengeStatus = z.infer<typeof ChallengeStatus>;
+
+/** Art eines Insel-Ereignisses (Spezifikation 4, Abschnitt 9). */
+export const IslandEventKind = z.enum(['besuch', 'momos_wunsch', 'inselwetter', 'entdeckung']);
+export type IslandEventKind = z.infer<typeof IslandEventKind>;
+
+const IslandMemberProgress = z
+  .strictObject({
+    personId: EntityId,
+    /** Anteil der eigenen Levelhälfte, abgerundet; bei voller Hälfte 100. */
+    halfPercent: z.int().min(0).max(100),
+    halfFull: z.boolean(),
+  })
+  .refine((member) => member.halfFull === (member.halfPercent === 100), {
+    message: '`halfFull` gilt genau bei 100 %',
+    path: ['halfFull'],
+  });
+
+/** Aus den Buchungen beider Personen jederzeit neu berechenbarer Fortschritt einer Insel; ohne Energiemengen. */
+export const IslandProgress = z
+  .strictObject({
+    islandId: EntityId,
+    couplingId: EntityId,
+    level: z.int().positive(),
+    /** Energiebedarf je Levelhälfte im aktuellen Level. */
+    levelNeed: z.int().positive(),
+    members: z.tuple([IslandMemberProgress, IslandMemberProgress]),
+    activeProject: z.strictObject({
+      projectId: EntityId,
+      templateKey: CatalogKey,
+      sequenceNumber: z.int().positive(),
+      stage: CommonStage,
+    }),
+    dataAsOf: Instant,
+    serverVersion: ServerVersion,
+  })
+  .refine(({ members: [a, b] }) => a.personId !== b.personId, {
+    message: 'Zwei verschiedene Mitglieder',
+    path: ['members'],
+  });
+export type IslandProgress = z.infer<typeof IslandProgress>;
+
+const sharedActionBase = {
+  id: EntityId,
+  couplingId: EntityId,
+  requesterPersonId: EntityId,
+  status: z.enum(['offen', 'angenommen', 'abgelehnt', 'zurueckgezogen']),
+  createdAt: Instant,
+  /** Gesetzt genau dann, wenn die Aktion nicht mehr offen ist. */
+  decidedAt: Instant.nullable(),
+};
+
+/**
+ * Gemeinsame Aktion einer Person (Art im Feld `type`). Rollenwahl, Rollentausch und Deko schenken
+ * entscheidet der Partner; Entkoppeln nimmt der Server einseitig an.
+ */
+export const SharedAction = z
+  .discriminatedUnion('type', [
+    z.strictObject({
+      type: z.literal('rollenwahl'),
+      ...sharedActionBase,
+      payload: z.strictObject({ proposerRole: IslandRole }),
+    }),
+    z.strictObject({ type: z.literal('rollentausch'), ...sharedActionBase, payload: z.strictObject({}) }),
+    z.strictObject({
+      type: z.literal('deko_schenken'),
+      ...sharedActionBase,
+      payload: z.strictObject({ islandObjectId: EntityId, decoKey: CatalogKey }),
+    }),
+    z.strictObject({ type: z.literal('entkoppeln'), ...sharedActionBase, payload: z.strictObject({}) }),
+  ])
+  .refine((action) => (action.status === 'offen') === (action.decidedAt === null), {
+    message: '`decidedAt` ist genau bei entschiedenen Aktionen gesetzt',
+    path: ['decidedAt'],
+  });
+export type SharedAction = z.infer<typeof SharedAction>;
+
+/** Entwicklungsform zum Level (Kaulquappe ab Level 1 … Lagunendrache ab Level 43). */
+export const MomoForm = z.enum([
+  'kaulquappe',
+  'huepfer',
+  'krabbler',
+  'aufrechter',
+  'springer',
+  'spirale',
+  'fluegling',
+  'lagunendrache',
+]);
+export type MomoForm = z.infer<typeof MomoForm>;
+
+/** Stimmung; „wartet im Ei“ ist keine Stimmung, sondern die Stufe `laichkugel`. */
+export const MomoMood = z.enum(['zufrieden', 'freut_sich', 'begeistert', 'neugierig', 'doest', 'schlaeft']);
+export type MomoMood = z.infer<typeof MomoMood>;
+
+/**
+ * Wie Momo aussieht. Als Laichkugel hat Momo weder Form noch Stimmung noch Accessoires;
+ * geschlüpft hat es immer eine Form und eine Stimmung und höchstens ein Accessoire je Stelle.
+ */
+export const MomoAppearance = z
+  .strictObject({
+    stage: z.enum(['laichkugel', 'geschluepft']),
+    formKey: MomoForm.nullable(),
+    moodKey: MomoMood.nullable(),
+    accessories: z.strictObject({ kopf: CatalogKey.nullable(), hals: CatalogKey.nullable() }),
+  })
+  .refine(
+    (appearance) =>
+      appearance.stage === 'geschluepft'
+        ? appearance.formKey !== null && appearance.moodKey !== null
+        : appearance.formKey === null &&
+          appearance.moodKey === null &&
+          appearance.accessories.kopf === null &&
+          appearance.accessories.hals === null,
+    { message: 'Form, Stimmung und Accessoires passen nicht zur Stufe' },
+  );
+export type MomoAppearance = z.infer<typeof MomoAppearance>;
