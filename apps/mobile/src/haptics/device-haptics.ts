@@ -8,7 +8,7 @@ import type { HapticKind, Haptics } from './haptics';
 // braucht (https://docs.expo.dev/versions/v58.0.0/sdk/haptics/). Ob sie auf den Zielgeräten dezent
 // genug ist, zeigt der Gerätesmoke; dann wird nur diese Tabelle angepasst. Bewegung reduzieren ändert
 // daran nichts. Ist auf Android „Haptisches Feedback beim Berühren“ aus, schweigt die Haptik-Engine;
-// so beobachtet auf dem Fairphone 6 (#95). Die App respektiert das bewusst (Nutzerentscheidung).
+// so beobachtet auf dem Fairphone 6 (#95). Die App respektiert die Systemeinstellung bewusst.
 const ios: Record<HapticKind, ImpactFeedbackStyle> = {
   tageszielerfuellung: ImpactFeedbackStyle.Light,
   tagesbonus: ImpactFeedbackStyle.Light,
