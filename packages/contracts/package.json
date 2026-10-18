@@ -9,6 +9,7 @@
     "./routes": "./src/routes.ts",
     "./contribution": "./src/contribution.ts",
     "./person": "./src/person.ts",
+    "./auth": "./src/auth.ts",
     "./daily-goals": "./src/daily-goals.ts",
     "./energy": "./src/energy.ts",
     "./partner": "./src/partner.ts",

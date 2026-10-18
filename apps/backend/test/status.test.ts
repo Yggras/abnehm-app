@@ -3,7 +3,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { StatusResponse } from '@abnehm/contracts/status';
 
-import { createApp } from '../src/app.ts';
+import { createTestApp } from './support/app.ts';
 import { openDatabase } from '../src/database.ts';
 import { createTestDatabase, testServerSettings } from './support/postgres.ts';
 
@@ -11,7 +11,7 @@ describe('GET /v1/status', () => {
   it('antwortet nach einer Abfrage an Postgres mit der Datenbankzeit', async () => {
     const database = await createTestDatabase();
     onTestFinished(() => database.drop());
-    const client = testClient(createApp({ database: database.handle }));
+    const client = testClient(createTestApp(database.handle).app);
 
     const before = Date.now();
     const response = await client.v1.status.$get();
@@ -29,7 +29,7 @@ describe('GET /v1/status', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const handle = openDatabase({ ...testServerSettings(), name: 'gibt_es_nicht' });
     onTestFinished(() => handle.close());
-    const client = testClient(createApp({ database: handle }));
+    const client = testClient(createTestApp(handle).app);
 
     const response = await client.v1.status.$get();
 
@@ -41,7 +41,7 @@ describe('GET /v1/status', () => {
     const database = await createTestDatabase();
     onTestFinished(() => database.drop());
 
-    const response = await createApp({ database: database.handle }).request('/status');
+    const response = await createTestApp(database.handle).app.request('/status');
 
     expect(response.status).toBe(404);
   });

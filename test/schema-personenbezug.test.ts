@@ -19,6 +19,8 @@ const withoutPersonReference: Record<string, string> = {
   outbox: 'Gerätedaten in der Datenbankdatei genau eines Kontos',
   sync_cursor: 'Gerätedaten in der Datenbankdatei genau eines Kontos',
   device_state: 'Gerätedaten in der Datenbankdatei genau eines Kontos',
+  user: 'das Konto selbst; seine `id` ist die Konto-ID',
+  verification: 'Bestätigungstokens von Better Auth, ohne E-Mail-Verifikation in V1 ungenutzt',
 };
 
 /** Better-Auth-Tabellen (Auth-Modul); nur sie dürfen eine E-Mail führen. */

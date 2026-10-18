@@ -174,6 +174,7 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     ["import { useFonts } from 'expo-font';\nexport const f = useFonts;", 'apps/mobile/src/design/fonts.ts'],
     ["import { openDatabaseSync } from 'expo-sqlite';\nexport const o = openDatabaseSync;", 'apps/mobile/src/local-db/expo-connection.ts'],
     ["import Database from 'better-sqlite3';\nexport const d = Database;", 'apps/mobile/src/local-db/testing/probe.ts'],
+    ["import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;", 'apps/mobile/src/auth/secure-session-store.ts'],
   ])('erlaubt %s in %s', async (code, filePath) => {
     expect(await violations(code, filePath)).toEqual([]);
   });
@@ -188,6 +189,7 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     "import { openDatabaseSync } from 'expo-sqlite';\nexport const o = openDatabaseSync;",
     "import { useLiveQuery } from 'drizzle-orm/expo-sqlite';\nexport const l = useLiveQuery;",
     "import Database from 'better-sqlite3';\nexport const d = Database;",
+    "import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;",
   ])('verbietet im Bereichscode: %s', async (code) => {
     expect(await violations(code, 'apps/mobile/src/start/probe.tsx')).toContain('abnehm/bibliotheksgrenzen');
   });

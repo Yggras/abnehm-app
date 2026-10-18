@@ -88,8 +88,12 @@ export const pushInstallation = pgTable(
     personId: ref('person_id')
       .notNull()
       .references(() => person.id),
-    /** Better-Auth-Sitzung der letzten Registrierung; der Fremdschlüssel kommt mit dem Auth-Modul. */
-    sessionId: text('session_id').notNull(),
+    /**
+     * Better-Auth-Sitzung der letzten Registrierung. Ohne Fremdschlüssel: Better Auth löscht widerrufene
+     * und abgelaufene Sitzungen, die Installation bleibt dann bis zur nächsten Registrierung ohne
+     * gültige Sitzung und erhält keine Pushes (Spezifikation 0, Abschnitt 9).
+     */
+    sessionId: ref('session_id').notNull(),
     installationKey: text('installation_key').notNull().unique('push_installation_key_uq'),
     expoPushToken: text('expo_push_token').notNull(),
     platform: text('platform').notNull(),

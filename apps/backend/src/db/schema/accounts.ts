@@ -4,18 +4,22 @@ import { check, foreignKey, pgTable, unique, uniqueIndex } from 'drizzle-orm/pg-
 import { AreaKey } from '@abnehm/contracts/base';
 import { IslandRole } from '@abnehm/contracts/island';
 
+import { user } from './auth.ts';
 import { flag, id, instant, json, localDate, mutable, oneOf, ref, small, text, whole } from './columns.ts';
 
 // Konto, Person und Kopplung (Spezifikation 0, Abschnitte 8 und 9; Personenfelder aus
 // Spezifikation 1, Abschnitt 2). Konto und Sitzung liegen in den Better-Auth-Tabellen des
-// Auth-Moduls; außerhalb davon gibt es keine E-Mail-Spalte.
+// Auth-Moduls (`auth.ts`); außerhalb davon gibt es keine E-Mail-Spalte.
 
 export const person = pgTable(
   'person',
   {
     id: id(),
     /** Better-Auth-Konto; servergesetzt, eindeutig und unveränderlich. */
-    accountId: text('account_id').notNull().unique('person_account_uq'),
+    accountId: ref('account_id')
+      .notNull()
+      .unique('person_account_uq')
+      .references(() => user.id),
     displayName: text('display_name').notNull(),
     calculationSex: text('calculation_sex'),
     birthDate: localDate('birth_date'),

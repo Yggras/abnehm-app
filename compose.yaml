@@ -32,8 +32,12 @@ services:
       DATABASE_NAME: abnehm
       DATABASE_USER: abnehm
       DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
+      # Öffentliche Adresse des Backends für Better Auth; lokal der Entwicklungsrechner.
+      AUTH_BASE_URL: "http://localhost:${BACKEND_PORT:-8787}"
     secrets:
       - postgres_password
+      - better_auth_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +70,9 @@ secrets:
   postgres_password:
     # Lokal, von Git ignoriert; `scripts/dev-secrets` legt die Datei an.
     file: ./secrets/postgres_password
+  better_auth_secret:
+    # Lokal wie oben; nur das Backend erhält es.
+    file: ./secrets/better_auth_secret
 
 volumes:
   postgres-data:

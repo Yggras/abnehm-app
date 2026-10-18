@@ -1,4 +1,5 @@
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle, type NodePgDatabase, type NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
+import type { PgDatabase } from 'drizzle-orm/pg-core';
 import pg from 'pg';
 
 import { errorCodeForLog } from './log.ts';
@@ -10,6 +11,9 @@ export type DatabaseSettings = {
   user: string;
   password: string;
 };
+
+/** Datenbank oder laufende Transaktion; Module schreiben damit auch in der Transaktion des Aufrufers. */
+export type DbExecutor = PgDatabase<NodePgQueryResultHKT>;
 
 export type Database = {
   db: NodePgDatabase;

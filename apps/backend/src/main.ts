@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 
-import { createApp } from './app.ts';
+import { createBackend } from './backend.ts';
 import { readConfig } from './config.ts';
 import { openDatabase } from './database.ts';
 import { migrateDatabase } from './db/migrate.ts';
@@ -16,7 +16,9 @@ try {
   await database.close();
   process.exit(1);
 }
-const app = createApp({ database });
+const { app, jobs } = createBackend({ database, authSettings: config.auth });
+// Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts).
+const stopJobs = jobs.start();
 
 // Im Container auf allen Interfaces; welche Adresse nach außen sichtbar ist, legt compose.yaml fest.
 const server = serve({ fetch: app.fetch, port: config.port, hostname: '0.0.0.0' }, (info) => {
@@ -29,7 +31,9 @@ function stop(signal: string) {
   stopping = true;
   console.log(`[backend] ${signal} empfangen, fahre herunter`);
   server.close(() => {
-    void database.close().finally(() => process.exit(0));
+    void stopJobs()
+      .then(() => database.close())
+      .finally(() => process.exit(0));
   });
 }
 

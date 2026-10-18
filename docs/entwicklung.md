@@ -104,6 +104,32 @@ Die App ruft das Backend über `hc<AppType>` auf ([Hono RPC](https://hono.dev/do
 
 `apps/mobile/src/backend/status.ts` prüft beim Typecheck, dass die abgeleitete Antwort genau dem Vertrag aus `@abnehm/contracts/status` entspricht. `test/rpc-typisierung.test.ts` belegt das: Ein umbenanntes oder zusätzliches Feld im Backend lässt die Typprüfung der App scheitern.
 
+Fach-Endpunkte ruft die App mit `createBackendClient({ fetch: auth.fetch })` auf. Das `fetch` des Auth-Moduls hängt die Sitzung an und sperrt bei `401`.
+
+### Konto, Sitzung und Sicherheitslog
+
+Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hinter einem eigenen Auth-Modul ([#97](https://github.com/Yggras/abnehm-app/issues/97), Abschnitt 9 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)). Bereichscode kennt Better Auth nicht, sondern nur das Interface seiner Rolle:
+
+| Rolle | Interface | Ort |
+| --- | --- | --- |
+| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, `revokeCurrentSession`, dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch` | `apps/mobile/src/auth/` |
+| Backend-Endpunkte | `SessionAuthenticator.authenticate(headers)` bzw. die Middleware `requireSession` | `apps/backend/src/auth/` |
+| Betrieb | `AdminPasswordReset`, aufgerufen über das Kommando unten | `apps/backend/src/auth/admin-reset-command.ts` |
+
+- **Endpunkte:** Better Auth liegt unter `/v1/auth`. Freigegeben sind nur `sign-up/email`, `sign-in/email`, `get-session` und `change-password`, alles andere dort antwortet mit `404`. Dazu kommen `POST /v1/session/revoke` (aktuelle Sitzung widerrufen) und `POST /v1/person/bootstrap` (die eine Person des Kontos).
+- **Sitzung:** Die App sendet das Sitzungstoken als `Authorization: Bearer …` ([Bearer-Plugin](https://www.better-auth.com/docs/plugins/bearer)) und hält es nur in SecureStore. Sitzungen liegen in Postgres, ohne Cookie-Cache. Sie laufen nach 30 Tagen ohne Nutzung ab und verlängern sich bei Nutzung höchstens einmal täglich.
+- **Begrenzung:** Fehlversuche bei der Anmeldung sind pro E-Mail (5 in 15 Minuten) und pro IP (20 je Stunde) begrenzt (`login-limiter.ts`). Zusätzlich gilt die eingebaute Begrenzung von Better Auth: 3 Anfragen in 10 Sekunden pro IP und Pfad ([Quelltext v1.7.10](https://github.com/better-auth/better-auth/blob/v1.7.10/packages/better-auth/src/api/rate-limiter/index.ts)). Die IP kommt aus `X-Forwarded-For`. Hinter einem Reverse Proxy gehört dessen Adresse in `AUTH_TRUSTED_PROXIES`; ohne erkennbare Adresse greift nur die Begrenzung pro E-Mail. Lokal ohne Proxy warnt Better Auth bei Aufrufen ohne diesen Header, dass es keine Client-IP erkennt (beobachtet im Containerlauf für #97). Ohne vorgeschalteten Proxy kann ein Client `X-Forwarded-For` selbst setzen; die Einrichtung des Proxys gehört zum [Produktiv-Gate](https://github.com/Yggras/abnehm-app/issues/115).
+- **Passwörter:** 10 bis 128 Zeichen (`passwordPolicy` in `@abnehm/contracts/auth`), dazu eine Blocklist häufiger Passwörter (`apps/backend/src/auth/password-blocklist.txt`, Quelle im Dateikopf).
+- **Admin-Reset:** Es gibt keinen öffentlichen Reset. Auf dem Server setzt dieses Kommando ein zufälliges neues Passwort, gibt es einmal aus und widerruft alle Sitzungen des Kontos:
+
+  ```sh
+  docker compose exec backend npm run admin:reset-password --workspace @abnehm/backend --silent -- anna@example.test
+  ```
+
+- **Sicherheitslog:** Geschrieben wird nur über `createSecurityLog` aus `apps/backend/src/security-log/`. Es nimmt ausschließlich die geschlossene Union `SecurityEvent` mit den Ereignistypen aus [#22](https://github.com/Yggras/abnehm-app/issues/22) an. Ihre Felder sind UUIDs, Katalogwerte, Wahrheitswerte oder IP-Adressen; unbekannte Felder werden abgewiesen. Mit `record(event, tx)` schreibt ein Modul in seiner eigenen Transaktion.
+- **Serverjobs:** Ein Job meldet Namen, Intervall und eine idempotente Funktion bei der Registry an (`apps/backend/src/jobs/job-registry.ts`). Angemeldet wird in `createBackend` (`apps/backend/src/backend.ts`), ohne die Registry zu ändern. Der Backend-Prozess prüft jede Minute, welche Jobs fällig sind; Tests lösen sie mit der Testuhr über `runDue()` aus. Erster Job ist `sicherheitslog_aufraeumen`, der Einträge nach 90 Tagen löscht.
+- **Tests:** `apps/backend/test/auth.test.ts` prüft die Abläufe über HTTP. `apps/backend/test/app-auth.test.ts` prüft das App-Modul `AppAuth` gegen die echte Hono-App. Dieser Test importiert App-Code und hat deshalb eine eigene tsconfig (`tsconfig.app-auth.json`, Bundler-Auflösung wie in der App).
+
 ## Befehle
 
 Alle Befehle laufen im Repo-Root:
@@ -127,7 +153,7 @@ Der CI-Workflow `.github/workflows/ci.yml` führt bei jedem Pull Request Typprü
 
 ## Secrets
 
-- Das Datenbankpasswort liegt in `secrets/postgres_password`. `scripts/dev-secrets` erzeugt es zufällig, und `npm run backend` ruft das Skript selbst auf.
+- Das Datenbankpasswort liegt in `secrets/postgres_password`, das Better-Auth-Secret in `secrets/better_auth_secret` (mindestens 32 Zeichen, nur das Backend erhält es). `scripts/dev-secrets` erzeugt beide zufällig, und `npm run backend` ruft das Skript selbst auf.
 - `secrets/` ist von Git und vom Docker-Build-Kontext ausgeschlossen.
 - Docker Compose bindet die Datei zur Laufzeit als Secret unter `/run/secrets/` ein. Das Backend liest Geheimnisse nur aus Dateien (`*_FILE`), nie aus Umgebungsvariablen, Git oder dem Image ([#22](https://github.com/Yggras/abnehm-app/issues/22)).
 - Die Integrationstests erzeugen für jeden Lauf ein eigenes Zufallspasswort.
