@@ -12,7 +12,14 @@ COPY apps/backend/package.json apps/backend/
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/clock/package.json packages/clock/
-RUN npm ci --workspace @abnehm/backend --omit=dev --ignore-scripts && npm cache clean --force
+# drizzle-orm/better-auth deklarieren optionale Peers für Expo, Jest und Drizzle Kit.
+# Ohne diese Option installiert npm sie trotz --workspace/--omit=dev ins Backend-Image.
+# Alle zur Laufzeit verwendeten Peers (z. B. drizzle-orm) sind direkte Backend-Abhängigkeiten.
+RUN npm ci --workspace @abnehm/backend --omit=dev --ignore-scripts --legacy-peer-deps \
+    && test ! -d node_modules/expo \
+    && test ! -d node_modules/jest \
+    && test ! -d node_modules/drizzle-kit \
+    && npm cache clean --force
 
 COPY packages/contracts/src packages/contracts/src
 COPY packages/clock/src packages/clock/src

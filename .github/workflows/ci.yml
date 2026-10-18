@@ -39,3 +39,14 @@ jobs:
       # Startet über docker compose ein eigenes, flüchtiges Postgres (apps/backend/test/compose.yaml).
       - name: Backend- und Pakettests (Vitest)
         run: npm run test:node
+
+  backend-image:
+    name: Backend-Image ohne App- und Test-Abhängigkeiten
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # Der Dockerfile-Build prüft, dass Expo, Jest und Drizzle Kit nicht installiert sind.
+      - run: docker build --file apps/backend/Dockerfile --tag abnehm-backend-ci .
+      - run: docker run --rm --entrypoint node abnehm-backend-ci --input-type=module -e 'await import("./apps/backend/src/backend.ts")'
