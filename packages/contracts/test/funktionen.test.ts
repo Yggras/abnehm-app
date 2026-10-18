@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { LocalDate, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
+import { routeTargetOrToday } from '../src/routes.ts';
 import { needsResponse, WirContribution } from '../src/wir.ts';
 import { notificationFixtures } from '../fixtures/notifications.ts';
 import { wirFixtures } from '../fixtures/wir.ts';
@@ -93,5 +94,19 @@ describe('contributionState', () => {
     type Declared = ContributionState<{ ml: number }, 'kein_ziel'>;
     const same: [Inferred, Declared] extends [Declared, Inferred] ? true : false = true;
     expect(same).toBe(true);
+  });
+});
+
+describe('routeTargetOrToday', () => {
+  it('übernimmt ein gültiges Ziel', () => {
+    expect(routeTargetOrToday({ type: 'momo', view: 'projekt' })).toEqual({ type: 'momo', view: 'projekt' });
+  });
+
+  it.each([
+    ['unbekannte Route', { type: 'capture.steps' }],
+    ['ungültige Parameter', { type: 'challenge.detail', challengeId: 'abc' }],
+    ['kein Objekt', '/today'],
+  ])('öffnet bei %s today', (_, value) => {
+    expect(routeTargetOrToday(value)).toEqual({ type: 'today' });
   });
 });

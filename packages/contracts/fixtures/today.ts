@@ -106,6 +106,11 @@ export const todayFixtures = {
       },
     },
     invalid: {
+      'Aktion ohne Fokus auf die Anfeuerung': {
+        senderDisplayName: 'Anna',
+        encouragementKey: 'stark_heute',
+        action: action('top_notice.open', { type: 'partner' }),
+      },
       'Freitext': {
         senderDisplayName: 'Anna',
         message: 'Stark heute! 🎉',
@@ -133,8 +138,21 @@ export const todayFixtures = {
         reasonKey: 'momo_wartet_im_ei',
         action: action('momo.invite_partner', { type: 'partner.invite' }),
       },
+      'Rollenwahl offen': {
+        type: 'empty',
+        reasonKey: 'rollenwahl_offen',
+        action: action('momo.open_role_choice', { type: 'momo', view: 'rollenwahl' }),
+      },
     },
-    invalid: { 'unbekannter Leer-Grund': { type: 'empty', reasonKey: 'keine_insel' } },
+    invalid: {
+      'unbekannter Leer-Grund': { type: 'empty', reasonKey: 'keine_insel' },
+      'wartet im Ei ohne Einladen': { type: 'empty', reasonKey: 'momo_wartet_im_ei' },
+      'Rollenwahl offen mit Aktion zur Insel': {
+        type: 'empty',
+        reasonKey: 'rollenwahl_offen',
+        action: action('momo.open', { type: 'momo', view: 'insel' }),
+      },
+    },
   }),
   MomoDailyGoalsReady: fixtures(MomoDailyGoalsReady, {
     valid: { 'drei Plätze': [goalCard(1), goalCard(2), goalCard(3)] },

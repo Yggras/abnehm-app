@@ -26,6 +26,10 @@ export const ChallengeStatus = z.enum([
 ]);
 export type ChallengeStatus = z.infer<typeof ChallengeStatus>;
 
+/** Art eines Insel-Ereignisses (Spezifikation 4, Abschnitt 9). */
+export const IslandEventKind = z.enum(['besuch', 'momos_wunsch', 'inselwetter', 'entdeckung']);
+export type IslandEventKind = z.infer<typeof IslandEventKind>;
+
 const IslandMemberProgress = z
   .strictObject({
     personId: EntityId,

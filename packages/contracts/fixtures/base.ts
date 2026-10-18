@@ -36,7 +36,7 @@ export const baseFixtures = {
   }),
   TimeZone: fixtures(TimeZone, {
     valid: { 'Berlin': timeZone, 'Halbstundenzone': 'Asia/Kolkata' },
-    invalid: { 'Versatz': '+02:00', 'unbekannt': 'Mars/Olympus_Mons' },
+    invalid: { 'Versatz': '+02:00', 'unbekannt': 'Mars/Olympus_Mons', 'falsche Schreibweise': 'europe/berlin' },
   }),
   ServerVersion: fixtures(ServerVersion, {
     valid: { 'erste Version': '1', 'größtes bigint': '9223372036854775807' },

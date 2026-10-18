@@ -1,6 +1,7 @@
 import {
   ChallengeStatus,
   CommonStage,
+  IslandEventKind,
   IslandProgress,
   IslandRole,
   MomoAppearance,
@@ -44,6 +45,10 @@ const hatched = {
 } as const;
 
 export const islandFixtures = {
+  IslandEventKind: fixtures(IslandEventKind, {
+    valid: { 'Besuch': 'besuch', 'Momos Wunsch': 'momos_wunsch' },
+    invalid: { 'Levelaufstieg ist kein Insel-Ereignis': 'levelaufstieg' },
+  }),
   IslandRole: fixtures(IslandRole, { valid: { 'Bauen': 'bauen', 'Natur': 'natur' }, invalid: { 'Deko': 'deko' } }),
   CommonStage: fixtures(CommonStage, {
     valid: { 'gestartet': 'gestartet', 'fast geschafft': 'fast_geschafft' },

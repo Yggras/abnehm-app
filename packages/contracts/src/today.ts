@@ -7,6 +7,7 @@ import { MomoAppearance } from './island.ts';
 import { EncouragementKey, PartnerDailyGoalStage } from './partner.ts';
 import { MaintenanceReason } from './ports.ts';
 import { actionTo, UiActionIntent } from './routes.ts';
+import { bodyWeightG } from './units.ts';
 
 // Ready-Payloads der „Heute“-Steckplätze (Spezifikation 0, Abschnitt 6). Die Shell besitzt
 // Reihenfolge, Layout und Navigation; Beiträge bestehen nur aus Daten und `UiActionIntent`.
@@ -30,7 +31,10 @@ export const TopNoticeReady = z.strictObject({
   senderDisplayName: DisplayName,
   /** Neueste feste Anfeuerungsbotschaft des Tags. */
   encouragementKey: EncouragementKey,
-  action: actionTo('partner'),
+  action: actionTo('partner').refine((action) => action.target.focus === 'received_encouragement', {
+    message: 'Öffnet „Wir“ mit Fokus auf die erhaltene Anfeuerung',
+    path: ['target', 'focus'],
+  }),
 });
 export type TopNoticeReady = z.infer<typeof TopNoticeReady>;
 
@@ -58,7 +62,15 @@ export type MomoCharacterReady = z.infer<typeof MomoCharacterReady>;
 export const MomoCharacterEmptyReason = z.enum(['momo_wartet_im_ei', 'rollenwahl_offen']);
 export type MomoCharacterEmptyReason = z.infer<typeof MomoCharacterEmptyReason>;
 
-export const MomoCharacterState = contributionState(MomoCharacterReady, MomoCharacterEmptyReason);
+/** Ohne Kopplung lädt die Leer-Aktion den Partner ein, vor der Rollenwahl öffnet sie die Rollenwahl. */
+export const MomoCharacterState = contributionState(MomoCharacterReady, MomoCharacterEmptyReason).refine(
+  (state) =>
+    state.type !== 'empty' ||
+    (state.reasonKey === 'momo_wartet_im_ei'
+      ? state.action?.target.type === 'partner.invite'
+      : state.action?.target.type === 'momo' && state.action.target.view === 'rollenwahl'),
+  { message: 'Leer-Grund ohne seine Aktion', path: ['action'] },
+);
 
 /** View-Model eines Tagesziels auf seinem Platz, mit Aktion zum Bereich. */
 const DailyGoalCard = z.strictObject({ slot: DailyGoalSlot, evaluation: DailyGoalEvaluated, action: UiActionIntent });
@@ -146,7 +158,7 @@ export const TrackerWeightReady = z.strictObject({
   key: z.literal('gewicht'),
   /** Trendwert ab drei Tagesgewichten, sonst das letzte Tagesgewicht; `null` ohne Gewichtseintrag. */
   value: z
-    .strictObject({ type: z.enum(['trend', 'tagesgewicht']), weightG: z.int().min(20_000).max(350_000) })
+    .strictObject({ type: z.enum(['trend', 'tagesgewicht']), weightG: bodyWeightG })
     .nullable(),
   status: z.discriminatedUnion('type', [
     z.strictObject({ type: z.literal('wiegetag_offen') }),

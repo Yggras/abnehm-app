@@ -2,13 +2,14 @@ import { z } from 'zod';
 
 import { AreaKey, EntityId, Instant, LocalDate, MessageKey, MessageValues, TimeZone } from './base.ts';
 import { ContractError } from './errors.ts';
+import { mealCategoryCount } from './units.ts';
 
 // Baustein-Auswertung und Tages-Check-in (Spezifikation 0, Abschnitt 3). Mengen sind ganze Zahlen:
 // Kalorien hier in ganzen kcal (Snapshot-Einheit), Wasser in ml, Sport in Minuten.
 
 const count = z.int().nonnegative();
 const positive = z.int().positive();
-const mealCategories = z.int().min(0).max(4);
+const minimumMealCategories = z.int().min(1).max(4);
 
 /** Platz eines Tagesziels auf Momos drei Plätzen. */
 export const DailyGoalSlot = z.union([z.literal(1), z.literal(2), z.literal(3)]);
@@ -25,7 +26,7 @@ const snapshotBase = {
 
 /** Bei der Materialisierung festgeschriebene Schwelle eines Tagesziels, je Baustein im Feld `type`. */
 export const DailyGoalSnapshot = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('ernaehrung_erfasst'), ...snapshotBase, minimumMealCategories: z.int().min(1).max(4) }),
+  z.strictObject({ type: z.literal('ernaehrung_erfasst'), ...snapshotBase, minimumMealCategories }),
   z
     .strictObject({ type: z.literal('im_kalorienbudget'), ...snapshotBase, budgetKcal: positive, lowerBoundKcal: positive })
     .refine((snapshot) => snapshot.lowerBoundKcal <= snapshot.budgetKcal, {
@@ -45,8 +46,8 @@ export type DailyGoalState = z.infer<typeof DailyGoalState>;
 export const DailyGoalProgress = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('ernaehrung_erfasst'),
-    recordedMealCategories: mealCategories,
-    minimumMealCategories: z.int().min(1).max(4),
+    recordedMealCategories: mealCategoryCount,
+    minimumMealCategories,
   }),
   z
     .strictObject({ type: z.literal('im_kalorienbudget'), intakeKcal: count, budgetKcal: positive, lowerBoundKcal: positive })
@@ -154,9 +155,15 @@ export type CheckInMoment = z.infer<typeof CheckInMoment>;
 
 /** Was der Tracker an diesem Tag aufweist (Feld `type` = Tracker); nie Gewichts- oder Kalorienwerte. */
 export const CheckInReason = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('ernaehrung'), recordedMealCategories: mealCategories }),
+  z.strictObject({ type: z.literal('ernaehrung'), recordedMealCategories: mealCategoryCount }),
   z.strictObject({ type: z.literal('wasser'), countedMl: count, targetMl: positive }),
-  z.strictObject({ type: z.literal('sport'), sportDay: z.boolean(), hasCountingEntry: z.boolean() }),
+  z.strictObject({
+    type: z.literal('sport'),
+    sportDay: z.boolean(),
+    hasCountingEntry: z.boolean(),
+    /** Weicher Textschlüssel: Ein Training kann noch im Health-Import fehlen. */
+    messageKey: MessageKey,
+  }),
   z.strictObject({ type: z.literal('gewicht'), weighDay: z.boolean(), hasCountingEntry: z.boolean() }),
 ]);
 export type CheckInReason = z.infer<typeof CheckInReason>;

@@ -32,13 +32,20 @@ export type TimeZone = z.infer<typeof TimeZone>;
 // Nur bekannte Zonen werden gemerkt: Davon gibt es wenige Hundert, von unbekannten Eingaben beliebig viele.
 const knownTimeZones = new Set<string>();
 
+/**
+ * Prüft gegen die Zonendatenbank der Laufzeit. `Intl` ignoriert die Groß-/Kleinschreibung; eine
+ * Zone, die sich nur darin von ihrer kanonischen Schreibweise unterscheidet, ist ungültig, damit
+ * dieselbe Zone immer dieselbe Zeichenfolge ist.
+ */
 function isKnownTimeZone(timeZone: string): boolean {
   if (knownTimeZones.has(timeZone)) return true;
+  let resolved: string;
   try {
-    new Intl.DateTimeFormat('en-US', { timeZone });
+    resolved = new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
   } catch {
     return false;
   }
+  if (resolved !== timeZone && resolved.toLowerCase() === timeZone.toLowerCase()) return false;
   knownTimeZones.add(timeZone);
   return true;
 }

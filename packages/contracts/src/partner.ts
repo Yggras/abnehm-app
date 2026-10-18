@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-import { EntityId, Instant, LocalDate, ServerVersion } from './base.ts';
+import { EntityId, Instant, LocalDate, MealKey, ServerVersion } from './base.ts';
 import { addDays, daysBetween, isoWeekdayIndex } from './calendar.ts';
+import { mealCategoryCount } from './units.ts';
 
 // Partner-Projektionen (Spezifikation 0, Abschnitt 5): serverseitig erzeugte, widerrufbare Lesemodelle
 // in bewusst datensparsamer Form. Strikte Objekte schließen jeden weiteren Wert aus, etwa
@@ -21,16 +22,28 @@ const FourteenDayPeriod = z
   .strictObject({ type: z.literal('vierzehn_tage'), from: LocalDate, to: LocalDate })
   .refine((period) => daysBetween(period.from, period.to) === 13, { message: 'Zeitraum umfasst 14 Tage' });
 
-const envelopeBase = {
+/** Felder jeder Partner-Projektion. */
+const projectionBase = {
   id: EntityId,
-  /** Steigt mit jeder erneuten Freigabe; gelöschte Fassungen werden nie wiederbelebt. */
-  generation: z.int().positive(),
   ownerPersonId: EntityId,
   recipientPersonId: EntityId,
   couplingId: EntityId,
   /** Datenstand, nie letzte App-Aktivität. */
   dataAsOf: Instant,
   serverVersion: ServerVersion,
+};
+
+const ownerIsNotRecipient = (projection: { ownerPersonId: string; recipientPersonId: string }) =>
+  projection.ownerPersonId !== projection.recipientPersonId;
+const ownerIsNotRecipientRule = {
+  message: 'Eigentümer und Empfänger sind verschiedene Personen',
+  path: ['recipientPersonId'],
+};
+
+const envelopeBase = {
+  ...projectionBase,
+  /** Steigt mit jeder erneuten Freigabe; gelöschte Fassungen werden nie wiederbelebt. */
+  generation: z.int().positive(),
 };
 
 /** Gewichtsveränderung über 14 Tage: eine Nachkommastelle, Richtung nach Rundung. */
@@ -55,7 +68,7 @@ export const PartnerSummaryEnvelope = z
       ...envelopeBase,
       period: DayPeriod,
       /** Verschiedene Mahlzeiten mit mindestens einem nicht gelöschten Eintrag. */
-      content: z.strictObject({ recordedMealCategories: z.int().min(0).max(4) }),
+      content: z.strictObject({ recordedMealCategories: mealCategoryCount }),
     }),
     z.strictObject({
       type: z.literal('wasser'),
@@ -72,10 +85,7 @@ export const PartnerSummaryEnvelope = z
     }),
     z.strictObject({ type: z.literal('gewicht'), ...envelopeBase, period: FourteenDayPeriod, content: WeightChange }),
   ])
-  .refine((envelope) => envelope.ownerPersonId !== envelope.recipientPersonId, {
-    message: 'Eigentümer und Empfänger sind verschiedene Personen',
-    path: ['recipientPersonId'],
-  });
+  .refine(ownerIsNotRecipient, ownerIsNotRecipientRule);
 export type PartnerSummaryEnvelope = z.infer<typeof PartnerSummaryEnvelope>;
 
 /** Grober Tageszielstand des Partners: 0, 1, 2 oder 3 Tageszielerfüllungen, nie als Zahl. */
@@ -84,20 +94,8 @@ export type PartnerDailyGoalStage = z.infer<typeof PartnerDailyGoalStage>;
 
 /** An die aktive Kopplung gebundene Projektion des groben Tageszielstands; ohne Bereichsfreigabe sichtbar. */
 export const PartnerDailyGoalStatus = z
-  .strictObject({
-    id: EntityId,
-    ownerPersonId: EntityId,
-    recipientPersonId: EntityId,
-    couplingId: EntityId,
-    localDate: LocalDate,
-    dataAsOf: Instant,
-    stage: PartnerDailyGoalStage,
-    serverVersion: ServerVersion,
-  })
-  .refine((status) => status.ownerPersonId !== status.recipientPersonId, {
-    message: 'Eigentümer und Empfänger sind verschiedene Personen',
-    path: ['recipientPersonId'],
-  });
+  .strictObject({ ...projectionBase, localDate: LocalDate, stage: PartnerDailyGoalStage })
+  .refine(ownerIsNotRecipient, ownerIsNotRecipientRule);
 export type PartnerDailyGoalStatus = z.infer<typeof PartnerDailyGoalStatus>;
 
 /**
@@ -132,3 +130,30 @@ export const EncouragementKey = z.enum([
   'stolz_auf_dich',
 ]);
 export type EncouragementKey = z.infer<typeof EncouragementKey>;
+
+/**
+ * Kurzlebiger, opaker Verweis auf ein Partnerfoto, höchstens 10 Minuten gültig; ausdrücklich keine
+ * Mahlzeitenfoto-ID.
+ */
+const PartnerPhotoHandle = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{16,200}$/)
+  .refine((handle) => !EntityId.safeParse(handle.toLowerCase()).success, { message: 'Keine Foto-ID als Handle' });
+
+/**
+ * Antwort der Online-Fotoliste „Fotos von heute“ (Spezifikation 0, Abschnitt 5): höchstens 12 Fotos
+ * des aktuellen lokalen Tags des Eigentümers, vom Server nach Aufnahmezeit sortiert. Namen, Mengen,
+ * Nährwerte, Zeitpunkte und Roh-IDs enthält sie nicht. Sie ist keine Projektion und nie im Pull.
+ */
+export const PartnerPhotoList = z.strictObject({
+  photos: z.array(z.strictObject({ handle: PartnerPhotoHandle, meal: MealKey })).max(12),
+  dataAsOf: Instant,
+});
+export type PartnerPhotoList = z.infer<typeof PartnerPhotoList>;
+
+/** Bildabruf per Handle, als Vorschau oder vergrößert; die Antwort ist das Bild, nicht cachebar. */
+export const PartnerPhotoRequest = z.strictObject({
+  handle: PartnerPhotoHandle,
+  variant: z.enum(['vorschau', 'gross']),
+});
+export type PartnerPhotoRequest = z.infer<typeof PartnerPhotoRequest>;

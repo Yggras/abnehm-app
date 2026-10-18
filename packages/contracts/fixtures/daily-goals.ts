@@ -147,10 +147,17 @@ export const dailyGoalFixtures = {
     valid: {
       'Ernährung': { type: 'ernaehrung', recordedMealCategories: 0 },
       'Gewicht ohne Werte': { type: 'gewicht', weighDay: true, hasCountingEntry: false },
+      'Sport mit weichem Textschlüssel': {
+        type: 'sport',
+        sportDay: true,
+        hasCountingEntry: false,
+        messageKey: 'checkin.sport.schon_trainiert',
+      },
     },
     invalid: {
       'Gewichtswert im Grund': { type: 'gewicht', weighDay: true, hasCountingEntry: true, weightG: 80_000 },
       'Kalorienbudget als Tracker': { type: 'kalorienbudget', intakeKcal: 1200 },
+      'Sport ohne weichen Textschlüssel': { type: 'sport', sportDay: true, hasCountingEntry: false },
     },
   }),
   CheckInEvaluation: fixtures(CheckInEvaluation, {
@@ -183,7 +190,7 @@ export const dailyGoalFixtures = {
         tracker: 'sport',
         moment: 'mittag',
         behind: false,
-        reason: { type: 'sport', sportDay: true, hasCountingEntry: false },
+        reason: { type: 'sport', sportDay: true, hasCountingEntry: false, messageKey: 'checkin.sport.schon_trainiert' },
       },
       'Gewicht am Wiegetag ohne Eintrag': {
         tracker: 'gewicht',
@@ -197,7 +204,7 @@ export const dailyGoalFixtures = {
         tracker: 'sport',
         moment: 'mittag',
         behind: true,
-        reason: { type: 'sport', sportDay: true, hasCountingEntry: false },
+        reason: { type: 'sport', sportDay: true, hasCountingEntry: false, messageKey: 'checkin.sport.schon_trainiert' },
       },
       'Gewicht ohne Wiegetag hinterher': {
         tracker: 'gewicht',

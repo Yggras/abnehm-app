@@ -60,6 +60,12 @@ export const RouteTarget = z.discriminatedUnion(
 );
 export type RouteTarget = z.infer<typeof RouteTarget>;
 
+/** Ziel aus ungeprüfter Quelle (Deep Link, Push-Daten): unbekannte oder ungültige Ziele öffnen `today`. */
+export function routeTargetOrToday(value: unknown): RouteTarget {
+  const parsed = RouteTarget.safeParse(value);
+  return parsed.success ? parsed.data : { type: 'today' };
+}
+
 /** Stabile Kennung einer Aktion; aus ihr entsteht in der App der zugängliche Name. */
 const ActionId = z
   .string()

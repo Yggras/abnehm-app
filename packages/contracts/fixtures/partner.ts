@@ -2,6 +2,8 @@ import {
   EncouragementKey,
   PartnerDailyGoalStage,
   PartnerDailyGoalStatus,
+  PartnerPhotoList,
+  PartnerPhotoRequest,
   PartnerSummaryEnvelope,
   RevocationNotice,
 } from '../src/partner.ts';
@@ -118,6 +120,37 @@ export const partnerFixtures = {
       },
       'unbekannter Grund': { ...revocation, reason: 'abgelaufen' },
     },
+  }),
+  PartnerPhotoList: fixtures(PartnerPhotoList, {
+    valid: {
+      'zwei Fotos': {
+        photos: [
+          { handle: 'ph_7Kq2mZ9xVt3LwR8b', meal: 'fruehstueck' },
+          { handle: 'ph_Q4nT1sYc6HgP0eJd', meal: 'mittagessen' },
+        ],
+        dataAsOf: now,
+      },
+      'keine Fotos': { photos: [], dataAsOf: now },
+    },
+    invalid: {
+      'Mahlzeitenfoto-ID als Handle': { photos: [{ handle: projection, meal: 'snacks' }], dataAsOf: now },
+      'mit Aufnahmezeit': {
+        photos: [{ handle: 'ph_7Kq2mZ9xVt3LwR8b', meal: 'fruehstueck', takenAt: now }],
+        dataAsOf: now,
+      },
+      '13 Fotos': {
+        photos: Array.from({ length: 13 }, (_, index) => ({ handle: `ph_handle_${String(index).padStart(8, '0')}`, meal: 'snacks' })),
+        dataAsOf: now,
+      },
+      'mit kcal': { photos: [{ handle: 'ph_7Kq2mZ9xVt3LwR8b', meal: 'fruehstueck', kcal: 540 }], dataAsOf: now },
+    },
+  }),
+  PartnerPhotoRequest: fixtures(PartnerPhotoRequest, {
+    valid: {
+      'Vorschau': { handle: 'ph_7Kq2mZ9xVt3LwR8b', variant: 'vorschau' },
+      'vergrößert': { handle: 'ph_7Kq2mZ9xVt3LwR8b', variant: 'gross' },
+    },
+    invalid: { 'Original': { handle: 'ph_7Kq2mZ9xVt3LwR8b', variant: 'original' }, 'kurzes Handle': { handle: 'abc', variant: 'gross' } },
   }),
   EncouragementKey: fixtures(EncouragementKey, {
     valid: { 'Du schaffst das': 'du_schaffst_das', 'Gemeinsam für Momo': 'gemeinsam_fuer_momo' },

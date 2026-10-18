@@ -77,6 +77,14 @@ const ProjectContributionDebit = z
   })
   .refine(bookedUnderCommand, commandKeyRule);
 
+const correctableTypes = [
+  'daily_goal_credit',
+  'daily_bonus_credit',
+  'build_debit',
+  'upgrade_debit',
+  'project_contribution_debit',
+] as const;
+
 /**
  * Korrigiert eine technisch oder fachlich irrtümlich erzeugte Buchung mit exaktem Gegenzeichen.
  * Der Buchungsschlüssel `gegenbuchung:<buchung>` lässt je Buchung höchstens eine Gegenbuchung zu.
@@ -88,7 +96,7 @@ const CounterBooking = z
     amount: z.int().refine((amount) => amount !== 0),
     trigger: z.strictObject({
       originalBookingId: EntityId,
-      originalType: z.enum(['daily_goal_credit', 'daily_bonus_credit', 'build_debit', 'upgrade_debit', 'project_contribution_debit']),
+      originalType: z.enum(correctableTypes),
       originalAmount: z.int().refine((amount) => amount !== 0),
     }),
   })

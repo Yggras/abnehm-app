@@ -3,14 +3,15 @@ import { z } from 'zod';
 import { BausteinKey, EntityId, Instant, LocalDate } from './base.ts';
 import { addDays } from './calendar.ts';
 import { ContractError } from './errors.ts';
+import { IslandEventKind } from './island.ts';
+import { bodyWeightG, mealCategoryCount } from './units.ts';
 
 // Ports zwischen Bereichen (Spezifikation 0, Abschnitt 3). Kein Bereich liest oder schreibt dafür
 // die Tabellen eines anderen. Lese-Ports laufen in einer Lesetransaktion; alle Rückgaben sind
 // Zod-validiert und verwenden die Einheiten aus Abschnitt 8: g, `milli_kcal`, ml, min.
 
 const milliKcal = z.int().positive();
-/** Körpergewicht in g im Bereich, den das Schema der Gewichtseinträge erlaubt (Spezifikation 3). */
-const weightG = z.int().min(20_000).max(350_000);
+const weightG = bodyWeightG;
 
 /** Haltemodus: `null` oder sein Grund. */
 export const MaintenanceReason = z.enum(['sicherheits_check', 'gewaehlt']);
@@ -109,7 +110,7 @@ export const DailyIntakeSeries = z
     z.strictObject({
       localDate: LocalDate,
       intakeMilliKcal: z.int().nonnegative(),
-      recordedMealCategories: z.int().min(0).max(4),
+      recordedMealCategories: mealCategoryCount,
     }),
   )
   .refine(
@@ -151,7 +152,7 @@ export interface WeightRecorder {
 export const IslandCheckInHint = z
   .strictObject({
     type: z.literal('neues_insel_ereignis'),
-    eventKind: z.enum(['besuch', 'momos_wunsch', 'inselwetter', 'entdeckung']),
+    eventKind: IslandEventKind,
   })
   .nullable();
 export type IslandCheckInHint = z.infer<typeof IslandCheckInHint>;
