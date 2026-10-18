@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { BootstrapPersonRequest, BootstrapPersonResult } from '@abnehm/contracts/auth';
+import { authErrorCodes, BootstrapPersonRequest, BootstrapPersonResult } from '@abnehm/contracts/auth';
 
 // Auth-Modul der App (Spezifikation 0, Abschnitt 9). Bildschirme und Bereichscode kennen nur diese
 // Schnittstelle, nicht Better Auth: Registrieren, Anmelden, Sitzung prüfen, Passwort ändern und das
@@ -59,7 +59,10 @@ export type RegisterResult =
 export type SignInResult = { type: 'signed_in'; accountId: string } | { type: 'invalid_credentials' } | RateLimited | Offline;
 export type SessionCheck =
   | { type: 'gueltig'; accountId: string }
-  /** Ohne Netz: Die gespeicherte Sitzung gilt weiter, bis der Server sie ablehnt. */
+  /**
+   * Der Server hat weder bestätigt noch abgelehnt (kein Netz, Begrenzung, Serverfehler): Die
+   * gespeicherte Sitzung gilt weiter, bis der Server sie ablehnt.
+   */
   | { type: 'offline'; accountId: string }
   | { type: 'ungueltig' }
   | { type: 'abgemeldet' };
@@ -112,10 +115,11 @@ const AuthError = z.object({ code: z.string() }).partial();
 
 type Reply = { status: number; body: unknown } | Offline;
 
+// Better-Auth-Codes laut https://github.com/better-auth/better-auth/blob/v1.7.10/packages/core/src/error/codes.ts
 const passwordRejections: Record<string, PasswordRejection> = {
   PASSWORD_TOO_SHORT: 'password_too_short',
   PASSWORD_TOO_LONG: 'password_too_long',
-  PASSWORD_COMPROMISED: 'password_compromised',
+  [authErrorCodes.passwordCompromised]: 'password_compromised',
 };
 
 export function createAppAuth({ baseUrl, sessionStore, accountData, onError, fetch: fetchImpl = globalThis.fetch }: AppAuthOptions): AppAuth {
@@ -145,10 +149,15 @@ export function createAppAuth({ baseUrl, sessionStore, accountData, onError, fet
     stored = session;
   }
 
-  async function signedIn(accountId: string, token: string) {
-    await remember({ accountId, token });
+  /** Öffnet die Datenbank des Kontos und entsperrt die Fachoberfläche. */
+  async function enter(accountId: string) {
     await accountData.open(accountId);
     setState({ type: 'angemeldet', accountId });
+  }
+
+  async function signedIn(accountId: string, token: string) {
+    await remember({ accountId, token });
+    await enter(accountId);
   }
 
   /** Sperrt nach `401`: Fachoberfläche zu, Datenbank geschlossen, Token verworfen, Haken einmal je Sperre. */
@@ -250,26 +259,23 @@ export function createAppAuth({ baseUrl, sessionStore, accountData, onError, fet
         await lock();
         return { type: 'ungueltig' };
       }
+      // Better Auth antwortet auf eine fehlende, widerrufene oder abgelaufene Sitzung mit `200` und
+      // `null`; `401` sperrt schon das `fetch` des Moduls.
       const reply = await request('GET', '/v1/auth/get-session', undefined, authorizedFetch);
-      if ('type' in reply) {
-        await accountData.open(session.accountId);
-        setState({ type: 'angemeldet', accountId: session.accountId });
-        return { type: 'offline', accountId: session.accountId };
-      }
-      const found = CurrentSession.safeParse(reply.body);
-      if (reply.status !== 200 || !found.success || found.data === null || found.data.user.id !== session.accountId) {
+      const found = 'type' in reply || reply.status !== 200 ? null : CurrentSession.safeParse(reply.body);
+      if (('status' in reply && reply.status === 401) || (found?.success === true && found.data?.user.id !== session.accountId)) {
         await lock();
         return { type: 'ungueltig' };
       }
-      await accountData.open(session.accountId);
-      setState({ type: 'angemeldet', accountId: session.accountId });
-      return { type: 'gueltig', accountId: session.accountId };
+      await enter(session.accountId);
+      return found?.success === true ? { type: 'gueltig', accountId: session.accountId } : { type: 'offline', accountId: session.accountId };
     },
 
     bootstrapPerson,
 
     async changePassword({ currentPassword, newPassword }) {
-      const reply = await request('POST', '/v1/auth/change-password', { currentPassword, newPassword, revokeOtherSessions: true }, authorizedFetch);
+      // Den Widerruf aller Sitzungen erzwingt das Backend; die App muss ihn nicht anfordern.
+      const reply = await request('POST', '/v1/auth/change-password', { currentPassword, newPassword }, authorizedFetch);
       if ('type' in reply) return reply;
       if (reply.status === 401) return { type: 'unauthorized' };
       if (reply.status === 429) return { type: 'rate_limited' };

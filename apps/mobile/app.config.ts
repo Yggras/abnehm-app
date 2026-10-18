@@ -55,8 +55,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       'expo-font',
       'expo-splash-screen',
       'expo-sqlite',
-      // Sitzung im Schlüsselbund bzw. Keystore. Ohne Biometrie: kein Face-ID-Hinweis. Die
-      // Android-Backup-Regeln des Plugins halten die Einträge aus Auto Backup heraus.
+      // Sitzung im Schlüsselbund bzw. Keystore. Ohne Biometrie: kein Face-ID-Hinweis. Das Plugin setzt
+      // standardmäßig Android-Backup-Regeln für die SecureStore-Einträge (`configureAndroidBackup`,
+      // https://docs.expo.dev/versions/v58.0.0/sdk/securestore/).
       ['expo-secure-store', { faceIDPermission: false }],
     ],
     experiments: {

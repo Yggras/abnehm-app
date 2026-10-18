@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TimeZone } from '@abnehm/contracts/base';
 
@@ -42,7 +42,14 @@ function accountDataModel(): AccountData & { open: ReturnType<typeof vi.fn>; ope
   return model;
 }
 
-type Phone = { auth: AppAuth; store: ReturnType<typeof memoryStore>; data: ReturnType<typeof accountDataModel>; online: boolean };
+type Phone = {
+  auth: AppAuth;
+  store: ReturnType<typeof memoryStore>;
+  data: ReturnType<typeof accountDataModel>;
+  online: boolean;
+  /** Feste Antwort für einen Pfad statt der des Backends, etwa eine Begrenzung. */
+  answer?: { path: string; status: number };
+};
 
 /** Ein Gerät mit eigenem Speicher, eigener Datenbank und eigener Quelladresse. */
 function phone(backend: TestBackend): Phone {
@@ -62,6 +69,7 @@ function phone(backend: TestBackend): Phone {
       },
       fetch: async (input, init) => {
         if (!device.online) throw new TypeError('Network request failed');
+        if (device.answer !== undefined && String(input).endsWith(device.answer.path)) return new Response(null, { status: device.answer.status });
         const headers = new Headers(init?.headers);
         headers.set('x-forwarded-for', ip);
         return backend.app.request(input instanceof Request ? input : String(input), { ...init, headers });
@@ -77,6 +85,10 @@ async function registered(backend: TestBackend, email = 'anna@example.test') {
   if (result.type !== 'registered') throw new Error(`Registrierung: ${result.type}`);
   return { device, accountId: result.accountId, person: result.person };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('Auth-Modul der App gegen das Backend', () => {
   it('registriert, legt genau eine Person an und hält die Sitzung nur im Sitzungsspeicher', async () => {
@@ -195,6 +207,28 @@ describe('Auth-Modul der App gegen das Backend', () => {
     expect(device.data.opened).toBe(accountId);
     expect(await device.auth.revokeCurrentSession()).toEqual({ type: 'unreachable' });
     expect(await device.auth.signIn({ email: 'anna@example.test', password: defaultPassword })).toEqual({ type: 'unreachable' });
+  });
+
+  it('sperrt bei einer abgelaufenen Sitzung', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-14T12:00:00.000Z'));
+    const backend = await createTestBackend();
+    const { device, accountId } = await registered(backend);
+
+    vi.setSystemTime(new Date('2026-11-14T12:00:00.000Z'));
+
+    expect(await device.auth.checkSession()).toEqual({ type: 'ungueltig' });
+    expect(device.auth.state()).toEqual({ type: 'gesperrt', accountId });
+  });
+
+  it.each([429, 404, 503])('sperrt nicht, wenn die Prüfung mit %i statt einer Entscheidung antwortet', async (status) => {
+    const backend = await createTestBackend();
+    const { device, accountId } = await registered(backend);
+    device.answer = { path: '/v1/auth/get-session', status };
+
+    expect(await device.auth.checkSession()).toEqual({ type: 'offline', accountId });
+    expect(device.auth.state()).toEqual({ type: 'angemeldet', accountId });
+    expect(device.store.value?.token).toEqual(expect.any(String));
   });
 
   it('meldet ohne gespeicherte Sitzung „abgemeldet“', async () => {

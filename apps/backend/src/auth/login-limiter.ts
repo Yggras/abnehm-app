@@ -1,9 +1,10 @@
 import type { Clock } from '@abnehm/clock';
 
 // Begrenzung der Anmeldeversuche pro Konto und pro IP (#22; Spezifikation 0, Abschnitt 9). Gezählt
-// werden Fehlversuche. Der Kontoschlüssel ist die normalisierte E-Mail und gilt auch für E-Mails ohne
-// Konto, sonst verriete die Sperre, welche E-Mails registriert sind. Die Grenzwerte sind dieselben
-// Designwerte wie bei den Einladungscodes und nicht wissenschaftlich belegt.
+// werden Fehlversuche. Der Kontoschlüssel ist die kleingeschriebene E-Mail, so wie Better Auth das Konto
+// sucht, und gilt auch für E-Mails ohne Konto, sonst verriete die Sperre, welche E-Mails registriert
+// sind. Die Grenzwerte sind dieselben Designwerte wie bei den Einladungscodes und nicht
+// wissenschaftlich belegt.
 // Die Zähler liegen im Speicher des einen Backend-Prozesses; ein Neustart setzt sie zurück.
 
 const MINUTE_MS = 60_000;
@@ -25,14 +26,17 @@ export type LoginLimiter = {
   recordSuccess(attempt: LoginAttempt): void;
 };
 
+const accountKey = (email: string) => `konto:${email.toLowerCase()}`;
+
 export function createLoginLimiter({ clock }: { clock: Clock }): LoginLimiter {
   const failures = new Map<string, number[]>();
   const now = () => Date.parse(clock.read().instant);
   const keys = ({ email, ipAddress }: LoginAttempt) => [
-    { key: `konto:${email.toLowerCase()}`, limit: loginLimits.perAccount },
-    // Ohne erkennbare Adresse teilen sich alle Anfragen einen Zähler; hinter dem Reverse Proxy kommt
-    // die Adresse aus `X-Forwarded-For`.
-    { key: `ip:${ipAddress ?? 'unbekannt'}`, limit: loginLimits.perIp },
+    { key: accountKey(email), limit: loginLimits.perAccount },
+    // Ohne erkennbare Adresse greift nur die Begrenzung pro Konto: Ein gemeinsamer Zähler ließe
+    // 20 Fehlversuche irgendwo die Anmeldung für alle sperren. Hinter dem Reverse Proxy kommt die
+    // Adresse aus `X-Forwarded-For` (`AUTH_TRUSTED_PROXIES`).
+    ...(ipAddress === null ? [] : [{ key: `ip:${ipAddress}`, limit: loginLimits.perIp }]),
   ];
 
   /** Fehlversuche im Fenster; ältere fallen heraus, leere Einträge verschwinden. */
@@ -57,7 +61,7 @@ export function createLoginLimiter({ clock }: { clock: Clock }): LoginLimiter {
       for (const { key, limit } of keys(attempt)) failures.set(key, [...recent(key, limit.windowMs, at), at]);
     },
     recordSuccess(attempt) {
-      failures.delete(`konto:${attempt.email.toLowerCase()}`);
+      failures.delete(accountKey(attempt.email));
     },
   };
 }

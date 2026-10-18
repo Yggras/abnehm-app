@@ -31,10 +31,13 @@ export type JobRegistry = {
 /** Wie oft der Backend-Prozess auf fällige Jobs prüft (Designwert). */
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
 
-export function createJobRegistry({ clock }: { clock: Clock }): JobRegistry {
-  const jobs = new Map<string, { job: Job; lastStartedAt: number | null; running: Promise<void> | null }>();
+/** Ein angemeldeter Job samt Zeitpunkt seines letzten Starts und seinem laufenden Durchgang. */
+type Entry = { job: Job; lastStartedAt: number | null; running: Promise<void> | null };
 
-  async function runOne(entry: { job: Job; lastStartedAt: number | null; running: Promise<void> | null }) {
+export function createJobRegistry({ clock }: { clock: Clock }): JobRegistry {
+  const jobs = new Map<string, Entry>();
+
+  async function runOne(entry: Entry) {
     entry.lastStartedAt = Date.parse(clock.read().instant);
     try {
       await entry.job.run();

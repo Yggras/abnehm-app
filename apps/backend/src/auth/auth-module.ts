@@ -8,12 +8,12 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
-import { passwordPolicy } from '@abnehm/contracts/auth';
+import { authErrorCodes, passwordPolicy } from '@abnehm/contracts/auth';
 import { EntityId } from '@abnehm/contracts/base';
 
 import type { Database } from '../database.ts';
 import { account, session, user, verification } from '../db/schema/index.ts';
-import type { SecurityLog } from '../security-log/security-log.ts';
+import type { SecurityEvent, SecurityLog } from '../security-log/security-log.ts';
 import { createLoginLimiter } from './login-limiter.ts';
 import type { PasswordBlocklist } from './password-blocklist.ts';
 import { requireSession } from './require-session.ts';
@@ -46,13 +46,19 @@ export type AdminPasswordReset = {
   resetPassword(email: string): Promise<{ type: 'reset'; password: string } | { type: 'unknown_account' }>;
 };
 
+/** Anlass, aus dem eine einzelne Sitzung widerrufen wird. */
+export type SingleSessionRevocation = Extract<SecurityEvent, { type: 'sitzungswiderruf' }>['cause'] & ('widerruf' | 'abmeldung');
+
 export type AuthModule = {
   /** Hono-Routen unter `/v1`: Better Auth in seinem Namensraum `/v1/auth` und `/v1/session/revoke`. */
   routes: Hono;
   sessions: SessionAuthenticator;
   admin: AdminPasswordReset;
-  /** Serverseitiges Primitive: widerruft genau diese Sitzung und protokolliert es. Idempotent. */
-  revokeSession(session: AuthenticatedSession, cause: 'widerruf' | 'abmeldung'): Promise<void>;
+  /**
+   * Serverseitiges Primitive: widerruft genau diese Sitzung und protokolliert es. Idempotent. Nutzer
+   * sind `POST /v1/session/revoke` und später das Abmeldemodul (#111) mit `abmeldung`.
+   */
+  revokeSession(session: AuthenticatedSession, cause: SingleSessionRevocation): Promise<void>;
 };
 
 export type AuthSettings = Readonly<{
@@ -81,13 +87,30 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
 
   const rejectCompromised = (password: unknown) => {
     if (typeof password === 'string' && passwordBlocklist.includes(password)) {
-      // Derselbe Code wie im Better-Auth-Plugin `haveIBeenPwned`.
-      throw APIError.from('BAD_REQUEST', { code: 'PASSWORD_COMPROMISED', message: 'Password is compromised' });
+      // Derselbe Code wie im Better-Auth-Plugin `haveIBeenPwned`
+      // (https://github.com/better-auth/better-auth/blob/v1.7.10/packages/better-auth/src/plugins/haveibeenpwned/index.ts).
+      throw APIError.from('BAD_REQUEST', { code: authErrorCodes.passwordCompromised, message: 'Password is compromised' });
     }
   };
   const returnedError = (context: object) => {
     const returned = (context as { returned?: unknown }).returned;
     return isAPIError(returned) ? returned : null;
+  };
+
+  type SignInContext = { body?: { email?: unknown }; request?: Request };
+  /** E-Mail und Quelladresse eines Anmeldeversuchs, wie Begrenzung und Sicherheitslog sie sehen. */
+  const attemptOf = (ctx: SignInContext) => ({
+    email: typeof ctx.body?.email === 'string' ? ctx.body.email : '',
+    ipAddress: ipOf(ctx.request),
+  });
+  /** Protokolliert einen Fehlschlag mit dem Konto zur E-Mail, falls es eines gibt, nie mit der E-Mail. */
+  const recordFailedSignIn = async (
+    findUserByEmail: (email: string) => Promise<{ user: { id: string } } | null>,
+    attempt: { email: string; ipAddress: string | null },
+    reason: 'zugangsdaten_falsch' | 'begrenzt',
+  ) => {
+    const found = await findUserByEmail(attempt.email.toLowerCase());
+    await securityLog.record({ type: 'anmeldung_fehlgeschlagen', accountId: found?.user.id ?? null, reason, ipAddress: attempt.ipAddress });
   };
 
   const policy = {
@@ -109,17 +132,10 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
         {
           matcher: (ctx) => ctx.path === '/sign-in/email',
           handler: createAuthMiddleware(async (ctx) => {
-            const email = typeof ctx.body?.email === 'string' ? ctx.body.email : '';
-            const ipAddress = ipOf(ctx.request);
-            if (!limiter.isBlocked({ email, ipAddress })) return;
-            const found = await ctx.context.internalAdapter.findUserByEmail(email.toLowerCase());
-            await securityLog.record({
-              type: 'anmeldung_fehlgeschlagen',
-              accountId: found?.user.id ?? null,
-              reason: 'begrenzt',
-              ipAddress,
-            });
-            throw APIError.from('TOO_MANY_REQUESTS', { code: 'TOO_MANY_LOGIN_ATTEMPTS', message: 'Too many login attempts' });
+            const attempt = attemptOf(ctx);
+            if (!limiter.isBlocked(attempt)) return;
+            await recordFailedSignIn(ctx.context.internalAdapter.findUserByEmail, attempt, 'begrenzt');
+            throw APIError.from('TOO_MANY_REQUESTS', { code: authErrorCodes.tooManyLoginAttempts, message: 'Too many login attempts' });
           }),
         },
       ],
@@ -127,22 +143,15 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
         {
           matcher: (ctx) => ctx.path === '/sign-in/email',
           handler: createAuthMiddleware(async (ctx) => {
-            const email = typeof ctx.body?.email === 'string' ? ctx.body.email : '';
-            const ipAddress = ipOf(ctx.request);
+            const attempt = attemptOf(ctx);
             const error = returnedError(ctx.context);
             const signedIn = ctx.context.newSession;
             if (error === null && signedIn !== null) {
-              limiter.recordSuccess({ email, ipAddress });
-              await securityLog.record({ type: 'anmeldung', accountId: signedIn.user.id, ipAddress });
+              limiter.recordSuccess(attempt);
+              await securityLog.record({ type: 'anmeldung', accountId: signedIn.user.id, ipAddress: attempt.ipAddress });
             } else if (error?.statusCode === 401) {
-              limiter.recordFailure({ email, ipAddress });
-              const found = await ctx.context.internalAdapter.findUserByEmail(email.toLowerCase());
-              await securityLog.record({
-                type: 'anmeldung_fehlgeschlagen',
-                accountId: found?.user.id ?? null,
-                reason: 'zugangsdaten_falsch',
-                ipAddress,
-              });
+              limiter.recordFailure(attempt);
+              await recordFailedSignIn(ctx.context.internalAdapter.findUserByEmail, attempt, 'zugangsdaten_falsch');
             }
           }),
         },
@@ -176,15 +185,18 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
     // Geräts (https://www.better-auth.com/docs/concepts/session-management). 30 Tage ohne Nutzung bis
     // zum Ablauf; bei Nutzung verlängert Better Auth höchstens einmal täglich (`updateAge`).
     session: { expiresIn: 30 * DAY_SECONDS, updateAge: DAY_SECONDS, cookieCache: { enabled: false } },
-    // Die eingebaute Begrenzung pro IP und Pfad (für Anmelden, Registrieren und Passwort ändern
-    // 3 Anfragen in 10 Sekunden) bleibt zusätzlich zur eigenen Begrenzung der Fehlversuche an.
+    // Die eingebaute Begrenzung pro IP und Pfad bleibt zusätzlich zur eigenen Begrenzung der
+    // Fehlversuche an; für Anmelden, Registrieren und Passwort ändern sind das 3 Anfragen in 10 Sekunden
+    // (`getDefaultSpecialRules`, https://github.com/better-auth/better-auth/blob/v1.7.10/packages/better-auth/src/api/rate-limiter/index.ts).
     rateLimit: { enabled: true },
     advanced: { database: { generateId: 'uuid' }, ...ipOptions.advanced },
     databaseHooks: {
       // Der Anzeigename gehört der Person (Bootstrap), nicht dem Konto.
       user: { create: { before: async (created) => ({ data: { ...created, name: '' } }) } },
     },
-    // Nur Meldungstexte, keine Zusatzdaten; Better Auth schreibt E-Mails nur auf Info-Ebene.
+    // Nur Meldungstexte ab Warnstufe, keine Zusatzdaten. Die Registrierung schreibt eine vorhandene
+    // E-Mail auf Info-Ebene ins Log, also unterhalb dieser Stufe
+    // (https://github.com/better-auth/better-auth/blob/v1.7.10/packages/better-auth/src/api/routes/sign-up.ts).
     logger: { level: 'warn', log: (level, message) => console[level === 'error' ? 'error' : 'warn'](`[auth] ${message}`) },
     telemetry: { enabled: false },
     plugins: [bearer(), policy],
