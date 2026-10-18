@@ -16,6 +16,9 @@ import { titleOf } from './texts';
 // und Platzhalter. Jest läuft in `apps/mobile`, deshalb ist der Pfad relativ dazu.
 const appDir = 'src/app';
 
+// Der erste Test lädt das ganze App-Verzeichnis; auf dem CI-Runner dauert das länger als Jests 5 s.
+jest.setTimeout(30_000);
+
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
 jest.mock('./tab-badge', () => ({ useMomoTabBadge: jest.fn() }));
 
