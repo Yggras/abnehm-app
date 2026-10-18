@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
@@ -46,10 +48,12 @@ const classes = {
     verbotene_operation: withOperation('partner_daily_goal_status', 'upsert'),
   }),
   'Partnerfoto (Bildabruf)': authorizationCases({
-    ...probeScenario(policies.resource('meal_photo', 'lesen'), async (world) => ({
-      actor: world.philipp,
-      target: { id: await insert.mealPhoto(world, world.anna) },
-    })),
+    // Das andere Mitglied ist hier die Eigentümerin und sieht ihr Foto selbst.
+    ...probeScenario(
+      policies.resource('meal_photo', 'lesen'),
+      async (world) => ({ actor: world.philipp, target: { id: await insert.mealPhoto(world, world.anna) } }),
+      { bothMembers: true },
+    ),
     manipulierte_id: withTarget(async (world) => {
       const other = await otherCouple(world);
       return { id: await insert.mealPhoto(other, other.anna) };
@@ -59,7 +63,10 @@ const classes = {
     verbotene_operation: withOperation('meal_photo', 'befehl'),
   }),
   'Partnerfoto (Fotoliste)': authorizationCases({
-    ...probeScenario(policies.resource('partner_photo_list', 'lesen'), async (world) => ({ actor: world.philipp, target: {} })),
+    // Beide Mitglieder sehen die Fotoliste des jeweils anderen.
+    ...probeScenario(policies.resource('partner_photo_list', 'lesen'), async (world) => ({ actor: world.philipp, target: {} }), {
+      bothMembers: true,
+    }),
     entkopplung: uncouple,
     freigabeentzug: (world) => setPhotoSharing(world, world.anna, 'privat'),
     verbotene_operation: withOperation('partner_photo_list', 'upsert'),
@@ -134,10 +141,33 @@ describe('Sichtbarkeit von Partnerfotos', () => {
 
     const denials = (await securityLogEntries(world.backend)).filter((entry) => entry.eventType === 'fotozugriff_verweigert');
 
-    expect(denials).toEqual([
-      { eventType: 'fotozugriff_verweigert', accountId: world.philipp.accountId, details: { accountId: world.philipp.accountId, operation: 'bildabruf' } },
-      { eventType: 'fotozugriff_verweigert', accountId: world.philipp.accountId, details: { accountId: world.philipp.accountId, operation: 'fotoliste' } },
-    ]);
+    const denial = (operation: string) => ({
+      eventType: 'fotozugriff_verweigert',
+      accountId: world.philipp.accountId,
+      details: { accountId: world.philipp.accountId, operation },
+    });
+    expect(denials).toEqual([denial('bildabruf'), denial('fotoliste')]);
+  });
+
+  it('protokolliert auch Fotozugriffe, die vor der Regel scheitern, etwa mit fremdem Eigentumsfeld', async () => {
+    const world = await coupledWorld();
+    const id = await insert.mealPhoto(world, world.anna);
+
+    const reply = await resourceProbe(world.backend, policies.resource('meal_photo', 'lesen'))(world.philipp.device, {
+      id,
+      claimedOwnerPersonId: world.anna.personId,
+    });
+
+    expect(httpOutcome(reply)).toBe('verweigert');
+    expect((await securityLogEntries(world.backend)).map((entry) => entry.eventType)).toContain('fotozugriff_verweigert');
+  });
+
+  it('löscht kein unbekanntes Foto, legt aber ein neues der Eigentümerin an', async () => {
+    const world = await coupledWorld();
+    const unknown = { id: randomUUID() };
+
+    expect(httpOutcome(await resourceProbe(world.backend, policies.resource('meal_photo', 'loeschen'))(world.anna.device, unknown))).toBe('verweigert');
+    expect(httpOutcome(await resourceProbe(world.backend, policies.resource('meal_photo', 'upsert'))(world.anna.device, unknown))).toBe('erlaubt');
   });
 
   it('liefert für die Fotoliste die Partnerin als Eigentümerin, ohne ID aus dem Client', async () => {
@@ -147,6 +177,11 @@ describe('Sichtbarkeit von Partnerfotos', () => {
       id: world.philipp.personId,
     });
 
-    expect(reply.body).toEqual({ exists: true, ownerPersonId: world.anna.personId, couplingId: world.couplingId, partnerPersonId: world.anna.personId });
+    expect(reply.body).toEqual({
+      exists: true,
+      ownerPersonId: world.anna.personId,
+      couplingId: world.couplingId,
+      partnerPersonId: world.anna.personId,
+    });
   });
 });

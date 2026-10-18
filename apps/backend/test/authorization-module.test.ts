@@ -25,8 +25,9 @@ import { coupledWorld, insert, type CoupledWorld } from './support/coupled-world
 const anyResource = () => ({ id: randomUUID() });
 
 async function actorOf(world: CoupledWorld, person: CoupledWorld['anna']): Promise<Actor> {
-  const session = await world.backend.auth.sessions.authenticate(new Headers({ authorization: `Bearer ${person.device.token}` }));
-  return { ...session!, personId: person.personId as Actor['personId'] };
+  const actor = await world.backend.authorization.actorOf(new Headers({ authorization: `Bearer ${person.device.token}` }));
+  if (actor === null) throw new Error('Keine Sitzung');
+  return actor;
 }
 
 describe('Ressourcenkatalog', () => {
@@ -88,7 +89,9 @@ describe('Vollständigkeit der Policies', () => {
       .post('/v1/ohne-fundstelle', guard(policies.resource('water_entry', 'lesen'), undefined as never), (c) => c.text('ok'))
       .get('/v1/in-ordnung', guard(policies.public()), (c) => c.text('ok'));
 
-    const problems = backend.authorization.findIncompletePolicies(app).map((problem) => (problem.type === 'route' ? `${problem.method} ${problem.path}` : problem.name));
+    const problems = backend.authorization
+      .findIncompletePolicies(app)
+      .map((problem) => (problem.type === 'route' ? `${problem.method} ${problem.path}` : problem.name));
 
     expect(problems).toEqual([
       'GET /v1/ohne-guard',
@@ -118,7 +121,9 @@ describe('Vollständigkeit der Policies', () => {
     for (const policy of [policies.resource('partner_summary', 'upsert'), policies.resource('security_log', 'lesen')]) {
       expect(httpOutcome(await resourceProbe(world.backend, policy)(world.philipp.device, { id: summary })), policy.entity).toBe('verweigert');
     }
-    const app = new Hono().use('*', world.backend.authorization.enforce).post('/v1/admin', guard(policies.adminCommand('passwort_reset')), (c) => c.text('ok'));
+    const app = new Hono()
+      .use('*', world.backend.authorization.enforce)
+      .post('/v1/admin', guard(policies.adminCommand('passwort_reset')), (c) => c.text('ok'));
     expect(httpOutcome(await call({ app }, 'POST', '/v1/admin', world.anna.device))).toBe('verweigert');
   });
 });
@@ -136,7 +141,7 @@ describe('Fachbefehle', () => {
   it('prüft einen angemeldeten Fachbefehl mit seiner Regel, auch in der Transaktion des Aufrufers', async () => {
     const world = await coupledWorld();
     const { authorization, database } = world.backend;
-    authorization.registerCommand('sendEncouragement', policies.resource('encouragement', 'befehl'));
+    authorization.registerCommand('sendEncouragement', policies.resource('encouragement_send', 'befehl'));
     const anna = await actorOf(world, world.anna);
 
     const decision = await database.db.transaction((tx) => authorization.authorizeCommand(tx, anna, 'sendEncouragement', anyResource()));

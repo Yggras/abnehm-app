@@ -2,8 +2,8 @@ import { createSystemClock, type Clock } from '@abnehm/clock';
 
 import { createApp } from './app.ts';
 import { createAuthModule, type AuthSettings } from './auth/auth-module.ts';
-import { createAuthorization, policies } from './authorization/authorization.ts';
 import { bundledPasswordBlocklist } from './auth/password-blocklist.ts';
+import { createAuthorization, policies } from './authorization/authorization.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createSecurityLog } from './security-log/security-log.ts';

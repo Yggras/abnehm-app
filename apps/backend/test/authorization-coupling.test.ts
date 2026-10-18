@@ -11,37 +11,52 @@ import { coupledWorld, insert, otherCouple, probeScenario, uncouple, withOperati
 
 const classes = {
   'Kopplungsinhalte (Insel lesen)': authorizationCases({
-    ...probeScenario(policies.resource('island', 'lesen'), async (world) => ({ actor: world.philipp, target: { id: world.islandId } })),
+    ...probeScenario(policies.resource('island', 'lesen'), async (world) => ({ actor: world.philipp, target: { id: world.islandId } }), {
+      bothMembers: true,
+    }),
     manipulierte_id: withTarget(async (world) => ({ id: (await otherCouple(world)).islandId })),
     entkopplung: uncouple,
     verbotene_operation: withOperation('island', 'upsert'),
   }),
   'Kopplungsinhalte (Fachbefehl auf der Kopplung)': authorizationCases({
-    ...probeScenario(policies.resource('coupling', 'befehl'), async (world) => ({ actor: world.anna, target: { id: world.couplingId } })),
+    ...probeScenario(policies.resource('coupling', 'befehl'), async (world) => ({ actor: world.anna, target: { id: world.couplingId } }), {
+      bothMembers: true,
+    }),
     manipulierte_id: withTarget(async (world) => ({ id: (await otherCouple(world)).couplingId })),
     entkopplung: uncouple,
     verbotene_operation: withOperation('coupling', 'loeschen'),
   }),
   'Inselfortschritt': authorizationCases({
-    ...probeScenario(policies.resource('island_progress', 'lesen'), async (world) => ({
-      actor: world.anna,
-      target: { id: await insert.islandProgress(world) },
-    })),
+    ...probeScenario(
+      policies.resource('island_progress', 'lesen'),
+      async (world) => ({ actor: world.anna, target: { id: await insert.islandProgress(world) } }),
+      { bothMembers: true },
+    ),
     manipulierte_id: withTarget(async (world) => ({ id: await insert.islandProgress(await otherCouple(world)) })),
     entkopplung: uncouple,
     verbotene_operation: withOperation('island_progress', 'upsert'),
   }),
   'Anfeuern (Lesen durch den Empfänger)': authorizationCases({
-    ...probeScenario(policies.resource('encouragement', 'lesen'), async (world) => ({
-      actor: world.philipp,
-      target: { id: await insert.encouragement(world, world.anna, world.philipp) },
-    })),
+    ...probeScenario(
+      policies.resource('encouragement', 'lesen'),
+      async (world) => ({ actor: world.philipp, target: { id: await insert.encouragement(world, world.anna, world.philipp) } }),
+      { bothMembers: true },
+    ),
     manipulierte_id: withTarget(async (world) => {
       const other = await otherCouple(world);
       return { id: await insert.encouragement(other, other.anna, other.philipp) };
     }),
     entkopplung: uncouple,
     verbotene_operation: withOperation('encouragement', 'upsert'),
+  }),
+  'Anfeuern (Senden)': authorizationCases({
+    ...probeScenario(policies.resource('encouragement_send', 'befehl'), async (world) => ({
+      actor: world.anna,
+      target: { id: await insert.encouragement(world, world.anna, world.philipp) },
+    })),
+    manipulierte_id: withTarget(async (world) => ({ id: randomUUID(), claimedOwnerPersonId: world.philipp.personId })),
+    entkopplung: uncouple,
+    verbotene_operation: withOperation('encouragement_send', 'lesen'),
   }),
   'Revocation-Notice': authorizationCases({
     ...probeScenario(policies.resource('revocation_notice', 'lesen'), async (world) => ({
@@ -52,10 +67,11 @@ const classes = {
     verbotene_operation: withOperation('revocation_notice', 'upsert'),
   }),
   'Archivstatus der Kopplung': authorizationCases({
-    ...probeScenario(policies.resource('coupling_archive_status', 'lesen'), async (world) => ({
-      actor: world.anna,
-      target: { id: world.couplingId },
-    })),
+    ...probeScenario(
+      policies.resource('coupling_archive_status', 'lesen'),
+      async (world) => ({ actor: world.anna, target: { id: world.couplingId } }),
+      { bothMembers: true },
+    ),
     manipulierte_id: withTarget(async (world) => ({ id: (await otherCouple(world)).couplingId })),
     verbotene_operation: withOperation('coupling_archive_status', 'befehl'),
   }),
@@ -70,7 +86,7 @@ for (const [resourceClass, cases] of Object.entries(classes)) {
 describe('Anfeuern', () => {
   it('sendet nur an den Partner aus der Kopplung, nie an eine mitgeschickte Empfänger-ID', async () => {
     const world = await coupledWorld();
-    const send = resourceProbe(world.backend, policies.resource('encouragement', 'befehl'));
+    const send = resourceProbe(world.backend, policies.resource('encouragement_send', 'befehl'));
 
     const reply = await send(world.anna.device, { id: randomUUID(), claimedOwnerPersonId: world.anna.personId });
 
@@ -88,9 +104,20 @@ describe('Anfeuern', () => {
     const world = await coupledWorld();
     await uncouple(world);
 
-    const reply = await resourceProbe(world.backend, policies.resource('encouragement', 'befehl'))(world.anna.device, { id: randomUUID() });
+    const reply = await resourceProbe(world.backend, policies.resource('encouragement_send', 'befehl'))(world.anna.device, { id: randomUUID() });
 
     expect(httpOutcome(reply)).toBe('verweigert');
+  });
+
+  it('lässt den Absender dasselbe Senden wiederholen, damit der Fachbefehl idempotent bleibt', async () => {
+    const world = await coupledWorld();
+    const id = await insert.encouragement(world, world.anna, world.philipp);
+    const send = resourceProbe(world.backend, policies.resource('encouragement_send', 'befehl'));
+
+    const retry = await send(world.anna.device, { id });
+
+    expect(retry.body).toMatchObject({ exists: true, partnerPersonId: world.philipp.personId });
+    expect(httpOutcome(await send(world.philipp.device, { id }))).toBe('verweigert');
   });
 
   it('lässt nur den Empfänger danken, nicht den Absender', async () => {

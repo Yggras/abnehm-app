@@ -19,20 +19,33 @@ import {
   type PublicPolicy,
   type ResourcePolicy,
 } from './policy.ts';
-import { resourceEntities, type Decision, type PersonActor, type ResourceFacts, type ResourceTarget } from './resources.ts';
+import {
+  denied,
+  resourceEntities,
+  type Actor,
+  type Decision,
+  type PersonActor,
+  type ResourceFacts,
+  type ResourceTarget,
+} from './resources.ts';
 
 export { partnerResponse, PartnerResponseRejected, type PartnerResponseKind } from './partner-response.ts';
 export { operationMatrix, policies, type Operation, type Policy, type ProtectionDimension, type ResourcePolicy } from './policy.ts';
-export { resourceEntities, resourceParts, type Decision, type PersonActor, type ResourceClass, type ResourceEntity } from './resources.ts';
+export {
+  resourceEntities,
+  resourceParts,
+  type Actor,
+  type Decision,
+  type PersonActor,
+  type ResourceClass,
+  type ResourceEntity,
+} from './resources.ts';
 export type { ResourceFacts, ResourceTarget };
 
 // Zentrale Autorisierung (Spezifikation 0, Abschnitt 11): deny by default, vor Datenzugriff und
 // Fachlogik. Jede Route beginnt mit `guard(policy)`, jeder Fachbefehl meldet seine Policy an.
 // Routen ohne Guard lehnt die App-weite Prüfung `enforce` ab, unbekannte Fachbefehle `authorizeCommand`.
 // Die Sitzung bestimmt Konto und Person; IDs aus dem Client finden eine Ressource nur.
-
-/** Wer handelt: Konto und Sitzung aus der Sitzung, die Person aus dem Konto (vor dem Bootstrap keine). */
-export type Actor = Readonly<{ accountId: EntityId; sessionId: EntityId; personId: EntityId | null }>;
 
 /** Antwort auf jeden verweigerten Zugriff; sie verrät nicht, ob es die Ressource gibt. */
 export const forbiddenError = { code: 'forbidden', retryable: false } as const satisfies ContractError;
@@ -49,6 +62,8 @@ export type IncompletePolicy =
 export type Authorization = {
   /** App-weite Middleware: lehnt jede Route ab, die nicht mit einem Guard beginnt. */
   enforce: MiddlewareHandler;
+  /** Wer zu den Request-Headern handelt, oder `null` ohne gültige Sitzung; Routen erhalten das vom Guard. */
+  actorOf(headers: Headers): Promise<Actor | null>;
   /** Prüft eine Ressourcenoperation, auf Wunsch in der Transaktion des Aufrufers. */
   authorize(executor: DbExecutor, actor: Actor, policy: Policy, target: ResourceTarget): Promise<Decision>;
   /** Meldet die Policy eines Fachbefehls an; ohne Anmeldung lehnt `authorizeCommand` ihn ab. */
@@ -61,17 +76,12 @@ export type Authorization = {
   routePolicy(app: Hono, method: string, path: string): Policy | null;
 };
 
-type Engine = Readonly<{
-  actorOf(headers: Headers): Promise<Actor | null>;
-  authorize: Authorization['authorize'];
-  db: DbExecutor;
-}>;
+/** Was ein Guard braucht; `enforce` legt es in den Kontext der Anfrage. */
+type GuardDependencies = Readonly<Pick<Authorization, 'actorOf' | 'authorize'> & { db: DbExecutor }>;
 
-type EngineEnv = { Variables: { authorization: Engine } };
-type ActorEnv = { Variables: { authorization: Engine; actor: Actor } };
-type ResourceEnv = { Variables: { authorization: Engine; actor: PersonActor; resource: ResourceFacts } };
-
-const denied: Decision = { type: 'verweigert' };
+type GuardEnv = { Variables: { authorization: GuardDependencies } };
+type ActorEnv = { Variables: { authorization: GuardDependencies; actor: Actor } };
+type ResourceEnv = { Variables: { authorization: GuardDependencies; actor: PersonActor; resource: ResourceFacts } };
 
 type Guarded = Readonly<{ policy: Policy; locates: boolean }>;
 
@@ -87,26 +97,26 @@ function deny(c: Context) {
  * verweigertem Zugriff mit `403` und `forbidden`; erst danach laufen Validierung und Fachlogik.
  * `c.var.actor` und bei Ressourcen `c.var.resource` stammen ausschließlich aus Sitzung und Postgres.
  */
-export function guard(policy: PublicPolicy): MiddlewareHandler<EngineEnv>;
+export function guard(policy: PublicPolicy): MiddlewareHandler<GuardEnv>;
 export function guard(policy: AuthenticatedPolicy): MiddlewareHandler<ActorEnv>;
 export function guard(policy: ResourcePolicy, locate: Locate): MiddlewareHandler<ResourceEnv>;
-export function guard(policy: AdminCommandPolicy): MiddlewareHandler<EngineEnv>;
+export function guard(policy: AdminCommandPolicy): MiddlewareHandler<GuardEnv>;
 export function guard(policy: Policy, locate?: Locate): MiddlewareHandler {
   const middleware = createMiddleware<ResourceEnv>(async (c, next) => {
-    const engine = c.get('authorization') as Engine | undefined;
-    if (engine === undefined || policyProblem(policy) !== null) return deny(c);
+    const dependencies = c.get('authorization') as GuardDependencies | undefined;
+    if (dependencies === undefined || policyProblem(policy) !== null) return deny(c);
     if (policy.kind === 'public') return next();
     if (policy.kind === 'adminCommand') return deny(c);
-    const actor = await engine.actorOf(c.req.raw.headers);
+    const actor = await dependencies.actorOf(c.req.raw.headers);
     if (actor === null) return c.body(null, 401);
     if (policy.kind === 'authenticated') {
       (c as unknown as Context<ActorEnv>).set('actor', actor);
       return next();
     }
-    if (actor.personId === null) return deny(c);
     const target = locate === undefined ? {} : await locate(c);
-    const decision = await engine.authorize(engine.db, actor, policy, target);
-    if (decision.type === 'verweigert') return deny(c);
+    const decision = await dependencies.authorize(dependencies.db, actor, policy, target);
+    // Erlaubt ist eine Ressourcenoperation nur einer Person; ohne Person verweigert schon `authorize`.
+    if (decision.type === 'verweigert' || actor.personId === null) return deny(c);
     c.set('actor', { ...actor, personId: actor.personId });
     c.set('resource', decision.facts);
     return next();
@@ -132,24 +142,28 @@ export function createAuthorization({ database, sessions, clock, securityLog }: 
     return { ...current, personId: own === undefined ? null : EntityId.parse(own.id) };
   }
 
-  const authorize: Authorization['authorize'] = async (executor, actor, policy, target) => {
-    if (policyProblem(policy) !== null || policy.kind !== 'resourceOperation' || actor.personId === null) return denied;
+  async function decide(executor: DbExecutor, actor: Actor, policy: ResourcePolicy, target: ResourceTarget): Promise<Decision> {
     const { personId } = actor;
+    if (personId === null) return denied;
     // Ein Eigentumsfeld der Nutzlast begründet nichts; weicht es ab, ist die Operation manipuliert.
     if (target.claimedOwnerPersonId !== undefined && target.claimedOwnerPersonId !== personId) return denied;
-    return resourceEntities[policy.entity].check({
-      db: executor,
-      actor: { ...actor, personId },
-      operation: policy.operation,
-      target,
-      clock,
-      securityLog,
-    });
+    return resourceEntities[policy.entity].check({ db: executor, actor: { ...actor, personId }, operation: policy.operation, target, clock });
+  }
+
+  const authorize: Authorization['authorize'] = async (executor, actor, policy, target) => {
+    if (policyProblem(policy) !== null || policy.kind !== 'resourceOperation') return denied;
+    const decision = await decide(executor, actor, policy, target);
+    // Jeder verweigerte Fotozugriff landet im Sicherheitslog, gleich aus welchem Grund.
+    const { photoAccess } = resourceEntities[policy.entity] as { photoAccess?: 'fotoliste' | 'bildabruf' };
+    if (decision.type === 'verweigert' && photoAccess !== undefined && policy.operation === 'lesen') {
+      await securityLog.record({ type: 'fotozugriff_verweigert', accountId: actor.accountId, operation: photoAccess }, executor);
+    }
+    return decision;
   };
 
-  const engine: Engine = { actorOf, authorize, db: database.db };
+  const dependencies: GuardDependencies = { actorOf, authorize, db: database.db };
 
-  const enforce = createMiddleware<EngineEnv>(async (c, next) => {
+  const enforce = createMiddleware<GuardEnv>(async (c, next) => {
     const matched = matchedRoutes(c);
     const own = matched.findIndex((route) => route.handler === enforce);
     // Jede passende Route muss mit einem Guard beginnen; ohne passende Route folgt die 404.
@@ -160,12 +174,13 @@ export function createAuthorization({ database, sessions, clock, securityLog }: 
       seen.add(key);
       if (!guards.has(route.handler)) return deny(c);
     }
-    c.set('authorization', engine);
+    c.set('authorization', dependencies);
     await next();
   });
 
   return {
     enforce,
+    actorOf,
     authorize,
     registerCommand(name, policy) {
       if (commands.has(name)) throw new Error(`Fachbefehl ${name} ist schon angemeldet`);

@@ -28,8 +28,12 @@ export function httpOutcome(reply: Reply): Outcome {
   return `unerwartet: ${reply.status} ${JSON.stringify(reply.body)}`;
 }
 
-/** Ausgangszustand eines Falls: frisches Backend und das Gerät der berechtigten Person. */
-export type AuthorizationWorld = { backend: TestBackend; actor: Device };
+/**
+ * Ausgangszustand eines Falls: frisches Backend und das Gerät der berechtigten Person. `alsoForeign`
+ * nennt weitere fremde Personen, etwa den Partner bei eigenen Einträgen; eine unbeteiligte Person
+ * legt das Gerüst selbst an.
+ */
+export type AuthorizationWorld = { backend: TestBackend; actor: Device; alsoForeign?: readonly Device[] };
 
 /** Was ein Szenario je Dimension beiträgt; ohne Sitzung und fremde Person leitet das Gerüst selbst ab. */
 type Variants<W> = {
@@ -88,7 +92,14 @@ export function authorizationCases<W extends AuthorizationWorld, D extends Prote
 
   const denial: Record<ProtectionDimension, (world: W) => Promise<Outcome>> = {
     ohne_sitzung: withoutSession,
-    fremde_person: async (world) => scenario.attempt(world, (await personWithSession(world.backend, 'fremd@example.test')).device),
+    fremde_person: async (world) => {
+      const stranger = (await personWithSession(world.backend, 'fremd@example.test')).device;
+      for (const device of [stranger, ...(world.alsoForeign ?? [])]) {
+        const outcome = await scenario.attempt(world, device);
+        if (outcome !== 'verweigert') return outcome;
+      }
+      return 'verweigert';
+    },
     manipulierte_id: (world) => variants.manipulierte_id!(world),
     verbotene_operation: (world) => variants.verbotene_operation!(world),
     entkopplung: async (world) => {

@@ -6,6 +6,14 @@ import { createTestClock, type TestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone, type AreaKey } from '@abnehm/contracts/base';
 
 import {
+  policies,
+  type Operation,
+  type ProtectionDimension,
+  type ResourceEntity,
+  type ResourcePolicy,
+  type ResourceTarget,
+} from '../../src/authorization/authorization.ts';
+import {
   coupling,
   couplingMember,
   encouragement,
@@ -25,14 +33,6 @@ import {
   waterEntry,
   weeklyPlanVersion,
 } from '../../src/db/schema/index.ts';
-import {
-  policies,
-  type Operation,
-  type ProtectionDimension,
-  type ResourceEntity,
-  type ResourcePolicy,
-  type ResourceTarget,
-} from '../../src/authorization/authorization.ts';
 import { createTestBackend, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { httpOutcome, personWithSession, resourceProbe } from './authorization.ts';
@@ -298,22 +298,25 @@ export const insert = {
   },
 };
 
-export type ProbeWorld = CoupledWorld & { actor: Device; target: ResourceTarget; policy: ResourcePolicy };
+export type ProbeWorld = CoupledWorld & { actor: Device; alsoForeign: readonly Device[]; target: ResourceTarget; policy: ResourcePolicy };
 
 /**
  * Szenario des Negativtest-Gerüsts über `resourceProbe`: `setup` legt in der gekoppelten Welt die
- * Ressource an und nennt die berechtigte Person samt Ziel der positiven Gegenprobe.
+ * Ressource an und nennt die berechtigte Person samt Ziel der positiven Gegenprobe. Das andere
+ * Mitglied der Kopplung gilt als fremde Person, außer beide Mitglieder sind berechtigt.
  */
 export function probeScenario<E extends ResourceEntity, O extends Operation, D extends ProtectionDimension>(
   policy: ResourcePolicy<E, O, D>,
   setup: (world: CoupledWorld) => Promise<{ actor: WorldPerson; target: ResourceTarget }>,
+  { bothMembers = false }: { bothMembers?: boolean } = {},
 ) {
   return {
     policy,
     arrange: async (): Promise<ProbeWorld> => {
       const world = await coupledWorld();
       const { actor, target } = await setup(world);
-      return { ...world, actor: actor.device, target, policy };
+      const partner = actor === world.anna ? world.philipp : world.anna;
+      return { ...world, actor: actor.device, alsoForeign: bothMembers ? [] : [partner.device], target, policy };
     },
     attempt: async (world: ProbeWorld, device: Device) => httpOutcome(await resourceProbe(world.backend, policy)(device, world.target)),
   };

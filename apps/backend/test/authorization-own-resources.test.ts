@@ -91,7 +91,9 @@ describe('Eigentum aus Postgres', () => {
     const unknown = await probe(world.anna.device, { id: randomUUID() });
     const malformed = await probe(world.anna.device, { id: 'kein-uuid' });
 
-    for (const reply of [foreign, unknown, malformed]) expect({ status: reply.status, body: reply.body }).toEqual({ status: 403, body: { code: 'forbidden', retryable: false } });
+    for (const reply of [foreign, unknown, malformed]) {
+      expect({ status: reply.status, body: reply.body }).toEqual({ status: 403, body: { code: 'forbidden', retryable: false } });
+    }
   });
 
   it('legt eine neue Ressource nur für die Person der Sitzung an', async () => {

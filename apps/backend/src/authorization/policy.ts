@@ -17,7 +17,8 @@ export type ProtectionDimension =
  * Operation auf einer Ressource: Lesen, generisches Upsert bzw. Löschen über das Sync-Schema oder
  * ein benannter, servervalidierter Fachbefehl.
  */
-export type Operation = 'lesen' | 'upsert' | 'loeschen' | 'befehl';
+export const operations = ['lesen', 'upsert', 'loeschen', 'befehl'] as const;
+export type Operation = (typeof operations)[number];
 
 /** Serverseitige Kommandos des Betriebs; dieselbe Liste wie im Sicherheitslog. */
 export type AdminCommand = 'passwort_reset';
@@ -65,7 +66,7 @@ export type DimensionsOf<E extends ResourceEntity, O extends Operation> =
   | ((typeof resourceEntities)[E]['locatedBy'] extends 'id' ? 'manipulierte_id' : never)
   | (O extends RowOf<E>['coupled'][number] ? 'entkopplung' : never)
   | (O extends RowOf<E>['shared'][number] ? 'freigabeentzug' : never)
-  | (OperationsOf<E>['length'] extends 4 ? never : 'verbotene_operation');
+  | (OperationsOf<E>['length'] extends (typeof operations)['length'] ? never : 'verbotene_operation');
 
 export type PublicPolicy = Readonly<{ kind: 'public'; dimensions: readonly never[] }>;
 export type AuthenticatedPolicy = Readonly<{ kind: 'authenticated'; dimensions: readonly 'ohne_sitzung'[] }>;
@@ -74,7 +75,7 @@ export type ResourcePolicy<
   E extends ResourceEntity = ResourceEntity,
   O extends Operation = Operation,
   D extends ProtectionDimension = ProtectionDimension,
-> = Readonly<{ kind: 'resourceOperation'; entity: E; resourceClass: ResourceClass; operation: O; dimensions: readonly D[] }>;
+> = Readonly<{ kind: 'resourceOperation'; entity: E; operation: O; dimensions: readonly D[] }>;
 export type Policy = PublicPolicy | AuthenticatedPolicy | AdminCommandPolicy | ResourcePolicy;
 
 const created = new WeakSet<Policy>();
@@ -99,7 +100,7 @@ function resourceDimensions(entity: ResourceEntity, operation: Operation): Prote
   if (locatedBy === 'id') dimensions.push('manipulierte_id');
   if (matrix.coupled.includes(operation)) dimensions.push('entkopplung');
   if (matrix.shared.includes(operation)) dimensions.push('freigabeentzug');
-  if (operationsOf(entity).length < 4) dimensions.push('verbotene_operation');
+  if (operationsOf(entity).length < operations.length) dimensions.push('verbotene_operation');
   return dimensions;
 }
 
@@ -115,7 +116,6 @@ export const policies = {
     create<ResourcePolicy>({
       kind: 'resourceOperation',
       entity,
-      resourceClass: resourceEntities[entity].resourceClass,
       operation,
       dimensions: resourceDimensions(entity, operation),
     }) as ResourcePolicy<E, O, DimensionsOf<E, O>>,
@@ -130,7 +130,7 @@ export function policyProblem(policy: unknown): string | null {
   const known = policy as Policy;
   if (known.kind !== 'resourceOperation') return null;
   if (!operationsOf(known.entity).includes(known.operation)) {
-    return `keine Regel für ${known.operation} auf ${known.entity} (${known.resourceClass})`;
+    return `keine Regel für ${known.operation} auf ${known.entity} (${resourceEntities[known.entity].resourceClass})`;
   }
   return null;
 }

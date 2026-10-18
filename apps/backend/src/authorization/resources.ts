@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import type { Clock } from '@abnehm/clock';
@@ -60,7 +60,6 @@ import {
   weeklyPlanVersion,
   weightEntry,
 } from '../db/schema/index.ts';
-import type { SecurityLog } from '../security-log/security-log.ts';
 import type { Operation } from './policy.ts';
 
 // Ressourcenregeln der Operationsmatrix (Spezifikation 0, Abschnitt 11). Jede Tabelle des Schemas
@@ -84,8 +83,11 @@ export type ResourceClass =
   | 'push_installation'
   | 'serverdaten';
 
-/** Wer handelt: Konto und Sitzung aus der Sitzung, die Person aus dem Konto. */
-export type PersonActor = Readonly<{ accountId: EntityId; sessionId: EntityId; personId: EntityId }>;
+/** Wer handelt: Konto und Sitzung aus der Sitzung, die Person aus dem Konto (vor dem Bootstrap keine). */
+export type Actor = Readonly<{ accountId: EntityId; sessionId: EntityId; personId: EntityId | null }>;
+
+/** Eine handelnde Person; nur sie führt Ressourcenoperationen aus. */
+export type PersonActor = Actor & Readonly<{ personId: EntityId }>;
 
 /** Was der Client über die Ressource sagt; nichts davon begründet Zugriff. */
 export type ResourceTarget = Readonly<{
@@ -107,13 +109,14 @@ export type ResourceFacts = Readonly<{
 
 export type Decision = Readonly<{ type: 'erlaubt'; facts: ResourceFacts }> | Readonly<{ type: 'verweigert' }>;
 
+export const denied: Decision = { type: 'verweigert' };
+
 export type RuleContext = Readonly<{
   db: DbExecutor;
   actor: PersonActor;
   operation: Operation;
   target: ResourceTarget;
   clock: Clock;
-  securityLog: SecurityLog;
 }>;
 
 /** Spalte mit einer UUID, etwa Primärschlüssel, Eigentümer oder Kopplung. */
@@ -127,12 +130,18 @@ type EntityRule<C extends ResourceClass = ResourceClass, L extends 'id' | 'akteu
   locatedBy: L;
   /** Engere Auswahl als die Klasse, etwa nur Lesen für die Fotoliste. */
   onlyOperations?: readonly Operation[];
+  /** Verweigertes Lesen ist ein Fotozugriff und landet im Sicherheitslog (#22). */
+  photoAccess?: 'fotoliste' | 'bildabruf';
   check(context: RuleContext): Promise<Decision>;
 }>;
 
-const denied: Decision = { type: 'verweigert' };
 const idOrNull = (value: string | null | undefined) => (value === null || value === undefined ? null : EntityId.parse(value));
-const allowed = (facts: { exists?: boolean; ownerPersonId?: string | null; couplingId?: string | null; partnerPersonId?: string | null }): Decision => ({
+const allowed = (facts: {
+  exists?: boolean;
+  ownerPersonId?: string | null;
+  couplingId?: string | null;
+  partnerPersonId?: string | null;
+}): Decision => ({
   type: 'erlaubt',
   facts: {
     exists: facts.exists ?? true,
@@ -142,14 +151,27 @@ const allowed = (facts: { exists?: boolean; ownerPersonId?: string | null; coupl
   },
 });
 
-/** Die ID aus dem Client, falls sie überhaupt eine ID ist; sonst gibt es keine Ressource. */
-const targetId = ({ target }: RuleContext): EntityId | null => {
-  const parsed = EntityId.safeParse(target.id);
-  return parsed.success ? parsed.data : null;
-};
-
 async function first<T>(rows: Promise<T[]>): Promise<T | null> {
   return (await rows)[0] ?? null;
+}
+
+/** Regel einer per ID gefundenen Ressource; eine ID, die keine UUID ist, findet nichts. */
+function byId<C extends ResourceClass>(
+  resourceClass: C,
+  table: PgTable,
+  check: (context: RuleContext, id: EntityId) => Promise<Decision>,
+  options: Pick<EntityRule, 'onlyOperations' | 'photoAccess'> = {},
+): EntityRule<C, 'id'> {
+  return {
+    resourceClass,
+    table,
+    locatedBy: 'id',
+    ...options,
+    async check(context) {
+      const id = EntityId.safeParse(context.target.id);
+      return id.success ? check(context, id.data) : denied;
+    },
+  };
 }
 
 /** Partner der Person, wenn sie aktives Mitglied der Kopplung ist; sonst `null`. */
@@ -176,6 +198,9 @@ async function activeCouplingOf(db: DbExecutor, personId: string): Promise<{ cou
   return membership === null ? null : { couplingId: own.couplingId, ...membership };
 }
 
+/** Ob die Operation eine Ressource anlegen kann, wenn es die ID noch nicht gibt. */
+const creates = (operation: Operation) => operation === 'upsert' || operation === 'befehl';
+
 /**
  * Ressource mit einem Eigentümer. Lesen, Ändern und Fachbefehle nur durch ihn; eine unbekannte ID
  * legt die handelnde Person nur an, wo die Ressource vom Client stammt (`creatable`).
@@ -186,37 +211,62 @@ function owned<C extends ResourceClass>(
   columns: { id: IdColumn; owner: IdColumn },
   { creatable }: { creatable: boolean },
 ): EntityRule<C, 'id'> {
-  return {
-    resourceClass,
-    table,
-    locatedBy: 'id',
-    async check(context) {
-      const id = targetId(context);
-      if (id === null) return denied;
-      const { personId } = context.actor;
-      const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
-      if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
-      const creates = context.operation === 'upsert' || context.operation === 'befehl';
-      return creatable && creates ? allowed({ exists: false, ownerPersonId: personId }) : denied;
-    },
-  };
+  return byId(resourceClass, table, async (context, id) => {
+    const { personId } = context.actor;
+    const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
+    if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
+    return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
+  });
 }
 
 /** Inhalt einer Kopplung: nur aktive Mitglieder, und nur über Fachbefehle bzw. den Server. */
 function coupled<C extends ResourceClass>(resourceClass: C, table: PgTable, columns: { id: IdColumn; coupling: IdColumn }): EntityRule<C, 'id'> {
-  return {
-    resourceClass,
-    table,
-    locatedBy: 'id',
-    async check(context) {
-      const id = targetId(context);
-      if (id === null) return denied;
-      const found = await first(context.db.select({ couplingId: columns.coupling }).from(table).where(eq(columns.id, id)));
-      if (found === null || found.couplingId === null) return denied;
-      const membership = await activeMembership(context.db, found.couplingId, context.actor.personId);
-      return membership === null ? denied : allowed({ couplingId: found.couplingId, ...membership });
-    },
-  };
+  return byId(resourceClass, table, async (context, id) => {
+    const found = await first(context.db.select({ couplingId: columns.coupling }).from(table).where(eq(columns.id, id)));
+    if (found === null || found.couplingId === null) return denied;
+    const membership = await activeMembership(context.db, found.couplingId, context.actor.personId);
+    return membership === null ? denied : allowed({ couplingId: found.couplingId, ...membership });
+  });
+}
+
+type ProjectionColumns = {
+  id: IdColumn;
+  coupling: IdColumn;
+  owner: IdColumn;
+  recipient: IdColumn;
+  deletedAt: AnyPgColumn<{ data: Date }>;
+  /** Bereich einer Zusammenfassung; dann gilt zusätzlich dessen Partnerfreigabe. */
+  area?: AnyPgColumn<{ data: string }>;
+};
+
+/**
+ * Projektion für genau einen Empfänger: nur die bezeichnete empfangende Person, solange die Kopplung
+ * aktiv und die Projektion nicht gelöscht ist; mit Bereich nur bei dessen Freigabe `zusammengefasst`.
+ */
+function addressedProjection<C extends ResourceClass>(resourceClass: C, table: PgTable, columns: ProjectionColumns): EntityRule<C, 'id'> {
+  return byId(resourceClass, table, async (context, id) => {
+    const { personId } = context.actor;
+    const found = await first(
+      context.db
+        .select({
+          couplingId: columns.coupling,
+          owner: columns.owner,
+          recipient: columns.recipient,
+          deletedAt: columns.deletedAt,
+          area: columns.area ?? sql<string | null>`null`,
+        })
+        .from(table)
+        .where(eq(columns.id, id)),
+    );
+    if (found === null || found.recipient !== personId || found.deletedAt !== null) return denied;
+    if (found.couplingId === null || found.owner === null) return denied;
+    const membership = await activeMembership(context.db, found.couplingId, personId);
+    if (membership === null) return denied;
+    if (found.area !== null && (await sharingLevel(context.db, found.owner, found.couplingId, found.area)) !== 'zusammengefasst') {
+      return denied;
+    }
+    return allowed({ ownerPersonId: found.owner, couplingId: found.couplingId, ...membership });
+  });
 }
 
 /** Nur der Server; kein allgemeiner Clientzugriff. */
@@ -224,18 +274,14 @@ function serverOnly(table: PgTable): EntityRule<'serverdaten', 'id'> {
   return { resourceClass: 'serverdaten', table, locatedBy: 'id', check: async () => denied };
 }
 
-/** Lesen per Fotoliste oder Bildabruf; jede Verweigerung landet im Sicherheitslog. */
-function loggedPhotoAccess<R extends EntityRule>(rule: R, operation: 'fotoliste' | 'bildabruf'): R {
-  return {
-    ...rule,
-    async check(context) {
-      const decision = await rule.check(context);
-      if (decision.type === 'verweigert' && context.operation === 'lesen') {
-        await context.securityLog.record({ type: 'fotozugriff_verweigert', accountId: context.actor.accountId, operation }, context.db);
-      }
-      return decision;
-    },
-  };
+async function sharingLevel(db: DbExecutor, ownerPersonId: string, couplingId: string, area: string) {
+  const found = await first(
+    db
+      .select({ level: partnerSharing.level })
+      .from(partnerSharing)
+      .where(and(eq(partnerSharing.ownerPersonId, ownerPersonId), eq(partnerSharing.couplingId, couplingId), eq(partnerSharing.area, area))),
+  );
+  return found?.level ?? 'privat';
 }
 
 async function photoSharingLevel(db: DbExecutor, ownerPersonId: string, couplingId: string) {
@@ -259,193 +305,118 @@ async function ownerToday(context: RuleContext, ownerPersonId: string): Promise<
  * (aktive Kopplung, Fotofreigabe `geteilt`, Schalter des Fotos an, nicht gelöscht und mindestens ein
  * nicht gelöschter Ernährungseintrag des Fotos am aktuellen lokalen Tag des Eigentümers).
  */
-const mealPhotoRule = loggedPhotoAccess<EntityRule<'partnerfoto', 'id'>>(
-  {
-    resourceClass: 'partnerfoto',
-    table: mealPhoto,
-    locatedBy: 'id',
-    async check(context) {
-      const id = targetId(context);
-      if (id === null) return denied;
-      const { personId } = context.actor;
-      const photo = await first(
-        context.db
-          .select({ owner: mealPhoto.personId, shared: mealPhoto.sharedWithPartner, deletedAt: mealPhoto.deletedAt })
-          .from(mealPhoto)
-          .where(eq(mealPhoto.id, id)),
-      );
-      if (photo === null) return context.operation === 'lesen' ? denied : allowed({ exists: false, ownerPersonId: personId });
-      if (photo.owner === personId) return allowed({ ownerPersonId: personId });
-      if (context.operation !== 'lesen' || !photo.shared || photo.deletedAt !== null) return denied;
-      const membership = await activeCouplingOf(context.db, personId);
-      if (membership?.partnerPersonId !== photo.owner) return denied;
-      if ((await photoSharingLevel(context.db, photo.owner, membership.couplingId)) !== 'geteilt') return denied;
-      const today = await ownerToday(context, photo.owner);
-      if (today === null) return denied;
-      const entry = await first(
-        context.db
-          .select({ id: nutritionEntry.id })
-          .from(nutritionEntry)
-          .where(
-            and(
-              eq(nutritionEntry.mealPhotoId, id),
-              eq(nutritionEntry.personId, photo.owner),
-              eq(nutritionEntry.localDate, today),
-              isNull(nutritionEntry.deletedAt),
-            ),
-          )
-          .limit(1),
-      );
-      return entry !== null ? allowed({ ownerPersonId: photo.owner, ...membership }) : denied;
-    },
+const mealPhotoRule = byId(
+  'partnerfoto',
+  mealPhoto,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const photo = await first(
+      context.db
+        .select({ owner: mealPhoto.personId, shared: mealPhoto.sharedWithPartner, deletedAt: mealPhoto.deletedAt })
+        .from(mealPhoto)
+        .where(eq(mealPhoto.id, id)),
+    );
+    if (photo === null) return creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
+    if (photo.owner === personId) return allowed({ ownerPersonId: personId });
+    if (context.operation !== 'lesen' || !photo.shared || photo.deletedAt !== null) return denied;
+    const membership = await activeCouplingOf(context.db, personId);
+    if (membership?.partnerPersonId !== photo.owner) return denied;
+    if ((await photoSharingLevel(context.db, photo.owner, membership.couplingId)) !== 'geteilt') return denied;
+    const today = await ownerToday(context, photo.owner);
+    if (today === null) return denied;
+    const entry = await first(
+      context.db
+        .select({ id: nutritionEntry.id })
+        .from(nutritionEntry)
+        .where(
+          and(
+            eq(nutritionEntry.mealPhotoId, id),
+            eq(nutritionEntry.personId, photo.owner),
+            eq(nutritionEntry.localDate, today),
+            isNull(nutritionEntry.deletedAt),
+          ),
+        )
+        .limit(1),
+    );
+    return entry !== null ? allowed({ ownerPersonId: photo.owner, ...membership }) : denied;
   },
-  'bildabruf',
+  { photoAccess: 'bildabruf' },
 );
 
 /** Fotoliste des Partners: ohne Parameter, der Eigentümer ist der Partner aus der aktiven Kopplung. */
-const partnerPhotoListRule = loggedPhotoAccess<EntityRule<'partnerfoto', 'akteur'> & { onlyOperations: readonly ['lesen'] }>(
-  {
-    resourceClass: 'partnerfoto',
-    table: null,
-    locatedBy: 'akteur',
-    onlyOperations: ['lesen'] as const,
-    async check(context) {
-      const membership = await activeCouplingOf(context.db, context.actor.personId);
-      if (membership === null) return denied;
-      if ((await photoSharingLevel(context.db, membership.partnerPersonId, membership.couplingId)) !== 'geteilt') return denied;
-      return allowed({ exists: true, ownerPersonId: membership.partnerPersonId, ...membership });
-    },
+const partnerPhotoListRule = {
+  resourceClass: 'partnerfoto',
+  table: null,
+  locatedBy: 'akteur',
+  onlyOperations: ['lesen'],
+  photoAccess: 'fotoliste',
+  async check(context: RuleContext) {
+    const membership = await activeCouplingOf(context.db, context.actor.personId);
+    if (membership === null) return denied;
+    if ((await photoSharingLevel(context.db, membership.partnerPersonId, membership.couplingId)) !== 'geteilt') return denied;
+    return allowed({ ownerPersonId: membership.partnerPersonId, ...membership });
   },
-  'fotoliste',
+} as const satisfies EntityRule<'partnerfoto', 'akteur'>;
+
+async function encouragementOf(db: DbExecutor, id: string) {
+  return first(
+    db
+      .select({ couplingId: encouragement.couplingId, sender: encouragement.senderPersonId, recipient: encouragement.recipientPersonId })
+      .from(encouragement)
+      .where(eq(encouragement.id, id)),
+  );
+}
+
+/** Anfeuerung lesen (beide aktiven Mitglieder) und danken (nur der Empfänger). */
+const encouragementRule = byId('anfeuern', encouragement, async (context, id) => {
+  const { personId } = context.actor;
+  const found = await encouragementOf(context.db, id);
+  if (found === null) return denied;
+  const involved = context.operation === 'lesen' ? [found.sender, found.recipient] : [found.recipient];
+  if (!involved.includes(personId)) return denied;
+  const membership = await activeMembership(context.db, found.couplingId, personId);
+  return membership === null ? denied : allowed({ ownerPersonId: found.sender, couplingId: found.couplingId, ...membership });
+});
+
+/**
+ * Anfeuerung senden: nur als aktives Mitglied, Empfänger ist immer der Partner aus der Kopplung. Ein
+ * Retry derselben ID durch den Absender ist erlaubt, damit der Fachbefehl idempotent bleibt.
+ */
+const encouragementSendRule = byId(
+  'anfeuern',
+  encouragement,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await encouragementOf(context.db, id);
+    if (found !== null && found.sender !== personId) return denied;
+    const membership = await activeCouplingOf(context.db, personId);
+    if (membership === null || (found !== null && found.couplingId !== membership.couplingId)) return denied;
+    return allowed({ exists: found !== null, ownerPersonId: personId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
 );
 
-/** Anfeuern: Senden als Mitglied an den Partner aus der Kopplung, Danke nur durch den Empfänger. */
-const encouragementRule: EntityRule<'anfeuern', 'id'> = {
-  resourceClass: 'anfeuern',
-  table: encouragement,
-  locatedBy: 'id',
-  async check(context) {
-    const id = targetId(context);
-    if (id === null) return denied;
-    const { personId } = context.actor;
-    const found = await first(
-      context.db
-        .select({ couplingId: encouragement.couplingId, sender: encouragement.senderPersonId, recipient: encouragement.recipientPersonId })
-        .from(encouragement)
-        .where(eq(encouragement.id, id)),
-    );
-    if (found === null) {
-      // Ein neuer Fachbefehl ist das Senden; der Empfänger ist immer der Partner der Kopplung.
-      if (context.operation !== 'befehl') return denied;
-      const membership = await activeCouplingOf(context.db, personId);
-      return membership === null ? denied : allowed({ exists: false, ownerPersonId: personId, ...membership });
-    }
-    const involved = context.operation === 'lesen' ? [found.sender, found.recipient] : [found.recipient];
-    if (!involved.includes(personId)) return denied;
-    const membership = await activeMembership(context.db, found.couplingId, personId);
-    return membership === null ? denied : allowed({ ownerPersonId: found.sender, couplingId: found.couplingId, ...membership });
-  },
-};
-
-/** Partner-Zusammenfassung: bezeichneter Empfänger bei aktiver Kopplung und passender Freigabe. */
-const partnerSummaryRule: EntityRule<'partner_zusammenfassung', 'id'> = {
-  resourceClass: 'partner_zusammenfassung',
-  table: partnerSummary,
-  locatedBy: 'id',
-  async check(context) {
-    const id = targetId(context);
-    if (id === null) return denied;
-    const found = await first(
-      context.db
-        .select({
-          couplingId: partnerSummary.couplingId,
-          owner: partnerSummary.ownerPersonId,
-          recipient: partnerSummary.recipientPersonId,
-          area: partnerSummary.area,
-          deletedAt: partnerSummary.deletedAt,
-        })
-        .from(partnerSummary)
-        .where(eq(partnerSummary.id, id)),
-    );
-    if (found === null || found.recipient !== context.actor.personId || found.deletedAt !== null) return denied;
-    const membership = await activeMembership(context.db, found.couplingId, context.actor.personId);
-    if (membership === null) return denied;
-    const sharing = await first(
-      context.db
-        .select({ level: partnerSharing.level })
-        .from(partnerSharing)
-        .where(
-          and(
-            eq(partnerSharing.ownerPersonId, found.owner),
-            eq(partnerSharing.couplingId, found.couplingId),
-            eq(partnerSharing.area, found.area),
-          ),
-        ),
-    );
-    return sharing?.level === 'zusammengefasst' ? allowed({ ownerPersonId: found.owner, couplingId: found.couplingId, ...membership }) : denied;
-  },
-};
-
-/** Partner-Tageszielstatus: bezeichneter Empfänger bei aktiver Kopplung, ohne Bereichsfreigabe. */
-const partnerDailyGoalStatusRule: EntityRule<'partner_tageszielstatus', 'id'> = {
-  resourceClass: 'partner_tageszielstatus',
-  table: partnerDailyGoalStatus,
-  locatedBy: 'id',
-  async check(context) {
-    const id = targetId(context);
-    if (id === null) return denied;
-    const found = await first(
-      context.db
-        .select({
-          couplingId: partnerDailyGoalStatus.couplingId,
-          owner: partnerDailyGoalStatus.ownerPersonId,
-          recipient: partnerDailyGoalStatus.recipientPersonId,
-          deletedAt: partnerDailyGoalStatus.deletedAt,
-        })
-        .from(partnerDailyGoalStatus)
-        .where(eq(partnerDailyGoalStatus.id, id)),
-    );
-    if (found === null || found.recipient !== context.actor.personId || found.deletedAt !== null) return denied;
-    const membership = await activeMembership(context.db, found.couplingId, context.actor.personId);
-    return membership === null ? denied : allowed({ ownerPersonId: found.owner, couplingId: found.couplingId, ...membership });
-  },
-};
-
 /** Revocation-Notice: nur der ehemals bezeichnete Empfänger, auch nach Rechteentzug. */
-const revocationNoticeRule: EntityRule<'widerrufshinweis', 'id'> = {
-  resourceClass: 'widerrufshinweis',
-  table: revocationNotice,
-  locatedBy: 'id',
-  async check(context) {
-    const id = targetId(context);
-    if (id === null) return denied;
-    const found = await first(
-      context.db
-        .select({ recipient: revocationNotice.recipientPersonId, couplingId: revocationNotice.couplingId })
-        .from(revocationNotice)
-        .where(eq(revocationNotice.id, id)),
-    );
-    return found?.recipient === context.actor.personId ? allowed({ couplingId: found.couplingId }) : denied;
-  },
-};
+const revocationNoticeRule = byId('widerrufshinweis', revocationNotice, async (context, id) => {
+  const found = await first(
+    context.db
+      .select({ recipient: revocationNotice.recipientPersonId, couplingId: revocationNotice.couplingId })
+      .from(revocationNotice)
+      .where(eq(revocationNotice.id, id)),
+  );
+  return found?.recipient === context.actor.personId ? allowed({ couplingId: found.couplingId }) : denied;
+});
 
-/** Archivstatus der gemeinsamen Kopplung: lesbar für beide (auch ehemaligen) Mitglieder. */
-const couplingArchiveStatusRule: EntityRule<'widerrufshinweis', 'id'> = {
-  resourceClass: 'widerrufshinweis',
-  table: coupling,
-  locatedBy: 'id',
-  async check(context) {
-    const id = targetId(context);
-    if (id === null) return denied;
-    const member = await first(
-      context.db
-        .select({ couplingId: couplingMember.couplingId })
-        .from(couplingMember)
-        .where(and(eq(couplingMember.couplingId, id), eq(couplingMember.personId, context.actor.personId))),
-    );
-    return member === null ? denied : allowed({ couplingId: member.couplingId });
-  },
-};
+/** Archivstatus der gemeinsamen Kopplung: lesbar für beide, auch ehemalige Mitglieder. */
+const couplingArchiveStatusRule = byId('widerrufshinweis', coupling, async (context, id) => {
+  const member = await first(
+    context.db
+      .select({ couplingId: couplingMember.couplingId })
+      .from(couplingMember)
+      .where(and(eq(couplingMember.couplingId, id), eq(couplingMember.personId, context.actor.personId))),
+  );
+  return member === null ? denied : allowed({ couplingId: member.couplingId });
+});
 
 const ownedBy = (table: PgTable & { id: IdColumn; personId: IdColumn }) => ({ id: table.id, owner: table.personId });
 const inCoupling = (table: PgTable & { id: IdColumn; couplingId: IdColumn }) => ({ id: table.id, coupling: table.couplingId });
@@ -492,11 +463,25 @@ export const resourceEntities = {
   island_event_state: owned('personenstand', islandEventState, ownedBy(islandEventState), { creatable: false }),
   challenge_requirement: owned('personenstand', challengeRequirement, ownedBy(challengeRequirement), { creatable: false }),
   encouragement: encouragementRule,
+  encouragement_send: encouragementSendRule,
   // Freigaben legt die Kopplungsannahme an; ändern darf sie nur der Eigentümer.
   partner_sharing: owned('partnerfreigabe', partnerSharing, { id: partnerSharing.id, owner: partnerSharing.ownerPersonId }, { creatable: false }),
   photo_sharing: owned('fotofreigabe', photoSharing, { id: photoSharing.id, owner: photoSharing.ownerPersonId }, { creatable: false }),
-  partner_summary: partnerSummaryRule,
-  partner_daily_goal_status: partnerDailyGoalStatusRule,
+  partner_summary: addressedProjection('partner_zusammenfassung', partnerSummary, {
+    id: partnerSummary.id,
+    coupling: partnerSummary.couplingId,
+    owner: partnerSummary.ownerPersonId,
+    recipient: partnerSummary.recipientPersonId,
+    deletedAt: partnerSummary.deletedAt,
+    area: partnerSummary.area,
+  }),
+  partner_daily_goal_status: addressedProjection('partner_tageszielstatus', partnerDailyGoalStatus, {
+    id: partnerDailyGoalStatus.id,
+    coupling: partnerDailyGoalStatus.couplingId,
+    owner: partnerDailyGoalStatus.ownerPersonId,
+    recipient: partnerDailyGoalStatus.recipientPersonId,
+    deletedAt: partnerDailyGoalStatus.deletedAt,
+  }),
   revocation_notice: revocationNoticeRule,
   coupling_archive_status: couplingArchiveStatusRule,
   meal_photo: mealPhotoRule,

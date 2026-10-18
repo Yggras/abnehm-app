@@ -15,10 +15,10 @@ export function newDevice(): Device {
 
 export type Reply = { status: number; body: unknown; headers: Headers };
 
-/** HTTP-Aufruf an die echte Hono-App, mit `X-Forwarded-For` und optional `Authorization: Bearer`. */
 /** Was `call` braucht: die echte App oder eine Test-App mit derselben Autorisierung. */
 type Requestable = { app: { request(input: string, init: RequestInit): Response | Promise<Response> } };
 
+/** HTTP-Aufruf an die echte Hono-App, mit `X-Forwarded-For` und optional `Authorization: Bearer`. */
 export async function call(backend: Requestable, method: 'GET' | 'POST', path: string, device: Device, body?: unknown): Promise<Reply> {
   const headers = new Headers({ 'x-forwarded-for': device.ip });
   if (device.token !== undefined) headers.set('authorization', `Bearer ${device.token}`);
