@@ -378,6 +378,8 @@ const hapticKinds = [
   ['levelaufstieg', 'Levelaufstieg'],
 ] as const;
 
+// Einziger Aufrufer der Haptik ist in der App die Reaktion aus Spezifikation 4. Der Katalog ruft sie
+// nur im Development Build für den Gerätesmoke („dezente Haptik“) direkt auf.
 function Haptics() {
   return (
     <Section title="Haptik">

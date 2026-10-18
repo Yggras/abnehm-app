@@ -64,7 +64,7 @@ export function Chip({
       ]}
     >
       {isSelected && !square ? <Icon name="check" size="sm" tone="primary" /> : null}
-      <Text variant="label" tone={disabled ? 'inkDisabled' : isSelected ? 'primary' : 'ink'} numberOfLines={1}>
+      <Text variant="label" tone={disabled ? 'inkDisabled' : isSelected ? 'primary' : 'ink'} style={styles.label}>
         {label}
       </Text>
     </Pressable>
@@ -85,4 +85,5 @@ const styles = StyleSheet.create({
   resting: { backgroundColor: color.surfaceCard, borderWidth: borderWidth.resting, borderColor: color.lineStrong },
   selected: { backgroundColor: color.primarySoft, borderWidth: borderWidth.selected, borderColor: color.primary },
   disabled: { backgroundColor: color.fillDisabled },
+  label: { flexShrink: 1, textAlign: 'center' },
 });

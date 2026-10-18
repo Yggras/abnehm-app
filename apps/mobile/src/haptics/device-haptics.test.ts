@@ -7,18 +7,16 @@ import type { HapticKind } from './haptics';
 jest.mock('expo-haptics', () => ({
   ...jest.requireActual<Record<string, unknown>>('expo-haptics'),
   impactAsync: jest.fn(() => Promise.resolve()),
-  notificationAsync: jest.fn(() => Promise.resolve()),
   performAndroidHapticsAsync: jest.fn(() => Promise.resolve()),
 }));
 
 const impact = jest.mocked(ExpoHaptics.impactAsync);
-const notification = jest.mocked(ExpoHaptics.notificationAsync);
 const android = jest.mocked(ExpoHaptics.performAndroidHapticsAsync);
 
 const kinds: HapticKind[] = ['tageszielerfuellung', 'tagesbonus', 'levelaufstieg'];
 
 function nativeCalls() {
-  return impact.mock.calls.length + notification.mock.calls.length + android.mock.calls.length;
+  return impact.mock.calls.length + android.mock.calls.length;
 }
 
 beforeEach(() => {
@@ -45,18 +43,12 @@ describe.each(['ios', 'android'] as const)('auf %s', (os) => {
   });
 });
 
-test('bleibt dezent: leichter Impuls für ein Tagesziel, Erfolgsmuster für Bonus und Levelaufstieg (iOS)', () => {
+test('bleibt leicht: iOS nutzt für alle drei Erfolge den leichten Impuls', () => {
   jest.replaceProperty(Platform, 'OS', 'ios');
 
-  deviceHaptics.feedback('tageszielerfuellung');
-  deviceHaptics.feedback('tagesbonus');
-  deviceHaptics.feedback('levelaufstieg');
+  for (const kind of kinds) deviceHaptics.feedback(kind);
 
-  expect(impact.mock.calls).toEqual([[ExpoHaptics.ImpactFeedbackStyle.Light]]);
-  expect(notification.mock.calls).toEqual([
-    [ExpoHaptics.NotificationFeedbackType.Success],
-    [ExpoHaptics.NotificationFeedbackType.Success],
-  ]);
+  expect(impact.mock.calls).toEqual(kinds.map(() => [ExpoHaptics.ImpactFeedbackStyle.Light]));
 });
 
 test('nutzt auf Android die Haptik-Engine des Systems statt des Vibrationsmotors', () => {
@@ -65,10 +57,7 @@ test('nutzt auf Android die Haptik-Engine des Systems statt des Vibrationsmotors
   deviceHaptics.feedback('tageszielerfuellung');
   deviceHaptics.feedback('levelaufstieg');
 
-  expect(android.mock.calls).toEqual([
-    [ExpoHaptics.AndroidHaptics.Context_Click],
-    [ExpoHaptics.AndroidHaptics.Confirm],
-  ]);
+  expect(android.mock.calls).toEqual([[ExpoHaptics.AndroidHaptics.Confirm], [ExpoHaptics.AndroidHaptics.Confirm]]);
   expect(impact).not.toHaveBeenCalled();
 });
 
@@ -78,7 +67,7 @@ test('reduzierte Bewegung verstärkt oder wiederholt die Haptik nicht', () => {
 
   deviceHaptics.feedback('levelaufstieg');
 
-  expect(notification.mock.calls).toEqual([[ExpoHaptics.NotificationFeedbackType.Success]]);
+  expect(impact.mock.calls).toEqual([[ExpoHaptics.ImpactFeedbackStyle.Light]]);
   expect(nativeCalls()).toBe(1);
 });
 

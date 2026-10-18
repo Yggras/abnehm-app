@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
 
 import { boxShadow } from './elevation';
 import { Icon } from './Icon';
-import { pressDepth } from './press';
+import { pressedEdge } from './press';
 import { color, radius, size, space } from './tokens';
 
 /**
@@ -22,7 +22,7 @@ export type CardProps = Pick<PressableProps, 'testOnly_pressed'> & {
   accessibilityLabel?: string;
 };
 
-const responseBorder = 2;
+const outlineWidth = 2;
 
 /** Karte nach dem Design-System. Keine Karten in Karten, keine farbigen Randstreifen. */
 export function Card({ children, variant = 'standard', onPress, accessibilityLabel, testOnly_pressed }: CardProps) {
@@ -38,11 +38,7 @@ export function Card({ children, variant = 'standard', onPress, accessibilityLab
         styles.card,
         styles.tappable,
         surface,
-        pressed &&
-          variant !== 'empty' && {
-            boxShadow: boxShadow.cardPressed,
-            transform: [{ translateY: pressDepth('card', 'cardPressed') }],
-          },
+        pressed && variant !== 'empty' && pressedEdge('card', 'cardPressed'),
       ]}
     >
       <View style={styles.content}>{children}</View>
@@ -56,11 +52,6 @@ const styles = StyleSheet.create({
   tappable: { minHeight: size.touchMin, minWidth: size.touchMin, flexDirection: 'row', alignItems: 'center' },
   content: { flex: 1, gap: space[3] },
   standard: { backgroundColor: color.surfaceCard, boxShadow: boxShadow.card },
-  response: {
-    backgroundColor: color.surfaceCard,
-    boxShadow: boxShadow.card,
-    borderWidth: responseBorder,
-    borderColor: color.partner,
-  },
-  empty: { borderWidth: responseBorder, borderColor: color.line },
+  response: { backgroundColor: color.surfaceCard, boxShadow: boxShadow.card, borderWidth: outlineWidth, borderColor: color.partner },
+  empty: { borderWidth: outlineWidth, borderColor: color.line },
 });

@@ -1,8 +1,7 @@
 import { Switch as NativeSwitch } from '@expo/ui';
-import { semantics } from '@expo/ui/jetpack-compose/modifiers';
-import { labelsHidden } from '@expo/ui/swift-ui/modifiers';
-import { Platform } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { size } from '../tokens';
 import { NativeHost } from './NativeHost';
 
 export type SwitchProps = {
@@ -13,17 +12,32 @@ export type SwitchProps = {
   disabled?: boolean;
 };
 
-// Die sichtbare Beschriftung zeichnet die gebrandete Listenzeile in Rubik. Der native Schalter
-// bekommt seinen Namen deshalb nur für Screenreader: SwiftUI blendet das Label aus, Compose liest
-// die Inhaltsbeschreibung vor (https://docs.expo.dev/versions/v58.0.0/sdk/ui/swift-ui/modifiers/).
-const accessibleName = (label: string) =>
-  Platform.OS === 'ios' ? { label, modifiers: [labelsHidden()] } : { modifiers: [semantics({ contentDescription: label })] };
-
-/** Nativer Schalter über `@expo/ui` (SwiftUI-Toggle bzw. Compose-Switch). */
+/**
+ * Schalter: zeichnet den nativen Schalter aus `@expo/ui` (SwiftUI-Toggle bzw. Compose-Switch),
+ * bedient wird er über eine 48 × 48 dp große Fläche darum. Der native Schalter selbst ist nur
+ * 31 pt hoch und kennt keine eigene Trefferfläche; außerdem zeichnet die gebrandete Listenzeile die
+ * Beschriftung in Rubik. Deshalb tragen Rolle, Zustand und Name das `Pressable`, und der native
+ * Schalter ist für Screenreader und Berührung ausgeblendet.
+ */
 export function Switch({ value, onValueChange, label, disabled = false }: SwitchProps) {
   return (
-    <NativeHost matchContents>
-      <NativeSwitch value={value} onValueChange={onValueChange} disabled={disabled} {...accessibleName(label)} />
-    </NativeHost>
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      style={styles.target}
+    >
+      <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <NativeHost matchContents>
+          <NativeSwitch value={value} onValueChange={onValueChange} disabled={disabled} />
+        </NativeHost>
+      </View>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  target: { minWidth: size.touchMin, minHeight: size.touchMin, alignItems: 'center', justifyContent: 'center' },
+});

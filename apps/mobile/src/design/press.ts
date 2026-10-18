@@ -1,5 +1,6 @@
 import type { Insets } from 'react-native';
 
+import { boxShadow } from './elevation';
 import { elevation, size, type ElevationToken } from './tokens';
 
 /**
@@ -19,4 +20,9 @@ export function touchSlop(visibleHeight: number, visibleWidth: number = size.tou
 export function pressDepth(resting: ElevationToken, pressed: ElevationToken): number {
   const edge = (token: ElevationToken) => elevation[token][0].offsetY;
   return edge(resting) - edge(pressed);
+}
+
+/** Stil eines gedrückten Elements: kürzere Sockelkante, um die Differenz eingesunken. */
+export function pressedEdge(resting: ElevationToken, pressed: ElevationToken) {
+  return { boxShadow: boxShadow[pressed], transform: [{ translateY: pressDepth(resting, pressed) }] };
 }

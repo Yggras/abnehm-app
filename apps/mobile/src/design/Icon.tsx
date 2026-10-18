@@ -1,25 +1,13 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { energyPath, iconShapes, type IconName, type IconShape } from './icon-shapes';
+import type { TextTone } from './Text';
 import { color, size as sizes } from './tokens';
 
 export type { IconName } from './icon-shapes';
 
-/** Farben für Icons: die Textfarben, dazu `self`, `partner` und `primary` (mindestens 3:1). */
-export type IconTone =
-  | 'ink'
-  | 'inkMuted'
-  | 'inkDisabled'
-  | 'primary'
-  | 'primaryPressed'
-  | 'onPrimary'
-  | 'onInverse'
-  | 'self'
-  | 'partner'
-  | 'success'
-  | 'hint'
-  | 'neutral'
-  | 'problem';
+/** Farben für Icons: die Textfarben, dazu die Personfarben (als Grafik mindestens 3:1). */
+export type IconTone = TextTone | 'self' | 'partner';
 
 export type IconSize = 'sm' | 'md' | 'lg';
 

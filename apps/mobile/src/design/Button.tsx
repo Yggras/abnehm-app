@@ -1,8 +1,8 @@
-import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
+import { Pressable, StyleSheet, View, type PressableProps, type ViewStyle } from 'react-native';
 
 import { boxShadow } from './elevation';
-import { Icon, type IconName, type IconTone } from './Icon';
-import { pressDepth, touchSlop } from './press';
+import { Icon, type IconName } from './Icon';
+import { pressedEdge, touchSlop } from './press';
 import { Text, type TextTone } from './Text';
 import { color, radius, size, space } from './tokens';
 
@@ -10,25 +10,20 @@ type ButtonVariant = 'primary' | 'secondary' | 'text';
 
 type Look = {
   surface: keyof typeof color | 'transparent';
-  label: TextTone & IconTone;
-  shadow?: keyof typeof boxShadow;
-  sink?: number;
+  label: TextTone;
+  /** Sockelkante in Ruhe bzw. gedrückt samt Einsinken. */
+  edge?: ViewStyle;
 };
 
 // Fläche, Beschriftung und Sockelkante je Variante in Ruhe und gedrückt (Komponente „Button“).
 const looks: Record<ButtonVariant, { resting: Look; pressed: Look }> = {
   primary: {
-    resting: { surface: 'primary', label: 'onPrimary', shadow: 'button' },
-    pressed: { surface: 'primaryPressed', label: 'onPrimary', shadow: 'buttonPressed', sink: pressDepth('button', 'buttonPressed') },
+    resting: { surface: 'primary', label: 'onPrimary', edge: { boxShadow: boxShadow.button } },
+    pressed: { surface: 'primaryPressed', label: 'onPrimary', edge: pressedEdge('button', 'buttonPressed') },
   },
   secondary: {
-    resting: { surface: 'primarySoft', label: 'primary', shadow: 'buttonSoft' },
-    pressed: {
-      surface: 'primarySoftPressed',
-      label: 'primaryPressed',
-      shadow: 'buttonSoftPressed',
-      sink: pressDepth('buttonSoft', 'buttonSoftPressed'),
-    },
+    resting: { surface: 'primarySoft', label: 'primary', edge: { boxShadow: boxShadow.buttonSoft } },
+    pressed: { surface: 'primarySoftPressed', label: 'primaryPressed', edge: pressedEdge('buttonSoft', 'buttonSoftPressed') },
   },
   text: {
     resting: { surface: 'transparent', label: 'primary' },
@@ -41,12 +36,8 @@ const disabledLook = (variant: ButtonVariant): Look => ({
   label: 'inkDisabled',
 });
 
-function lookStyle(look: Look) {
-  return {
-    backgroundColor: look.surface === 'transparent' ? 'transparent' : color[look.surface],
-    boxShadow: look.shadow ? boxShadow[look.shadow] : undefined,
-    transform: look.sink ? [{ translateY: look.sink }] : undefined,
-  };
+function lookStyle(look: Look): ViewStyle {
+  return { backgroundColor: look.surface === 'transparent' ? 'transparent' : color[look.surface], ...look.edge };
 }
 
 type PressState = Pick<PressableProps, 'testOnly_pressed'>;
@@ -105,7 +96,7 @@ export function Button({
           <>
             <View style={[styles.content, loading && styles.hidden]}>
               {icon ? <Icon name={icon} tone={look.label} /> : null}
-              <Text variant="button" tone={look.label} numberOfLines={2} style={styles.label}>
+              <Text variant="button" tone={look.label} style={styles.label}>
                 {label}
               </Text>
             </View>
@@ -150,11 +141,7 @@ export function IconButton({ icon, accessibilityLabel, onPress, disabled = false
         disabled
           ? styles.iconButtonDisabled
           : pressed
-            ? {
-                backgroundColor: color.surfaceSunken,
-                boxShadow: boxShadow.buttonSoftPressed,
-                transform: [{ translateY: pressDepth('buttonSoft', 'buttonSoftPressed') }],
-              }
+            ? { backgroundColor: color.surfaceSunken, ...pressedEdge('buttonSoft', 'buttonSoftPressed') }
             : { backgroundColor: color.surfaceCard, boxShadow: boxShadow.buttonSoft },
       ]}
     >
