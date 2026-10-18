@@ -1,4 +1,5 @@
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
+import type { QuickCommandKey } from '@abnehm/contracts/today';
 
 import { ownerOf, type Owner } from '../navigation/route-catalog';
 
@@ -57,6 +58,16 @@ export function ownerNameOf(target: RouteTarget): string {
   return ownerNames[ownerOf(target)];
 }
 
+/** Bereich, der den Handler eines Quick-Commands liefert. */
+const quickCommandOwners: Record<QuickCommandKey, Owner> = {
+  'water.quick_add': 'tracker',
+};
+
+/** Name des Bereichs, der den Handler eines Quick-Commands liefert. */
+export function quickCommandOwnerName(commandKey: QuickCommandKey): string {
+  return ownerNames[quickCommandOwners[commandKey]];
+}
+
 export const shellTexts = {
   placeholder: 'Dieser Bereich ist noch in Arbeit.',
   placeholderOwner: (owner: string) => `Kommt mit: ${owner}`,
@@ -64,6 +75,10 @@ export const shellTexts = {
   back: 'Zurück',
   capture: 'Erfassen',
   captureSheetTitle: 'Was möchtest du erfassen?',
+  /** Direktaktion ganz oben im ＋-Sheet (Quick-Command `water.quick_add`). */
+  quickAddWater: (ml: number) => `+${ml} ml Wasser`,
+  /** Development Build: Hinweis statt Text, wenn ein Bereich seine Meldung noch nicht eingetragen hat. */
+  missingMessageText: (messageKey: string) => `Text fehlt: ${messageKey}`,
   /** Zugänglicher Name eines Tabs; mit Punkt kommt der Hinweis dazu. */
   tab: (title: string, badge: boolean) => (badge ? `${title}, Neues auf der Insel` : title),
   developer: 'Entwicklung',

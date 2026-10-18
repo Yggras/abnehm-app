@@ -1,7 +1,8 @@
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
-import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import type { ComponentType } from 'react';
 
+import { UnknownTarget } from '../shell/UnknownTarget';
 import { hrefFor, targetFromLink } from './href';
 import { pathOf, routeCatalog } from './route-catalog';
 
@@ -12,7 +13,7 @@ export type RouteScreenProps<N extends RouteName> = { target: TargetOf<N> };
 
 /**
  * Inhalt einer Routendatei unter `app/`: prüft die Parameter des Links mit dem Schema der Route
- * und zeigt bei ungültigen Parametern „Heute“. Ein Bereich ersetzt seinen Platzhalter, indem er
+ * und zeigt bei ungültigen Parametern „Heute“ samt Meldung. Ein Bereich ersetzt seinen Platzhalter, indem er
  * hier seinen Bildschirm übergibt: `export default routeScreen('capture.food', FoodCapture)`.
  * `fixed` sind die Parameter, die der Pfad selbst festlegt, etwa der Einstellungsabschnitt.
  */
@@ -24,7 +25,7 @@ export function routeScreen<N extends RouteName>(
   const { pathname } = hrefFor({ ...fixed, type: name } as RouteTarget);
   function RouteScreen() {
     const target = targetFromLink(pathname, useLocalSearchParams());
-    if (target.type !== name) return <Redirect href={pathOf('today')} />;
+    if (target.type !== name) return <UnknownTarget />;
     return <Screen target={target as TargetOf<N>} />;
   }
   RouteScreen.displayName = `RouteScreen(${pathname})`;

@@ -1,12 +1,14 @@
 import type { RouteTarget } from '@abnehm/contracts/routes';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 
 import { boxShadow, color, fontFamily, Icon, pressedEdge, radius, size, space, Text, type IconName } from '../design';
 import { openTarget } from '../navigation';
 import { CaptureSheet } from './CaptureSheet';
+import type { QuickCommand } from './quick-commands';
 import { shellTexts, titleOf } from './texts';
+import { useQuickCommand } from './use-quick-command';
 
 type TabName = 'index' | 'log' | 'momo' | 'partner';
 
@@ -24,6 +26,8 @@ const plusOverhang = 14;
 export type TabBarProps = Pick<BottomTabBarProps, 'state' | 'emitter' | 'navigateToTab' | 'insets'> & {
   /** Punkt am Tab „Momo“ für ein neues Insel-Ereignis (`TabBadge`). */
   momoBadge?: boolean;
+  /** Höhe der Leiste samt Überstand; darüber steht der Meldungs-Host. */
+  onLayout?: (event: LayoutChangeEvent) => void;
 };
 
 /**
@@ -31,8 +35,9 @@ export type TabBarProps = Pick<BottomTabBarProps, 'state' | 'emitter' | 'navigat
  * ＋-Sheet. Die Leiste ist oben um den Überstand höher als ihre Fläche, sodass das ＋ ganz in ihr
  * liegt: Android nimmt Berührungen außerhalb des Elternelements nicht an.
  */
-export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = false }: TabBarProps) {
+export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = false, onLayout }: TabBarProps) {
   const [captureOpen, setCaptureOpen] = useState(false);
+  const runQuickCommand = useQuickCommand();
   const items = state.routes.map((route, index) => {
     const tab = tabs[route.name as TabName];
     const focused = index === state.index;
@@ -57,11 +62,16 @@ export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = fals
     setCaptureOpen(false);
     openTarget(target);
   };
+  const quickCommand = (command: QuickCommand) => {
+    setCaptureOpen(false);
+    runQuickCommand(command);
+  };
 
   return (
     <View
       testID="tab-bar"
       accessibilityRole="tablist"
+      onLayout={onLayout}
       style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space[2]) }]}
     >
       <View style={styles.surface} pointerEvents="none" />
@@ -78,7 +88,7 @@ export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = fals
         </Pressable>
       </View>
       {items.slice(middle)}
-      <CaptureSheet visible={captureOpen} onClose={() => setCaptureOpen(false)} onChoose={choose} />
+      <CaptureSheet visible={captureOpen} onClose={() => setCaptureOpen(false)} onChoose={choose} onQuickCommand={quickCommand} />
     </View>
   );
 }
