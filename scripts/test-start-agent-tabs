@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+# Hermetischer Smoke-Test: keine echten GitHub-/Herdr-Aufrufe oder Agentenstarts.
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+mkdir "$tmp/bin"
+
+printf '%s\n' '#!/bin/sh' 'case "$1" in' \
+  '  api) printf "open\t0\t0\tfalse\n" ;;' \
+  '  issue) printf "Testticket %s\n" "$3" ;;' \
+  'esac' > "$tmp/bin/gh"
+printf '%s\n' '#!/bin/sh' \
+  'case "$1 $2" in' \
+  '  "tab create") printf '\''{"result":{"tab":{"tab_id":"tab1"},"root_pane":{"pane_id":"pane1"}}}\n'\'' ;;' \
+  '  "pane run") printf "%s\n" "$4" >> "$MOCK_COMMANDS" ;;' \
+  'esac' > "$tmp/bin/herdr"
+printf '%s\n' '#!/bin/sh' \
+  'case "$1" in' \
+  '  --list-models) printf "provider model\nopenai-codex gpt-6-sol\n" ;;' \
+  '  auth) [ "${MOCK_AUTH_FAIL:-0}" = 0 ] && [ "$4" = openai-codex/gpt-6-sol ] ;;' \
+  'esac' > "$tmp/bin/pi"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$tmp/bin/claude"
+chmod +x "$tmp/bin/"*
+export PATH="$tmp/bin:$PATH" HERDR_ENV=1 HERDR_WORKSPACE_ID=workspace MOCK_COMMANDS="$tmp/commands"
+
+cd "$root"
+"$root/scripts/start-agent-tabs" 900001 -- --effort xhigh >/dev/null
+grep -F "claude --permission-mode auto -n '#900001 Testticket 900001' '--effort' 'xhigh' '/start 900001'" "$MOCK_COMMANDS" >/dev/null || { printf 'Erhalten: '; head -1 "$MOCK_COMMANDS"; exit 1; }
+: > "$MOCK_COMMANDS"
+"$root/scripts/start-agent-tabs" --agent pi 900001 900002 -- --thinking high >/dev/null
+[ "$(wc -l < "$MOCK_COMMANDS" | tr -d ' ')" = 2 ]
+grep -F "pi --model 'openai-codex/gpt-6-sol' --name '#900001 Testticket 900001' '--thinking' 'high' '/skill:start 900001'" "$MOCK_COMMANDS" >/dev/null
+grep -F "pi --model 'openai-codex/gpt-6-sol' --name '#900002 Testticket 900002' '--thinking' 'high' '/skill:start 900002'" "$MOCK_COMMANDS" >/dev/null
+: > "$MOCK_COMMANDS"
+if "$root/scripts/start-agent-tabs" --agent pi --model openai-codex/unbekannt 900001 > "$tmp/output" 2>&1; then
+  echo 'Fehler: unbekanntes Modell wurde akzeptiert' >&2; exit 1
+fi
+[ ! -s "$MOCK_COMMANDS" ]
+if MOCK_AUTH_FAIL=1 "$root/scripts/start-agent-tabs" --agent pi 900001 > "$tmp/output" 2>&1; then
+  echo 'Fehler: fehlender Pi-Zugang wurde akzeptiert' >&2; exit 1
+fi
+[ ! -s "$MOCK_COMMANDS" ]
+if "$root/scripts/start-agent-tabs" 900001 900001 > "$tmp/output" 2>&1; then
+  echo 'Fehler: doppeltes Ticket wurde akzeptiert' >&2; exit 1
+fi
+[ ! -s "$MOCK_COMMANDS" ]
+if "$root/scripts/start-agent-tabs" --model openai-codex/gpt-6-sol 900001 > "$tmp/output" 2>&1; then
+  echo 'Fehler: --model ohne Pi wurde akzeptiert' >&2; exit 1
+fi
+[ ! -s "$MOCK_COMMANDS" ]
+printf 'start-agent-tabs: OK\n'

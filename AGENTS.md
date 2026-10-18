@@ -18,7 +18,7 @@ Für eine **rein lesende Übersicht** über offene Tickets, sinnvolle parallele 
 
 Zum unmittelbaren Einstieg in die Umsetzung den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er ermittelt mit `scripts/ticket-frontier` die freien Umsetzungstickets der Spezifikationen 0–5. Dann greift er sich das nächste und setzt es in einem eigenen Worktree bis zum Pull Request um. Das geht ohne Neustart, und mehrere Sessions können parallel laufen.
 
-Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58 59 61`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session, die `/start <ticket>` ausführt.
+Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58`, pi: `/skill:start-parallel --agent pi 57 58`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session (Standard, `/start <ticket>`) oder Pi-Session (`--agent pi`, standardmäßig `openai-codex/gpt-6-sol`, `/skill:start <ticket>`).
 
 Spezifikationen zerlegt der Nutzer parallel mit dem Skill **`to-tickets-parallel`** (Claude Code: `/to-tickets-parallel 82 81 86 83 87`): `scripts/start-to-tickets-tabs` öffnet je Spezifikation einen Herdr-Tab, in dem eine eigenständige Session `/to-tickets` ausführt.
 

@@ -1,29 +1,48 @@
 #!/bin/sh
 set -eu
 
-# Startet je Ticket eine eigenständige Claude-Code-Session in einem eigenen
-# Herdr-Tab. Jede Session beginnt im primären Checkout mit `/start <ticket>`;
-# der Skill `start` claimt das Ticket, legt den Worktree an und verlegt die
-# Session hinein. Herdr-Mechanik wie bei Firstmate (`tab create` + `pane run`):
+# Startet je Ticket eine eigenständige Claude-Code- oder Pi-Session in einem
+# Herdr-Tab. Jede Session beginnt im primären Checkout mit dem Skill `start`;
+# der Skill `start` claimt das Ticket und legt den Worktree an. Claude wechselt
+# hinein; Pi arbeitet anschließend per absoluten Pfaden und `cd` darin.
+# Herdr-Mechanik wie bei Firstmate (`tab create` + `pane run`):
 # https://github.com/kunchenguid/firstmate/blob/main/bin/backends/herdr.sh
 
 usage() {
-  echo "Verwendung: $0 <ticket> [<ticket> …] [-- <zusätzliche claude-Optionen>]" >&2
-  echo "Beispiel:   $0 57 58 59 61 -- --effort xhigh" >&2
+  echo "Verwendung: $0 [--agent claude|pi] [--model provider/id] <ticket> [<ticket> …] [-- <Agent-Optionen>]" >&2
+  echo "Beispiele:  $0 57 58 -- --effort xhigh" >&2
+  echo "            $0 --agent pi 57 58 [-- --thinking high] (Standardmodell: openai-codex/gpt-6-sol)" >&2
   exit 2
 }
 
 repo=Yggras/abnehm-app
 
+agent=claude
+model=
 tickets=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --) shift; break ;;
+    --agent)
+      [ "$#" -ge 2 ] || usage
+      agent=$2; shift 2 ;;
+    --model)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage
+      model=$2; shift 2 ;;
     ''|*[!0-9]*) usage ;;
-    *) tickets="$tickets $1"; shift ;;
+    *)
+      case " $tickets " in *" $1 "*) echo "Fehler: Ticket #$1 doppelt angegeben." >&2; exit 2 ;; esac
+      tickets="$tickets $1"; shift ;;
   esac
 done
 [ -n "$tickets" ] || usage
+case "$agent" in claude|pi) ;; *) usage ;; esac
+if [ "$agent" = claude ]; then
+  [ -z "$model" ] || { echo "Fehler: --model ist nur mit --agent pi verfügbar." >&2; exit 2; }
+else
+  model=${model:-openai-codex/gpt-6-sol}
+  case "$model" in */?*) ;; *) echo "Fehler: Pi-Modell als provider/id angeben." >&2; exit 2 ;; esac
+fi
 
 # Shell-sicheres Quoting für den Befehl, den Herdr in den Tab tippt.
 quote() {
@@ -39,12 +58,24 @@ done
   echo "Fehler: Nicht in Herdr gestartet (HERDR_ENV/HERDR_WORKSPACE_ID fehlen)." >&2
   exit 1
 }
-for tool in herdr gh jq claude; do
+for tool in herdr gh jq "$agent"; do
   command -v "$tool" >/dev/null 2>&1 || {
     echo "Fehler: '$tool' ist nicht installiert." >&2
     exit 1
   }
 done
+
+if [ "$agent" = pi ]; then
+  # Vor dem ersten Tab auch Modell und Zugang prüfen (nicht erst im gestarteten Tab).
+  if ! pi --list-models "$model" | awk -v wanted="$model" 'NR > 1 && $1 "/" $2 == wanted { found = 1 } END { exit !found }'; then
+    echo "Fehler: Pi-Modell '$model' nicht verfügbar (pi --list-models prüfen)." >&2
+    exit 1
+  fi
+  if ! pi auth check --model "$model" >/dev/null; then
+    echo "Fehler: Kein nutzbarer Pi-Zugang für '$model' (pi auth check --model '$model')." >&2
+    exit 1
+  fi
+fi
 
 primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
 [ -n "$primary" ] || {
@@ -94,7 +125,11 @@ for ticket in $tickets; do
     exit 1
   }
 
-  herdr pane run "$pane" \
-    "claude --permission-mode auto -n $(quote "$label")$extra_args $(quote "/start $ticket")" >/dev/null
+  if [ "$agent" = pi ]; then
+    command="pi --model $(quote "$model") --name $(quote "$label")$extra_args $(quote "/skill:start $ticket")"
+  else
+    command="claude --permission-mode auto -n $(quote "$label")$extra_args $(quote "/start $ticket")"
+  fi
+  herdr pane run "$pane" "$command" >/dev/null
   printf 'Gestartet: %s  (Tab %s)\n' "$label" "$tab"
 done
