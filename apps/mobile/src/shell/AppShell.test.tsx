@@ -1,7 +1,8 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
-import { act, screen, userEvent, within } from '@testing-library/react-native';
+import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native';
 import { Dimensions } from 'react-native';
 import { renderRouter, testRouter } from 'expo-router/testing-library';
+import type * as ZodModule from 'zod';
 
 import { EntityId } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
@@ -9,6 +10,9 @@ import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 import { hitArea } from '../design/testing/hit-area';
 import { textScale } from '../design/tokens';
 import { hrefFor, openTarget, routeCatalog } from '../navigation';
+import type * as MessageTextsModule from './message-texts';
+import { useMessageHost, type MessageHost } from './MessageHost';
+import * as quickCommands from './quick-commands';
 import { useMomoTabBadge } from './tab-badge';
 import { titleOf } from './texts';
 
@@ -22,8 +26,41 @@ jest.setTimeout(30_000);
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
 jest.mock('./tab-badge', () => ({ useMomoTabBadge: jest.fn() }));
 
+// Den echten Handler für `water.quick_add` und seinen Text liefert Spezifikation 3; bis dahin
+// belegen ein Test-Handler über einer Test-Datenbank und ein Testtext den Ablauf.
+const mockQuickCommands: { handler?: quickCommands.QuickCommandHandler<'water.quick_add'> } = {};
+jest.mock('./app-quick-commands', () => {
+  const { createQuickCommandRegistry } = jest.requireActual<typeof quickCommands>('./quick-commands');
+  const tx = { afterCommit() {} };
+  const database = { accountId: 'konto_a', transaction: (work: (context: unknown) => unknown) => work(tx) };
+  return {
+    appQuickCommands: createQuickCommandRegistry(() => database as never, {
+      get 'water.quick_add'() {
+        return mockQuickCommands.handler;
+      },
+    }),
+  };
+});
+jest.mock('./message-texts', () => {
+  const actual = jest.requireActual<typeof MessageTextsModule>('./message-texts');
+  const { z } = jest.requireActual<typeof ZodModule>('zod');
+  return {
+    ...actual,
+    messageTexts: {
+      ...actual.messageTexts,
+      'test.wasser': actual.messageText(z.strictObject({ ml: z.int() }), ({ ml }) => ({ text: `+${ml} ml Wasser` })),
+    },
+  };
+});
+
+let execute: jest.Mock;
+let undo: jest.Mock;
+
 beforeEach(() => {
   jest.mocked(useMomoTabBadge).mockReturnValue(false);
+  execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undoData: 'eintrag-1' }));
+  undo = jest.fn();
+  mockQuickCommands.handler = quickCommands.quickCommandHandler<'water.quick_add', string>({ execute, undo });
 });
 
 const id = EntityId.parse('0b9f4a1e-6c1d-4f7b-9a51-2f3d8c7e1a10');
@@ -98,9 +135,10 @@ describe('Tab-Leiste', () => {
     expect(await heading('Was möchtest du erfassen?')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Erfassen' })).toBeExpanded();
     expect(screen).toHavePathname('/momo');
-    for (const option of ['Essen', 'Wasser', 'Sport', 'Gewicht']) {
-      expect(screen.getByRole('button', { name: option })).toBeOnTheScreen();
-    }
+    const options = within(screen.getByTestId('sheet'))
+      .getAllByRole('button')
+      .map((element) => within(element).getAllByText(/./).map((text) => text.props.children as string).join(' '));
+    expect(options).toEqual(['+250 ml Wasser', 'Essen', 'Wasser', 'Sport', 'Gewicht']);
   });
 
   test.each([
@@ -121,6 +159,119 @@ describe('Tab-Leiste', () => {
 
     await user.press(screen.getByRole('button', { name: 'Fertig' }));
     expect(screen).toHavePathname('/log');
+  });
+});
+
+describe('Quick-Commands und Meldungen', () => {
+  const wasserMeldung = () => screen.queryByText('+250 ml Wasser', { exact: true });
+  const quickAdd = async () => {
+    await user.press(screen.getByRole('button', { name: 'Erfassen' }));
+    await user.press(await screen.findByRole('button', { name: '+250 ml Wasser' }));
+  };
+
+  test('＋ → „+250 ml Wasser“ bucht ohne Navigation, schließt das Sheet und zeigt die Meldung mit „Rückgängig“', async () => {
+    await renderRouter(appDir, { initialUrl: '/momo' });
+
+    await quickAdd();
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(expect.anything(), { ml: 250 });
+    expect(screen).toHavePathname('/momo');
+    expect(screen.queryByRole('header', { name: 'Was möchtest du erfassen?' })).not.toBeOnTheScreen();
+    expect(within(screen.getByTestId('message-slot')).getByText('+250 ml Wasser')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Rückgängig' })).toBeOnTheScreen();
+  });
+
+  test('„Rückgängig“ ruft genau einmal das Undo des Handlers auf, auch bei Doppeltipp', async () => {
+    await renderRouter(appDir, { initialUrl: '/' });
+    await quickAdd();
+
+    const button = screen.getByRole('button', { name: 'Rückgängig' });
+    await user.press(button);
+    await user.press(button);
+
+    expect(undo).toHaveBeenCalledTimes(1);
+    expect(undo).toHaveBeenCalledWith(expect.anything(), 'eintrag-1');
+    expect(wasserMeldung()).not.toBeOnTheScreen();
+  });
+
+  test('ohne Handler zeigt der Development Build einen Platzhalter-Hinweis statt zu buchen', async () => {
+    mockQuickCommands.handler = undefined;
+    await renderRouter(appDir, { initialUrl: '/log' });
+
+    await quickAdd();
+
+    expect(screen.getByText('Dieser Bereich ist noch in Arbeit. Kommt mit: Wasser, Sport, Gewicht & Health')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
+    expect(screen).toHavePathname('/log');
+  });
+
+  test('scheitert die Buchung, zeigt der Host eine Meldung ohne „Rückgängig“', async () => {
+    const report = jest.spyOn(console, 'error').mockImplementation(() => {});
+    execute.mockImplementation(() => {
+      throw new Error('Fachfehler');
+    });
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    await quickAdd();
+
+    expect(screen.getByText('Das hat nicht geklappt. Versuch es bitte noch einmal.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ message: 'Fachfehler' }));
+    report.mockRestore();
+  });
+
+  test('scheitert das Undo, zeigt der Host eine Meldung ohne „Rückgängig“', async () => {
+    const report = jest.spyOn(console, 'error').mockImplementation(() => {});
+    undo.mockImplementation(() => {
+      throw new Error('Fachfehler');
+    });
+    await renderRouter(appDir, { initialUrl: '/' });
+    await quickAdd();
+
+    await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
+
+    expect(screen.getByText('Das hat nicht geklappt. Versuch es bitte noch einmal.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
+    report.mockRestore();
+  });
+
+  test.each([
+    ['einem modalen Ablauf', { type: 'capture.water' }],
+    ['einer Seite', { type: 'settings', section: 'goals' }],
+  ] as const)('eine Meldung aus %s steht dort, nicht verdeckt über der Tab-Leiste', async (_case, target) => {
+    // Der Host ist über allen Routen; die Leiste „Heute“ holt ihn hier für den Test ab.
+    let host: MessageHost | undefined;
+    jest.mocked(useMomoTabBadge).mockImplementation(() => {
+      host = useMessageHost();
+      return false;
+    });
+    const run = jest.fn();
+    await renderRouter(appDir, { initialUrl: '/' });
+    await open(target);
+    await heading(titleOf(target));
+
+    await act(async () => host!.showMessage({ messageKey: 'test.wasser', values: { ml: 250 }, undo: { run } }));
+
+    expect(screen.getAllByTestId('message-slot')).toHaveLength(1);
+    expect(screen.getByText('+250 ml Wasser')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  test('im Release ist ein fehlender Handler ein Integrationsfehler', async () => {
+    const runtime = globalThis as unknown as { __DEV__: boolean };
+    mockQuickCommands.handler = undefined;
+    await renderRouter(appDir, { initialUrl: '/log' });
+    await user.press(screen.getByRole('button', { name: 'Erfassen' }));
+    const button = await screen.findByRole('button', { name: '+250 ml Wasser' });
+
+    runtime.__DEV__ = false;
+    try {
+      await expect(fireEvent.press(button)).rejects.toThrow(quickCommands.MissingQuickCommandError);
+    } finally {
+      runtime.__DEV__ = true;
+    }
   });
 });
 
@@ -178,11 +329,12 @@ describe('Deep Links', () => {
     ['Pflichtparameter fehlt', '/challenge/detail'],
     ['keine UUID', '/plan/budget_suggestion?suggestionId=abc'],
     ['newEntry false', '/capture/sport?newEntry=false'],
-  ])('%s öffnet „Heute“', async (_case, url) => {
+  ])('%s öffnet „Heute“ und sagt, dass es das Ziel nicht mehr gibt', async (_case, url) => {
     await renderRouter(appDir, { initialUrl: url });
 
     expect(await heading('Heute')).toBeOnTheScreen();
     expect(screen).toHavePathname('/');
+    expect(await screen.findByText('Das gibt es nicht mehr.')).toBeOnTheScreen();
   });
 
   test('ein modaler Ablauf aus einem Deep Link schließt mit „Fertig“ zu „Heute“', async () => {
@@ -242,7 +394,7 @@ describe('Zugänglichkeit', () => {
       const name =
         (control.props.accessibilityLabel as string | undefined) ??
         within(control).getAllByText(/./).map((text) => text.props.children as string).join(' ');
-      expect(name).toMatch(/^[A-ZÄÖÜ][\p{L} ,&-]+$/u);
+      expect(name).toMatch(/^[+A-ZÄÖÜ][\p{L}\p{N} ,&+-]+$/u);
       const area = hitArea(control);
       expect({ name, fits: area.width >= 48 && area.height >= 48 }).toEqual({ name, fits: true });
     }
@@ -276,6 +428,17 @@ describe('Schriftfaktor 2,0', () => {
 
   afterEach(() => {
     Dimensions.set(initial);
+  });
+
+  test('Wasser mit einem Tipp erfassen und rückgängig machen bleibt bedienbar', async () => {
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    await user.press(screen.getByRole('button', { name: 'Erfassen' }));
+    await user.press(await screen.findByRole('button', { name: '+250 ml Wasser' }));
+    expect(within(screen.getByTestId('message-slot')).getByText('+250 ml Wasser')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
+
+    expect(undo).toHaveBeenCalledTimes(1);
   });
 
   test('die Hauptaufgabe bleibt bedienbar: Tab wechseln, über ＋ erfassen, mit „Fertig“ zurück', async () => {

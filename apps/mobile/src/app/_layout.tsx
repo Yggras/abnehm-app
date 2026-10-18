@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 
 import { color, useDesignFonts } from '../design';
 import { modalScreens } from '../navigation';
+import { MessageHostProvider } from '../shell/MessageHost';
 
 // Der Startbildschirm bleibt stehen, bis Rubik geladen ist; sonst blitzt die Systemschrift auf.
 void SplashScreen.preventAutoHideAsync();
@@ -22,8 +23,10 @@ export default function RootLayout() {
 
   if (!fontsReady) return null;
 
+  // Der Meldungs-Host liegt über allen Routen. Sichtbar wird die Meldung über der Tab-Leiste oder,
+  // auf Seiten und in modalen Abläufen, am unteren Rand von `ScreenFrame`.
   return (
-    <>
+    <MessageHostProvider>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
         <Stack.Screen name="(tabs)" />
@@ -36,6 +39,6 @@ export default function RootLayout() {
           <Stack.Screen name="technik" />
         </Stack.Protected>
       </Stack>
-    </>
+    </MessageHostProvider>
   );
 }

@@ -1,9 +1,11 @@
+import { useIsFocused } from 'expo-router';
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
 import { Button, color, IconButton, space, Text } from '../design';
 import { closeRoute, type Presentation } from '../navigation';
+import { MessageSlot } from './MessageHost';
 import { shellTexts } from './texts';
 
 export type ScreenFrameProps = {
@@ -22,8 +24,12 @@ const edges: Record<Presentation, Edge[]> = {
 /**
  * Rahmen eines Bildschirms je Darstellung: Tabs mit großem Titel, Seiten mit „Zurück“, modale
  * Abläufe mit „Fertig“. „Zurück“ und „Fertig“ kehren wie System-Zurück zum Aufrufer zurück.
+ * Seiten und modale Abläufe verdecken die Tab-Leiste; solange sie im Fokus sind, steht die
+ * Meldung des Meldungs-Hosts deshalb an ihrem unteren Rand.
  */
 export function ScreenFrame({ title, presentation, children }: ScreenFrameProps) {
+  const focused = useIsFocused();
+  const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges[presentation]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -44,6 +50,11 @@ export function ScreenFrame({ title, presentation, children }: ScreenFrameProps)
         )}
         {children}
       </ScrollView>
+      {presentation !== 'tab' && focused ? (
+        <View style={[styles.messages, { bottom: insets.bottom + space[4] }]} pointerEvents="box-none">
+          <MessageSlot />
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -54,4 +65,5 @@ const styles = StyleSheet.create({
   tabTitle: { paddingTop: space[4] },
   bar: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   barTitle: { flex: 1 },
+  messages: { position: 'absolute', left: 0, right: 0 },
 });
