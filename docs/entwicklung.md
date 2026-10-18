@@ -71,6 +71,33 @@ Die Navigationshülle liefert [#101](https://github.com/Yggras/abnehm-app/issues
 - **Platzhalter:** Development Builds zeigen für fehlende Bildschirme einen deutschen Platzhalter mit dem liefernden Bereich. In Release-Builds wirft er `MissingContributionError`; ein fehlender Beitrag ist dort ein Integrationsfehler.
 - **Tests:** `renderRouter('src/app', { initialUrl })` aus `expo-router/testing-library` rendert die echte App. Inhalte des nativen `Sheet` erreichen Tipps im Test nur über den Test-Adapter `src/design/testing/inline-sheet.tsx` (siehe `src/shell/AppShell.test.tsx`).
 
+### Datenmodell und Migrationen
+
+Das vollständige V1-Schema ([#96](https://github.com/Yggras/abnehm-app/issues/96), Abschnitt 8 der Spezifikation 0) liegt zweimal vor, als Drizzle-Schema je Dialekt:
+
+| Dialekt | Schema | Migrationen | erzeugen |
+| --- | --- | --- | --- |
+| Postgres (Backend) | `apps/backend/src/db/schema/` | `apps/backend/drizzle/` | `npm run db:generate --workspace @abnehm/backend` |
+| SQLite (App) | `apps/mobile/src/local-db/schema/` | `apps/mobile/src/local-db/migrations/` | `npx drizzle-kit generate` in `apps/mobile` |
+
+- **Gleiche Namen, gleiche Constraints:** Tabellen, Spalten, Unique-Keys, partielle Indizes, CHECKs und Fremdschlüssel heißen in beiden Schemas gleich. `test/schema-paritaet.test.ts` vergleicht sie. Erlaubte Abweichungen stehen dort mit Grund, etwa reine Server- und Gerätetabellen oder die Partnerspalten ohne Fremdschlüssel in SQLite (`partnerPersonColumns`).
+- **Typabbildung:** UUIDs in Postgres als `uuid`, in SQLite als TEXT. Lokale Tage sind `date` bzw. `YYYY-MM-DD`, Zeitpunkte `timestamptz` bzw. UTC-ISO-8601. Messwerte sind Ganzzahlen (`milli_kcal`, mg, ml, g, Minuten). `server_version` ist in Postgres `bigint NOT NULL`, lokal eine Dezimalzeichenfolge, die bei unbestätigten Creates leer ist.
+- **Schema ändern:** beide Schemas anpassen, in beiden Workspaces `drizzle-kit generate` ausführen und die erzeugten Dateien einchecken. `test/schema-migrationen.test.ts` scheitert, solange eine Migration fehlt. Migrationen auf `main` ändern sich nie mehr; jede Änderung kommt als neue Migration. Wer eine noch unveröffentlichte SQLite-Migration auf dem eigenen Branch neu erzeugt, leert danach die Babel-Caches (`npx jest --clearCache`, `npx expo start --clear`). Babel bündelt die SQL-Datei in `migrations.js` und erkennt nicht, wenn sich nur die SQL-Datei ändert.
+- **Personenbezug:** Jede Tabelle führt Konto, Person oder Kopplung in einer eigenen Spalte, keine außerhalb der Better-Auth-Tabellen eine E-Mail (`test/schema-personenbezug.test.ts`).
+- **Unveränderliche Entitäten** (Tagesziel, Tageszielerfüllung, Energiebuchung, Projekteinzahlung, Freischaltungen, Inselfeld, Momo-Accessoire, Revocation-Notice): In Postgres verhindern Trigger jedes Update und Delete (Migration `0001_immutable_entities`), Fremdschlüssel darauf sind `ON DELETE RESTRICT`. Lokal ersetzt der Sync ein Duplikat durch den kanonischen Datensatz, deshalb gibt es dort keine Trigger.
+- **Weitere Invarianten per Trigger** (nur Postgres, Migration `0003_integrity_triggers`): Eine Kopplung hat genau die beiden Personen ihres Paars als Mitglieder (am Transaktionsende geprüft), `person.account_id` und der Inhalt eines Notification-Intents ändern sich nie, und ein manueller Sporteintrag wird nur durch einen Import ersetzt.
+- **Ausführen:** Das Backend migriert beim Start (`src/main.ts`) und per `npm run db:migrate --workspace @abnehm/backend`. Die App bündelt ihre Migrationen (`migrations.js` mit babel-plugin-inline-import, `metro.config.js` kennt `.sql`) und migriert beim Öffnen einer Kontodatenbank.
+
+### Lokale Datenbank der App
+
+`apps/mobile/src/local-db/` kapselt expo-sqlite und Drizzle. Bereichscode kennt nur die Schnittstelle aus `local-db/index.ts`:
+
+- **Je Konto eine Datei** (`konto-<konto-id>.db`). `LocalDatabases.open(kontoId)` öffnet und migriert sie, `lock()` schließt sie bei `401`. Wer ein anderes Konto öffnet oder sperrt, beendet alle Handles und Beobachtungen des bisherigen; sie werfen danach `LocalDatabaseClosedError`.
+- **Transaktionen:** `LocalDatabase.transaction(work)` reicht einen opaken `TransactionContext` an fachliche Repositories und Befehle; `read(work)` einen `ReadContext`, in dem Schreiben scheitert. `work` ist synchron, Verschachteln ist verboten. `tx.afterCommit(callback)` läuft nur nach erfolgreichem Commit; Fehler darin gehen an `onError` und rollen nichts zurück.
+- **Repositories** öffnen den Kontext mit `sqliteOf(tx)` aus `local-db/sqlite.ts` und bauen ihre Abfragen mit Drizzle über `local-db/schema`. Nur sie sehen Drizzle-Typen.
+- **Beobachten:** `observe(read, listener)` liest sofort und nach jedem Commit dieser Datenbank erneut. Drizzles `useLiveQuery` wird nicht verwendet: Es hört auf den globalen Change-Listener von expo-sqlite und vergleicht nur den Tabellennamen, nicht die Datei ([Quelltext](https://unpkg.com/drizzle-orm@0.45.4/expo-sqlite/query.js)). Vom Kontowechsel wüsste es nichts.
+- **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`).
+
 ### Typisierte Endpunkte (Hono RPC)
 
 Die App ruft das Backend über `hc<AppType>` auf ([Hono RPC](https://hono.dev/docs/guides/rpc)). Fachliche Pfade sind versioniert (`/v1/…`).

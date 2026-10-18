@@ -17,6 +17,8 @@ RUN npm ci --workspace @abnehm/backend --omit=dev --ignore-scripts && npm cache 
 COPY packages/contracts/src packages/contracts/src
 COPY packages/clock/src packages/clock/src
 COPY apps/backend/src apps/backend/src
+# Migrationen laufen beim Start (src/main.ts) und per `npm run db:migrate`.
+COPY apps/backend/drizzle apps/backend/drizzle
 
 USER node
 EXPOSE 8787

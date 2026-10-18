@@ -167,6 +167,17 @@ export default defineConfig([
             allowedIn: ['apps/mobile/src/design/fonts.ts'],
             message: 'Schriften lädt `useDesignFonts()`; Texte nutzen `Text` mit einem Textstil.',
           },
+          {
+            // Auch `useLiveQuery` von Drizzle: Beobachtet wird über `LocalDatabase.observe`, das den Kontowechsel kennt.
+            modules: ['expo-sqlite', 'drizzle-orm/expo-sqlite'],
+            allowedIn: ['apps/mobile/src/local-db/expo-connection.ts', 'apps/mobile/src/local-db/migrate.ts'],
+            message: 'Die lokale Datenbank läuft über `LocalDatabases` aus apps/mobile/src/local-db/.',
+          },
+          {
+            modules: ['better-sqlite3', 'drizzle-orm/better-sqlite3'],
+            allowedIn: ['apps/mobile/src/local-db/testing/'],
+            message: 'better-sqlite3 ist nur der Test-Adapter der lokalen Datenbank (local-db/testing/).',
+          },
         ],
       ],
     },

@@ -8,6 +8,8 @@
   },
   "scripts": {
     "start": "node src/main.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node src/db/migrate-command.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -19,6 +21,7 @@
     "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.23.1"
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11"
   }
 }

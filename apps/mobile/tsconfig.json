@@ -1,6 +1,6 @@
 {
   "extends": [
-    "expo/tsconfig.base",
+    "expo/tsconfig.base.json",
     "../../tsconfig.base.json"
   ],
   "compilerOptions": {
@@ -11,6 +11,7 @@
   },
   "include": [
     "src",
-    "app.config.ts"
+    "app.config.ts",
+    "drizzle.config.ts"
   ]
 }
