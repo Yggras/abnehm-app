@@ -14,7 +14,9 @@ Abnehm-App (iOS + Android) für zwei Personen (Philipp: iPhone, seine Frau: Andr
 
 ## Session-Start
 
-Zum Einstieg in eine neue Session den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er ermittelt mit `scripts/ticket-frontier` die freien Umsetzungstickets der Spezifikationen 0–5. Dann greift er sich das nächste und setzt es in einem eigenen Worktree bis zum Pull Request um. Das geht ohne Neustart, und mehrere Sessions können parallel laufen.
+Für eine **rein lesende Übersicht** über offene Tickets, sinnvolle parallele Gruppen und die Reihenfolge den Skill **`ticket-uebersicht`** aufrufen (Claude Code: `/ticket-uebersicht`, pi: `/skill:ticket-uebersicht`). Er claimt nichts und startet keine Session.
+
+Zum unmittelbaren Einstieg in die Umsetzung den Skill **`start`** aufrufen (Claude Code: `/start`, pi: `/skill:start`). Er ermittelt mit `scripts/ticket-frontier` die freien Umsetzungstickets der Spezifikationen 0–5. Dann greift er sich das nächste und setzt es in einem eigenen Worktree bis zum Pull Request um. Das geht ohne Neustart, und mehrere Sessions können parallel laufen.
 
 Mehrere Tickets auf einmal startet der Nutzer mit dem Skill **`start-parallel`** (Claude Code: `/start-parallel 57 58 59 61`) aus einer Session in [Herdr](https://herdr.dev): `scripts/start-agent-tabs` öffnet je Ticket einen eigenen Herdr-Tab mit einer eigenständigen Claude-Code-Session, die `/start <ticket>` ausführt.
 
