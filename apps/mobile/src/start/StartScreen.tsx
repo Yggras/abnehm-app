@@ -1,10 +1,12 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { backendBaseUrl } from '../backend/client';
 import { fetchBackendStatus, type BackendStatus } from '../backend/status';
 import { useClock } from '../clock/clock-context';
+import { Button, Card, color, space, Text } from '../design';
 
 // Technischer Startbildschirm des Projektgerüsts (#93): prüft den Weg App → Backend → Postgres
 // und zeigt die Ablesung der Uhr. Die App-Shell (#101) ersetzt ihn durch die Tabs.
@@ -44,61 +46,42 @@ export default function StartScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Abnehm-App
-        </Text>
-        <Text style={styles.subtitle}>Technischer Startbildschirm</Text>
+        <View style={styles.heading}>
+          <Text variant="display" accessibilityRole="header">
+            Abnehm-App
+          </Text>
+          <Text tone="inkMuted">Technischer Startbildschirm</Text>
+        </View>
 
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.heading}>
+        <Card>
+          <Text variant="title" accessibilityRole="header">
             Backend
           </Text>
-          <Text accessibilityLiveRegion="polite" style={styles.body}>
-            {statusText[status.type]}
-          </Text>
-          {status.type === 'ok' ? <Text style={styles.body}>Datenbankzeit: {status.databaseTime}</Text> : null}
-          <Text style={styles.body}>Adresse: {backendBaseUrl() ?? 'nicht konfiguriert'}</Text>
-          <Pressable
-            accessibilityRole="button"
-            disabled={status.type === 'checking'}
-            onPress={retry}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          >
-            <Text style={styles.buttonLabel}>Erneut prüfen</Text>
-          </Pressable>
-        </View>
+          <Text accessibilityLiveRegion="polite">{statusText[status.type]}</Text>
+          {status.type === 'ok' ? <Text>Datenbankzeit: {status.databaseTime}</Text> : null}
+          <Text>Adresse: {backendBaseUrl() ?? 'nicht konfiguriert'}</Text>
+          <Button label="Erneut prüfen" variant="secondary" disabled={status.type === 'checking'} onPress={retry} />
+        </Card>
 
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.heading}>
+        <Card>
+          <Text variant="title" accessibilityRole="header">
             Uhr
           </Text>
-          <Text style={styles.body}>Lokaler Tag: {reading.localDate}</Text>
-          <Text style={styles.body}>Zeitzone: {reading.timeZone}</Text>
-          <Text style={styles.body}>Zeitpunkt: {reading.instant}</Text>
-        </View>
+          <Text>Lokaler Tag: {reading.localDate}</Text>
+          <Text>Zeitzone: {reading.timeZone}</Text>
+          <Text>Zeitpunkt: {reading.instant}</Text>
+        </Card>
+
+        {__DEV__ ? (
+          <Button label="Komponentenkatalog" variant="text" icon="layers" onPress={() => router.push('/katalog')} />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// Bewusst schlicht: Tokens und gebrandete Primitiven liefert das Design-System (#95).
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { padding: 24, gap: 24 },
-  title: { fontSize: 28, fontWeight: '700', color: '#1A1A1A' },
-  subtitle: { fontSize: 16, color: '#4A4A4A' },
-  section: { gap: 8 },
-  heading: { fontSize: 20, fontWeight: '600', color: '#1A1A1A' },
-  body: { fontSize: 16, color: '#1A1A1A' },
-  button: {
-    alignSelf: 'flex-start',
-    minHeight: 48,
-    minWidth: 48,
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#1A5F7A',
-  },
-  buttonPressed: { opacity: 0.8 },
-  buttonLabel: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  screen: { flex: 1, backgroundColor: color.surfaceBase },
+  content: { padding: space[4], gap: space[4] },
+  heading: { gap: space[1], paddingTop: space[4] },
 });

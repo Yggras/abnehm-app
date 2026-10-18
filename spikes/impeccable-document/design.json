@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T00:00:00Z",
+  "title": "Design System: Gemeinsam leichter",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "elevation-card",
+        "value": "0 4px 0 0 #E4D2B0"
+      },
+      {
+        "name": "elevation-card-pressed",
+        "value": "0 1px 0 0 #E4D2B0"
+      },
+      {
+        "name": "elevation-button",
+        "value": "0 4px 0 0 #085B58"
+      },
+      {
+        "name": "elevation-button-pressed",
+        "value": "0 1px 0 0 #085B58"
+      },
+      {
+        "name": "elevation-button-soft",
+        "value": "0 3px 0 0 #C6E6E2"
+      },
+      {
+        "name": "elevation-button-soft-pressed",
+        "value": "0 1px 0 0 #C6E6E2"
+      },
+      {
+        "name": "elevation-floating",
+        "value": "0 4px 0 0 #085B58, 0 10px 20px -6px #1D333240"
+      },
+      {
+        "name": "elevation-sheet",
+        "value": "0 -1px 0 0 #EAD9BC, 0 -10px 30px -10px #1D333233"
+      },
+      {
+        "name": "elevation-toast",
+        "value": "0 4px 0 0 #0E1F1E, 0 12px 24px -10px #1D333259"
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 2px #FFFCF6, 0 0 0 5px #0B7470"
+      }
+    ],
+    "motion": [
+      {
+        "name": "duration-instant",
+        "value": "90ms"
+      },
+      {
+        "name": "duration-fast",
+        "value": "150ms"
+      },
+      {
+        "name": "duration-base",
+        "value": "240ms"
+      },
+      {
+        "name": "duration-slow",
+        "value": "400ms"
+      },
+      {
+        "name": "duration-celebrate",
+        "value": "1200ms"
+      },
+      {
+        "name": "easing-standard",
+        "value": "cubic-bezier(0.2, 0, 0, 1)"
+      },
+      {
+        "name": "easing-enter",
+        "value": "cubic-bezier(0, 0, 0, 1)"
+      },
+      {
+        "name": "easing-exit",
+        "value": "cubic-bezier(0.3, 0, 1, 1)"
+      },
+      {
+        "name": "spring-bouncy",
+        "value": "damping 11, stiffness 180, mass 1"
+      },
+      {
+        "name": "spring-firm",
+        "value": "damping 20, stiffness 260, mass 1"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primär-Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Hauptaktion, höchstens eine je Bildschirm; sinkt beim Drücken um 3 dp ein.",
+      "html": "<button class=\"ds-btn-primary\">Speichern</button>",
+      "css": ".ds-btn-primary { background: #0B7470; color: #FFFFFF; font: 600 16px/20px Rubik, sans-serif; min-height: 52px; padding: 8px 20px; border: 0; border-radius: 999px; box-shadow: 0 4px 0 0 #085B58; } .ds-btn-primary:active { background: #085B58; box-shadow: 0 1px 0 0 #085B58; transform: translateY(3px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 4px 0 0 #085B58, 0 0 0 2px #FFFCF6, 0 0 0 5px #0B7470; }"
+    },
+    {
+      "name": "Sekundär-Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Direktaktionen wie „+250 ml“.",
+      "html": "<button class=\"ds-btn-secondary\">+250 ml</button>",
+      "css": ".ds-btn-secondary { background: #DDF0EE; color: #0B7470; font: 600 16px/20px Rubik, sans-serif; min-height: 52px; padding: 8px 20px; border: 0; border-radius: 999px; box-shadow: 0 3px 0 0 #C6E6E2; } .ds-btn-secondary:active { background: #C6E6E2; color: #085B58; box-shadow: 0 1px 0 0 #C6E6E2; transform: translateY(2px); }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Auswahl aus wenigen festen Optionen; ausgewählt mit Fläche, 2-dp-Rahmen und Häkchen.",
+      "html": "<span class=\"ds-chip\">4 Wochen</span><span class=\"ds-chip ds-chip-on\">✓ 3 Monate</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; margin-right: 8px; border-radius: 999px; background: #FFFCF6; color: #1D3332; font: 500 14px/18px Rubik, sans-serif; box-shadow: inset 0 0 0 1.5px #8F7B59; } .ds-chip-on { background: #DDF0EE; color: #0B7470; box-shadow: inset 0 0 0 2px #0B7470; }"
+    },
+    {
+      "name": "Karte",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Inhalte auf surface-card mit Sockelkante.",
+      "html": "<div class=\"ds-card\"><strong>Kalorien</strong><p>640 kcal übrig</p></div>",
+      "css": ".ds-card { background: #FFFCF6; border-radius: 24px; padding: 16px; box-shadow: 0 4px 0 0 #E4D2B0; color: #1D3332; font: 400 16px/22px Rubik, sans-serif; } .ds-card strong { font: 600 20px/26px Rubik, sans-serif; } .ds-card p { margin: 12px 0 0; }"
+    },
+    {
+      "name": "Hinweis",
+      "kind": "custom",
+      "refersTo": "notice-hint",
+      "description": "Symbol, Satz und höchstens eine Aktion, ohne zu werten.",
+      "html": "<div class=\"ds-notice\">☾ „Im Kalorienbudget“ entscheidet sich am Tagesende.</div>",
+      "css": ".ds-notice { background: #FDEBC2; color: #1D3332; border-radius: 16px; padding: 12px 16px; font: 500 14px/18px Rubik, sans-serif; }"
+    },
+    {
+      "name": "Meldung",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Bestätigt eine Buchung und bietet „Rückgängig“ an.",
+      "html": "<div class=\"ds-toast\"><span>+250 ml Wasser</span><button>Rückgängig</button></div>",
+      "css": ".ds-toast { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 4px 8px 4px 16px; border-radius: 16px; background: #1D3332; color: #FFFCF6; font: 400 16px/22px Rubik, sans-serif; box-shadow: 0 4px 0 0 #0E1F1E, 0 12px 24px -10px #1D333259; } .ds-toast span { flex: 1; } .ds-toast button { background: none; border: 0; color: #FFFCF6; font: 600 16px/20px Rubik, sans-serif; min-height: 44px; padding: 0 12px; border-radius: 999px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Lagune – wie aus Momos Insel geschnitzt",
+    "rules": [
+      {
+        "name": "The Farbe-ist-Person Rule",
+        "section": "colors"
+      },
+      {
+        "name": "The Kein-Rot Rule",
+        "section": "colors"
+      },
+      {
+        "name": "The Energie-ist-ein-Symbol Rule",
+        "section": "colors"
+      },
+      {
+        "name": "The Mitwachsen Rule",
+        "section": "typography"
+      },
+      {
+        "name": "The Sockel Rule",
+        "section": "elevation"
+      }
+    ]
+  }
+}

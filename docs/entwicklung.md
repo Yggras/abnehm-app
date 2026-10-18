@@ -29,6 +29,8 @@ Node führt die TypeScript-Quellen von Backend und Paketen direkt aus ([Type Str
 - **Uhr:** nur das Vertragsmodul sowie `Date` und `Intl` aus dem Sprachstandard.
 - **Zeit im Bereichscode:** In `apps/*/src` sind `Date.now()`, `new Date()`, `Date()` und `Intl…resolvedOptions()` verboten, in der App außerdem `expo-localization`. Ausgenommen sind nur der Geräteadapter `apps/mobile/src/clock/` und Tests.
 - **App → Backend:** nur `import type` aus `@abnehm/backend/rpc`. Laufzeitcode des Backends gelangt nie ins App-Bundle.
+- **Farben:** In `apps/mobile/src` stehen Farben nur als Design-Token aus `apps/mobile/src/design/tokens.ts`. Rohe Hex-, `rgb()`- oder `hsl()`-Werte und Farbnamen in Farbeigenschaften verbietet die Regel `abnehm/token-farben`; ausgenommen sind die Token-Datei und Tests.
+- **Plattformbibliotheken:** `expo-haptics` nur in `apps/mobile/src/haptics/`, `@expo/ui` nur in den Hüllen unter `apps/mobile/src/design/native/`, `expo-font` und `@expo-google-fonts/*` nur in `apps/mobile/src/design/fonts.ts` (Regel `abnehm/bibliotheksgrenzen`).
 - **Testuhr:** `@abnehm/clock/testing` und `@abnehm/clock/conformance` erlaubt Lint nur in Testdateien. Ins Backend-Image kommen sie nicht (`.dockerignore`). Development-Artefakte wie Seeds registrieren Testfähigkeiten später zentral ([#112](https://github.com/Yggras/abnehm-app/issues/112)).
 
 ### Vertragsmodul
@@ -49,6 +51,14 @@ Bereichscode liest Zeitpunkt, Zeitzone und lokalen Tag ausschließlich über die
 - In der App liefert `useClock()` die Geräteuhr: Systemzeit plus Gerätezone aus `expo-localization`.
 - `clock.read(timeZone)` liest in einer anderen Zone, im Backend etwa in der `time_zone` der Person.
 - Tests nutzen `createTestClock()`. Das Konformitäts-Testkit (`clockConformanceCases`) läuft gegen Systemuhr, Geräteuhr und Testuhr. Es prüft Tageswechsel, Sommerzeit (23- und 25-Stunden-Tage, Südhalbkugel, ausfallende Mitternacht), Halbstundenzonen, Reisen und ungültige Zonen.
+
+### Design-System
+
+Oberflächen entstehen nur aus den Tokens und Primitiven in `apps/mobile/src/design/` ([#95](https://github.com/Yggras/abnehm-app/issues/95)), Import über `../design`.
+
+- **Tokens:** `tokens.ts` übernimmt `research/design-system.md` vollständig; `tokens.test.ts` prüft das gegen die Tabellen dort. Ändert sich das Design-System, schlägt der Test fehl, bis die Tokens nachgezogen sind.
+- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`.
+- **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf dem Startbildschirm oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
 
 ### Typisierte Endpunkte (Hono RPC)
 

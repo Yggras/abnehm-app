@@ -133,3 +133,57 @@ describe('Backend in der App', () => {
     expect(await violations(runtime, 'apps/mobile/src/probe.ts')).toContain('no-restricted-imports');
   });
 });
+
+describe('Farben nur aus den Design-Tokens', () => {
+  const inApp = (code: string) => violations(code, 'apps/mobile/src/start/probe.tsx');
+
+  it.each([
+    "export const s = { color: '#1D3332' };",
+    "export const s = { backgroundColor: 'white' };",
+    "export const s = { borderColor: 'rgba(0, 0, 0, 0.2)' };",
+    "export const s = { boxShadow: '0 4px 0 0 #E4D2B0' };",
+    "export const ink = '#1d3332';",
+    "export const ink = 'hsl(170, 28%, 17%)';",
+    'export const e = <Svg stroke="#0B7470" />;',
+    "export const e = <Text style={{ color: 'red' }} />;",
+    'export const e = <Path fill={`#${hex}`} />;',
+  ])('verbietet rohe Farben: %s', async (code) => {
+    expect(await inApp(code)).toContain('abnehm/token-farben');
+  });
+
+  it.each([
+    "import { color } from '../design';\nexport const s = { color: color.ink, backgroundColor: 'transparent' };",
+    "import Svg from 'react-native-svg';\nexport const e = <Svg fill=\"none\" />;",
+    "export const t = 'Ticket #12 und Punkt 3';",
+  ])('erlaubt Tokens und Schlüsselwörter: %s', async (code) => {
+    expect(await inApp(code)).toEqual([]);
+  });
+
+  it('erlaubt rohe Farben nur in der Token-Datei und in Tests', async () => {
+    const code = "export const s = { color: '#1D3332' };";
+    expect(await violations(code, 'apps/mobile/src/design/tokens.ts')).toEqual([]);
+    expect(await violations(code, 'apps/mobile/src/design/Button.test.tsx')).toEqual([]);
+  });
+});
+
+describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
+  it.each([
+    ["import * as Haptics from 'expo-haptics';\nexport const h = Haptics;", 'apps/mobile/src/haptics/probe.ts'],
+    ["import { Host } from '@expo/ui';\nexport const h = Host;", 'apps/mobile/src/design/native/probe.tsx'],
+    ["import { MenuView } from '@expo/ui/community/menu';\nexport const m = MenuView;", 'apps/mobile/src/design/native/probe.tsx'],
+    ["import { useFonts } from 'expo-font';\nexport const f = useFonts;", 'apps/mobile/src/design/fonts.ts'],
+  ])('erlaubt %s in %s', async (code, filePath) => {
+    expect(await violations(code, filePath)).toEqual([]);
+  });
+
+  it.each([
+    "import * as Haptics from 'expo-haptics';\nexport const h = Haptics;",
+    "import { Host } from '@expo/ui';\nexport const h = Host;",
+    "import { labelsHidden } from '@expo/ui/swift-ui/modifiers';\nexport const l = labelsHidden;",
+    "import { useFonts } from 'expo-font';\nexport const f = useFonts;",
+    "import { Rubik_400Regular } from '@expo-google-fonts/rubik/400Regular';\nexport const r = Rubik_400Regular;",
+    "export const h = () => import('expo-haptics');",
+  ])('verbietet im Bereichscode: %s', async (code) => {
+    expect(await violations(code, 'apps/mobile/src/start/probe.tsx')).toContain('abnehm/bibliotheksgrenzen');
+  });
+});
