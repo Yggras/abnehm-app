@@ -77,6 +77,14 @@ export const partnerFixtures = {
     invalid: {
       'absolutes Gewicht': { ...weight, content: { ...weight.content, weightKg: 79.6 } },
       'Rohdatensatz-ID': { ...water, content: { progressPercent: 64, entryIds: [projection] } },
+      'fremdes Wasserziel': { ...water, content: { progressPercent: 64, waterTargetMl: 2000 } },
+      'fremdes Kalorienbudget': {
+        type: 'ernaehrung',
+        ...envelopeBase,
+        period: { type: 'tag', localDate: today },
+        content: { recordedMealCategories: 2, calorieBudgetKcal: 1800 },
+      },
+      'fremdes Zielgewicht': { ...weight, content: { ...weight.content, goalWeightKg: 72 } },
       'Wasser über 100 %': { ...water, content: { progressPercent: 120 } },
       'Woche ab Mittwoch': {
         type: 'sport',
@@ -99,6 +107,7 @@ export const partnerFixtures = {
     valid: { 'unterwegs': status, 'noch nichts': { ...status, stage: 'noch_nichts' } },
     invalid: {
       'exakte Zahl der Erfüllungen': { ...status, completedCount: 1 },
+      'Rohdatensatz-ID der Erfüllung': { ...status, dailyGoalCompletionId: projection },
       'an sich selbst': { ...status, recipientPersonId: anna },
     },
   }),

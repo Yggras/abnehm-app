@@ -142,7 +142,7 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 | Rolle | Interface | Ort |
 | --- | --- | --- |
 | App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, `revokeCurrentSession`, dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch` | `apps/mobile/src/auth/` |
-| Backend-Endpunkte | `SessionAuthenticator.authenticate(headers)` bzw. die Middleware `requireSession` | `apps/backend/src/auth/` |
+| Backend-Endpunkte | `SessionAuthenticator.authenticate(headers)`; Endpunkte erhalten die Sitzung über den Guard der Autorisierung (unten) | `apps/backend/src/auth/` |
 | Betrieb | `AdminPasswordReset`, aufgerufen über das Kommando unten | `apps/backend/src/auth/admin-reset-command.ts` |
 
 - **Endpunkte:** Better Auth liegt unter `/v1/auth`. Freigegeben sind nur `sign-up/email`, `sign-in/email`, `get-session` und `change-password`, alles andere dort antwortet mit `404`. Dazu kommen `POST /v1/session/revoke` (aktuelle Sitzung widerrufen) und `POST /v1/person/bootstrap` (die eine Person des Kontos).
@@ -158,6 +158,40 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 - **Sicherheitslog:** Geschrieben wird nur über `createSecurityLog` aus `apps/backend/src/security-log/`. Es nimmt ausschließlich die geschlossene Union `SecurityEvent` mit den Ereignistypen aus [#22](https://github.com/Yggras/abnehm-app/issues/22) an. Ihre Felder sind UUIDs, Katalogwerte, Wahrheitswerte oder IP-Adressen; unbekannte Felder werden abgewiesen. Mit `record(event, tx)` schreibt ein Modul in seiner eigenen Transaktion.
 - **Serverjobs:** Ein Job meldet Namen, Intervall und eine idempotente Funktion bei der Registry an (`apps/backend/src/jobs/job-registry.ts`). Angemeldet wird in `createBackend` (`apps/backend/src/backend.ts`), ohne die Registry zu ändern. Der Backend-Prozess prüft jede Minute, welche Jobs fällig sind; Tests lösen sie mit der Testuhr über `runDue()` aus. Erster Job ist `sicherheitslog_aufraeumen`, der Einträge nach 90 Tagen löscht.
 - **Tests:** `apps/backend/test/auth.test.ts` prüft die Abläufe über HTTP. `apps/backend/test/app-auth.test.ts` prüft das App-Modul `AppAuth` gegen die echte Hono-App. Dieser Test importiert App-Code und hat deshalb eine eigene tsconfig (`tsconfig.app-auth.json`, Bundler-Auflösung wie in der App).
+
+### Autorisierung
+
+Jeder Zugriff läuft durch das zentrale Modul `apps/backend/src/authorization/` ([#98](https://github.com/Yggras/abnehm-app/issues/98), Abschnitt 11 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)). Es arbeitet nach „deny by default“, vor Body-Validierung, Datenzugriff und Fachlogik. Importiert wird aus `authorization/authorization.ts`.
+
+- **Policy je Route:** Jede Route beginnt mit `guard(policy)`. Die Policy kommt aus `policies`:
+  - `public()` nur für Status und Auth-Abläufe ohne Sitzung (Registrieren, Anmelden, „Sitzung prüfen“);
+  - `authenticated()`, wenn eine Sitzung genügt, etwa beim Bootstrap, Passwort ändern und Sitzung widerrufen;
+  - `resource(entity, operation)` mit Fundstelle, z. B. `guard(policies.resource('partner_summary', 'lesen'), (c) => ({ id: c.req.param('id') }))`;
+  - `adminCommand(command)` nur für Server-Kommandos, nie über HTTP.
+
+  Ohne Sitzung antwortet der Guard mit `401` ohne Body, bei verweigertem Zugriff mit `403` und genau `{ code: 'forbidden', retryable: false }`. Ob es die Ressource gibt, verrät die Antwort nicht. Danach stehen `c.var.actor` (Konto, Sitzung, Person) und bei Ressourcen `c.var.resource` bereit. Beides stammt nur aus Sitzung und Postgres.
+- **Sperre für Routen ohne Policy:** `createApp` setzt `authorization.enforce` vor alle Routen. Eine Route, die nicht mit einem Guard beginnt, lehnt sie zur Laufzeit mit `forbidden` ab; ihr Handler läuft nicht. `findIncompletePolicies(app)` listet solche Routen und Fachbefehle. Der Test in `authorization-module.test.ts` erwartet an der echten App eine leere Liste.
+- **Ressourcen und Matrix:** `resources.ts` ordnet jede Tabelle des Schemas genau einer Ressourcenklasse der Matrix zu und enthält deren Regel. Eigentum, Mitgliedschaft und Freigaben liest die Regel aus Postgres. IDs aus dem Client finden eine Ressource nur. Weicht ein Eigentumsfeld der Nutzlast (`claimedOwnerPersonId`) von der Person der Sitzung ab, ist die Operation verboten. Welche Operationen eine Klasse kennt, steht in `operationMatrix` (`policy.ts`). Eine neue Tabelle braucht einen Eintrag in `resourceEntities`, sonst scheitert der Katalogtest.
+- **Fachbefehle:** Ein Befehl meldet seine Policy in `createBackend` mit `authorization.registerCommand(name, policy)` an und wird mit `authorizeCommand(executor, actor, name, target)` geprüft, auf Wunsch in der Transaktion des Aufrufers. Einen nicht angemeldeten Befehl lehnt das Modul ab. Generisches Upsert und Löschen prüft `authorize(executor, actor, policies.resource(entity, operation), target)`. Den `actor` liefert auf Routen der Guard, außerhalb einer Route `actorOf(headers)`.
+- **Partnerantworten:** Was eine Person über ihren Partner erhält, geht vor dem Senden durch `partnerResponse(kind, value)`. Die geschlossenen Schemas aus `@abnehm/contracts` sind die einzige Positivliste; bei einem Verstoß wirft die Funktion `PartnerResponseRejected`, ohne Daten zu nennen.
+- **Sicherheitslog:** Verweigerte Fotozugriffe (Fotoliste, Bildabruf) schreibt die Regel selbst als `fotozugriff_verweigert`.
+- **Negativtests:** `apps/backend/test/support/authorization.ts` erzeugt aus den Schutzdimensionen einer Policy die anwendbaren Fälle, jeweils mit positiver Gegenprobe. Die Dimensionen sind ohne Sitzung, fremde Person, manipulierte ID, Entkopplung, Freigabeentzug und verbotene Operation. Eine öffentliche Route erwartet Erfolg ohne Sitzung. Welche Varianten ein Szenario liefern muss, prüft schon die Typprüfung:
+
+  ```ts
+  const cases = authorizationCases({
+    policy: policies.resource('partner_summary', 'lesen'),
+    route: { method: 'GET', path: '/v1/partner/summary' },
+    arrange: async () => …, // Welt mit `backend` und dem Gerät `actor` der berechtigten Person
+    attempt: async (world, device) => httpOutcome(await call(world.backend, 'GET', …, device)),
+    manipulierte_id: …,
+    entkopplung: …,
+    freigabeentzug: …,
+    verbotene_operation: …,
+  });
+  for (const { name, run } of cases) it(name, run);
+  ```
+
+  `test/support/coupled-world.ts` liefert dafür eine gekoppelte Welt mit Anna und Philipp. Bis Endpunkte da sind, prüft `resourceProbe` eine Policy über eine Test-Route.
 
 ## Befehle
 

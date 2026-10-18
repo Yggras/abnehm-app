@@ -11,12 +11,12 @@ import type { Clock } from '@abnehm/clock';
 import { authErrorCodes, passwordPolicy } from '@abnehm/contracts/auth';
 import { EntityId } from '@abnehm/contracts/base';
 
+import { guard, policies } from '../authorization/authorization.ts';
 import type { Database } from '../database.ts';
 import { account, session, user, verification } from '../db/schema/index.ts';
 import type { SecurityEvent, SecurityLog } from '../security-log/security-log.ts';
 import { createLoginLimiter } from './login-limiter.ts';
 import type { PasswordBlocklist } from './password-blocklist.ts';
-import { requireSession } from './require-session.ts';
 
 // Auth-Modul (Spezifikation 0, Abschnitt 9). Better Auth bleibt hier gekapselt; Bereichscode erhält
 // nur das Interface seiner Rolle:
@@ -248,14 +248,16 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
   };
 
   // Nur diese Better-Auth-Pfade sind freigegeben; alles andere im Namensraum antwortet mit 404.
+  // Registrieren, Anmelden und „Sitzung prüfen“ sind öffentlich; Better Auth prüft dort die
+  // Zugangsdaten bzw. liefert ohne Sitzung `null`. Passwort ändern verlangt eine Sitzung.
   const handle = (c: { req: { raw: Request } }) => auth.handler(c.req.raw);
   const routes = new Hono()
-    .post('/auth/sign-up/email', handle)
-    .post('/auth/sign-in/email', handle)
-    .post('/auth/change-password', handle)
-    .get('/auth/get-session', handle)
-    .post('/session/revoke', requireSession(sessions), async (c) => {
-      await revokeSession(c.var.session, 'widerruf');
+    .post('/auth/sign-up/email', guard(policies.public()), handle)
+    .post('/auth/sign-in/email', guard(policies.public()), handle)
+    .post('/auth/change-password', guard(policies.authenticated()), handle)
+    .get('/auth/get-session', guard(policies.public()), handle)
+    .post('/session/revoke', guard(policies.authenticated()), async (c) => {
+      await revokeSession(c.var.actor, 'widerruf');
       return c.body(null, 204);
     });
 

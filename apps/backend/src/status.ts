@@ -4,15 +4,16 @@ import { Hono } from 'hono';
 import { Instant } from '@abnehm/contracts/base';
 import type { StatusResponse } from '@abnehm/contracts/status';
 
+import { guard, policies } from './authorization/authorization.ts';
 import type { Database } from './database.ts';
 import { errorCodeForLog } from './log.ts';
 
 type Ok = Extract<StatusResponse, { type: 'ok' }>;
 type Unavailable = Extract<StatusResponse, { type: 'database_unavailable' }>;
 
-/** Status-Endpunkt: antwortet erst, nachdem Postgres eine Abfrage beantwortet hat. */
+/** Status-Endpunkt, öffentlich: antwortet erst, nachdem Postgres eine Abfrage beantwortet hat. */
 export function statusRoutes({ database }: { database: Database }) {
-  return new Hono().get('/status', async (c) => {
+  return new Hono().get('/status', guard(policies.public()), async (c) => {
     let databaseTime: Instant;
     try {
       const result = await database.db.execute<{ database_time: string }>(
