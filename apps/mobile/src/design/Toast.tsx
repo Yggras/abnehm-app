@@ -4,6 +4,7 @@ import { boxShadow } from './elevation';
 import { EnergySymbol, Icon } from './Icon';
 import { touchSlop } from './press';
 import { Text } from './Text';
+import { useLargeTextLayout } from './text-scale';
 import { color, radius, size, space } from './tokens';
 
 /** Eine Zeile der Meldung; `energy` setzt das Energie-Symbol davor („Wasserziel erfüllt · +1 Energie“). */
@@ -33,8 +34,10 @@ function Line({ line }: { line: ToastLine }) {
  * Standzeit, Ansage und das Ersetzen mehrerer Meldungen besitzt der Meldungs-Host der App-Shell.
  */
 export function Toast({ line, secondLine, onUndo, testOnly_pressed }: ToastProps) {
+  // Ab Schriftfaktor 1,3 steht „Rückgängig“ unter dem Text, sonst rechts daneben.
+  const stacked = useLargeTextLayout();
   return (
-    <View style={styles.toast}>
+    <View style={[styles.toast, stacked && styles.stacked]}>
       <View style={styles.lines}>
         <Line line={line} />
         {secondLine ? <Line line={secondLine} /> : null}
@@ -63,7 +66,6 @@ const styles = StyleSheet.create({
     minHeight: size.buttonHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: space[2],
     paddingVertical: space[1],
     paddingLeft: space[4],
@@ -72,7 +74,8 @@ const styles = StyleSheet.create({
     backgroundColor: color.surfaceInverse,
     boxShadow: boxShadow.toast,
   },
-  lines: { flex: 1, minWidth: '50%', gap: space[1], paddingVertical: space[2] },
+  stacked: { flexDirection: 'column', alignItems: 'flex-start' },
+  lines: { flexShrink: 1, flexGrow: 1, gap: space[1], paddingVertical: space[2] },
   line: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   lineText: { flexShrink: 1 },
   undo: {

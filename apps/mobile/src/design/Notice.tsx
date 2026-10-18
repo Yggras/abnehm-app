@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+import { useLargeTextLayout } from './text-scale';
 import { color, radius, space } from './tokens';
 
 type NoticeAction = { label: string; onPress: () => void };
@@ -41,8 +42,10 @@ const toneStyle: Record<Tone, { surface: keyof typeof color; icon: IconName }> =
 /** Hinweis nach dem Design-System; Bedeutung entsteht aus Symbol und Text, nie aus Farbe allein. */
 export function Notice(props: NoticeProps) {
   const look = toneStyle[props.tone];
+  // Ab Schriftfaktor 1,3 rückt die Aktion unter den Satz, sonst steht sie rechts daneben.
+  const stacked = useLargeTextLayout();
   return (
-    <View style={[styles.notice, { backgroundColor: color[look.surface] }]}>
+    <View style={[styles.notice, stacked && styles.stacked, { backgroundColor: color[look.surface] }]}>
       <Icon name={props.icon ?? look.icon} tone={props.tone} />
       <Text variant="label" style={styles.text}>
         {props.text}
@@ -56,11 +59,11 @@ const styles = StyleSheet.create({
   notice: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: space[3],
     paddingVertical: space[3],
     paddingHorizontal: space[4],
     borderRadius: radius.md,
   },
-  text: { flex: 1, minWidth: '60%' },
+  stacked: { flexWrap: 'wrap' },
+  text: { flexShrink: 1, flexGrow: 1 },
 });
