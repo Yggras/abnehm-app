@@ -21,6 +21,7 @@
     "./today": "./src/today.ts",
     "./onboarding": "./src/onboarding.ts",
     "./status": "./src/status.ts",
+    "./sync": "./src/sync.ts",
     "./fixtures": "./fixtures/index.ts"
   },
   "scripts": {

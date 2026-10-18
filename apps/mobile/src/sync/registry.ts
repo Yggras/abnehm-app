@@ -1,0 +1,72 @@
+import type { z } from 'zod';
+
+import type { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
+import type { ContractError } from '@abnehm/contracts/errors';
+import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
+
+import type { TransactionContext } from '../local-db';
+
+// Entitäts-Registry des App-Syncs (Spezifikation 0, Abschnitt 10). Ein Bereich meldet je Entität seine
+// Transport-Schemas, die Eigentumsregel und drei Adapteroperationen an, die über den opaken
+// `TransactionContext` arbeiten. Drizzle-Tabellen oder andere Bibliothekstypen kommen im Interface nicht
+// vor; der Sync-Kern bleibt unverändert, wenn ein Bereich eine Entität ergänzt.
+
+/** Kanonischer Datensatz, wie ihn ein Adapter übernimmt; `data` ist schon mit `record` geprüft. */
+export type CanonicalEntity<R> = Readonly<{ entityId: EntityId; serverVersion: ServerVersion; data: R }>;
+
+/** Löschmarkierung des Servers; inhaltsfrei und terminal. */
+export type EntityTombstone = Readonly<{ entityId: EntityId; serverVersion: ServerVersion; deletedAt: Instant }>;
+
+/** Noch offene lokale Operation derselben Entität, in Entstehungsreihenfolge. */
+export type PendingChange<U> = Readonly<
+  ({ type: 'upsert_entity'; payload: U } | { type: 'delete_entity' }) & { operationId: EntityId; createdAt: Instant }
+>;
+
+/** Eine dauerhaft abgelehnte Operation samt kanonischem Zustand und den neueren offenen Operationen. */
+export type RejectedChange<U, R> = Readonly<{
+  entityId: EntityId;
+  error: ContractError;
+  /** Datensatz oder Löschmarkierung des Servers; `null`, wenn es die Entität für diese Person nicht gibt. */
+  canonical: ({ type: 'record' } & CanonicalEntity<R>) | ({ type: 'tombstone' } & EntityTombstone) | null;
+  pending: readonly PendingChange<U>[];
+}>;
+
+export type SyncEntityAdapter<U extends EntityData = EntityData, R extends EntityData = EntityData> = Readonly<{
+  entityType: SyncEntityType;
+  /**
+   * Eigentumsregel: das Feld des kanonischen Datensatzes mit der Eigentumsgrenze, etwa `personId`. Es
+   * setzt nur der Server; eine Upsert-Nutzlast mit diesem Feld weist die Outbox ab.
+   */
+  ownerField: string;
+  /** Transport-Schema des generischen Upserts; `null`, wenn die Entität kein Upsert kennt. */
+  upsert: z.ZodType<U> | null;
+  deletable: boolean;
+  /** Transport-Schema des kanonischen Datensatzes vom Server. */
+  record: z.ZodType<R>;
+  /**
+   * Übernimmt den kanonischen Datensatz vollständig. Ist die lokale Serverversion schon neuer, bleibt
+   * alles unverändert; eine gleiche Version wird erneut übernommen.
+   */
+  applyCanonical(tx: TransactionContext, record: CanonicalEntity<R>): void;
+  /** Übernimmt die Löschmarkierung; eine lokal unbekannte Entität bleibt unbekannt. */
+  applyTombstone(tx: TransactionContext, tombstone: EntityTombstone): void;
+  /**
+   * Stellt nach einer dauerhaften Ablehnung den kanonischen Zustand her und wendet danach die offenen
+   * Operationen in Reihenfolge erneut an. Ohne kanonischen Zustand verschwindet die Entität lokal.
+   */
+  reconcileRejected(tx: TransactionContext, rejection: RejectedChange<U, R>): void;
+}>;
+
+export type SyncRegistry = {
+  get(entityType: string): SyncEntityAdapter | undefined;
+};
+
+/** Alle Entitäten der App; ein doppelter Typ ist ein Integrationsfehler. */
+export function createSyncRegistry(entities: readonly SyncEntityAdapter[]): SyncRegistry {
+  const byType = new Map<string, SyncEntityAdapter>();
+  for (const entity of entities) {
+    if (byType.has(entity.entityType)) throw new Error(`Sync-Entität ${entity.entityType} ist doppelt angemeldet`);
+    byType.set(entity.entityType, entity);
+  }
+  return { get: (entityType) => byType.get(entityType) };
+}

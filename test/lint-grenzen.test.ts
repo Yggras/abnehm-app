@@ -114,9 +114,12 @@ describe('Vertrags-Fixtures nur in Tests', () => {
     expect(await violations(fixturesImport, filePath)).toContain('no-restricted-imports');
   });
 
-  it.each(['apps/mobile/src/probe.test.ts', 'apps/backend/test/probe.test.ts'])('erlaubt sie in Testdateien (%s)', async (filePath) => {
-    expect(await violations(fixturesImport, filePath)).toEqual([]);
-  });
+  it.each(['apps/mobile/src/probe.test.ts', 'apps/mobile/src/sync/testing/probe.ts', 'apps/backend/test/probe.test.ts'])(
+    'erlaubt sie in Testdateien und Test-Helfern (%s)',
+    async (filePath) => {
+      expect(await violations(fixturesImport, filePath)).toEqual([]);
+    },
+  );
 
   it('die Fixtures selbst nutzen wie das Vertragsmodul nur Zod und eigene Dateien', async () => {
     const code = "import { Hono } from 'hono';\nexport const h = Hono;";

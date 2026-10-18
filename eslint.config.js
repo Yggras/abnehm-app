@@ -142,6 +142,20 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // Test-Helfer unter `testing/` dürfen die Test-Entitäten aus den Vertrags-Fixtures nutzen; App-Code
+    // importiert sie nie, so gelangen sie nicht ins Bundle.
+    files: ['apps/mobile/src/**/testing/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'expo-localization', message: 'Die Gerätezone kommt aus der Uhr (useClock()).' }],
+          patterns: [backendTypesOnly, testOnlyClock],
+        },
+      ],
+    },
+  },
   // Design-System: Farben nur aus den Tokens; Plattformbibliotheken nur hinter ihrem Projektmodul.
   {
     files: ['apps/mobile/src/**/*.{ts,tsx}'],

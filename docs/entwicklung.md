@@ -193,6 +193,19 @@ Jeder Zugriff läuft durch das zentrale Modul `apps/backend/src/authorization/` 
 
   `test/support/coupled-world.ts` liefert dafür eine gekoppelte Welt mit Anna und Philipp. Bis Endpunkte da sind, prüft `resourceProbe` eine Policy über eine Test-Route.
 
+### Sync: Outbox, Push und Pull
+
+Der eigene Push/Pull-Sync ([#99](https://github.com/Yggras/abnehm-app/issues/99), Abschnitt 10 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)) lehnt sich an das [Backend-Protokoll von WatermelonDB](https://watermelondb.dev/docs/Sync/Backend) an. Die Hüllen stehen in `@abnehm/contracts/sync`. Fachbefehle und kanonische Duplikate ergänzt [#100](https://github.com/Yggras/abnehm-app/issues/100); Auslöser, Status, Schemaversionen und `pushNow` folgen mit [#102](https://github.com/Yggras/abnehm-app/issues/102).
+
+- **Entität anmelden:** Ein Bereich meldet jede synchronisierte Entität zweimal an, ohne den Sync-Kern zu ändern.
+  - Backend: `backend.sync.registerEntity(entity)` in `createBackend`. Für eigene Einträge mit `person_id` baut `ownedEntity({ entityType, resource, table, upsert, deletable, columns, record })` aus `apps/backend/src/sync/registry.ts` die Speicheroperationen. `resource` ist die Ressource der Autorisierung; ihre Regel entscheidet über Eigentum, Lesen, Upsert und Löschen.
+  - App: ein `SyncEntityAdapter` mit Transport-Schemas (`upsert`, `record`), Eigentumsregel (`ownerField`) und den Operationen `applyCanonical`, `applyTombstone` und `reconcileRejected`, die nur den opaken `TransactionContext` sehen. Für eine Entität, die genau eine Zeile ist, baut `sqliteEntity(…)` aus `apps/mobile/src/sync/` sie samt Versionsprüfung und Reconciliation. Der Composition Root übergibt alle an `createSyncRegistry([...foundationSyncEntities, …])`.
+- **Lokal ändern:** Das Repository schreibt seine Zeile und ruft in derselben Transaktion `SyncWriter.upsert` bzw. `delete` auf (`createSyncWriter`). Die Nutzlast ist vollständig und enthält keine Eigentums-, Server- oder abgeleiteten Felder; ein Rollback hinterlässt weder Änderung noch Operation.
+- **Ablauf:** `createSyncEngine(…).sync()` pusht erst, dann pullt es. Der Server verarbeitet einen Push in einer Transaktion. Jedes terminale Ergebnis (`applied`, `already_applied`, `permanently_rejected`) hält er unter der Operations-ID fest, ein vorübergehender Fehler rollt alles zurück (`503`). Der Pull liefert Seiten bis zu einer festen Obergrenze. Die App übernimmt jede Antwort in einer SQLite-Transaktion und speichert den Cursor erst mit der letzten Seite. Eine Zeile mit offener Operation überschreibt sie nie.
+- **Haken:** `onCanonicalChanges(tx, changes)` der Engine läuft in derselben Transaktion wie jede Übernahme; dort dockt der Persistenzdienst der Tagesziele an (#105). Serverseitige Vor-Pull-Schritte meldet ein Bereich mit `backend.sync.registerPrePullStep(name, step)` an. Sie laufen vor jeder Pull-Antwort in eigener Transaktion und müssen idempotent sein.
+- **Aufbewahrung:** Änderungsprotokoll, Löschmarkierungen und verarbeitete Operationen bleiben dauerhaft erhalten; es gibt keinen Job, der sie bereinigt.
+- **Tests:** `apps/backend/test/sync-push.test.ts`, `sync-pull.test.ts` und `sync-authorization.test.ts` prüfen das Protokoll über HTTP. `sync-app.test.ts` lässt Engine, Outbox und Adapter der App auf echtem SQLite gegen die echte Hono-App laufen. Deshalb gehört er wie `app-auth.test.ts` zu `tsconfig.app-auth.json`, und `vitest.config.ts` lädt die `.sql`-Migrationen der App als Text. `apps/mobile/src/sync/engine.test.ts` steuert den Transport selbst und prüft Transaktionen, Reconciliation und atomare Seiten. Als Entität dient beiden die Test-Entität auf `water_entry` (`TestWaterUpsert` aus `@abnehm/contracts/fixtures`, App-Seite in `src/sync/testing/`). Den echten Wassereintrag meldet Spezifikation 3 an.
+
 ## Befehle
 
 Alle Befehle laufen im Repo-Root:

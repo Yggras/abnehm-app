@@ -49,6 +49,9 @@ export const processedOperation = pgTable(
       .notNull()
       .references(() => person.id),
     operationType: text('operation_type').notNull(),
+    /** Entität der Operation; fehlt nur bei Fachbefehlen ohne einzelne Entität. */
+    entityType: text('entity_type'),
+    entityId: ref('entity_id'),
     /** Fachlicher Idempotenzschlüssel, etwa ein Buchungsschlüssel. */
     businessKey: text('business_key'),
     payloadHash: text('payload_hash').notNull(),
@@ -62,6 +65,7 @@ export const processedOperation = pgTable(
       .on(t.operationType, t.businessKey)
       .where(sql`${t.outcome} <> 'permanently_rejected'`),
     check('processed_operation_outcome_check', oneOf(t.outcome, ['applied', 'already_applied', 'permanently_rejected'])),
+    check('processed_operation_entity_check', sql`(${t.entityType} is null) = (${t.entityId} is null)`),
   ],
 );
 

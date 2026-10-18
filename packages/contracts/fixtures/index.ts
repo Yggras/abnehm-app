@@ -14,6 +14,9 @@ import { personFixtures } from './person.ts';
 import { portFixtures } from './ports.ts';
 import { routeFixtures } from './routes.ts';
 import { statusFixtures } from './status.ts';
+import { syncFixtures } from './sync.ts';
+
+export { TestWaterRecord, TestWaterUpsert } from './sync.ts';
 import { todayFixtures } from './today.ts';
 import { wirFixtures } from './wir.ts';
 
@@ -38,6 +41,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   today: todayFixtures,
   onboarding: onboardingFixtures,
   status: statusFixtures,
+  sync: syncFixtures,
 };
 
 export type FixtureCase = Readonly<{ name: string; schema: z.ZodType; value: unknown; valid: boolean }>;

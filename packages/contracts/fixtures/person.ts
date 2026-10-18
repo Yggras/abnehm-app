@@ -1,6 +1,6 @@
-import { PersonUpsert, UpdatePersonTimeZone, UpdatePersonTimeZoneResult } from '../src/person.ts';
+import { PersonRecord, PersonUpsert, UpdatePersonTimeZone, UpdatePersonTimeZoneResult } from '../src/person.ts';
 import { fixtures } from './define.ts';
-import { now, philipp, timeZone } from './ids.ts';
+import { account, now, philipp, timeZone } from './ids.ts';
 
 const started = {
   id: philipp,
@@ -58,5 +58,24 @@ export const personFixtures = {
   UpdatePersonTimeZoneResult: fixtures(UpdatePersonTimeZoneResult, {
     valid: { 'übernommen': { personId: philipp, timeZone, serverVersion: '1841' } },
     invalid: { 'ohne Serverversion': { personId: philipp, timeZone } },
+  }),
+  PersonRecord: fixtures(PersonRecord, {
+    valid: {
+      'nach dem Bootstrap': { ...started, accountId: account, timeZone, createdAt: now, updatedAt: now },
+      'Onboarding abgeschlossen': { ...completed, accountId: account, timeZone, createdAt: now, updatedAt: now },
+    },
+    invalid: {
+      'ohne Zeitzone': { ...completed, accountId: account, createdAt: now, updatedAt: now },
+      'mit Serverversion': { ...completed, accountId: account, timeZone, createdAt: now, updatedAt: now, serverVersion: '12' },
+      'abgeschlossen ohne Körperdaten': {
+        ...started,
+        accountId: account,
+        timeZone,
+        createdAt: now,
+        updatedAt: now,
+        onboardingStatus: 'abgeschlossen',
+        onboardingCompletedAt: now,
+      },
+    },
   }),
 };
