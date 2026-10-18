@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -14,7 +15,9 @@ import { useMomoTabBadge } from '../../shell/tab-badge';
  */
 export default function TabsLayout() {
   const momoBadge = useMomoTabBadge();
+  // Über Seiten und modalen Abläufen zeigt `ScreenFrame` die Meldung.
   const [barHeight, setBarHeight] = useState(0);
+  const focused = useIsFocused();
   return (
     <View style={styles.root}>
       <Tabs
@@ -28,9 +31,11 @@ export default function TabsLayout() {
         <Tabs.Screen name="momo" />
         <Tabs.Screen name="partner" />
       </Tabs>
-      <View style={[styles.messages, { bottom: barHeight + space[2] }]} pointerEvents="box-none">
-        <MessageSlot />
-      </View>
+      {focused ? (
+        <View style={[styles.messages, { bottom: barHeight + space[2] }]} pointerEvents="box-none">
+          <MessageSlot />
+        </View>
+      ) : null}
     </View>
   );
 }

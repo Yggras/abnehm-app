@@ -1,5 +1,8 @@
 import { render, screen } from '@testing-library/react-native';
+import { Slot } from 'expo-router';
+import { renderRouter } from 'expo-router/testing-library';
 
+import { MessageHostProvider } from './MessageHost';
 import { MissingContributionError, Placeholder } from './Placeholder';
 
 // `__DEV__` ist in React Native eine globale Variable; der Test schaltet sie auf Release um.
@@ -11,7 +14,15 @@ afterEach(() => {
 });
 
 test('im Development Build zeigt ein fehlender Beitrag einen deutschen Platzhalter mit Lieferant', async () => {
-  await render(<Placeholder target={{ type: 'settings', section: 'health' }} />);
+  const Layout = () => (
+    <MessageHostProvider>
+      <Slot />
+    </MessageHostProvider>
+  );
+  await renderRouter(
+    { _layout: Layout, index: () => <Placeholder target={{ type: 'settings', section: 'health' }} /> },
+    { initialUrl: '/' },
+  );
 
   expect(screen.getByRole('header', { name: 'Gesundheitsdaten' })).toBeOnTheScreen();
   expect(screen.getByText('Dieser Bereich ist noch in Arbeit.')).toBeOnTheScreen();

@@ -44,7 +44,7 @@ const testHandlers = ({ failUndo = false } = {}): QuickCommandHandlers => ({
     execute(tx, { ml }) {
       const id = water(++entries);
       sqliteOf(tx).insert(schema.waterEntry).values(waterRow(id, PERSON, ml)).run();
-      return { messageKey: 'wasser.hinzugefuegt', values: { ml }, undo: id };
+      return { messageKey: 'wasser.hinzugefuegt', values: { ml }, undoData: id };
     },
     undo(tx, id) {
       undoCalls.push(id);

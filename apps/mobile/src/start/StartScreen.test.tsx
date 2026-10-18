@@ -6,6 +6,7 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { createTestClock } from '@abnehm/clock/testing';
 
 import { ClockProvider } from '../clock/clock-context';
+import { MessageHostProvider } from '../shell/MessageHost';
 import StartScreen from './StartScreen';
 
 const fetchMock = jest.fn<Promise<Response>, Parameters<typeof fetch>>();
@@ -26,7 +27,9 @@ async function renderStart() {
   });
   const Layout = () => (
     <ClockProvider clock={clock}>
-      <Slot />
+      <MessageHostProvider>
+        <Slot />
+      </MessageHostProvider>
     </ClockProvider>
   );
   await renderRouter({ _layout: Layout, index: StartScreen }, { initialUrl: '/' });

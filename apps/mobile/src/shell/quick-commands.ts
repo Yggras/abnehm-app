@@ -13,7 +13,7 @@ export type QuickCommand = Extract<TrackerQuickAction, { type: 'command' }>;
 export type QuickCommandParams<K extends QuickCommandKey> = Extract<QuickCommand, { commandKey: K }>['params'];
 
 /** Ergebnis eines Handlers: Meldung und die Daten, die sein eigenes Undo braucht (etwa die Eintrags-ID). */
-export type QuickCommandResult<U> = { messageKey: MessageKey; values: MessageValues; undo: U };
+export type QuickCommandResult<U> = { messageKey: MessageKey; values: MessageValues; undoData: U };
 
 /**
  * Handler eines Bereichs. Beide Methoden arbeiten in der Transaktion, die die Registry öffnet, und
@@ -22,10 +22,10 @@ export type QuickCommandResult<U> = { messageKey: MessageKey; values: MessageVal
  */
 export type QuickCommandHandler<K extends QuickCommandKey, U = unknown> = {
   execute(tx: TransactionContext, params: QuickCommandParams<K>): QuickCommandResult<U>;
-  undo(tx: TransactionContext, undo: U): void;
+  undo(tx: TransactionContext, undoData: U): void;
 };
 
-/** Typisiert einen Handler, sodass `undo` die Daten aus `execute` kennt. */
+/** Typisiert einen Handler, sodass `undo` die `undoData` aus `execute` kennt. */
 export function quickCommandHandler<K extends QuickCommandKey, U>(handler: QuickCommandHandler<K, U>): QuickCommandHandler<K> {
   return handler as QuickCommandHandler<K>;
 }
@@ -59,7 +59,7 @@ export class MissingQuickCommandError extends Error {
   }
 }
 
-type PendingUndo = { database: LocalDatabase; handler: QuickCommandHandler<QuickCommandKey>; undo: unknown };
+type PendingUndo = { database: LocalDatabase; handler: QuickCommandHandler<QuickCommandKey>; undoData: unknown };
 
 // Fortlaufend über alle Registries, damit ein Token nie zu einer späteren Registry passt.
 let issuedTokens = 0;
@@ -81,9 +81,9 @@ export function createQuickCommandRegistry(
       if (!handler) throw new MissingQuickCommandError(command.commandKey);
       const database = currentDatabase();
       if (!database) throw new LocalDatabaseClosedError();
-      const { messageKey, values, undo } = database.transaction((tx) => handler.execute(tx, command.params));
+      const { messageKey, values, undoData } = database.transaction((tx) => handler.execute(tx, command.params));
       const undoToken = `undo-${++issuedTokens}`;
-      pending.set(undoToken, { database, handler, undo });
+      pending.set(undoToken, { database, handler, undoData });
       return { messageKey, values, undoToken };
     },
     undo(token) {
@@ -92,7 +92,7 @@ export function createQuickCommandRegistry(
       // Vor der Transaktion beansprucht: Ein zweiter Aufruf findet den Token nicht mehr.
       pending.delete(token);
       try {
-        claimed.database.transaction((tx) => claimed.handler.undo(tx, claimed.undo));
+        claimed.database.transaction((tx) => claimed.handler.undo(tx, claimed.undoData));
       } catch (error) {
         if (error instanceof LocalDatabaseClosedError) return { type: 'noop' };
         throw error;

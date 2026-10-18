@@ -11,6 +11,7 @@ import { hitArea } from '../design/testing/hit-area';
 import { textScale } from '../design/tokens';
 import { hrefFor, openTarget, routeCatalog } from '../navigation';
 import type * as MessageTextsModule from './message-texts';
+import { useMessageHost, type MessageHost } from './MessageHost';
 import * as quickCommands from './quick-commands';
 import { useMomoTabBadge } from './tab-badge';
 import { titleOf } from './texts';
@@ -57,7 +58,7 @@ let undo: jest.Mock;
 
 beforeEach(() => {
   jest.mocked(useMomoTabBadge).mockReturnValue(false);
-  execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undo: 'eintrag-1' }));
+  execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undoData: 'eintrag-1' }));
   undo = jest.fn();
   mockQuickCommands.handler = quickCommands.quickCommandHandler<'water.quick_add', string>({ execute, undo });
 });
@@ -233,6 +234,29 @@ describe('Quick-Commands und Meldungen', () => {
     expect(screen.getByText('Das hat nicht geklappt. Versuch es bitte noch einmal.')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
     report.mockRestore();
+  });
+
+  test.each([
+    ['einem modalen Ablauf', { type: 'capture.water' }],
+    ['einer Seite', { type: 'settings', section: 'goals' }],
+  ] as const)('eine Meldung aus %s steht dort, nicht verdeckt über der Tab-Leiste', async (_case, target) => {
+    // Der Host ist über allen Routen; die Leiste „Heute“ holt ihn hier für den Test ab.
+    let host: MessageHost | undefined;
+    jest.mocked(useMomoTabBadge).mockImplementation(() => {
+      host = useMessageHost();
+      return false;
+    });
+    const run = jest.fn();
+    await renderRouter(appDir, { initialUrl: '/' });
+    await open(target);
+    await heading(titleOf(target));
+
+    await act(async () => host!.showMessage({ messageKey: 'test.wasser', values: { ml: 250 }, undo: { run } }));
+
+    expect(screen.getAllByTestId('message-slot')).toHaveLength(1);
+    expect(screen.getByText('+250 ml Wasser')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   test('im Release ist ein fehlender Handler ein Integrationsfehler', async () => {

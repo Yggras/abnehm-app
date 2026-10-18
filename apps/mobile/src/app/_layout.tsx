@@ -23,8 +23,8 @@ export default function RootLayout() {
 
   if (!fontsReady) return null;
 
-  // Der Meldungs-Host liegt über allen Routen, damit auch modale Abläufe Meldungen zeigen können;
-  // sichtbar wird die Meldung über der Tab-Leiste.
+  // Der Meldungs-Host liegt über allen Routen. Sichtbar wird die Meldung über der Tab-Leiste oder,
+  // auf Seiten und in modalen Abläufen, am unteren Rand von `ScreenFrame`.
   return (
     <MessageHostProvider>
       <StatusBar style="dark" />

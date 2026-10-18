@@ -30,20 +30,27 @@ export function useQuickCommand(): (command: QuickCommand) => void {
       }
 
       const { messageKey, values, undoToken } = outcome;
-      showMessage({
-        messageKey,
-        values,
-        undo: {
-          run: () => {
-            try {
-              appQuickCommands.undo(undoToken);
-            } catch (error) {
-              failed(error);
-            }
+      const expire = () => appQuickCommands.expire(undoToken);
+      try {
+        showMessage({
+          messageKey,
+          values,
+          undo: {
+            run: () => {
+              try {
+                appQuickCommands.undo(undoToken);
+              } catch (error) {
+                failed(error);
+              }
+            },
+            expire,
           },
-          expire: () => appQuickCommands.expire(undoToken),
-        },
-      });
+        });
+      } catch (error) {
+        // Ohne Meldung gibt es kein „Rückgängig“; der Token endet hier (fehlender Text im Release).
+        expire();
+        throw error;
+      }
     },
     [showMessage],
   );
