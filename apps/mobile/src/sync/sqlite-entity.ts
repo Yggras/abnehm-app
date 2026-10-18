@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { z } from 'zod';
 
@@ -71,7 +71,9 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
     applyTombstone,
     reconcileRejected(tx, rejection) {
       const { canonical } = rejection;
-      if (canonical === null) sqliteOf(tx).delete(table).where(eq(table.id, rejection.entityId)).run();
+      // Ohne kanonischen Zustand verschwindet nur, was der Server nie bestätigt hat; eine bestätigte
+      // eigene Zeile (etwa die Person) kann der Server nicht nachträglich vorenthalten.
+      if (canonical === null) sqliteOf(tx).delete(table).where(and(eq(table.id, rejection.entityId), isNull(table.serverVersion))).run();
       else if (canonical.type === 'record') applyCanonical(tx, canonical);
       else applyTombstone(tx, canonical);
       for (const change of rejection.pending) options.replay(tx, rejection.entityId, change);

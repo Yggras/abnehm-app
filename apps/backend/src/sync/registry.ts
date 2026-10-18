@@ -28,7 +28,7 @@ export type EntityWrite = Readonly<{
   at: Date;
 }>;
 
-export type EntityRemoval = Readonly<{ entityId: EntityId; serverVersion: bigint; at: Date }>;
+export type EntityRemoval = Readonly<{ entityId: EntityId; ownerPersonId: EntityId; serverVersion: bigint; at: Date }>;
 
 export type ServerSyncEntity = Readonly<{
   entityType: SyncEntityType;
@@ -105,7 +105,7 @@ export function ownedEntity<T extends PgTable & OwnedColumns, U extends EntityDa
       await tx
         .update(table)
         .set({ deletedAt: removal.at, updatedAt: removal.at, serverVersion: removal.serverVersion } as never)
-        .where(eq(table.id, removal.entityId));
+        .where(and(eq(table.id, removal.entityId), eq(table.personId, removal.ownerPersonId)));
     },
   };
 }

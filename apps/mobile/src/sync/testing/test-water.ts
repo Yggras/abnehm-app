@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { asc, eq, isNull } from 'drizzle-orm';
 
 import type { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
 import { TestWaterRecord, TestWaterUpsert } from '@abnehm/contracts/fixtures';
@@ -72,7 +72,7 @@ export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
     },
     /** Eine Zeile samt Löschmarkierung, auch wenn sie gelöscht ist. */
     row(tx: ReadContext, entityId: EntityId) {
-      return sqliteOf(tx).select().from(waterEntry).where(and(eq(waterEntry.id, entityId))).get();
+      return sqliteOf(tx).select().from(waterEntry).where(eq(waterEntry.id, entityId)).get();
     },
   };
 }

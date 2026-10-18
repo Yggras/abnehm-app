@@ -75,6 +75,9 @@ describe('Push', () => {
     const operation = upsertOp(id, water(250));
     const [applied] = await push(backend, anna.device, [operation]);
 
+    // Auch abweichende Metadaten machen aus dem Retry einen Konflikt.
+    const [otherTime] = await push(backend, anna.device, [{ ...operation, createdAt: '2026-10-14T13:00:00.000Z' as typeof operation.createdAt }]);
+    expect(otherTime).toMatchObject({ type: 'permanently_rejected', error: { code: 'operation_conflict' } });
     const [conflict] = await push(backend, anna.device, [{ ...operation, payload: water(300) }]);
     expect(conflict).toMatchObject({ type: 'permanently_rejected', error: { code: 'operation_conflict', retryable: false } });
     // Kanonischer Zustand der eigenen Entität, unverändert.
@@ -254,6 +257,12 @@ describe('Push', () => {
       operations: [operation],
     });
     expect(withPerson).toMatchObject({ status: 400, body: { code: 'invalid_payload' } });
+    const oldOperation = await call(backend, 'POST', '/v1/sync/push', anna.device, {
+      schemaVersion: 1,
+      installationId: randomUUID(),
+      operations: [{ ...operation, schemaVersion: 2 }],
+    });
+    expect(oldOperation).toMatchObject({ status: 400, body: { code: 'schema_update_required' } });
     expect(await backend.database.db.select().from(waterEntry)).toHaveLength(0);
   });
 });

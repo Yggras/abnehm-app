@@ -42,7 +42,7 @@ export type SyncTransport = {
 };
 
 /** Eine Entität, deren kanonischer Stand in der laufenden Transaktion übernommen wurde. */
-export type CanonicalChangeApplied = Readonly<{ entityType: string; entityId: EntityId; kind: 'record' | 'tombstone' | 'reconciled' }>;
+export type CanonicalChangeApplied = Readonly<{ entityType: string; entityId: EntityId; type: 'record' | 'tombstone' | 'reconciled' }>;
 
 /**
  * Haken in derselben Transaktion wie die Übernahme kanonischer Ergebnisse, Ablehnungen und Pull-Seiten.
@@ -75,25 +75,18 @@ const maxRounds = 1000;
 export function createSyncEngine({ database, registry, transport, clock, installationId, onCanonicalChanges }: SyncEngineOptions): SyncEngine {
   let running: Promise<SyncCycleResult> | null = null;
 
-  function adapterFor(entityType: string): SyncEntityAdapter {
-    const adapter = registry.get(entityType);
-    // Der Server liefert nur Entitäten, die auch die App kennt; alles andere ist ein Integrationsfehler.
-    if (adapter === undefined) throw new Error(`Sync-Entität ${entityType} ist in der App nicht angemeldet`);
-    return adapter;
-  }
-
   function apply(tx: TransactionContext, change: CanonicalChange): CanonicalChangeApplied {
-    const adapter = adapterFor(change.entityType);
+    const adapter = registry.require(change.entityType);
     if (change.type === 'record') {
       adapter.applyCanonical(tx, { entityId: change.entityId, serverVersion: change.serverVersion, data: adapter.record.parse(change.data) });
     } else {
       adapter.applyTombstone(tx, { entityId: change.entityId, serverVersion: change.serverVersion, deletedAt: change.deletedAt });
     }
-    return { entityType: change.entityType, entityId: change.entityId, kind: change.type };
+    return { entityType: change.entityType, entityId: change.entityId, type: change.type };
   }
 
   function reconcile(tx: TransactionContext, operation: OutboxOperation, result: Extract<PushResult, { type: 'permanently_rejected' }>) {
-    const adapter = adapterFor(operation.entityType);
+    const adapter = registry.require(operation.entityType);
     const pending = pendingFor(tx, operation.entityType, operation.entityId).map((change): PendingChange<never> =>
       change.type === 'upsert_entity' ? { ...change, payload: adapter.upsert!.parse(change.payload) as never } : change,
     );
@@ -129,7 +122,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
           removeOperation(tx, operation.operationId);
           if (result.type === 'permanently_rejected') {
             reconcile(tx, operation, result);
-            changes.push({ entityType: operation.entityType, entityId: operation.entityId, kind: 'reconciled' });
+            changes.push({ entityType: operation.entityType, entityId: operation.entityId, type: 'reconciled' });
           } else if (!hasPending(tx, operation.entityType, operation.entityId)) {
             changes.push(apply(tx, result.canonical));
           }

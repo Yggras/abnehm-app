@@ -15,10 +15,11 @@ import { portFixtures } from './ports.ts';
 import { routeFixtures } from './routes.ts';
 import { statusFixtures } from './status.ts';
 import { syncFixtures } from './sync.ts';
-
-export { TestWaterRecord, TestWaterUpsert } from './sync.ts';
 import { todayFixtures } from './today.ts';
 import { wirFixtures } from './wir.ts';
+
+/** Test-Entität der Sync-Tests in App und Backend; kein Teil des Transportkatalogs. */
+export { TestWaterRecord, TestWaterUpsert } from './sync.ts';
 
 /**
  * Fixture-Register aller exportierten Schemas, je Teilpfad des Pakets. Ein neues Schema bekommt

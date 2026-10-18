@@ -52,13 +52,16 @@ export type SyncEntityAdapter<U extends EntityData = EntityData, R extends Entit
   applyTombstone(tx: TransactionContext, tombstone: EntityTombstone): void;
   /**
    * Stellt nach einer dauerhaften Ablehnung den kanonischen Zustand her und wendet danach die offenen
-   * Operationen in Reihenfolge erneut an. Ohne kanonischen Zustand verschwindet die Entität lokal.
+   * Operationen in Reihenfolge erneut an. Ohne kanonischen Zustand verschwindet eine nie bestätigte
+   * Entität lokal.
    */
   reconcileRejected(tx: TransactionContext, rejection: RejectedChange<U, R>): void;
 }>;
 
 export type SyncRegistry = {
   get(entityType: string): SyncEntityAdapter | undefined;
+  /** Die angemeldete Entität; eine unbekannte ist ein Integrationsfehler. */
+  require(entityType: string): SyncEntityAdapter;
 };
 
 /** Alle Entitäten der App; ein doppelter Typ ist ein Integrationsfehler. */
@@ -68,5 +71,12 @@ export function createSyncRegistry(entities: readonly SyncEntityAdapter[]): Sync
     if (byType.has(entity.entityType)) throw new Error(`Sync-Entität ${entity.entityType} ist doppelt angemeldet`);
     byType.set(entity.entityType, entity);
   }
-  return { get: (entityType) => byType.get(entityType) };
+  return {
+    get: (entityType) => byType.get(entityType),
+    require(entityType) {
+      const adapter = byType.get(entityType);
+      if (adapter === undefined) throw new Error(`Sync-Entität ${entityType} ist in der App nicht angemeldet`);
+      return adapter;
+    },
+  };
 }

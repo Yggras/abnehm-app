@@ -207,7 +207,7 @@ describe('Sync der App', () => {
     // Die jüngere Operation ist noch offen: Ihre Wirkung bleibt, der Pull überschreibt die Zeile nicht.
     expect(database.read((tx) => repository.row(tx, id))).toMatchObject({ amountMl: 400, serverVersion: '5' });
     expect(outboxRows(database)).toEqual([expect.objectContaining({ entityId: id, payload: expect.objectContaining({ amountMl: 400 }) })]);
-    expect(hookCalls[0]).toEqual([{ entityType: 'water_entry', entityId: id, kind: 'reconciled' }]);
+    expect(hookCalls[0]).toEqual([{ entityType: 'water_entry', entityId: id, type: 'reconciled' }]);
   });
 
   it('entfernt eine abgelehnte Entität ohne kanonischen Zustand lokal', async () => {
@@ -229,6 +229,29 @@ describe('Sync der App', () => {
     });
     await engine.sync();
     expect(database.read((tx) => repository.row(tx, id))).toBeUndefined();
+    expect(outboxRows(database)).toEqual([]);
+  });
+
+  it('behält eine schon bestätigte Zeile, auch wenn eine Ablehnung keinen kanonischen Zustand nennt', async () => {
+    const { database, repository, transport, engine } = context;
+    const id = EntityId.parse(randomUUID());
+    database.transaction((tx) => testWaterEntity.applyCanonical(tx, { entityId: id, serverVersion: ServerVersion.parse('5'), data: recordData(250) }));
+    database.transaction((tx) => repository.save(tx, id, water(300)));
+    transport.onPush = (request) => ({
+      type: 'ok',
+      body: {
+        results: [
+          {
+            type: 'permanently_rejected',
+            operationId: request.operations[0]!.operationId,
+            error: { code: 'forbidden', retryable: false },
+            canonical: { type: 'absent', entityType: 'water_entry', entityId: id },
+          },
+        ],
+      },
+    });
+    await engine.sync();
+    expect(database.read((tx) => repository.row(tx, id))).toMatchObject({ amountMl: 300, serverVersion: '5' });
     expect(outboxRows(database)).toEqual([]);
   });
 

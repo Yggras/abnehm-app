@@ -23,6 +23,7 @@ import {
   guard,
   policies,
   policyProblem,
+  type Actor,
   type Authorization,
   type PersonActor,
   type ResourcePolicy,
@@ -129,6 +130,8 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         stored.payloadHash === hash;
       if (!identical) return rejected(operation, 'operation_conflict', await visibleState(tx, actor, operation));
       const result = PushResult.parse(stored.result);
+      // Kanonischen Inhalt gibt es nur, solange die Person die Entität noch lesen darf.
+      if (result.canonical.type === 'record' && (await visibleState(tx, actor, operation)).type === 'absent') return forbidden(operation);
       return result.type === 'applied' ? { ...result, type: 'already_applied' } : result;
     }
     const result = await decide(tx, actor, operation, at);
@@ -169,7 +172,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
           const write = { entityId: operation.entityId, payload: parsed.data, ownerPersonId: actor.personId, serverVersion, at };
           await entity.write(savepoint, { ...write, exists: current !== undefined });
         } else {
-          await entity.remove(savepoint, { entityId: operation.entityId, serverVersion, at });
+          await entity.remove(savepoint, { entityId: operation.entityId, ownerPersonId: actor.personId, serverVersion, at });
         }
         await recordChange(savepoint, {
           position: serverVersion,
@@ -281,32 +284,43 @@ function syncRoutes({
   push(actor: PersonActor, request: PushRequest): Promise<PushResponse>;
   pull(actor: PersonActor, request: PullRequest): Promise<PullResponse | ContractError>;
 }) {
+  /**
+   * Gemeinsamer Rahmen beider Endpunkte: eine Person (vor dem Bootstrap generisch verweigert), die
+   * aktuelle Vertragsversion in Hülle und Operationen und `503` ohne Body bei einem vorübergehenden
+   * Fehler. Unbekannte Fehler gelten bewusst als vorübergehend: Die Outbox bleibt erhalten, statt dass
+   * ein Fehler des Servers Änderungen als dauerhaft abgelehnt verwirft.
+   */
+  async function handle<T>(
+    actor: Actor,
+    versions: readonly number[],
+    run: (actor: PersonActor) => Promise<T>,
+  ): Promise<{ type: 'ok'; value: T } | { type: 'error'; error: ContractError; status: 400 | 403 } | { type: 'unavailable' }> {
+    if (actor.personId === null) return { type: 'error', error: forbiddenError, status: 403 };
+    if (versions.some((version) => version !== currentSyncSchemaVersion)) return { type: 'error', error: schemaUpdateRequired, status: 400 };
+    try {
+      return { type: 'ok', value: await run({ ...actor, personId: actor.personId }) };
+    } catch (error) {
+      // Die ganze Transaktion ist zurückgerollt; keine Operation ist bestätigt.
+      console.error('[sync] abgebrochen:', errorCodeForLog(error));
+      return { type: 'unavailable' };
+    }
+  }
+
   return new Hono()
     .post('/sync/push', guard(policies.authenticated()), jsonBody(PushRequest), async (c) => {
-      const { actor } = c.var;
-      if (actor.personId === null) return c.json(forbiddenError, 403);
       const request = c.req.valid('json');
-      if (request.schemaVersion !== currentSyncSchemaVersion) return c.json(schemaUpdateRequired, 400);
-      try {
-        return c.json(await push({ ...actor, personId: actor.personId }, request), 200);
-      } catch (error) {
-        // Vorübergehender Fehler: Die ganze Transaktion ist zurückgerollt, keine Operation ist bestätigt.
-        console.error('[sync] Push abgebrochen:', errorCodeForLog(error));
-        return c.body(null, 503);
-      }
+      const versions = [request.schemaVersion, ...request.operations.map((operation) => operation.schemaVersion)];
+      const outcome = await handle(c.var.actor, versions, (actor) => push(actor, request));
+      if (outcome.type === 'unavailable') return c.body(null, 503);
+      if (outcome.type === 'error') return c.json(outcome.error, outcome.status);
+      return c.json(outcome.value, 200);
     })
     .post('/sync/pull', guard(policies.authenticated()), jsonBody(PullRequest), async (c) => {
-      const { actor } = c.var;
-      if (actor.personId === null) return c.json(forbiddenError, 403);
       const request = c.req.valid('json');
-      if (request.schemaVersion !== currentSyncSchemaVersion) return c.json(schemaUpdateRequired, 400);
-      let response: PullResponse | ContractError;
-      try {
-        response = await pull({ ...actor, personId: actor.personId }, request);
-      } catch (error) {
-        console.error('[sync] Pull abgebrochen:', errorCodeForLog(error));
-        return c.body(null, 503);
-      }
+      const outcome = await handle(c.var.actor, [request.schemaVersion], (actor) => pull(actor, request));
+      if (outcome.type === 'unavailable') return c.body(null, 503);
+      if (outcome.type === 'error') return c.json(outcome.error, outcome.status);
+      const response = outcome.value;
       if ('code' in response) return c.json(response, response.code === 'full_resync_required' ? 409 : 400);
       return c.json(response, 200);
     });
@@ -394,11 +408,12 @@ function sqlState(error: unknown): string | undefined {
   return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
 }
 
-/** SHA-256 der kanonischen Nutzlast: Typ, Entität und Nutzlast mit sortierten Schlüsseln. */
+/**
+ * SHA-256 der kanonischen Operation (sortierte Schlüssel): Nur ein vollständig identischer Retry erhält
+ * das gespeicherte Ergebnis, schon eine abweichende Version oder Erstellungszeit ist ein Konflikt.
+ */
 export function payloadHash(operation: OutboxOperation): string {
-  const payload = operation.type === 'upsert_entity' ? operation.payload : null;
-  const canonical = canonicalJson({ type: operation.type, entityType: operation.entityType, entityId: operation.entityId, payload });
-  return createHash('sha256').update(canonical).digest('hex');
+  return createHash('sha256').update(canonicalJson(operation)).digest('hex');
 }
 
 function canonicalJson(value: unknown): string {

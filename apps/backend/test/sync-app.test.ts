@@ -159,7 +159,7 @@ describe('Sync App ↔ Backend', () => {
 
     expect(await a.sync()).toEqual({ push: 'done', pull: 'done' });
 
-    expect(a.visible()).toEqual([
+    expect(a.visible().sort((x, y) => x.amountMl - y.amountMl)).toEqual([
       { id: first, amountMl: 250 },
       { id: last, amountMl: 400 },
     ]);
