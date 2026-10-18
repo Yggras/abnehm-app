@@ -1,4 +1,4 @@
-import { AreaKey, BausteinKey, EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
+import { AreaKey, BausteinKey, EntityId, type Instant, type LocalDate } from '@abnehm/contracts/base';
 import {
   CheckInMoment,
   DailyGoalEvaluated,

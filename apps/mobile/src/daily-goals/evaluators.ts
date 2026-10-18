@@ -56,7 +56,5 @@ export type CheckInEvaluator<T extends AreaKey, Facts> = {
 // Die Registry hält Evaluatoren mit verschiedenen Faktentypen. Ein Bausteinschlüssel macht den
 // Typparameter invariant, deshalb ist die Liste die Vereinigung über alle Schlüssel; die Fakten
 // bleiben dem jeweiligen Evaluator überlassen, der sie selbst liest.
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export type AnyBausteinEvaluator = { [K in BausteinKey]: BausteinEvaluator<K, any> }[BausteinKey];
 export type AnyCheckInEvaluator = { [T in AreaKey]: CheckInEvaluator<T, any> }[AreaKey];
-/* eslint-enable @typescript-eslint/no-explicit-any */
