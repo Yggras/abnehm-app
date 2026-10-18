@@ -49,7 +49,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
       predictiveBackGestureEnabled: false,
     },
-    plugins: ['expo-router', 'expo-localization', 'expo-font', 'expo-splash-screen', 'expo-sqlite'],
+    plugins: [
+      'expo-router',
+      'expo-localization',
+      'expo-font',
+      'expo-splash-screen',
+      'expo-sqlite',
+      // Sitzung im Schlüsselbund bzw. Keystore. Ohne Biometrie: kein Face-ID-Hinweis. Die
+      // Android-Backup-Regeln des Plugins halten die Einträge aus Auto Backup heraus.
+      ['expo-secure-store', { faceIDPermission: false }],
+    ],
     experiments: {
       reactCompiler: true,
     },

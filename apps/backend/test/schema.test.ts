@@ -16,6 +16,8 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 const ME = uuid(1);
 const PARTNER = uuid(2);
 const OTHER = uuid(3);
+/** Konten (Better-Auth-„user“) der drei Personen. */
+const accountOf = (person: string) => person.replace('00000000-0000-4000-8000-', '00000000-0000-4000-9000-');
 
 type Db = Database['db'];
 
@@ -24,12 +26,9 @@ async function migratedDatabase(): Promise<Db> {
   onTestFinished(() => database.drop());
   await migrateDatabase(database.handle);
   const { db } = database.handle;
-  for (const [id, accountId] of [
-    [ME, 'konto_me'],
-    [PARTNER, 'konto_partner'],
-    [OTHER, 'konto_other'],
-  ] as const) {
-    await db.insert(schema.person).values(personRow(id, accountId));
+  for (const id of [ME, PARTNER, OTHER]) {
+    await db.insert(schema.user).values({ id: accountOf(id), name: '', email: `${id}@example.test`, emailVerified: false, createdAt: at, updatedAt: at });
+    await db.insert(schema.person).values(personRow(id, accountOf(id)));
   }
   return db;
 }
@@ -120,7 +119,7 @@ describe('Migrationen', () => {
     const db = await migratedDatabase();
 
     const columns = await db.execute<{ table_name: string; column_name: string }>(
-      sql`select table_name, column_name from information_schema.columns where table_schema = 'public' and column_name ~* 'e_?mail'`,
+      sql`select table_name, column_name from information_schema.columns where table_schema = 'public' and column_name ~* 'e_?mail' and table_name not in ('user', 'account', 'session', 'verification')`,
     );
     expect(columns.rows).toEqual([]);
   });
@@ -129,7 +128,7 @@ describe('Migrationen', () => {
 describe('natürliche Unique-Keys', () => {
   it('Person je Konto', async () => {
     const db = await migratedDatabase();
-    await expectViolation('person_account_uq', db.insert(schema.person).values(personRow(uuid(9), 'konto_me')));
+    await expectViolation('person_account_uq', db.insert(schema.person).values(personRow(uuid(9), accountOf(ME))));
   });
 
   it('eine Kopplung je ungeordnetem Personenpaar, sortiert gespeichert', async () => {
@@ -183,7 +182,7 @@ describe('natürliche Unique-Keys', () => {
     const db = await migratedDatabase();
     const error = await db
       .update(schema.person)
-      .set({ accountId: 'anderes_konto' })
+      .set({ accountId: accountOf(uuid(9)) })
       .where(eq(schema.person.id, ME))
       .then(
         () => undefined,

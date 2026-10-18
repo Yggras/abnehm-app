@@ -14,6 +14,11 @@ const lite = byName(sqliteShape(sqlite));
 
 /** Reine Server-Tabellen (Spezifikation 0, Abschnitte 8–11; Spezifikation 5, Abschnitt 9). */
 const serverOnly = [
+  // Better-Auth-Tabellen des Auth-Moduls: Konto und Sitzung sind nicht Teil des Fach-Syncs.
+  'user',
+  'session',
+  'account',
+  'verification',
   'invitation',
   'push_installation',
   'notification_intent',
@@ -96,13 +101,14 @@ describe('Schema-Parität Postgres ↔ SQLite', () => {
     expect(comparable(lite.get(name)!)).toEqual(comparable(pg.get(name)!));
   });
 
-  it.each(shared)('%s: dieselben Fremdschlüssel, außer auf Personen, die lokal fehlen können', (name) => {
+  it.each(shared)('%s: dieselben Fremdschlüssel, außer auf Personen, die lokal fehlen können, und auf reine Server-Tabellen', (name) => {
     const partnerColumns = new Set<string>(sqlite.partnerPersonColumns);
     const expected = pg
       .get(name)!
       .foreignKeys.filter(
         (foreignKey) =>
-          !(foreignKey.foreignTable === 'person' && foreignKey.columns.length === 1 && partnerColumns.has(`${name}.${foreignKey.columns[0]}`)),
+          !(foreignKey.foreignTable === 'person' && foreignKey.columns.length === 1 && partnerColumns.has(`${name}.${foreignKey.columns[0]}`)) &&
+          !serverOnly.includes(foreignKey.foreignTable),
       )
       .map(foreignKeyText)
       .sort();

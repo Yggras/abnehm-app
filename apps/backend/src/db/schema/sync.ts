@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { bigint, check, pgTable, smallint, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, check, index, pgTable, smallint, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { coupling, person } from './accounts.ts';
+import { securityEventTypes } from '../../security-log/events.ts';
 import { id, instant, json, oneOf, ref, text } from './columns.ts';
 
 // Technische Sync- und Sicherheitsdaten des Servers (Spezifikation 0, Abschnitte 8, 10 und 11).
@@ -66,13 +67,22 @@ export const processedOperation = pgTable(
 
 /**
  * Sicherheitslog ohne Gesundheitswerte, Geheimnisse, Codes oder vollständige Requests. Konto und Person
- * stehen in eigenen Spalten; der Eintrag bleibt erhalten, auch wenn die Person fehlt.
+ * stehen in eigenen Spalten, bewusst ohne Fremdschlüssel: Der Eintrag bleibt erhalten, auch wenn
+ * Konto oder Person fehlen. Schreiben und Löschen nach 90 Tagen nur über `src/security-log/`.
  */
-export const securityLog = pgTable('security_log', {
-  id: id(),
-  occurredAt: instant('occurred_at').notNull(),
-  eventType: text('event_type').notNull(),
-  accountId: text('account_id'),
-  personId: ref('person_id'),
-  details: json<Record<string, unknown>>('details').notNull(),
-});
+export const securityLog = pgTable(
+  'security_log',
+  {
+    id: id(),
+    occurredAt: instant('occurred_at').notNull(),
+    eventType: text('event_type').notNull(),
+    accountId: ref('account_id'),
+    personId: ref('person_id'),
+    /** Ereignisspezifische Felder, an der Anwendungsgrenze mit `SecurityEvent` validiert. */
+    details: json<Record<string, unknown>>('details').notNull(),
+  },
+  (t) => [
+    check('security_log_event_type_check', oneOf(t.eventType, securityEventTypes)),
+    index('security_log_occurred_at_idx').on(t.occurredAt),
+  ],
+);

@@ -1,0 +1,16 @@
+{
+  // Nur der Integrationstest des App-Auth-Moduls (test/app-auth.test.ts). Er importiert App-Code, der
+  // wie die App mit Bundler-Auflösung und ohne Dateiendungen arbeitet; unter `nodenext` gälte die
+  // Datei als CommonJS. Backend-Code prüft zusätzlich tsconfig.json mit `nodenext`.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "types": ["node"]
+  },
+  // postgres-server.ts deklariert den von Vitest bereitgestellten Postgres-Zugang.
+  "include": ["test/app-auth.test.ts", "test/support/postgres-server.ts"]
+}

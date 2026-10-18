@@ -178,6 +178,11 @@ export default defineConfig([
             allowedIn: ['apps/mobile/src/local-db/testing/'],
             message: 'better-sqlite3 ist nur der Test-Adapter der lokalen Datenbank (local-db/testing/).',
           },
+          {
+            modules: ['expo-secure-store'],
+            allowedIn: ['apps/mobile/src/auth/secure-session-store.ts'],
+            message: 'Die Sitzung liegt nur über das Auth-Modul in SecureStore (apps/mobile/src/auth/).',
+          },
         ],
       ],
     },

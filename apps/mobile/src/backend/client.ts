@@ -18,11 +18,14 @@ export function backendBaseUrl(): string | undefined {
   return Platform.OS === 'android' ? 'http://10.0.2.2:8787' : 'http://localhost:8787';
 }
 
-/** Typisierter Hono-RPC-Client; die Typen stammen direkt aus der Backend-App. */
-export function createBackendClient() {
+/**
+ * Typisierter Hono-RPC-Client; die Typen stammen direkt aus der Backend-App. Fach-Endpunkte erhalten
+ * `fetch` aus dem Auth-Modul (`AppAuth.fetch`): Es hängt die Sitzung an und sperrt bei `401`.
+ */
+export function createBackendClient(options: { fetch?: typeof fetch } = {}) {
   const baseUrl = backendBaseUrl();
   if (baseUrl === undefined) throw new Error('EXPO_PUBLIC_API_URL fehlt im Produktionsbuild');
-  return hc<AppType>(baseUrl);
+  return hc<AppType>(baseUrl, options);
 }
 
 export type BackendClient = ReturnType<typeof createBackendClient>;

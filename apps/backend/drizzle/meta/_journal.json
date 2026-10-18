@@ -29,6 +29,13 @@
       "when": 1792323468184,
       "tag": "0003_integrity_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792342350388,
+      "tag": "0004_auth_and_security_log",
+      "breakpoints": true
     }
   ]
 }
