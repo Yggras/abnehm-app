@@ -98,6 +98,33 @@ Das vollständige V1-Schema ([#96](https://github.com/Yggras/abnehm-app/issues/9
 - **Beobachten:** `observe(read, listener)` liest sofort und nach jedem Commit dieser Datenbank erneut. Drizzles `useLiveQuery` wird nicht verwendet: Es hört auf den globalen Change-Listener von expo-sqlite und vergleicht nur den Tabellennamen, nicht die Datei ([Quelltext](https://unpkg.com/drizzle-orm@0.45.4/expo-sqlite/query.js)). Vom Kontowechsel wüsste es nichts.
 - **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`).
 
+### Tagesziel-Auswertung und Tages-Check-in
+
+`apps/mobile/src/daily-goals/` ist die Registry aus Abschnitt 3 der Spezifikation 0 ([#104](https://github.com/Yggras/abnehm-app/issues/104)). Die Bereichsregeln liefern die Spezifikationen 2 und 3.
+
+- **Registrieren:** Ein Bereich liefert je Baustein einen `BausteinEvaluator` und je Tracker einen `CheckInEvaluator`. Beide bestehen aus `readFacts(tx, personId, localDate)` und `evaluate`.
+  - `readFacts` ist der Bereichsreader. Er liest nur die Tabellen des eigenen Bereichs.
+  - `evaluate` ist rein: Es liest weder Uhr noch Datenbank. Tag und Tagesende nimmt es nur aus dem Snapshot, `isDayClosed(snapshot, at)` setzt diese Regel um.
+  - Der Composition Root übergibt alle Evaluatoren an `createDailyGoalRegistry({ bausteine, checkIns })`. Doppelte Schlüssel und das Kalorienbudget als Tracker werfen schon dort.
+- **Auswerten:** `evaluateDailyGoal(tx, snapshot, at)` bzw. `evaluateCheckIn(tx, input)` laufen in der Lese- oder Schreibtransaktion des Aufrufers.
+  - Das Fundament prüft jedes Ergebnis gegen den Vertrag, den Snapshot (Schwelle, Tagesende) und den Plan (Wasserziel, Sporttag, Wiegetag).
+  - `completion` ergänzt das Fundament aus der persistierten Tageszielerfüllung.
+  - Ein fehlender Evaluator (`unknown_catalog_key`), ein ungültiger Snapshot (`invalid_snapshot`) und ein vertragswidriges Ergebnis (`invalid_payload` mit `issue`) ergeben einen `contract_error`, keine Ausnahme.
+- **Konformitäts-Testkit** unter `daily-goals/testing/`, in Tests mit `test(case.name, case.run)` registriert:
+  - `bausteinConformanceCases` und `checkInConformanceCases` nehmen die Wahrheitstabelle des Bereichs. Sie prüfen Ergebnisform, Zustandsregeln, Determinismus und die Abdeckung der Schwellen (knapp unter, exakt auf, darüber). Tagesverlauf, Reise, 23- und 25-Stunden-Tag, Check-ins ohne Momo-Platz und die Unabhängigkeit vom Kalorienbudget leitet das Kit selbst ab.
+  - `completionConformanceCases` wertet über den echten Orchestrator gegen SQLite aus: noch nicht erfüllt, erstmals erfüllt, nach Erfüllung korrigiert, erneute Auswertung. Es braucht `@jest-environment node`.
+  - Die Test-Evaluatoren in `testing/test-evaluators.ts` belegen Registry und Kit. Sie lesen ihre Fakten aus einem Speicher im Test.
+
+### Ports zwischen Bereichen
+
+`PlanReader`, `WeightTrendReader`, `IntakeReader`, `WeightRecorder` und der optionale `IslandCheckInHintReader` (Schnittstellen in `@abnehm/contracts/ports`) sind keine Registry. Ein Modul, das einen Port braucht, nimmt ihn als Pflichtparameter entgegen.
+
+- **Zusammensetzen:** `composeAreaPorts(database, providers)` aus `apps/mobile/src/area-ports/` ruft je Port die Fabrik des liefernden Bereichs auf.
+  - Lese-Ports bekommen nur `read`, also Lesetransaktionen. Der `WeightRecorder` bekommt zusätzlich `transaction` für seine eigene Transaktion.
+  - Fehlende Pflichtports und Methoden meldet `IncompleteAreaPortsError` auf einmal. Ohne Insel-Hinweis ist `islandCheckInHintReader` `null`.
+- **Validieren:** Jede Rückgabe wird gegen ihr Vertragsschema geprüft. Ein Verstoß wirft `PortContractError`. Eine ungültige Eingabe an `recordManualWeight` beantwortet die Prüfung mit `invalid_payload`, ohne den Port aufzurufen.
+- **Fake-Ports für Tests** in `area-ports/testing/fakes.ts`: `fakePlanReader` (Fassungen nach `validFrom` und Wochentag), `fakeWeightTrendReader`, `fakeIntakeReader` (jeder Tag, sonst 0), `fakeWeightRecorder(localDateOf)` (idempotent je `entryId`; den lokalen Tag liefert der Test, etwa über die Testuhr) und `fakeIslandCheckInHintReader`. `fakeAreaPorts(overrides)` setzt sie geprüft zusammen.
+
 ### Typisierte Endpunkte (Hono RPC)
 
 Die App ruft das Backend über `hc<AppType>` auf ([Hono RPC](https://hono.dev/docs/guides/rpc)). Fachliche Pfade sind versioniert (`/v1/…`).
