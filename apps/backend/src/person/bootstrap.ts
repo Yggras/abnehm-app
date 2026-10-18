@@ -6,8 +6,7 @@ import { Hono } from 'hono';
 import type { Clock } from '@abnehm/clock';
 import { BootstrapPersonRequest, BootstrapPersonResult } from '@abnehm/contracts/auth';
 
-import type { SessionAuthenticator } from '../auth/auth-module.ts';
-import { requireSession } from '../auth/require-session.ts';
+import { guard, policies } from '../authorization/authorization.ts';
 import { jsonBody } from '../contract-validation.ts';
 import type { Database, DbExecutor } from '../database.ts';
 import { person } from '../db/schema/index.ts';
@@ -19,9 +18,9 @@ import { nextServerVersion, recordChange } from '../sync/change-log.ts';
  * Gibt es die Person des Kontos schon, kommt sie unverändert zurück. Das Konto stammt ausschließlich
  * aus der Sitzung; Konto- oder Personen-IDs im Body lehnt der Vertrag ab.
  */
-export function bootstrapRoutes({ database, clock, sessions }: { database: Database; clock: Clock; sessions: SessionAuthenticator }) {
-  return new Hono().post('/person/bootstrap', requireSession(sessions), jsonBody(BootstrapPersonRequest), async (c) => {
-    const { accountId } = c.var.session;
+export function bootstrapRoutes({ database, clock }: { database: Database; clock: Clock }) {
+  return new Hono().post('/person/bootstrap', guard(policies.authenticated()), jsonBody(BootstrapPersonRequest), async (c) => {
+    const { accountId } = c.var.actor;
     const request = c.req.valid('json');
     const result = await database.db.transaction(async (tx) => {
       const existing = await personOf(tx, accountId);
