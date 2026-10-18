@@ -1,7 +1,8 @@
 /**
  * @jest-environment node
  */
-import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
+import { createTestClock } from '@abnehm/clock/testing';
+import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { DailyIntakeSeries, type PlanReader, type RecordManualWeight } from '@abnehm/contracts/ports';
 
 import type { LocalDatabase } from '../local-db';
@@ -28,6 +29,7 @@ import {
 const PERSON = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
 const day = (value: string) => LocalDate.parse(value);
 const today = day('2026-10-14');
+const berlinDateOf = (at: Instant) => createTestClock({ instant: at, timeZone: TimeZone.parse('Europe/Berlin') }).read().localDate;
 
 const goal: FakeGoalVersion = {
   personId: PERSON,
@@ -61,7 +63,7 @@ const allProviders: AreaPortProviders = {
   planReader: () => fakePlanReader({ goals: [goal], weeklyPlans: [weeklyPlan] }),
   weightTrendReader: () => fakeWeightTrendReader(),
   intakeReader: () => fakeIntakeReader(),
-  weightRecorder: () => fakeWeightRecorder(),
+  weightRecorder: () => fakeWeightRecorder(berlinDateOf),
 };
 
 let files: ReturnType<typeof createBetterSqliteFiles>;
@@ -234,7 +236,7 @@ describe('Fake-Ports', () => {
   });
 
   it('WeightRecorder: zweimal speichern ergibt genau einen Eintrag, lokaler Tag aus der Zone', async () => {
-    const recorder = fakeWeightRecorder();
+    const recorder = fakeWeightRecorder(berlinDateOf);
     const { weightRecorder } = fakeAreaPorts({ weightRecorder: recorder });
     const input = {
       entryId: EntityId.parse('1f3e5d7c-9b8a-4c6e-8f2d-1e3c5a7b9d01'),

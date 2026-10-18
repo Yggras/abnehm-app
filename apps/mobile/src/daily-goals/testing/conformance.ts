@@ -237,7 +237,7 @@ function bausteinCoverageGaps<K extends BausteinKey, Facts>(baustein: K, rows: r
       .filter((row) => row.expected.currentState !== 'tagesende')
       .map((row) => row.expected.progress);
     for (const bounds of distinct(closed.map(budgetBounds))) {
-      const intakes = new Set(closed.filter((p) => sameJson(budgetBounds(p), bounds)).map(intakeOf));
+      const intakes = new Set(closed.filter((p) => sameJson(budgetBounds(p), bounds)).map(measureOf));
       for (const [value, label] of [
         [bounds.lowerBoundKcal - 1, 'knapp unter der Untergrenze'],
         [bounds.lowerBoundKcal, 'exakt auf der Untergrenze'],
@@ -277,7 +277,7 @@ function bausteinCoverageGaps<K extends BausteinKey, Facts>(baustein: K, rows: r
 
 function checkInCoverageGaps<T extends AreaKey, Facts>(tracker: T, truthRows: readonly CheckInTruthRow<T, Facts>[]): string[] {
   const rows: readonly { moment: CheckInMoment; expected: { reason: CheckInReason } }[] = truthRows;
-  const has =(moment: CheckInMoment, matches: (reason: CheckInReason) => boolean) =>
+  const has = (moment: CheckInMoment, matches: (reason: CheckInReason) => boolean) =>
     rows.some((row) => row.moment === moment && matches(row.expected.reason));
   const gaps: string[] = [];
   const require = (label: string, moment: CheckInMoment, matches: (reason: CheckInReason) => boolean) => {
@@ -355,8 +355,6 @@ function thresholdOf(progress: DailyGoalProgress): number {
       return 1;
   }
 }
-
-const intakeOf = (progress: DailyGoalProgress) => measureOf(progress);
 
 function budgetBounds(progress: DailyGoalProgress): { budgetKcal: number; lowerBoundKcal: number } {
   if (progress.type !== 'im_kalorienbudget') fail(`Fortschritt ${progress.type} in der Tabelle des Kalorienbudgets`);

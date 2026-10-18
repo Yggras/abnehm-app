@@ -123,7 +123,7 @@ Das vollständige V1-Schema ([#96](https://github.com/Yggras/abnehm-app/issues/9
   - Lese-Ports bekommen nur `read`, also Lesetransaktionen. Der `WeightRecorder` bekommt zusätzlich `transaction` für seine eigene Transaktion.
   - Fehlende Pflichtports und Methoden meldet `IncompleteAreaPortsError` auf einmal. Ohne Insel-Hinweis ist `islandCheckInHintReader` `null`.
 - **Validieren:** Jede Rückgabe wird gegen ihr Vertragsschema geprüft. Ein Verstoß wirft `PortContractError`. Eine ungültige Eingabe an `recordManualWeight` beantwortet die Prüfung mit `invalid_payload`, ohne den Port aufzurufen.
-- **Fake-Ports für Tests** in `area-ports/testing/fakes.ts`: `fakePlanReader` (Fassungen nach `validFrom` und Wochentag), `fakeWeightTrendReader`, `fakeIntakeReader` (jeder Tag, sonst 0), `fakeWeightRecorder` (idempotent je `entryId`) und `fakeIslandCheckInHintReader`. `fakeAreaPorts(overrides)` setzt sie geprüft zusammen.
+- **Fake-Ports für Tests** in `area-ports/testing/fakes.ts`: `fakePlanReader` (Fassungen nach `validFrom` und Wochentag), `fakeWeightTrendReader`, `fakeIntakeReader` (jeder Tag, sonst 0), `fakeWeightRecorder(localDateOf)` (idempotent je `entryId`; den lokalen Tag liefert der Test, etwa über die Testuhr) und `fakeIslandCheckInHintReader`. `fakeAreaPorts(overrides)` setzt sie geprüft zusammen.
 
 ### Typisierte Endpunkte (Hono RPC)
 

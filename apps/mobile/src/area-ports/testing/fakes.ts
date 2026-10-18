@@ -1,4 +1,4 @@
-import { LocalDate, TimeZone, weekdayOf, type BausteinKey, type EntityId, type Weekday } from '@abnehm/contracts/base';
+import { LocalDate, weekdayOf, type BausteinKey, type EntityId, type Instant, type Weekday } from '@abnehm/contracts/base';
 import type {
   DailyIntakeSeries,
   EffectivePlan,
@@ -80,15 +80,15 @@ export function fakeIntakeReader(days: Readonly<Record<string, Readonly<Record<s
 
 /**
  * `WeightRecorder` im Speicher: idempotent je `entryId`, ein erneuter Aufruf ersetzt den Eintrag.
- * Den lokalen Tag des Messzeitpunkts bestimmt die Zone der Person (Vorgabe Europe/Berlin).
+ * Den lokalen Tag des Messzeitpunkts liefert der Test, etwa über die Testuhr:
+ * `(at) => createTestClock({ instant: at, timeZone }).read().localDate`.
  */
-export function fakeWeightRecorder(options: { timeZone?: TimeZone } = {}): WeightRecorder & { entries(): RecordManualWeight[] } {
-  const timeZone = options.timeZone ?? TimeZone.parse('Europe/Berlin');
+export function fakeWeightRecorder(localDateOf: (measuredAt: Instant) => LocalDate): WeightRecorder & { entries(): RecordManualWeight[] } {
   const entries = new Map<string, RecordManualWeight>();
   return {
     recordManualWeight: async (input) => {
       entries.set(input.entryId, input);
-      return { type: 'recorded', entryId: input.entryId, localDate: localDateAt(input.measuredAt, timeZone) };
+      return { type: 'recorded', entryId: input.entryId, localDate: localDateOf(input.measuredAt) };
     },
     entries: () => [...entries.values()],
   };
@@ -97,6 +97,13 @@ export function fakeWeightRecorder(options: { timeZone?: TimeZone } = {}): Weigh
 export function fakeIslandCheckInHintReader(hint: IslandCheckInHint = null): IslandCheckInHintReader {
   return { hint: async () => hint };
 }
+
+/** Ohne hinterlegten `fakeWeightRecorder` scheitert ein Aufruf laut statt mit einem erfundenen Tag. */
+const missingWeightRecorder: WeightRecorder = {
+  recordManualWeight: async () => {
+    throw new Error('fakeAreaPorts: WeightRecorder mit fakeWeightRecorder(localDateOf) hinterlegen');
+  },
+};
 
 /**
  * Vollständige, geprüfte Ports für Tests: ohne Vorgabe leer (kein Plan, nie gewogen, keine
@@ -107,7 +114,7 @@ export function fakeAreaPorts(overrides: Partial<AreaPorts> = {}): AreaPorts {
     planReader: fakePlanReader(),
     weightTrendReader: fakeWeightTrendReader(),
     intakeReader: fakeIntakeReader(),
-    weightRecorder: fakeWeightRecorder(),
+    weightRecorder: missingWeightRecorder,
     islandCheckInHintReader: null,
     ...overrides,
   });
@@ -115,12 +122,4 @@ export function fakeAreaPorts(overrides: Partial<AreaPorts> = {}): AreaPorts {
 
 function nextDay(localDate: LocalDate): LocalDate {
   return LocalDate.parse(new Date(Date.parse(`${localDate}T00:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10));
-}
-
-function localDateAt(instant: string, timeZone: TimeZone): LocalDate {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(
-    Date.parse(instant),
-  );
-  const part = (type: string) => parts.find((entry) => entry.type === type)?.value;
-  return LocalDate.parse(`${part('year')}-${part('month')}-${part('day')}`);
 }

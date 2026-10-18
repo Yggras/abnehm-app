@@ -62,7 +62,7 @@ export function createDailyGoalRegistry({ bausteine, checkIns }: DailyGoalRegist
     BausteinKey,
     RegisteredBaustein
   >;
-  const checkInEvaluators = indexBy(checkIns, (evaluator) => checkInTracker(evaluator.tracker), 'Tracker') as unknown as ReadonlyMap<
+  const checkInEvaluators = indexBy(checkIns, (evaluator) => parseCheckInTracker(evaluator.tracker), 'Tracker') as unknown as ReadonlyMap<
     AreaKey,
     RegisteredCheckIn
   >;
@@ -114,7 +114,7 @@ export function createDailyGoalRegistry({ bausteine, checkIns }: DailyGoalRegist
 }
 
 /** Das Kalorienbudget ist ein Baustein, aber kein Check-in-Tracker. */
-function checkInTracker(tracker: unknown): AreaKey {
+function parseCheckInTracker(tracker: unknown): AreaKey {
   const parsed = AreaKey.safeParse(tracker);
   if (!parsed.success) throw new TypeError(`Kein Check-in-Tracker: ${String(tracker)}`);
   return parsed.data;
