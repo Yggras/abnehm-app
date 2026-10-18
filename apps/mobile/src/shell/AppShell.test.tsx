@@ -169,6 +169,19 @@ describe('Quick-Commands und Meldungen', () => {
     await user.press(await screen.findByRole('button', { name: '+250 ml Wasser' }));
   };
 
+  test('Heute-Vorschau bucht Wasser über den Mini-Tracker ohne Navigation und öffnet Sport/Gewicht über Routen', async () => {
+    await renderRouter(appDir, { initialUrl: '/' });
+    await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
+    expect(screen.getByRole('image', { name: 'Momo, zufrieden' })).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Wasser: +250 ml' }));
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(screen).toHavePathname('/');
+    expect(screen.getByRole('button', { name: 'Rückgängig' })).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Sport: + Einheit' }));
+    expect(screen).toHavePathname('/capture/sport');
+    expect(screen).toHaveSearchParams({ newEntry: 'true' });
+  });
+
   test('＋ → „+250 ml Wasser“ bucht ohne Navigation, schließt das Sheet und zeigt die Meldung mit „Rückgängig“', async () => {
     await renderRouter(appDir, { initialUrl: '/momo' });
 
@@ -428,6 +441,20 @@ describe('Schriftfaktor 2,0', () => {
 
   afterEach(() => {
     Dimensions.set(initial);
+  });
+
+  test('Heute-Vorschau stapelt Momo und Mini-Tracker, deren getrennte Aktionen bedienbar bleiben', async () => {
+    await renderRouter(appDir, { initialUrl: '/' });
+    await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
+    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 750 ml / 1500 ml, teil. Details öffnen'];
+    for (const name of controls) {
+      const control = screen.getByRole('button', { name });
+      const area = hitArea(control);
+      expect({ name, fits: area.width >= 48 && area.height >= 48 }).toEqual({ name, fits: true });
+    }
+    expect(screen.getByText('Deine drei Tagesziele')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Wasser: +250 ml' }));
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   test('Wasser mit einem Tipp erfassen und rückgängig machen bleibt bedienbar', async () => {
