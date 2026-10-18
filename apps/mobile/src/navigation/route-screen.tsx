@@ -3,7 +3,7 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import type { ComponentType } from 'react';
 
 import { hrefFor, targetFromLink } from './href';
-import { routeCatalog } from './route-catalog';
+import { pathOf, routeCatalog } from './route-catalog';
 
 /** Ziel einer bestimmten Route mit ihren geprüften Parametern. */
 export type TargetOf<N extends RouteName> = Extract<RouteTarget, { type: N }>;
@@ -24,7 +24,7 @@ export function routeScreen<N extends RouteName>(
   const { pathname } = hrefFor({ ...fixed, type: name } as RouteTarget);
   function RouteScreen() {
     const target = targetFromLink(pathname, useLocalSearchParams());
-    if (target.type !== name) return <Redirect href="/" />;
+    if (target.type !== name) return <Redirect href={pathOf('today')} />;
     return <Screen target={target as TargetOf<N>} />;
   }
   RouteScreen.displayName = `RouteScreen(${pathname})`;
@@ -41,5 +41,5 @@ export function openTarget(target: RouteTarget) {
 /** Schließt einen modalen Ablauf oder eine Seite und kehrt zum Aufrufer zurück, sonst zu „Heute“. */
 export function closeRoute() {
   if (router.canGoBack()) router.back();
-  else router.replace('/');
+  else router.replace(pathOf('today'));
 }

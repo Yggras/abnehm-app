@@ -9,7 +9,7 @@ export default function TabsLayout() {
   const momoBadge = useMomoTabBadge();
   return (
     <Tabs
-      tabBar={(props) => <TabBar {...props} badges={{ momo: momoBadge }} />}
+      tabBar={(props) => <TabBar {...props} momoBadge={momoBadge} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.surfaceBase } }}
     >
       <Tabs.Screen name="index" />

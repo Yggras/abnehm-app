@@ -3,9 +3,7 @@ import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { boxShadow, color, Icon, radius, size, space, Text, type IconName } from '../design';
-import { pressedEdge } from '../design/press';
-import { fontFamily } from '../design/tokens';
+import { boxShadow, color, fontFamily, Icon, pressedEdge, radius, size, space, Text, type IconName } from '../design';
 import { openTarget } from '../navigation';
 import { CaptureSheet } from './CaptureSheet';
 import { shellTexts, titleOf } from './texts';
@@ -24,8 +22,8 @@ const tabs: Record<TabName, { target: RouteTarget; icon: IconName }> = {
 const plusOverhang = 14;
 
 export type TabBarProps = Pick<BottomTabBarProps, 'state' | 'emitter' | 'navigateToTab' | 'insets'> & {
-  /** Tabs mit Punkt, etwa `{ momo: true }` für ein neues Insel-Ereignis. */
-  badges?: Partial<Record<TabName, boolean>>;
+  /** Punkt am Tab „Momo“ für ein neues Insel-Ereignis (`TabBadge`). */
+  momoBadge?: boolean;
 };
 
 /**
@@ -33,7 +31,7 @@ export type TabBarProps = Pick<BottomTabBarProps, 'state' | 'emitter' | 'navigat
  * ＋-Sheet. Die Leiste ist oben um den Überstand höher als ihre Fläche, sodass das ＋ ganz in ihr
  * liegt: Android nimmt Berührungen außerhalb des Elternelements nicht an.
  */
-export function TabBar({ state, emitter, navigateToTab, insets, badges = {} }: TabBarProps) {
+export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = false }: TabBarProps) {
   const [captureOpen, setCaptureOpen] = useState(false);
   const items = state.routes.map((route, index) => {
     const tab = tabs[route.name as TabName];
@@ -48,7 +46,7 @@ export function TabBar({ state, emitter, navigateToTab, insets, badges = {} }: T
         title={titleOf(tab.target)}
         icon={tab.icon}
         focused={focused}
-        badge={badges[route.name as TabName] ?? false}
+        badge={route.name === 'momo' && momoBadge}
         onPress={onPress}
       />
     );
@@ -121,6 +119,7 @@ function TabItem({ title, icon, focused, badge, onPress }: TabItemProps) {
 const pillWidth = 56;
 const pillHeight = 32;
 const badgeSize = 10;
+const badgeInset = 3;
 
 const styles = StyleSheet.create({
   // Die Leiste reicht bis an die Oberkante des ＋; ihre Fläche beginnt erst unter dem Überstand.
@@ -152,7 +151,7 @@ const styles = StyleSheet.create({
   pillFocusedPressed: { backgroundColor: color.primarySoftPressed },
   badge: {
     position: 'absolute',
-    top: space[1] - 1,
+    top: badgeInset,
     right: space[3],
     width: badgeSize,
     height: badgeSize,

@@ -1,4 +1,4 @@
-import type { RouteName } from '@abnehm/contracts/routes';
+import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
 
 /** Wie eine Route erscheint: als Tab, als modaler Ablauf über dem Aufrufer oder als Seite im Stapel. */
 export type Presentation = 'tab' | 'modal' | 'page';
@@ -32,6 +32,24 @@ export const routeCatalog = {
   'plan.budget_suggestion': { presentation: 'modal', owner: 'ziele' },
   'plan.goal_reached': { presentation: 'modal', owner: 'ziele' },
 } as const satisfies Record<RouteName, CatalogEntry>;
+
+type SettingsSection = NonNullable<Extract<RouteTarget, { type: 'settings' }>['section']>;
+
+/** Lieferant je Einstellungsseite; die Übersicht liefert Spezifikation 5. */
+const settingsOwners: Record<SettingsSection, Owner> = {
+  goals: 'ziele',
+  weekly_plan: 'ziele',
+  partner_sharing: 'partner',
+  notifications: 'partner',
+  health: 'tracker',
+  account: 'partner',
+};
+
+/** Bereich, der den Bildschirm zu einem Ziel liefert. */
+export function ownerOf(target: RouteTarget): Owner {
+  if (target.type === 'settings' && target.section) return settingsOwners[target.section];
+  return routeCatalog[target.type].owner;
+}
 
 /** Pfad einer Route: `today` ist `/`, sonst der Name mit `/` statt `.` (`capture.food` → `/capture/food`). */
 export function pathOf(name: RouteName): string {

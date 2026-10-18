@@ -10,6 +10,9 @@ export type LinkParams = Record<string, string | string[] | undefined>;
 
 const settingsPath = pathOf('settings');
 
+/** Schema eines einzelnen Routenparameters; mehr braucht die Dekodierung nicht. */
+type FieldSchema = { safeParse(value: unknown): { success: boolean } };
+
 /**
  * Link zu einem Ziel. Der Pfad folgt dem Routennamen (`capture.food` → `/capture/food`), nur der
  * Einstellungsabschnitt ist eine eigene Seite (`/settings/goals`). Parameter stehen in der Abfrage.
@@ -36,7 +39,7 @@ export function targetFromLink(pathname: string, params: LinkParams): RouteTarge
   const name = section === undefined ? routeByPath.get(pathname) : 'settings';
   if (!name) return { type: 'today' };
   if (section !== undefined && 'section' in params) return { type: 'today' };
-  const fields = routeParams[name].shape as Record<string, { safeParse(value: unknown): { success: boolean } }>;
+  const fields = routeParams[name].shape as Record<string, FieldSchema>;
   const decoded = Object.fromEntries(
     Object.entries(params).map(([key, value]) => [key, decodeParam(fields[key], value)]),
   );
@@ -44,7 +47,7 @@ export function targetFromLink(pathname: string, params: LinkParams): RouteTarge
 }
 
 /** Abfragewerte sind Text; `true` wird zum Wahrheitswert, wo das Schema ihn statt Text verlangt. */
-function decodeParam(field: { safeParse(value: unknown): { success: boolean } } | undefined, value: LinkParams[string]) {
+function decodeParam(field: FieldSchema | undefined, value: LinkParams[string]) {
   if (field === undefined || typeof value !== 'string' || field.safeParse(value).success) return value;
   if (value === 'true' && field.safeParse(true).success) return true;
   return value;

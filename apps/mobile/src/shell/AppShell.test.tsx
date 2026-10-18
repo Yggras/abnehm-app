@@ -1,5 +1,6 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
 import { act, screen, userEvent, within } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
 import { renderRouter, testRouter } from 'expo-router/testing-library';
 
 import { EntityId } from '@abnehm/contracts/base';
@@ -16,7 +17,11 @@ import { titleOf } from './texts';
 const appDir = 'src/app';
 
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
-jest.mock('./tab-badge', () => ({ useMomoTabBadge: jest.fn(() => false) }));
+jest.mock('./tab-badge', () => ({ useMomoTabBadge: jest.fn() }));
+
+beforeEach(() => {
+  jest.mocked(useMomoTabBadge).mockReturnValue(false);
+});
 
 const id = EntityId.parse('0b9f4a1e-6c1d-4f7b-9a51-2f3d8c7e1a10');
 
@@ -256,5 +261,32 @@ describe('Zugänglichkeit', () => {
     for (const tab of screen.queryAllByRole('tab', { includeHiddenElements: true })) {
       expect(within(tab).getByText(/./, { includeHiddenElements: true }).props.maxFontSizeMultiplier).toBe(textScale.limit.tabLabel);
     }
+  });
+});
+
+describe('Schriftfaktor 2,0', () => {
+  const initial = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
+
+  beforeEach(() => {
+    Dimensions.set({ window: { ...initial.window, fontScale: 2 }, screen: { ...initial.screen, fontScale: 2 } });
+  });
+
+  afterEach(() => {
+    Dimensions.set(initial);
+  });
+
+  test('die Hauptaufgabe bleibt bedienbar: Tab wechseln, über ＋ erfassen, mit „Fertig“ zurück', async () => {
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    await user.press(screen.getByRole('tab', { name: 'Momo' }));
+    expect(await heading('Momo')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Erfassen' }));
+    await user.press(await screen.findByRole('button', { name: 'Gewicht' }));
+    expect(screen).toHavePathname('/capture/weight');
+    expect(await heading('Gewicht')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Fertig' }));
+    expect(screen).toHavePathname('/momo');
   });
 });

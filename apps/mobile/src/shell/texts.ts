@@ -1,6 +1,6 @@
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
 
-import { routeCatalog, type Owner } from '../navigation/route-catalog';
+import { ownerOf, type Owner } from '../navigation/route-catalog';
 
 // Sichtbare Texte und zugängliche Namen der App-Shell. Sie entstehen hier in der App aus
 // Routennamen und typisierten Werten, nie im Transport (Spezifikation 0, Abschnitt 2).
@@ -37,16 +37,6 @@ const settingsTitles: Record<SettingsSection, string> = {
   account: 'Konto',
 };
 
-/** Lieferant je Einstellungsseite; die Übersicht liefert Spezifikation 5. */
-const settingsOwners: Record<SettingsSection, Owner> = {
-  goals: 'ziele',
-  weekly_plan: 'ziele',
-  partner_sharing: 'partner',
-  notifications: 'partner',
-  health: 'tracker',
-  account: 'partner',
-};
-
 const ownerNames: Record<Owner, string> = {
   fundament: 'Fundament',
   ziele: 'Ziele & Onboarding',
@@ -64,8 +54,7 @@ export function titleOf(target: RouteTarget): string {
 
 /** Name des Bereichs, der den Bildschirm zu einem Ziel liefert. */
 export function ownerNameOf(target: RouteTarget): string {
-  const owner = target.type === 'settings' && target.section ? settingsOwners[target.section] : routeCatalog[target.type].owner;
-  return ownerNames[owner];
+  return ownerNames[ownerOf(target)];
 }
 
 export const shellTexts = {
