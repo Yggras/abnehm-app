@@ -19,10 +19,11 @@ import {
 } from '@abnehm/contracts/sync';
 
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
-import { syncCursor } from '../local-db/schema';
+import { outbox, syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation } from './outbox';
 import type { PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
+import type { LocalCommandRegistry } from './commands';
 
 // Sync-Ablauf der App (Spezifikation 0, Abschnitt 10): erst Push, dann Pull. Kanonische Ergebnisse,
 // Ablehnungen samt Reconciliation, Seiten und Cursor werden je Antwort in einer SQLite-Transaktion
@@ -65,6 +66,7 @@ export type SyncEngineOptions = {
   clock: Clock;
   installationId: InstallationId;
   onCanonicalChanges?: CanonicalChangesHook;
+  commands?: LocalCommandRegistry;
 };
 
 /** Der Pull-Stand je Kontodatenbank; es gibt genau einen. */
@@ -72,7 +74,7 @@ const cursorScope = 'konto';
 /** Schutz vor einem Server, der nie zum Ende kommt. */
 const maxRounds = 1000;
 
-export function createSyncEngine({ database, registry, transport, clock, installationId, onCanonicalChanges }: SyncEngineOptions): SyncEngine {
+export function createSyncEngine({ database, registry, transport, clock, installationId, onCanonicalChanges, commands }: SyncEngineOptions): SyncEngine {
   let running: Promise<SyncCycleResult> | null = null;
 
   function apply(tx: TransactionContext, change: CanonicalChange): CanonicalChangeApplied {
@@ -85,7 +87,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
     return { entityType: change.entityType, entityId: change.entityId, type: change.type };
   }
 
-  function reconcile(tx: TransactionContext, operation: OutboxOperation, result: Extract<PushResult, { type: 'permanently_rejected' }>) {
+  function reconcile(tx: TransactionContext, operation: Extract<OutboxOperation, { entityId: EntityId }>, result: Extract<PushResult, { type: 'permanently_rejected' }>) {
     const adapter = registry.require(operation.entityType);
     const pending = pendingFor(tx, operation.entityType, operation.entityId).map((change): PendingChange<never> =>
       change.type === 'upsert_entity' ? { ...change, payload: adapter.upsert!.parse(change.payload) as never } : change,
@@ -120,10 +122,23 @@ export function createSyncEngine({ database, registry, transport, clock, install
           const operation = operations[index]!;
           // Erst nach der Übernahme des kanonischen Ergebnisses ist die Operation erledigt.
           removeOperation(tx, operation.operationId);
-          if (result.type === 'permanently_rejected') {
+          if ('businessKey' in operation) {
+            if (result.type === 'permanently_rejected') {
+              if (commands === undefined) throw new Error(`Fachbefehl ${operation.type} hat keine lokale Reconciliation`);
+              commands.reconcileRejected(tx, operation, result);
+            } else {
+              for (const mapping of result.idMappings ?? []) {
+                const adapter = registry.require(mapping.entityType);
+                if (adapter.replaceCanonicalId === undefined) throw new Error(`Sync-Entität ${mapping.entityType} kann keine kanonische ID übernehmen`);
+                adapter.replaceCanonicalId(tx, mapping.from, mapping.to);
+                replaceOutboxReferences(tx, mapping.from, mapping.to);
+              }
+              for (const change of result.changes ?? []) changes.push(apply(tx, change));
+            }
+          } else if (result.type === 'permanently_rejected') {
             reconcile(tx, operation, result);
             changes.push({ entityType: operation.entityType, entityId: operation.entityId, type: 'reconciled' });
-          } else if (!hasPending(tx, operation.entityType, operation.entityId)) {
+          } else if (!hasPending(tx, operation.entityType, operation.entityId) && result.canonical.type !== 'absent') {
             changes.push(apply(tx, result.canonical));
           }
         });
@@ -183,6 +198,21 @@ export function createSyncEngine({ database, registry, transport, clock, install
       return running;
     },
   };
+}
+
+function replaceOutboxReferences(tx: TransactionContext, from: EntityId, to: EntityId): void {
+  const db = sqliteOf(tx);
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === 'string') return value.split(from).join(to);
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, rewrite(entry)]));
+    return value;
+  };
+  for (const row of db.select().from(outbox).all()) {
+    db.update(outbox).set({ entityId: row.entityId === from ? to : row.entityId,
+      businessKey: row.businessKey?.split(from).join(to), payload: rewrite(row.payload) as Record<string, unknown> })
+      .where(eq(outbox.operationId, row.operationId)).run();
+  }
 }
 
 function matches(operations: readonly OutboxOperation[], results: readonly PushResult[]): boolean {

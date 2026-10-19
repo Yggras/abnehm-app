@@ -40,7 +40,7 @@ describe('Push', () => {
     });
     const [row] = await backend.database.db.select().from(waterEntry).where(eq(waterEntry.id, id));
     expect(row?.personId).toBe(anna.personId);
-    expect(result?.type === 'applied' && result.canonical.serverVersion).toBe(row?.serverVersion.toString());
+    expect(result?.type === 'applied' && result.canonical.type !== 'absent' && result.canonical.serverVersion).toBe(row?.serverVersion.toString());
     const [stored] = await backend.database.db.select().from(processedOperation);
     expect(stored).toMatchObject({
       operationId: operation.operationId,
@@ -170,7 +170,7 @@ describe('Push', () => {
     const second = (await signIn(backend, 'anna@example.test', defaultPassword, newDevice())).device;
     const id = randomUUID();
     const [created] = await push(backend, anna.device, [upsertOp(id, water(250))]);
-    const known = created?.type === 'applied' ? created.canonical.serverVersion : null;
+    const known = created?.type === 'applied' && created.canonical.type !== 'absent' ? created.canonical.serverVersion : null;
 
     // Beide Geräte ändern offline ausgehend von derselben Version; das spätere gewinnt vollständig.
     await push(backend, second, [upsertOp(id, water(500, { utcOffsetMinutes: 60 }), { knownServerVersion: known })]);

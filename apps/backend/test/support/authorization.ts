@@ -50,8 +50,9 @@ type Variants<W> = {
 export type AuthorizationScenario<W extends AuthorizationWorld, D extends ProtectionDimension> = {
   /** Die Policy, die die Route trägt; das Gerüst prüft das an der echten App. */
   policy: Policy & { dimensions: readonly D[] };
-  /** Route, an der die Policy hängen muss; Fachbefehle prüfen ihre Anmeldung selbst. */
+  /** Route beziehungsweise Fachbefehl, deren Policy tatsächlich angemeldet sein muss. */
   route?: { method: 'GET' | 'POST'; path: string };
+  command?: string;
   arrange(): Promise<W>;
   /** Die Anfrage der positiven Gegenprobe, gestellt von `device`. */
   attempt(world: W, device: Device): Promise<Outcome>;
@@ -80,9 +81,18 @@ export function authorizationCases<W extends AuthorizationWorld, D extends Prote
           },
         ];
 
+  const commandCase: AuthorizationCase[] = scenario.command === undefined ? [] : [{
+    name: `Fachbefehl ${scenario.command} trägt die Policy`,
+    run: async () => {
+      const { backend } = await scenario.arrange();
+      expect(backend.authorization.registeredCommands().get(scenario.command!)).toEqual(policy);
+    },
+  }];
+
   if (policy.kind === 'public') {
     return [
       ...routeCase,
+      ...commandCase,
       {
         name: 'öffentlich: gelingt ohne Sitzung',
         run: async () => expect(await withoutSession(await scenario.arrange())).toBe('erlaubt'),
@@ -114,6 +124,7 @@ export function authorizationCases<W extends AuthorizationWorld, D extends Prote
 
   return [
     ...routeCase,
+    ...commandCase,
     ...policy.dimensions.map((dimension) => ({
       name: `${dimension}: verweigert, die Gegenprobe gelingt`,
       run: async () => {
@@ -123,6 +134,17 @@ export function authorizationCases<W extends AuthorizationWorld, D extends Prote
       },
     })),
   ];
+}
+
+/** Registrierte Fachbefehle werden vollständig in Negativfälle überführt; eine fehlende Szenario-
+ * Familie ist ein Testfehler statt eines still übergangenen Befehls. Admin-Kommandos sind kein Sync. */
+export function registeredCommandCases<W extends AuthorizationWorld, D extends ProtectionDimension>(
+  backend: TestBackend,
+  scenarios: Readonly<Record<string, AuthorizationScenario<W, D>>>,
+): AuthorizationCase[] {
+  const registered = [...backend.authorization.registeredCommands()].filter(([, policy]) => policy.kind === 'resourceOperation');
+  for (const [name] of registered) if (scenarios[name] === undefined) throw new Error(`Negativtest für Fachbefehl ${name} fehlt`);
+  return registered.flatMap(([name, policy]) => authorizationCases({ ...scenarios[name]!, policy: policy as Policy & { dimensions: readonly D[] }, command: name }));
 }
 
 /** Ein Konto mit Person und angemeldetem Gerät, wie nach Registrierung und Bootstrap. */

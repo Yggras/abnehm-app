@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { and, eq } from 'drizzle-orm';
+
 import { EntityId, Instant, ServerVersion, type SyncCursor } from '@abnehm/contracts/base';
 import { TestWaterUpsert, type TestWaterRecord } from '@abnehm/contracts/fixtures';
 import {
@@ -12,6 +14,9 @@ import {
 } from '@abnehm/contracts/sync';
 
 import { waterEntry } from '../../src/db/schema/index.ts';
+import { policies } from '../../src/authorization/authorization.ts';
+import { nextServerVersion, recordChange } from '../../src/sync/change-log.ts';
+import type { ServerCommand } from '../../src/sync/commands.ts';
 import { ownedEntity, type ServerSyncEntity } from '../../src/sync/registry.ts';
 import { call, type Device, type Reply } from './auth-client.ts';
 import type { TestBackend } from './app.ts';
@@ -45,6 +50,40 @@ export const testWaterEntity = ownedEntity({
     updatedAt: Instant.parse(row.updatedAt.toISOString()),
   }),
 });
+
+/** Ausschließlich im Test-Artefakt injizierter Fachbefehl: eine natürliche Tageskennung. */
+const TestGoalCommand = TestWaterUpsert.extend({ localId: EntityId });
+export const testWaterCommand: ServerCommand = {
+  type: 'completeDailyGoal',
+  policy: policies.resource('water_entry', 'befehl'),
+  payload: TestGoalCommand,
+  target: (operation) => ({ id: operation.payload.localId as string }),
+  canonicalRequest: (operation) => {
+    const { localId, ...values } = TestGoalCommand.parse(operation.payload);
+    void localId;
+    return values;
+  },
+  duplicate(operation, original) {
+    const record = original.changes?.find((change) => change.type === 'record' && change.entityType === 'water_entry');
+    if (record === undefined) throw new Error('Kanonischer Datensatz des Fachbefehls fehlt');
+    return [{ entityType: 'water_entry', from: EntityId.parse(operation.payload.localId), to: record.entityId }];
+  },
+  async execute(tx, { actor, payload, at }) {
+    const values = TestGoalCommand.parse(payload);
+    const [existing] = await tx.select().from(waterEntry).where(and(eq(waterEntry.personId, actor.personId), eq(waterEntry.loggedAt, new Date(values.loggedAt))));
+    if (existing !== undefined) throw new Error('Natürlicher Schlüssel ohne verarbeitetes Kommando');
+    const serverVersion = await nextServerVersion(tx);
+    await testWaterEntity.write(tx, { entityId: values.localId, ownerPersonId: actor.personId, payload: values,
+      exists: false, serverVersion, at });
+    await recordChange(tx, { position: serverVersion, entityType: 'water_entry', entityId: values.localId,
+      operation: 'upsert', ownerPersonId: actor.personId, createdAt: at });
+    const stored = (await testWaterEntity.read(tx, [values.localId])).get(values.localId);
+    if (stored === undefined) throw new Error('Fachbefehl lieferte keine Zeile');
+    return { changes: [{ type: 'record', entityType: 'water_entry', entityId: values.localId,
+      serverVersion: ServerVersion.parse(serverVersion.toString()), data: stored.data }],
+      idMappings: [{ entityType: 'water_entry', from: values.localId, to: values.localId }] };
+  },
+};
 
 /** Test-Entität, deren Schreiben auf Wunsch wie ein Verbindungsabbruch scheitert. */
 export function faultyWaterEntity(): ServerSyncEntity & { failAfter(successfulWrites: number): void } {

@@ -18,12 +18,12 @@ import {
   foundationSyncEntities,
   type SyncTransport,
 } from '../../mobile/src/sync/index.ts';
-import { testWaterEntity as localWaterEntity, testWaterRepository } from '../../mobile/src/sync/testing/test-water.ts';
+import { testWaterCommandEntity as localWaterEntity, testWaterRepository } from '../../mobile/src/sync/testing/test-water.ts';
 import { changeLog, processedOperation, waterEntry } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { defaultPassword, newDevice, signIn, type Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
-import { faultyWaterEntity, push, upsertOp, water } from './support/sync.ts';
+import { faultyWaterEntity, push, testWaterCommand, upsertOp, water } from './support/sync.ts';
 
 // Der Sync der App gegen die echte Hono-App mit Postgres (#99): Engine, Outbox und Adapter der App auf
 // echtem SQLite (better-sqlite3), der HTTP-Transport über `app.request`. Zwei Installationen derselben
@@ -80,6 +80,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     network,
     sync: () => engine.sync(),
     save: (id: EntityId, amountMl: number) => database.transaction((tx) => water_.save(tx, id, water(amountMl))),
+    completeTestGoal: (id: EntityId, businessKey: string) => database.transaction((tx) => water_.completeTestGoal(tx, id, businessKey, water(250))),
     remove: (id: EntityId) => database.transaction((tx) => water_.remove(tx, id)),
     visible: () => database.read((tx) => water_.visible(tx)).map(({ id, amountMl }) => ({ id, amountMl })),
     row: (id: EntityId) => database.read((tx) => water_.row(tx, id)),
@@ -91,6 +92,7 @@ async function setup(options: { entity?: ReturnType<typeof faultyWaterEntity> } 
   const backend = await createTestBackend();
   const entity = options.entity ?? faultyWaterEntity();
   backend.sync.registerEntity(entity);
+  backend.sync.registerCommand(testWaterCommand);
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const second = (await signIn(backend, 'anna@example.test', defaultPassword, newDevice())).device;
   const a = await phone(backend, anna.accountId, anna.device);
@@ -104,6 +106,31 @@ async function setup(options: { entity?: ReturnType<typeof faultyWaterEntity> } 
 const serverRows = (backend: TestBackend) => backend.database.db.select().from(waterEntry);
 
 describe('Sync App ↔ Backend', () => {
+  it('ersetzt offline erzeugte Duplikate zweier Installationen durch die kanonische ID', async () => {
+    const { backend, a, b } = await setup();
+    const first = EntityId.parse(randomUUID());
+    const second = EntityId.parse(randomUUID());
+    a.completeTestGoal(first, 'goal:2026-10-14:1');
+    b.completeTestGoal(second, 'goal:2026-10-14:1');
+    await a.sync();
+    await b.sync();
+    expect(b.visible()).toEqual([{ id: first, amountMl: 250 }]);
+    expect(a.visible()).toEqual([{ id: first, amountMl: 250 }]);
+    expect(await serverRows(backend)).toHaveLength(1);
+    expect(b.outbox()).toEqual([]);
+  });
+
+  it('verliert nach abgebrochener HTTP-Antwort keinen Fachbefehl und führt ihn nur einmal aus', async () => {
+    const { backend, a } = await setup();
+    const id = EntityId.parse(randomUUID());
+    a.completeTestGoal(id, 'goal:2026-10-14:1');
+    a.network.dropNextPushResponse = true;
+    expect((await a.sync()).push).toBe('unavailable');
+    expect(a.outbox()).toHaveLength(1);
+    expect((await a.sync()).push).toBe('done');
+    expect(await serverRows(backend)).toHaveLength(1);
+    expect(a.outbox()).toEqual([]);
+  });
   it('bringt die Person mit dem ersten vollständigen Pull auf das Gerät', async () => {
     const { a, anna } = await setup();
     const people = a.database.read((tx) => sqliteOf(tx).select().from(localPerson).all());

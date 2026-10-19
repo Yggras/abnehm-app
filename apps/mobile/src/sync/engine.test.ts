@@ -16,7 +16,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { personRow } from '../local-db/testing/rows';
 import type { CanonicalChangeApplied } from './engine';
-import { testWaterEntity, testWaterRepository } from './testing/test-water';
+import { testWaterCommandEntity as testWaterEntity, testWaterRepository } from './testing/test-water';
 
 // Sync-Ablauf der App gegen echtes SQLite (better-sqlite3) und einen Transport, den der Test steuert
 // (#99). Das Zusammenspiel mit dem echten Backend prüft apps/backend/test/sync-app.test.ts.
@@ -57,7 +57,7 @@ function scriptedTransport(): ScriptedTransport {
     pulls: [],
     onPush: (request) => ({
       type: 'ok',
-      body: { results: request.operations.map((operation) => applied(operation.operationId, record(operation.entityId, 1, '1'))) },
+      body: { results: request.operations.map((operation) => applied(operation.operationId, record('entityId' in operation ? operation.entityId : operation.operationId, 1, '1'))) },
     }),
     onPull: () => ({ type: 'ok', body: { changes: [], next: { type: 'complete', cursor: '1' as never } } }),
     async push(request) {
@@ -102,6 +102,7 @@ async function setup() {
     transport,
     engine,
     repository,
+    writer,
     hookCalls,
     setHook: (next: typeof hook) => {
       hook = next;
@@ -113,6 +114,27 @@ const outboxRows = (database: LocalDatabase) => database.read((tx) => sqliteOf(t
 const cursorRow = (database: LocalDatabase) => database.read((tx) => sqliteOf(tx).select().from(syncCursor).get());
 
 describe('Sync der App', () => {
+  it('tauscht beim kanonischen Duplikat ID, fachlichen Schlüssel und offene Outbox-Payload atomar', async () => {
+    const context = await setup();
+    const local = EntityId.parse(randomUUID());
+    const canonical = EntityId.parse(randomUUID());
+    context.database.transaction((tx) => context.repository.completeTestGoal(tx, local, `goal:${local}`, water(250)));
+    let firstPush = true;
+    context.transport.onPush = (request) => {
+      if (!firstPush) return { type: 'unavailable' };
+      firstPush = false;
+      context.database.transaction((tx) => context.writer.command(tx, { type: 'markEventsSeen', businessKey: `next:${local}`,
+        payload: { referencedId: local }, knownServerVersion: null }));
+      return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
+        canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
+        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
+    };
+    expect((await context.engine.sync()).push).toBe('unavailable');
+    expect(context.database.read((tx) => context.repository.visible(tx))).toMatchObject([{ id: canonical }]);
+    expect(context.database.read((tx) => context.repository.row(tx, local))).toBeUndefined();
+    expect(outboxRows(context.database)).toMatchObject([{ businessKey: `next:${canonical}`, payload: { referencedId: canonical } }]);
+    context.databases.lock(); context.files.remove();
+  });
   let context: Awaited<ReturnType<typeof setup>>;
   beforeEach(async () => {
     context = await setup();

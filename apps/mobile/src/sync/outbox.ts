@@ -2,7 +2,7 @@ import { and, asc, eq, max, sql } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { currentSyncSchemaVersion, OutboxOperation, type EntityData } from '@abnehm/contracts/sync';
+import { currentSyncSchemaVersion, OutboxOperation, type CommandType, type EntityData } from '@abnehm/contracts/sync';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { outbox } from '../local-db/schema';
@@ -18,6 +18,7 @@ export type SyncWriter = {
   upsert(tx: TransactionContext, change: { entityType: string; entityId: EntityId; payload: EntityData; knownServerVersion: ServerVersion | null }): void;
   /** Merkt das Löschen einer Entität vor; der Server setzt daraus die Löschmarkierung. */
   delete(tx: TransactionContext, change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }): void;
+  command(tx: TransactionContext, change: { type: CommandType; businessKey: string; payload: EntityData; knownServerVersion: ServerVersion | null }): void;
 };
 
 export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
@@ -29,10 +30,10 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
         operationId: operation.operationId,
         sequence: last + 1,
         type: operation.type,
-        entityType: operation.entityType,
-        entityId: operation.entityId,
-        businessKey: null,
-        payload: operation.type === 'upsert_entity' ? operation.payload : {},
+        entityType: 'businessKey' in operation ? null : operation.entityType,
+        entityId: 'businessKey' in operation ? null : operation.entityId,
+        businessKey: 'businessKey' in operation ? operation.businessKey : null,
+        payload: 'payload' in operation ? operation.payload : {},
         knownServerVersion: operation.knownServerVersion,
         schemaVersion: operation.schemaVersion,
         createdAt: operation.createdAt,
@@ -64,6 +65,10 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       if (!registry.require(change.entityType).deletable) throw new Error(`Sync-Entität ${change.entityType} wird nicht gelöscht`);
       append(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
     },
+    command(tx, change) {
+      append(tx, OutboxOperation.parse({ ...change, operationId: newId(), schemaVersion: currentSyncSchemaVersion,
+        createdAt: Instant.parse(clock.read().instant) }));
+    },
   };
 }
 
@@ -81,6 +86,7 @@ export function pendingFor(tx: ReadContext, entityType: string, entityId: string
     .orderBy(asc(outbox.sequence))
     .all()
     .map(toOperation)
+    .filter((operation) => !('businessKey' in operation))
     .map((operation) =>
       operation.type === 'upsert_entity'
         ? { type: 'upsert_entity', payload: operation.payload, operationId: operation.operationId, createdAt: operation.createdAt }
@@ -123,5 +129,8 @@ function toOperation(row: typeof outbox.$inferSelect): OutboxOperation {
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
   };
-  return OutboxOperation.parse(row.type === 'upsert_entity' ? { ...common, type: row.type, payload: row.payload } : { ...common, type: row.type });
+  return OutboxOperation.parse(row.businessKey !== null
+    ? { type: row.type, operationId: common.operationId, businessKey: row.businessKey, payload: row.payload,
+      knownServerVersion: row.knownServerVersion, schemaVersion: row.schemaVersion, createdAt: row.createdAt }
+    : row.type === 'upsert_entity' ? { ...common, type: row.type, payload: row.payload } : { ...common, type: row.type });
 }

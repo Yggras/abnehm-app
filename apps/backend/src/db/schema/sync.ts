@@ -62,7 +62,7 @@ export const processedOperation = pgTable(
   (t) => [
     // Nur erfolgreiche Ergebnisse belegen den fachlichen Schlüssel; eine Ablehnung sperrt ihn nicht.
     uniqueIndex('processed_operation_business_key_uq')
-      .on(t.operationType, t.businessKey)
+      .on(t.personId, t.operationType, t.businessKey)
       .where(sql`${t.outcome} <> 'permanently_rejected'`),
     check('processed_operation_outcome_check', oneOf(t.outcome, ['applied', 'already_applied', 'permanently_rejected'])),
     check('processed_operation_entity_check', sql`(${t.entityType} is null) = (${t.entityId} is null)`),
