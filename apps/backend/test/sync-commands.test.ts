@@ -120,9 +120,11 @@ describe('Fachbefehl über Push', () => {
       },
     } satisfies AuthorizationScenario<{ backend: TestBackend; actor: Device; ownId: string },
       'ohne_sitzung' | 'fremde_person' | 'manipulierte_id'>;
-    const cases = registeredCommandCases(backend, { completeDailyGoal: scenario, updatePersonTimeZone: personTimeZoneScenario });
+    // Das Gerüst verlangt jeden registrierten Befehl; die Welt von `updatePersonTimeZone` ist eine andere.
+    const timeZone = personTimeZoneScenario as unknown as typeof scenario;
+    const cases = registeredCommandCases(backend, { completeDailyGoal: scenario, updatePersonTimeZone: timeZone });
     const wrong = registeredCommandCases(backend, { completeDailyGoal: { ...scenario, policy: policies.resource('weight_entry', 'befehl') },
-      updatePersonTimeZone: personTimeZoneScenario });
+      updatePersonTimeZone: timeZone });
     await expect(wrong.find((testCase) => testCase.name.startsWith('Fachbefehl completeDailyGoal'))!.run()).rejects.toThrow();
     for (const testCase of cases) {
       try { await testCase.run(); } catch (error) { throw new Error(`${testCase.name}: ${String(error)}`); }

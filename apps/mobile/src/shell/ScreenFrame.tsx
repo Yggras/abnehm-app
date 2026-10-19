@@ -21,11 +21,13 @@ const edges: Record<Presentation, Edge[]> = {
   tab: ['top', 'left', 'right'],
   page: ['top', 'left', 'right', 'bottom'],
   modal: ['top', 'left', 'right', 'bottom'],
+  flow: ['top', 'left', 'right', 'bottom'],
 };
 
 /**
  * Rahmen eines Bildschirms je Darstellung: Tabs mit großem Titel, Seiten mit „Zurück“, modale
- * Abläufe mit „Fertig“. „Zurück“ und „Fertig“ kehren wie System-Zurück zum Aufrufer zurück.
+ * Abläufe mit „Fertig“, eigenständige Abläufe ohne beides. „Zurück“ und „Fertig“ kehren wie
+ * System-Zurück zum Aufrufer zurück.
  * Seiten und modale Abläufe verdecken die Tab-Leiste; solange sie im Fokus sind, steht die
  * Meldung des Meldungs-Hosts deshalb an ihrem unteren Rand.
  */

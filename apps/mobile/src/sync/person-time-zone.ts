@@ -1,4 +1,4 @@
-import { EntityId, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, type TimeZone } from '@abnehm/contracts/base';
 import { personTimeZoneKey, UpdatePersonTimeZone } from '@abnehm/contracts/person';
 
 import type { LocalDatabase } from '../local-db';

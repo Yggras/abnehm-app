@@ -86,8 +86,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device, ti
     },
     change: (change: PersonChange) => database.transaction((tx) => updateOwnPerson(tx, writer, change, Instant.parse(clock.read().instant))),
     person: () => database.read((tx) => sqliteOf(tx).select().from(localPerson).get()),
-    member: (personId: string) =>
-      database.read((tx) => sqliteOf(tx).select().from(localMember).where(eq(localMember.personId, personId)).get()),
+    member: (personId: string) => database.read((tx) => sqliteOf(tx).select().from(localMember).all()).find((row) => row.personId === personId),
     outbox: () => database.read((tx) => sqliteOf(tx).select().from(outbox).all()),
   };
 }
