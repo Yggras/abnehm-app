@@ -9,7 +9,7 @@ import type {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Button, Card, color, EnergySymbol, Icon, IconButton, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
+import { Button, Card, color, EnergySymbol, Icon, IconButton, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
@@ -63,7 +63,7 @@ function StateView<K extends TodaySlot>({ state, slot, children }: {
       <Text>{state.reasonKey === 'momo_wartet_im_ei' ? 'Momo wartet im Ei' : state.reasonKey === 'rollenwahl_offen' ? 'Momo wartet auf eure Rollenwahl' : state.reasonKey === 'noch_keine_eintraege' ? 'Noch keine Einträge' : 'Hier gibt es noch nichts zu zeigen.'}</Text>
       {state.action ? <Button variant="secondary" label="Jetzt öffnen" onPress={() => action(state.action!)} /> : null}
     </View>;
-    case 'error': return <View style={styles.group}><Text>Dieser Bereich ist gerade nicht verfügbar.</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => action(state.retryAction!)} /> : null}</View>;
+    case 'error': return <View style={styles.group}><Text>{names[slot]} ist gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => action(state.retryAction!)} /> : null}</View>;
   }
 }
 
@@ -87,6 +87,7 @@ const goalNames = {
   wasserziel: 'Wasserziel', sporteinheit: 'Sporteinheit', gewogen: 'Gewogen',
 } as const;
 const goalStatus = { offen: 'Noch offen', teilweise: 'Unterwegs', erfuellt: 'Erreicht', tagesende: 'Am Tagesende' } as const;
+const trackerStatus = { leer: 'Noch offen', teil: 'Unterwegs', erreicht: 'Ziel erreicht', ueber_ziel: 'Über dem Ziel' } as const;
 
 function MomoArea({ character, goals, large, stale }: { character: MomoCharacterReady; goals: MomoDailyGoalsReady; large: boolean; stale?: Instant }) {
   return <Card><View style={[styles.momo, large && styles.stack]}>
@@ -109,7 +110,7 @@ function MomoArea({ character, goals, large, stale }: { character: MomoCharacter
     </View>
   </View>
   <Text variant="headline">Deine drei Tagesziele</Text>
-  {goals.map((goal) => <Button key={goal.slot} variant="text" block label={`${goal.slot}. ${goalNames[goal.evaluation.progress.type]} · ${goalStatus[goal.evaluation.currentState]}`} onPress={() => action(goal.action)} />)}
+  {goals.map((goal) => <Button key={goal.slot} compact variant="text" block label={`${goal.slot}. ${goalNames[goal.evaluation.progress.type]} · ${goalStatus[goal.evaluation.currentState]}`} onPress={() => action(goal.action)} />)}
   </Card>;
 }
 
@@ -163,12 +164,21 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
   const large = useLargeTextLayout();
   return <View style={styles.content}>
     <View testID="today-slot-header"><State registry={registry} slot="header">{(data) => <Header data={data as HeaderReady} />}</State></View>
-    <View testID="today-slot-top_notice"><State registry={registry} slot="top_notice">{(data) => <Card><Text>{(data as TopNoticeReady).senderDisplayName} feuert dich an</Text><Text>{encouragement[(data as TopNoticeReady).encouragementKey]}</Text><Button label="Ansehen" variant="text" onPress={() => action((data as TopNoticeReady).action)} /></Card>}</State></View>
+    <View testID="today-slot-top_notice"><State registry={registry} slot="top_notice">{(value) => {
+      const data = value as TopNoticeReady;
+      const message = encouragement[data.encouragementKey];
+      return <Pressable onPress={() => action(data.action)} accessibilityRole="button"
+        accessibilityLabel={`${data.senderDisplayName} feuert dich an: ${message}. Ansehen`} style={styles.encouragement}>
+        <Icon name="heart" tone="partner" />
+        <Text variant="label" style={styles.flex}>{data.senderDisplayName} feuert dich an · {message}</Text>
+        <Icon name="chevron" tone="inkMuted" />
+      </Pressable>;
+    }}</State></View>
     <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b, stale) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} stale={stale} />}</CardPair></View>
     <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b, stale) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} stale={stale} />}</CardPair></View>
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${d.countedMl.toLocaleString('de-DE')} ml / ${d.targetMl.toLocaleString('de-DE')} ml`} status={d.status} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={d.status} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${d.countedMl.toLocaleString('de-DE')} ml / ${d.targetMl.toLocaleString('de-DE')} ml`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${(d.value.weightG / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>
@@ -194,6 +204,7 @@ function CardPair<A extends TodaySlot, B extends TodaySlot>({ registry, first, s
 
 const styles = StyleSheet.create({
   content: { gap: space[4] }, header: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  encouragement: { minHeight: size.touchMin, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: space[2], borderRadius: radius.md, backgroundColor: color.partnerSoft },
   flex: { flex: 1 }, row: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   momo: { flexDirection: 'row', gap: space[4], alignItems: 'center' },
   momoStage: { backgroundColor: color.momoStage, borderRadius: size.momoToday / 2 },

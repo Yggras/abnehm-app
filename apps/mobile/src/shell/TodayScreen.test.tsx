@@ -53,7 +53,7 @@ test('ein beobachteter Pflichtslot zeigt loading, ready, stale, empty und error 
   await act(async () => publish({ type: 'empty', reasonKey: 'nicht_gekoppelt' }));
   expect(screen.getByText('Hier gibt es noch nichts zu zeigen.')).toBeOnTheScreen();
   await act(async () => publish({ type: 'error', code: 'invalid_payload' }));
-  expect(screen.getByText('Dieser Bereich ist gerade nicht verfügbar.')).toBeOnTheScreen();
+  expect(screen.getByText('Partner ist gerade nicht verfügbar. Versuch es später noch einmal.')).toBeOnTheScreen();
 });
 
 test('eine zusammengesetzte Ernährungskarte kennzeichnet veraltete Teildaten mit Zeitpunkt', async () => {

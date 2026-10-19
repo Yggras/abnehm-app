@@ -173,6 +173,10 @@ describe('Quick-Commands und Meldungen', () => {
     await renderRouter(appDir, { initialUrl: '/' });
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
     expect(screen.getByRole('image', { name: 'Momo, zufrieden' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: /Anna feuert dich an: Stark heute!/ })).toBeOnTheScreen();
+    for (const name of ['1. Ernährung erfasst · Unterwegs', '2. Wasserziel · Unterwegs', '3. Sporteinheit · Noch offen']) {
+      expect(screen.getByRole('button', { name })).toBeOnTheScreen();
+    }
     await user.press(screen.getByRole('button', { name: 'Wasser: +250 ml' }));
     expect(execute).toHaveBeenCalledTimes(1);
     expect(screen).toHavePathname('/');
@@ -446,7 +450,7 @@ describe('Schriftfaktor 2,0', () => {
   test('Heute-Vorschau stapelt Momo und Mini-Tracker, deren getrennte Aktionen bedienbar bleiben', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
-    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 750 ml / 1.500 ml, teil. Details öffnen'];
+    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 750 ml / 1.500 ml, Unterwegs. Details öffnen'];
     for (const name of controls) {
       const control = screen.getByRole('button', { name });
       const area = hitArea(control);

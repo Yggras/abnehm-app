@@ -15,11 +15,12 @@ function TodayRoute() {
   const clock = useClock();
   const [preview, setPreview] = useState(false);
   const [sample] = useState(() => __DEV__ ? createTodayPreview(clock) : null);
-  return <ScreenFrame title="Heute" presentation="tab">
-    {__DEV__ ? <Button compact label={preview ? 'Beispieldaten ausblenden' : 'Beispieldaten anzeigen'} variant="secondary" onPress={() => setPreview(!preview)} /> : null}
+  return <ScreenFrame title="Heute" presentation="tab" compactTabTitle>
+    {__DEV__ && !preview ? <Button compact label="Beispieldaten anzeigen" variant="secondary" onPress={() => setPreview(true)} /> : null}
     <TodayContent registry={preview && sample ? sample : appTodayRegistry} />
     {__DEV__ ? <View style={{ gap: space[2] }}>
       <Text variant="caption" tone="inkMuted">{shellTexts.developer}</Text>
+      {preview ? <Button label="Beispieldaten ausblenden" variant="text" onPress={() => setPreview(false)} /> : null}
       <Button label={shellTexts.componentCatalog} variant="text" icon="layers" onPress={() => router.push('/katalog')} />
       <Button label={shellTexts.technicalCheck} variant="text" icon="pulse" onPress={() => router.push('/technik')} />
     </View> : null}
