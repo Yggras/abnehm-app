@@ -84,7 +84,7 @@ export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
       writer.upsert(tx, { entityType: 'water_entry', entityId, payload, knownServerVersion: knownVersion(tx, entityId) });
     },
     /** Nur im Test-Artefakt: zwei Geräte erzeugen dieselbe fachliche Zeile unabhängig. */
-    completeTestGoal(tx: TransactionContext, entityId: EntityId, businessKey: string, payload: TestWaterUpsert) {
+    saveTestCommand(tx: TransactionContext, entityId: EntityId, businessKey: string, payload: TestWaterUpsert) {
       writeLocal(tx, entityId, payload, now());
       writer.command(tx, { type: 'saveMealFavorite', businessKey, payload: { ...payload, localId: entityId },
         knownServerVersion: null, affectedRefs: [{ entityType: 'water_entry', entityId }],

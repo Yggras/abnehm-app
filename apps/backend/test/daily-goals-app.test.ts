@@ -12,12 +12,12 @@ import {
   createDailyGoalRegistry,
   createDaysChangedDispatcher,
   dailyGoalCommands,
-  dailyGoalSyncEntities,
+  dailyGoalCompletionEntity,
   type DaysChanged,
 } from '../../mobile/src/daily-goals/index.ts';
 import { insertDailyGoalForTest } from '../../mobile/src/daily-goals/testing/persisted.ts';
 import { createTestFactsStore, testBausteinEvaluators, testCheckInEvaluators, type TestDayFacts } from '../../mobile/src/daily-goals/testing/test-evaluators.ts';
-import { bookingByKey, readEnergy } from '../../mobile/src/energy/index.ts';
+import { bookingByKey, energyBookingEntity, readEnergy } from '../../mobile/src/energy/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { dailyGoalCompletion as localCompletion, outbox } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
@@ -60,7 +60,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device, st
   const database = await databases.open(accountId);
   const clock = createTestClock({ instant: Instant.parse(startsAt), timeZone: berlin });
   const facts = createTestFactsStore();
-  const registry = createSyncRegistry([...foundationSyncEntities, ...dailyGoalSyncEntities]);
+  const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
   const writer = createSyncWriter({ registry, clock, newId: () => EntityId.parse(randomUUID()) });
   const signals: DaysChanged[] = [];
   const dispatcher = createDaysChangedDispatcher({ database, observers: [(signal) => void signals.push(signal)], onError: (error) => { throw error; } });
@@ -166,7 +166,8 @@ describe('Tagesziele über App und Backend', () => {
     expect(bookings).toEqual([expect.objectContaining({ bookingKey: key, amount: 1 })]);
     // Der zuerst angenommene Erfüllungszeitpunkt gilt überall.
     expect(b.completions()).toEqual([expect.objectContaining({ completionKey: key, firstCompletedAt: '2026-10-14T10:00:00.000Z', serverVersion: expect.any(String) })]);
-    expect(b.booking(key)).toMatchObject({ bookingKey: key, amount: 1, createdAt: '2026-10-14T10:00:00.000Z' });
+    expect(b.booking(key)).toEqual(a.booking(key));
+    expect(b.booking(key)).toMatchObject({ bookingKey: key, amount: 1 });
     expect(b.outbox()).toEqual([]);
     expect(b.energy()).toEqual({ balance: 1, levelHalf: 0 });
     expect(a.energy()).toEqual({ balance: 1, levelHalf: 0 });

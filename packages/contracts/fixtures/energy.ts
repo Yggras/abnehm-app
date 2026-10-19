@@ -97,7 +97,7 @@ export const energyFixtures = {
     },
   }),
   GrantDailyBonusPayload: fixtures(GrantDailyBonusPayload, {
-    valid: { 'Tagesbonus': { localDate: today, grantedAt: now } },
-    invalid: { 'mit Betrag': { localDate: today, grantedAt: now, amount: 2 }, 'ohne Tag': { grantedAt: now } },
+    valid: { 'Tagesbonus': { localDate: today } },
+    invalid: { 'mit Betrag': { localDate: today, amount: 2 }, 'mit Gerätezeit': { localDate: today, grantedAt: now }, 'ohne Tag': {} },
   }),
 };

@@ -1,12 +1,12 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { EntityId, Instant, LocalDate, type ServerVersion } from '@abnehm/contracts/base';
+import { Instant, type EntityId, type LocalDate, type ServerVersion } from '@abnehm/contracts/base';
 import { DailyGoalCompletionRecord, type DailyGoalCompletion, type DailyGoalSnapshot } from '@abnehm/contracts/daily-goals';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { dailyGoalCompletion } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import type { SyncEntityAdapter } from '../sync';
+import { immutableDayEntity } from '../sync';
 
 /**
  * Die fundamentseigene, unveränderliche Tageszielerfüllung zu Person, Tag und Platz des Snapshots.
@@ -51,39 +51,13 @@ export function removeUnconfirmedCompletion(tx: TransactionContext, completionId
 }
 
 /** Sync-Entität: Erfüllungen kommen nur als kanonische Datensätze, nie als Upsert oder Löschung. */
-export const dailyGoalCompletionEntity: SyncEntityAdapter<never, DailyGoalCompletionRecord> = {
+export const dailyGoalCompletionEntity = immutableDayEntity({
   entityType: 'daily_goal_completion',
   ownerField: 'personId',
-  upsert: null,
-  deletable: false,
   record: DailyGoalCompletionRecord,
-  applyCanonical(tx, { entityId, serverVersion, data }) {
-    if (data.id !== entityId) throw new Error('Tageszielerfüllung mit abweichender ID');
-    const local = sqliteOf(tx)
-      .select({ serverVersion: dailyGoalCompletion.serverVersion })
-      .from(dailyGoalCompletion)
-      .where(eq(dailyGoalCompletion.id, entityId))
-      .get();
-    if (local?.serverVersion != null && BigInt(local.serverVersion) > BigInt(serverVersion)) return;
-    // Ein lokales Duplikat derselben ID wird vollständig durch den kanonischen Datensatz ersetzt.
-    const row = rowOf(data, serverVersion);
-    sqliteOf(tx).insert(dailyGoalCompletion).values(row).onConflictDoUpdate({ target: dailyGoalCompletion.id, set: row }).run();
-  },
-  applyTombstone() {
-    throw new Error('Tageszielerfüllungen sind unveränderlich und werden nie gelöscht');
-  },
-  reconcileRejected() {
-    throw new Error('Tageszielerfüllungen entstehen nur im Fachbefehl completeDailyGoal');
-  },
-  affectedDays(tx, entityId) {
-    const row = sqliteOf(tx)
-      .select({ personId: dailyGoalCompletion.personId, localDate: dailyGoalCompletion.localDate })
-      .from(dailyGoalCompletion)
-      .where(eq(dailyGoalCompletion.id, entityId))
-      .get();
-    return row === undefined ? [] : [{ type: 'tag', personId: EntityId.parse(row.personId), localDate: LocalDate.parse(row.localDate) }];
-  },
-};
+  table: dailyGoalCompletion,
+  row: (record) => rowOf(record, null),
+});
 
 function rowOf(record: DailyGoalCompletionRecord, serverVersion: ServerVersion | null): typeof dailyGoalCompletion.$inferInsert {
   return { ...record, serverVersion };

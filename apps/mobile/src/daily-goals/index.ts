@@ -32,7 +32,7 @@ export {
 export {
   createDailyGoalPersistence,
   dailyGoalCommands,
-  dailyGoalSyncEntities,
+  dailyGoalCompletionEntity,
   type DailyGoalPersistence,
   type MissingDaysHook,
 } from './persistence';

@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 
-import { ServerVersion, type EntityId } from '@abnehm/contracts/base';
-import { EnergyBooking, energyBookingId } from '@abnehm/contracts/energy';
+import { Instant, ServerVersion, type EntityId } from '@abnehm/contracts/base';
+import { bookingReferences, counterBookingKey, EnergyBooking, energyBookingId } from '@abnehm/contracts/energy';
 import type { CanonicalRecord } from '@abnehm/contracts/sync';
 
 import type { DbExecutor } from '../database.ts';
@@ -38,7 +38,6 @@ export const energyBookingEntity: ServerSyncEntity = {
  */
 export async function insertBooking(tx: DbExecutor, booking: EnergyBooking): Promise<CanonicalRecord> {
   const parsed = EnergyBooking.parse(booking);
-  const { trigger } = parsed;
   const serverVersion = await nextServerVersion(tx);
   const createdAt = new Date(parsed.createdAt);
   await tx.insert(energyBooking).values({
@@ -48,11 +47,8 @@ export async function insertBooking(tx: DbExecutor, booking: EnergyBooking): Pro
     amount: parsed.amount,
     localDate: parsed.localDate,
     bookingKey: parsed.bookingKey,
-    trigger,
-    dailyGoalCompletionId: 'dailyGoalCompletionId' in trigger ? trigger.dailyGoalCompletionId : null,
-    islandObjectId: 'islandObjectId' in trigger ? trigger.islandObjectId : null,
-    communityProjectId: 'projectId' in trigger ? trigger.projectId : null,
-    originalBookingId: 'originalBookingId' in trigger ? trigger.originalBookingId : null,
+    trigger: parsed.trigger,
+    ...bookingReferences(parsed),
     createdAt,
     serverVersion,
   });
@@ -71,7 +67,7 @@ export async function bookCounterBooking(tx: DbExecutor, { originalBookingId, at
   if (row === undefined) throw new Error('Ursprüngliche Buchung fehlt');
   const original = bookingOf(row);
   if (original.type === 'counter_booking') throw new Error('Eine Gegenbuchung wird nicht korrigiert');
-  const bookingKey = `gegenbuchung:${original.id}`;
+  const bookingKey = counterBookingKey(original.id);
   return insertBooking(tx, {
     type: 'counter_booking',
     id: energyBookingId(bookingKey),
@@ -79,7 +75,7 @@ export async function bookCounterBooking(tx: DbExecutor, { originalBookingId, at
     amount: -original.amount,
     localDate: original.localDate,
     bookingKey,
-    createdAt: at.toISOString() as EnergyBooking['createdAt'],
+    createdAt: Instant.parse(at.toISOString()),
     trigger: { originalBookingId: original.id, originalType: original.type, originalAmount: original.amount },
   });
 }

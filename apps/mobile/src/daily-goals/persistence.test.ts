@@ -6,7 +6,7 @@ import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { dailyGoalCompletionId, dailyGoalKey, planChangeDays, type DailyGoalCause, type DailyGoalSnapshot } from '@abnehm/contracts/daily-goals';
 import { dailyBonusKey, energyBookingId } from '@abnehm/contracts/energy';
 
-import { bookingByKey, readEnergy } from '../energy';
+import { bookingByKey, energyBookingEntity, readEnergy } from '../energy';
 import type { LocalDatabase, TransactionContext } from '../local-db';
 import { createLocalDatabases } from '../local-db/local-databases';
 import { dailyGoalCompletion, outbox } from '../local-db/schema';
@@ -14,7 +14,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createLocalCommandRegistry, createSyncRegistry, createSyncWriter } from '../sync';
 import { createDaysChangedDispatcher, type DaysChanged } from './days-changed';
-import { createDailyGoalPersistence, dailyGoalCommands, dailyGoalSyncEntities } from './persistence';
+import { createDailyGoalPersistence, dailyGoalCommands, dailyGoalCompletionEntity } from './persistence';
 import { createDailyGoalRegistry } from './registry';
 import { insertDailyGoalForTest, insertPersonForTest } from './testing/persisted';
 import { createTestFactsStore, testBausteinEvaluators, testCheckInEvaluators, type TestDayFacts } from './testing/test-evaluators';
@@ -78,7 +78,7 @@ async function setup(options: { materialized?: LocalDate[] } = {}) {
     bausteine: Object.values(testBausteinEvaluators(facts.read)),
     checkIns: Object.values(testCheckInEvaluators(facts.read)),
   });
-  const writer = createSyncWriter({ registry: createSyncRegistry(dailyGoalSyncEntities), clock, newId: () => EntityId.parse(randomUUID()) });
+  const writer = createSyncWriter({ registry: createSyncRegistry([dailyGoalCompletionEntity, energyBookingEntity]), clock, newId: () => EntityId.parse(randomUUID()) });
   const signals: DaysChanged[] = [];
   const dispatcher = createDaysChangedDispatcher({ database, observers: [(signal) => void signals.push(signal)], onError: (error) => { throw error; } });
   const persistence = createDailyGoalPersistence({ registry, clock, writer, dispatcher });
@@ -168,7 +168,7 @@ describe('reevaluateDailyGoals', () => {
       trigger: { dailyGoalCompletionIds: ([1, 2, 3] as const).map((slot) => dailyGoalCompletionId(dailyGoalKey(anna, today, slot))) },
     });
     expect(world.commands().map((command) => command.type)).toEqual(['completeDailyGoal', 'completeDailyGoal', 'completeDailyGoal', 'grantDailyBonus']);
-    expect(world.commands()[3]).toEqual({ type: 'grantDailyBonus', businessKey: bonusKey, payload: { localDate: today, grantedAt: noon } });
+    expect(world.commands()[3]).toEqual({ type: 'grantDailyBonus', businessKey: bonusKey, payload: { localDate: today } });
     expect(world.energy()).toEqual({ balance: 4, levelHalf: 0 });
   });
 

@@ -101,6 +101,11 @@ const correctableTypes = [
   'project_contribution_debit',
 ] as const;
 
+/** Buchungsschlüssel der Gegenbuchung: `gegenbuchung:<buchung>`. */
+export function counterBookingKey(originalBookingId: EntityId): string {
+  return `gegenbuchung:${originalBookingId}`;
+}
+
 /**
  * Korrigiert eine technisch oder fachlich irrtümlich erzeugte Buchung mit exaktem Gegenzeichen.
  * Der Buchungsschlüssel `gegenbuchung:<buchung>` lässt je Buchung höchstens eine Gegenbuchung zu.
@@ -124,7 +129,7 @@ const CounterBooking = z
     message: 'Betrag der ursprünglichen Buchung passt nicht zu ihrer Art',
     path: ['trigger', 'originalAmount'],
   })
-  .refine((b) => b.bookingKey === `gegenbuchung:${b.trigger.originalBookingId}`, {
+  .refine((b) => b.bookingKey === counterBookingKey(b.trigger.originalBookingId), {
     message: 'Buchungsschlüssel muss gegenbuchung:<buchung> sein',
     path: ['bookingKey'],
   });
@@ -139,6 +144,24 @@ export const EnergyBooking = z.discriminatedUnion('type', [
   CounterBooking,
 ]);
 export type EnergyBooking = z.infer<typeof EnergyBooking>;
+
+/**
+ * Die Verweisspalten einer Buchung aus ihrem Auslöser, wie sie beide Datenbankschemas führen: genau
+ * die zur Art passende ist gesetzt (CHECK `energy_booking_reference_check`).
+ */
+export function bookingReferences({ trigger }: EnergyBooking): {
+  dailyGoalCompletionId: EntityId | null;
+  islandObjectId: EntityId | null;
+  communityProjectId: EntityId | null;
+  originalBookingId: EntityId | null;
+} {
+  return {
+    dailyGoalCompletionId: 'dailyGoalCompletionId' in trigger ? trigger.dailyGoalCompletionId : null,
+    islandObjectId: 'islandObjectId' in trigger ? trigger.islandObjectId : null,
+    communityProjectId: 'projectId' in trigger ? trigger.projectId : null,
+    originalBookingId: 'originalBookingId' in trigger ? trigger.originalBookingId : null,
+  };
+}
 
 const spendingTypes: ReadonlySet<EnergyBooking['type']> = new Set(['build_debit', 'upgrade_debit', 'project_contribution_debit']);
 
@@ -178,6 +201,9 @@ export const CompleteDailyGoalPayload = z.strictObject({
 });
 export type CompleteDailyGoalPayload = z.infer<typeof CompleteDailyGoalPayload>;
 
-/** Nutzlast von `grantDailyBonus`: `+1`-Tagesbonus, sobald alle drei Tagesziele des Tags erfüllt sind. */
-export const GrantDailyBonusPayload = z.strictObject({ localDate: LocalDate, grantedAt: Instant });
+/**
+ * Nutzlast von `grantDailyBonus`: `+1`-Tagesbonus, sobald alle drei Tagesziele des Tags erfüllt sind.
+ * Der Tag genügt; Erfüllungen und Zeitpunkt der Buchung bestimmt der Server.
+ */
+export const GrantDailyBonusPayload = z.strictObject({ localDate: LocalDate });
 export type GrantDailyBonusPayload = z.infer<typeof GrantDailyBonusPayload>;

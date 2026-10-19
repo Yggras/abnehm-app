@@ -20,7 +20,7 @@ import { appendBooking, bookingByKey, energyBookingEntity, removeUnconfirmedBook
 import type { TransactionContext } from '../local-db';
 import { dailyGoal } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import type { AffectedDay, CanonicalChangesHook, LocalCommand, SyncEntityAdapter, SyncWriter } from '../sync';
+import type { AffectedDay, CanonicalChangesHook, LocalCommand, SyncWriter } from '../sync';
 import { completionsOfDay, dailyGoalCompletionEntity, insertCompletion, removeUnconfirmedCompletion } from './completion';
 import { markDaysChanged, type DaysChangedDispatcher } from './days-changed';
 import type { DailyGoalRegistry } from './registry';
@@ -133,7 +133,7 @@ export function createDailyGoalPersistence({
     writer.command(tx, {
       type: 'grantDailyBonus',
       businessKey: key,
-      payload: GrantDailyBonusPayload.parse({ localDate, grantedAt: at }),
+      payload: GrantDailyBonusPayload.parse({ localDate }),
       knownServerVersion: null,
       affectedRefs: [{ entityType: energyBookingEntity.entityType, entityId: bookingId }],
       referencePaths: [],
@@ -193,8 +193,8 @@ export const dailyGoalCommands: readonly LocalCommand[] = [
   },
 ];
 
-/** Die Sync-Entitäten der Tagesziele und Energie; Spezifikation 4 liest sie, ohne sie zu schreiben. */
-export const dailyGoalSyncEntities: readonly SyncEntityAdapter[] = [dailyGoalCompletionEntity, energyBookingEntity];
+/** Sync-Entität der Tageszielerfüllung; die Energiebuchung meldet `energyBookingEntity` aus `../energy` an. */
+export { dailyGoalCompletionEntity };
 
 function onlyThePersistenceService(type: string): () => never {
   return () => {

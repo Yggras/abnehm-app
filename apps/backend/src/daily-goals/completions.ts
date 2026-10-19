@@ -1,13 +1,13 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
-import { EntityId, ServerVersion } from '@abnehm/contracts/base';
+import { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
 import { dailyGoalCompletionId, DailyGoalCompletionRecord, dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { CompleteDailyGoalPayload, dailyBonusKey, energyBookingId, GrantDailyBonusPayload } from '@abnehm/contracts/energy';
 import type { CanonicalRecord } from '@abnehm/contracts/sync';
 
 import { policies } from '../authorization/authorization.ts';
 import { dailyGoal, dailyGoalCompletion } from '../db/schema/index.ts';
-import { energyBookingEntity, insertBooking } from '../energy/bookings.ts';
+import { insertBooking } from '../energy/bookings.ts';
 import { nextServerVersion, recordChange } from '../sync/change-log.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
@@ -49,7 +49,7 @@ export const completeDailyGoalCommand: ServerCommand = {
     return { dailyGoalId, localDate, slot, baustein };
   },
   duplicate: () => [],
-  async execute(tx, { actor, payload, businessKey }) {
+  async execute(tx, { actor, payload, businessKey, at }) {
     const input = CompleteDailyGoalPayload.parse(payload);
     const key = dailyGoalKey(actor.personId, input.localDate, input.slot);
     if (businessKey !== key) throw new CommandRejection('invalid_payload');
@@ -63,7 +63,8 @@ export const completeDailyGoalCommand: ServerCommand = {
     ) {
       throw new CommandRejection('invalid_payload');
     }
-    const completedAt = new Date(input.completedAt);
+    // Der erstmalige Erfüllungszeitpunkt ist ein Fachwert des Geräts; technische Zeitstempel setzt die Clock des Servers.
+    const createdAt = Instant.parse(at.toISOString());
     const completion = DailyGoalCompletionRecord.parse({
       id: dailyGoalCompletionId(key),
       dailyGoalId: input.dailyGoalId,
@@ -73,12 +74,12 @@ export const completeDailyGoalCommand: ServerCommand = {
       baustein: input.baustein,
       firstCompletedAt: input.completedAt,
       completionKey: key,
-      createdAt: input.completedAt,
+      createdAt,
     });
     const serverVersion = await nextServerVersion(tx);
-    await tx.insert(dailyGoalCompletion).values({ ...completion, firstCompletedAt: completedAt, createdAt: completedAt, serverVersion });
+    await tx.insert(dailyGoalCompletion).values({ ...completion, firstCompletedAt: new Date(input.completedAt), createdAt: at, serverVersion });
     await recordChange(tx, { position: serverVersion, entityType: dailyGoalCompletionEntity.entityType, entityId: completion.id,
-      operation: 'upsert', ownerPersonId: actor.personId, createdAt: completedAt });
+      operation: 'upsert', ownerPersonId: actor.personId, createdAt: at });
     const credit = await insertBooking(tx, {
       type: 'daily_goal_credit',
       id: energyBookingId(key),
@@ -86,7 +87,7 @@ export const completeDailyGoalCommand: ServerCommand = {
       amount: 1,
       localDate: input.localDate,
       bookingKey: key,
-      createdAt: input.completedAt,
+      createdAt,
       trigger: { dailyGoalCompletionId: completion.id, slot: input.slot },
     });
     const record: CanonicalRecord = { type: 'record', entityType: dailyGoalCompletionEntity.entityType, entityId: completion.id,
@@ -101,9 +102,9 @@ export const grantDailyBonusCommand: ServerCommand = {
   policy: policies.resource('energy_booking', 'befehl'),
   payload: GrantDailyBonusPayload,
   target: (operation) => ({ id: energyBookingId(operation.businessKey) }),
-  canonicalRequest: (operation) => ({ localDate: GrantDailyBonusPayload.parse(operation.payload).localDate }),
+  canonicalRequest: (operation) => GrantDailyBonusPayload.parse(operation.payload),
   duplicate: () => [],
-  async execute(tx, { actor, payload, businessKey }) {
+  async execute(tx, { actor, payload, businessKey, at }) {
     const input = GrantDailyBonusPayload.parse(payload);
     const key = dailyBonusKey(actor.personId, input.localDate);
     if (businessKey !== key) throw new CommandRejection('invalid_payload');
@@ -121,15 +122,13 @@ export const grantDailyBonusCommand: ServerCommand = {
       amount: 1,
       localDate: input.localDate,
       bookingKey: key,
-      createdAt: input.grantedAt,
+      createdAt: Instant.parse(at.toISOString()),
       trigger: { dailyGoalCompletionIds: completions.map((completion) => EntityId.parse(completion.id)) as [EntityId, EntityId, EntityId] },
     });
     return { changes: [bonus], idMappings: [] };
   },
 };
 
-/** Was die Bereiche Tagesziele und Energie beim Sync anmelden. */
-export const dailyGoalSyncEntities: readonly ServerSyncEntity[] = [dailyGoalCompletionEntity, energyBookingEntity];
 export const dailyGoalCommands: readonly ServerCommand[] = [completeDailyGoalCommand, grantDailyBonusCommand];
 
 function recordOf(row: typeof dailyGoalCompletion.$inferSelect): DailyGoalCompletionRecord {

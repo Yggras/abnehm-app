@@ -21,6 +21,7 @@ export {
 } from './engine';
 export { createHttpSyncTransport } from './http-transport';
 export { createLocalCommandRegistry, type LocalCommand, type LocalCommandRegistry } from './commands';
+export { immutableDayEntity } from './immutable-entity';
 export { createSyncWriter, type SyncWriter } from './outbox';
 export { personEntity } from './person-entity';
 export {

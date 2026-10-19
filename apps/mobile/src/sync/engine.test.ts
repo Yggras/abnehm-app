@@ -119,7 +119,7 @@ describe('Sync der App', () => {
   it('übernimmt bei ausgefallenem Push keinen Pull über eine lokal offene Fachänderung', async () => {
     const context = await setup();
     const id = EntityId.parse(randomUUID());
-    context.database.transaction((tx) => context.repository.completeTestGoal(tx, id, 'goal:offen', water(250)));
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, id, 'goal:offen', water(250)));
     context.transport.onPush = () => ({ type: 'unavailable' });
     context.transport.onPull = () => ({ type: 'ok', body: { changes: [record(id, 100, '2')],
       next: { type: 'complete', cursor: '2' as never } } });
@@ -152,7 +152,7 @@ describe('Sync der App', () => {
     const local = EntityId.parse(randomUUID());
     const canonical = EntityId.parse(randomUUID());
     context.database.transaction((tx) => {
-      context.repository.completeTestGoal(tx, local, 'goal:serialized', water(250));
+      context.repository.saveTestCommand(tx, local, 'goal:serialized', water(250));
       context.repository.save(tx, local, water(300));
     });
     let pushes = 0;
@@ -177,7 +177,7 @@ describe('Sync der App', () => {
     const context = await setup();
     const local = EntityId.parse(randomUUID());
     const canonical = EntityId.parse(randomUUID());
-    context.database.transaction((tx) => context.repository.completeTestGoal(tx, local, 'goal:gleicher-tag', water(250)));
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, local, 'goal:gleicher-tag', water(250)));
     let firstPush = true;
     context.transport.onPush = (request) => {
       if (!firstPush) return { type: 'unavailable' };
@@ -198,7 +198,7 @@ describe('Sync der App', () => {
     const context = await setup();
     const local = EntityId.parse(randomUUID());
     const canonical = EntityId.parse(randomUUID());
-    context.database.transaction((tx) => context.repository.completeTestGoal(tx, local, `goal:${local}`, water(250)));
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, local, `goal:${local}`, water(250)));
     let firstPush = true;
     context.transport.onPush = (request) => {
       if (!firstPush) return { type: 'unavailable' };

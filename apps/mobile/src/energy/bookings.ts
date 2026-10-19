@@ -1,12 +1,12 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
-import { EntityId, LocalDate, type ServerVersion } from '@abnehm/contracts/base';
-import { EnergyBooking, summarizeEnergy } from '@abnehm/contracts/energy';
+import type { EntityId, ServerVersion } from '@abnehm/contracts/base';
+import { bookingReferences, EnergyBooking, summarizeEnergy } from '@abnehm/contracts/energy';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { energyBooking } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import type { SyncEntityAdapter } from '../sync';
+import { immutableDayEntity } from '../sync';
 
 // Energiebuchungen der App (Spezifikation 0, Abschnitt 4). Buchungen sind unveränderlich: Es gibt nur
 // Anlegen und Lesen. Korrigiert wird mit einer Gegenbuchung, die der Server anlegt und der Sync bringt.
@@ -33,43 +33,19 @@ export function bookingByKey(tx: ReadContext, bookingKey: string): EnergyBooking
 
 /** Lokal unbestätigte Buchung entfernen, wenn der Server ihren Fachbefehl dauerhaft abgelehnt hat. */
 export function removeUnconfirmedBooking(tx: TransactionContext, bookingId: EntityId): void {
-  const row = sqliteOf(tx).select({ serverVersion: energyBooking.serverVersion }).from(energyBooking).where(eq(energyBooking.id, bookingId)).get();
-  if (row !== undefined && row.serverVersion === null) sqliteOf(tx).delete(energyBooking).where(eq(energyBooking.id, bookingId)).run();
+  sqliteOf(tx).delete(energyBooking).where(and(eq(energyBooking.id, bookingId), isNull(energyBooking.serverVersion))).run();
 }
 
 /** Sync-Entität: Buchungen kommen nur als kanonische Datensätze, nie als Upsert oder Löschung. */
-export const energyBookingEntity: SyncEntityAdapter<never, EnergyBooking> = {
+export const energyBookingEntity = immutableDayEntity({
   entityType: 'energy_booking',
   ownerField: 'personId',
-  upsert: null,
-  deletable: false,
   record: EnergyBooking,
-  applyCanonical(tx, { entityId, serverVersion, data }) {
-    if (data.id !== entityId) throw new Error('Energiebuchung mit abweichender ID');
-    const local = sqliteOf(tx).select({ serverVersion: energyBooking.serverVersion }).from(energyBooking).where(eq(energyBooking.id, entityId)).get();
-    if (local?.serverVersion != null && BigInt(local.serverVersion) > BigInt(serverVersion)) return;
-    // Ein lokales Duplikat derselben ID wird vollständig durch den kanonischen Datensatz ersetzt.
-    const row = rowOf(data, serverVersion);
-    sqliteOf(tx).insert(energyBooking).values(row).onConflictDoUpdate({ target: energyBooking.id, set: row }).run();
-  },
-  applyTombstone() {
-    throw new Error('Energiebuchungen sind unveränderlich und werden nie gelöscht');
-  },
-  reconcileRejected() {
-    throw new Error('Energiebuchungen entstehen nur in Fachbefehlen');
-  },
-  affectedDays(tx, entityId) {
-    const row = sqliteOf(tx)
-      .select({ personId: energyBooking.personId, localDate: energyBooking.localDate })
-      .from(energyBooking)
-      .where(eq(energyBooking.id, entityId))
-      .get();
-    return row === undefined ? [] : [{ type: 'tag', personId: EntityId.parse(row.personId), localDate: LocalDate.parse(row.localDate) }];
-  },
-};
+  table: energyBooking,
+  row: (booking) => rowOf(booking, null),
+});
 
 function rowOf(booking: EnergyBooking, serverVersion: ServerVersion | null): typeof energyBooking.$inferInsert {
-  const { trigger } = booking;
   return {
     id: booking.id,
     personId: booking.personId,
@@ -77,11 +53,8 @@ function rowOf(booking: EnergyBooking, serverVersion: ServerVersion | null): typ
     amount: booking.amount,
     localDate: booking.localDate,
     bookingKey: booking.bookingKey,
-    trigger,
-    dailyGoalCompletionId: 'dailyGoalCompletionId' in trigger ? trigger.dailyGoalCompletionId : null,
-    islandObjectId: 'islandObjectId' in trigger ? trigger.islandObjectId : null,
-    communityProjectId: 'projectId' in trigger ? trigger.projectId : null,
-    originalBookingId: 'originalBookingId' in trigger ? trigger.originalBookingId : null,
+    trigger: booking.trigger,
+    ...bookingReferences(booking),
     createdAt: booking.createdAt,
     serverVersion,
   };

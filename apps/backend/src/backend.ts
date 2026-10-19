@@ -8,7 +8,8 @@ import { couplingSyncEntities } from './coupling/coupling-entities.ts';
 import { createInvitationLimiter } from './coupling/invitation-limiter.ts';
 import { invitationRoutes } from './coupling/invitations.ts';
 import { createInviteCodes, type InvitationSettings } from './coupling/invite-codes.ts';
-import { dailyGoalCommands, dailyGoalSyncEntities } from './daily-goals/completions.ts';
+import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
+import { energyBookingEntity } from './energy/bookings.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
@@ -44,7 +45,8 @@ export function createBackend({
   const sync = createSync({ database, clock, authorization, pullPageSize: syncPullPageSize });
   sync.registerEntity(personEntity);
   for (const entity of couplingSyncEntities) sync.registerEntity(entity);
-  for (const entity of dailyGoalSyncEntities) sync.registerEntity(entity);
+  sync.registerEntity(dailyGoalCompletionEntity);
+  sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
   const invitations = invitationRoutes({
     database,

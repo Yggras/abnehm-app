@@ -102,7 +102,7 @@ describe('grantDailyBonus', () => {
     const second = (await signIn(backend, 'anna@example.test', defaultPassword, newDevice())).device;
     await push(backend, anna.device, goals.map((goal) => completeOp(goal)));
     const [applied] = await push(backend, anna.device, [bonusOp(anna.personId, today)]);
-    const [duplicate] = await push(backend, second, [bonusOp(anna.personId, today, { grantedAt: '2026-10-14T11:00:00.000Z' })], installationB);
+    const [duplicate] = await push(backend, second, [bonusOp(anna.personId, today)], installationB);
     const key = dailyBonusKey(EntityId.parse(anna.personId), LocalDate.parse(today));
     expect(applied).toMatchObject({ type: 'applied', changes: [{ entityType: 'energy_booking', entityId: energyBookingId(key),
       data: { type: 'daily_bonus_credit', amount: 1, bookingKey: key,

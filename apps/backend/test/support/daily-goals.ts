@@ -84,16 +84,15 @@ export function completeOp(goal: ServerDailyGoal, overrides: { completedAt?: str
 }
 
 /** `grantDailyBonus` eines Tags. */
-export function bonusOp(personId: string, localDate: string, overrides: { grantedAt?: string; operationId?: string; businessKey?: string } = {}): CommandOperation {
-  const grantedAt = overrides.grantedAt ?? '2026-10-14T10:00:00.000Z';
+export function bonusOp(personId: string, localDate: string, overrides: { operationId?: string; businessKey?: string } = {}): CommandOperation {
   return {
     type: 'grantDailyBonus',
     operationId: EntityId.parse(overrides.operationId ?? randomUUID()),
     businessKey: overrides.businessKey ?? dailyBonusKey(EntityId.parse(personId), LocalDate.parse(localDate)),
-    payload: { localDate, grantedAt },
+    payload: { localDate },
     knownServerVersion: null,
     schemaVersion: currentSyncSchemaVersion,
-    createdAt: Instant.parse(grantedAt),
+    createdAt: Instant.parse('2026-10-14T10:00:00.000Z'),
   };
 }
 
