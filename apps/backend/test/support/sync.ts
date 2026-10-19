@@ -54,7 +54,7 @@ export const testWaterEntity = ownedEntity({
 /** Ausschließlich im Test-Artefakt injizierter Fachbefehl: eine natürliche Tageskennung. */
 const TestGoalCommand = TestWaterUpsert.extend({ localId: EntityId });
 export const testWaterCommand: ServerCommand = {
-  type: 'completeDailyGoal',
+  type: 'saveMealFavorite',
   identity: 'mapped',
   policy: policies.resource('water_entry', 'befehl'),
   payload: TestGoalCommand,
