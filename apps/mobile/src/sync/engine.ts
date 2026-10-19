@@ -22,7 +22,7 @@ import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db
 import { syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation, rewritePendingOutboxReferences } from './outbox';
-import type { PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
+import type { AffectedDay, PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
 import type { LocalCommandRegistry } from './commands';
 
 // Sync-Ablauf der App (Spezifikation 0, Abschnitt 10): erst Push, dann Pull. Kanonische Ergebnisse,
@@ -42,8 +42,16 @@ export type SyncTransport = {
   pull(request: PullRequest): Promise<TransportReply<PullResponse>>;
 };
 
-/** Eine Entität, deren kanonischer Stand in der laufenden Transaktion übernommen wurde. */
-export type CanonicalChangeApplied = Readonly<{ entityType: string; entityId: EntityId; type: 'record' | 'tombstone' | 'reconciled' }>;
+/**
+ * Eine Entität, deren kanonischer Stand in der laufenden Transaktion übernommen wurde, samt den Tagen,
+ * die ihre Zeile vor und nach der Übernahme betraf.
+ */
+export type CanonicalChangeApplied = Readonly<{
+  entityType: string;
+  entityId: EntityId;
+  type: 'record' | 'tombstone' | 'reconciled';
+  days: readonly AffectedDay[];
+}>;
 
 /**
  * Haken in derselben Transaktion wie die Übernahme kanonischer Ergebnisse, Ablehnungen und Pull-Seiten.
@@ -77,27 +85,39 @@ const maxRounds = 1000;
 export function createSyncEngine({ database, registry, transport, clock, installationId, onCanonicalChanges, commands }: SyncEngineOptions): SyncEngine {
   let running: Promise<SyncCycleResult> | null = null;
 
-  function apply(tx: TransactionContext, change: CanonicalChange): CanonicalChangeApplied {
-    const adapter = registry.require(change.entityType);
-    if (change.type === 'record') {
-      adapter.applyCanonical(tx, { entityId: change.entityId, serverVersion: change.serverVersion, data: adapter.record.parse(change.data) });
-    } else {
-      adapter.applyTombstone(tx, { entityId: change.entityId, serverVersion: change.serverVersion, deletedAt: change.deletedAt });
-    }
-    return { entityType: change.entityType, entityId: change.entityId, type: change.type };
+  /** Übernimmt per `work` und meldet die Tage der Zeile davor und danach. */
+  function withDays(tx: TransactionContext, adapter: SyncEntityAdapter, entityId: EntityId, work: () => void): readonly AffectedDay[] {
+    const before = adapter.affectedDays?.(tx, entityId) ?? [];
+    work();
+    return [...before, ...(adapter.affectedDays?.(tx, entityId) ?? [])];
   }
 
-  function reconcile(tx: TransactionContext, operation: Extract<OutboxOperation, { entityId: EntityId }>, result: Extract<PushResult, { type: 'permanently_rejected' }>) {
+  function apply(tx: TransactionContext, change: CanonicalChange): CanonicalChangeApplied {
+    const adapter = registry.require(change.entityType);
+    const days = withDays(tx, adapter, change.entityId, () => {
+      if (change.type === 'record') {
+        adapter.applyCanonical(tx, { entityId: change.entityId, serverVersion: change.serverVersion, data: adapter.record.parse(change.data) });
+      } else {
+        adapter.applyTombstone(tx, { entityId: change.entityId, serverVersion: change.serverVersion, deletedAt: change.deletedAt });
+      }
+    });
+    return { entityType: change.entityType, entityId: change.entityId, type: change.type, days };
+  }
+
+  function reconcile(tx: TransactionContext, operation: Extract<OutboxOperation, { entityId: EntityId }>, result: Extract<PushResult, { type: 'permanently_rejected' }>): CanonicalChangeApplied {
     const adapter = registry.require(operation.entityType);
     const pending = pendingFor(tx, operation.entityType, operation.entityId).map((change): PendingChange<never> =>
       change.type === 'upsert_entity' ? { ...change, payload: adapter.upsert!.parse(change.payload) as never } : change,
     );
-    adapter.reconcileRejected(tx, {
-      entityId: operation.entityId,
-      error: result.error,
-      canonical: canonicalForAdapter(adapter, result.canonical),
-      pending,
-    });
+    const days = withDays(tx, adapter, operation.entityId, () =>
+      adapter.reconcileRejected(tx, {
+        entityId: operation.entityId,
+        error: result.error,
+        canonical: canonicalForAdapter(adapter, result.canonical),
+        pending,
+      }),
+    );
+    return { entityType: operation.entityType, entityId: operation.entityId, type: 'reconciled', days };
   }
 
   function finish(tx: TransactionContext, changes: CanonicalChangeApplied[]) {
@@ -146,8 +166,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
               }
             }
           } else if (result.type === 'permanently_rejected') {
-            reconcile(tx, operation, result);
-            changes.push({ entityType: operation.entityType, entityId: operation.entityId, type: 'reconciled' });
+            changes.push(reconcile(tx, operation, result));
           } else if (!hasPending(tx, operation.entityType, operation.entityId) && result.canonical.type !== 'absent') {
             changes.push(apply(tx, result.canonical));
           }

@@ -25,6 +25,7 @@ export { createSyncWriter, type SyncWriter } from './outbox';
 export { personEntity } from './person-entity';
 export {
   createSyncRegistry,
+  type AffectedDay,
   type CanonicalEntity,
   type EntityTombstone,
   type PendingChange,

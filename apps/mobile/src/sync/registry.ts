@@ -1,10 +1,10 @@
 import type { z } from 'zod';
 
-import type { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
+import type { EntityId, Instant, LocalDate, ServerVersion } from '@abnehm/contracts/base';
 import type { ContractError } from '@abnehm/contracts/errors';
 import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
 
-import type { TransactionContext } from '../local-db';
+import type { ReadContext, TransactionContext } from '../local-db';
 
 // Entitäts-Registry des App-Syncs (Spezifikation 0, Abschnitt 10). Ein Bereich meldet je Entität seine
 // Transport-Schemas, die Eigentumsregel und drei Adapteroperationen an, die über den opaken
@@ -31,6 +31,14 @@ export type RejectedChange<U, R> = Readonly<{
   pending: readonly PendingChange<U>[];
 }>;
 
+/**
+ * Was eine lokale Zeile für die Tagesziele bedeutet (#105): ein Tag einer tagesbezogenen Entität oder
+ * die Gültigkeit einer Ziel- bzw. Wochenplanversion. Der Persistenzdienst wertet danach neu aus.
+ */
+export type AffectedDay = Readonly<
+  { type: 'tag'; personId: EntityId; localDate: LocalDate } | { type: 'plan'; personId: EntityId; validFrom: LocalDate }
+>;
+
 export type SyncEntityAdapter<U extends EntityData = EntityData, R extends EntityData = EntityData> = Readonly<{
   entityType: SyncEntityType;
   /**
@@ -52,6 +60,11 @@ export type SyncEntityAdapter<U extends EntityData = EntityData, R extends Entit
   applyCanonical(tx: TransactionContext, record: CanonicalEntity<R>): void;
   /** Übernimmt die Löschmarkierung; eine lokal unbekannte Entität bleibt unbekannt. */
   applyTombstone(tx: TransactionContext, tombstone: EntityTombstone): void;
+  /**
+   * Tage, die die lokale Zeile betrifft. Die Engine liest sie vor und nach jeder Übernahme; so erreicht
+   * den Persistenzdienst der alte und der neue `local_date`. Fehlt die Methode, betrifft die Entität keinen Tag.
+   */
+  affectedDays?(tx: ReadContext, entityId: EntityId): readonly AffectedDay[];
   /** Ersetzt eine lokale, logisch identische ID samt allen fachlichen Verweisen; läuft vor applyCanonical. */
   replaceCanonicalId?(tx: TransactionContext, from: EntityId, to: EntityId, options: { preserveLocalChanges: boolean }): void;
   /**

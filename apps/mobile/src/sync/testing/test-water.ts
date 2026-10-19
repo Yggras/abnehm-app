@@ -1,12 +1,13 @@
 import { asc, eq, isNull } from 'drizzle-orm';
 
-import type { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
+import { EntityId, LocalDate, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { TestWaterRecord, TestWaterUpsert } from '@abnehm/contracts/fixtures';
 
 import type { ReadContext, TransactionContext } from '../../local-db';
 import { person, waterEntry } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import type { SyncWriter } from '../outbox';
+import type { SyncEntityAdapter } from '../registry';
 import { sqliteEntity } from '../sqlite-entity';
 
 // Test-Entität auf `water_entry` (#99): Sie steht für einen Bereich, der eine eigene Entität anmeldet.
@@ -32,7 +33,7 @@ function deleteLocal(tx: TransactionContext, entityId: EntityId, at: Instant) {
   sqliteOf(tx).update(waterEntry).set({ deletedAt: at, updatedAt: at }).where(eq(waterEntry.id, entityId)).run();
 }
 
-export const testWaterEntity = sqliteEntity({
+const sqliteWaterEntity = sqliteEntity({
   entityType: 'water_entry',
   ownerField: 'personId',
   upsert: TestWaterUpsert,
@@ -45,6 +46,15 @@ export const testWaterEntity = sqliteEntity({
     else deleteLocal(tx, entityId, change.createdAt);
   },
 });
+
+/** Test-Entität samt ihrem Tag; so prüfen Tests den Pull-Haken der Tagesziele (#105). */
+export const testWaterEntity: SyncEntityAdapter<TestWaterUpsert, TestWaterRecord> = {
+  ...sqliteWaterEntity,
+  affectedDays(tx, entityId) {
+    const row = sqliteOf(tx).select({ personId: waterEntry.personId, localDate: waterEntry.localDate }).from(waterEntry).where(eq(waterEntry.id, entityId)).get();
+    return row === undefined ? [] : [{ type: 'tag', personId: EntityId.parse(row.personId), localDate: LocalDate.parse(row.localDate) }];
+  },
+};
 
 /** Test-Adapter für #100: die produktive Wasser-Entität braucht keine natürliche Duplikat-ID.
  * Verweise anderer Fachbereiche werden dort im jeweiligen Bereichsadapter umgeschrieben. */

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { AreaKey, BausteinKey, EntityId, Instant, LocalDate, MessageKey, MessageValues, TimeZone } from './base.ts';
+import { addDays } from './calendar.ts';
 import { ContractError } from './errors.ts';
 import { uuidV5 } from './ids.ts';
 import { mealCategoryCount } from './units.ts';
@@ -183,6 +184,17 @@ export const DailyGoalCause = z.enum([
   'planaenderung',
 ]);
 export type DailyGoalCause = z.infer<typeof DailyGoalCause>;
+
+/**
+ * Tage, die eine neue oder ersetzte Ziel- bzw. Wochenplanversion betrifft: `max(validFrom, heute)` bis
+ * heute + 13. Sie gehen mit `planaenderung` an `reevaluateDailyGoals`, lokal wie bei der Pull-Übernahme.
+ */
+export function planChangeDays(validFrom: LocalDate, today: LocalDate): LocalDate[] {
+  const days: LocalDate[] = [];
+  const last = addDays(today, 13);
+  for (let day: string = validFrom > today ? validFrom : today; day <= last; day = addDays(day, 1)) days.push(LocalDate.parse(day));
+  return days;
+}
 
 /** Zeitpunkt eines Tages-Check-ins. */
 export const CheckInMoment = z.enum(['mittag', 'abend']);
