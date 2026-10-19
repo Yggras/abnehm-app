@@ -33,11 +33,13 @@ services:
       DATABASE_USER: abnehm
       DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
       BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
+      INVITE_CODE_SECRET_FILE: /run/secrets/invite_code_secret
       # Öffentliche Adresse des Backends für Better Auth; lokal der Entwicklungsrechner.
       AUTH_BASE_URL: "http://localhost:${BACKEND_PORT:-8787}"
     secrets:
       - postgres_password
       - better_auth_secret
+      - invite_code_secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +75,9 @@ secrets:
   better_auth_secret:
     # Lokal wie oben; nur das Backend erhält es.
     file: ./secrets/better_auth_secret
+  invite_code_secret:
+    # HMAC der Einladungscodes, getrennt vom Better-Auth-Secret; nur das Backend erhält es.
+    file: ./secrets/invite_code_secret
 
 volumes:
   postgres-data:

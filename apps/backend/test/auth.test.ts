@@ -178,7 +178,7 @@ describe('Anmeldung', () => {
     const backend = await createTestBackend();
     const { accountId } = await signUp(backend, 'anna@example.test');
 
-    for (let attempt = 0; attempt < loginLimits.perAccount.maxFailures; attempt++) {
+    for (let attempt = 0; attempt < loginLimits.perAccount.max; attempt++) {
       expect((await signIn(backend, 'anna@example.test', 'falsches-passwort')).reply.status).toBe(401);
     }
     const blocked = await signIn(backend, 'anna@example.test', defaultPassword);
@@ -188,7 +188,7 @@ describe('Anmeldung', () => {
     expect((await signIn(backend, 'anna@example.test', defaultPassword)).reply.status).toBe(200);
 
     const failures = (await securityLogEntries(backend)).filter((entry) => entry.eventType === 'anmeldung_fehlgeschlagen');
-    expect(failures).toHaveLength(loginLimits.perAccount.maxFailures + 1);
+    expect(failures).toHaveLength(loginLimits.perAccount.max + 1);
     expect(failures.at(-1)).toMatchObject({ accountId, details: { reason: 'begrenzt' } });
   });
 
@@ -198,7 +198,7 @@ describe('Anmeldung', () => {
 
     const replies = [];
     for (const email of ['anna@example.test', 'niemand@example.test']) {
-      for (let attempt = 0; attempt < loginLimits.perAccount.maxFailures; attempt++) await signIn(backend, email, 'falsches-passwort');
+      for (let attempt = 0; attempt < loginLimits.perAccount.max; attempt++) await signIn(backend, email, 'falsches-passwort');
       replies.push((await signIn(backend, email, 'falsches-passwort')).reply);
     }
 
@@ -213,7 +213,7 @@ describe('Anmeldung', () => {
     await signUp(backend, 'anna@example.test');
     const attacker = newDevice();
 
-    for (let attempt = 0; attempt < loginLimits.perIp.maxFailures; attempt++) {
+    for (let attempt = 0; attempt < loginLimits.perIp.max; attempt++) {
       // Je 11 Sekunden Abstand: Die eingebaute Begrenzung von Better Auth (3 Anfragen, Fenster ab der
       // letzten Anfrage 10 Sekunden) greift so nicht, die eigene pro IP schon.
       advance(11_000);

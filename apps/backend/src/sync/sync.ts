@@ -28,6 +28,7 @@ import {
   type PersonActor,
   type ResourcePolicy,
 } from '../authorization/authorization.ts';
+import { canonicalJson } from '../canonical-json.ts';
 import { jsonBody } from '../contract-validation.ts';
 import type { Database, DbExecutor } from '../database.ts';
 import { changeLog, couplingMember, processedOperation } from '../db/schema/index.ts';
@@ -414,15 +415,4 @@ function sqlState(error: unknown): string | undefined {
  */
 export function payloadHash(operation: OutboxOperation): string {
   return createHash('sha256').update(canonicalJson(operation)).digest('hex');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
 }

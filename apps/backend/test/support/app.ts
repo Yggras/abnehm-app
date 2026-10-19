@@ -19,7 +19,8 @@ export type TestBackend = Backend & { database: Database };
  */
 export function createTestApp(database: Database, { clock, syncPullPageSize }: TestAppOptions = {}): TestBackend {
   const authSettings = { secret: 'test-secret-mit-mindestens-zweiunddreissig-zeichen', baseUrl: testBaseUrl, trustedProxies: [] };
-  return { ...createBackend({ database, authSettings, clock, syncPullPageSize }), database };
+  const invitationSettings = { codeSecret: 'test-einladungs-secret-mit-mindestens-32-zeichen' };
+  return { ...createBackend({ database, authSettings, invitationSettings, clock, syncPullPageSize }), database };
 }
 
 export type TestAppOptions = { clock?: Clock; syncPullPageSize?: number };

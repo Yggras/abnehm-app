@@ -18,6 +18,9 @@ const authSecret = 'a'.repeat(64);
 const authSecretDirectory = await mkdtemp(path.join(tmpdir(), 'abnehm-config-'));
 const authSecretFile = path.join(authSecretDirectory, 'better_auth_secret');
 await writeFile(authSecretFile, `${authSecret}\n`);
+const inviteCodeSecret = 'b'.repeat(64);
+const inviteCodeSecretFile = path.join(authSecretDirectory, 'invite_code_secret');
+await writeFile(inviteCodeSecretFile, `${inviteCodeSecret}\n`);
 afterAll(() => rm(authSecretDirectory, { recursive: true, force: true }));
 
 const baseEnvironment = {
@@ -27,6 +30,7 @@ const baseEnvironment = {
   DATABASE_NAME: 'abnehm',
   DATABASE_USER: 'abnehm',
   BETTER_AUTH_SECRET_FILE: authSecretFile,
+  INVITE_CODE_SECRET_FILE: inviteCodeSecretFile,
   AUTH_BASE_URL: 'http://localhost:8787',
 };
 
@@ -40,7 +44,20 @@ describe('readConfig', () => {
       port: 8787,
       database: { host: 'postgres', port: 5432, name: 'abnehm', user: 'abnehm', password: 'geheim-123' },
       auth: { secret: authSecret, baseUrl: 'http://localhost:8787', trustedProxies: [] },
+      invitations: { codeSecret: inviteCodeSecret },
     });
+  });
+
+  it('liest das Einladungs-Secret aus der Secret-Datei und verlangt mindestens 32 Zeichen', async () => {
+    const file = await secretFile('geheim-123');
+    const shortSecret = await secretFile('zu-kurz', 'invite_code_secret');
+
+    expect(() => readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, INVITE_CODE_SECRET_FILE: shortSecret })).toThrow(
+      /INVITE_CODE_SECRET_FILE ist kürzer als 32 Zeichen/,
+    );
+    expect(() => readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, INVITE_CODE_SECRET_FILE: undefined })).toThrow(
+      /INVITE_CODE_SECRET_FILE fehlt/,
+    );
   });
 
   it('liest das Better-Auth-Secret aus der Secret-Datei und verlangt mindestens 32 Zeichen', async () => {

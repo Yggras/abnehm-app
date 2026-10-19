@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs';
 
 import type { AuthSettings } from './auth/auth-module.ts';
+import type { InvitationSettings } from './backend.ts';
+import { MIN_INVITE_CODE_SECRET_LENGTH } from './coupling/invite-codes.ts';
 import type { DatabaseSettings } from './database.ts';
 
 export type BackendConfig = {
   port: number;
   database: DatabaseSettings;
   auth: AuthSettings;
+  invitations: InvitationSettings;
 };
 
 /** Better Auth signiert damit Sitzungstokens; `openssl rand -hex 32` ergibt 64 Zeichen. */
@@ -48,6 +51,11 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
     problems.push(`Secret aus BETTER_AUTH_SECRET_FILE ist kürzer als ${MIN_AUTH_SECRET_LENGTH} Zeichen`);
   }
 
+  const inviteCodeSecret = secret('INVITE_CODE_SECRET_FILE');
+  if (inviteCodeSecret !== '' && inviteCodeSecret.length < MIN_INVITE_CODE_SECRET_LENGTH) {
+    problems.push(`Secret aus INVITE_CODE_SECRET_FILE ist kürzer als ${MIN_INVITE_CODE_SECRET_LENGTH} Zeichen`);
+  }
+
   const config: BackendConfig = {
     port: port('PORT'),
     database: {
@@ -66,6 +74,7 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
         .map((entry) => entry.trim())
         .filter((entry) => entry !== ''),
     },
+    invitations: { codeSecret: inviteCodeSecret },
   };
   if (problems.length > 0) throw new Error(`Ungültige Backend-Konfiguration: ${problems.join(', ')}`);
   return config;
