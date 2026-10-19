@@ -67,8 +67,8 @@ export type SyncEngineOptions = {
   onCanonicalChanges?: CanonicalChangesHook;
 };
 
-/** Der Pull-Stand je Kontodatenbank; es gibt genau einen. */
-const cursorScope = 'konto';
+/** Der Pull-Stand je Kontodatenbank; es gibt genau einen. Der Seeder (#112) setzt ihn ebenfalls. */
+export const syncCursorScope = 'konto';
 /** Schutz vor einem Server, der nie zum Ende kommt. */
 const maxRounds = 1000;
 
@@ -198,7 +198,7 @@ function canonicalForAdapter(adapter: SyncEntityAdapter, state: CanonicalState) 
 type CursorState = { cursor: SyncCursor | null; pageToken: PullPageToken | null };
 
 function readCursor(tx: ReadContext): CursorState {
-  const row = sqliteOf(tx).select().from(syncCursor).where(eq(syncCursor.scope, cursorScope)).get();
+  const row = sqliteOf(tx).select().from(syncCursor).where(eq(syncCursor.scope, syncCursorScope)).get();
   return {
     cursor: row?.cursor == null ? null : SyncCursor.parse(row.cursor),
     pageToken: row?.pageToken == null ? null : PullPageToken.parse(row.pageToken),
@@ -209,7 +209,7 @@ function writeCursor(tx: TransactionContext, state: CursorState, clock: Clock) {
   const updatedAt = clock.read().instant;
   sqliteOf(tx)
     .insert(syncCursor)
-    .values({ scope: cursorScope, ...state, updatedAt })
+    .values({ scope: syncCursorScope, ...state, updatedAt })
     .onConflictDoUpdate({ target: syncCursor.scope, set: { ...state, updatedAt } })
     .run();
 }

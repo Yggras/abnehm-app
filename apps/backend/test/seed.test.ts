@@ -2,9 +2,9 @@ import { verifyPassword } from 'better-auth/crypto';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { canonicalRows, seedManifests, seedPassword, type SeedManifest } from '@abnehm/contracts/seeds';
+import { canonicalRows, seedManifests, seedPassword, seedRoutePath, type SeedManifest } from '@abnehm/contracts/seeds';
 
-import { createDevelopmentApp, seedRoutePath } from '../dev/app.ts';
+import { createDevelopmentApp } from '../dev/app.ts';
 import { dumpServer, seedServer, tablesWithEmail } from '../dev/seed/server-seed.ts';
 import { account, person, session, user } from '../src/db/schema/index.ts';
 import { createTestBackend, type TestBackend } from './support/app.ts';

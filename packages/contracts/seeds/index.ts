@@ -17,6 +17,7 @@ export {
   SeedState,
   SeedStep,
   seedFormatVersion,
+  seedRoutePath,
   type SeedAccount,
   type SeedInstallation,
   type SeedValue,

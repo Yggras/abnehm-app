@@ -3,8 +3,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { testCapabilities } from '../build-capabilities';
+import { ClockProvider } from '../clock/clock-context';
 import { color, useDesignFonts } from '../design';
 import { modalScreens } from '../navigation';
+import { appClock, deviceSession } from '../session/device-session';
 import { MessageHostProvider } from '../shell/MessageHost';
 
 // Der Startbildschirm bleibt stehen, bis Rubik geladen ist; sonst blitzt die Systemschrift auf.
@@ -25,20 +28,24 @@ export default function RootLayout() {
 
   // Der Meldungs-Host liegt über allen Routen. Sichtbar wird die Meldung über der Tab-Leiste oder,
   // auf Seiten und in modalen Abläufen, am unteren Rand von `ScreenFrame`.
+  // Die Uhr der App gilt für alle Routen; im Development Build ist es die Testuhr, die ein Seed stellt.
   return (
-    <MessageHostProvider>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
-        <Stack.Screen name="(tabs)" />
-        {modalScreens.map((name) => (
-          <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
-        ))}
-        {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar. */}
-        <Stack.Protected guard={__DEV__}>
-          <Stack.Screen name="katalog" />
-          <Stack.Screen name="technik" />
-        </Stack.Protected>
-      </Stack>
-    </MessageHostProvider>
+    <ClockProvider clock={appClock}>
+      <MessageHostProvider>
+        <StatusBar style="dark" />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
+          <Stack.Screen name="(tabs)" />
+          {modalScreens.map((name) => (
+            <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
+          ))}
+          {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar. */}
+          <Stack.Protected guard={__DEV__}>
+            <Stack.Screen name="katalog" />
+            <Stack.Screen name="technik" />
+          </Stack.Protected>
+        </Stack>
+        {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
+      </MessageHostProvider>
+    </ClockProvider>
   );
 }

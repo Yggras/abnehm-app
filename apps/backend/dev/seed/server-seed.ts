@@ -13,11 +13,16 @@ import * as schema from '../../src/db/schema/index.ts';
 // Manifests zurück (TRUNCATE aller Tabellen des Schemas, dann Einfügen). TRUNCATE löst die
 // Zeilen-Trigger der unveränderlichen Entitäten nicht aus. So ergibt jedes Seeden für Fach- und
 // Sync-Daten exakt denselben kanonischen Stand. Konten entstehen aus `accounts`: Konto mit fester ID
-// und gesalzenem Passwort-Hash, keine Sitzung. Sitzungen entstehen erst bei der Anmeldung danach;
-// der Vergleich mit dem Manifest läuft deshalb vor der Anmeldung und prüft Konten nur semantisch.
+// und gesalzenem Passwort-Hash, keine Sitzung. Sitzung und Sicherheitslog-Eintrag entstehen erst bei
+// der Anmeldung danach. Der kanonische Vergleich umfasst deshalb Fach- und Sync-Daten, also alle
+// Tabellen außer den Better-Auth-Tabellen (Konten prüft der Test semantisch: ID, E-Mail, Hash passt
+// zum Testpasswort) und dem Sicherheitslog (betriebliches Protokoll, das jede Anmeldung schreibt).
+// Seeden leert beide.
 
-const tables = Object.values(schema).filter((value): value is PgTable => is(value, PgTable));
+const tables = (Object.values(schema) as unknown[]).filter((value): value is PgTable => is(value, PgTable));
 const byName = new Map(tables.map((table) => [getTableConfig(table).name, table]));
+/** Nicht Teil des kanonischen Vergleichs; siehe Seed-Strategie oben. */
+const notCanonical: readonly string[] = [...authTables, 'security_log'];
 const authTableNames: readonly string[] = authTables;
 
 /** Tabellen so geordnet, dass jede nach den Tabellen kommt, auf die ihre Fremdschlüssel zeigen. */
@@ -43,6 +48,7 @@ export async function seedServer(database: Database, manifest: SeedManifest): Pr
     if (!byName.has(table)) throw new Error(`Seed: unbekannte Tabelle ${table}`);
   }
   if (rows.sync_clock?.length !== 1) throw new Error('Seed: das Manifest muss die Sync-Clock setzen');
+  if (rows.security_log !== undefined) throw new Error('Seed: das Sicherheitslog entsteht nur im Betrieb');
   // Hashen dauert; es läuft vor der Transaktion.
   const accounts = await Promise.all(manifest.accounts.map(async (account) => ({ ...account, hash: await hashPassword(account.password) })));
   const at = new Date(manifest.clock.instant);
@@ -73,11 +79,11 @@ export async function seedServer(database: Database, manifest: SeedManifest): Pr
   });
 }
 
-/** Kanonischer Stand aller Tabellen außer den Better-Auth-Tabellen, vergleichbar mit `manifest.initial.server`. */
+/** Kanonischer Stand der Fach- und Sync-Daten, vergleichbar mit `manifest.initial.server`. */
 export async function dumpServer(executor: DbExecutor): Promise<SeedRows> {
   const dump: Record<string, SeedRow[]> = {};
   for (const [name, table] of byName) {
-    if (authTableNames.includes(name)) continue;
+    if (notCanonical.includes(name)) continue;
     const found = await executor.select().from(table);
     dump[name] = found.map((row) => toCanonical(table, row as Record<string, unknown>));
   }

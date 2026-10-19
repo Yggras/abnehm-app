@@ -19,6 +19,9 @@ export const seedFormatVersion = 1;
 export const SeedScenarioKey = z.enum(['solo']);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 
+/** Pfad der Seed-Route des Development-Backends; nur dort gibt es sie. */
+export const seedRoutePath = '/dev/seed';
+
 /** Body von `POST /dev/seed` des Development-Backends. */
 export const SeedRequest = z.strictObject({ scenario: SeedScenarioKey });
 export type SeedRequest = z.infer<typeof SeedRequest>;
