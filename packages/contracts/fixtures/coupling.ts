@@ -12,7 +12,9 @@ import {
   InvitationErrorCode,
   InviteCode,
   OnlineRequestId,
+  PartnerSharingLevel,
   PartnerSharingRecord,
+  PhotoSharingLevel,
   PhotoSharingRecord,
 } from '../src/coupling.ts';
 import { fixtures, without } from './define.ts';
@@ -85,6 +87,8 @@ export const couplingFixtures = {
     },
   }),
   CouplingStatus: fixtures(CouplingStatus, { valid: { 'aktiv': 'aktiv' }, invalid: { 'beendet': 'beendet' } }),
+  PartnerSharingLevel: fixtures(PartnerSharingLevel, { valid: { 'privat': 'privat' }, invalid: { 'geteilt gilt nur für Fotos': 'geteilt' } }),
+  PhotoSharingLevel: fixtures(PhotoSharingLevel, { valid: { 'geteilt': 'geteilt' }, invalid: { 'zusammengefasst gilt nur für Bereiche': 'zusammengefasst' } }),
   CouplingRecord: fixtures(CouplingRecord, {
     valid: {
       'aktiv': couplingRecord,

@@ -2,23 +2,27 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 
 import type { EntityId } from '@abnehm/contracts/base';
+import type { ContractErrorCode } from '@abnehm/contracts/errors';
 
-import type { OnlineResult } from './invitation-flows';
+import type { OnlineResult } from './online-result';
 import { useOnlineFlows } from './OnlineFlowsProvider';
 
 /** Was ein Bildschirm über einen Online-Ablauf sieht: noch nicht gestartet, läuft oder sein Ausgang. */
-export type FlowState<T> = Readonly<{ type: 'idle' }> | Readonly<{ type: 'pending' }> | OnlineResult<T>;
+export type FlowState<T, C extends ContractErrorCode = ContractErrorCode> = Readonly<{ type: 'idle' }> | Readonly<{ type: 'pending' }> | OnlineResult<T, C>;
 
 /**
  * Ein Online-Ablauf als TanStack-Mutation. Eine Absicht ist der Ablauf mit derselben Eingabe (`keyOf`):
  * Bis zum Erfolg trägt jeder Versuch dieselbe `requestId`, damit ein Retry nach verlorener Antwort beim
  * Server dasselbe Ergebnis erhält statt etwa „Code verbraucht“. Nach dem Erfolg beginnt eine neue Absicht.
  */
-export function useOnlineFlow<I, T>(run: (input: I, requestId: EntityId) => Promise<OnlineResult<T>>, keyOf: (input: I) => string) {
+export function useOnlineFlow<I, T, C extends ContractErrorCode>(
+  run: (input: I, requestId: EntityId) => Promise<OnlineResult<T, C>>,
+  keyOf: (input: I) => string,
+) {
   const { newId } = useOnlineFlows();
   const intent = useRef<{ key: string; requestId: EntityId } | null>(null);
   const mutation = useMutation({
-    mutationFn: async ({ input, requestId }: { input: I; requestId: EntityId }): Promise<OnlineResult<T>> => {
+    mutationFn: async ({ input, requestId }: { input: I; requestId: EntityId }): Promise<OnlineResult<T, C>> => {
       try {
         return await run(input, requestId);
       } catch {
@@ -40,6 +44,6 @@ export function useOnlineFlow<I, T>(run: (input: I, requestId: EntityId) => Prom
     [keyOf, mutate, newId],
   );
 
-  const state: FlowState<T> = mutation.isPending ? { type: 'pending' } : (mutation.data ?? { type: 'idle' });
+  const state: FlowState<T, C> = mutation.isPending ? { type: 'pending' } : (mutation.data ?? { type: 'idle' });
   return { state, start, reset };
 }

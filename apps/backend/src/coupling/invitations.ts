@@ -18,13 +18,13 @@ import {
 
 import { forbiddenError, guard, policies, type Actor, type PersonActor } from '../authorization/authorization.ts';
 import { jsonBody } from '../contract-validation.ts';
-import type { Database, DbExecutor } from '../database.ts';
-import { coupling, couplingMember, invitation, person } from '../db/schema/index.ts';
+import { sqlStateOf, type Database, type DbExecutor } from '../database.ts';
+import { couplingMember, invitation, person } from '../db/schema/index.ts';
 import type { OnlineFlow } from '../online/flows.ts';
-import { storedOnlineResult, storeOnlineResult, type OnlineRequestBinding } from '../online/online-requests.ts';
+import { onlineRequestBinding, storedOnlineResult, storeOnlineResult, type OnlineRequestBinding } from '../online/online-requests.ts';
 import type { SecurityLog } from '../security-log/security-log.ts';
 import { lockSyncClock } from '../sync/change-log.ts';
-import { couple } from './couple.ts';
+import { couple, couplingOfPair } from './couple.ts';
 import type { InviteCodes } from './invite-codes.ts';
 import type { InvitationLimiter } from './invitation-limiter.ts';
 
@@ -41,6 +41,8 @@ export type InvitationsDependencies = Readonly<{
   database: Database;
   clock: Clock;
   codes: InviteCodes;
+  /** Schlüssel des Anfrage-Hashes in `online_request`; das Einladungs-Secret. */
+  requestHashKey: string;
   limiter: InvitationLimiter;
   securityLog: SecurityLog;
   /** Quelladresse der Anfrage, wie die Begrenzung der Anmeldung sie bestimmt. */
@@ -58,7 +60,7 @@ const forbidden: Outcome<never> = { type: 'error', error: forbiddenError };
 /** Fehlversuche im Sinne der Begrenzung: Der Code führt zu keiner Einladung, die angenommen werden kann. */
 const failedAttempts: readonly InvitationErrorCode[] = ['invite_invalid', 'invite_expired', 'invite_consumed', 'invite_self'];
 
-export function invitationRoutes({ database, clock, codes, limiter, securityLog, ipAddressOf }: InvitationsDependencies) {
+export function invitationRoutes({ database, clock, codes, requestHashKey, limiter, securityLog, ipAddressOf }: InvitationsDependencies) {
   const now = () => new Date(clock.read().instant);
 
   /** Ein identischer Retry erhält das gespeicherte Ergebnis, eine fremde `requestId` nur `forbidden`. */
@@ -86,7 +88,7 @@ export function invitationRoutes({ database, clock, codes, limiter, securityLog,
   }
 
   function binding(actor: Actor, flow: OnlineFlow, request: { requestId: string }): OnlineRequestBinding {
-    return { requestId: request.requestId, accountId: actor.accountId, flow, requestHash: codes.requestHash(flow, request) };
+    return onlineRequestBinding({ hashKey: requestHashKey, accountId: actor.accountId, flow, request });
   }
 
   // Code erzeugen ---------------------------------------------------------------------------------
@@ -166,12 +168,8 @@ export function invitationRoutes({ database, clock, codes, limiter, securityLog,
       if (found.type === 'error') return found;
       const inviter = found.value.inviterPersonId;
       const [named] = await database.db.select({ displayName: person.displayName }).from(person).where(eq(person.id, inviter));
-      const [low, high] = [inviter, actor.personId].sort() as [string, string];
-      const [previous] = await database.db
-        .select({ id: coupling.id })
-        .from(coupling)
-        .where(and(eq(coupling.personLowId, low), eq(coupling.personHighId, high)));
-      return { type: 'ok', value: { inviterDisplayName: named!.displayName, reactivates: previous !== undefined } };
+      const previous = await couplingOfPair(database.db, [inviter, actor.personId]);
+      return { type: 'ok', value: { inviterDisplayName: named!.displayName, reactivates: previous !== null } };
     });
   }
 
@@ -254,6 +252,6 @@ async function anyActivelyCoupled(executor: DbExecutor, personIds: readonly stri
  * (40P01) oder Serialisierungsfehler (40001) laut https://www.postgresql.org/docs/current/errcodes-appendix.html.
  */
 function isContention(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null)?.code ?? (error as { cause?: { code?: unknown } } | null)?.cause?.code;
+  const code = sqlStateOf(error);
   return code === '23505' || code === '40P01' || code === '40001';
 }

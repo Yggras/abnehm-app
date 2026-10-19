@@ -1,7 +1,7 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import type { AcceptInvitationResult, CheckInvitationResult, CreateInvitationResult } from '@abnehm/contracts/coupling';
 
-import type { InvitationFlows, OnlineResult } from '../invitation-flows';
+import type { InvitationFlows, InvitationResult } from '../invitation-flows';
 
 // Online-Test-Adapter der Einladungsabläufe (#103) für Komponententests, etwa der Bildschirme
 // `partner.invite` und `partner.redeem` (Spezifikation 5). Ohne Vorgabe gelingt jeder Aufruf; `respond`
@@ -18,7 +18,7 @@ export type FakeInvitationFlows = InvitationFlows & {
   /** Erfolgreiche Werte, die ohne Vorgabe zurückkommen. */
   readonly defaults: Values;
   /** Die nächsten Ausgänge des Ablaufs in Reihenfolge; ein `Error` wird geworfen. */
-  respond<M extends Method>(method: M, ...outcomes: (OnlineResult<Values[M]> | Error)[]): void;
+  respond<M extends Method>(method: M, ...outcomes: (InvitationResult<Values[M]> | Error)[]): void;
   /** Hält den nächsten Aufruf des Ablaufs an; die zurückgegebene Funktion gibt ihn frei. */
   hold(method: Method): () => void;
 };
@@ -30,14 +30,14 @@ export function fakeInvitationFlows(): FakeInvitationFlows {
     acceptCode: { couplingId: EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c01'), reactivated: false },
   };
   const calls: FakeInvitationCall[] = [];
-  const queued: { [M in Method]: (OnlineResult<Values[M]> | Error)[] } = { createCode: [], checkCode: [], acceptCode: [] };
+  const queued: { [M in Method]: (InvitationResult<Values[M]> | Error)[] } = { createCode: [], checkCode: [], acceptCode: [] };
   const held: { [M in Method]: Promise<void>[] } = { createCode: [], checkCode: [], acceptCode: [] };
 
-  async function answer<M extends Method>(method: M, call: Omit<FakeInvitationCall, 'method'>): Promise<OnlineResult<Values[M]>> {
+  async function answer<M extends Method>(method: M, call: Omit<FakeInvitationCall, 'method'>): Promise<InvitationResult<Values[M]>> {
     calls.push({ method, ...call });
     const gate = held[method].shift();
     if (gate !== undefined) await gate;
-    const outcome = queued[method].shift() as OnlineResult<Values[M]> | Error | undefined;
+    const outcome = queued[method].shift() as InvitationResult<Values[M]> | Error | undefined;
     if (outcome instanceof Error) throw outcome;
     return outcome ?? { type: 'ok', value: defaults[method] };
   }

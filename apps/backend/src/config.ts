@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import type { AuthSettings } from './auth/auth-module.ts';
-import type { InvitationSettings } from './backend.ts';
-import { MIN_INVITE_CODE_SECRET_LENGTH } from './coupling/invite-codes.ts';
+import { MIN_INVITE_CODE_SECRET_LENGTH, type InvitationSettings } from './coupling/invite-codes.ts';
 import type { DatabaseSettings } from './database.ts';
 
 export type BackendConfig = {

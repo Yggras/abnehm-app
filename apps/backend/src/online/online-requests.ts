@@ -1,5 +1,8 @@
+import { createHmac } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 
+import { canonicalJson } from '../canonical-json.ts';
 import type { DbExecutor } from '../database.ts';
 import { onlineRequest } from '../db/schema/index.ts';
 import type { OnlineFlow } from './flows.ts';
@@ -10,6 +13,26 @@ import type { OnlineFlow } from './flows.ts';
 // vorübergehende Begrenzung an der `requestId` hängen.
 
 export type OnlineRequestBinding = Readonly<{ requestId: string; accountId: string; flow: OnlineFlow; requestHash: string }>;
+
+/**
+ * Bindung einer Anfrage an Konto und Ablaufart. Der Inhalt geht als HMAC der kanonischen Anfrage ein,
+ * mit dem Schlüssel des Ablaufs: So steht ein enthaltener Code (eine Million Möglichkeiten) nie
+ * durchprobierbar in der Datenbank.
+ */
+export function onlineRequestBinding({
+  hashKey,
+  accountId,
+  flow,
+  request,
+}: {
+  hashKey: string;
+  accountId: string;
+  flow: OnlineFlow;
+  request: { requestId: string };
+}): OnlineRequestBinding {
+  const requestHash = createHmac('sha256', hashKey).update(`anfrage:${flow}:${canonicalJson(request)}`).digest('hex');
+  return { requestId: request.requestId, accountId, flow, requestHash };
+}
 
 export type StoredOnlineResult =
   | Readonly<{ type: 'none' }>

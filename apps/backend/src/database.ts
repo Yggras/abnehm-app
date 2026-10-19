@@ -37,3 +37,16 @@ export function openDatabase(settings: DatabaseSettings): Database {
 export function pgConnection({ host, port, name, user, password }: DatabaseSettings): pg.ClientConfig {
   return { host, port, database: name, user, password };
 }
+
+/**
+ * SQLSTATE eines Postgres-Fehlers, auch wenn Drizzle ihn als `cause` einpackt; sonst `undefined`
+ * (https://www.postgresql.org/docs/current/errcodes-appendix.html).
+ */
+export function sqlStateOf(error: unknown): string | undefined {
+  return sqlState(error) ?? sqlState((error as { cause?: unknown } | null)?.cause);
+}
+
+function sqlState(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
+}

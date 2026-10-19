@@ -21,17 +21,26 @@ export type Coupled = Readonly<{ couplingId: string; reactivated: boolean }>;
  * `zusammengefasst` und die Fotofreigaben auf `geteilt`.
  */
 export async function couple(tx: DbExecutor, personIds: readonly [string, string], at: Date): Promise<Coupled> {
-  const [low, high] = [...personIds].sort() as [string, string];
-  const [existing] = await tx
+  const existing = await couplingOfPair(tx, personIds);
+  if (existing !== null) {
+    await reactivate(tx, existing, at);
+    return { couplingId: existing, reactivated: true };
+  }
+  return { couplingId: await create(tx, sortedPair(personIds), at), reactivated: false };
+}
+
+/** Die Kopplung des ungeordneten Paars, aktiv oder archiviert; es gibt höchstens eine. */
+export async function couplingOfPair(executor: DbExecutor, personIds: readonly [string, string]): Promise<string | null> {
+  const [low, high] = sortedPair(personIds);
+  const [found] = await executor
     .select({ id: coupling.id })
     .from(coupling)
     .where(and(eq(coupling.personLowId, low), eq(coupling.personHighId, high)));
-  if (existing !== undefined) {
-    await reactivate(tx, existing.id, at);
-    return { couplingId: existing.id, reactivated: true };
-  }
-  return { couplingId: await create(tx, [low, high], at), reactivated: false };
+  return found?.id ?? null;
 }
+
+/** Das Paar so sortiert, wie `coupling` es speichert. */
+const sortedPair = (personIds: readonly [string, string]) => [...personIds].sort() as [string, string];
 
 async function create(tx: DbExecutor, [low, high]: readonly [string, string], at: Date): Promise<string> {
   const couplingId = randomUUID();

@@ -74,6 +74,14 @@ export type InvitationError = z.infer<typeof InvitationError>;
 export const CouplingStatus = z.enum(['aktiv', 'archiviert']);
 export type CouplingStatus = z.infer<typeof CouplingStatus>;
 
+/** Stufe einer Partnerfreigabe je Bereich (Spezifikation 0, Abschnitt 5). */
+export const PartnerSharingLevel = z.enum(['privat', 'zusammengefasst']);
+export type PartnerSharingLevel = z.infer<typeof PartnerSharingLevel>;
+
+/** Stufe der Fotofreigabe; sie gehört zu keinem Gesundheitsbereich. */
+export const PhotoSharingLevel = z.enum(['privat', 'geteilt']);
+export type PhotoSharingLevel = z.infer<typeof PhotoSharingLevel>;
+
 const syncTimes = { createdAt: Instant, updatedAt: Instant };
 
 /** Kanonischer Datensatz der Kopplung (`coupling`); das Paar steht sortiert. */
@@ -113,7 +121,7 @@ export const PartnerSharingRecord = z.strictObject({
   ownerPersonId: EntityId,
   couplingId: EntityId,
   area: AreaKey,
-  level: z.enum(['privat', 'zusammengefasst']),
+  level: PartnerSharingLevel,
   ...syncTimes,
 });
 export type PartnerSharingRecord = z.infer<typeof PartnerSharingRecord>;
@@ -122,7 +130,7 @@ export type PartnerSharingRecord = z.infer<typeof PartnerSharingRecord>;
 export const PhotoSharingRecord = z.strictObject({
   ownerPersonId: EntityId,
   couplingId: EntityId,
-  level: z.enum(['privat', 'geteilt']),
+  level: PhotoSharingLevel,
   ...syncTimes,
 });
 export type PhotoSharingRecord = z.infer<typeof PhotoSharingRecord>;

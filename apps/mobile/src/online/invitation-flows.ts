@@ -12,6 +12,8 @@ import {
 } from '@abnehm/contracts/coupling';
 import { ContractError } from '@abnehm/contracts/errors';
 
+import type { OnlineResult } from './online-result';
+
 // Online-Abläufe zum Koppeln (Spezifikation 0, Abschnitt 9; #103). Sie laufen nur mit Netz, gehören
 // nicht zum Fach-Sync und halten keine Fachdaten: Nach der Annahme kommen Kopplung, Mitglieder, Insel
 // und Freigaben ausschließlich per Pull in SQLite. Bildschirme nutzen die Hooks aus `./index`.
@@ -19,29 +21,19 @@ import { ContractError } from '@abnehm/contracts/errors';
 // Die Datei hat bewusst keine React- oder React-Native-Importe: Der Integrationstest des Backends prüft
 // sie gegen den echten Server.
 
-/**
- * Ausgang eines Online-Ablaufs. `rejected` trägt den fachlichen Code; die App zeigt für ungültige,
- * abgelaufene, verbrauchte und eigene Codes denselben Text. `offline` heißt: Server nicht erreicht,
- * „Braucht Internet“. `unauthorized`: Die Sitzung ist abgelehnt; das Auth-Modul sperrt schon.
- * `failed` ist alles Unerwartete, etwa eine fremd verwendete `requestId`.
- */
-export type OnlineResult<T> =
-  | Readonly<{ type: 'ok'; value: T }>
-  | Readonly<{ type: 'rejected'; code: InvitationErrorCode }>
-  | Readonly<{ type: 'offline' }>
-  | Readonly<{ type: 'unauthorized' }>
-  | Readonly<{ type: 'failed' }>;
+/** Ausgang eines Einladungsablaufs; die App zeigt für ungültige, abgelaufene, verbrauchte und eigene Codes denselben Text. */
+export type InvitationResult<T> = OnlineResult<T, InvitationErrorCode>;
 
 export type InvitationFlows = {
   /** Erzeugt einen Code; ein Retry mit derselben `requestId` liefert denselben Code. */
-  createCode(requestId: EntityId): Promise<OnlineResult<CreateInvitationResult>>;
+  createCode(requestId: EntityId): Promise<InvitationResult<CreateInvitationResult>>;
   /** Nennt die einladende Person und ob die Annahme reaktiviert, ohne den Code zu verbrauchen. */
-  checkCode(code: InviteCode): Promise<OnlineResult<CheckInvitationResult>>;
+  checkCode(code: InviteCode): Promise<InvitationResult<CheckInvitationResult>>;
   /**
    * Nimmt die Einladung an und stößt danach einen Sync an, der die Kopplung in SQLite holt. Scheitert
    * nur dieser Sync, gilt die Annahme trotzdem; die Daten kommen mit dem nächsten Sync.
    */
-  acceptCode(requestId: EntityId, code: InviteCode): Promise<OnlineResult<AcceptInvitationResult>>;
+  acceptCode(requestId: EntityId, code: InviteCode): Promise<InvitationResult<AcceptInvitationResult>>;
 };
 
 /** Was die Abläufe vom Sync brauchen: einen Zyklus, der die Kopplung per Pull holt. */
@@ -59,7 +51,7 @@ type Reply = { status: number; json(): Promise<unknown> };
 export function createInvitationFlows({ baseUrl, fetch, sync }: { baseUrl: string; fetch: typeof globalThis.fetch; sync: SyncTrigger }): InvitationFlows {
   const client = hc<AppType>(baseUrl, { fetch });
 
-  async function exchange<T>(send: (init: RequestInit) => Promise<Reply>, schema: z.ZodType<T>): Promise<OnlineResult<T>> {
+  async function exchange<T>(send: (init: RequestInit) => Promise<Reply>, schema: z.ZodType<T>): Promise<InvitationResult<T>> {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), TIMEOUT_MS);
     let response: Reply;

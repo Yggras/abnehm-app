@@ -7,17 +7,12 @@ import { createAuthorization, policies } from './authorization/authorization.ts'
 import { couplingSyncEntities } from './coupling/coupling-entities.ts';
 import { createInvitationLimiter } from './coupling/invitation-limiter.ts';
 import { invitationRoutes } from './coupling/invitations.ts';
-import { createInviteCodes } from './coupling/invite-codes.ts';
+import { createInviteCodes, type InvitationSettings } from './coupling/invite-codes.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
-
-export type InvitationSettings = Readonly<{
-  /** Eigenes Secret für die HMACs der Einladungscodes, getrennt vom Better-Auth-Secret. */
-  codeSecret: string;
-}>;
 
 /**
  * Setzt die Module des Backends über einer Datenbank zusammen; gemeinsam genutzt von `main.ts`, den
@@ -52,6 +47,7 @@ export function createBackend({
     database,
     clock,
     codes: createInviteCodes(invitationSettings.codeSecret),
+    requestHashKey: invitationSettings.codeSecret,
     limiter: createInvitationLimiter({ clock }),
     securityLog,
     ipAddressOf: auth.ipAddressOf,

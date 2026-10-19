@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { and, eq, sql } from 'drizzle-orm';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import type { SyncCursor } from '@abnehm/contracts/base';
@@ -59,6 +59,26 @@ describe('Code erzeugen', () => {
     expect((next.body as { code: string }).code).not.toBe((first.body as { code: string }).code);
   });
 
+  it('übersetzt gleichzeitige identische Anfragen nach der Unique-Verletzung in dasselbe Ergebnis', async () => {
+    const { backend, philipp } = await setup();
+    const requestId = randomUUID();
+
+    // Die Sperre lässt beide Transaktionen lesen, aber erst schreiben, wenn beide am Insert in
+    // `online_request` warten. Dann scheitert die zweite am Primärschlüssel, wiederholt und liefert das
+    // gespeicherte Ergebnis der ersten.
+    const { pending } = await backend.database.db.transaction(async (tx) => {
+      await tx.execute(sql`lock table online_request in exclusive mode`);
+      const both = Promise.all([createInvitation(backend, philipp.device, requestId), createInvitation(backend, philipp.device, requestId)]);
+      await vi.waitFor(async () => expect(await waitingOnOnlineRequest(backend)).toBe(2), { timeout: 5_000 });
+      return { pending: both };
+    });
+    const replies = await pending;
+
+    expect(replies.map((reply) => reply.status)).toEqual([200, 200]);
+    expect(new Set(replies.map((reply) => JSON.stringify(reply.body))).size).toBe(1);
+    expect(await backend.database.db.select().from(invitation)).toHaveLength(1);
+  });
+
   it('weist eine fremde oder anders verwendete requestId ab', async () => {
     const { backend, philipp, anna } = await setup();
     const requestId = randomUUID();
@@ -69,6 +89,14 @@ describe('Code erzeugen', () => {
     expect(asAccept).toMatchObject({ status: 409, body: { code: 'operation_conflict', retryable: false } });
   });
 });
+
+/** Wie viele Transaktionen gerade auf eine Sperre von `online_request` warten. */
+async function waitingOnOnlineRequest(backend: TestBackend) {
+  const result = await backend.database.db.execute<{ waiting: number }>(
+    sql`select count(*)::int as waiting from pg_locks where not granted and relation = 'online_request'::regclass`,
+  );
+  return result.rows[0]!.waiting;
+}
 
 function check(backend: TestBackend, device: Device, code: string) {
   return call(backend, 'POST', '/v1/invitations/check', device, { code });
