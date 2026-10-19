@@ -30,7 +30,7 @@ import {
 } from './resources.ts';
 
 export { partnerResponse, PartnerResponseRejected, type PartnerResponseKind } from './partner-response.ts';
-export { operationMatrix, policies, type Operation, type Policy, type ProtectionDimension, type ResourcePolicy } from './policy.ts';
+export { operationMatrix, policies, policyProblem, type Operation, type Policy, type ProtectionDimension, type ResourcePolicy } from './policy.ts';
 export {
   resourceEntities,
   resourceParts,

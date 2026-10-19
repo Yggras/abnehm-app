@@ -17,13 +17,15 @@ export type TestBackend = Backend & { database: Database };
  * Ohne `clock` gilt die Systemuhr; Better Auth rechnet Sitzungsablauf ohnehin mit `Date`, deshalb
  * steuern Tests die Zeit dort mit `vi.setSystemTime`.
  */
-export function createTestApp(database: Database, { clock }: { clock?: Clock } = {}): TestBackend {
+export function createTestApp(database: Database, { clock, syncPullPageSize }: TestAppOptions = {}): TestBackend {
   const authSettings = { secret: 'test-secret-mit-mindestens-zweiunddreissig-zeichen', baseUrl: testBaseUrl, trustedProxies: [] };
-  return { ...createBackend({ database, authSettings, clock }), database };
+  return { ...createBackend({ database, authSettings, clock, syncPullPageSize }), database };
 }
 
+export type TestAppOptions = { clock?: Clock; syncPullPageSize?: number };
+
 /** Frisch migrierte, eigene Datenbank samt App; wird nach dem Test verworfen. */
-export async function createTestBackend(options: { clock?: Clock } = {}): Promise<TestBackend> {
+export async function createTestBackend(options: TestAppOptions = {}): Promise<TestBackend> {
   const database = await createTestDatabase();
   onTestFinished(() => database.drop());
   await migrateDatabase(database.handle);
