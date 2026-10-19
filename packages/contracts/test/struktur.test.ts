@@ -21,7 +21,7 @@ describe('Zuschnitt des Vertragsmoduls', () => {
   it('hat kein Paket-Barrel, sondern je Bereich einen Teilpfad auf seine eigene Datei', () => {
     expect(Object.keys(packageJson.exports)).not.toContain('.');
     for (const [subpath, file] of Object.entries(packageJson.exports)) {
-      if (subpath === './fixtures') continue;
+      if (subpath === './fixtures' || subpath === './seeds') continue;
       expect(file).toBe(`./src/${subpath.slice(2)}.ts`);
     }
   });

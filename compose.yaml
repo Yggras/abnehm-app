@@ -25,6 +25,8 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
+      # Mit den Testfähigkeiten (Seed-Route, Seed-Kommando); das Produktions-Image hat sie nicht (#112).
+      target: development
     environment:
       PORT: "8787"
       DATABASE_HOST: postgres
@@ -59,6 +61,12 @@ services:
         - action: sync+restart
           path: ./apps/backend/drizzle
           target: /app/apps/backend/drizzle
+        - action: sync+restart
+          path: ./apps/backend/dev
+          target: /app/apps/backend/dev
+        - action: sync+restart
+          path: ./packages/contracts/seeds
+          target: /app/packages/contracts/seeds
         - action: sync+restart
           path: ./packages/contracts/src
           target: /app/packages/contracts/src

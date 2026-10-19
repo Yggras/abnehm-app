@@ -1,7 +1,12 @@
 # Backend-Image. Build-Kontext ist das Repo-Root (siehe compose.yaml).
 # Node führt die TypeScript-Quellen direkt aus (Type Stripping); es gibt keinen Build-Schritt.
 # Secrets kommen erst zur Laufzeit als Compose-Secret dazu und sind nie Teil des Images.
-FROM node:26.12.0-alpine
+#
+# Zwei Ziele (#112): `production` (Standard, letzte Stage) enthält nur `src/`; `development` legt
+# die Testfähigkeiten dazu (Seed-Route und Seed-Kommando aus `apps/backend/dev/`, Manifeste aus
+# `packages/contracts/seeds/`). compose.yaml baut für die lokale Entwicklung `development`.
+# test/release-sperren.test.ts prüft, dass `production` keine Testfähigkeit kopiert.
+FROM node:26.12.0-alpine AS base
 
 ENV NODE_ENV=production
 WORKDIR /app
@@ -29,4 +34,14 @@ COPY apps/backend/drizzle apps/backend/drizzle
 
 USER node
 EXPOSE 8787
+
+# Lokale Entwicklung: dieselbe App, davor die Testfähigkeiten.
+FROM base AS development
+ENV NODE_ENV=development
+COPY packages/contracts/seeds packages/contracts/seeds
+COPY apps/backend/dev apps/backend/dev
+CMD ["node", "apps/backend/dev/main.ts"]
+
+# Produktion: ohne Testfähigkeiten.
+FROM base AS production
 CMD ["node", "apps/backend/src/main.ts"]

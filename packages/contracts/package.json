@@ -23,7 +23,8 @@
     "./onboarding": "./src/onboarding.ts",
     "./status": "./src/status.ts",
     "./sync": "./src/sync.ts",
-    "./fixtures": "./fixtures/index.ts"
+    "./fixtures": "./fixtures/index.ts",
+    "./seeds": "./seeds/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"

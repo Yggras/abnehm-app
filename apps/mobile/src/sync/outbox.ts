@@ -20,27 +20,28 @@ export type SyncWriter = {
   delete(tx: TransactionContext, change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }): void;
 };
 
-export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
-  function append(tx: TransactionContext, operation: OutboxOperation) {
-    const db = sqliteOf(tx);
-    const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;
-    db.insert(outbox)
-      .values({
-        operationId: operation.operationId,
-        sequence: last + 1,
-        type: operation.type,
-        entityType: operation.entityType,
-        entityId: operation.entityId,
-        businessKey: null,
-        payload: operation.type === 'upsert_entity' ? operation.payload : {},
-        knownServerVersion: operation.knownServerVersion,
-        schemaVersion: operation.schemaVersion,
-        createdAt: operation.createdAt,
-        attemptCount: 0,
-      })
-      .run();
-  }
+/** Hängt eine geprüfte Operation ans Ende der Outbox. */
+export function appendOperation(tx: TransactionContext, operation: OutboxOperation): void {
+  const db = sqliteOf(tx);
+  const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;
+  db.insert(outbox)
+    .values({
+      operationId: operation.operationId,
+      sequence: last + 1,
+      type: operation.type,
+      entityType: operation.entityType,
+      entityId: operation.entityId,
+      businessKey: null,
+      payload: operation.type === 'upsert_entity' ? operation.payload : {},
+      knownServerVersion: operation.knownServerVersion,
+      schemaVersion: operation.schemaVersion,
+      createdAt: operation.createdAt,
+      attemptCount: 0,
+    })
+    .run();
+}
 
+export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
   function base(change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }) {
     return {
       operationId: newId(),
@@ -58,11 +59,11 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       if (adapter.upsert === null) throw new Error(`Sync-Entität ${change.entityType} kennt kein Upsert`);
       if (adapter.ownerField in change.payload) throw new Error(`Die Eigentumsgrenze ${adapter.ownerField} setzt nur der Server`);
       const payload = adapter.upsert.parse(change.payload);
-      append(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }));
+      appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }));
     },
     delete(tx, change) {
       if (!registry.require(change.entityType).deletable) throw new Error(`Sync-Entität ${change.entityType} wird nicht gelöscht`);
-      append(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
+      appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
     },
   };
 }

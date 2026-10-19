@@ -7,11 +7,14 @@ import type { SyncEntityAdapter } from './registry';
 // wie ihre Fachänderung. Den Ablauf startet `SyncEngine.sync()`; Auslöser und Status liefert #102.
 export {
   createSyncEngine,
+  readSyncState,
+  restoreSyncState,
   type CanonicalChangeApplied,
   type CanonicalChangesHook,
   type SyncCycleResult,
   type SyncEngine,
   type SyncEngineOptions,
+  type SyncState,
   type SyncStepResult,
   type SyncTransport,
   type TransportReply,

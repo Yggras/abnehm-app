@@ -17,7 +17,7 @@ const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.me
 async function exportedSchemas(): Promise<Map<string, z.ZodType>> {
   const schemas = new Map<string, z.ZodType>();
   for (const [subpath, file] of Object.entries(packageJson.exports)) {
-    if (subpath === './fixtures') continue;
+    if (subpath === './fixtures' || subpath === './seeds') continue;
     const module = (await import(new URL(`../${file}`, import.meta.url).href)) as Record<string, unknown>;
     for (const [name, value] of Object.entries(module)) {
       const prefix = `${subpath.slice(2)}.${name}`;

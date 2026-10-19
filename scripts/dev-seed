@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Seedet das laufende lokale Development-Backend (`npm run backend`) mit einem Szenario (#112):
+#   scripts/dev-seed solo
+# Setzt die ganze lokale Datenbank auf den Ausgangszustand des Manifests zurück und nennt die
+# Testkonten. Das Kommando gibt es nur im Development-Image, nicht im Produktions-Image.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+exec docker compose exec backend node apps/backend/dev/seed-command.ts "$@"
