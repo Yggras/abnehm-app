@@ -1,0 +1,136 @@
+import { hashPassword } from 'better-auth/crypto';
+import { getTableColumns, is, sql } from 'drizzle-orm';
+import { getTableConfig, PgTable, type AnyPgColumn } from 'drizzle-orm/pg-core';
+
+import { authTables, canonicalRows, type SeedManifest, type SeedRow, type SeedRows, type SeedValue } from '@abnehm/contracts/seeds';
+
+import type { Database, DbExecutor } from '../../src/database.ts';
+import * as schema from '../../src/db/schema/index.ts';
+
+// Seeder für Postgres (Spezifikation 0, Abschnitt 12; #112). Nur im Development-Backend und in Tests.
+//
+// Seed-Strategie: Seeden setzt die ganze Datenbank in einer Transaktion auf den Ausgangszustand des
+// Manifests zurück (TRUNCATE aller Tabellen des Schemas, dann Einfügen). TRUNCATE löst die
+// Zeilen-Trigger der unveränderlichen Entitäten nicht aus. So ergibt jedes Seeden für Fach- und
+// Sync-Daten exakt denselben kanonischen Stand. Konten entstehen aus `accounts`: Konto mit fester ID
+// und gesalzenem Passwort-Hash, keine Sitzung. Sitzungen entstehen erst bei der Anmeldung danach;
+// der Vergleich mit dem Manifest läuft deshalb vor der Anmeldung und prüft Konten nur semantisch.
+
+const tables = Object.values(schema).filter((value): value is PgTable => is(value, PgTable));
+const byName = new Map(tables.map((table) => [getTableConfig(table).name, table]));
+const authTableNames: readonly string[] = authTables;
+
+/** Tabellen so geordnet, dass jede nach den Tabellen kommt, auf die ihre Fremdschlüssel zeigen. */
+const insertOrder: readonly string[] = (() => {
+  const ordered: string[] = [];
+  const visit = (name: string, path: readonly string[]) => {
+    if (ordered.includes(name) || path.includes(name)) return;
+    const config = getTableConfig(byName.get(name)!);
+    for (const foreignKey of config.foreignKeys) {
+      const target = getTableConfig(foreignKey.reference().foreignTable).name;
+      if (target !== name) visit(target, [...path, name]);
+    }
+    ordered.push(name);
+  };
+  for (const name of [...byName.keys()].sort()) visit(name, []);
+  return ordered;
+})();
+
+/** Setzt Postgres auf den Ausgangszustand des Manifests. Scheitert eine Prüfung, bleibt nichts zurück. */
+export async function seedServer(database: Database, manifest: SeedManifest): Promise<void> {
+  const rows = manifest.initial.server;
+  for (const table of Object.keys(rows)) {
+    if (!byName.has(table)) throw new Error(`Seed: unbekannte Tabelle ${table}`);
+  }
+  if (rows.sync_clock?.length !== 1) throw new Error('Seed: das Manifest muss die Sync-Clock setzen');
+  // Hashen dauert; es läuft vor der Transaktion.
+  const accounts = await Promise.all(manifest.accounts.map(async (account) => ({ ...account, hash: await hashPassword(account.password) })));
+  const at = new Date(manifest.clock.instant);
+
+  await database.db.transaction(async (tx) => {
+    await tx.execute(sql.raw(`TRUNCATE TABLE ${[...byName.keys()].map((name) => `"${name}"`).join(', ')} RESTART IDENTITY CASCADE`));
+    for (const account of accounts) {
+      await tx.insert(schema.user).values({ id: account.accountId, name: '', email: account.email, emailVerified: false, createdAt: at, updatedAt: at });
+      // Bei `credential` ist die Anbieterkennung die Konto-ID selbst (wie bei der Registrierung).
+      await tx.insert(schema.account).values({
+        id: account.accountId,
+        accountId: account.accountId,
+        providerId: 'credential',
+        userId: account.accountId,
+        password: account.hash,
+        createdAt: at,
+        updatedAt: at,
+      });
+    }
+    for (const name of insertOrder) {
+      const tableRows = rows[name];
+      if (tableRows === undefined || tableRows.length === 0) continue;
+      const table = byName.get(name)!;
+      await tx.insert(table).values(tableRows.map((row) => toDatabase(table, row)));
+    }
+    const withEmail = await tablesWithEmail(tx);
+    if (withEmail.length > 0) throw new Error(`Seed: E-Mail außerhalb der Better-Auth-Tabellen in ${withEmail.join(', ')}`);
+  });
+}
+
+/** Kanonischer Stand aller Tabellen außer den Better-Auth-Tabellen, vergleichbar mit `manifest.initial.server`. */
+export async function dumpServer(executor: DbExecutor): Promise<SeedRows> {
+  const dump: Record<string, SeedRow[]> = {};
+  for (const [name, table] of byName) {
+    if (authTableNames.includes(name)) continue;
+    const found = await executor.select().from(table);
+    dump[name] = found.map((row) => toCanonical(table, row as Record<string, unknown>));
+  }
+  return canonicalRows(dump);
+}
+
+/**
+ * Schema-Prüfung: Tabellen außerhalb der Better-Auth-Tabellen, in denen irgendeine Spalte eine
+ * E-Mail-Adresse enthält. Sie prüft den ganzen Zeileninhalt als JSON, also auch JSON-Spalten.
+ */
+export async function tablesWithEmail(executor: DbExecutor): Promise<string[]> {
+  const found: string[] = [];
+  for (const name of byName.keys()) {
+    if (authTableNames.includes(name)) continue;
+    const result = await executor.execute<{ hit: boolean }>(
+      sql.raw(`select exists (select 1 from "${name}" t where to_jsonb(t)::text ~ '[^[:space:]@"]+@[^[:space:]@"]+\\.[^[:space:]@"]+') as hit`),
+    );
+    if (result.rows[0]?.hit === true) found.push(name);
+  }
+  return found;
+}
+
+function columnsOf(table: PgTable): Map<string, { key: string; column: AnyPgColumn }> {
+  return new Map(Object.entries(getTableColumns(table)).map(([key, column]) => [column.name, { key, column: column as AnyPgColumn }]));
+}
+
+function toDatabase(table: PgTable, row: SeedRow): Record<string, unknown> {
+  const columns = columnsOf(table);
+  const values: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(row)) {
+    const found = columns.get(name);
+    if (found === undefined) throw new Error(`Seed: unbekannte Spalte ${getTableConfig(table).name}.${name}`);
+    values[found.key] = value === null ? null : fromCanonical(found.column, value);
+  }
+  return values;
+}
+
+function fromCanonical(column: AnyPgColumn, value: SeedValue): unknown {
+  switch (column.columnType) {
+    case 'PgTimestamp':
+      return new Date(value as string);
+    case 'PgBigInt64':
+      return BigInt(value as string);
+    default:
+      return value;
+  }
+}
+
+function toCanonical(table: PgTable, row: Record<string, unknown>): SeedRow {
+  const canonical: SeedRow = {};
+  for (const [name, { key }] of columnsOf(table)) {
+    const value = row[key];
+    canonical[name] = value instanceof Date ? value.toISOString() : typeof value === 'bigint' ? value.toString() : (value as SeedValue);
+  }
+  return canonical;
+}

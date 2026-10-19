@@ -3,7 +3,7 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src", "test", "*.ts"],
+  "include": ["src", "dev", "test", "*.ts"],
   // Prüft tsconfig.app-auth.json; diese Tests importieren App-Code.
   "exclude": ["test/app-auth.test.ts", "test/sync-app.test.ts"]
 }
