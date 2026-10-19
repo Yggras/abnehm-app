@@ -11,6 +11,7 @@ import { CommandRejection } from '../src/sync/commands.ts';
 import { createTestBackend, type TestBackend } from './support/app.ts';
 import { personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
 import type { Device } from './support/auth-client.ts';
+import { personTimeZoneScenario } from './support/person-time-zone.ts';
 import { push, pushRaw, testWaterEntity, upsertOp, water } from './support/sync.ts';
 import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
@@ -95,7 +96,7 @@ describe('Fachbefehl über Push', () => {
 
   it('erfasst alle registrierten Fachbefehle im Negativtest-Gerüst', async () => {
     const { backend } = await setup();
-    expect(() => registeredCommandCases(backend, {})).toThrow('completeDailyGoal');
+    expect(() => registeredCommandCases(backend, { updatePersonTimeZone: personTimeZoneScenario })).toThrow('completeDailyGoal');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),
       arrange: async () => {
@@ -119,9 +120,10 @@ describe('Fachbefehl über Push', () => {
       },
     } satisfies AuthorizationScenario<{ backend: TestBackend; actor: Device; ownId: string },
       'ohne_sitzung' | 'fremde_person' | 'manipulierte_id'>;
-    const cases = registeredCommandCases(backend, { completeDailyGoal: scenario });
-    const wrong = registeredCommandCases(backend, { completeDailyGoal: { ...scenario, policy: policies.resource('weight_entry', 'befehl') } });
-    await expect(wrong.find((testCase) => testCase.name.startsWith('Fachbefehl'))!.run()).rejects.toThrow();
+    const cases = registeredCommandCases(backend, { completeDailyGoal: scenario, updatePersonTimeZone: personTimeZoneScenario });
+    const wrong = registeredCommandCases(backend, { completeDailyGoal: { ...scenario, policy: policies.resource('weight_entry', 'befehl') },
+      updatePersonTimeZone: personTimeZoneScenario });
+    await expect(wrong.find((testCase) => testCase.name.startsWith('Fachbefehl completeDailyGoal'))!.run()).rejects.toThrow();
     for (const testCase of cases) {
       try { await testCase.run(); } catch (error) { throw new Error(`${testCase.name}: ${String(error)}`); }
     }

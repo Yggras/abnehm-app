@@ -1,4 +1,4 @@
-import { and, asc, eq, max, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, type ServerVersion } from '@abnehm/contracts/base';
@@ -112,6 +112,17 @@ export function pendingFor(tx: ReadContext, entityType: string, entityId: string
         ? { type: 'upsert_entity', payload: operation.payload, operationId: operation.operationId, createdAt: operation.createdAt }
         : { type: 'delete_entity', operationId: operation.operationId, createdAt: operation.createdAt },
     );
+}
+
+/** Nutzlasten der offenen Fachbefehle eines Typs in Entstehungsreihenfolge. */
+export function pendingCommandPayloads(tx: ReadContext, type: CommandType): EntityData[] {
+  return sqliteOf(tx)
+    .select({ payload: outbox.payload })
+    .from(outbox)
+    .where(and(eq(outbox.type, type), isNotNull(outbox.businessKey)))
+    .orderBy(asc(outbox.sequence))
+    .all()
+    .map((row) => row.payload);
 }
 
 export function hasPending(tx: ReadContext, entityType: string, entityId: string): boolean {
