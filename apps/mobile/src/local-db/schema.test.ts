@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 
 import type { LocalDatabase, TransactionContext } from '.';
 import { createLocalDatabases, type LocalDatabases } from './local-databases';
+import bundledMigrations from './migrations/migrations';
 import * as schema from './schema';
 import { sqliteOf, type SqliteDatabase } from './sqlite';
 import { createBetterSqliteFiles } from './testing/better-sqlite';
@@ -144,7 +145,7 @@ describe('Migrationen', () => {
     db = await databases.open('konto_a');
 
     const applied = db.read((tx) => sqliteOf(tx).all(sql`select hash from __drizzle_migrations`));
-    expect(applied).toHaveLength(1);
+    expect(applied).toHaveLength(bundledMigrations.journal.entries.length);
     expect(db.read((tx) => sqliteOf(tx).select().from(schema.person).all())).toHaveLength(1);
   });
 

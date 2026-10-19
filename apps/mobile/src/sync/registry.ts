@@ -51,7 +51,7 @@ export type SyncEntityAdapter<U extends EntityData = EntityData, R extends Entit
   /** Übernimmt die Löschmarkierung; eine lokal unbekannte Entität bleibt unbekannt. */
   applyTombstone(tx: TransactionContext, tombstone: EntityTombstone): void;
   /** Ersetzt eine lokale, logisch identische ID samt allen fachlichen Verweisen; läuft vor applyCanonical. */
-  replaceCanonicalId?(tx: TransactionContext, from: EntityId, to: EntityId): void;
+  replaceCanonicalId?(tx: TransactionContext, from: EntityId, to: EntityId, options: { preserveLocalChanges: boolean }): void;
   /**
    * Stellt nach einer dauerhaften Ablehnung den kanonischen Zustand her und wendet danach die offenen
    * Operationen in Reihenfolge erneut an. Ohne kanonischen Zustand verschwindet eine nie bestätigte

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { and, asc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
@@ -34,6 +34,7 @@ import type { Database, DbExecutor } from '../database.ts';
 import { changeLog, couplingMember, processedOperation } from '../db/schema/index.ts';
 import { errorCodeForLog } from '../log.ts';
 import { currentServerVersion, lockSyncClock, nextServerVersion, recordChange } from './change-log.ts';
+import { canonicalJson } from './canonical-json.ts';
 import type { ServerSyncEntity, StoredEntity } from './registry.ts';
 import { CommandRejection, type ServerCommand } from './commands.ts';
 
@@ -143,7 +144,8 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
       if (command && (registeredCommand === undefined ||
         (await authorization.authorizeCommand(tx, actor, operation.type, registeredCommand.target(operation))).type === 'verweigert')) return forbidden(operation);
       const result = PushResult.parse(stored.result);
-      // Kanonischen Inhalt gibt es nur, solange die Person die Entität noch lesen darf.
+      // Ein Retry darf weder widerrufene abgeleitete Datensätze noch deren IDs preisgeben.
+      if (command && !(await canDeliverCommandResult(tx, actor, result))) return forbidden(operation);
       if (!command && result.canonical.type === 'record' && (await visibleState(tx, actor, operation)).type === 'absent') return forbidden(operation);
       return result.type === 'applied' ? { ...result, type: 'already_applied' } : result;
     }
@@ -152,11 +154,12 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         (await authorization.authorizeCommand(tx, actor, operation.type, registeredCommand.target(operation))).type === 'verweigert') return forbidden(operation);
       const [existing] = await tx.select().from(processedOperation).where(and(
         eq(processedOperation.personId, actor.personId), eq(processedOperation.operationType, operation.type),
-        eq(processedOperation.businessKey, operation.businessKey),
+        eq(processedOperation.businessKey, operation.businessKey), ne(processedOperation.outcome, 'permanently_rejected'),
       ));
-      if (existing !== undefined && existing.outcome !== 'permanently_rejected') {
+      if (existing !== undefined) {
         if (existing.payloadHash !== hash) return rejected(operation, 'operation_conflict', absent(operation));
         const result = PushResult.parse(existing.result);
+        if (!(await canDeliverCommandResult(tx, actor, result))) return forbidden(operation);
         if (result.type === 'permanently_rejected') throw new Error('Erfolgreicher Fachschlüssel mit abgelehntem Ergebnis');
         const duplicate = { ...result, operationId: operation.operationId, type: 'already_applied',
           canonical: absent(operation), idMappings: commands.get(operation.type)!.duplicate(operation, result) } as const;
@@ -172,7 +175,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
       operationType: operation.type,
       entityType,
       entityId,
-      businessKey: command && result.type !== 'permanently_rejected' ? operation.businessKey : null,
+      businessKey: command ? operation.businessKey : null,
       payloadHash: hash,
       outcome: result.type,
       result,
@@ -191,9 +194,11 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
     try {
       return await tx.transaction(async (savepoint) => {
         const result = await command.execute(savepoint, { actor, payload: parsed.data, businessKey: operation.businessKey, at });
-        // Der Handler schreibt Fachzeilen, Änderungslog und abgeleitete Zeilen in diesem Savepoint.
-        return { type: 'applied', operationId: operation.operationId, canonical: absent(operation),
+        const applied = { type: 'applied', operationId: operation.operationId, canonical: absent(operation),
           changes: result.changes, idMappings: result.idMappings } as const;
+        if (!(await canDeliverCommandResult(savepoint, actor, applied))) throw new CommandRejection('invalid_payload');
+        // Der Handler schreibt Fachzeilen, Änderungslog und abgeleitete Zeilen in diesem Savepoint.
+        return applied;
       });
     } catch (error) {
       const code = error instanceof Rejection || error instanceof CommandRejection ? error.code : integrityViolation(error);
@@ -246,6 +251,18 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
   }
 
   /** Kanonischer Zustand der Entität, sofern die Person sie lesen darf; sonst `absent`. */
+  async function canDeliverCommandResult(tx: DbExecutor, actor: PersonActor, result: PushResult): Promise<boolean> {
+    if (result.type === 'permanently_rejected') return true;
+    const refs = [ ...(result.changes ?? []).map((change) => ({ entityType: change.entityType, entityId: change.entityId })),
+      ...(result.idMappings ?? []).map((mapping) => ({ entityType: mapping.entityType, entityId: mapping.to })) ];
+    for (const ref of refs) {
+      const entity = entities.get(ref.entityType);
+      if (entity === undefined ||
+        (await authorization.authorize(tx, actor, entity.policies.lesen, { id: ref.entityId })).type === 'verweigert') return false;
+    }
+    return true;
+  }
+
   async function visibleState(tx: DbExecutor, actor: PersonActor, operation: OutboxOperation): Promise<CanonicalState> {
     if ('businessKey' in operation) return absent(operation);
     const entity = entities.get(operation.entityType);
@@ -480,15 +497,4 @@ function businessHash(operation: Extract<OutboxOperation, { businessKey: string 
   // Weder Operations-ID noch Gerätezeit gehört zum fachlichen Request; Version und Inhalt schon.
   return createHash('sha256').update(canonicalJson({ type: operation.type, businessKey: operation.businessKey,
     payload: canonicalRequest, schemaVersion: operation.schemaVersion, knownServerVersion: operation.knownServerVersion })).digest('hex');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
 }

@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import type { ServerVersion } from '@abnehm/contracts/base';
+import type { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import type { CommandType, EntityData, OutboxOperation, PushResult } from '@abnehm/contracts/sync';
 
 import type { LocalDatabase, TransactionContext } from '../local-db';
@@ -11,7 +11,8 @@ import type { SyncWriter } from './outbox';
 export type LocalCommand<P extends EntityData = EntityData> = Readonly<{
   type: CommandType;
   payload: z.ZodType<P>;
-  apply(tx: TransactionContext, payload: P): void;
+  /** Liefert jede lokal optimistisch geänderte Entität, auch abgeleitete Zeilen. */
+  apply(tx: TransactionContext, payload: P): readonly { entityType: string; entityId: EntityId }[];
   reconcileRejected(tx: TransactionContext, operation: Extract<OutboxOperation, { businessKey: string }>, result: Extract<PushResult, { type: 'permanently_rejected' }>): void;
 }>;
 
@@ -33,8 +34,8 @@ export function createLocalCommandRegistry({ database, writer, commands }: {
       const command = requireCommand(type);
       const parsed = command.payload.parse(payload);
       database.transaction((tx) => {
-        command.apply(tx, parsed);
-        writer.command(tx, { type, businessKey, payload: parsed, knownServerVersion });
+        const affectedRefs = command.apply(tx, parsed);
+        writer.command(tx, { type, businessKey, payload: parsed, knownServerVersion, affectedRefs });
       });
     },
     reconcileRejected(tx: TransactionContext, operation: Extract<OutboxOperation, { businessKey: string }>, result: Extract<PushResult, { type: 'permanently_rejected' }>) {

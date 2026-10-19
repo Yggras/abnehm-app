@@ -50,8 +50,15 @@ export const testWaterEntity = sqliteEntity({
  * Verweise anderer Fachbereiche werden dort im jeweiligen Bereichsadapter umgeschrieben. */
 export const testWaterCommandEntity = {
   ...testWaterEntity,
-  replaceCanonicalId(tx: TransactionContext, from: EntityId, to: EntityId) {
-    if (from !== to) sqliteOf(tx).delete(waterEntry).where(eq(waterEntry.id, from)).run();
+  replaceCanonicalId(tx: TransactionContext, from: EntityId, to: EntityId, { preserveLocalChanges }: { preserveLocalChanges: boolean }) {
+    if (from === to) return;
+    const db = sqliteOf(tx);
+    const local = db.select().from(waterEntry).where(eq(waterEntry.id, from)).get();
+    if (preserveLocalChanges && local !== undefined) {
+      const moved = { ...local, id: to };
+      db.insert(waterEntry).values(moved).onConflictDoUpdate({ target: waterEntry.id, set: moved }).run();
+    }
+    db.delete(waterEntry).where(eq(waterEntry.id, from)).run();
   },
 };
 
@@ -69,7 +76,8 @@ export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
     /** Nur im Test-Artefakt: zwei Geräte erzeugen dieselbe fachliche Zeile unabhängig. */
     completeTestGoal(tx: TransactionContext, entityId: EntityId, businessKey: string, payload: TestWaterUpsert) {
       writeLocal(tx, entityId, payload, now());
-      writer.command(tx, { type: 'completeDailyGoal', businessKey, payload: { ...payload, localId: entityId }, knownServerVersion: null });
+      writer.command(tx, { type: 'completeDailyGoal', businessKey, payload: { ...payload, localId: entityId },
+        knownServerVersion: null, affectedRefs: [{ entityType: 'water_entry', entityId }] });
     },
     remove(tx: TransactionContext, entityId: EntityId) {
       deleteLocal(tx, entityId, now());

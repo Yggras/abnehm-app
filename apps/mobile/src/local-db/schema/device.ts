@@ -21,6 +21,8 @@ export const outbox = sqliteTable(
     entityType: text('entity_type'),
     entityId: text('entity_id'),
     businessKey: text('business_key'),
+    /** Lokal optimistisch geänderte Entitäten eines Fachbefehls; bleibt außerhalb des Transports. */
+    affectedRefs: json<{ entityType: string; entityId: string }[]>('affected_refs').notNull().default(sql`'[]'`),
     /** Vollständige Nutzlast statt Patch, validiert mit dem Vertragsschema der Operation. */
     payload: json<Record<string, unknown>>('payload').notNull(),
     knownServerVersion: text('known_server_version'),

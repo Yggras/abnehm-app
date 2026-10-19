@@ -107,7 +107,11 @@ export function createSyncEngine({ database, registry, transport, clock, install
   async function push(): Promise<SyncStepResult> {
     let pushed = false;
     for (let round = 0; round < maxRounds; round++) {
-      const operations = database.read((tx) => pendingOperations(tx, maxPushOperations));
+      const pending = database.read((tx) => pendingOperations(tx, maxPushOperations));
+      // Spätere Operationen dürfen eine vorläufige lokale ID erst nach deren kanonischer Auflösung
+      // versenden. Die Befehlsantwort enthält die ID-Zuordnung; der nächste Batch liest die Outbox neu.
+      const firstCommand = pending.findIndex((operation) => 'businessKey' in operation);
+      const operations = firstCommand < 0 ? pending : pending.slice(0, firstCommand + 1);
       if (operations.length === 0) return pushed ? 'done' : 'nothing_to_do';
       const reply = await transport.push({ schemaVersion: currentSyncSchemaVersion, installationId, operations });
       if (reply.type !== 'ok' || !matches(operations, reply.body.results)) {
@@ -127,13 +131,19 @@ export function createSyncEngine({ database, registry, transport, clock, install
               if (commands === undefined) throw new Error(`Fachbefehl ${operation.type} hat keine lokale Reconciliation`);
               commands.reconcileRejected(tx, operation, result);
             } else {
+              const protectedChanges = new Set<string>();
               for (const mapping of result.idMappings ?? []) {
                 const adapter = registry.require(mapping.entityType);
                 if (adapter.replaceCanonicalId === undefined) throw new Error(`Sync-Entität ${mapping.entityType} kann keine kanonische ID übernehmen`);
-                adapter.replaceCanonicalId(tx, mapping.from, mapping.to);
+                const preserveLocalChanges = hasPending(tx, mapping.entityType, mapping.from) || hasPending(tx, mapping.entityType, mapping.to);
+                if (preserveLocalChanges) protectedChanges.add(`${mapping.entityType}:${mapping.to}`);
+                adapter.replaceCanonicalId(tx, mapping.from, mapping.to, { preserveLocalChanges });
                 replaceOutboxReferences(tx, mapping.from, mapping.to);
               }
-              for (const change of result.changes ?? []) changes.push(apply(tx, change));
+              for (const change of result.changes ?? []) {
+                if (!protectedChanges.has(`${change.entityType}:${change.entityId}`) &&
+                  !hasPending(tx, change.entityType, change.entityId)) changes.push(apply(tx, change));
+              }
             }
           } else if (result.type === 'permanently_rejected') {
             reconcile(tx, operation, result);
@@ -209,8 +219,11 @@ function replaceOutboxReferences(tx: TransactionContext, from: EntityId, to: Ent
     return value;
   };
   for (const row of db.select().from(outbox).all()) {
+    // Bereits versendete Bytes müssen unter derselben Operations-ID wiederholbar bleiben.
+    if (row.attemptCount > 0) continue;
     db.update(outbox).set({ entityId: row.entityId === from ? to : row.entityId,
-      businessKey: row.businessKey?.split(from).join(to), payload: rewrite(row.payload) as Record<string, unknown> })
+      businessKey: row.businessKey?.split(from).join(to), payload: rewrite(row.payload) as Record<string, unknown>,
+      affectedRefs: row.affectedRefs.map((ref) => ({ ...ref, entityId: ref.entityId === from ? to : ref.entityId })) })
       .where(eq(outbox.operationId, row.operationId)).run();
   }
 }

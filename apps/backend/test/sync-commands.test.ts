@@ -11,7 +11,7 @@ import { CommandRejection } from '../src/sync/commands.ts';
 import { createTestBackend } from './support/app.ts';
 import { personWithSession, registeredCommandCases, httpOutcome } from './support/authorization.ts';
 import { push, pushRaw, testWaterEntity, upsertOp, water } from './support/sync.ts';
-import { EntityId } from '@abnehm/contracts/base';
+import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
 
 const command = (id: string, key: string, amountMl = 250): Extract<OutboxOperation, { businessKey: string }> => ({
@@ -66,6 +66,7 @@ describe('Fachbefehl über Push', () => {
     const results = await push(backend, anna.device, [command(randomUUID(), 'goal:fail', 999), command(randomUUID(), 'goal:ok')]);
     expect(results.map((result) => result.type)).toEqual(['permanently_rejected', 'applied']);
     expect(results[0]).toMatchObject({ error: { code: 'conflict' } });
+    expect(await push(backend, anna.device, [command(results[0]!.operationId, 'goal:fail', 999)])).toEqual([results[0]]);
     expect(await backend.database.db.select().from(waterEntry)).toHaveLength(1);
   });
 
@@ -108,6 +109,34 @@ describe('Fachbefehl über Push', () => {
     const [foreign] = await push(backend, philipp.device, [operation]);
     expect(foreign).toEqual({ type: 'permanently_rejected', operationId: operation.operationId,
       error: { code: 'forbidden', retryable: false },
+      canonical: { type: 'absent', entityType: 'command_result', entityId: operation.operationId } });
+  });
+
+  it('liefert beim Retry keine ehemals lesbaren abgeleiteten Daten nach Rechteentzug aus', async () => {
+    const { backend, anna } = await setup();
+    backend.sync.registerEntity(testWaterEntity);
+    const targetId = randomUUID();
+    const disclosedId = randomUUID();
+    await push(backend, anna.device, [upsertOp(targetId, water(250)), upsertOp(disclosedId, water(300))]);
+    backend.sync.registerCommand({ type: 'grantDailyBonus', policy: policies.resource('water_entry', 'befehl'),
+      payload: z.strictObject({ targetId: EntityId, disclosedId: EntityId }),
+      target: (operation) => ({ id: operation.payload.targetId }),
+      canonicalRequest: (operation) => operation.payload,
+      duplicate: () => [],
+      async execute(tx, { payload }) {
+        const row = (await testWaterEntity.read(tx, [EntityId.parse(payload.disclosedId)])).get(String(payload.disclosedId));
+        if (row === undefined) throw new Error('Testdatensatz fehlt');
+        return { idMappings: [], changes: [{ type: 'record', entityType: 'water_entry', entityId: EntityId.parse(payload.disclosedId),
+          serverVersion: ServerVersion.parse(row.serverVersion.toString()), data: row.data }] };
+      },
+    });
+    const operation = { ...command(randomUUID(), 'bonus:1'), type: 'grantDailyBonus' as const,
+      payload: { targetId, disclosedId } };
+    expect((await push(backend, anna.device, [operation]))[0]?.type).toBe('applied');
+    const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
+    await backend.database.db.update(waterEntry).set({ personId: philipp.personId }).where(eq(waterEntry.id, disclosedId));
+    expect((await push(backend, anna.device, [operation]))[0]).toEqual({ type: 'permanently_rejected',
+      operationId: operation.operationId, error: { code: 'forbidden', retryable: false },
       canonical: { type: 'absent', entityType: 'command_result', entityId: operation.operationId } });
   });
 

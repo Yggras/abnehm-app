@@ -4,6 +4,7 @@ import { NotificationIntent } from '@abnehm/contracts/notifications';
 
 import type { DbExecutor } from '../database.ts';
 import { notificationIntent } from '../db/schema/index.ts';
+import { canonicalJson } from './canonical-json.ts';
 
 /** Die einzige Schreibgrenze für Push-Intents. Aufrufer reichen ihren Fach-Savepoint durch; bei
  * Rollback des Befehls bleibt weder Intent noch Fachereignis bestehen. */
@@ -28,11 +29,4 @@ export async function insertNotificationIntent(tx: DbExecutor, raw: unknown): Pr
       throw new Error('Intent-ID mit anderem Inhalt wiederverwendet');
     }
   }
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value !== null && typeof value === 'object') return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
-  return JSON.stringify(value);
 }

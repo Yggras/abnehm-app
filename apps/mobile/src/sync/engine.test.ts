@@ -3,6 +3,8 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { eq } from 'drizzle-orm';
+
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, ServerVersion, TimeZone } from '@abnehm/contracts/base';
 import type { TestWaterRecord, TestWaterUpsert } from '@abnehm/contracts/fixtures';
@@ -114,6 +116,66 @@ const outboxRows = (database: LocalDatabase) => database.read((tx) => sqliteOf(t
 const cursorRow = (database: LocalDatabase) => database.read((tx) => sqliteOf(tx).select().from(syncCursor).get());
 
 describe('Sync der App', () => {
+  it('übernimmt bei ausgefallenem Push keinen Pull über eine lokal offene Fachänderung', async () => {
+    const context = await setup();
+    const id = EntityId.parse(randomUUID());
+    context.database.transaction((tx) => context.repository.completeTestGoal(tx, id, 'goal:offen', water(250)));
+    context.transport.onPush = () => ({ type: 'unavailable' });
+    context.transport.onPull = () => ({ type: 'ok', body: { changes: [record(id, 100, '2')],
+      next: { type: 'complete', cursor: '2' as never } } });
+    expect(await context.engine.sync()).toEqual({ push: 'unavailable', pull: 'done' });
+    expect(context.database.read((tx) => context.repository.row(tx, id))?.amountMl).toBe(250);
+    expect(outboxRows(context.database)).toHaveLength(1);
+    context.databases.lock(); context.files.remove();
+  });
+
+  it('sendet Änderungen nach einem Fachbefehl erst mit der kanonischen ID', async () => {
+    const context = await setup();
+    const local = EntityId.parse(randomUUID());
+    const canonical = EntityId.parse(randomUUID());
+    context.database.transaction((tx) => {
+      context.repository.completeTestGoal(tx, local, 'goal:serialized', water(250));
+      context.repository.save(tx, local, water(300));
+    });
+    let pushes = 0;
+    context.transport.onPush = (request) => {
+      pushes++;
+      if (pushes === 2) {
+        expect(request.operations).toMatchObject([{ type: 'upsert_entity', entityId: canonical }]);
+        return { type: 'unavailable' };
+      }
+      expect(request.operations).toHaveLength(1);
+      return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
+        canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
+        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
+    };
+    expect((await context.engine.sync()).push).toBe('unavailable');
+    expect(pushes).toBe(2);
+    expect(context.database.read((tx) => context.repository.visible(tx))).toMatchObject([{ id: canonical, amountMl: 300 }]);
+    context.databases.lock(); context.files.remove();
+  });
+
+  it('behält eine neuere lokale Änderung während der kanonischen ID-Zuordnung', async () => {
+    const context = await setup();
+    const local = EntityId.parse(randomUUID());
+    const canonical = EntityId.parse(randomUUID());
+    context.database.transaction((tx) => context.repository.completeTestGoal(tx, local, 'goal:gleicher-tag', water(250)));
+    let firstPush = true;
+    context.transport.onPush = (request) => {
+      if (!firstPush) return { type: 'unavailable' };
+      firstPush = false;
+      context.database.transaction((tx) => context.repository.save(tx, local, water(300)));
+      return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
+        canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
+        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
+    };
+    expect((await context.engine.sync()).push).toBe('unavailable');
+    expect(context.database.read((tx) => context.repository.visible(tx))).toMatchObject([{ id: canonical, amountMl: 300 }]);
+    expect(context.database.read((tx) => context.repository.row(tx, local))).toBeUndefined();
+    expect(outboxRows(context.database)).toMatchObject([{ entityId: canonical, payload: expect.objectContaining({ amountMl: 300 }) }]);
+    context.databases.lock(); context.files.remove();
+  });
+
   it('tauscht beim kanonischen Duplikat ID, fachlichen Schlüssel und offene Outbox-Payload atomar', async () => {
     const context = await setup();
     const local = EntityId.parse(randomUUID());
@@ -123,8 +185,14 @@ describe('Sync der App', () => {
     context.transport.onPush = (request) => {
       if (!firstPush) return { type: 'unavailable' };
       firstPush = false;
-      context.database.transaction((tx) => context.writer.command(tx, { type: 'markEventsSeen', businessKey: `next:${local}`,
-        payload: { referencedId: local }, knownServerVersion: null }));
+      context.database.transaction((tx) => {
+        context.writer.command(tx, { type: 'markEventsSeen', businessKey: `attempted:${local}`,
+          payload: { referencedId: local }, knownServerVersion: null, affectedRefs: [] });
+        const attempted = sqliteOf(tx).select().from(outbox).all().at(-1)!;
+        sqliteOf(tx).update(outbox).set({ attemptCount: 1 }).where(eq(outbox.operationId, attempted.operationId)).run();
+        context.writer.command(tx, { type: 'markEventsSeen', businessKey: `next:${local}`,
+          payload: { referencedId: local }, knownServerVersion: null, affectedRefs: [] });
+      });
       return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
         canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
         changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
@@ -132,7 +200,10 @@ describe('Sync der App', () => {
     expect((await context.engine.sync()).push).toBe('unavailable');
     expect(context.database.read((tx) => context.repository.visible(tx))).toMatchObject([{ id: canonical }]);
     expect(context.database.read((tx) => context.repository.row(tx, local))).toBeUndefined();
-    expect(outboxRows(context.database)).toMatchObject([{ businessKey: `next:${canonical}`, payload: { referencedId: canonical } }]);
+    expect(outboxRows(context.database)).toMatchObject([
+      { businessKey: `attempted:${local}`, payload: { referencedId: local } },
+      { businessKey: `next:${canonical}`, payload: { referencedId: canonical } },
+    ]);
     context.databases.lock(); context.files.remove();
   });
   let context: Awaited<ReturnType<typeof setup>>;

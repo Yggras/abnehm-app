@@ -18,7 +18,8 @@ export type SyncWriter = {
   upsert(tx: TransactionContext, change: { entityType: string; entityId: EntityId; payload: EntityData; knownServerVersion: ServerVersion | null }): void;
   /** Merkt das Löschen einer Entität vor; der Server setzt daraus die Löschmarkierung. */
   delete(tx: TransactionContext, change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }): void;
-  command(tx: TransactionContext, change: { type: CommandType; businessKey: string; payload: EntityData; knownServerVersion: ServerVersion | null }): void;
+  command(tx: TransactionContext, change: { type: CommandType; businessKey: string; payload: EntityData; knownServerVersion: ServerVersion | null;
+    affectedRefs: readonly { entityType: string; entityId: EntityId }[] }): void;
 };
 
 export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
@@ -33,6 +34,7 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
         entityType: 'businessKey' in operation ? null : operation.entityType,
         entityId: 'businessKey' in operation ? null : operation.entityId,
         businessKey: 'businessKey' in operation ? operation.businessKey : null,
+        affectedRefs: [],
         payload: 'payload' in operation ? operation.payload : {},
         knownServerVersion: operation.knownServerVersion,
         schemaVersion: operation.schemaVersion,
@@ -66,8 +68,14 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       append(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
     },
     command(tx, change) {
-      append(tx, OutboxOperation.parse({ ...change, operationId: newId(), schemaVersion: currentSyncSchemaVersion,
-        createdAt: Instant.parse(clock.read().instant) }));
+      const { affectedRefs, ...request } = change;
+      if (new Set(affectedRefs.map((ref) => `${ref.entityType}:${ref.entityId}`)).size !== affectedRefs.length) {
+        throw new Error('Fachbefehl enthält doppelte betroffene Entität');
+      }
+      const operation = OutboxOperation.parse({ ...request, operationId: newId(), schemaVersion: currentSyncSchemaVersion,
+        createdAt: Instant.parse(clock.read().instant) });
+      append(tx, operation);
+      sqliteOf(tx).update(outbox).set({ affectedRefs: [...affectedRefs] }).where(eq(outbox.operationId, operation.operationId)).run();
     },
   };
 }
@@ -99,7 +107,10 @@ export function hasPending(tx: ReadContext, entityType: string, entityId: string
     sqliteOf(tx)
       .select({ operationId: outbox.operationId })
       .from(outbox)
-      .where(and(eq(outbox.entityType, entityType), eq(outbox.entityId, entityId)))
+      .where(sql`(${outbox.entityType} = ${entityType} and ${outbox.entityId} = ${entityId}) or exists (
+        select 1 from json_each(${outbox.affectedRefs}) where json_extract(value, '$.entityType') = ${entityType}
+          and json_extract(value, '$.entityId') = ${entityId}
+      )`)
       .limit(1)
       .get() !== undefined
   );
