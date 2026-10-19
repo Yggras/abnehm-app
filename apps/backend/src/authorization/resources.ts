@@ -37,6 +37,7 @@ import {
   notificationIntent,
   notificationSetting,
   nutritionEntry,
+  onlineRequest,
   ownFood,
   partnerDailyGoalStatus,
   partnerSharing,
@@ -499,6 +500,7 @@ export const resourceEntities = {
   sync_clock: serverOnly(syncClock),
   change_log: serverOnly(changeLog),
   processed_operation: serverOnly(processedOperation),
+  online_request: serverOnly(onlineRequest),
   security_log: serverOnly(securityLog),
 } as const satisfies Record<string, EntityRule>;
 

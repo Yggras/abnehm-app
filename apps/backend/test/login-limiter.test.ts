@@ -14,12 +14,12 @@ describe('Begrenzung der Anmeldeversuche', () => {
   it('teilt ohne erkennbare IP keinen gemeinsamen Zähler; es greift nur die Begrenzung pro Konto', () => {
     const limiter = createLoginLimiter({ clock: clock() });
 
-    for (let n = 0; n <= loginLimits.perIp.maxFailures; n++) {
+    for (let n = 0; n <= loginLimits.perIp.max; n++) {
       limiter.recordFailure({ email: `opfer-${n}@example.test`, ipAddress: null });
     }
 
     expect(limiter.isBlocked({ email: 'anna@example.test', ipAddress: null })).toBe(false);
-    for (let n = 0; n < loginLimits.perAccount.maxFailures; n++) limiter.recordFailure({ email: 'Anna@Example.test', ipAddress: null });
+    for (let n = 0; n < loginLimits.perAccount.max; n++) limiter.recordFailure({ email: 'Anna@Example.test', ipAddress: null });
     expect(limiter.isBlocked({ email: 'anna@example.test', ipAddress: null })).toBe(true);
   });
 });

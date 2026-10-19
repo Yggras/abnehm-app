@@ -2,6 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { PersonRecord, PersonUpsert } from '@abnehm/contracts/person';
 
+import { followDisplayName } from '../coupling/couple.ts';
 import { person } from '../db/schema/index.ts';
 import type { ServerSyncEntity } from './registry.ts';
 
@@ -75,6 +76,8 @@ export const personEntity: ServerSyncEntity = {
         serverVersion: change.serverVersion,
       })
       .where(eq(person.id, change.entityId));
+    // Der Partner liest den Namen nur am Kopplungsmitglied; er folgt in derselben Transaktion.
+    await followDisplayName(tx, change.entityId, payload.displayName, change.at);
   },
   async remove() {
     throw new Error('Eine Person wird nicht gelöscht');

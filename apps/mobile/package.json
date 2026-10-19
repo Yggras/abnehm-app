@@ -15,6 +15,7 @@
     "@abnehm/contracts": "*",
     "@expo-google-fonts/rubik": "^0.4.2",
     "@expo/ui": "~58.0.20",
+    "@tanstack/react-query": "^5.104.4",
     "drizzle-orm": "^0.45.4",
     "expo": "~58.0.14",
     "expo-constants": "~58.0.12",

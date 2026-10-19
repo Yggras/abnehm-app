@@ -1,4 +1,4 @@
-import { backendBaseUrl } from '../backend/client';
+import { requiredBackendBaseUrl } from '../backend/client';
 import { createAppAuth, type AccountData, type AppAuth } from './app-auth';
 import { secureSessionStore } from './secure-session-store';
 
@@ -17,7 +17,5 @@ export type {
 
 /** Das Auth-Modul des Geräts: Sitzung in SecureStore, kontogetrennte Datenbank aus `LocalDatabases`. */
 export function createDeviceAuth(options: { accountData: AccountData; onError: (error: unknown) => void }): AppAuth {
-  const baseUrl = backendBaseUrl();
-  if (baseUrl === undefined) throw new Error('EXPO_PUBLIC_API_URL fehlt im Produktionsbuild');
-  return createAppAuth({ baseUrl, sessionStore: secureSessionStore, ...options });
+  return createAppAuth({ baseUrl: requiredBackendBaseUrl(), sessionStore: secureSessionStore, ...options });
 }

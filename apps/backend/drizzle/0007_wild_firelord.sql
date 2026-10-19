@@ -1,1 +1,0 @@
-ALTER TABLE "processed_operation" ADD COLUMN "request_hash" text;

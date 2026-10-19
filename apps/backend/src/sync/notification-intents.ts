@@ -4,7 +4,7 @@ import { NotificationIntent } from '@abnehm/contracts/notifications';
 
 import type { DbExecutor } from '../database.ts';
 import { notificationIntent } from '../db/schema/index.ts';
-import { canonicalJson } from './canonical-json.ts';
+import { canonicalJson } from '../canonical-json.ts';
 
 /** Die einzige Schreibgrenze für Push-Intents. Aufrufer reichen ihren Fach-Savepoint durch; bei
  * Rollback des Befehls bleibt weder Intent noch Fachereignis bestehen. */

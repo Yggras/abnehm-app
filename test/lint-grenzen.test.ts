@@ -127,6 +127,50 @@ describe('Vertrags-Fixtures nur in Tests', () => {
   });
 });
 
+describe('Testfähigkeiten nur in Tests und Development-Artefakten (#112)', () => {
+  const seedsImport = "import { seedManifests } from '@abnehm/contracts/seeds';\nexport const s = seedManifests;";
+  const testClockImport = "import { createTestClock } from '@abnehm/clock/testing';\nexport const c = createTestClock;";
+
+  it.each(['apps/backend/src/probe.ts', 'apps/mobile/src/probe.ts', 'apps/mobile/src/shell/probe.tsx'])(
+    'sperrt Seed-Manifeste in Produktionscode (%s)',
+    async (filePath) => {
+      expect(await violations(seedsImport, filePath)).toContain('no-restricted-imports');
+    },
+  );
+
+  it.each(['apps/backend/dev/probe.ts', 'apps/mobile/src/test-capabilities/probe.ts', 'apps/mobile/src/probe.test.ts', 'apps/backend/test/probe.test.ts'])(
+    'erlaubt sie in Testfähigkeiten und Tests (%s)',
+    async (filePath) => {
+      expect(await violations(seedsImport, filePath)).toEqual([]);
+    },
+  );
+
+  it('erlaubt die Testuhr in den Testfähigkeiten der App, nicht im Development-Backend', async () => {
+    expect(await violations(testClockImport, 'apps/mobile/src/test-capabilities/probe.ts')).toEqual([]);
+    expect(await violations(testClockImport, 'apps/backend/dev/probe.ts')).toContain('no-restricted-imports');
+  });
+
+  it.each([
+    ["import { testCapabilities } from '../test-capabilities';\nexport const t = testCapabilities;", 'apps/mobile/src/session/probe.ts'],
+    ["import { createFaultController } from '../test-capabilities/faults';\nexport const f = createFaultController;", 'apps/mobile/src/shell/probe.ts'],
+  ])('App-Code erreicht die Testfähigkeiten nur über die Grenze: %s', async (code, filePath) => {
+    expect(await violations(code, filePath)).toContain('no-restricted-imports');
+    expect(await violations(code.replace('../', './'), 'apps/mobile/src/build-capabilities.ts')).toEqual([]);
+  });
+
+  it('erlaubt reine Typimporte aus den Testfähigkeiten', async () => {
+    const code = "import type { TestCapabilities } from './test-capabilities';\nexport type T = TestCapabilities;";
+    expect(await violations(code, 'apps/mobile/src/probe.ts')).toEqual([]);
+  });
+
+  it('Produktionscode des Backends importiert das Development-Backend nicht', async () => {
+    const code = "import { createDevelopmentApp } from '../dev/app.ts';\nexport const d = createDevelopmentApp;";
+    expect(await violations(code, 'apps/backend/src/probe.ts')).toContain('no-restricted-imports');
+    expect(await violations(code.replace('../dev/', '../../dev/'), 'apps/backend/src/sync/probe.ts')).toContain('no-restricted-imports');
+    expect(await violations("import { x } from './device.ts';\nexport const y = x;", 'apps/backend/src/probe.ts')).toEqual([]);
+  });
+});
+
 describe('Backend in der App', () => {
   it('erlaubt nur Typen aus dem Backend', async () => {
     const typeOnly = "import type { AppType } from '@abnehm/backend/rpc';\nexport type A = AppType;";
@@ -178,6 +222,7 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     ["import { openDatabaseSync } from 'expo-sqlite';\nexport const o = openDatabaseSync;", 'apps/mobile/src/local-db/expo-connection.ts'],
     ["import Database from 'better-sqlite3';\nexport const d = Database;", 'apps/mobile/src/local-db/testing/probe.ts'],
     ["import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;", 'apps/mobile/src/auth/secure-session-store.ts'],
+    ["import { useMutation } from '@tanstack/react-query';\nexport const m = useMutation;", 'apps/mobile/src/online/probe.ts'],
   ])('erlaubt %s in %s', async (code, filePath) => {
     expect(await violations(code, filePath)).toEqual([]);
   });
@@ -193,6 +238,7 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     "import { useLiveQuery } from 'drizzle-orm/expo-sqlite';\nexport const l = useLiveQuery;",
     "import Database from 'better-sqlite3';\nexport const d = Database;",
     "import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;",
+    "import { useQuery } from '@tanstack/react-query';\nexport const q = useQuery;",
   ])('verbietet im Bereichscode: %s', async (code) => {
     expect(await violations(code, 'apps/mobile/src/start/probe.tsx')).toContain('abnehm/bibliotheksgrenzen');
   });

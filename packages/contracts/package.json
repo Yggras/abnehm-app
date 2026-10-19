@@ -10,6 +10,7 @@
     "./contribution": "./src/contribution.ts",
     "./person": "./src/person.ts",
     "./auth": "./src/auth.ts",
+    "./coupling": "./src/coupling.ts",
     "./daily-goals": "./src/daily-goals.ts",
     "./energy": "./src/energy.ts",
     "./partner": "./src/partner.ts",
@@ -22,7 +23,8 @@
     "./onboarding": "./src/onboarding.ts",
     "./status": "./src/status.ts",
     "./sync": "./src/sync.ts",
-    "./fixtures": "./fixtures/index.ts"
+    "./fixtures": "./fixtures/index.ts",
+    "./seeds": "./seeds/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"

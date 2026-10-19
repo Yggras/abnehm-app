@@ -29,12 +29,12 @@ import {
   type PersonActor,
   type ResourcePolicy,
 } from '../authorization/authorization.ts';
+import { canonicalJson } from '../canonical-json.ts';
 import { jsonBody } from '../contract-validation.ts';
-import type { Database, DbExecutor } from '../database.ts';
+import { sqlStateOf, type Database, type DbExecutor } from '../database.ts';
 import { changeLog, couplingMember, processedOperation } from '../db/schema/index.ts';
 import { errorCodeForLog } from '../log.ts';
 import { currentServerVersion, lockSyncClock, nextServerVersion, recordChange } from './change-log.ts';
-import { canonicalJson } from './canonical-json.ts';
 import type { ServerSyncEntity, StoredEntity } from './registry.ts';
 import { CommandRejection, type ServerCommand } from './commands.ts';
 
@@ -487,15 +487,10 @@ function rejected(operation: OutboxOperation, code: ContractErrorCode, canonical
  * ist ein vorübergehender Infrastrukturfehler.
  */
 function integrityViolation(error: unknown): ContractErrorCode | null {
-  const code = sqlState(error) ?? sqlState((error as { cause?: unknown } | null)?.cause);
+  const code = sqlStateOf(error);
   if (code === undefined) return null;
   if (code === '23505') return 'conflict';
   return code.startsWith('23') || code.startsWith('22') ? 'invalid_payload' : null;
-}
-
-function sqlState(error: unknown): string | undefined {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
 }
 
 /**

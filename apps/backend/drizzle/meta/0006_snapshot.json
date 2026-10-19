@@ -1,5 +1,5 @@
 {
-  "id": "894713e8-e4e1-42eb-8bbd-3931a20d2f79",
+  "id": "424cb92c-658e-4ce0-b370-8110a274b331",
   "prevId": "2ba9a9f6-2565-4fa9-956d-9bb081409ff7",
   "version": "7",
   "dialect": "postgresql",
@@ -6553,6 +6553,74 @@
       },
       "isRLSEnabled": false
     },
+    "public.online_request": {
+      "name": "online_request",
+      "schema": "",
+      "columns": {
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow": {
+          "name": "flow",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "online_request_account_id_user_id_fk": {
+          "name": "online_request_account_id_user_id_fk",
+          "tableFrom": "online_request",
+          "tableTo": "user",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "online_request_flow_check": {
+          "name": "online_request_flow_check",
+          "value": "\"online_request\".\"flow\" in ('einladung_erzeugen', 'einladung_annehmen')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.processed_operation": {
       "name": "processed_operation",
       "schema": "",
@@ -6622,12 +6690,6 @@
         "processed_operation_business_key_uq": {
           "name": "processed_operation_business_key_uq",
           "columns": [
-            {
-              "expression": "person_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
             {
               "expression": "operation_type",
               "isExpression": false,

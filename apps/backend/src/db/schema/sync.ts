@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import { bigint, check, index, pgTable, smallint, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { coupling, person } from './accounts.ts';
+import { user } from './auth.ts';
+import { onlineFlows } from '../../online/flows.ts';
 import { securityEventTypes } from '../../security-log/events.ts';
 import { id, instant, json, oneOf, ref, text } from './columns.ts';
 
@@ -70,6 +72,27 @@ export const processedOperation = pgTable(
     check('processed_operation_outcome_check', oneOf(t.outcome, ['applied', 'already_applied', 'permanently_rejected'])),
     check('processed_operation_entity_check', sql`(${t.entityType} is null) = (${t.entityId} is null)`),
   ],
+);
+
+/**
+ * Ergebnis eines erfolgreichen Online-Ablaufs unter seiner clientseitigen `requestId`, gebunden an
+ * Konto, Ablaufart und den Schlüssel-Hash der Anfrage. Ein identischer Retry erhält es unverändert.
+ * Bleibt wie die verarbeiteten Operationen dauerhaft erhalten.
+ */
+export const onlineRequest = pgTable(
+  'online_request',
+  {
+    requestId: ref('request_id').primaryKey(),
+    accountId: ref('account_id')
+      .notNull()
+      .references(() => user.id),
+    flow: text('flow').notNull(),
+    /** HMAC der kanonischen Anfrage mit dem Einladungs-Secret; ein Code steckt darin nie lesbar. */
+    requestHash: text('request_hash').notNull(),
+    result: json<Record<string, unknown>>('result').notNull(),
+    createdAt: instant('created_at').notNull(),
+  },
+  (t) => [check('online_request_flow_check', oneOf(t.flow, onlineFlows))],
 );
 
 /**

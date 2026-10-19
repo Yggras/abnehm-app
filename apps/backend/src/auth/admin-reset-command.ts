@@ -17,7 +17,7 @@ if (email === undefined || email === '') {
 const config = readConfig(process.env);
 const database = openDatabase(config.database);
 try {
-  const result = await createBackend({ database, authSettings: config.auth }).auth.admin.resetPassword(email);
+  const result = await createBackend({ database, authSettings: config.auth, invitationSettings: config.invitations }).auth.admin.resetPassword(email);
   if (result.type === 'unknown_account') {
     console.error('[admin] Kein Konto mit dieser E-Mail');
     process.exitCode = 1;

@@ -23,34 +23,39 @@ export type SyncWriter = {
     referencePaths: readonly (readonly string[])[] }): void;
 };
 
-export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
-  function append(tx: TransactionContext, operation: OutboxOperation, referencePaths: readonly (readonly string[])[] = []) {
-    for (const path of referencePaths) {
-      if (!((path[0] === 'payload' && path.length >= 2) || (path.length === 1 && path[0] === 'businessKey'))) {
-        throw new Error('Ungültiger Referenzpfad der Outbox');
-      }
+/** Hängt eine geprüfte Operation ans Ende der Outbox; `referencePaths` nennt ihre ID-Verweise. */
+export function appendOperation(
+  tx: TransactionContext,
+  operation: OutboxOperation,
+  referencePaths: readonly (readonly string[])[] = [],
+): void {
+  for (const path of referencePaths) {
+    if (!((path[0] === 'payload' && path.length >= 2) || (path.length === 1 && path[0] === 'businessKey'))) {
+      throw new Error('Ungültiger Referenzpfad der Outbox');
     }
-    const db = sqliteOf(tx);
-    const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;
-    db.insert(outbox)
-      .values({
-        operationId: operation.operationId,
-        sequence: last + 1,
-        type: operation.type,
-        entityType: 'businessKey' in operation ? null : operation.entityType,
-        entityId: 'businessKey' in operation ? null : operation.entityId,
-        businessKey: 'businessKey' in operation ? operation.businessKey : null,
-        affectedRefs: [],
-        referencePaths: referencePaths.map((path) => [...path]),
-        payload: 'payload' in operation ? operation.payload : {},
-        knownServerVersion: operation.knownServerVersion,
-        schemaVersion: operation.schemaVersion,
-        createdAt: operation.createdAt,
-        attemptCount: 0,
-      })
-      .run();
   }
+  const db = sqliteOf(tx);
+  const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;
+  db.insert(outbox)
+    .values({
+      operationId: operation.operationId,
+      sequence: last + 1,
+      type: operation.type,
+      entityType: 'businessKey' in operation ? null : operation.entityType,
+      entityId: 'businessKey' in operation ? null : operation.entityId,
+      businessKey: 'businessKey' in operation ? operation.businessKey : null,
+      affectedRefs: [],
+      referencePaths: referencePaths.map((path) => [...path]),
+      payload: 'payload' in operation ? operation.payload : {},
+      knownServerVersion: operation.knownServerVersion,
+      schemaVersion: operation.schemaVersion,
+      createdAt: operation.createdAt,
+      attemptCount: 0,
+    })
+    .run();
+}
 
+export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
   function base(change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }) {
     return {
       operationId: newId(),
@@ -68,11 +73,11 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       if (adapter.upsert === null) throw new Error(`Sync-Entität ${change.entityType} kennt kein Upsert`);
       if (adapter.ownerField in change.payload) throw new Error(`Die Eigentumsgrenze ${adapter.ownerField} setzt nur der Server`);
       const payload = adapter.upsert.parse(change.payload);
-      append(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }), adapter.referencePaths);
+      appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }), adapter.referencePaths);
     },
     delete(tx, change) {
       if (!registry.require(change.entityType).deletable) throw new Error(`Sync-Entität ${change.entityType} wird nicht gelöscht`);
-      append(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
+      appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
     },
     command(tx, change) {
       const { affectedRefs, referencePaths, ...request } = change;
@@ -81,7 +86,7 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       }
       const operation = OutboxOperation.parse({ ...request, operationId: newId(), schemaVersion: currentSyncSchemaVersion,
         createdAt: Instant.parse(clock.read().instant) });
-      append(tx, operation, referencePaths);
+      appendOperation(tx, operation, referencePaths);
       sqliteOf(tx).update(outbox).set({ affectedRefs: [...affectedRefs] }).where(eq(outbox.operationId, operation.operationId)).run();
     },
   };
