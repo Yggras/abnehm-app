@@ -248,21 +248,24 @@ describe('Push', () => {
     const operation = upsertOp(randomUUID(), water(250));
     const { call } = await import('./support/auth-client.ts');
 
-    const tooNew = await call(backend, 'POST', '/v1/sync/push', anna.device, { schemaVersion: 2, installationId: randomUUID(), operations: [operation] });
+    const tooNew = await call(backend, 'POST', '/v1/sync/push', anna.device, { schemaVersion: 4, installationId: randomUUID(), operations: [operation] });
     expect(tooNew).toMatchObject({ status: 400, body: { code: 'schema_update_required', retryable: false } });
+    const previous = await call(backend, 'POST', '/v1/sync/push', anna.device, {
+      schemaVersion: 2, installationId: randomUUID(), operations: [{ ...operation, schemaVersion: 2 }],
+    });
+    expect(previous).toMatchObject({ status: 200, body: { results: [{ type: 'applied' }] } });
+    const old = await call(backend, 'POST', '/v1/sync/pull', anna.device, {
+      schemaVersion: 1, installationId: randomUUID(), cursor: null, pageToken: null,
+    });
+    expect(old).toMatchObject({ status: 400, body: { code: 'schema_update_required' } });
     const withPerson = await call(backend, 'POST', '/v1/sync/push', anna.device, {
-      schemaVersion: 1,
-      installationId: randomUUID(),
-      personId: anna.personId,
-      operations: [operation],
+      schemaVersion: 3, installationId: randomUUID(), personId: anna.personId, operations: [operation],
     });
     expect(withPerson).toMatchObject({ status: 400, body: { code: 'invalid_payload' } });
     const oldOperation = await call(backend, 'POST', '/v1/sync/push', anna.device, {
-      schemaVersion: 1,
-      installationId: randomUUID(),
-      operations: [{ ...operation, schemaVersion: 2 }],
+      schemaVersion: 3, installationId: randomUUID(), operations: [{ ...operation, schemaVersion: 1 }],
     });
     expect(oldOperation).toMatchObject({ status: 400, body: { code: 'schema_update_required' } });
-    expect(await backend.database.db.select().from(waterEntry)).toHaveLength(0);
+    expect(await backend.database.db.select().from(waterEntry)).toHaveLength(1);
   });
 });

@@ -248,7 +248,7 @@ describe('Sync der App', () => {
 
     expect(database.read((tx) => repository.visible(tx)).map((row) => row.amountMl)).toEqual([250]);
     expect(outboxRows(database)).toEqual([
-      expect.objectContaining({ type: 'upsert_entity', entityType: 'water_entry', entityId: kept, sequence: 1, knownServerVersion: null, schemaVersion: 1 }),
+      expect.objectContaining({ type: 'upsert_entity', entityType: 'water_entry', entityId: kept, sequence: 1, knownServerVersion: null, schemaVersion: 3 }),
     ]);
   });
 

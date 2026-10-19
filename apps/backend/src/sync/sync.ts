@@ -385,7 +385,9 @@ function syncRoutes({
     run: (actor: PersonActor) => Promise<T>,
   ): Promise<{ type: 'ok'; value: T } | { type: 'error'; error: ContractError; status: 400 | 403 } | { type: 'unavailable' }> {
     if (actor.personId === null) return { type: 'error', error: forbiddenError, status: 403 };
-    if (versions.some((version) => version !== currentSyncSchemaVersion)) return { type: 'error', error: schemaUpdateRequired, status: 400 };
+    if (versions.some((version) => version < currentSyncSchemaVersion - 1 || version > currentSyncSchemaVersion)) {
+      return { type: 'error', error: schemaUpdateRequired, status: 400 };
+    }
     try {
       return { type: 'ok', value: await run({ ...actor, personId: actor.personId }) };
     } catch (error) {
