@@ -46,6 +46,24 @@ const testOnlyFixtures = {
   message: 'Vertrags-Fixtures sind nur in Testdateien erlaubt.',
 };
 
+const testOnlySeeds = {
+  group: ['@abnehm/contracts/seeds'],
+  message: 'Seed-Manifeste gibt es nur in Tests und Testfähigkeiten (apps/backend/dev/, apps/mobile/src/test-capabilities/).',
+};
+
+/** App-Code erreicht die Testfähigkeiten nur über die Compile-time-Grenze `src/build-capabilities.ts` (#112). */
+const testCapabilitiesViaGate = {
+  regex: '(^|/)test-capabilities(/|$)',
+  allowTypeImports: true,
+  message: 'Testfähigkeiten nur über `testCapabilities` aus src/build-capabilities.ts; sonst gelangen sie ins Produktions-Bundle.',
+};
+
+/** Produktionscode des Backends kennt das Development-Backend nicht; das Produktions-Image hat es nicht (#112). */
+const noDevelopmentBackend = {
+  regex: '^(\\.\\./)+dev(/|$)',
+  message: 'apps/backend/dev/ gehört nur ins Development-Image.',
+};
+
 const backendTypesOnly = {
   group: ['@abnehm/backend', '@abnehm/backend/*'],
   allowTypeImports: true,
@@ -98,12 +116,17 @@ export default defineConfig([
   },
   {
     files: ['apps/backend/src/**'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock, testOnlyFixtures, testOnlySeeds, noDevelopmentBackend] }] },
+  },
+  {
+    // Development-Backend (#112): darf die Seed-Manifeste nutzen, aber weder Testuhr noch Vertrags-Fixtures.
+    files: ['apps/backend/dev/**'],
     rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock, testOnlyFixtures] }] },
   },
   {
     // Bereichscode liest Zeitpunkt, Zone und lokalen Tag nur über die Uhr (`@abnehm/clock`).
     // Einzige Ausnahme ist der Geräteadapter der App, der Systemzeit und Gerätezone kapselt.
-    files: ['apps/*/src/**'],
+    files: ['apps/*/src/**', 'apps/backend/dev/**'],
     ignores: ['**/*.test.{ts,tsx}', 'apps/mobile/src/clock/**'],
     rules: {
       'no-restricted-syntax': [
@@ -127,7 +150,7 @@ export default defineConfig([
   // Spätere Blöcke ersetzen die Regel der früheren für dieselbe Datei vollständig.
   {
     files: ['apps/mobile/src/**'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures, testOnlySeeds, testCapabilitiesViaGate] }] },
   },
   {
     files: ['apps/mobile/src/**'],
@@ -137,7 +160,26 @@ export default defineConfig([
         'error',
         {
           paths: [{ name: 'expo-localization', message: 'Die Gerätezone kommt aus der Uhr (useClock()).' }],
-          patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures],
+          patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures, testOnlySeeds, testCapabilitiesViaGate],
+        },
+      ],
+    },
+  },
+  {
+    // Die Grenze selbst lädt die Testfähigkeiten; sie fallen im Produktions-Bundle mit `__DEV__` weg (#112).
+    files: ['apps/mobile/src/build-capabilities.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures, testOnlySeeds] }] },
+  },
+  {
+    // Testfähigkeiten der App (#112): Seed-Manifeste und Testuhr erlaubt, Vertrags-Fixtures nicht.
+    files: ['apps/mobile/src/test-capabilities/**'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'expo-localization', message: 'Die Gerätezone kommt aus der Uhr (useClock()).' }],
+          patterns: [backendTypesOnly, testOnlyFixtures],
         },
       ],
     },

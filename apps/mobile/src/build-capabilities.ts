@@ -10,5 +10,5 @@ import type { TestCapabilities } from './test-capabilities';
  */
 export const testCapabilities: TestCapabilities | null = __DEV__
   ? // eslint-disable-next-line @typescript-eslint/no-require-imports -- nur so entfällt das Modul im Produktions-Bundle
-    (require('./test-capabilities') as typeof import('./test-capabilities')).testCapabilities
+    (require('./test-capabilities') as { testCapabilities: TestCapabilities }).testCapabilities
   : null;

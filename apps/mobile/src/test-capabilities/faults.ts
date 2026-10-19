@@ -7,7 +7,7 @@ import type { SessionStore } from '../auth/app-auth';
 // Adapter umhüllen die echten Abhängigkeiten der App-Sitzung (`fetch`, SessionStore); es gibt sie
 // nur im Development Build und in Tests, nie im Produktions-Bundle (Release-Test).
 
-export const FaultPlan = z.strictObject({
+export const faultPlanSchema = z.strictObject({
   /** `offline`: keine Verbindung; `response_lost`: der Server verarbeitet, die Antwort geht verloren. */
   transport: z.enum(['ok', 'offline', 'response_lost']),
   /** `unavailable`: vorübergehender Serverfehler, `503` ohne Body wie beim echten Backend. */
@@ -17,7 +17,7 @@ export const FaultPlan = z.strictObject({
   /** `unavailable`: der geschützte Speicher (SecureStore) liest und schreibt nicht. */
   storage: z.enum(['ok', 'unavailable']),
 });
-export type FaultPlan = z.infer<typeof FaultPlan>;
+export type FaultPlan = z.infer<typeof faultPlanSchema>;
 
 export const noFaults: FaultPlan = { transport: 'ok', server: 'ok', auth: 'ok', storage: 'ok' };
 
@@ -28,11 +28,11 @@ export type FaultController = {
 };
 
 export function createFaultController(initial: Partial<FaultPlan> = {}): FaultController {
-  let current = FaultPlan.parse({ ...noFaults, ...initial });
+  let current = faultPlanSchema.parse({ ...noFaults, ...initial });
   return {
     plan: () => current,
     set: (change) => {
-      current = FaultPlan.parse({ ...current, ...change });
+      current = faultPlanSchema.parse({ ...current, ...change });
     },
     reset: () => {
       current = noFaults;

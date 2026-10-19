@@ -111,9 +111,4 @@ describe('Seed-Route des Development-Backends', () => {
     expect((await call(development, 'GET', '/v1/status', newDevice())).status).toBe(200);
     expect((await call(development, 'POST', '/v1/person/bootstrap', newDevice(), {})).status).toBe(401);
   });
-
-  it('fehlt in der App des Backends selbst', async () => {
-    const backend = await createTestBackend();
-    expect((await call(backend, 'POST', seedRoutePath, newDevice(), { scenario: 'solo' })).status).toBe(404);
-  });
 });

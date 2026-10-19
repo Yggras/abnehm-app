@@ -2,7 +2,7 @@ import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
 import { targetFromLink } from '../navigation/href';
-import { FaultPlan } from './faults';
+import { faultPlanSchema, type FaultPlan } from './faults';
 
 // Deep Links der Testfähigkeiten (#112), nur im Development Build:
 //
@@ -41,7 +41,7 @@ export function parseTestLink(link: string): TestLink | null {
     };
   }
   if (path === testLinkPaths.fehler) {
-    const plan = FaultPlan.partial().safeParse(Object.fromEntries(params));
+    const plan = faultPlanSchema.partial().safeParse(Object.fromEntries(params));
     return plan.success ? { type: 'fehler', plan: plan.data } : { type: 'ungueltig', capability: 'fehler' };
   }
   return null;

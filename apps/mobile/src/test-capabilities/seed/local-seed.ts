@@ -2,7 +2,7 @@ import { eq, getTableColumns, is } from 'drizzle-orm';
 import { getTableConfig, SQLiteTable, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 import { SyncCursor } from '@abnehm/contracts/base';
-import { canonicalRows, type SeedDeviceState, type SeedManifest, type SeedRow, type SeedRows, type SeedValue } from '@abnehm/contracts/seeds';
+import { canonicalRows, type SeedDeviceState, type SeedManifest, type SeedRow, type SeedValue } from '@abnehm/contracts/seeds';
 
 import type { LocalDatabase, ReadContext } from '../../local-db';
 import * as schema from '../../local-db/schema';
