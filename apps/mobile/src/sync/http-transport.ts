@@ -39,7 +39,7 @@ export function createHttpSyncTransport({ baseUrl, fetch }: { baseUrl: string; f
   }
 
   return {
-    push: (request) => exchange(() => client.v1.sync.push.$post({ json: request }), PushResponse),
+    push: (request, options) => exchange(() => client.v1.sync.push.$post({ json: request }, { init: { signal: options?.signal } }), PushResponse),
     pull: (request) => exchange(() => client.v1.sync.pull.$post({ json: request }), PullResponse),
   };
 }

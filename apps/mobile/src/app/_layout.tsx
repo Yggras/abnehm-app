@@ -6,7 +6,8 @@ import { useEffect } from 'react';
 import { testCapabilities } from '../build-capabilities';
 import { ClockProvider } from '../clock/clock-context';
 import { color, useDesignFonts } from '../design';
-import { appClock, deviceSession } from '../session/device-session';
+import { appClock, deviceInvitationFlows, deviceSession } from '../session/device-session';
+import { OnlineFlowsProvider } from '../online/OnlineFlowsProvider';
 import { useSessionGate } from '../session/use-session-gate';
 import { MessageHostProvider } from '../shell/MessageHost';
 import { gateHome, isSessionScreenGate, screenAccess, type GatedScreen } from '../shell/session-routes';
@@ -42,6 +43,7 @@ export default function RootLayout() {
   return (
     <ClockProvider clock={appClock}>
       <MessageHostProvider>
+        <OnlineFlowsProvider {...deviceInvitationFlows()}>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
           <Stack.Protected guard={gate === 'today'} redirectTo={home}>
@@ -63,6 +65,7 @@ export default function RootLayout() {
           </Stack.Protected>
         </Stack>
         {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
+        </OnlineFlowsProvider>
       </MessageHostProvider>
     </ClockProvider>
   );

@@ -116,6 +116,74 @@ const outboxRows = (database: LocalDatabase) => database.read((tx) => sqliteOf(t
 const cursorRow = (database: LocalDatabase) => database.read((tx) => sqliteOf(tx).select().from(syncCursor).get());
 
 describe('Sync der App', () => {
+  it('meldet nach 24 Stunden die älteste unbestätigte Änderung und entfernt den Hinweis nach Bestätigung', async () => {
+    const context = await setup();
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, EntityId.parse(randomUUID()), 'goal:offen', water(250)));
+    const clock = createTestClock(start);
+    const engine = createSyncEngine({ database: context.database, registry: createSyncRegistry([...foundationSyncEntities, testWaterEntity]),
+      transport: context.transport, clock, installationId });
+    expect(engine.status()).toEqual({ type: 'secured' });
+    clock.advanceBy(24 * 60 * 60 * 1000 + 1);
+    expect(engine.status()).toEqual({ type: 'not_secured_since', since: start.instant });
+    await engine.sync();
+    expect(engine.status()).toEqual({ type: 'secured' });
+    context.databases.lock(); context.files.remove();
+  });
+
+  it('pushNow bestätigt bei Fristablauf keinen Teil und behält dieselbe Operation für den Retry', async () => {
+    const context = await setup();
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, EntityId.parse(randomUUID()), 'goal:offen', water(250)));
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    context.transport.push = async (request) => { context.transport.pushes.push(request); await waiting; return context.transport.onPush(request); };
+    const clock = createTestClock(start);
+    const engine = createSyncEngine({ database: context.database, registry: createSyncRegistry([...foundationSyncEntities, testWaterEntity]),
+      transport: context.transport, clock, installationId });
+    const operation = outboxRows(context.database)[0];
+    const result = engine.pushNow({ deadline: Instant.parse('2026-10-14T12:00:25.000Z') });
+    clock.advanceBy(26_000);
+    release();
+    expect(await result).toBe('failed');
+    expect(outboxRows(context.database)).toEqual([expect.objectContaining({
+      operationId: operation?.operationId, payload: operation?.payload, schemaVersion: operation?.schemaVersion,
+      businessKey: operation?.businessKey, createdAt: operation?.createdAt, attemptCount: 1,
+    })]);
+    expect(context.transport.pulls).toHaveLength(0);
+    context.databases.lock(); context.files.remove();
+  });
+
+  it('pushNow wartet auf einen laufenden Vordergrund-Zyklus derselben Installation', async () => {
+    const context = await setup();
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, EntityId.parse(randomUUID()), 'goal:offen', water(250)));
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    context.transport.push = async (request) => { context.transport.pushes.push(request); await waiting; return context.transport.onPush(request); };
+    const foreground = context.engine.sync();
+    const background = context.engine.pushNow({ deadline: Instant.parse('2026-10-14T12:00:25.000Z') });
+    expect(context.transport.pushes).toHaveLength(1);
+    release();
+    expect((await foreground).push).toBe('done');
+    expect(await background).toBe('nothing_to_push');
+    expect(context.transport.pushes).toHaveLength(1);
+    context.databases.lock(); context.files.remove();
+  });
+
+  it('pushNow sendet genau einen Batch ohne Pull; gleichzeitige Aufrufe teilen den Push', async () => {
+    const context = await setup();
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, EntityId.parse(randomUUID()), 'goal:offen', water(250)));
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    context.transport.push = async (request) => { context.transport.pushes.push(request); await waiting; return context.transport.onPush(request); };
+    const deadline = Instant.parse('2026-10-14T12:00:25.000Z');
+    const first = context.engine.pushNow({ deadline });
+    const second = context.engine.pushNow({ deadline });
+    expect(context.transport.pushes).toHaveLength(1);
+    release();
+    expect(await Promise.all([first, second])).toEqual(['pushed', 'pushed']);
+    expect(context.transport.pulls).toHaveLength(0);
+    expect(await context.engine.pushNow({ deadline })).toBe('nothing_to_push');
+    context.databases.lock(); context.files.remove();
+  });
   it('übernimmt bei ausgefallenem Push keinen Pull über eine lokal offene Fachänderung', async () => {
     const context = await setup();
     const id = EntityId.parse(randomUUID());

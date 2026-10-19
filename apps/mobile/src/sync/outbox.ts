@@ -184,6 +184,12 @@ export function recordAttempt(tx: TransactionContext, operationIds: readonly str
   }
 }
 
+export function recordFailure(tx: TransactionContext, operationIds: readonly string[], errorCode: string): void {
+  for (const operationId of operationIds) {
+    sqliteOf(tx).update(outbox).set({ lastErrorCode: errorCode }).where(eq(outbox.operationId, operationId)).run();
+  }
+}
+
 function toOperation(row: typeof outbox.$inferSelect): OutboxOperation {
   const common = {
     operationId: EntityId.parse(row.operationId),

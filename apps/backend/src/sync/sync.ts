@@ -400,8 +400,15 @@ function syncRoutes({
   return new Hono()
     .post('/sync/push', guard(policies.authenticated()), jsonBody(PushRequest), async (c) => {
       const request = c.req.valid('json');
+      // Nur eine aktuelle Hülle darf unveränderte historische Outbox-Bytes tragen. Der Request-Hash
+      // bleibt einschließlich der ursprünglichen Operationsversion identisch (Antwortverlust/Retry).
+      // V1–V3 haben dieselbe Operationsnutzlast; die Registry validiert den historischen Inhalt.
+      // Bei einer künftigen Formänderung muss hier ein versionierter Decoder stehen, bevor V1/V2
+      // entfernt werden dürfen. Alte Hüllen und unbekannte Versionen bleiben abgewiesen.
       const versions = [request.schemaVersion, ...request.operations.map((operation) => operation.schemaVersion)];
-      const outcome = await handle(c.var.actor, versions, (actor) => push(actor, request));
+      const compatible = request.schemaVersion === currentSyncSchemaVersion &&
+        request.operations.every((operation) => operation.schemaVersion >= 1 && operation.schemaVersion <= currentSyncSchemaVersion);
+      const outcome = await handle(c.var.actor, compatible ? [request.schemaVersion] : versions, (actor) => push(actor, request));
       if (outcome.type === 'unavailable') return c.body(null, 503);
       if (outcome.type === 'error') return c.json(outcome.error, outcome.status);
       return c.json(outcome.value, 200);

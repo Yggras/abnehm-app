@@ -73,18 +73,28 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
       return { type: 'unavailable' };
     },
   };
-  const engine = createSyncEngine({ database, registry, transport, clock, installationId: EntityId.parse(randomUUID()) });
+  const installationId = EntityId.parse(randomUUID());
+  const engine = createSyncEngine({ database, registry, transport, clock, installationId });
   const water_ = testWaterRepository(writer, () => Instant.parse(clock.read().instant));
   return {
     database,
     network,
     sync: () => engine.sync(),
     save: (id: EntityId, amountMl: number) => database.transaction((tx) => water_.save(tx, id, water(amountMl))),
-    saveTestCommand: (id: EntityId, businessKey: string) => database.transaction((tx) => water_.saveTestCommand(tx, id, businessKey, water(250))),
+    saveTestCommand: (id: EntityId, businessKey: string, loggedAt?: string) => database.transaction((tx) => water_.saveTestCommand(tx, id, businessKey,
+      water(250, loggedAt ? { loggedAt: Instant.parse(loggedAt) } : {}))),
     remove: (id: EntityId) => database.transaction((tx) => water_.remove(tx, id)),
     visible: () => database.read((tx) => water_.visible(tx)).map(({ id, amountMl }) => ({ id, amountMl })),
     row: (id: EntityId) => database.read((tx) => water_.row(tx, id)),
     outbox: () => database.read((tx) => sqliteOf(tx).select().from(outbox).all()),
+    async upgradeAndSync() {
+      databases.lock();
+      const upgraded = await databases.open(accountId);
+      const resumed = createSyncEngine({ database: upgraded, registry, transport, clock, installationId });
+      const before = upgraded.read((tx) => sqliteOf(tx).select().from(outbox).orderBy(outbox.sequence).all());
+      const result = await resumed.sync();
+      return { before, result, remaining: upgraded.read((tx) => sqliteOf(tx).select().from(outbox).all()) };
+    },
   };
 }
 
@@ -106,6 +116,45 @@ async function setup(options: { entity?: ReturnType<typeof faultyWaterEntity> } 
 const serverRows = (backend: TestBackend) => backend.database.db.select().from(waterEntry);
 
 describe('Sync App ↔ Backend', () => {
+  it('aktualisiert nach mehr als zwei Offline-Versionen Upsert, Delete und Fachbefehl verlustfrei und synchronisiert sie', async () => {
+    const { backend, a } = await setup();
+    const deleted = EntityId.parse(randomUUID());
+    const kept = EntityId.parse(randomUUID());
+    a.network.online = false;
+    a.save(deleted, 250);
+    a.remove(deleted);
+    a.save(kept, 400);
+    a.saveTestCommand(EntityId.parse(randomUUID()), 'goal:offline-alt', '2026-10-14T13:00:00.000Z');
+    const before = a.outbox();
+    a.database.transaction((tx) => {
+      for (const row of before) sqliteOf(tx).update(outbox).set({ schemaVersion: 1 }).where(eq(outbox.operationId, row.operationId)).run();
+    });
+    a.network.online = true;
+    const result = await a.upgradeAndSync();
+    expect(result.before.map((row) => row.schemaVersion)).toEqual(before.map(() => 3));
+    expect(result.before.map((row) => [row.operationId, row.businessKey, row.sequence, row.createdAt]))
+      .toEqual(before.map((row) => [row.operationId, row.businessKey, row.sequence, row.createdAt]));
+    expect(result.result).toEqual({ push: 'done', pull: 'done' });
+    expect(result.remaining).toEqual([]);
+    expect((await serverRows(backend)).some((row) => row.id === kept && row.amountMl === 400)).toBe(true);
+  });
+  it('wiederholt eine gesendete V1-Operation nach Antwortverlust und App-Update bytegleich ohne Doppelwirkung', async () => {
+    const { backend, a } = await setup();
+    const id = EntityId.parse(randomUUID());
+    a.save(id, 250);
+    const old = a.outbox()[0]!;
+    a.database.transaction((tx) => sqliteOf(tx).update(outbox).set({ schemaVersion: 1 }).where(eq(outbox.operationId, old.operationId)).run());
+    a.network.dropNextPushResponse = true;
+    expect((await a.sync()).push).toBe('unavailable');
+    expect(a.outbox()[0]).toMatchObject({ operationId: old.operationId, schemaVersion: 1, attemptCount: 1 });
+    const resumed = await a.upgradeAndSync();
+    expect(resumed.before[0]).toMatchObject({ operationId: old.operationId, schemaVersion: 1, attemptCount: 1 });
+    expect(resumed.result).toEqual({ push: 'done', pull: 'done' });
+    expect(resumed.remaining).toEqual([]);
+    expect(await serverRows(backend)).toHaveLength(1);
+    expect(await backend.database.db.select().from(processedOperation)).toHaveLength(1);
+  });
+
   it('ersetzt offline erzeugte Duplikate zweier Installationen durch die kanonische ID', async () => {
     const { backend, a, b } = await setup();
     const first = EntityId.parse(randomUUID());

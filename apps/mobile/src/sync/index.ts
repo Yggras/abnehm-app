@@ -18,6 +18,8 @@ export {
   type SyncEngineOptions,
   type SyncState,
   type SyncStepResult,
+  type SyncStatus,
+  type PushNowResult,
   type SyncTransport,
   type TransportReply,
 } from './engine';

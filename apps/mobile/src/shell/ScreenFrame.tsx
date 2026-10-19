@@ -1,12 +1,13 @@
 import { useIsFocused } from 'expo-router';
-import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context';
 
 import { Button, color, IconButton, space, Text } from '../design';
 import { closeRoute, type Presentation } from '../navigation';
 import { MessageSlot } from './MessageHost';
 import { shellTexts } from './texts';
+import { SyncWarning } from './SyncWarning';
 
 export type ScreenFrameProps = {
   title: string;
@@ -14,6 +15,7 @@ export type ScreenFrameProps = {
   children: ReactNode;
   /** Auf Heute trägt der Personen-Kopf die große Überschrift; der Tabtitel bleibt klein zugänglich. */
   compactTabTitle?: boolean;
+  onRefresh?: () => Promise<unknown>;
 };
 
 // Tabs enden über der Tab-Leiste, die den unteren sicheren Bereich selbst freihält.
@@ -31,12 +33,18 @@ const edges: Record<Presentation, Edge[]> = {
  * Seiten und modale Abläufe verdecken die Tab-Leiste; solange sie im Fokus sind, steht die
  * Meldung des Meldungs-Hosts deshalb an ihrem unteren Rand.
  */
-export function ScreenFrame({ title, presentation, children, compactTabTitle = false }: ScreenFrameProps) {
+export function ScreenFrame({ title, presentation, children, compactTabTitle = false, onRefresh }: ScreenFrameProps) {
+  const [refreshing, setRefreshing] = useState(false);
   const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges[presentation]} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={onRefresh ? (
+        <RefreshControl refreshing={refreshing} onRefresh={() => {
+          setRefreshing(true);
+          void onRefresh().finally(() => setRefreshing(false));
+        }} />
+      ) : undefined}>
         {presentation === 'tab' ? (
           <Text variant={compactTabTitle ? 'label' : 'display'} accessibilityRole="header" style={compactTabTitle ? styles.compactTabTitle : styles.tabTitle}>
             {title}
@@ -52,6 +60,7 @@ export function ScreenFrame({ title, presentation, children, compactTabTitle = f
             {presentation === 'modal' ? <Button label={shellTexts.done} variant="text" onPress={closeRoute} /> : null}
           </View>
         )}
+        <SyncWarning />
         {children}
       </ScrollView>
       {presentation !== 'tab' && focused ? (

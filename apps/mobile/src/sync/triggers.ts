@@ -1,0 +1,41 @@
+/** Lifecycle-Quellen sind Adapter: React Native und Expo Network hängen erst am Composition Root. */
+export function startSyncTriggers({ sync, observePending, observeForeground, observeNetwork }: {
+  sync(): Promise<unknown>;
+  observePending(listener: (signature: string) => void): () => void;
+  observeForeground(listener: (active: boolean) => void): () => void;
+  observeNetwork(listener: (online: boolean) => void): () => void;
+}) {
+  let active = true;
+  let online = true;
+  let pending = '';
+  let initialized = false;
+  let debounce: ReturnType<typeof setTimeout> | null = null;
+  const run = () => { void sync().catch(() => {}); };
+  const stopPending = observePending((signature) => {
+    const changed = initialized && signature !== pending;
+    initialized = true;
+    pending = signature;
+    if (!changed || !active) return;
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => { debounce = null; run(); }, 2000);
+  });
+  const stopForeground = observeForeground((next) => {
+    if (next && !active) run();
+    active = next;
+    if (!next && debounce) { clearTimeout(debounce); debounce = null; }
+  });
+  const stopNetwork = observeNetwork((next) => {
+    if (next && !online && pending && active) run();
+    online = next;
+  });
+  // Der Takt läuft nur bei offener Kontodatenbank; im Hintergrund erfolgt kein allgemeiner Sync.
+  const interval = setInterval(() => { if (active) run(); }, 60_000);
+  run();
+  return {
+    refresh: run,
+    dispose() {
+      stopPending(); stopForeground(); stopNetwork(); clearInterval(interval);
+      if (debounce) clearTimeout(debounce);
+    },
+  };
+}

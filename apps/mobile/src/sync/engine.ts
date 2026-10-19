@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
-import { Instant, SyncCursor, type EntityId } from '@abnehm/contracts/base';
+import { EntityId, Instant, SyncCursor } from '@abnehm/contracts/base';
 import type { ContractError } from '@abnehm/contracts/errors';
 import {
   currentSyncSchemaVersion,
@@ -19,9 +19,9 @@ import {
 } from '@abnehm/contracts/sync';
 
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
-import { syncCursor } from '../local-db/schema';
+import { outbox, syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation, rewritePendingOutboxReferences } from './outbox';
+import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, recordFailure, removeOperation, rewritePendingOutboxReferences } from './outbox';
 import type { AffectedDay, PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
 import type { LocalCommandRegistry } from './commands';
 
@@ -38,7 +38,7 @@ export type TransportReply<T> =
   | Readonly<{ type: 'rejected'; error: ContractError }>;
 
 export type SyncTransport = {
-  push(request: PushRequest): Promise<TransportReply<PushResponse>>;
+  push(request: PushRequest, options?: { signal?: AbortSignal }): Promise<TransportReply<PushResponse>>;
   pull(request: PullRequest): Promise<TransportReply<PullResponse>>;
 };
 
@@ -62,9 +62,15 @@ export type CanonicalChangesHook = (tx: TransactionContext, changes: readonly Ca
 export type SyncStepResult = 'done' | 'nothing_to_do' | 'unavailable' | 'unauthorized' | 'rejected';
 export type SyncCycleResult = Readonly<{ push: SyncStepResult; pull: SyncStepResult | 'skipped' }>;
 
+export type SyncStatus = { type: 'secured' } | { type: 'not_secured_since'; since: Instant } | { type: 'migration_failed'; operationId: EntityId };
+export type PushNowResult = 'pushed' | 'nothing_to_push' | 'failed';
+
 export type SyncEngine = {
   /** Ein Sync-Zyklus: Push vor Pull. Gleichzeitige Aufrufe teilen sich denselben Zyklus. */
   sync(): Promise<SyncCycleResult>;
+  /** Ein einzelner Push ohne React-Baum und ohne Pull; auf dieselbe Installation serialisiert. */
+  pushNow(options: { deadline: Instant }): Promise<PushNowResult>;
+  status(): SyncStatus;
 };
 
 export type SyncEngineOptions = {
@@ -84,6 +90,7 @@ const maxRounds = 1000;
 
 export function createSyncEngine({ database, registry, transport, clock, installationId, onCanonicalChanges, commands }: SyncEngineOptions): SyncEngine {
   let running: Promise<SyncCycleResult> | null = null;
+  let backgroundPush: Promise<PushNowResult> | null = null;
 
   /** Übernimmt per `work` und meldet die Tage der Zeile davor und danach. */
   function withDays(tx: TransactionContext, adapter: SyncEntityAdapter, entityId: EntityId, work: () => void): readonly AffectedDay[] {
@@ -124,20 +131,28 @@ export function createSyncEngine({ database, registry, transport, clock, install
     if (changes.length > 0) onCanonicalChanges?.(tx, changes);
   }
 
-  async function push(): Promise<SyncStepResult> {
+  async function push(options: { single?: boolean; signal?: AbortSignal; deadline?: Instant } = {}): Promise<SyncStepResult> {
     let pushed = false;
-    for (let round = 0; round < maxRounds; round++) {
+    for (let round = 0; round < (options.single ? 1 : maxRounds); round++) {
+      if (options.signal?.aborted || (options.deadline && clock.read().instant >= options.deadline)) return 'unavailable';
+      // Eine nicht verlustfrei transformierbare Operation stoppt den Sync, ohne die Absicht zu löschen.
+      if (database.read((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox)
+        .where(eq(outbox.lastErrorCode, 'outbox_migration_failed')).get()) !== undefined) return 'rejected';
       const pending = database.read((tx) => pendingOperations(tx, maxPushOperations));
       // Spätere Operationen dürfen eine vorläufige lokale ID erst nach deren kanonischer Auflösung
       // versenden. Die Befehlsantwort enthält die ID-Zuordnung; der nächste Batch liest die Outbox neu.
       const firstCommand = pending.findIndex((operation) => 'businessKey' in operation);
       const operations = firstCommand < 0 ? pending : pending.slice(0, firstCommand + 1);
       if (operations.length === 0) return pushed ? 'done' : 'nothing_to_do';
-      const reply = await transport.push({ schemaVersion: currentSyncSchemaVersion, installationId, operations });
+      // Vor dem Netzaufruf markieren: stirbt die App nach Server-Commit, bleiben Retry-Bytes unverändert.
+      database.transaction((tx) => recordAttempt(tx, operations.map((operation) => operation.operationId),
+        Instant.parse(clock.read().instant), 'sending'));
+      const reply = await transport.push({ schemaVersion: currentSyncSchemaVersion, installationId, operations }, { signal: options.signal });
+      // Eine verspätete Antwort ist keine Teilbestätigung: der nächste Push wiederholt dieselben Bytes.
+      if (options.signal?.aborted || (options.deadline && clock.read().instant >= options.deadline)) return 'unavailable';
       if (reply.type !== 'ok' || !matches(operations, reply.body.results)) {
         const code = reply.type === 'ok' ? 'protocol' : reply.type === 'rejected' ? reply.error.code : reply.type;
-        const at = Instant.parse(clock.read().instant);
-        database.transaction((tx) => recordAttempt(tx, operations.map((operation) => operation.operationId), at, code));
+        database.transaction((tx) => recordFailure(tx, operations.map((operation) => operation.operationId), code));
         return reply.type === 'ok' ? 'unavailable' : reply.type;
       }
       database.transaction((tx) => {
@@ -175,7 +190,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
       });
       pushed = true;
     }
-    return 'unavailable';
+    return options.single && pushed ? 'done' : 'unavailable';
   }
 
   async function pull(): Promise<SyncStepResult> {
@@ -221,10 +236,38 @@ export function createSyncEngine({ database, registry, transport, clock, install
 
   return {
     sync() {
-      running ??= cycle().finally(() => {
-        running = null;
-      });
+      running ??= (async () => {
+        if (backgroundPush) await backgroundPush;
+        return cycle();
+      })().finally(() => { running = null; });
       return running;
+    },
+    pushNow({ deadline }) {
+      backgroundPush ??= (async (): Promise<PushNowResult> => {
+        if (running) await running;
+        if (clock.read().instant >= deadline) return 'failed';
+        const abort = new AbortController();
+        const remaining = Math.max(0, Date.parse(deadline) - Date.parse(clock.read().instant));
+        const timer = setTimeout(() => abort.abort(), remaining);
+        try {
+          const result = await push({ single: true, signal: abort.signal, deadline });
+          return result === 'done' ? 'pushed' : result === 'nothing_to_do' ? 'nothing_to_push' : 'failed';
+        } catch {
+          return 'failed';
+        } finally {
+          clearTimeout(timer);
+        }
+      })().finally(() => { backgroundPush = null; });
+      return backgroundPush;
+    },
+    status() {
+      const migrationError = database.read((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox)
+        .where(eq(outbox.lastErrorCode, 'outbox_migration_failed')).get());
+      if (migrationError) return { type: 'migration_failed', operationId: EntityId.parse(migrationError.operationId) };
+      const oldest = database.read((tx) => sqliteOf(tx).select().from(outbox).orderBy(outbox.sequence).limit(1).get());
+      if (!oldest) return { type: 'secured' };
+      return Date.parse(clock.read().instant) - Date.parse(oldest.createdAt) > 24 * 60 * 60 * 1000
+        ? { type: 'not_secured_since', since: Instant.parse(oldest.createdAt) } : { type: 'secured' };
     },
   };
 }

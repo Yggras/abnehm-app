@@ -254,6 +254,10 @@ describe('Push', () => {
       schemaVersion: 2, installationId: randomUUID(), operations: [{ ...operation, schemaVersion: 2 }],
     });
     expect(previous).toMatchObject({ status: 200, body: { results: [{ type: 'applied' }] } });
+    const previousPull = await call(backend, 'POST', '/v1/sync/pull', anna.device, {
+      schemaVersion: 2, installationId: randomUUID(), cursor: null, pageToken: null,
+    });
+    expect(previousPull).toMatchObject({ status: 200 });
     const old = await call(backend, 'POST', '/v1/sync/pull', anna.device, {
       schemaVersion: 1, installationId: randomUUID(), cursor: null, pageToken: null,
     });
@@ -262,10 +266,23 @@ describe('Push', () => {
       schemaVersion: 3, installationId: randomUUID(), personId: anna.personId, operations: [operation],
     });
     expect(withPerson).toMatchObject({ status: 400, body: { code: 'invalid_payload' } });
+    const historical = { ...upsertOp(randomUUID(), water(500)), schemaVersion: 1 };
     const oldOperation = await call(backend, 'POST', '/v1/sync/push', anna.device, {
-      schemaVersion: 3, installationId: randomUUID(), operations: [{ ...operation, schemaVersion: 1 }],
+      schemaVersion: 3, installationId: randomUUID(), operations: [historical],
     });
-    expect(oldOperation).toMatchObject({ status: 400, body: { code: 'schema_update_required' } });
-    expect(await backend.database.db.select().from(waterEntry)).toHaveLength(1);
+    expect(oldOperation).toMatchObject({ status: 200, body: { results: [{ type: 'applied' }] } });
+    const repeated = await call(backend, 'POST', '/v1/sync/push', anna.device, {
+      schemaVersion: 3, installationId: randomUUID(), operations: [historical],
+    });
+    expect(repeated).toMatchObject({ status: 200, body: { results: [{ type: 'already_applied' }] } });
+    const rewritten = await call(backend, 'POST', '/v1/sync/push', anna.device, {
+      schemaVersion: 3, installationId: randomUUID(), operations: [{ ...historical, schemaVersion: 3 }],
+    });
+    expect(rewritten).toMatchObject({ status: 200, body: { results: [{ type: 'permanently_rejected', error: { code: 'operation_conflict' } }] } });
+    const legacyEnvelope = await call(backend, 'POST', '/v1/sync/push', anna.device, {
+      schemaVersion: 1, installationId: randomUUID(), operations: [historical],
+    });
+    expect(legacyEnvelope).toMatchObject({ status: 400, body: { code: 'schema_update_required' } });
+    expect(await backend.database.db.select().from(waterEntry)).toHaveLength(2);
   });
 });
