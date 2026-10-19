@@ -29,6 +29,16 @@ export type InstallationId = z.infer<typeof InstallationId>;
 export const EntityData = z.record(z.string().regex(/^[a-z][A-Za-z0-9]*$/), z.unknown());
 export type EntityData = z.infer<typeof EntityData>;
 
+export const CommandType = z.enum([
+  'createGoalVersion', 'createWeeklyPlanVersion', 'materializeDailyGoals', 'acceptBudgetSuggestion',
+  'updatePersonTimeZone', 'completeDailyGoal', 'grantDailyBonus', 'confirmPhotoDraft', 'saveMealFavorite',
+  'requestSharedAction', 'decideSharedAction', 'buildObject', 'upgradeObject', 'placeObject',
+  'contributeToProject', 'dressMomo', 'claimEventReward', 'markEventsSeen', 'proposeChallenge',
+  'decideChallengeProposal', 'withdrawChallengeProposal', 'endChallenge', 'sendEncouragement',
+  'thankEncouragements', 'requestUncoupling',
+]);
+export type CommandType = z.infer<typeof CommandType>;
+
 const operationFields = {
   operationId: EntityId,
   entityType: SyncEntityType,
@@ -46,6 +56,10 @@ const operationFields = {
 export const OutboxOperation = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('upsert_entity'), ...operationFields, payload: EntityData }),
   z.strictObject({ type: z.literal('delete_entity'), ...operationFields }),
+  ...CommandType.options.map((type) => z.strictObject({
+    type: z.literal(type), operationId: EntityId, businessKey: z.string().min(1).max(200),
+    payload: EntityData, knownServerVersion: ServerVersion.nullable(), schemaVersion: SyncSchemaVersion, createdAt: Instant,
+  })),
 ]);
 export type OutboxOperation = z.infer<typeof OutboxOperation>;
 
@@ -71,13 +85,16 @@ export const CanonicalState = z.discriminatedUnion('type', [
 ]);
 export type CanonicalState = z.infer<typeof CanonicalState>;
 
+export const CanonicalIdMapping = z.strictObject({ entityType: SyncEntityType, from: EntityId, to: EntityId });
+export type CanonicalIdMapping = z.infer<typeof CanonicalIdMapping>;
+
 /**
  * Terminales Ergebnis einer Operation. `already_applied` trägt dieselben kanonischen Ergebnisse wie
  * die erste Bestätigung. Bei `forbidden` gibt es nur den generischen Fehler und `absent`.
  */
 export const PushResult = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('applied'), operationId: EntityId, canonical: CanonicalChange }),
-  z.strictObject({ type: z.literal('already_applied'), operationId: EntityId, canonical: CanonicalChange }),
+  z.strictObject({ type: z.literal('applied'), operationId: EntityId, canonical: CanonicalState, changes: z.array(CanonicalChange).optional(), idMappings: z.array(CanonicalIdMapping).optional() }),
+  z.strictObject({ type: z.literal('already_applied'), operationId: EntityId, canonical: CanonicalState, changes: z.array(CanonicalChange).optional(), idMappings: z.array(CanonicalIdMapping).optional() }),
   z
     .strictObject({ type: z.literal('permanently_rejected'), operationId: EntityId, error: ContractError, canonical: CanonicalState })
     .refine((result) => result.error.code !== 'forbidden' || (result.error.context === undefined && result.canonical.type === 'absent'), {

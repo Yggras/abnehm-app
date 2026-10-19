@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { EntityId, Instant, LocalDate, TimeZone } from '../src/base.ts';
 import {
   CanonicalChange,
+  CanonicalIdMapping,
+  CommandType,
   CanonicalRecord,
   CanonicalState,
   CanonicalTombstone,
@@ -42,6 +44,14 @@ const absent = { type: 'absent', entityType: 'water_entry', entityId: waterEntry
 const forbidden = { type: 'permanently_rejected', operationId: operation, error: { code: 'forbidden', retryable: false }, canonical: absent } as const;
 
 export const syncFixtures = {
+  CommandType: fixtures(CommandType, {
+    valid: { 'Tageszielerfüllung': 'completeDailyGoal' },
+    invalid: { 'unbekannter Befehl': 'inventSomething' },
+  }),
+  CanonicalIdMapping: fixtures(CanonicalIdMapping, {
+    valid: { 'lokales Duplikat': { entityType: 'daily_goal_completion', from: operation, to: operation2 } },
+    invalid: { 'ungültige kanonische ID': { entityType: 'daily_goal_completion', from: operation, to: 'invalid' } },
+  }),
   SyncSchemaVersion: fixtures(SyncSchemaVersion, {
     valid: { 'erste Version': 1 },
     invalid: { 'null': 0, 'als Zeichenfolge': '1' },
@@ -59,7 +69,7 @@ export const syncFixtures = {
     invalid: { 'Liste': [water], 'Spalte statt Feld': { amount_ml: 250 } },
   }),
   OutboxOperation: fixtures(OutboxOperation, {
-    valid: { 'Create': upsert, 'Update': { ...upsert, knownServerVersion: '1841' }, 'Löschen': remove },
+    valid: { 'Create': upsert, 'Update': { ...upsert, knownServerVersion: '1841' }, 'Löschen': remove, 'Fachbefehl': { type: 'completeDailyGoal', operationId: operation, businessKey: 'goal:1', payload: {}, knownServerVersion: null, schemaVersion: 1, createdAt: now } },
     invalid: {
       'Patch statt vollständiger Nutzlast': { ...upsert, patch: { amountMl: 300 } },
       'ohne bekannte Serverversion': without(upsert, 'knownServerVersion'),

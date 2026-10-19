@@ -2,7 +2,7 @@ import { and, asc, eq, max, sql } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { currentSyncSchemaVersion, OutboxOperation, type EntityData } from '@abnehm/contracts/sync';
+import { currentSyncSchemaVersion, OutboxOperation, type CommandType, type EntityData } from '@abnehm/contracts/sync';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { outbox } from '../local-db/schema';
@@ -18,10 +18,22 @@ export type SyncWriter = {
   upsert(tx: TransactionContext, change: { entityType: string; entityId: EntityId; payload: EntityData; knownServerVersion: ServerVersion | null }): void;
   /** Merkt das Löschen einer Entität vor; der Server setzt daraus die Löschmarkierung. */
   delete(tx: TransactionContext, change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }): void;
+  command(tx: TransactionContext, change: { type: CommandType; businessKey: string; payload: EntityData; knownServerVersion: ServerVersion | null;
+    affectedRefs: readonly { entityType: string; entityId: EntityId }[];
+    referencePaths: readonly (readonly string[])[] }): void;
 };
 
-/** Hängt eine geprüfte Operation ans Ende der Outbox. */
-export function appendOperation(tx: TransactionContext, operation: OutboxOperation): void {
+/** Hängt eine geprüfte Operation ans Ende der Outbox; `referencePaths` nennt ihre ID-Verweise. */
+export function appendOperation(
+  tx: TransactionContext,
+  operation: OutboxOperation,
+  referencePaths: readonly (readonly string[])[] = [],
+): void {
+  for (const path of referencePaths) {
+    if (!((path[0] === 'payload' && path.length >= 2) || (path.length === 1 && path[0] === 'businessKey'))) {
+      throw new Error('Ungültiger Referenzpfad der Outbox');
+    }
+  }
   const db = sqliteOf(tx);
   const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;
   db.insert(outbox)
@@ -29,10 +41,12 @@ export function appendOperation(tx: TransactionContext, operation: OutboxOperati
       operationId: operation.operationId,
       sequence: last + 1,
       type: operation.type,
-      entityType: operation.entityType,
-      entityId: operation.entityId,
-      businessKey: null,
-      payload: operation.type === 'upsert_entity' ? operation.payload : {},
+      entityType: 'businessKey' in operation ? null : operation.entityType,
+      entityId: 'businessKey' in operation ? null : operation.entityId,
+      businessKey: 'businessKey' in operation ? operation.businessKey : null,
+      affectedRefs: [],
+      referencePaths: referencePaths.map((path) => [...path]),
+      payload: 'payload' in operation ? operation.payload : {},
       knownServerVersion: operation.knownServerVersion,
       schemaVersion: operation.schemaVersion,
       createdAt: operation.createdAt,
@@ -59,11 +73,21 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       if (adapter.upsert === null) throw new Error(`Sync-Entität ${change.entityType} kennt kein Upsert`);
       if (adapter.ownerField in change.payload) throw new Error(`Die Eigentumsgrenze ${adapter.ownerField} setzt nur der Server`);
       const payload = adapter.upsert.parse(change.payload);
-      appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }));
+      appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }), adapter.referencePaths);
     },
     delete(tx, change) {
       if (!registry.require(change.entityType).deletable) throw new Error(`Sync-Entität ${change.entityType} wird nicht gelöscht`);
       appendOperation(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
+    },
+    command(tx, change) {
+      const { affectedRefs, referencePaths, ...request } = change;
+      if (new Set(affectedRefs.map((ref) => `${ref.entityType}:${ref.entityId}`)).size !== affectedRefs.length) {
+        throw new Error('Fachbefehl enthält doppelte betroffene Entität');
+      }
+      const operation = OutboxOperation.parse({ ...request, operationId: newId(), schemaVersion: currentSyncSchemaVersion,
+        createdAt: Instant.parse(clock.read().instant) });
+      appendOperation(tx, operation, referencePaths);
+      sqliteOf(tx).update(outbox).set({ affectedRefs: [...affectedRefs] }).where(eq(outbox.operationId, operation.operationId)).run();
     },
   };
 }
@@ -82,6 +106,7 @@ export function pendingFor(tx: ReadContext, entityType: string, entityId: string
     .orderBy(asc(outbox.sequence))
     .all()
     .map(toOperation)
+    .filter((operation) => !('businessKey' in operation))
     .map((operation) =>
       operation.type === 'upsert_entity'
         ? { type: 'upsert_entity', payload: operation.payload, operationId: operation.operationId, createdAt: operation.createdAt }
@@ -94,7 +119,10 @@ export function hasPending(tx: ReadContext, entityType: string, entityId: string
     sqliteOf(tx)
       .select({ operationId: outbox.operationId })
       .from(outbox)
-      .where(and(eq(outbox.entityType, entityType), eq(outbox.entityId, entityId)))
+      .where(sql`(${outbox.entityType} = ${entityType} and ${outbox.entityId} = ${entityId}) or exists (
+        select 1 from json_each(${outbox.affectedRefs}) where json_extract(value, '$.entityType') = ${entityType}
+          and json_extract(value, '$.entityId') = ${entityId}
+      )`)
       .limit(1)
       .get() !== undefined
   );
@@ -102,6 +130,36 @@ export function hasPending(tx: ReadContext, entityType: string, entityId: string
 
 export function removeOperation(tx: TransactionContext, operationId: string): void {
   sqliteOf(tx).delete(outbox).where(eq(outbox.operationId, operationId)).run();
+}
+
+/** Schreibt nur deklarierte ID-Referenzen um. Bereits versendete Bytes sind unter ihrer Operations-ID
+ * möglicherweise auf dem Server verarbeitet und bleiben für ihren Retry unverändert. */
+export function rewritePendingOutboxReferences(tx: TransactionContext, from: EntityId, to: EntityId): void {
+  const db = sqliteOf(tx);
+  for (const row of db.select().from(outbox).all()) {
+    if (row.attemptCount > 0) continue;
+    let payload: unknown = row.payload;
+    for (const path of row.referencePaths.filter((path) => path[0] === 'payload')) {
+      payload = rewriteAtPath(payload, path.slice(1), from, to);
+    }
+    db.update(outbox).set({ entityId: row.entityId === from ? to : row.entityId,
+      businessKey: row.referencePaths.some((path) => path.length === 1 && path[0] === 'businessKey')
+        ? row.businessKey?.split(from).join(to) : row.businessKey,
+      payload: payload as Record<string, unknown>,
+      affectedRefs: row.affectedRefs.map((ref) => ({ ...ref, entityId: ref.entityId === from ? to : ref.entityId })) })
+      .where(eq(outbox.operationId, row.operationId)).run();
+  }
+}
+
+function rewriteAtPath(value: unknown, path: readonly string[], from: string, to: string): unknown {
+  if (path.length === 0) return value === from ? to : value;
+  const [segment, ...remaining] = path;
+  if (segment === '*' && Array.isArray(value)) return value.map((element) => rewriteAtPath(element, remaining, from, to));
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && segment !== undefined && segment in value) {
+    const object = value as Record<string, unknown>;
+    return { ...object, [segment]: rewriteAtPath(object[segment], remaining, from, to) };
+  }
+  return value;
 }
 
 /** Hält einen gescheiterten Versuch fest; die Operationen bleiben unverändert in der Outbox. */
@@ -124,5 +182,8 @@ function toOperation(row: typeof outbox.$inferSelect): OutboxOperation {
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
   };
-  return OutboxOperation.parse(row.type === 'upsert_entity' ? { ...common, type: row.type, payload: row.payload } : { ...common, type: row.type });
+  return OutboxOperation.parse(row.businessKey !== null
+    ? { type: row.type, operationId: common.operationId, businessKey: row.businessKey, payload: row.payload,
+      knownServerVersion: row.knownServerVersion, schemaVersion: row.schemaVersion, createdAt: row.createdAt }
+    : row.type === 'upsert_entity' ? { ...common, type: row.type, payload: row.payload } : { ...common, type: row.type });
 }

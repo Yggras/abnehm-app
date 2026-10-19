@@ -1,0 +1,3 @@
+DROP INDEX "processed_operation_business_key_uq";--> statement-breakpoint
+ALTER TABLE "processed_operation" ADD COLUMN "request_hash" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "processed_operation_business_key_uq" ON "processed_operation" USING btree ("person_id","operation_type","business_key") WHERE "processed_operation"."outcome" <> 'permanently_rejected';

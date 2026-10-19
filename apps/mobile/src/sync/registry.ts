@@ -41,6 +41,8 @@ export type SyncEntityAdapter<U extends EntityData = EntityData, R extends Entit
   /** Transport-Schema des generischen Upserts; `null`, wenn die Entität kein Upsert kennt. */
   upsert: z.ZodType<U> | null;
   deletable: boolean;
+  /** Pfade zu UUID-Referenzen im Upsert-Payload, z. B. `['payload', 'parentId']`. */
+  referencePaths?: readonly (readonly string[])[];
   /** Transport-Schema des kanonischen Datensatzes vom Server. */
   record: z.ZodType<R>;
   /**
@@ -50,6 +52,8 @@ export type SyncEntityAdapter<U extends EntityData = EntityData, R extends Entit
   applyCanonical(tx: TransactionContext, record: CanonicalEntity<R>): void;
   /** Übernimmt die Löschmarkierung; eine lokal unbekannte Entität bleibt unbekannt. */
   applyTombstone(tx: TransactionContext, tombstone: EntityTombstone): void;
+  /** Ersetzt eine lokale, logisch identische ID samt allen fachlichen Verweisen; läuft vor applyCanonical. */
+  replaceCanonicalId?(tx: TransactionContext, from: EntityId, to: EntityId, options: { preserveLocalChanges: boolean }): void;
   /**
    * Stellt nach einer dauerhaften Ablehnung den kanonischen Zustand her und wendet danach die offenen
    * Operationen in Reihenfolge erneut an. Ohne kanonischen Zustand verschwindet eine nie bestätigte

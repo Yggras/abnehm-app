@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { and, asc, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
@@ -9,6 +9,7 @@ import type { ContractError, ContractErrorCode } from '@abnehm/contracts/errors'
 import {
   currentSyncSchemaVersion,
   PullRequest,
+  type CommandType,
   PushRequest,
   PushResult,
   type CanonicalChange,
@@ -35,11 +36,12 @@ import { changeLog, couplingMember, processedOperation } from '../db/schema/inde
 import { errorCodeForLog } from '../log.ts';
 import { currentServerVersion, lockSyncClock, nextServerVersion, recordChange } from './change-log.ts';
 import type { ServerSyncEntity, StoredEntity } from './registry.ts';
+import { CommandRejection, type ServerCommand } from './commands.ts';
 
 // Push/Pull-Sync (Spezifikation 0, Abschnitt 10; #99). Push verarbeitet die geordnete Liste in einer
 // Transaktion und hält jedes terminale Ergebnis unter der Operations-ID fest. Pull liefert alle seit dem
 // Cursor sichtbaren Änderungen bis zu einer festen Obergrenze in Seiten. Bereiche schließen ihre
-// Entitäten und Vor-Pull-Schritte über `registerEntity` und `registerPrePullStep` an.
+// Entitäten, Fachbefehle und Vor-Pull-Schritte über die jeweilige Registry an.
 
 /**
  * Serverseitiger Schritt vor jeder Pull-Antwort, etwa Partner-Projektionen oder Fristabläufe. Er läuft in
@@ -51,6 +53,7 @@ export type PrePullStep = (tx: DbExecutor, context: Readonly<{ personId: EntityI
 export type Sync = {
   /** Meldet eine Entität an; ihr Typ muss eindeutig und ihre Operationen in der Matrix erlaubt sein. */
   registerEntity(entity: ServerSyncEntity): void;
+  registerCommand(command: ServerCommand): void;
   registerPrePullStep(name: string, step: PrePullStep): void;
   routes: ReturnType<typeof syncRoutes>;
 };
@@ -82,6 +85,7 @@ class Rejection extends Error {
 
 export function createSync({ database, clock, authorization, pullPageSize = 500 }: SyncOptions): Sync {
   const entities = new Map<string, RegisteredEntity>();
+  const commands = new Map<CommandType, ServerCommand>();
   const prePullSteps = new Map<string, PrePullStep>();
 
   function policyFor(entity: ServerSyncEntity, operation: 'lesen' | 'upsert' | 'loeschen'): ResourcePolicy {
@@ -120,30 +124,69 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
   }
 
   async function processOperation(tx: DbExecutor, actor: PersonActor, operation: OutboxOperation, at: Date): Promise<PushResult> {
-    const hash = payloadHash(operation);
+    const command = 'businessKey' in operation;
+    const registeredCommand = command ? commands.get(operation.type) : undefined;
+    const parsedCommand = command && registeredCommand !== undefined ? registeredCommand.payload.safeParse(operation.payload) : null;
+    const requestHash = payloadHash(operation);
+    const hash = command && registeredCommand !== undefined && parsedCommand?.success
+      ? businessHash(operation, registeredCommand.canonicalRequest(operation)) : requestHash;
+    const entityType = command ? null : operation.entityType;
+    const entityId = command ? null : operation.entityId;
     const [stored] = await tx.select().from(processedOperation).where(eq(processedOperation.operationId, operation.operationId));
     if (stored !== undefined) {
       if (stored.personId !== actor.personId) return forbidden(operation);
       const identical =
         stored.operationType === operation.type &&
-        stored.entityType === operation.entityType &&
-        stored.entityId === operation.entityId &&
-        stored.payloadHash === hash;
+        stored.entityType === entityType &&
+        stored.entityId === entityId &&
+        (stored.businessKey === (command ? operation.businessKey : null) ||
+          (command && stored.businessKey === null && stored.outcome === 'already_applied')) &&
+        (stored.requestHash ?? stored.payloadHash) === requestHash;
       if (!identical) return rejected(operation, 'operation_conflict', await visibleState(tx, actor, operation));
+      if (command && parsedCommand?.success && (registeredCommand === undefined ||
+        (await authorization.authorizeCommand(tx, actor, operation.type, registeredCommand.target(operation))).type === 'verweigert')) return forbidden(operation);
       const result = PushResult.parse(stored.result);
-      // Kanonischen Inhalt gibt es nur, solange die Person die Entität noch lesen darf.
-      if (result.canonical.type === 'record' && (await visibleState(tx, actor, operation)).type === 'absent') return forbidden(operation);
+      // Ein Retry darf weder widerrufene abgeleitete Datensätze noch deren IDs preisgeben.
+      if (command && !(await canDeliverCommandResult(tx, actor, result))) return forbidden(operation);
+      if (!command && result.canonical.type === 'record' && (await visibleState(tx, actor, operation)).type === 'absent') return forbidden(operation);
       return result.type === 'applied' ? { ...result, type: 'already_applied' } : result;
     }
-    const result = await decide(tx, actor, operation, at);
+    if (command && !parsedCommand?.success && registeredCommand === undefined) return forbidden(operation);
+    if (command && parsedCommand?.success) {
+      if (registeredCommand === undefined ||
+        (await authorization.authorizeCommand(tx, actor, operation.type, registeredCommand.target(operation))).type === 'verweigert') return forbidden(operation);
+      const [existing] = await tx.select().from(processedOperation).where(and(
+        eq(processedOperation.personId, actor.personId), eq(processedOperation.operationType, operation.type),
+        eq(processedOperation.businessKey, operation.businessKey), ne(processedOperation.outcome, 'permanently_rejected'),
+      ));
+      if (existing !== undefined) {
+        if (existing.payloadHash !== hash) return rejected(operation, 'operation_conflict', absent(operation));
+        const result = PushResult.parse(existing.result);
+        if (!(await canDeliverCommandResult(tx, actor, result))) return forbidden(operation);
+        if (result.type === 'permanently_rejected') throw new Error('Erfolgreicher Fachschlüssel mit abgelehntem Ergebnis');
+        const mappings = registeredCommand!.duplicate(operation, result);
+        if (registeredCommand!.identity === 'mapped' && !completeMappings(result.changes ?? [], mappings)) {
+          throw new Error(`Fachbefehl ${operation.type} liefert für sein Duplikat keine kanonische Identität`);
+        }
+        const duplicate = { ...result, operationId: operation.operationId, type: 'already_applied',
+          canonical: absent(operation), idMappings: mappings } as const;
+        await tx.insert(processedOperation).values({ operationId: operation.operationId, personId: actor.personId, operationType: operation.type,
+          entityType: null, entityId: null, businessKey: null, requestHash, payloadHash: hash,
+          outcome: duplicate.type, result: duplicate, createdAt: at });
+        return duplicate;
+      }
+    }
+    const result = command && !parsedCommand?.success ? rejected(operation, 'invalid_payload', absent(operation))
+      : command ? await decideCommand(tx, actor, operation, at) : await decide(tx, actor, operation, at);
     await tx.insert(processedOperation).values({
       operationId: operation.operationId,
       personId: actor.personId,
       operationType: operation.type,
-      entityType: operation.entityType,
-      entityId: operation.entityId,
-      businessKey: null,
+      entityType,
+      entityId,
+      businessKey: command ? operation.businessKey : null,
       payloadHash: hash,
+      requestHash,
       outcome: result.type,
       result,
       createdAt: at,
@@ -151,7 +194,33 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
     return result;
   }
 
-  async function decide(tx: DbExecutor, actor: PersonActor, operation: OutboxOperation, at: Date): Promise<PushResult> {
+  async function decideCommand(tx: DbExecutor, actor: PersonActor, operation: Extract<OutboxOperation, { businessKey: string }>, at: Date): Promise<PushResult> {
+    const command = commands.get(operation.type);
+    if (command === undefined) return forbidden(operation);
+    const parsed = command.payload.safeParse(operation.payload);
+    if (!parsed.success) return rejected(operation, 'invalid_payload', absent(operation));
+    const decision = await authorization.authorizeCommand(tx, actor, operation.type, command.target(operation));
+    if (decision.type === 'verweigert') return forbidden(operation);
+    try {
+      return await tx.transaction(async (savepoint) => {
+        const result = await command.execute(savepoint, { actor, payload: parsed.data, businessKey: operation.businessKey, at });
+        if (command.identity === 'mapped' && !completeMappings(result.changes, result.idMappings)) {
+          throw new CommandRejection('invalid_payload');
+        }
+        const applied = { type: 'applied', operationId: operation.operationId, canonical: absent(operation),
+          changes: result.changes, idMappings: result.idMappings } as const;
+        if (!(await canDeliverCommandResult(savepoint, actor, applied))) throw new CommandRejection('invalid_payload');
+        // Der Handler schreibt Fachzeilen, Änderungslog und abgeleitete Zeilen in diesem Savepoint.
+        return applied;
+      });
+    } catch (error) {
+      const code = error instanceof Rejection || error instanceof CommandRejection ? error.code : integrityViolation(error);
+      if (code === null) throw error;
+      return rejected(operation, code, absent(operation));
+    }
+  }
+
+  async function decide(tx: DbExecutor, actor: PersonActor, operation: Extract<OutboxOperation, { entityId: EntityId }>, at: Date): Promise<PushResult> {
     const entity = entities.get(operation.entityType);
     const policy = entity === undefined ? null : operation.type === 'upsert_entity' ? entity.policies.upsert : entity.policies.loeschen;
     if (entity === undefined || policy === null) return forbidden(operation);
@@ -195,7 +264,20 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
   }
 
   /** Kanonischer Zustand der Entität, sofern die Person sie lesen darf; sonst `absent`. */
+  async function canDeliverCommandResult(tx: DbExecutor, actor: PersonActor, result: PushResult): Promise<boolean> {
+    if (result.type === 'permanently_rejected') return true;
+    const refs = [ ...(result.changes ?? []).map((change) => ({ entityType: change.entityType, entityId: change.entityId })),
+      ...(result.idMappings ?? []).map((mapping) => ({ entityType: mapping.entityType, entityId: mapping.to })) ];
+    for (const ref of refs) {
+      const entity = entities.get(ref.entityType);
+      if (entity === undefined ||
+        (await authorization.authorize(tx, actor, entity.policies.lesen, { id: ref.entityId })).type === 'verweigert') return false;
+    }
+    return true;
+  }
+
   async function visibleState(tx: DbExecutor, actor: PersonActor, operation: OutboxOperation): Promise<CanonicalState> {
+    if ('businessKey' in operation) return absent(operation);
     const entity = entities.get(operation.entityType);
     if (entity === undefined) return absent(operation);
     const decision = await authorization.authorize(tx, actor, entity.policies.lesen, { id: operation.entityId });
@@ -270,6 +352,12 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
 
   return {
     registerEntity,
+    registerCommand(command) {
+      if (commands.has(command.type)) throw new Error(`Fachbefehl ${command.type} ist schon angemeldet`);
+      if (policyProblem(command.policy) !== null || command.policy.operation !== 'befehl') throw new Error(`Fachbefehl ${command.type} benötigt eine gültige Befehlsregel`);
+      authorization.registerCommand(command.type, command.policy);
+      commands.set(command.type, command);
+    },
     registerPrePullStep(name, step) {
       if (prePullSteps.has(name)) throw new Error(`Vor-Pull-Schritt ${name} ist schon angemeldet`);
       prePullSteps.set(name, step);
@@ -381,7 +469,8 @@ async function stateOf(tx: DbExecutor, entity: ServerSyncEntity, entityId: Entit
 }
 
 function absent(operation: OutboxOperation): CanonicalState {
-  return { type: 'absent', entityType: operation.entityType, entityId: operation.entityId };
+  return { type: 'absent', entityType: 'businessKey' in operation ? 'command_result' : operation.entityType,
+    entityId: 'businessKey' in operation ? operation.operationId : operation.entityId };
 }
 
 function forbidden(operation: OutboxOperation): PushResult {
@@ -410,4 +499,15 @@ function integrityViolation(error: unknown): ContractErrorCode | null {
  */
 export function payloadHash(operation: OutboxOperation): string {
   return createHash('sha256').update(canonicalJson(operation)).digest('hex');
+}
+
+function completeMappings(changes: readonly CanonicalChange[], mappings: readonly { entityType: string; to: string }[]): boolean {
+  return mappings.length > 0 && mappings.every((mapping) => changes.some((change) =>
+    change.type === 'record' && change.entityType === mapping.entityType && change.entityId === mapping.to));
+}
+
+function businessHash(operation: Extract<OutboxOperation, { businessKey: string }>, canonicalRequest: Record<string, unknown>): string {
+  // Weder Operations-ID noch Gerätezeit gehört zum fachlichen Request; Version und Inhalt schon.
+  return createHash('sha256').update(canonicalJson({ type: operation.type, businessKey: operation.businessKey,
+    payload: canonicalRequest, schemaVersion: operation.schemaVersion, knownServerVersion: operation.knownServerVersion })).digest('hex');
 }

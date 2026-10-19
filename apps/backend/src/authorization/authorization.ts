@@ -70,6 +70,8 @@ export type Authorization = {
   registerCommand(name: string, policy: CommandPolicy): void;
   /** Prüft einen Fachbefehl mit seiner angemeldeten Policy. */
   authorizeCommand(executor: DbExecutor, actor: Actor, name: string, target: ResourceTarget): Promise<Decision>;
+  /** Inventar aller angemeldeten Fachbefehle für das Negativtest-Gerüst. */
+  registeredCommands(): ReadonlyMap<string, CommandPolicy>;
   /** Alle Routen der App und alle Fachbefehle mit fehlender oder unvollständiger Policy. */
   findIncompletePolicies(app: Hono): IncompletePolicy[];
   /** Policy einer Route laut ihrem Guard, oder `null`. */
@@ -190,6 +192,7 @@ export function createAuthorization({ database, sessions, clock, securityLog }: 
       const policy = commands.get(name);
       return policy === undefined ? denied : authorize(executor, actor, policy, target);
     },
+    registeredCommands() { return new Map(commands); },
     findIncompletePolicies(app) {
       const problems: IncompletePolicy[] = [];
       for (const { method, path, guarded } of routesOf(app)) {

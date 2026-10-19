@@ -20,6 +20,7 @@ export {
   type TransportReply,
 } from './engine';
 export { createHttpSyncTransport } from './http-transport';
+export { createLocalCommandRegistry, type LocalCommand, type LocalCommandRegistry } from './commands';
 export { createSyncWriter, type SyncWriter } from './outbox';
 export { personEntity } from './person-entity';
 export {

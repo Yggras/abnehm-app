@@ -1,0 +1,1 @@
+ALTER TABLE `outbox` ADD `affected_refs` text DEFAULT '[]' NOT NULL;

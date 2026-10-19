@@ -46,6 +46,22 @@ export const testWaterEntity = sqliteEntity({
   },
 });
 
+/** Test-Adapter für #100: die produktive Wasser-Entität braucht keine natürliche Duplikat-ID.
+ * Verweise anderer Fachbereiche werden dort im jeweiligen Bereichsadapter umgeschrieben. */
+export const testWaterCommandEntity = {
+  ...testWaterEntity,
+  replaceCanonicalId(tx: TransactionContext, from: EntityId, to: EntityId, { preserveLocalChanges }: { preserveLocalChanges: boolean }) {
+    if (from === to) return;
+    const db = sqliteOf(tx);
+    const local = db.select().from(waterEntry).where(eq(waterEntry.id, from)).get();
+    if (preserveLocalChanges && local !== undefined) {
+      const moved = { ...local, id: to };
+      db.insert(waterEntry).values(moved).onConflictDoUpdate({ target: waterEntry.id, set: moved }).run();
+    }
+    db.delete(waterEntry).where(eq(waterEntry.id, from)).run();
+  },
+};
+
 /** Wie ein Bereichs-Repository: Fachänderung und Outbox-Operation in derselben Transaktion. */
 export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
   function knownVersion(tx: ReadContext, entityId: EntityId): ServerVersion | null {
@@ -56,6 +72,13 @@ export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
     save(tx: TransactionContext, entityId: EntityId, payload: TestWaterUpsert) {
       writeLocal(tx, entityId, payload, now());
       writer.upsert(tx, { entityType: 'water_entry', entityId, payload, knownServerVersion: knownVersion(tx, entityId) });
+    },
+    /** Nur im Test-Artefakt: zwei Geräte erzeugen dieselbe fachliche Zeile unabhängig. */
+    completeTestGoal(tx: TransactionContext, entityId: EntityId, businessKey: string, payload: TestWaterUpsert) {
+      writeLocal(tx, entityId, payload, now());
+      writer.command(tx, { type: 'completeDailyGoal', businessKey, payload: { ...payload, localId: entityId },
+        knownServerVersion: null, affectedRefs: [{ entityType: 'water_entry', entityId }],
+        referencePaths: [['payload', 'localId'], ['businessKey']] });
     },
     remove(tx: TransactionContext, entityId: EntityId) {
       deleteLocal(tx, entityId, now());
