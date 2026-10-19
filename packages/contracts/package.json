@@ -13,6 +13,7 @@
     "./coupling": "./src/coupling.ts",
     "./daily-goals": "./src/daily-goals.ts",
     "./energy": "./src/energy.ts",
+    "./ids": "./src/ids.ts",
     "./partner": "./src/partner.ts",
     "./island": "./src/island.ts",
     "./wir": "./src/wir.ts",

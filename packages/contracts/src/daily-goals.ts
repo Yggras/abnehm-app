@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-import { AreaKey, EntityId, Instant, LocalDate, MessageKey, MessageValues, TimeZone } from './base.ts';
+import { AreaKey, BausteinKey, EntityId, Instant, LocalDate, MessageKey, MessageValues, TimeZone } from './base.ts';
+import { addDays } from './calendar.ts';
 import { ContractError } from './errors.ts';
+import { uuidV5 } from './ids.ts';
 import { mealCategoryCount } from './units.ts';
 
 // Baustein-Auswertung und Tages-Check-in (Spezifikation 0, Abschnitt 3). Mengen sind ganze Zahlen:
@@ -109,6 +111,40 @@ const stateRule = { message: 'Zustand passt nicht zu Fortschritt und Tagesende',
 export const BausteinEvaluation = z.strictObject(evaluationShape).refine(stateMatchesProgress, stateRule);
 export type BausteinEvaluation = z.infer<typeof BausteinEvaluation>;
 
+/** Fachlicher Schlüssel einer Tageszielerfüllung und ihrer Gutschrift: `tagesziel:<person>:<tag>:<platz>`. */
+export function dailyGoalKey(personId: EntityId, localDate: LocalDate, slot: DailyGoalSlot): string {
+  return `tagesziel:${personId}:${localDate}:${slot}`;
+}
+
+const completionNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b60';
+
+/** Deterministische ID der Tageszielerfüllung: Zwei Geräte erzeugen dieselbe Erfüllung mit derselben ID. */
+export function dailyGoalCompletionId(completionKey: string): EntityId {
+  return EntityId.parse(uuidV5(completionNamespace, completionKey));
+}
+
+/**
+ * Unveränderliche Tageszielerfüllung, wie sie der Sync überträgt. Person, Tag, Platz und Baustein
+ * stammen aus dem Tagesziel; Spezifikation 4 zählt darüber, ohne Tagesziele zu lesen.
+ */
+export const DailyGoalCompletionRecord = z
+  .strictObject({
+    id: EntityId,
+    dailyGoalId: EntityId,
+    personId: EntityId,
+    localDate: LocalDate,
+    slot: DailyGoalSlot,
+    baustein: BausteinKey,
+    firstCompletedAt: Instant,
+    completionKey: z.string(),
+    createdAt: Instant,
+  })
+  .refine((record) => record.completionKey === dailyGoalKey(record.personId, record.localDate, record.slot), {
+    message: 'Schlüssel muss tagesziel:<person>:<tag>:<platz> sein',
+    path: ['completionKey'],
+  });
+export type DailyGoalCompletionRecord = z.infer<typeof DailyGoalCompletionRecord>;
+
 /** Ob das Tagesziel schon einmal dauerhaft erfüllt wurde; Korrekturen ändern daran nichts. */
 export const DailyGoalCompletion = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('nie') }),
@@ -148,6 +184,17 @@ export const DailyGoalCause = z.enum([
   'planaenderung',
 ]);
 export type DailyGoalCause = z.infer<typeof DailyGoalCause>;
+
+/**
+ * Tage, die eine neue oder ersetzte Ziel- bzw. Wochenplanversion betrifft: `max(validFrom, heute)` bis
+ * heute + 13. Sie gehen mit `planaenderung` an `reevaluateDailyGoals`, lokal wie bei der Pull-Übernahme.
+ */
+export function planChangeDays(validFrom: LocalDate, today: LocalDate): LocalDate[] {
+  const days: LocalDate[] = [];
+  const last = addDays(today, 13);
+  for (let day: string = validFrom > today ? validFrom : today; day <= last; day = addDays(day, 1)) days.push(LocalDate.parse(day));
+  return days;
+}
 
 /** Zeitpunkt eines Tages-Check-ins. */
 export const CheckInMoment = z.enum(['mittag', 'abend']);

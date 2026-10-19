@@ -28,7 +28,7 @@ it('schreibt Fachzeile und genau eine Operation atomar; eine Ablehnung rollt bei
     const writer = createSyncWriter({ registry: createSyncRegistry([]), clock, newId: () => opId });
     let reject = true;
     const commands = createLocalCommandRegistry({ database, writer, commands: [{
-      type: 'completeDailyGoal', payload: z.strictObject({ amountMl: z.int().positive() }), referencePaths: [],
+      type: 'saveMealFavorite', payload: z.strictObject({ amountMl: z.int().positive() }), referencePaths: [],
       apply(tx, payload) {
         sqliteOf(tx).insert(waterEntry).values({ id: entryId, personId, amountMl: z.number().parse(payload.amountMl), origin: 'manuell',
           loggedAt: now, localDate: '2026-10-14', timeZone: 'Europe/Berlin', utcOffsetMinutes: 120,
@@ -38,14 +38,14 @@ it('schreibt Fachzeile und genau eine Operation atomar; eine Ablehnung rollt bei
       },
       reconcileRejected(tx) { sqliteOf(tx).delete(waterEntry).run(); },
     }] });
-    expect(() => commands.execute('completeDailyGoal', 'goal:2026-10-14:1', { amountMl: 250 })).toThrow('Fachregel abgelehnt');
+    expect(() => commands.execute('saveMealFavorite', 'goal:2026-10-14:1', { amountMl: 250 })).toThrow('Fachregel abgelehnt');
     expect(database.read((tx) => sqliteOf(tx).select().from(waterEntry).all())).toHaveLength(0);
     expect(database.read((tx) => sqliteOf(tx).select().from(outbox).all())).toHaveLength(0);
     reject = false;
-    commands.execute('completeDailyGoal', 'goal:2026-10-14:1', { amountMl: 250 });
+    commands.execute('saveMealFavorite', 'goal:2026-10-14:1', { amountMl: 250 });
     expect(database.read((tx) => sqliteOf(tx).select().from(waterEntry).all())).toHaveLength(1);
-    expect(database.read((tx) => sqliteOf(tx).select().from(outbox).all())).toMatchObject([{ type: 'completeDailyGoal', businessKey: 'goal:2026-10-14:1' }]);
-    expect(() => commands.execute('completeDailyGoal', 'goal:other', { amountMl: -1 })).toThrow();
+    expect(database.read((tx) => sqliteOf(tx).select().from(outbox).all())).toMatchObject([{ type: 'saveMealFavorite', businessKey: 'goal:2026-10-14:1' }]);
+    expect(() => commands.execute('saveMealFavorite', 'goal:other', { amountMl: -1 })).toThrow();
     const engine = createSyncEngine({ database, registry: createSyncRegistry([]), clock, commands, installationId: opId,
       transport: {
         async push(request) {

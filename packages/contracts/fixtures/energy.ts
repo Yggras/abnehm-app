@@ -1,6 +1,6 @@
-import { EnergyBooking } from '../src/energy.ts';
+import { CompleteDailyGoalPayload, EnergyBooking, GrantDailyBonusPayload } from '../src/energy.ts';
 import { fixtures } from './define.ts';
-import { booking, command, completion, completion2, completion3, islandObject, now, philipp, project, today } from './ids.ts';
+import { booking, command, completion, completion2, completion3, islandObject, now, philipp, project, today, weeklyPlanVersion } from './ids.ts';
 
 const base = { id: booking, personId: philipp, localDate: today, createdAt: now } as const;
 
@@ -85,5 +85,19 @@ export const energyFixtures = {
       },
       'unbekannte Art': { ...buildDebit, type: 'transfer' },
     },
+  }),
+  CompleteDailyGoalPayload: fixtures(CompleteDailyGoalPayload, {
+    valid: {
+      'Wasserziel erfüllt': { dailyGoalId: weeklyPlanVersion, localDate: today, slot: 2, baustein: 'wasserziel', completedAt: now },
+    },
+    invalid: {
+      'mit Person aus dem Client': { dailyGoalId: weeklyPlanVersion, personId: philipp, localDate: today, slot: 2, baustein: 'wasserziel', completedAt: now },
+      'Platz 0': { dailyGoalId: weeklyPlanVersion, localDate: today, slot: 0, baustein: 'wasserziel', completedAt: now },
+      'ohne Zeitpunkt': { dailyGoalId: weeklyPlanVersion, localDate: today, slot: 2, baustein: 'wasserziel' },
+    },
+  }),
+  GrantDailyBonusPayload: fixtures(GrantDailyBonusPayload, {
+    valid: { 'Tagesbonus': { localDate: today } },
+    invalid: { 'mit Betrag': { localDate: today, amount: 2 }, 'mit Gerätezeit': { localDate: today, grantedAt: now }, 'ohne Tag': {} },
   }),
 };
