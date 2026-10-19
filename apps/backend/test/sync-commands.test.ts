@@ -12,6 +12,7 @@ import { createTestBackend, type TestBackend } from './support/app.ts';
 import { authorizationCases, personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
 import { dailyGoalCommandScenarios } from './support/daily-goals.ts';
 import type { Device } from './support/auth-client.ts';
+import { personTimeZoneScenario } from './support/person-time-zone.ts';
 import { push, pushRaw, testWaterEntity, upsertOp, water } from './support/sync.ts';
 import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
@@ -96,7 +97,9 @@ describe('Fachbefehl über Push', () => {
 
   it('erfasst alle registrierten Fachbefehle im Negativtest-Gerüst', async () => {
     const { backend } = await setup();
-    expect(() => registeredCommandCases(backend, dailyGoalCommandScenarios)).toThrow('saveMealFavorite');
+    // Die Welten der echten Fachbefehle sind andere; deren Fälle laufen in ihren eigenen Tests.
+    const real = { ...dailyGoalCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+    expect(() => registeredCommandCases(backend, real)).toThrow('saveMealFavorite');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),
       arrange: async () => {
@@ -120,9 +123,8 @@ describe('Fachbefehl über Push', () => {
       },
     } satisfies AuthorizationScenario<{ backend: TestBackend; actor: Device; ownId: string },
       'ohne_sitzung' | 'fremde_person' | 'manipulierte_id'>;
-    // Vollständig erst mit den Szenarien der echten Fachbefehle; deren Fälle laufen in ihren eigenen Tests (#105).
-    const all = { ...dailyGoalCommandScenarios, saveMealFavorite: scenario } as unknown as Parameters<typeof registeredCommandCases>[1];
-    expect(() => registeredCommandCases(backend, all)).not.toThrow();
+    // Vollständig erst mit den Szenarien der echten Fachbefehle; deren Fälle laufen in ihren eigenen Tests (#105, #110).
+    expect(() => registeredCommandCases(backend, { ...real, saveMealFavorite: scenario })).not.toThrow();
     const cases = authorizationCases({ ...scenario, command: 'saveMealFavorite' });
     const wrong = authorizationCases({ ...scenario, policy: policies.resource('weight_entry', 'befehl'), command: 'saveMealFavorite' });
     await expect(wrong.find((testCase) => testCase.name.startsWith('Fachbefehl'))!.run()).rejects.toThrow();

@@ -64,6 +64,26 @@ export type PersonUpsert = z.infer<typeof PersonUpsert>;
 export const UpdatePersonTimeZone = z.strictObject({ timeZone: TimeZone });
 export type UpdatePersonTimeZone = z.infer<typeof UpdatePersonTimeZone>;
 
+const timeZoneKeyPattern = /^person:([0-9a-f-]{36}):time_zone:([0-9a-f-]{36})$/;
+
+/**
+ * Fachlicher Schlüssel eines `updatePersonTimeZone`: Person und eine je Änderung neue ID. Ein fester
+ * Schlüssel je Person oder Zone ließe einen späteren Wechsel (Berlin → New York → Berlin) als
+ * `already_applied` mit dem alten Ergebnis enden; der Server ordnet die Person aus dem Schlüssel zu und
+ * prüft sie gegen die Sitzung.
+ */
+export function personTimeZoneKey(personId: EntityId, changeId: EntityId): string {
+  return `person:${personId}:time_zone:${changeId}`;
+}
+
+/** Die Person eines Schlüssels aus `personTimeZoneKey`; `null` bei jedem anderen Format. */
+export function personOfTimeZoneKey(key: string): EntityId | null {
+  const match = timeZoneKeyPattern.exec(key);
+  if (match === null) return null;
+  const personId = EntityId.safeParse(match[1]);
+  return personId.success && EntityId.safeParse(match[2]).success ? personId.data : null;
+}
+
 /** Kanonisches Ergebnis von `updatePersonTimeZone`; die Person stammt aus der Sitzung. */
 export const UpdatePersonTimeZoneResult = z.strictObject({
   personId: EntityId,

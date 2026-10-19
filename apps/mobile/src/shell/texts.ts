@@ -1,3 +1,4 @@
+import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
 import type { QuickCommandKey } from '@abnehm/contracts/today';
 
@@ -58,6 +59,18 @@ export function ownerNameOf(target: RouteTarget): string {
   return ownerNames[ownerOf(target)];
 }
 
+/** Name eines liefernden Bereichs, etwa für Steckplätze außerhalb des Routenkatalogs. */
+export function ownerName(owner: Owner): string {
+  return ownerNames[owner];
+}
+
+/** Titel der Onboarding-Steckplätze (Spezifikation 0, Abschnitt 6). */
+export const onboardingStepTitles: Record<OnboardingStepKey, string> = {
+  health: 'Gesundheitsdaten verbinden',
+  notifications: 'Benachrichtigungen',
+  partner: 'Partner einladen',
+};
+
 /** Bereich, der den Handler eines Quick-Commands liefert. */
 const quickCommandOwners: Record<QuickCommandKey, Owner> = {
   'water.quick_add': 'tracker',
@@ -71,6 +84,8 @@ export function quickCommandOwnerName(commandKey: QuickCommandKey): string {
 export const shellTexts = {
   placeholder: 'Dieser Bereich ist noch in Arbeit.',
   placeholderOwner: (owner: string) => `Kommt mit: ${owner}`,
+  onboardingStepPlaceholder: 'Dieser Schritt ist noch in Arbeit.',
+  skip: 'Überspringen',
   done: 'Fertig',
   back: 'Zurück',
   capture: 'Erfassen',

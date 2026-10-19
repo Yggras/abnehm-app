@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { LocalDate, weekdayOf } from '../src/base.ts';
+import { EntityId, LocalDate, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
+import { personOfTimeZoneKey, personTimeZoneKey } from '../src/person.ts';
 import { routeTargetOrToday } from '../src/routes.ts';
 import { needsResponse, WirContribution } from '../src/wir.ts';
 import { notificationFixtures } from '../fixtures/notifications.ts';
@@ -108,5 +109,25 @@ describe('routeTargetOrToday', () => {
     ['kein Objekt', '/today'],
   ])('öffnet bei %s today', (_, value) => {
     expect(routeTargetOrToday(value)).toEqual({ type: 'today' });
+  });
+});
+
+describe('personTimeZoneKey', () => {
+  const personId = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
+  const changeId = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
+
+  it('trägt die Person und liest sie wieder aus', () => {
+    const key = personTimeZoneKey(personId, changeId);
+    expect(key).toBe(`person:${personId}:time_zone:${changeId}`);
+    expect(personOfTimeZoneKey(key)).toBe(personId);
+  });
+
+  it.each([
+    ['ohne Änderungs-ID', `person:${personId}:time_zone`],
+    ['mit anderem Präfix', `goal:${personId}:time_zone:${changeId}`],
+    ['mit Großbuchstaben', `person:${personId.toUpperCase()}:time_zone:${changeId}`],
+    ['ohne UUID', `person:${'x'.repeat(36)}:time_zone:${changeId}`],
+  ])('erkennt %s nicht als Schlüssel', (_, key) => {
+    expect(personOfTimeZoneKey(key)).toBeNull();
   });
 });

@@ -455,7 +455,8 @@ function visibleTo(tx: DbExecutor, personId: EntityId) {
   );
 }
 
-function canonicalOf(entity: ServerSyncEntity, entityId: EntityId, stored: StoredEntity): CanonicalChange {
+/** Kanonischer Datensatz oder Löschmarkierung einer gelesenen Entität, wie Push und Pull ihn liefern. */
+export function canonicalOf(entity: ServerSyncEntity, entityId: EntityId, stored: StoredEntity): CanonicalChange {
   const serverVersion = ServerVersion.parse(stored.serverVersion.toString());
   if (stored.deletedAt !== null) {
     return { type: 'tombstone', entityType: entity.entityType, entityId, serverVersion, deletedAt: Instant.parse(stored.deletedAt.toISOString()) };

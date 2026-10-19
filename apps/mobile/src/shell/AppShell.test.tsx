@@ -24,6 +24,8 @@ const appDir = 'src/app';
 jest.setTimeout(30_000);
 
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
+// Die Fachoberfläche hinter der Sitzungs-Weiche; ihre Zustände prüft SessionGate.test.tsx.
+jest.mock('../session/use-session-gate', () => jest.requireActual('../session/testing/test-gate'));
 jest.mock('./tab-badge', () => ({ useMomoTabBadge: jest.fn() }));
 
 // Den echten Handler für `water.quick_add` und seinen Text liefert Spezifikation 3; bis dahin
@@ -297,7 +299,8 @@ describe('Routenkatalog', () => {
     expect(new Set(targets.map((target) => target.type))).toEqual(new Set(RouteName.options));
   });
 
-  test.each(targets)('$type $section ist erreichbar, und System-Zurück führt zum Aufrufer', async (target) => {
+  // Das Onboarding ist nur im Zustand `onboarding` der Weiche erreichbar; das prüft SessionGate.test.tsx.
+  test.each(targets.filter((target) => target.type !== 'onboarding'))('$type $section ist erreichbar, und System-Zurück führt zum Aufrufer', async (target) => {
     await renderRouter(appDir, { initialUrl: '/momo' });
 
     await open(target);
@@ -363,9 +366,9 @@ describe('Deep Links', () => {
   });
 
   test('System-Zurück aus einem Deep Link führt zu „Heute“', async () => {
-    await renderRouter(appDir, { initialUrl: '/onboarding' });
+    await renderRouter(appDir, { initialUrl: '/plan/goal_reached' });
 
-    expect(await heading('Einrichtung')).toBeOnTheScreen();
+    expect(await heading('Zielgewicht erreicht')).toBeOnTheScreen();
     await act(() => testRouter.back());
     expect(screen).toHavePathname('/');
   });

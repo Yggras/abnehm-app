@@ -165,7 +165,8 @@ describe('Fachbefehle', () => {
   it('verweigert ohne Person und bei abweichendem Eigentumsfeld', async () => {
     const world = await coupledWorld();
     const { authorization, database } = world.backend;
-    authorization.registerCommand('updatePersonTimeZone', policies.resource('person', 'befehl'));
+    // Das Backend meldet `updatePersonTimeZone` mit dieser Regel an; ein zweites Mal wäre ein Fehler.
+    expect(authorization.registeredCommands().get('updatePersonTimeZone')).toEqual(policies.resource('person', 'befehl'));
     const anna = await actorOf(world, world.anna);
 
     const own = await authorization.authorizeCommand(database.db, anna, 'updatePersonTimeZone', { id: world.anna.personId });

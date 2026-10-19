@@ -12,6 +12,7 @@ import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/comp
 import { energyBookingEntity } from './energy/bookings.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
+import { personTimeZoneCommand } from './person/time-zone.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
@@ -44,6 +45,7 @@ export function createBackend({
   // Sync-Entitäten und Vor-Pull-Schritte melden die Bereiche hier an, ohne den Sync-Kern zu ändern.
   const sync = createSync({ database, clock, authorization, pullPageSize: syncPullPageSize });
   sync.registerEntity(personEntity);
+  sync.registerCommand(personTimeZoneCommand);
   for (const entity of couplingSyncEntities) sync.registerEntity(entity);
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);

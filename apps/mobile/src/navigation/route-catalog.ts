@@ -1,7 +1,10 @@
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
 
-/** Wie eine Route erscheint: als Tab, als modaler Ablauf über dem Aufrufer oder als Seite im Stapel. */
-export type Presentation = 'tab' | 'modal' | 'page';
+/**
+ * Wie eine Route erscheint: als Tab, als modaler Ablauf über dem Aufrufer, als Seite im Stapel oder
+ * als eigenständiger Ablauf ohne Aufrufer (Onboarding und Anmeldung, je nach Sitzungs-Weiche).
+ */
+export type Presentation = 'tab' | 'modal' | 'page' | 'flow';
 
 /** Lieferant einer Route (Spezifikation 0, Abschnitt 6); der Platzhalter nennt ihn. */
 export type Owner = 'fundament' | 'ziele' | 'ernaehrung' | 'tracker' | 'momo' | 'partner';
@@ -28,7 +31,7 @@ export const routeCatalog = {
   'partner.encourage': { presentation: 'modal', owner: 'partner' },
   'notifications.permission': { presentation: 'modal', owner: 'partner' },
   settings: { presentation: 'page', owner: 'partner' },
-  onboarding: { presentation: 'modal', owner: 'ziele' },
+  onboarding: { presentation: 'flow', owner: 'ziele' },
   'plan.budget_suggestion': { presentation: 'modal', owner: 'ziele' },
   'plan.goal_reached': { presentation: 'modal', owner: 'ziele' },
 } as const satisfies Record<RouteName, CatalogEntry>;
@@ -56,7 +59,21 @@ export function pathOf(name: RouteName): string {
   return name === 'today' ? '/' : `/${name.replaceAll('.', '/')}`;
 }
 
-/** Pfade der modalen Routen ohne führenden `/`, als Namen der Screens im Wurzel-Stack. */
+/** Name des Screens einer Route im Wurzel-Stack: ihr Pfad ohne führenden `/`. */
+export function screenNameOf(name: RouteName): string {
+  return pathOf(name).slice(1);
+}
+
+/** Namen der Screens der modalen Routen im Wurzel-Stack. */
 export const modalScreens = (Object.keys(routeCatalog) as RouteName[])
   .filter((name) => routeCatalog[name].presentation === 'modal')
-  .map((name) => pathOf(name).slice(1));
+  .map(screenNameOf);
+
+/** Namen der Seiten im Wurzel-Stack; die Einstellungen sind je Abschnitt eine Datei unter `settings/`. */
+export const pageScreens = (Object.keys(routeCatalog) as RouteName[])
+  .filter((name) => routeCatalog[name].presentation === 'page')
+  .flatMap((name) =>
+    name === 'settings'
+      ? ['settings/index', ...Object.keys(settingsOwners).map((section) => `settings/${section}`)]
+      : [screenNameOf(name)],
+  );

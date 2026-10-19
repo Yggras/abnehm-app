@@ -1,9 +1,13 @@
 import { eq } from 'drizzle-orm';
 
+import { EntityId, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { PersonRecord, PersonUpsert } from '@abnehm/contracts/person';
 
+import type { TransactionContext } from '../local-db';
+import { readOwnPerson } from '../local-db/person-header';
 import { person } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
+import type { SyncWriter } from './outbox';
 import { sqliteEntity } from './sqlite-entity';
 
 // Die eigene Person im App-Sync (Spezifikation 0, Abschnitte 8 und 9). Sie entsteht lokal erst mit dem
@@ -23,6 +27,24 @@ const personFields = (data: PersonUpsert) => ({
   goalWeightReachedG: data.goalWeightReachedG,
   goalWeightReachedAt: data.goalWeightReachedAt,
 });
+
+/** Felder, die Bereiche an der eigenen Person ändern: Spezifikation 1 Körperdaten und Onboarding-Stand, Spezifikation 5 den Anzeigenamen. */
+export type PersonChange = Partial<Omit<PersonUpsert, 'id'>>;
+
+/**
+ * Ändert Felder der eigenen Person und merkt in derselben Transaktion den vollständigen Upsert vor
+ * (Last-Write-Wins). Konto-Verweis, Zeitzone und Serverfelder gehören nicht dazu; die Zeitzone ändert
+ * nur `updatePersonTimeZone`. Vor dem ersten Pull gibt es keine Person, das ist ein Aufruffehler.
+ */
+export function updateOwnPerson(tx: TransactionContext, writer: SyncWriter, change: PersonChange, at: Instant): PersonUpsert {
+  const row = readOwnPerson(tx);
+  if (row === undefined) throw new Error('Die eigene Person ist lokal noch nicht angekommen');
+  // Die Spalten tragen dieselben Namen wie die Upsert-Felder; das Schema prüft die Werte der Zeile.
+  const payload = PersonUpsert.parse({ id: row.id, ...personFields(row as unknown as PersonUpsert), ...change });
+  sqliteOf(tx).update(person).set({ ...personFields(payload), updatedAt: at }).where(eq(person.id, row.id)).run();
+  writer.upsert(tx, { entityType: 'person', entityId: EntityId.parse(row.id), payload, knownServerVersion: row.serverVersion as ServerVersion | null });
+  return payload;
+}
 
 export const personEntity = sqliteEntity({
   entityType: 'person',
