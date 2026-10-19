@@ -55,6 +55,7 @@ export const testWaterEntity = ownedEntity({
 const TestGoalCommand = TestWaterUpsert.extend({ localId: EntityId });
 export const testWaterCommand: ServerCommand = {
   type: 'completeDailyGoal',
+  identity: 'mapped',
   policy: policies.resource('water_entry', 'befehl'),
   payload: TestGoalCommand,
   target: (operation) => ({ id: operation.payload.localId as string }),

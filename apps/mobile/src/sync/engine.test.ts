@@ -187,11 +187,13 @@ describe('Sync der App', () => {
       firstPush = false;
       context.database.transaction((tx) => {
         context.writer.command(tx, { type: 'markEventsSeen', businessKey: `attempted:${local}`,
-          payload: { referencedId: local }, knownServerVersion: null, affectedRefs: [] });
+          payload: { referencedId: local, note: `Zitat ${local}` }, knownServerVersion: null, affectedRefs: [],
+          referencePaths: [['businessKey'], ['payload', 'referencedId']] });
         const attempted = sqliteOf(tx).select().from(outbox).all().at(-1)!;
         sqliteOf(tx).update(outbox).set({ attemptCount: 1 }).where(eq(outbox.operationId, attempted.operationId)).run();
         context.writer.command(tx, { type: 'markEventsSeen', businessKey: `next:${local}`,
-          payload: { referencedId: local }, knownServerVersion: null, affectedRefs: [] });
+          payload: { referencedId: local, note: `Zitat ${local}` }, knownServerVersion: null, affectedRefs: [],
+          referencePaths: [['businessKey'], ['payload', 'referencedId']] });
       });
       return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
         canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
@@ -202,7 +204,7 @@ describe('Sync der App', () => {
     expect(context.database.read((tx) => context.repository.row(tx, local))).toBeUndefined();
     expect(outboxRows(context.database)).toMatchObject([
       { businessKey: `attempted:${local}`, payload: { referencedId: local } },
-      { businessKey: `next:${canonical}`, payload: { referencedId: canonical } },
+      { businessKey: `next:${canonical}`, payload: { referencedId: canonical, note: `Zitat ${local}` } },
     ]);
     context.databases.lock(); context.files.remove();
   });

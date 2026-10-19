@@ -1,0 +1,1 @@
+ALTER TABLE `outbox` ADD `reference_paths` text DEFAULT '[]' NOT NULL;

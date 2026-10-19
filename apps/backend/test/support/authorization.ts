@@ -144,7 +144,10 @@ export function registeredCommandCases<W extends AuthorizationWorld, D extends P
 ): AuthorizationCase[] {
   const registered = [...backend.authorization.registeredCommands()].filter(([, policy]) => policy.kind === 'resourceOperation');
   for (const [name] of registered) if (scenarios[name] === undefined) throw new Error(`Negativtest für Fachbefehl ${name} fehlt`);
-  return registered.flatMap(([name, policy]) => authorizationCases({ ...scenarios[name]!, policy: policy as Policy & { dimensions: readonly D[] }, command: name }));
+  for (const name of Object.keys(scenarios)) if (!registered.some(([registeredName]) => registeredName === name)) {
+    throw new Error(`Szenario für nicht registrierten Fachbefehl ${name}`);
+  }
+  return registered.flatMap(([name]) => authorizationCases({ ...scenarios[name]!, command: name }));
 }
 
 /** Ein Konto mit Person und angemeldetem Gerät, wie nach Registrierung und Bootstrap. */

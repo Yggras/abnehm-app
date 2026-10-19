@@ -50,6 +50,13 @@
       "when": 1792398536331,
       "tag": "0006_medical_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792401252958,
+      "tag": "0007_wild_firelord",
+      "breakpoints": true
     }
   ]
 }

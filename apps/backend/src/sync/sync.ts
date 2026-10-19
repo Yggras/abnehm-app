@@ -126,8 +126,10 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
   async function processOperation(tx: DbExecutor, actor: PersonActor, operation: OutboxOperation, at: Date): Promise<PushResult> {
     const command = 'businessKey' in operation;
     const registeredCommand = command ? commands.get(operation.type) : undefined;
-    const hash = command && registeredCommand !== undefined && registeredCommand.payload.safeParse(operation.payload).success
-      ? businessHash(operation, registeredCommand.canonicalRequest(operation)) : payloadHash(operation);
+    const parsedCommand = command && registeredCommand !== undefined ? registeredCommand.payload.safeParse(operation.payload) : null;
+    const requestHash = payloadHash(operation);
+    const hash = command && registeredCommand !== undefined && parsedCommand?.success
+      ? businessHash(operation, registeredCommand.canonicalRequest(operation)) : requestHash;
     const entityType = command ? null : operation.entityType;
     const entityId = command ? null : operation.entityId;
     const [stored] = await tx.select().from(processedOperation).where(eq(processedOperation.operationId, operation.operationId));
@@ -139,9 +141,9 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         stored.entityId === entityId &&
         (stored.businessKey === (command ? operation.businessKey : null) ||
           (command && stored.businessKey === null && stored.outcome === 'already_applied')) &&
-        stored.payloadHash === hash;
+        (stored.requestHash ?? stored.payloadHash) === requestHash;
       if (!identical) return rejected(operation, 'operation_conflict', await visibleState(tx, actor, operation));
-      if (command && (registeredCommand === undefined ||
+      if (command && parsedCommand?.success && (registeredCommand === undefined ||
         (await authorization.authorizeCommand(tx, actor, operation.type, registeredCommand.target(operation))).type === 'verweigert')) return forbidden(operation);
       const result = PushResult.parse(stored.result);
       // Ein Retry darf weder widerrufene abgeleitete Datensätze noch deren IDs preisgeben.
@@ -149,7 +151,8 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
       if (!command && result.canonical.type === 'record' && (await visibleState(tx, actor, operation)).type === 'absent') return forbidden(operation);
       return result.type === 'applied' ? { ...result, type: 'already_applied' } : result;
     }
-    if (command) {
+    if (command && !parsedCommand?.success && registeredCommand === undefined) return forbidden(operation);
+    if (command && parsedCommand?.success) {
       if (registeredCommand === undefined ||
         (await authorization.authorizeCommand(tx, actor, operation.type, registeredCommand.target(operation))).type === 'verweigert') return forbidden(operation);
       const [existing] = await tx.select().from(processedOperation).where(and(
@@ -161,14 +164,20 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         const result = PushResult.parse(existing.result);
         if (!(await canDeliverCommandResult(tx, actor, result))) return forbidden(operation);
         if (result.type === 'permanently_rejected') throw new Error('Erfolgreicher Fachschlüssel mit abgelehntem Ergebnis');
+        const mappings = registeredCommand!.duplicate(operation, result);
+        if (registeredCommand!.identity === 'mapped' && !completeMappings(result.changes ?? [], mappings)) {
+          throw new Error(`Fachbefehl ${operation.type} liefert für sein Duplikat keine kanonische Identität`);
+        }
         const duplicate = { ...result, operationId: operation.operationId, type: 'already_applied',
-          canonical: absent(operation), idMappings: commands.get(operation.type)!.duplicate(operation, result) } as const;
+          canonical: absent(operation), idMappings: mappings } as const;
         await tx.insert(processedOperation).values({ operationId: operation.operationId, personId: actor.personId, operationType: operation.type,
-          entityType: null, entityId: null, businessKey: null, payloadHash: hash, outcome: duplicate.type, result: duplicate, createdAt: at });
+          entityType: null, entityId: null, businessKey: null, requestHash, payloadHash: hash,
+          outcome: duplicate.type, result: duplicate, createdAt: at });
         return duplicate;
       }
     }
-    const result = command ? await decideCommand(tx, actor, operation, at) : await decide(tx, actor, operation, at);
+    const result = command && !parsedCommand?.success ? rejected(operation, 'invalid_payload', absent(operation))
+      : command ? await decideCommand(tx, actor, operation, at) : await decide(tx, actor, operation, at);
     await tx.insert(processedOperation).values({
       operationId: operation.operationId,
       personId: actor.personId,
@@ -177,6 +186,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
       entityId,
       businessKey: command ? operation.businessKey : null,
       payloadHash: hash,
+      requestHash,
       outcome: result.type,
       result,
       createdAt: at,
@@ -187,13 +197,16 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
   async function decideCommand(tx: DbExecutor, actor: PersonActor, operation: Extract<OutboxOperation, { businessKey: string }>, at: Date): Promise<PushResult> {
     const command = commands.get(operation.type);
     if (command === undefined) return forbidden(operation);
-    const decision = await authorization.authorizeCommand(tx, actor, operation.type, command.target(operation));
-    if (decision.type === 'verweigert') return forbidden(operation);
     const parsed = command.payload.safeParse(operation.payload);
     if (!parsed.success) return rejected(operation, 'invalid_payload', absent(operation));
+    const decision = await authorization.authorizeCommand(tx, actor, operation.type, command.target(operation));
+    if (decision.type === 'verweigert') return forbidden(operation);
     try {
       return await tx.transaction(async (savepoint) => {
         const result = await command.execute(savepoint, { actor, payload: parsed.data, businessKey: operation.businessKey, at });
+        if (command.identity === 'mapped' && !completeMappings(result.changes, result.idMappings)) {
+          throw new CommandRejection('invalid_payload');
+        }
         const applied = { type: 'applied', operationId: operation.operationId, canonical: absent(operation),
           changes: result.changes, idMappings: result.idMappings } as const;
         if (!(await canDeliverCommandResult(savepoint, actor, applied))) throw new CommandRejection('invalid_payload');
@@ -491,6 +504,11 @@ function sqlState(error: unknown): string | undefined {
  */
 export function payloadHash(operation: OutboxOperation): string {
   return createHash('sha256').update(canonicalJson(operation)).digest('hex');
+}
+
+function completeMappings(changes: readonly CanonicalChange[], mappings: readonly { entityType: string; to: string }[]): boolean {
+  return mappings.length > 0 && mappings.every((mapping) => changes.some((change) =>
+    change.type === 'record' && change.entityType === mapping.entityType && change.entityId === mapping.to));
 }
 
 function businessHash(operation: Extract<OutboxOperation, { businessKey: string }>, canonicalRequest: Record<string, unknown>): string {

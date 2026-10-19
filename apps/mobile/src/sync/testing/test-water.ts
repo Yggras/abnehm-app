@@ -77,7 +77,8 @@ export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
     completeTestGoal(tx: TransactionContext, entityId: EntityId, businessKey: string, payload: TestWaterUpsert) {
       writeLocal(tx, entityId, payload, now());
       writer.command(tx, { type: 'completeDailyGoal', businessKey, payload: { ...payload, localId: entityId },
-        knownServerVersion: null, affectedRefs: [{ entityType: 'water_entry', entityId }] });
+        knownServerVersion: null, affectedRefs: [{ entityType: 'water_entry', entityId }],
+        referencePaths: [['payload', 'localId'], ['businessKey']] });
     },
     remove(tx: TransactionContext, entityId: EntityId) {
       deleteLocal(tx, entityId, now());

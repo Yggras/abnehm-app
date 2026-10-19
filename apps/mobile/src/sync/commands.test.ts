@@ -28,7 +28,7 @@ it('schreibt Fachzeile und genau eine Operation atomar; eine Ablehnung rollt bei
     const writer = createSyncWriter({ registry: createSyncRegistry([]), clock, newId: () => opId });
     let reject = true;
     const commands = createLocalCommandRegistry({ database, writer, commands: [{
-      type: 'completeDailyGoal', payload: z.strictObject({ amountMl: z.int().positive() }),
+      type: 'completeDailyGoal', payload: z.strictObject({ amountMl: z.int().positive() }), referencePaths: [],
       apply(tx, payload) {
         sqliteOf(tx).insert(waterEntry).values({ id: entryId, personId, amountMl: z.number().parse(payload.amountMl), origin: 'manuell',
           loggedAt: now, localDate: '2026-10-14', timeZone: 'Europe/Berlin', utcOffsetMinutes: 120,

@@ -19,11 +19,17 @@ export type SyncWriter = {
   /** Merkt das Löschen einer Entität vor; der Server setzt daraus die Löschmarkierung. */
   delete(tx: TransactionContext, change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }): void;
   command(tx: TransactionContext, change: { type: CommandType; businessKey: string; payload: EntityData; knownServerVersion: ServerVersion | null;
-    affectedRefs: readonly { entityType: string; entityId: EntityId }[] }): void;
+    affectedRefs: readonly { entityType: string; entityId: EntityId }[];
+    referencePaths: readonly (readonly string[])[] }): void;
 };
 
 export function createSyncWriter({ registry, clock, newId }: { registry: SyncRegistry; clock: Clock; newId: () => EntityId }): SyncWriter {
-  function append(tx: TransactionContext, operation: OutboxOperation) {
+  function append(tx: TransactionContext, operation: OutboxOperation, referencePaths: readonly (readonly string[])[] = []) {
+    for (const path of referencePaths) {
+      if (!((path[0] === 'payload' && path.length >= 2) || (path.length === 1 && path[0] === 'businessKey'))) {
+        throw new Error('Ungültiger Referenzpfad der Outbox');
+      }
+    }
     const db = sqliteOf(tx);
     const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;
     db.insert(outbox)
@@ -35,6 +41,7 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
         entityId: 'businessKey' in operation ? null : operation.entityId,
         businessKey: 'businessKey' in operation ? operation.businessKey : null,
         affectedRefs: [],
+        referencePaths: referencePaths.map((path) => [...path]),
         payload: 'payload' in operation ? operation.payload : {},
         knownServerVersion: operation.knownServerVersion,
         schemaVersion: operation.schemaVersion,
@@ -61,20 +68,20 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
       if (adapter.upsert === null) throw new Error(`Sync-Entität ${change.entityType} kennt kein Upsert`);
       if (adapter.ownerField in change.payload) throw new Error(`Die Eigentumsgrenze ${adapter.ownerField} setzt nur der Server`);
       const payload = adapter.upsert.parse(change.payload);
-      append(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }));
+      append(tx, OutboxOperation.parse({ ...base(change), type: 'upsert_entity', payload }), adapter.referencePaths);
     },
     delete(tx, change) {
       if (!registry.require(change.entityType).deletable) throw new Error(`Sync-Entität ${change.entityType} wird nicht gelöscht`);
       append(tx, OutboxOperation.parse({ ...base(change), type: 'delete_entity' }));
     },
     command(tx, change) {
-      const { affectedRefs, ...request } = change;
+      const { affectedRefs, referencePaths, ...request } = change;
       if (new Set(affectedRefs.map((ref) => `${ref.entityType}:${ref.entityId}`)).size !== affectedRefs.length) {
         throw new Error('Fachbefehl enthält doppelte betroffene Entität');
       }
       const operation = OutboxOperation.parse({ ...request, operationId: newId(), schemaVersion: currentSyncSchemaVersion,
         createdAt: Instant.parse(clock.read().instant) });
-      append(tx, operation);
+      append(tx, operation, referencePaths);
       sqliteOf(tx).update(outbox).set({ affectedRefs: [...affectedRefs] }).where(eq(outbox.operationId, operation.operationId)).run();
     },
   };
@@ -118,6 +125,36 @@ export function hasPending(tx: ReadContext, entityType: string, entityId: string
 
 export function removeOperation(tx: TransactionContext, operationId: string): void {
   sqliteOf(tx).delete(outbox).where(eq(outbox.operationId, operationId)).run();
+}
+
+/** Schreibt nur deklarierte ID-Referenzen um. Bereits versendete Bytes sind unter ihrer Operations-ID
+ * möglicherweise auf dem Server verarbeitet und bleiben für ihren Retry unverändert. */
+export function rewritePendingOutboxReferences(tx: TransactionContext, from: EntityId, to: EntityId): void {
+  const db = sqliteOf(tx);
+  for (const row of db.select().from(outbox).all()) {
+    if (row.attemptCount > 0) continue;
+    let payload: unknown = row.payload;
+    for (const path of row.referencePaths.filter((path) => path[0] === 'payload')) {
+      payload = rewriteAtPath(payload, path.slice(1), from, to);
+    }
+    db.update(outbox).set({ entityId: row.entityId === from ? to : row.entityId,
+      businessKey: row.referencePaths.some((path) => path.length === 1 && path[0] === 'businessKey')
+        ? row.businessKey?.split(from).join(to) : row.businessKey,
+      payload: payload as Record<string, unknown>,
+      affectedRefs: row.affectedRefs.map((ref) => ({ ...ref, entityId: ref.entityId === from ? to : ref.entityId })) })
+      .where(eq(outbox.operationId, row.operationId)).run();
+  }
+}
+
+function rewriteAtPath(value: unknown, path: readonly string[], from: string, to: string): unknown {
+  if (path.length === 0) return value === from ? to : value;
+  const [segment, ...remaining] = path;
+  if (segment === '*' && Array.isArray(value)) return value.map((element) => rewriteAtPath(element, remaining, from, to));
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && segment !== undefined && segment in value) {
+    const object = value as Record<string, unknown>;
+    return { ...object, [segment]: rewriteAtPath(object[segment], remaining, from, to) };
+  }
+  return value;
 }
 
 /** Hält einen gescheiterten Versuch fest; die Operationen bleiben unverändert in der Outbox. */

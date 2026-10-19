@@ -15,6 +15,13 @@
       "when": 1792400414580,
       "tag": "0001_overjoyed_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792401355062,
+      "tag": "0002_pretty_puppet_master",
+      "breakpoints": true
     }
   ]
 }

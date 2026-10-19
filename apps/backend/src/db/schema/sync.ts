@@ -54,6 +54,9 @@ export const processedOperation = pgTable(
     entityId: ref('entity_id'),
     /** Fachlicher Idempotenzschlüssel, etwa ein Buchungsschlüssel. */
     businessKey: text('business_key'),
+    /** Hash des vollständigen Requests für den Retry exakt derselben Operations-ID. */
+    requestHash: text('request_hash'),
+    /** Kanonischer Fach-Hash (bei Entitätsoperationen gleich dem Request-Hash). */
     payloadHash: text('payload_hash').notNull(),
     outcome: text('outcome').notNull(),
     result: json<Record<string, unknown>>('result').notNull(),

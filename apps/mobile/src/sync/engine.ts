@@ -19,9 +19,9 @@ import {
 } from '@abnehm/contracts/sync';
 
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
-import { outbox, syncCursor } from '../local-db/schema';
+import { syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation } from './outbox';
+import { hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation, rewritePendingOutboxReferences } from './outbox';
 import type { PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
 import type { LocalCommandRegistry } from './commands';
 
@@ -138,7 +138,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
                 const preserveLocalChanges = hasPending(tx, mapping.entityType, mapping.from) || hasPending(tx, mapping.entityType, mapping.to);
                 if (preserveLocalChanges) protectedChanges.add(`${mapping.entityType}:${mapping.to}`);
                 adapter.replaceCanonicalId(tx, mapping.from, mapping.to, { preserveLocalChanges });
-                replaceOutboxReferences(tx, mapping.from, mapping.to);
+                rewritePendingOutboxReferences(tx, mapping.from, mapping.to);
               }
               for (const change of result.changes ?? []) {
                 if (!protectedChanges.has(`${change.entityType}:${change.entityId}`) &&
@@ -208,24 +208,6 @@ export function createSyncEngine({ database, registry, transport, clock, install
       return running;
     },
   };
-}
-
-function replaceOutboxReferences(tx: TransactionContext, from: EntityId, to: EntityId): void {
-  const db = sqliteOf(tx);
-  const rewrite = (value: unknown): unknown => {
-    if (typeof value === 'string') return value.split(from).join(to);
-    if (Array.isArray(value)) return value.map(rewrite);
-    if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, rewrite(entry)]));
-    return value;
-  };
-  for (const row of db.select().from(outbox).all()) {
-    // Bereits versendete Bytes müssen unter derselben Operations-ID wiederholbar bleiben.
-    if (row.attemptCount > 0) continue;
-    db.update(outbox).set({ entityId: row.entityId === from ? to : row.entityId,
-      businessKey: row.businessKey?.split(from).join(to), payload: rewrite(row.payload) as Record<string, unknown>,
-      affectedRefs: row.affectedRefs.map((ref) => ({ ...ref, entityId: ref.entityId === from ? to : ref.entityId })) })
-      .where(eq(outbox.operationId, row.operationId)).run();
-  }
 }
 
 function matches(operations: readonly OutboxOperation[], results: readonly PushResult[]): boolean {

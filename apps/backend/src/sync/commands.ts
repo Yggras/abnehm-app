@@ -19,6 +19,8 @@ export class CommandRejection extends Error {
  * Savepoint des Push-Batches und muss seine Fachzeilen, Ableitungen und Änderungspositionen dort schreiben. */
 export type ServerCommand<P extends EntityData = EntityData> = Readonly<{
   type: CommandType;
+  /** `mapped` für Befehle, die lokal eine fachlich eindeutige Entität anlegen. */
+  identity: 'none' | 'mapped';
   policy: ResourcePolicy;
   payload: z.ZodType<P>;
   target(operation: Extract<OutboxOperation, { businessKey: string }>): ResourceTarget;

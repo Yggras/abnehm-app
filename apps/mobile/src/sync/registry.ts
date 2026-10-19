@@ -41,6 +41,8 @@ export type SyncEntityAdapter<U extends EntityData = EntityData, R extends Entit
   /** Transport-Schema des generischen Upserts; `null`, wenn die Entität kein Upsert kennt. */
   upsert: z.ZodType<U> | null;
   deletable: boolean;
+  /** Pfade zu UUID-Referenzen im Upsert-Payload, z. B. `['payload', 'parentId']`. */
+  referencePaths?: readonly (readonly string[])[];
   /** Transport-Schema des kanonischen Datensatzes vom Server. */
   record: z.ZodType<R>;
   /**
