@@ -61,7 +61,7 @@ Umsetzungstickets sind die Sub-Issues der sechs Spezifikationen. Spezifikation 0
     - Branch pushen und einen Pull Request gegen `main` öffnen, ohne KI-Attribution.
     - In den PR-Text kommt `Closes #<nummer>`. Wird der PR in den Standard-Branch gemergt, schließt GitHub das Ticket automatisch ([GitHub-Doku](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). Erst dann sind die davon blockierten Tickets frei.
     - Im PR-Text jedes Akzeptanzkriterium mit seinem Nachweis auflisten. Nicht erfüllte Kriterien nennst du ausdrücklich.
-    - Den PR mergt der Nutzer nach seinem Review. Melde ihm den Link. Der Worktree bleibt bis zum Merge stehen und wird danach mit dem Nutzer aufgeräumt.
+    - Bei einzeln gestarteten Tickets mergt der Nutzer nach seinem Review; der Worktree bleibt bis dahin stehen. Bei `/start-parallel` übernimmt die koordinierende Hauptsession nach abgeschlossenem `review-parallel` und erfolgreicher CI Merge und Worktree-Aufräumen gemäß dessen Skill. Melde in beiden Fällen den PR-Link; die Ticket-Session selbst mergt nicht.
 
 Im primären Checkout sind nur lesende Schritte erlaubt, dazu `scripts/ticket-frontier` und `scripts/start-ticket-worktree`. Das gilt auch, wenn voraussichtlich nur eine kleine Datei geändert wird.
 

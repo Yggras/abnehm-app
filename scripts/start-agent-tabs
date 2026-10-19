@@ -111,6 +111,13 @@ if [ -n "$problems" ]; then
   exit 1
 fi
 
+# Stabile IDs für die koordinierende Session; Dateiname pro Aufruf, damit sich
+# gleichzeitig gestartete Gruppen nicht überschreiben.
+manifest_dir="$(git -C "$primary" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-parallel"
+mkdir -p "$manifest_dir"
+manifest=$(mktemp "$manifest_dir/run.XXXXXX")
+printf 'Manifest: %s\n' "$manifest"
+
 for ticket in $tickets; do
   title=$(gh issue view "$ticket" --repo "$repo" --json title --jq .title)
   short=$(printf '%s' "$title" | sed 's/^Spezifikation erstellen: //')
@@ -130,6 +137,10 @@ for ticket in $tickets; do
   else
     command="claude --permission-mode auto -n $(quote "$label")$extra_args $(quote "/start $ticket")"
   fi
-  herdr pane run "$pane" "$command" >/dev/null
-  printf 'Gestartet: %s  (Tab %s)\n' "$label" "$tab"
+  printf '%s\t%s\t%s\n' "$ticket" "$tab" "$pane" >> "$manifest"
+  if ! herdr pane run "$pane" "$command" >/dev/null; then
+    echo "Fehler: #$ticket konnte in Tab $tab nicht gestartet werden; bisherige Tabs (einschließlich des leeren Tabs) bleiben bestehen (Manifest: $manifest)." >&2
+    exit 1
+  fi
+  printf 'Gestartet: %s  (Tab %s, Pane %s)\n' "$label" "$tab" "$pane"
 done

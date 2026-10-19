@@ -26,7 +26,10 @@ chmod +x "$tmp/bin/"*
 export PATH="$tmp/bin:$PATH" HERDR_ENV=1 HERDR_WORKSPACE_ID=workspace MOCK_COMMANDS="$tmp/commands"
 
 cd "$root"
-"$root/scripts/start-agent-tabs" 900001 -- --effort xhigh >/dev/null
+"$root/scripts/start-agent-tabs" 900001 -- --effort xhigh > "$tmp/output"
+manifest=$(awk '/^Manifest: / { print $2 }' "$tmp/output")
+[ -f "$manifest" ]
+grep "$(printf '900001\ttab1\tpane1')" "$manifest" >/dev/null
 grep -F "claude --permission-mode auto -n '#900001 Testticket 900001' '--effort' 'xhigh' '/start 900001'" "$MOCK_COMMANDS" >/dev/null || { printf 'Erhalten: '; head -1 "$MOCK_COMMANDS"; exit 1; }
 : > "$MOCK_COMMANDS"
 "$root/scripts/start-agent-tabs" --agent pi 900001 900002 -- --thinking high >/dev/null
