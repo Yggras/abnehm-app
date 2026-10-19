@@ -1,0 +1,134 @@
+#!/bin/sh
+set -eu
+
+# Startet aus einer Ticket-Session heraus zwei Reviewer (Standards und Spec) als
+# eigenständige Sessions in eigenen Herdr-Tabs, mit demselben Agenten wie die
+# aufrufende Session (Claude Code oder Pi). Die Reviewer arbeiten lesend im
+# primären Checkout und reichen ihren Bericht mit scripts/submit-review ein;
+# scripts/wait-review-reports wartet darauf. Herdr-Mechanik wie in
+# scripts/start-agent-tabs.
+
+usage() {
+  echo "Verwendung: $0 [--agent claude|pi] [--model provider/id] [-- <Agent-Optionen>]" >&2
+  echo "Im Ticket-Worktree ausführen; ohne --agent erkennt Herdr den Agenten der aktuellen Pane." >&2
+  exit 2
+}
+
+agent=
+model=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --) shift; break ;;
+    --agent)
+      [ "$#" -ge 2 ] || usage
+      agent=$2; shift 2 ;;
+    --model)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || usage
+      model=$2; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+# Shell-sicheres Quoting für den Befehl, den Herdr in den Tab tippt.
+quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+extra_args=
+for arg in "$@"; do
+  extra_args="$extra_args $(quote "$arg")"
+done
+
+"$(dirname "$0")/require-ticket-worktree" >/dev/null
+worktree=$(git rev-parse --show-toplevel)
+branch=$(git symbolic-ref --short HEAD)
+ticket=$(printf '%s' "$branch" | sed -n 's|^work/\([0-9][0-9]*\)-.*|\1|p')
+[ -n "$ticket" ] || {
+  echo "Fehler: Branch '$branch' ist kein Ticket-Branch (work/<nummer>-…)." >&2
+  exit 1
+}
+[ -z "$(git status --porcelain)" ] || {
+  echo "Fehler: Der Worktree hat uncommittete Änderungen. Erst committen, dann reviewen lassen." >&2
+  exit 1
+}
+base=$(git merge-base origin/main HEAD)
+head=$(git rev-parse HEAD)
+[ "$base" != "$head" ] || {
+  echo "Fehler: Keine Commits gegenüber origin/main, nichts zu reviewen." >&2
+  exit 1
+}
+
+[ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || {
+  echo "Fehler: Nicht in Herdr gestartet (HERDR_ENV/HERDR_WORKSPACE_ID fehlen)." >&2
+  exit 1
+}
+for tool in herdr jq; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "Fehler: '$tool' ist nicht installiert." >&2
+    exit 1
+  }
+done
+
+if [ -z "$agent" ]; then
+  agent=$(herdr pane current | jq -r '.result.pane.agent // empty')
+fi
+case "$agent" in
+  claude|pi) ;;
+  *) echo "Fehler: Agent der aktuellen Pane nicht erkannt ('$agent'); --agent claude|pi angeben." >&2; exit 1 ;;
+esac
+command -v "$agent" >/dev/null 2>&1 || {
+  echo "Fehler: '$agent' ist nicht installiert." >&2
+  exit 1
+}
+if [ "$agent" = claude ]; then
+  [ -z "$model" ] || { echo "Fehler: --model ist nur mit Pi verfügbar." >&2; exit 2; }
+elif [ -z "$model" ]; then
+  # Dasselbe Modell wie die aufrufende Pi-Session: aus deren Startbefehl (Herdr
+  # liefert für Pi keine argv, nur die PID). Ohne --model nutzt auch der
+  # Reviewer Pis eigenes Standardmodell.
+  for pid in $(herdr pane process-info --current | jq -r '.result.process_info.foreground_processes[].pid'); do
+    model=$(ps -o command= -p "$pid" | awk '{ for (i = 1; i < NF; i++) if ($i == "--model") { print $(i + 1); exit } }')
+    [ -z "$model" ] || break
+  done
+fi
+
+primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+reviews="$(git rev-parse --path-format=absolute --git-common-dir)/abnehm-app-reviews/$ticket"
+
+# Eine laufende Review-Runde nicht doppelt starten.
+if [ -f "$reviews/panes" ]; then
+  while read -r axis tab pane; do
+    if herdr tab get "$tab" >/dev/null 2>&1; then
+      echo "Fehler: Review-Tab '$axis' für #$ticket läuft noch (Tab $tab). Erst scripts/wait-review-reports abwarten." >&2
+      exit 1
+    fi
+  done < "$reviews/panes"
+fi
+rm -rf "$reviews"
+mkdir -p "$reviews"
+
+for axis in standards spec; do
+  case "$axis" in
+    standards) label="#$ticket Review: Standards" ;;
+    spec) label="#$ticket Review: Spec" ;;
+  esac
+  created=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$primary" \
+    --label "$label" --no-focus)
+  tab=$(printf '%s' "$created" | jq -r '.result.tab.tab_id // empty')
+  pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
+  [ -n "$tab" ] && [ -n "$pane" ] || {
+    echo "Fehler: Herdr lieferte keine Tab-/Pane-ID für '$label': $created" >&2
+    exit 1
+  }
+  printf '%s %s %s\n' "$axis" "$tab" "$pane" >> "$reviews/panes"
+
+  args="$axis $ticket $worktree $base $head"
+  if [ "$agent" = pi ]; then
+    command="pi${model:+ --model $(quote "$model")} --name $(quote "$label")$extra_args $(quote "/skill:review-achse $args")"
+  else
+    command="claude --permission-mode auto --add-dir $(quote "$worktree") -n $(quote "$label")$extra_args $(quote "/review-achse $args")"
+  fi
+  herdr pane run "$pane" "$command" >/dev/null
+  printf 'Gestartet: %s  (Tab %s)\n' "$label" "$tab"
+done
+printf 'Reviewt: %s..%s\nAuf die Berichte warten: scripts/wait-review-reports\n' "$base" "$head"
