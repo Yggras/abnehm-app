@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+mkdir -p "$tmp/bin" "$tmp/main" "$tmp/work"
+git -C "$tmp/main" init -q
+git -C "$tmp/main" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
+git -C "$tmp/main" worktree add -qb work/900001-test "$tmp/work"
+head=$(git -C "$tmp/work" rev-parse HEAD)
+reviews="$(git -C "$tmp/work" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-reviews/900001"
+mkdir -p "$reviews"
+printf 'Standards: OK\n' > "$reviews/standards.md"
+printf 'Spec: OK\n' > "$reviews/spec.md"
+printf '%s\n' '#!/bin/sh' \
+  'case "$1 $2" in' \
+  '  "pr view") printf '\''{"number":1,"url":"https://github.com/Yggras/abnehm-app/pull/1","state":"OPEN","isDraft":false,"headRefName":"work/900001-test","headRefOid":"%s","baseRefName":"main","body":"Closes #900001\\nReview: 1 Runde","reviewDecision":"","mergeable":"%s"}\n'\'' "$MOCK_HEAD" "${MOCK_MERGEABLE:-MERGEABLE}" ;;' \
+  '  "pr checks") printf '\''[%s]\n'\'' "$MOCK_CHECKS" ;;' \
+  'esac' > "$tmp/bin/gh"
+chmod +x "$tmp/bin/gh"
+export PATH="$tmp/bin:$PATH" MOCK_HEAD="$head"
+MOCK_CHECKS='{"name":"Typprüfung, Lint und Tests","bucket":"pass"},{"name":"Backend-Image ohne App- und Test-Abhängigkeiten","bucket":"pass"}'
+export MOCK_CHECKS
+"$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output"
+grep -F 'Bereit:' "$tmp/output" >/dev/null
+MOCK_MERGEABLE=UNKNOWN "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1 && { echo 'UNKNOWN akzeptiert' >&2; exit 1; } || [ "$?" = 3 ]
+MOCK_CHECKS='{"name":"Typprüfung, Lint und Tests","bucket":"pending"},{"name":"Backend-Image ohne App- und Test-Abhängigkeiten","bucket":"pass"}' \
+  "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1 && { echo 'Pending akzeptiert' >&2; exit 1; } || [ "$?" = 3 ]
+printf 'dirty\n' > "$tmp/work/file"
+if "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1; then echo 'Dirty akzeptiert' >&2; exit 1; fi
+printf 'check-parallel-pr: OK\n'

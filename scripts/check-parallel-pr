@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+# Freigabe-Gate für start-parallel. 0 = bereit, 3 = CI/Merge noch offen,
+# 1 = unsicher/Fehler. Nie allein aufgrund des Agent-Status mergen.
+[ "$#" -eq 2 ] || { echo "Verwendung: $0 <ticket> <worktree>" >&2; exit 2; }
+ticket=$1
+worktree=$2
+case "$ticket" in ''|*[!0-9]*) exit 2 ;; esac
+repo=Yggras/abnehm-app
+branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD) || exit 1
+case "$branch" in work/"$ticket"-*) ;; *) echo "Falscher Ticket-Branch: $branch" >&2; exit 1 ;; esac
+[ -z "$(git -C "$worktree" status --porcelain)" ] || { echo "Worktree #$ticket ist nicht sauber." >&2; exit 1; }
+primary=$(git -C "$worktree" worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+[ "$worktree" != "$primary" ] || { echo 'Primären Checkout nicht verwenden.' >&2; exit 1; }
+
+pr=$(gh pr view "$branch" --repo "$repo" --json number,url,state,isDraft,headRefName,headRefOid,baseRefName,body,reviewDecision,mergeable) || exit 1
+printf '%s' "$pr" | jq -e --arg branch "$branch" --arg ticket "$ticket" '
+  .state == "OPEN" and .isDraft == false and .headRefName == $branch and
+  .baseRefName == "main" and (.body | test("(?i)Closes[[:space:]]+#" + $ticket + "([^0-9]|$)")) and
+  (.body | test("(?i)Review")) and .reviewDecision != "CHANGES_REQUESTED"
+' >/dev/null || { echo "PR #$ticket ist nicht mergefähig: Branch, Ziel, Closes-Verweis, Review oder Review-Entscheid prüfen." >&2; exit 1; }
+head=$(printf '%s' "$pr" | jq -r .headRefOid)
+[ "$head" = "$(git -C "$worktree" rev-parse HEAD)" ] || { echo "PR-Head und lokaler HEAD weichen für #$ticket ab." >&2; exit 1; }
+reviews="$(git -C "$worktree" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-reviews/$ticket"
+[ -s "$reviews/standards.md" ] && [ -s "$reviews/spec.md" ] && [ ! -f "$reviews/panes" ] || {
+  echo "Review-Berichte für #$ticket fehlen oder Reviewer sind noch aktiv." >&2; exit 1;
+}
+mergeable=$(printf '%s' "$pr" | jq -r .mergeable)
+case "$mergeable" in
+  MERGEABLE) ;;
+  UNKNOWN) echo "Merge-Status für #$ticket noch unbekannt." >&2; exit 3 ;;
+  *) echo "Mergekonflikt oder nicht mergefähiger PR #$ticket ($mergeable)." >&2; exit 1 ;;
+esac
+checks=$(gh pr checks "$branch" --repo "$repo" --json name,bucket) || { echo "CI für #$ticket nicht abrufbar." >&2; exit 1; }
+# Beide Jobs aus .github/workflows/ci.yml müssen für genau diesen Head bestehen
+# und erfolgreich sein; keine leere oder übersprungene CI als Erfolg werten.
+if printf '%s' "$checks" | jq -e '
+  length >= 2 and
+  all(.[]; .bucket == "pass") and
+  ([.[] | select(.name == "Typprüfung, Lint und Tests" and .bucket == "pass")] | length) >= 1 and
+  ([.[] | select(.name == "Backend-Image ohne App- und Test-Abhängigkeiten" and .bucket == "pass")] | length) >= 1
+' >/dev/null; then
+  printf 'Bereit: %s (Head %s)\n' "$(printf '%s' "$pr" | jq -r .url)" "$head"
+  exit 0
+fi
+if printf '%s' "$checks" | jq -e 'any(.[]; .bucket == "fail" or .bucket == "cancel")' >/dev/null; then
+  echo "CI für #$ticket fehlgeschlagen." >&2
+  exit 1
+fi
+echo "CI für #$ticket läuft noch oder erforderliche Jobs fehlen." >&2
+exit 3
