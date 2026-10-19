@@ -2,11 +2,10 @@
  * @jest-environment node
  */
 import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext, type TransactionContext } from '.';
-import { EntityId, Instant } from '@abnehm/contracts/base';
+import { createTestClock } from '@abnehm/clock/testing';
+import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
 import { createSyncEngine, readSyncState } from '../sync/engine';
 import { createSyncRegistry } from '../sync/registry';
-import { createTestClock } from '@abnehm/clock/testing';
-import { TimeZone } from '@abnehm/contracts/base';
 import { appendOperation } from '../sync/outbox';
 import { createLocalDatabases } from './local-databases';
 import * as schema from './schema';

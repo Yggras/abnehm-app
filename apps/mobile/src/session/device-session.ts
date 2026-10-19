@@ -1,10 +1,8 @@
 import { uuid } from 'expo';
 import * as Network from 'expo-network';
 import { AppState } from 'react-native';
-import { eq } from 'drizzle-orm';
-
 import type { Clock } from '@abnehm/clock';
-import { EntityId, Instant, type Instant as InstantType } from '@abnehm/contracts/base';
+import { EntityId, type Instant } from '@abnehm/contracts/base';
 
 import { secureSessionStore } from '../auth/secure-session-store';
 import { backendBaseUrl } from '../backend/client';
@@ -14,12 +12,10 @@ import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedD
 import { energyBookingEntity } from '../energy';
 import { createDeviceLocalDatabases } from '../local-db';
 import { createDeviceInvitationFlows } from '../online';
-import type { LocalDatabase } from '../local-db';
-import { deviceState as deviceStateTable, outbox } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
 import { appTodayRegistry, followTodayPerson } from '../shell/app-today';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
+import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -39,17 +35,7 @@ const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 let activeEngine: SyncEngine | null = null;
-
-function installationId(database: LocalDatabase) {
-  return database.transaction((tx) => {
-    const db = sqliteOf(tx);
-    const existing = db.select().from(deviceStateTable).where(eq(deviceStateTable.key, 'sync_installation_id')).get();
-    if (existing) return EntityId.parse(existing.value);
-    const id = newId();
-    db.insert(deviceStateTable).values({ key: 'sync_installation_id', value: id, updatedAt: Instant.parse(appClock.read().instant) }).run();
-    return id;
-  });
-}
+let backgroundOpening = false;
 /** Setzt die Zone der Person beim Start und bei jedem Wechsel (#110). */
 const timeZone = followPersonTimeZone({
   clock: appClock,
@@ -80,20 +66,18 @@ function deviceState() {
       });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
-        installationId: installationId(database), onCanonicalChanges: persistence.onCanonicalChanges,
+        installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
         commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands] }),
       });
       activeEngine = engine;
       void dispatcher.deliver();
       const stops = [todayPersonOpened(database), timeZone.opened(database), gate?.opened(database)];
       const publishStatus = () => syncStatusSource.publish(engine.status());
-      const stopStatus = database.observe((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox).all(), publishStatus);
+      const stopStatus = observeOutbox(database, publishStatus);
       const statusTimer = setInterval(publishStatus, 60_000);
-      const triggers = startSyncTriggers({ sync: () => engine.sync(),
-        observePending(listener) {
-          return database.observe((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox).orderBy(outbox.sequence).all(),
-            (rows) => listener(rows.map((row) => row.operationId).join(',')));
-        },
+      const triggers = startSyncTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active',
+        sync: () => engine.sync(),
+        observePending: (listener) => observePendingSignature(database, listener),
         observeForeground(listener) {
           const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
           return () => subscription.remove();
@@ -131,10 +115,14 @@ export function deviceSession(): AppSession {
 }
 
 /** Health-Hintergrundfenster: prüft die gespeicherte Sitzung, öffnet bei Bedarf SQLite und pusht ohne React. */
-export async function pushDeviceNow({ deadline }: { deadline: InstantType }) {
+export async function pushDeviceNow({ deadline }: { deadline: Instant }) {
   try {
     const session = deviceSession();
-    if (!session.databases.current()) await session.auth.checkSession();
+    if (!session.databases.current()) {
+      backgroundOpening = true;
+      try { await session.auth.checkSession(); }
+      finally { backgroundOpening = false; }
+    }
     return activeEngine ? await activeEngine.pushNow({ deadline }) : 'failed' as const;
   } catch {
     return 'failed' as const;

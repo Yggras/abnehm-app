@@ -1,11 +1,12 @@
 /** Lifecycle-Quellen sind Adapter: React Native und Expo Network hängen erst am Composition Root. */
-export function startSyncTriggers({ sync, observePending, observeForeground, observeNetwork }: {
+export function startSyncTriggers({ initialActive, sync, observePending, observeForeground, observeNetwork }: {
+  initialActive: boolean;
   sync(): Promise<unknown>;
   observePending(listener: (signature: string) => void): () => void;
   observeForeground(listener: (active: boolean) => void): () => void;
   observeNetwork(listener: (online: boolean) => void): () => void;
 }) {
-  let active = true;
+  let active = initialActive;
   let online = true;
   let pending = '';
   let initialized = false;
@@ -30,9 +31,8 @@ export function startSyncTriggers({ sync, observePending, observeForeground, obs
   });
   // Der Takt läuft nur bei offener Kontodatenbank; im Hintergrund erfolgt kein allgemeiner Sync.
   const interval = setInterval(() => { if (active) run(); }, 60_000);
-  run();
+  if (active) run();
   return {
-    refresh: run,
     dispose() {
       stopPending(); stopForeground(); stopNetwork(); clearInterval(interval);
       if (debounce) clearTimeout(debounce);
