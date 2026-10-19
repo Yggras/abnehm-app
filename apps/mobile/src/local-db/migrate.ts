@@ -7,6 +7,7 @@ import type { SqliteDatabase } from './connection';
 import bundledMigrations from './migrations/migrations';
 import type * as schema from './schema';
 import { outbox } from './schema';
+import { decodeOutboxRow } from '../sync/outbox';
 
 /**
  * Führt die mit der App gebündelten Migrationen aus (`migrations/migrations.js`, erzeugt von
@@ -30,12 +31,7 @@ export async function migrateLocalDatabase(db: SqliteDatabase): Promise<void> {
     db.transaction((tx) => {
       for (const row of tx.select().from(outbox).all()) {
         if (row.schemaVersion === currentSyncSchemaVersion || row.attemptCount > 0) continue;
-        const parsed = OutboxOperation.safeParse(row.businessKey !== null
-          ? { type: row.type, operationId: row.operationId, businessKey: row.businessKey, payload: row.payload,
-            knownServerVersion: row.knownServerVersion, schemaVersion: row.schemaVersion, createdAt: row.createdAt }
-          : { type: row.type, operationId: row.operationId, entityType: row.entityType, entityId: row.entityId,
-            ...(row.type === 'upsert_entity' ? { payload: row.payload } : {}),
-            knownServerVersion: row.knownServerVersion, schemaVersion: row.schemaVersion, createdAt: row.createdAt });
+        const parsed = OutboxOperation.safeParse(decodeOutboxRow(row));
         if (!parsed.success || row.schemaVersion < 1 || row.schemaVersion > currentSyncSchemaVersion) {
           tx.update(outbox).set({ lastErrorCode: 'outbox_migration_failed' }).where(eq(outbox.operationId, row.operationId)).run();
           continue;

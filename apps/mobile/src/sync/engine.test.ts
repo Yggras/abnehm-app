@@ -152,6 +152,22 @@ describe('Sync der App', () => {
     context.databases.lock(); context.files.remove();
   });
 
+  it('pushNow beendet das Warten auf einen hängenden Vordergrund-Sync bei Fristablauf', async () => {
+    jest.useFakeTimers();
+    const context = await setup();
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, EntityId.parse(randomUUID()), 'goal:offen', water(250)));
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    context.transport.push = async (request) => { context.transport.pushes.push(request); await waiting; return context.transport.onPush(request); };
+    const foreground = context.engine.sync();
+    const background = context.engine.pushNow({ deadline: Instant.parse('2026-10-14T12:00:25.000Z') });
+    await jest.advanceTimersByTimeAsync(25_001);
+    expect(await background).toBe('failed');
+    expect(context.transport.pushes).toHaveLength(1);
+    release(); await foreground;
+    context.databases.lock(); context.files.remove(); jest.useRealTimers();
+  });
+
   it('pushNow wartet auf einen laufenden Vordergrund-Zyklus derselben Installation', async () => {
     const context = await setup();
     context.database.transaction((tx) => context.repository.saveTestCommand(tx, EntityId.parse(randomUUID()), 'goal:offen', water(250)));

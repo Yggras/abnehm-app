@@ -8,6 +8,7 @@ import { closeRoute, type Presentation } from '../navigation';
 import { MessageSlot } from './MessageHost';
 import { shellTexts } from './texts';
 import { SyncWarning } from './SyncWarning';
+import { useSyncRefresh } from './SyncRefresh';
 
 export type ScreenFrameProps = {
   title: string;
@@ -35,14 +36,16 @@ const edges: Record<Presentation, Edge[]> = {
  */
 export function ScreenFrame({ title, presentation, children, compactTabTitle = false, onRefresh }: ScreenFrameProps) {
   const [refreshing, setRefreshing] = useState(false);
+  const refresh = useSyncRefresh();
+  const pullToRefresh = onRefresh ?? (presentation === 'tab' || presentation === 'page' ? refresh : null);
   const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges[presentation]} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={onRefresh ? (
+      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} refreshControl={pullToRefresh ? (
         <RefreshControl refreshing={refreshing} onRefresh={() => {
           setRefreshing(true);
-          void onRefresh().finally(() => setRefreshing(false));
+          void pullToRefresh().finally(() => setRefreshing(false));
         }} />
       ) : undefined}>
         {presentation === 'tab' ? (

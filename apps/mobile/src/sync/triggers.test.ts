@@ -27,6 +27,20 @@ test('Start, Vordergrund, Änderung nach 2 Sekunden, Minute, Refresh und Netzrü
   jest.useRealTimers();
 });
 
+test('eine erste positive Netzmeldung synchronisiert bei gefüllter Outbox auch ohne vorherige Offline-Meldung', () => {
+  jest.useFakeTimers();
+  const sync = jest.fn(async () => {});
+  let network!: (online: boolean) => void;
+  const stop = startSyncTriggers({ initialActive: true, sync,
+    observePending: (listener) => { listener('op-1'); return () => {}; },
+    observeForeground: () => () => {}, observeNetwork: (listener) => { network = listener; return () => {}; } });
+  network(true);
+  expect(sync).toHaveBeenCalledTimes(2);
+  network(true);
+  expect(sync).toHaveBeenCalledTimes(2);
+  stop.dispose(); jest.useRealTimers();
+});
+
 test('ein im Hintergrund geöffnetes Konto startet weder Push noch Pull und bleibt ohne Minutentakt', () => {
   jest.useFakeTimers();
   const sync = jest.fn(async () => {});

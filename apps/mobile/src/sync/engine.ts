@@ -244,12 +244,18 @@ export function createSyncEngine({ database, registry, transport, clock, install
     },
     pushNow({ deadline }) {
       backgroundPush ??= (async (): Promise<PushNowResult> => {
-        if (running) await running;
         if (clock.read().instant >= deadline) return 'failed';
         const abort = new AbortController();
         const remaining = Math.max(0, Date.parse(deadline) - Date.parse(clock.read().instant));
         const timer = setTimeout(() => abort.abort(), remaining);
         try {
+          // Auch das Warten auf einen Vordergrund-Sync verbraucht die Frist. Niemals parallel starten.
+          if (running) {
+            await Promise.race([running, new Promise<void>((resolve) => {
+              abort.signal.addEventListener('abort', () => resolve(), { once: true });
+            })]);
+          }
+          if (abort.signal.aborted || clock.read().instant >= deadline) return 'failed';
           const result = await push({ single: true, signal: abort.signal, deadline });
           return result === 'done' ? 'pushed' : result === 'nothing_to_do' ? 'nothing_to_push' : 'failed';
         } catch {

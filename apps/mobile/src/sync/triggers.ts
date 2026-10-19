@@ -7,7 +7,7 @@ export function startSyncTriggers({ initialActive, sync, observePending, observe
   observeNetwork(listener: (online: boolean) => void): () => void;
 }) {
   let active = initialActive;
-  let online = true;
+  let online: boolean | null = null;
   let pending = '';
   let initialized = false;
   let debounce: ReturnType<typeof setTimeout> | null = null;
@@ -26,7 +26,9 @@ export function startSyncTriggers({ initialActive, sync, observePending, observe
     if (!next && debounce) { clearTimeout(debounce); debounce = null; }
   });
   const stopNetwork = observeNetwork((next) => {
-    if (next && !online && pending && active) run();
+    // Der erste positive Status darf ebenfalls auslösen: der Offline-Zustand kann vor der
+    // Listener-Registrierung eingetreten sein und bleibt sonst bis zum Minutentakt unbemerkt.
+    if (next && online !== true && pending && active) run();
     online = next;
   });
   // Der Takt läuft nur bei offener Kontodatenbank; im Hintergrund erfolgt kein allgemeiner Sync.

@@ -104,6 +104,15 @@ async function open(target: RouteTarget) {
 }
 
 describe('Tab-Leiste', () => {
+  test('Heute, andere Tabs und Bereichsseiten besitzen Pull-to-Refresh', async () => {
+    await renderRouter(appDir, { initialUrl: '/' });
+    const canRefresh = () => screen.getAllByTestId('sync-scroll').some((node) => node.props.refreshControl != null);
+    expect(canRefresh()).toBe(true);
+    await user.press(screen.getByRole('tab', { name: 'Protokoll' }));
+    expect(canRefresh()).toBe(true);
+    await open({ type: 'settings' });
+    expect(canRefresh()).toBe(true);
+  });
   test('zeigt Heute · Protokoll · ＋ · Momo · Wir und wechselt die Tabs', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
 
