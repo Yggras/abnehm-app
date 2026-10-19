@@ -1,0 +1,107 @@
+#!/bin/sh
+set -eu
+
+# Hermetischer Smoke-Test für start-review-tabs, submit-review und
+# wait-review-reports: Git-Repo im Temp-Verzeichnis, Herdr und Agenten gemockt.
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+mkdir "$tmp/bin"
+
+printf '%s\n' '#!/bin/sh' \
+  'case "$1 $2" in' \
+  '  "pane current") printf '\''{"result":{"pane":{"agent":"%s"}}}\n'\'' "$MOCK_AGENT" ;;' \
+  '  "pane process-info") printf '\''{"result":{"process_info":{"foreground_processes":[{"argv0":"pi","pid":4711}]}}}\n'\'' ;;' \
+  '  "tab create") n=$(($(wc -l < "$MOCK_COMMANDS") + 1)); printf '\''{"result":{"tab":{"tab_id":"tab%s"},"root_pane":{"pane_id":"pane%s"}}}\n'\'' "$n" "$n" ;;' \
+  '  "pane run") printf "%s\n" "$4" >> "$MOCK_COMMANDS" ;;' \
+  '  "pane get"|"tab get") [ "${MOCK_GONE:-0}" = 0 ] ;;' \
+  '  "agent get") printf '\''{"result":{"agent":{"agent_status":"working"}}}\n'\'' ;;' \
+  '  "tab close") printf "%s\n" "$3" >> "$MOCK_CLOSED" ;;' \
+  'esac' > "$tmp/bin/herdr"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$tmp/bin/claude"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$tmp/bin/pi"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$tmp/bin/sleep"
+printf '%s\n' '#!/bin/sh' '[ "$4" = 4711 ] && printf "%s\n" "$MOCK_PI_COMMAND"' > "$tmp/bin/ps"
+chmod +x "$tmp/bin/"*
+export PATH="$tmp/bin:$PATH" HERDR_ENV=1 HERDR_WORKSPACE_ID=workspace \
+  MOCK_COMMANDS="$tmp/commands" MOCK_CLOSED="$tmp/closed" MOCK_AGENT=claude
+: > "$MOCK_COMMANDS"
+: > "$MOCK_CLOSED"
+
+# Repo mit origin/main, primärem Checkout und Ticket-Worktree.
+export GIT_AUTHOR_NAME=Test GIT_AUTHOR_EMAIL=test@example.invalid
+export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=test@example.invalid
+git init -q --bare -b main "$tmp/origin.git"
+git clone -q "$tmp/origin.git" "$tmp/primary" 2>/dev/null
+mkdir "$tmp/primary/scripts"
+cp "$root/scripts/require-ticket-worktree" "$root/scripts/start-review-tabs" \
+  "$root/scripts/submit-review" "$root/scripts/wait-review-reports" "$tmp/primary/scripts/"
+git -C "$tmp/primary" add scripts
+git -C "$tmp/primary" commit -q -m Basis
+git -C "$tmp/primary" push -q origin main
+git -C "$tmp/primary" worktree add -q "$tmp/wt" -b work/900001-test origin/main
+wt=$(CDPATH= cd -- "$tmp/wt" && pwd -P)
+
+cd "$wt"
+if scripts/start-review-tabs > "$tmp/output" 2>&1; then
+  echo 'Fehler: Review ohne Commits wurde gestartet' >&2; exit 1
+fi
+[ ! -s "$MOCK_COMMANDS" ]
+echo neu > datei
+if scripts/start-review-tabs > "$tmp/output" 2>&1; then
+  echo 'Fehler: Review mit uncommitteten Änderungen wurde gestartet' >&2; exit 1
+fi
+[ ! -s "$MOCK_COMMANDS" ]
+git add datei
+git commit -q -m Änderung
+base=$(git merge-base origin/main HEAD)
+head=$(git rev-parse HEAD)
+
+# Claude: zwei Reviewer-Tabs mit /review-achse.
+scripts/start-review-tabs -- --effort xhigh >/dev/null
+[ "$(wc -l < "$MOCK_COMMANDS" | tr -d ' ')" = 2 ]
+grep -F "claude --permission-mode auto --add-dir '$wt' -n '#900001 Review: Standards' '--effort' 'xhigh' '/review-achse standards 900001 $wt $base $head'" "$MOCK_COMMANDS" >/dev/null || { cat "$MOCK_COMMANDS"; exit 1; }
+grep -F "'/review-achse spec 900001 $wt $base $head'" "$MOCK_COMMANDS" >/dev/null
+if scripts/start-review-tabs > "$tmp/output" 2>&1; then
+  echo 'Fehler: zweite Runde trotz laufender Tabs gestartet' >&2; exit 1
+fi
+
+# Ein Bericht fehlt: Zeitlimit mit Exit-Code 4, kein Tab geschlossen.
+printf 'Keine Befunde.\n' | scripts/submit-review 900001 standards >/dev/null
+status=0
+scripts/wait-review-reports --timeout 0 > "$tmp/output" 2>&1 || status=$?
+[ "$status" = 4 ] || { echo "Fehler: Exit-Code $status statt 4" >&2; exit 1; }
+[ ! -s "$MOCK_CLOSED" ]
+
+# Reviewer-Tab verschwunden: Fehler statt endlosem Warten.
+status=0
+MOCK_GONE=1 scripts/wait-review-reports > "$tmp/output" 2>&1 || status=$?
+[ "$status" = 1 ]
+
+# Beide Berichte da: Ausgabe mit Überschriften, Tabs geschlossen.
+printf 'Ein Befund: Kriterium fehlt.\n' | scripts/submit-review 900001 spec >/dev/null
+scripts/wait-review-reports > "$tmp/output"
+grep -Fx '## Standards' "$tmp/output" >/dev/null
+grep -Fx 'Ein Befund: Kriterium fehlt.' "$tmp/output" >/dev/null
+[ "$(cat "$MOCK_CLOSED" | tr '\n' ' ')" = 'tab1 tab2 ' ]
+if printf 'zu spät\n' | scripts/submit-review 900001 spec > "$tmp/output" 2>&1; then
+  echo 'Fehler: Bericht nach Ende der Runde angenommen' >&2; exit 1
+fi
+
+# Pi: dasselbe Modell wie die aufrufende Session, ohne --model Pis Standard.
+: > "$MOCK_COMMANDS"
+MOCK_AGENT=pi MOCK_PI_COMMAND='pi' scripts/start-review-tabs >/dev/null
+grep -F "pi --name '#900001 Review: Standards' '/skill:review-achse standards 900001 $wt $base $head'" "$MOCK_COMMANDS" >/dev/null || { cat "$MOCK_COMMANDS"; exit 1; }
+printf 'Keine Befunde.\n' | scripts/submit-review 900001 standards >/dev/null
+printf 'Keine Befunde.\n' | scripts/submit-review 900001 spec >/dev/null
+scripts/wait-review-reports >/dev/null
+: > "$MOCK_COMMANDS"
+MOCK_AGENT=pi MOCK_PI_COMMAND='node /bin/pi --model openai-codex/gpt-test --name x' scripts/start-review-tabs >/dev/null
+grep -F "pi --model 'openai-codex/gpt-test' --name '#900001 Review: Spec' '/skill:review-achse spec 900001 $wt $base $head'" "$MOCK_COMMANDS" >/dev/null || { cat "$MOCK_COMMANDS"; exit 1; }
+if MOCK_AGENT=pi scripts/start-review-tabs --model x/y > "$tmp/output" 2>&1; then
+  echo 'Fehler: zweite Runde trotz laufender Tabs gestartet' >&2; exit 1
+fi
+MOCK_GONE=1 MOCK_AGENT=unbekannt scripts/start-review-tabs > "$tmp/output" 2>&1 && {
+  echo 'Fehler: unbekannter Agent wurde akzeptiert' >&2; exit 1
+}
+printf 'start-review-tabs: OK\n'

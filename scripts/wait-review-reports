@@ -1,0 +1,73 @@
+#!/bin/sh
+set -eu
+
+# Wartet im Ticket-Worktree auf beide Berichte der Reviewer aus
+# scripts/start-review-tabs, gibt sie aus und schließt die Reviewer-Tabs.
+# Exit-Code 4 = Zeitlimit erreicht, die Reviewer arbeiten noch: erneut aufrufen.
+
+usage() {
+  echo "Verwendung: $0 [--timeout <sekunden>]  (Standard: 1800)" >&2
+  exit 2
+}
+
+timeout=1800
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --timeout)
+      [ "$#" -ge 2 ] || usage
+      timeout=$2; shift 2 ;;
+    *) usage ;;
+  esac
+done
+case "$timeout" in ''|*[!0-9]*) usage ;; esac
+
+branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+ticket=$(printf '%s' "$branch" | sed -n 's|^work/\([0-9][0-9]*\)-.*|\1|p')
+[ -n "$ticket" ] || {
+  echo "Fehler: Branch '$branch' ist kein Ticket-Branch (work/<nummer>-…)." >&2
+  exit 1
+}
+reviews="$(git rev-parse --path-format=absolute --git-common-dir)/abnehm-app-reviews/$ticket"
+[ -f "$reviews/panes" ] || {
+  echo "Fehler: Für #$ticket läuft keine Review-Runde (scripts/start-review-tabs)." >&2
+  exit 1
+}
+
+waited=0
+warned=
+while :; do
+  missing=
+  while read -r axis tab pane; do
+    [ -f "$reviews/$axis.md" ] && continue
+    missing="$missing $axis"
+    if ! herdr pane get "$pane" >/dev/null 2>&1; then
+      echo "Fehler: Reviewer '$axis' (Tab $tab) wurde ohne Bericht beendet." >&2
+      exit 1
+    fi
+    status=$(herdr agent get "$pane" 2>/dev/null | jq -r '.result.agent.agent_status // empty') || status=
+    if [ "$status" = blocked ]; then
+      case " $warned " in
+        *" $axis "*) ;;
+        *) echo "Hinweis: Reviewer '$axis' wartet auf Eingabe im Tab $tab." >&2; warned="$warned $axis" ;;
+      esac
+    fi
+  done < "$reviews/panes"
+  [ -n "$missing" ] || break
+  if [ "$waited" -ge "$timeout" ]; then
+    echo "Zeitlimit: Noch kein Bericht von:$missing. Erneut aufrufen, um weiter zu warten." >&2
+    exit 4
+  fi
+  sleep 10
+  waited=$((waited + 10))
+done
+
+printf '## Standards\n\n'
+cat "$reviews/standards.md"
+printf '\n\n## Spec\n\n'
+cat "$reviews/spec.md"
+printf '\n'
+
+while read -r axis tab pane; do
+  herdr tab close "$tab" >/dev/null 2>&1 || true
+done < "$reviews/panes"
+rm -f "$reviews/panes"

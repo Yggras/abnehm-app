@@ -55,8 +55,8 @@ Umsetzungstickets sind die Sub-Issues der sechs Spezifikationen. Spezifikation 0
    - Test-first mit dem Skill `tdd` an den Seams, die Ticket und Spezifikation festlegen.
    - Typecheck und einzelne Testdateien laufen regelmäßig, die komplette Testsuite einmal am Ende.
    - Jedes Akzeptanzkriterium belegst du so, wie das Ticket es verlangt: mit einem Test, einem Gerätelauf oder der Impeccable-Prüfung aus der Definition of Done bei Tickets mit Bildschirm.
-   - Danach mit dem Skill `code-review` gegen `origin/main` prüfen und die Befunde beheben.
    - Selbstständig committen, ohne KI als Co-Author.
+   - Danach mit dem Skill `review-parallel` prüfen lassen und die Befunde beheben. Er startet zwei eigenständige Reviewer (Standards und Spec) in eigenen Herdr-Tabs, mit demselben Agenten wie diese Session. Ohne Herdr greift dessen Fallback auf `code-review`.
 10. **Abschließen:**
     - Branch pushen und einen Pull Request gegen `main` öffnen, ohne KI-Attribution.
     - In den PR-Text kommt `Closes #<nummer>`. Wird der PR in den Standard-Branch gemergt, schließt GitHub das Ticket automatisch ([GitHub-Doku](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)). Erst dann sind die davon blockierten Tickets frei.

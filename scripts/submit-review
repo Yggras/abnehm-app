@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+# Reicht den Bericht eines Reviewers aus scripts/start-review-tabs ein (stdin).
+# Die Datei liegt im gemeinsamen Git-Verzeichnis, nicht im Worktree, und wird
+# erst nach dem Schreiben umbenannt, damit scripts/wait-review-reports nie einen
+# halben Bericht liest.
+
+usage() {
+  echo "Verwendung: $0 <ticket> standards|spec < bericht.md" >&2
+  exit 2
+}
+
+[ "$#" -eq 2 ] || usage
+ticket=$1
+axis=$2
+case "$ticket" in ''|*[!0-9]*) usage ;; esac
+case "$axis" in standards|spec) ;; *) usage ;; esac
+
+reviews="$(git rev-parse --path-format=absolute --git-common-dir)/abnehm-app-reviews/$ticket"
+[ -f "$reviews/panes" ] || {
+  echo "Fehler: Für #$ticket läuft keine Review-Runde (scripts/start-review-tabs)." >&2
+  exit 1
+}
+
+cat > "$reviews/$axis.md.tmp"
+[ -s "$reviews/$axis.md.tmp" ] || {
+  rm -f "$reviews/$axis.md.tmp"
+  echo "Fehler: Leerer Bericht." >&2
+  exit 1
+}
+mv "$reviews/$axis.md.tmp" "$reviews/$axis.md"
+printf 'Bericht eingereicht: %s\n' "$reviews/$axis.md"
