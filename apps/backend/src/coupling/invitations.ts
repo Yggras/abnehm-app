@@ -10,7 +10,7 @@ import {
   AcceptInvitationResult,
   CheckInvitationRequest,
   CreateInvitationRequest,
-  CreateInvitationResult,
+  type CreateInvitationResult,
   type CheckInvitationResult,
   type InvitationError,
   type InvitationErrorCode,

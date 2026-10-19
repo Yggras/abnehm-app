@@ -193,6 +193,12 @@ export default defineConfig([
             message: 'better-sqlite3 ist nur der Test-Adapter der lokalen Datenbank (local-db/testing/).',
           },
           {
+            // Nur flüchtige Orchestrierung der Online-Abläufe; Fachdaten liegen in SQLite, nie im Query-Cache.
+            modules: ['@tanstack/react-query'],
+            allowedIn: ['apps/mobile/src/online/'],
+            message: 'Online-Abläufe laufen über die Hooks aus apps/mobile/src/online/.',
+          },
+          {
             modules: ['expo-secure-store'],
             allowedIn: ['apps/mobile/src/auth/secure-session-store.ts'],
             message: 'Die Sitzung liegt nur über das Auth-Modul in SecureStore (apps/mobile/src/auth/).',
