@@ -19,7 +19,7 @@ export type TestLink =
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
   | Readonly<{ type: 'ungueltig'; capability: 'seed' | 'fehler' }>;
 
-/** Pfade der Deep Links; der Release-Test sucht sie im Produktions-Bundle. */
+/** Pfade der Deep Links; der Release-Test gleicht sie mit der Registry ab (`test/test-capabilities.ts`). */
 export const testLinkPaths = { seed: 'seed', fehler: 'fehler' } as const;
 
 /** Der Link als Testfähigkeit, oder `null`, wenn er keiner ist. */

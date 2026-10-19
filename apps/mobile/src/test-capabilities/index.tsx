@@ -4,7 +4,7 @@ import type { SessionStore } from '../auth/app-auth';
 import { deviceClock } from '../clock/device-clock';
 import type { AppSession } from '../session/app-session';
 import { createAppTestClock, type AppTestClock } from './clock';
-import { createFaultController, faultyFetch, faultySessionStore, type FaultController } from './faults';
+import { createFaultController, faultyFetch, faultySessionStore } from './faults';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
 import { TestCapabilityHost } from './TestCapabilityHost';
@@ -16,7 +16,6 @@ import { TestCapabilityHost } from './TestCapabilityHost';
 
 export type TestCapabilities = Readonly<{
   clock: AppTestClock;
-  faults: FaultController;
   /** Umhüllt die echten Abhängigkeiten der App-Sitzung mit den Fehler-Adaptern. */
   adapters: Readonly<{ fetch(inner: typeof fetch): typeof fetch; sessionStore(inner: SessionStore): SessionStore }>;
   /** Für `+native-intent`: nimmt Links der Testfähigkeiten an und öffnet dann „Heute“; andere bleiben unverändert. */
@@ -35,7 +34,6 @@ function Host({ session }: { session: () => AppSession }) {
 
 export const testCapabilities: TestCapabilities = {
   clock,
-  faults,
   adapters: {
     fetch: (inner) => faultyFetch(inner, faults),
     sessionStore: (inner) => faultySessionStore(inner, faults),

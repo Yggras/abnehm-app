@@ -21,7 +21,7 @@ import {
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation } from './outbox';
+import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, removeOperation } from './outbox';
 import type { PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
 
 // Sync-Ablauf der App (Spezifikation 0, Abschnitt 10): erst Push, dann Pull. Kanonische Ergebnisse,
@@ -67,8 +67,8 @@ export type SyncEngineOptions = {
   onCanonicalChanges?: CanonicalChangesHook;
 };
 
-/** Der Pull-Stand je Kontodatenbank; es gibt genau einen. Der Seeder (#112) setzt ihn ebenfalls. */
-export const syncCursorScope = 'konto';
+/** Der Pull-Stand je Kontodatenbank; es gibt genau einen. */
+const syncCursorScope = 'konto';
 /** Schutz vor einem Server, der nie zum Ende kommt. */
 const maxRounds = 1000;
 
@@ -143,7 +143,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
         // Ein veraltetes Seitentoken oder ein Cursor aus einem anderen Datenstand: neu ab dem Cursor bzw. vollständig.
         retriedFromCursor = true;
         const cursor = reply.error.code === 'full_resync_required' ? null : state.cursor;
-        database.transaction((tx) => writeCursor(tx, { cursor, pageToken: null }, clock));
+        database.transaction((tx) => writeCursor(tx, { cursor, pageToken: null }, Instant.parse(clock.read().instant)));
         continue;
       }
       if (reply.type !== 'ok') return reply.type;
@@ -159,7 +159,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
         writeCursor(
           tx,
           page.next.type === 'complete' ? { cursor: page.next.cursor, pageToken: null } : { cursor: state.cursor, pageToken: page.next.pageToken },
-          clock,
+          Instant.parse(clock.read().instant),
         );
         finish(tx, changes);
       });
@@ -195,6 +195,23 @@ function canonicalForAdapter(adapter: SyncEntityAdapter, state: CanonicalState) 
   return { type: 'record', entityId: state.entityId, serverVersion: state.serverVersion, data: adapter.record.parse(state.data) } as const;
 }
 
+/** Sync-Stand einer Kontodatenbank: endgültiger Pull-Cursor und offene Operationen in Reihenfolge. */
+export type SyncState = Readonly<{ cursor: SyncCursor | null; outbox: readonly OutboxOperation[] }>;
+
+/**
+ * Stellt Cursor und Outbox einer leeren Kontodatenbank her, etwa beim Seeden (#112). Ohne laufende Seite;
+ * die Operationen gelten als geprüft und noch nie versucht.
+ */
+export function restoreSyncState(tx: TransactionContext, state: SyncState, at: Instant): void {
+  if (state.cursor !== null) writeCursor(tx, { cursor: state.cursor, pageToken: null }, at);
+  for (const operation of state.outbox) appendOperation(tx, operation);
+}
+
+/** Der Sync-Stand, wie `restoreSyncState` ihn herstellt. */
+export function readSyncState(tx: ReadContext): SyncState {
+  return { cursor: readCursor(tx).cursor, outbox: pendingOperations(tx, Number.MAX_SAFE_INTEGER) };
+}
+
 type CursorState = { cursor: SyncCursor | null; pageToken: PullPageToken | null };
 
 function readCursor(tx: ReadContext): CursorState {
@@ -205,8 +222,7 @@ function readCursor(tx: ReadContext): CursorState {
   };
 }
 
-function writeCursor(tx: TransactionContext, state: CursorState, clock: Clock) {
-  const updatedAt = clock.read().instant;
+function writeCursor(tx: TransactionContext, state: CursorState, updatedAt: Instant) {
   sqliteOf(tx)
     .insert(syncCursor)
     .values({ scope: syncCursorScope, ...state, updatedAt })

@@ -26,6 +26,22 @@ export function canonicalRows(rows: SeedRows): SeedRows {
   );
 }
 
+/**
+ * Tabellen so geordnet, dass jede nach den Tabellen kommt, auf die ihre Fremdschlüssel zeigen; beide
+ * Seeder fügen in dieser Reihenfolge ein und leeren in umgekehrter. Selbstbezüge zählen nicht.
+ */
+export function dependencyOrder(tables: readonly Readonly<{ name: string; references: readonly string[] }>[]): string[] {
+  const references = new Map(tables.map((table) => [table.name, table.references]));
+  const ordered: string[] = [];
+  const visit = (name: string, path: readonly string[]) => {
+    if (ordered.includes(name) || path.includes(name)) return;
+    for (const target of references.get(name) ?? []) if (target !== name) visit(target, [...path, name]);
+    ordered.push(name);
+  };
+  for (const name of [...references.keys()].sort()) visit(name, []);
+  return ordered;
+}
+
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }

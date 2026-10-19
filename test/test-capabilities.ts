@@ -31,6 +31,12 @@ export type TestCapability = Readonly<{
   markers: readonly string[];
 }>;
 
+/**
+ * Modul, das die Deep Links der Testfähigkeiten annimmt; es nennt jeden registrierten Pfad. Fehlt es im
+ * Produktions-Bundle, kann dort kein Deep Link eine Testfähigkeit erreichen.
+ */
+export const deepLinkHandler = 'apps/mobile/src/test-capabilities/links.ts';
+
 /** Ordner, deren Dateien vollständig Testfähigkeiten gehören (ohne Testdateien). */
 export const testCapabilityRoots = ['apps/backend/dev/', 'apps/mobile/src/test-capabilities/', 'packages/contracts/seeds/'] as const;
 
@@ -52,7 +58,7 @@ export const testCapabilities: readonly TestCapability[] = [
     description: 'Steuerbare Testuhr: `@abnehm/clock/testing`, Konformitäts-Testkit und die Testuhr der App, die ein Seed stellt',
     modules: ['packages/clock/src/testing.ts', 'packages/clock/src/conformance.ts', 'apps/mobile/src/test-capabilities/clock.ts'],
     entries: {},
-    markers: ['@abnehm/clock/testing', '@abnehm/clock/conformance'],
+    markers: ['@abnehm/clock/testing'],
   },
   {
     key: 'fehler-adapter',

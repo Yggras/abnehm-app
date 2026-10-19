@@ -31,7 +31,6 @@ export function deviceSession(): AppSession {
     fetch: adapters?.fetch(globalThis.fetch) ?? globalThis.fetch,
     sessionStore: adapters?.sessionStore(secureSessionStore) ?? secureSessionStore,
     databases: createDeviceLocalDatabases({ onError }),
-    clock: appClock,
     onAccountOpened: todayPersonOpened,
     onError,
   });

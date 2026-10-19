@@ -20,7 +20,7 @@ export type SyncWriter = {
   delete(tx: TransactionContext, change: { entityType: string; entityId: EntityId; knownServerVersion: ServerVersion | null }): void;
 };
 
-/** Hängt eine geprüfte Operation ans Ende der Outbox; auch der Seeder (#112) stellt so offene Operationen her. */
+/** Hängt eine geprüfte Operation ans Ende der Outbox. */
 export function appendOperation(tx: TransactionContext, operation: OutboxOperation): void {
   const db = sqliteOf(tx);
   const last = db.select({ sequence: max(outbox.sequence) }).from(outbox).get()?.sequence ?? 0;

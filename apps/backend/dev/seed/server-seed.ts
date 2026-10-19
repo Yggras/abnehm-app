@@ -2,7 +2,7 @@ import { hashPassword } from 'better-auth/crypto';
 import { getTableColumns, is, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import { authTables, canonicalRows, type SeedManifest, type SeedRow, type SeedRows, type SeedValue } from '@abnehm/contracts/seeds';
+import { authTables, canonicalRows, dependencyOrder, type SeedManifest, type SeedRow, type SeedRows, type SeedValue } from '@abnehm/contracts/seeds';
 
 import type { Database, DbExecutor } from '../../src/database.ts';
 import * as schema from '../../src/db/schema/index.ts';
@@ -25,21 +25,12 @@ const byName = new Map(tables.map((table) => [getTableConfig(table).name, table]
 const notCanonical: readonly string[] = [...authTables, 'security_log'];
 const authTableNames: readonly string[] = authTables;
 
-/** Tabellen so geordnet, dass jede nach den Tabellen kommt, auf die ihre Fremdschlüssel zeigen. */
-const insertOrder: readonly string[] = (() => {
-  const ordered: string[] = [];
-  const visit = (name: string, path: readonly string[]) => {
-    if (ordered.includes(name) || path.includes(name)) return;
-    const config = getTableConfig(byName.get(name)!);
-    for (const foreignKey of config.foreignKeys) {
-      const target = getTableConfig(foreignKey.reference().foreignTable).name;
-      if (target !== name) visit(target, [...path, name]);
-    }
-    ordered.push(name);
-  };
-  for (const name of [...byName.keys()].sort()) visit(name, []);
-  return ordered;
-})();
+const insertOrder = dependencyOrder(
+  [...byName].map(([name, table]) => ({
+    name,
+    references: getTableConfig(table).foreignKeys.map((foreignKey) => getTableConfig(foreignKey.reference().foreignTable).name),
+  })),
+);
 
 /** Setzt Postgres auf den Ausgangszustand des Manifests. Scheitert eine Prüfung, bleibt nichts zurück. */
 export async function seedServer(database: Database, manifest: SeedManifest): Promise<void> {

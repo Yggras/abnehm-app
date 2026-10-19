@@ -76,7 +76,6 @@ function phone(backend: TestBackend): Phone {
     fetch: faultyFetch(network, faults),
     sessionStore: memoryStore(),
     databases,
-    clock,
     onAccountOpened: (database) => {
       opened.push(database);
       return () => undefined;

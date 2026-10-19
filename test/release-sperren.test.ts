@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
+import { deepLinkHandler, testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
 
 // Release-Sperren (Spezifikation 0, Abschnitt 12 und Testing Decisions; #112): Für jede registrierte
 // Testfähigkeit enthalten weder das Produktions-Image des Backends noch das Produktions-Bundle der App
@@ -95,10 +95,11 @@ const packageModules: Readonly<Record<string, string>> = {
   '@abnehm/clock/conformance': 'packages/clock/src/conformance.ts',
 };
 
-/** Repo-Pfad eines Imports, soweit er auf eigenen Code zeigt. */
-function resolved(file: string, specifier: string): string | null {
-  if (specifier.startsWith('.')) return relative(root, join(root, file, '..', specifier));
-  return packageModules[specifier] ?? null;
+/** Mögliche Repo-Pfade eines Imports, soweit er auf eigenen Code zeigt; auch ohne Dateiendung. */
+function resolved(file: string, specifier: string): string[] {
+  if (!specifier.startsWith('.')) return specifier in packageModules ? [packageModules[specifier]!] : [];
+  const path = relative(root, join(root, file, '..', specifier));
+  return [path, ...['.ts', '.tsx', '/index.ts', '/index.tsx'].map((suffix) => `${path}${suffix}`)];
 }
 
 // App-Bundle ---------------------------------------------------------------------------------------
@@ -153,6 +154,24 @@ describe('Registry der Testfähigkeiten', () => {
       for (const module of capability.modules) expect(filesBelow(module.replace(/\/$/, '')).length, module).toBeGreaterThan(0);
     }
   });
+
+  it('jeder registrierte Deep Link wird ausschließlich im Deep-Link-Modul der Testfähigkeiten angenommen', () => {
+    const handler = read(deepLinkHandler);
+    const paths = testCapabilities.flatMap(({ entries }) => entries.deepLinks ?? []);
+    expect(paths.sort()).toEqual(['fehler', 'seed']);
+    for (const path of paths) expect(handler, path).toContain(`'${path}'`);
+    expect(testCapabilities.some(({ modules }) => belongsTo(deepLinkHandler, modules))).toBe(true);
+  });
+
+  it('Gegenprobe: jeder Marker steht in einem Development-Artefakt, die Prüfung fände ihn also', () => {
+    const developmentImage = imageFiles('development').map(read).join('\n');
+    for (const { key, markers } of testCapabilities) {
+      for (const marker of markers) {
+        const found = developmentImage.includes(marker) || bundles.development.every((bundle) => bundle.js.includes(marker));
+        expect(found, `${key}: ${marker}`).toBe(true);
+      }
+    }
+  });
 });
 
 describe('Produktions-Image des Backends', () => {
@@ -187,8 +206,7 @@ describe('Produktions-Image des Backends', () => {
     it('kein Produktionscode importiert die Fähigkeit', () => {
       for (const file of production) {
         for (const specifier of specifiers(read(file))) {
-          const target = resolved(file, specifier);
-          expect(target !== null && belongsTo(target.replace(/\.ts$/, '.ts'), capability.modules), `${file} → ${specifier}`).toBe(false);
+          expect(resolved(file, specifier).some((target) => belongsTo(target, capability.modules)), `${file} → ${specifier}`).toBe(false);
         }
       }
     });
@@ -220,10 +238,15 @@ describe('Produktions-Bundle der App', () => {
       }
     });
 
-    it('enthält keinen Marker und keinen Deep-Link-Einstieg der Fähigkeit', () => {
+    it('enthält keinen Marker der Fähigkeit', () => {
       for (const bundle of bundles.production) {
         for (const marker of capability.markers) expect(bundle.js.includes(marker), `${bundle.platform}: ${marker}`).toBe(false);
       }
+    });
+
+    it.runIf((capability.entries.deepLinks ?? []).length > 0)('nimmt keinen Deep Link der Fähigkeit an', () => {
+      for (const bundle of bundles.production) expect(bundle.sources, bundle.platform).not.toContain(deepLinkHandler);
+      for (const bundle of bundles.development) expect(bundle.sources, bundle.platform).toContain(deepLinkHandler);
     });
   });
 
