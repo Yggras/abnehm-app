@@ -5,6 +5,7 @@ import {
   CheckInReason,
   DailyGoalCause,
   DailyGoalCompletion,
+  DailyGoalCompletionRecord,
   DailyGoalEvaluated,
   DailyGoalEvaluation,
   DailyGoalProgress,
@@ -13,7 +14,7 @@ import {
   DailyGoalState,
 } from '../src/daily-goals.ts';
 import { fixtures } from './define.ts';
-import { now, philipp, timeZone, today, todayEndsAt } from './ids.ts';
+import { completion, now, philipp, timeZone, today, todayEndsAt, weeklyPlanVersion } from './ids.ts';
 
 const snapshotBase = { personId: philipp, localDate: today, slot: 1, timeZone, dayEndsAt: todayEndsAt } as const;
 
@@ -50,6 +51,19 @@ const weighed = {
 } as const;
 
 const recorded = { type: 'festgehalten', firstCompletedAt: now } as const;
+
+const completionRecord = {
+  id: completion,
+  // Irgendeine UUID; das Tagesziel selbst liefert Spezifikation 1.
+  dailyGoalId: weeklyPlanVersion,
+  personId: philipp,
+  localDate: today,
+  slot: 2,
+  baustein: 'wasserziel',
+  firstCompletedAt: now,
+  completionKey: `tagesziel:${philipp}:${today}:2`,
+  createdAt: now,
+} as const;
 
 export const dailyGoalFixtures = {
   DailyGoalSlot: fixtures(DailyGoalSlot, {
@@ -107,6 +121,14 @@ export const dailyGoalFixtures = {
   DailyGoalCompletion: fixtures(DailyGoalCompletion, {
     valid: { 'nie': { type: 'nie' }, 'festgehalten': recorded },
     invalid: { 'festgehalten ohne Zeitpunkt': { type: 'festgehalten' } },
+  }),
+  DailyGoalCompletionRecord: fixtures(DailyGoalCompletionRecord, {
+    valid: { 'Wasserziel auf Platz 2': completionRecord },
+    invalid: {
+      'Schlüssel eines anderen Platzes': { ...completionRecord, completionKey: `tagesziel:${philipp}:${today}:1` },
+      'Platz 4': { ...completionRecord, slot: 4, completionKey: `tagesziel:${philipp}:${today}:4` },
+      'unbekannter Baustein': { ...completionRecord, baustein: 'schritte' },
+    },
   }),
   DailyGoalEvaluated: fixtures(DailyGoalEvaluated, {
     valid: {

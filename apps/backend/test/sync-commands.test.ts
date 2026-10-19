@@ -9,14 +9,15 @@ import { notificationIntent, processedOperation, waterEntry } from '../src/db/sc
 import { insertNotificationIntent } from '../src/sync/notification-intents.ts';
 import { CommandRejection } from '../src/sync/commands.ts';
 import { createTestBackend, type TestBackend } from './support/app.ts';
-import { personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
+import { authorizationCases, personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
+import { dailyGoalCommandScenarios } from './support/daily-goals.ts';
 import type { Device } from './support/auth-client.ts';
 import { push, pushRaw, testWaterEntity, upsertOp, water } from './support/sync.ts';
 import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
 
 const command = (id: string, key: string, amountMl = 250): Extract<OutboxOperation, { businessKey: string }> => ({
-  type: 'completeDailyGoal', operationId: EntityId.parse(id), businessKey: key, payload: { amountMl, localId: id },
+  type: 'saveMealFavorite', operationId: EntityId.parse(id), businessKey: key, payload: { amountMl, localId: id },
   knownServerVersion: null, schemaVersion: currentSyncSchemaVersion, createdAt: '2026-10-14T12:00:00.000Z' as never,
 });
 
@@ -25,7 +26,7 @@ async function setup() {
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   backend.sync.registerEntity(testWaterEntity);
   const payloadSchema = z.strictObject({ amountMl: z.int().positive(), localId: EntityId });
-  backend.sync.registerCommand({ type: 'completeDailyGoal', identity: 'mapped', policy: policies.resource('water_entry', 'befehl'),
+  backend.sync.registerCommand({ type: 'saveMealFavorite', identity: 'mapped', policy: policies.resource('water_entry', 'befehl'),
     payload: payloadSchema,
     target: (operation) => ({ id: operation.payload.localId as string }),
     duplicate: (operation, original) => {
@@ -95,7 +96,7 @@ describe('Fachbefehl über Push', () => {
 
   it('erfasst alle registrierten Fachbefehle im Negativtest-Gerüst', async () => {
     const { backend } = await setup();
-    expect(() => registeredCommandCases(backend, {})).toThrow('completeDailyGoal');
+    expect(() => registeredCommandCases(backend, dailyGoalCommandScenarios)).toThrow('saveMealFavorite');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),
       arrange: async () => {
@@ -119,8 +120,11 @@ describe('Fachbefehl über Push', () => {
       },
     } satisfies AuthorizationScenario<{ backend: TestBackend; actor: Device; ownId: string },
       'ohne_sitzung' | 'fremde_person' | 'manipulierte_id'>;
-    const cases = registeredCommandCases(backend, { completeDailyGoal: scenario });
-    const wrong = registeredCommandCases(backend, { completeDailyGoal: { ...scenario, policy: policies.resource('weight_entry', 'befehl') } });
+    // Vollständig erst mit den Szenarien der echten Fachbefehle; deren Fälle laufen in ihren eigenen Tests (#105).
+    const all = { ...dailyGoalCommandScenarios, saveMealFavorite: scenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+    expect(() => registeredCommandCases(backend, all)).not.toThrow();
+    const cases = authorizationCases({ ...scenario, command: 'saveMealFavorite' });
+    const wrong = authorizationCases({ ...scenario, policy: policies.resource('weight_entry', 'befehl'), command: 'saveMealFavorite' });
     await expect(wrong.find((testCase) => testCase.name.startsWith('Fachbefehl'))!.run()).rejects.toThrow();
     for (const testCase of cases) {
       try { await testCase.run(); } catch (error) { throw new Error(`${testCase.name}: ${String(error)}`); }
@@ -143,7 +147,7 @@ describe('Fachbefehl über Push', () => {
     const targetId = randomUUID();
     const disclosedId = randomUUID();
     await push(backend, anna.device, [upsertOp(targetId, water(250)), upsertOp(disclosedId, water(300))]);
-    backend.sync.registerCommand({ type: 'grantDailyBonus', identity: 'none', policy: policies.resource('water_entry', 'befehl'),
+    backend.sync.registerCommand({ type: 'confirmPhotoDraft', identity: 'none', policy: policies.resource('water_entry', 'befehl'),
       payload: z.strictObject({ targetId: EntityId, disclosedId: EntityId }),
       target: (operation) => ({ id: operation.payload.targetId }),
       canonicalRequest: (operation) => operation.payload,
@@ -155,7 +159,7 @@ describe('Fachbefehl über Push', () => {
           serverVersion: ServerVersion.parse(row.serverVersion.toString()), data: row.data }] };
       },
     });
-    const operation = { ...command(randomUUID(), 'bonus:1'), type: 'grantDailyBonus' as const,
+    const operation = { ...command(randomUUID(), 'bonus:1'), type: 'confirmPhotoDraft' as const,
       payload: { targetId, disclosedId } };
     expect((await push(backend, anna.device, [operation]))[0]?.type).toBe('applied');
     const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
@@ -167,12 +171,12 @@ describe('Fachbefehl über Push', () => {
 
   it('verweigert einem ID-erzeugenden Handler ohne vollständige kanonische Zuordnung die Bestätigung', async () => {
     const { backend, anna } = await setup();
-    backend.sync.registerCommand({ type: 'grantDailyBonus', identity: 'mapped', policy: policies.resource('water_entry', 'befehl'),
+    backend.sync.registerCommand({ type: 'confirmPhotoDraft', identity: 'mapped', policy: policies.resource('water_entry', 'befehl'),
       payload: z.strictObject({ localId: EntityId }), target: (operation) => ({ id: operation.payload.localId }),
       canonicalRequest: () => ({}), duplicate: () => [],
       async execute() { return { changes: [], idMappings: [] }; },
     });
-    const request = { ...command(randomUUID(), 'bonus:broken'), type: 'grantDailyBonus' as const, payload: { localId: randomUUID() } };
+    const request = { ...command(randomUUID(), 'bonus:broken'), type: 'confirmPhotoDraft' as const, payload: { localId: randomUUID() } };
     expect((await push(backend, anna.device, [request]))[0]).toMatchObject({ type: 'permanently_rejected',
       error: { code: 'invalid_payload' } });
   });

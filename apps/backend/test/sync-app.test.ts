@@ -80,7 +80,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     network,
     sync: () => engine.sync(),
     save: (id: EntityId, amountMl: number) => database.transaction((tx) => water_.save(tx, id, water(amountMl))),
-    completeTestGoal: (id: EntityId, businessKey: string) => database.transaction((tx) => water_.completeTestGoal(tx, id, businessKey, water(250))),
+    saveTestCommand: (id: EntityId, businessKey: string) => database.transaction((tx) => water_.saveTestCommand(tx, id, businessKey, water(250))),
     remove: (id: EntityId) => database.transaction((tx) => water_.remove(tx, id)),
     visible: () => database.read((tx) => water_.visible(tx)).map(({ id, amountMl }) => ({ id, amountMl })),
     row: (id: EntityId) => database.read((tx) => water_.row(tx, id)),
@@ -110,8 +110,8 @@ describe('Sync App ↔ Backend', () => {
     const { backend, a, b } = await setup();
     const first = EntityId.parse(randomUUID());
     const second = EntityId.parse(randomUUID());
-    a.completeTestGoal(first, 'goal:2026-10-14:1');
-    b.completeTestGoal(second, 'goal:2026-10-14:1');
+    a.saveTestCommand(first, 'goal:2026-10-14:1');
+    b.saveTestCommand(second, 'goal:2026-10-14:1');
     await a.sync();
     await b.sync();
     expect(b.visible()).toEqual([{ id: first, amountMl: 250 }]);
@@ -123,7 +123,7 @@ describe('Sync App ↔ Backend', () => {
   it('verliert nach abgebrochener HTTP-Antwort keinen Fachbefehl und führt ihn nur einmal aus', async () => {
     const { backend, a } = await setup();
     const id = EntityId.parse(randomUUID());
-    a.completeTestGoal(id, 'goal:2026-10-14:1');
+    a.saveTestCommand(id, 'goal:2026-10-14:1');
     a.network.dropNextPushResponse = true;
     expect((await a.sync()).push).toBe('unavailable');
     expect(a.outbox()).toHaveLength(1);

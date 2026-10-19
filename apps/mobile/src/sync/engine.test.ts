@@ -119,7 +119,7 @@ describe('Sync der App', () => {
   it('übernimmt bei ausgefallenem Push keinen Pull über eine lokal offene Fachänderung', async () => {
     const context = await setup();
     const id = EntityId.parse(randomUUID());
-    context.database.transaction((tx) => context.repository.completeTestGoal(tx, id, 'goal:offen', water(250)));
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, id, 'goal:offen', water(250)));
     context.transport.onPush = () => ({ type: 'unavailable' });
     context.transport.onPull = () => ({ type: 'ok', body: { changes: [record(id, 100, '2')],
       next: { type: 'complete', cursor: '2' as never } } });
@@ -129,12 +129,30 @@ describe('Sync der App', () => {
     context.databases.lock(); context.files.remove();
   });
 
+  it('meldet dem Haken den alten und den neuen lokalen Tag einer übernommenen Zeile (#105)', async () => {
+    const context = await setup();
+    const id = EntityId.parse(randomUUID());
+    context.database.transaction((tx) =>
+      testWaterEntity.applyCanonical(tx, { entityId: id, serverVersion: ServerVersion.parse('1'), data: { ...recordData(250), localDate: '2026-10-13' as never } }),
+    );
+    const fresh = EntityId.parse(randomUUID());
+    context.transport.onPull = () => ({ type: 'ok', body: { changes: [record(id, 300, '2'), record(fresh, 100, '3')],
+      next: { type: 'complete', cursor: '3' as never } } });
+    expect(await context.engine.sync()).toEqual({ push: 'nothing_to_do', pull: 'done' });
+    const day = (localDate: string) => ({ type: 'tag', personId: PERSON, localDate });
+    expect(context.hookCalls).toEqual([[
+      { entityType: 'water_entry', entityId: id, type: 'record', days: [day('2026-10-13'), day('2026-10-14')] },
+      { entityType: 'water_entry', entityId: fresh, type: 'record', days: [day('2026-10-14')] },
+    ]]);
+    context.databases.lock(); context.files.remove();
+  });
+
   it('sendet Änderungen nach einem Fachbefehl erst mit der kanonischen ID', async () => {
     const context = await setup();
     const local = EntityId.parse(randomUUID());
     const canonical = EntityId.parse(randomUUID());
     context.database.transaction((tx) => {
-      context.repository.completeTestGoal(tx, local, 'goal:serialized', water(250));
+      context.repository.saveTestCommand(tx, local, 'goal:serialized', water(250));
       context.repository.save(tx, local, water(300));
     });
     let pushes = 0;
@@ -159,7 +177,7 @@ describe('Sync der App', () => {
     const context = await setup();
     const local = EntityId.parse(randomUUID());
     const canonical = EntityId.parse(randomUUID());
-    context.database.transaction((tx) => context.repository.completeTestGoal(tx, local, 'goal:gleicher-tag', water(250)));
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, local, 'goal:gleicher-tag', water(250)));
     let firstPush = true;
     context.transport.onPush = (request) => {
       if (!firstPush) return { type: 'unavailable' };
@@ -180,7 +198,7 @@ describe('Sync der App', () => {
     const context = await setup();
     const local = EntityId.parse(randomUUID());
     const canonical = EntityId.parse(randomUUID());
-    context.database.transaction((tx) => context.repository.completeTestGoal(tx, local, `goal:${local}`, water(250)));
+    context.database.transaction((tx) => context.repository.saveTestCommand(tx, local, `goal:${local}`, water(250)));
     let firstPush = true;
     context.transport.onPush = (request) => {
       if (!firstPush) return { type: 'unavailable' };
@@ -302,7 +320,8 @@ describe('Sync der App', () => {
     // Die jüngere Operation ist noch offen: Ihre Wirkung bleibt, der Pull überschreibt die Zeile nicht.
     expect(database.read((tx) => repository.row(tx, id))).toMatchObject({ amountMl: 400, serverVersion: '5' });
     expect(outboxRows(database)).toEqual([expect.objectContaining({ entityId: id, payload: expect.objectContaining({ amountMl: 400 }) })]);
-    expect(hookCalls[0]).toEqual([{ entityType: 'water_entry', entityId: id, type: 'reconciled' }]);
+    const today = { type: 'tag', personId: PERSON, localDate: '2026-10-14' };
+    expect(hookCalls[0]).toEqual([{ entityType: 'water_entry', entityId: id, type: 'reconciled', days: [today, today] }]);
   });
 
   it('entfernt eine abgelehnte Entität ohne kanonischen Zustand lokal', async () => {
