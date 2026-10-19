@@ -72,6 +72,11 @@ export const dirtyDay = sqliteTable(
     localDate: localDate('local_date').notNull(),
     cause: text('cause').notNull(),
     createdAt: instant('created_at').notNull(),
+    /**
+     * Steigt bei jedem erneuten Markieren. Der Dispatcher bestätigt nur die Revision, die er zugestellt
+     * hat; ein währenddessen neu gesetzter Marker bleibt so erhalten.
+     */
+    revision: integer('revision').notNull().default(0),
   },
   (t) => [
     primaryKey({ name: 'dirty_day_pk', columns: [t.personId, t.localDate, t.cause] }),
