@@ -108,10 +108,13 @@ async function reactivate(tx: DbExecutor, couplingId: string, at: Date) {
       .where(eq(island.id, found.id));
     return found.id;
   });
-  for (const table of [partnerSharing, photoSharing]) {
+  const sharingTables = [
+    { entityType: 'partner_sharing', table: partnerSharing },
+    { entityType: 'photo_sharing', table: photoSharing },
+  ] as const;
+  for (const { entityType, table } of sharingTables) {
     const sharings = await tx.select({ id: table.id, ownerPersonId: table.ownerPersonId }).from(table).where(eq(table.couplingId, couplingId));
     for (const sharing of sharings) {
-      const entityType = table === partnerSharing ? 'partner_sharing' : 'photo_sharing';
       await write({ entityType, ownerPersonId: sharing.ownerPersonId }, async (stamp) => {
         await tx.update(table).set(updated(stamp)).where(eq(table.id, sharing.id));
         return sharing.id;

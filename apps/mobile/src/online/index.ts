@@ -6,7 +6,7 @@ import type {
   InviteCode,
 } from '@abnehm/contracts/coupling';
 
-import { backendBaseUrl } from '../backend/client';
+import { requiredBackendBaseUrl } from '../backend/client';
 import { createInvitationFlows, type InvitationFlows, type SyncTrigger } from './invitation-flows';
 import { useOnlineFlows } from './OnlineFlowsProvider';
 import { useOnlineFlow, type FlowState } from './use-online-flow';
@@ -22,9 +22,7 @@ export { OnlineFlowsProvider } from './OnlineFlowsProvider';
 
 /** Die Abläufe des Geräts: `fetch` des Auth-Moduls (Sitzung, Sperre bei `401`) und der Sync des Kontos. */
 export function createDeviceInvitationFlows({ fetch, sync }: { fetch: typeof globalThis.fetch; sync: SyncTrigger }): InvitationFlows {
-  const baseUrl = backendBaseUrl();
-  if (baseUrl === undefined) throw new Error('EXPO_PUBLIC_API_URL fehlt im Produktionsbuild');
-  return createInvitationFlows({ baseUrl, fetch, sync });
+  return createInvitationFlows({ baseUrl: requiredBackendBaseUrl(), fetch, sync });
 }
 
 const sameIntent = () => 'einladung';

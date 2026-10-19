@@ -152,17 +152,21 @@ describe('Code prüfen', () => {
     expect(await accept(backend, fourth.device, expiring)).toMatchObject(rejected('invite_expired'));
   });
 
-  it('meldet already_coupled, wenn eine der beiden Personen schon gekoppelt ist', async () => {
+  it('meldet already_coupled für die eigene Kopplung; der Code einer gekoppelten Person gilt als ungültig', async () => {
     const { backend, philipp, anna } = await setup();
     const third = await personWithSession(backend, 'dritte@example.test', 'Dritte');
     const fromThird = await codeOf(backend, third.device);
-    expect((await accept(backend, anna.device, await codeOf(backend, philipp.device))).status).toBe(200);
+    const [first, second] = [await codeOf(backend, philipp.device), await codeOf(backend, philipp.device)];
+    expect((await accept(backend, anna.device, first)).status).toBe(200);
 
     expect(await check(backend, anna.device, fromThird)).toMatchObject(rejected('already_coupled'));
     expect(await accept(backend, anna.device, fromThird)).toMatchObject(rejected('already_coupled'));
     expect(await createInvitation(backend, philipp.device)).toMatchObject(rejected('already_coupled'));
     const fourth = await personWithSession(backend, 'vierte@example.test', 'Vierte');
     expect(await check(backend, fourth.device, fromThird)).toMatchObject({ status: 200 });
+    // Philipp ist inzwischen gekoppelt; sein zweiter Code verrät das nicht.
+    expect(await check(backend, fourth.device, second)).toMatchObject(rejected('invite_invalid'));
+    expect(await accept(backend, fourth.device, second)).toMatchObject(rejected('invite_invalid'));
   });
 });
 
@@ -179,6 +183,17 @@ describe('Begrenzung', () => {
     expect(await accept(backend, anna.device, code)).toMatchObject(limited);
     clock.advanceBy(15 * 60 * 1000);
     expect(await check(backend, anna.device, code)).toMatchObject({ status: 200 });
+  });
+
+  it('lässt auch gleichzeitig nicht mehr als fünf Fehlversuche eines Kontos zu', async () => {
+    const { backend, philipp, anna } = await setup();
+    const code = await codeOf(backend, philipp.device);
+    const guesses = Array.from({ length: 10 }, (_, n) => String(n).padStart(6, '0')).filter((guess) => guess !== code);
+
+    const replies = await Promise.all(guesses.slice(0, 9).map((guess) => check(backend, anna.device, guess)));
+
+    expect(replies.filter((reply) => reply.status === 422)).toHaveLength(5);
+    expect(replies.filter((reply) => reply.status === 429)).toHaveLength(4);
   });
 
   it('sperrt einen Code nach fünf Fehlversuchen beliebiger Konten', async () => {

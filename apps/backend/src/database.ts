@@ -39,6 +39,22 @@ export function pgConnection({ host, port, name, user, password }: DatabaseSetti
 }
 
 /**
+ * Führt eine Schreibtransaktion aus und wiederholt sie bei Unique-Verletzung (23505), Deadlock (40P01)
+ * oder Serialisierungsfehler (40001): Der neue Versuch prüft alles erneut und kommt so zu einem stabilen
+ * fachlichen Ausgang. Nach `attempts` Versuchen oder bei jedem anderen Fehler geht der Fehler durch.
+ */
+export async function transactionWithRetry<T>(database: Database, work: (tx: DbExecutor) => Promise<T>, { attempts = 5 } = {}): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await database.db.transaction(work);
+    } catch (error) {
+      const code = sqlStateOf(error);
+      if (attempt >= attempts || (code !== '23505' && code !== '40P01' && code !== '40001')) throw error;
+    }
+  }
+}
+
+/**
  * SQLSTATE eines Postgres-Fehlers, auch wenn Drizzle ihn als `cause` einpackt; sonst `undefined`
  * (https://www.postgresql.org/docs/current/errcodes-appendix.html).
  */

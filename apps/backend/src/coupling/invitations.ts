@@ -18,10 +18,10 @@ import {
 
 import { forbiddenError, guard, policies, type Actor, type PersonActor } from '../authorization/authorization.ts';
 import { jsonBody } from '../contract-validation.ts';
-import { sqlStateOf, type Database, type DbExecutor } from '../database.ts';
+import { transactionWithRetry, type Database, type DbExecutor } from '../database.ts';
 import { couplingMember, invitation, person } from '../db/schema/index.ts';
 import type { OnlineFlow } from '../online/flows.ts';
-import { onlineRequestBinding, storedOnlineResult, storeOnlineResult, type OnlineRequestBinding } from '../online/online-requests.ts';
+import { storedOnlineResult, storeOnlineResult, type OnlineRequestBinding } from '../online/online-requests.ts';
 import type { SecurityLog } from '../security-log/security-log.ts';
 import { lockSyncClock } from '../sync/change-log.ts';
 import { couple, couplingOfPair } from './couple.ts';
@@ -34,15 +34,10 @@ import type { InvitationLimiter } from './invitation-limiter.ts';
 /** Gültigkeit eines Codes (Designwert, nicht wissenschaftlich belegt). */
 export const INVITATION_VALIDITY_MS = 24 * 60 * 60 * 1000;
 
-/** Versuche bei Unique-Verletzung, Deadlock oder Serialisierungsfehler, bevor der Fehler durchgeht. */
-const MAX_TRANSACTION_ATTEMPTS = 5;
-
 export type InvitationsDependencies = Readonly<{
   database: Database;
   clock: Clock;
   codes: InviteCodes;
-  /** Schlüssel des Anfrage-Hashes in `online_request`; das Einladungs-Secret. */
-  requestHashKey: string;
   limiter: InvitationLimiter;
   securityLog: SecurityLog;
   /** Quelladresse der Anfrage, wie die Begrenzung der Anmeldung sie bestimmt. */
@@ -58,9 +53,9 @@ const fail = (code: InvitationErrorCode | 'operation_conflict'): Outcome<never> 
 const forbidden: Outcome<never> = { type: 'error', error: forbiddenError };
 
 /** Fehlversuche im Sinne der Begrenzung: Der Code führt zu keiner Einladung, die angenommen werden kann. */
-const failedAttempts: readonly InvitationErrorCode[] = ['invite_invalid', 'invite_expired', 'invite_consumed', 'invite_self'];
+const failedAttempts: ReadonlySet<string> = new Set<InvitationErrorCode>(['invite_invalid', 'invite_expired', 'invite_consumed', 'invite_self']);
 
-export function invitationRoutes({ database, clock, codes, requestHashKey, limiter, securityLog, ipAddressOf }: InvitationsDependencies) {
+export function invitationRoutes({ database, clock, codes, limiter, securityLog, ipAddressOf }: InvitationsDependencies) {
   const now = () => new Date(clock.read().instant);
 
   /** Ein identischer Retry erhält das gespeicherte Ergebnis, eine fremde `requestId` nur `forbidden`. */
@@ -72,24 +67,10 @@ export function invitationRoutes({ database, clock, codes, requestHashKey, limit
     return null;
   }
 
-  /**
-   * Führt eine Schreibtransaktion aus und wiederholt sie bei Unique-Verletzung, Deadlock oder
-   * Serialisierungsfehler: Der neue Versuch prüft alles erneut und kommt so zu einem stabilen
-   * fachlichen Ausgang, etwa `already_coupled` nach einer gleichzeitigen Annahme.
-   */
-  async function retrying<T>(work: (tx: DbExecutor) => Promise<T>): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await database.db.transaction(work);
-      } catch (error) {
-        if (attempt >= MAX_TRANSACTION_ATTEMPTS || !isContention(error)) throw error;
-      }
-    }
-  }
+  const retrying = <T>(work: (tx: DbExecutor) => Promise<T>) => transactionWithRetry(database, work);
 
-  function binding(actor: Actor, flow: OnlineFlow, request: { requestId: string }): OnlineRequestBinding {
-    return onlineRequestBinding({ hashKey: requestHashKey, accountId: actor.accountId, flow, request });
-  }
+  const binding = (actor: Actor, flow: OnlineFlow, request: { requestId: string }) =>
+    codes.bindRequest(request, { accountId: actor.accountId, flow });
 
   // Code erzeugen ---------------------------------------------------------------------------------
 
@@ -146,17 +127,22 @@ export function invitationRoutes({ database, clock, codes, requestHashKey, limit
     if (found.consumedAt !== null) return fail('invite_consumed');
     if (found.expiresAt.getTime() <= now().getTime()) return fail('invite_expired');
     if (found.inviterPersonId === actor.personId) return fail('invite_self');
-    if (await anyActivelyCoupled(executor, [found.inviterPersonId])) return fail('already_coupled');
+    // Ist die einladende Person inzwischen gekoppelt, taugt der Code nicht mehr. Ein eigener Fehler verriete,
+    // dass es ihn gibt; er zählt deshalb wie ein ungültiger Code.
+    if (await anyActivelyCoupled(executor, [found.inviterPersonId])) return fail('invite_invalid');
     return { type: 'ok', value: found } as const;
   }
 
-  /** Begrenzung um einen Ablauf: gesperrt ohne Datenbankzugriff, danach je Ausgang gezählt. */
+  /**
+   * Begrenzung um einen Ablauf: gesperrt ohne Datenbankzugriff. Der Versuch zählt vorab als Fehlversuch
+   * und wird nur bei einem anderen Ausgang freigegeben; ein abgebrochener Ablauf bleibt gezählt.
+   */
   async function limited<T>(actor: PersonActor, code: string, ipAddress: string | null, run: (codeHmac: string) => Promise<Outcome<T>>) {
     const attempt = { accountId: actor.accountId, codeHmac: codes.hmacOf(code), ipAddress };
-    if (limiter.isBlocked(attempt)) return fail('invite_rate_limited');
+    const ticket = limiter.begin(attempt);
+    if (ticket === null) return fail('invite_rate_limited');
     const outcome = await run(attempt.codeHmac);
-    const failed = outcome.type === 'error' && failedAttempts.includes(outcome.error.code as InvitationErrorCode);
-    limiter.record(attempt, { failed });
+    if (outcome.type === 'ok' || !failedAttempts.has(outcome.error.code)) limiter.succeeded(ticket);
     return outcome;
   }
 
@@ -186,6 +172,8 @@ export function invitationRoutes({ database, clock, codes, requestHashKey, limit
         await lockSyncClock(tx);
         const again = await stored(tx, bound, AcceptInvitationResult.parse);
         if (again !== null) return again;
+        // Die eigene Kopplung zuerst: Bei überkreuzten Annahmen ist die zweite Person inzwischen gekoppelt.
+        if (await anyActivelyCoupled(tx, [actor.personId])) return fail('already_coupled');
         const found = await usableInvitation(tx, actor, codeHmac, true);
         if (found.type === 'error') return found;
         const pair = [found.value.inviterPersonId, actor.personId] as const;
@@ -195,7 +183,9 @@ export function invitationRoutes({ database, clock, codes, requestHashKey, limit
           .where(inArray(person.id, [...pair]))
           .orderBy(asc(person.id))
           .for('update');
-        if (await anyActivelyCoupled(tx, pair)) return fail('already_coupled');
+        // Unter der Sperre erneut: Eine gleichzeitige Annahme kann eine der beiden inzwischen gekoppelt haben.
+        if (await anyActivelyCoupled(tx, [actor.personId])) return fail('already_coupled');
+        if (await anyActivelyCoupled(tx, [found.value.inviterPersonId])) return fail('invite_invalid');
         const at = now();
         await tx.update(invitation).set({ consumedAt: at, consumedByPersonId: actor.personId }).where(eq(invitation.id, found.value.id));
         const coupled = await couple(tx, pair, at);
@@ -210,22 +200,21 @@ export function invitationRoutes({ database, clock, codes, requestHashKey, limit
   // Routen ----------------------------------------------------------------------------------------
 
   /** Vor dem Bootstrap gibt es keine Person; die Abläufe verweigern dann generisch. */
-  const personOf = (actor: Actor): PersonActor | null => (actor.personId === null ? null : { ...actor, personId: actor.personId });
+  const asPerson = async <T>(actor: Actor, run: (person: PersonActor) => Promise<Outcome<T>>): Promise<Outcome<T>> =>
+    actor.personId === null ? forbidden : run({ ...actor, personId: actor.personId });
 
+  // Je Route ein eigenes `c.json`, damit Hono RPC die Antworttypen ableitet.
   return new Hono()
     .post('/invitations', guard(policies.authenticated()), jsonBody(CreateInvitationRequest), async (c) => {
-      const actor = personOf(c.var.actor);
-      const outcome = actor === null ? forbidden : await create(actor, c.req.valid('json'));
+      const outcome = await asPerson(c.var.actor, (actor) => create(actor, c.req.valid('json')));
       return outcome.type === 'ok' ? c.json(outcome.value, 200) : c.json(outcome.error, statusOf(outcome.error));
     })
     .post('/invitations/check', guard(policies.authenticated()), jsonBody(CheckInvitationRequest), async (c) => {
-      const actor = personOf(c.var.actor);
-      const outcome = actor === null ? forbidden : await check(actor, c.req.valid('json'), ipAddressOf(c.req.raw));
+      const outcome = await asPerson(c.var.actor, (actor) => check(actor, c.req.valid('json'), ipAddressOf(c.req.raw)));
       return outcome.type === 'ok' ? c.json(outcome.value, 200) : c.json(outcome.error, statusOf(outcome.error));
     })
     .post('/invitations/accept', guard(policies.authenticated()), jsonBody(AcceptInvitationRequest), async (c) => {
-      const actor = personOf(c.var.actor);
-      const outcome = actor === null ? forbidden : await accept(actor, c.req.valid('json'), ipAddressOf(c.req.raw));
+      const outcome = await asPerson(c.var.actor, (actor) => accept(actor, c.req.valid('json'), ipAddressOf(c.req.raw)));
       return outcome.type === 'ok' ? c.json(outcome.value, 200) : c.json(outcome.error, statusOf(outcome.error));
     });
 }
@@ -245,13 +234,4 @@ async function anyActivelyCoupled(executor: DbExecutor, personIds: readonly stri
     .where(and(inArray(couplingMember.personId, [...personIds]), eq(couplingMember.couplingStatus, 'aktiv')))
     .limit(1);
   return found !== undefined;
-}
-
-/**
- * Konkurrenz zweier Transaktionen statt eines fachlichen Fehlers: Unique-Verletzung (23505), Deadlock
- * (40P01) oder Serialisierungsfehler (40001) laut https://www.postgresql.org/docs/current/errcodes-appendix.html.
- */
-function isContention(error: unknown): boolean {
-  const code = sqlStateOf(error);
-  return code === '23505' || code === '40P01' || code === '40001';
 }

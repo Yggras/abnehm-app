@@ -1,6 +1,6 @@
 import type { Clock } from '@abnehm/clock';
 
-import { createSlidingWindows } from '../rate-limit.ts';
+import { createSlidingWindows, MINUTE_MS } from '../rate-limit.ts';
 
 // Begrenzung der Anmeldeversuche pro Konto und pro IP (#22; Spezifikation 0, Abschnitt 9). Gezählt
 // werden Fehlversuche. Der Kontoschlüssel ist die kleingeschriebene E-Mail, so wie Better Auth das Konto
@@ -8,8 +8,6 @@ import { createSlidingWindows } from '../rate-limit.ts';
 // sind. Die Grenzwerte sind dieselben Designwerte wie bei den Einladungscodes und nicht
 // wissenschaftlich belegt.
 // Die Zähler liegen im Speicher des einen Backend-Prozesses; ein Neustart setzt sie zurück.
-
-const MINUTE_MS = 60_000;
 
 export const loginLimits = {
   perAccount: { max: 5, windowMs: 15 * MINUTE_MS },

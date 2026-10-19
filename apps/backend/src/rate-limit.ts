@@ -5,13 +5,17 @@ import type { Clock } from '@abnehm/clock';
 
 const MAX_TRACKED_KEYS = 10_000;
 
+export const MINUTE_MS = 60_000;
+
 export type WindowLimit = Readonly<{ max: number; windowMs: number }>;
 
 export type SlidingWindows = {
   /** Ob unter dem Schlüssel im Fenster schon `limit.max` Ereignisse liegen. */
   exhausted(key: string, limit: WindowLimit): boolean;
-  /** Zählt ein Ereignis jetzt. */
-  add(key: string, limit: WindowLimit): void;
+  /** Zählt ein Ereignis jetzt; der Zeitpunkt nimmt es mit `remove` wieder heraus. */
+  add(key: string, limit: WindowLimit): number;
+  /** Nimmt ein mit `add` gezähltes Ereignis wieder heraus. */
+  remove(key: string, at: number): void;
   clear(key: string): void;
 };
 
@@ -39,6 +43,14 @@ export function createSlidingWindows({ clock, longestWindowMs }: { clock: Clock;
         for (const known of [...events.keys()]) recent(known, longestWindowMs, at);
       }
       events.set(key, [...recent(key, limit.windowMs, at), at]);
+      return at;
+    },
+    remove(key, at) {
+      const kept = [...(events.get(key) ?? [])];
+      const index = kept.indexOf(at);
+      if (index >= 0) kept.splice(index, 1);
+      if (kept.length === 0) events.delete(key);
+      else events.set(key, kept);
     },
     clear(key) {
       events.delete(key);

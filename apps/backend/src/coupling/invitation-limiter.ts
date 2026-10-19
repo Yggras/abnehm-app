@@ -1,14 +1,15 @@
 import type { Clock } from '@abnehm/clock';
 
-import { createSlidingWindows } from '../rate-limit.ts';
+import { createSlidingWindows, MINUTE_MS } from '../rate-limit.ts';
 
 // Begrenzung von „Code prüfen“ und „Einladung annehmen“ (Spezifikation 0, Abschnitt 9): fünf
 // Fehlversuche je Konto bzw. je Code in 15 Minuten, 20 Versuche je IP in der Stunde. Je IP zählt
 // wörtlich jeder Versuch, nicht nur ein Fehlversuch; zwei Personen hinter einer Adresse brauchen für
 // eine Kopplung trotzdem nur wenige. Die Grenzwerte sind Designwerte und nicht wissenschaftlich belegt.
 // Der Code geht nur als HMAC in den Schlüssel ein.
-
-const MINUTE_MS = 60_000;
+//
+// Ein Versuch zählt schon beim Beginn als Fehlversuch und wird erst bei einem anderen Ausgang wieder
+// freigegeben. So kommen auch gleichzeitige Anfragen nicht an der Sperre vorbei.
 
 export const invitationLimits = {
   perAccount: { max: 5, windowMs: 15 * MINUTE_MS },
@@ -19,11 +20,14 @@ export const invitationLimits = {
 /** Wer mit welchem Code anfragt; die IP fehlt ohne erkennbare Quelladresse. */
 export type InvitationAttempt = Readonly<{ accountId: string; codeHmac: string; ipAddress: string | null }>;
 
+/** Ein begonnener Versuch; bis zur Freigabe zählt er als Fehlversuch. */
+export type AttemptTicket = Readonly<{ provisional: readonly { key: string; at: number }[] }>;
+
 export type InvitationLimiter = {
-  /** Gesperrt, solange Konto, Code oder IP ihr Kontingent im Fenster aufgebraucht haben. */
-  isBlocked(attempt: InvitationAttempt): boolean;
-  /** Ein abgearbeiteter Versuch; `failed` bei ungültigem, abgelaufenem, verbrauchtem oder eigenem Code. */
-  record(attempt: InvitationAttempt, outcome: { failed: boolean }): void;
+  /** `null`, solange Konto, Code oder IP ihr Kontingent im Fenster aufgebraucht haben; sonst zählt der Versuch. */
+  begin(attempt: InvitationAttempt): AttemptTicket | null;
+  /** Der Versuch war kein Fehlversuch: ungültiger, abgelaufener, verbrauchter oder eigener Code. */
+  succeeded(ticket: AttemptTicket): void;
 };
 
 export function createInvitationLimiter({ clock }: { clock: Clock }): InvitationLimiter {
@@ -37,9 +41,14 @@ export function createInvitationLimiter({ clock }: { clock: Clock }): Invitation
     ipAddress === null ? [] : [{ key: `ip:${ipAddress}`, limit: invitationLimits.perIp }];
 
   return {
-    isBlocked: (attempt) => [...failureKeys(attempt), ...ipKey(attempt)].some(({ key, limit }) => windows.exhausted(key, limit)),
-    record(attempt, { failed }) {
-      for (const { key, limit } of [...ipKey(attempt), ...(failed ? failureKeys(attempt) : [])]) windows.add(key, limit);
+    begin(attempt) {
+      const keys = [...failureKeys(attempt), ...ipKey(attempt)];
+      if (keys.some(({ key, limit }) => windows.exhausted(key, limit))) return null;
+      for (const { key, limit } of ipKey(attempt)) windows.add(key, limit);
+      return { provisional: failureKeys(attempt).map(({ key, limit }) => ({ key, at: windows.add(key, limit) })) };
+    },
+    succeeded(ticket) {
+      for (const { key, at } of ticket.provisional) windows.remove(key, at);
     },
   };
 }

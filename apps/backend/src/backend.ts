@@ -47,7 +47,6 @@ export function createBackend({
     database,
     clock,
     codes: createInviteCodes(invitationSettings.codeSecret),
-    requestHashKey: invitationSettings.codeSecret,
     limiter: createInvitationLimiter({ clock }),
     securityLog,
     ipAddressOf: auth.ipAddressOf,

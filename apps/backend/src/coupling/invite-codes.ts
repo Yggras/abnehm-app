@@ -2,9 +2,12 @@ import { createHmac } from 'node:crypto';
 
 import { InviteCode } from '@abnehm/contracts/coupling';
 
+import type { OnlineFlow } from '../online/flows.ts';
+import { onlineRequestBinding, type OnlineRequestBinding } from '../online/online-requests.ts';
+
 // Einladungscodes (Spezifikation 0, Abschnitt 9). Alles hängt an einem eigenen Secret, getrennt vom
 // Better-Auth-Secret; die Verwendungen sind über ein Präfix voneinander getrennt. Dasselbe Secret
-// schlüsselt den Hash der Einladungsanfragen in `online_request` (`online/online-requests.ts`).
+// schlüsselt den Hash der Einladungsanfragen in `online_request` (`bindRequest`).
 //
 // Der Server speichert nie den Klartext eines Codes. Damit ein Retry der Erzeugung dennoch denselben
 // Code liefert, ist der Code eine HMAC-Ableitung der zufälligen Einladungs-ID: HMAC-SHA256 ist mit
@@ -28,6 +31,8 @@ export type InviteCodes = {
   codeFor(invitationId: string): InviteCode;
   /** Was die Tabelle `invitation` speichert und worüber sie den eingegebenen Code findet. */
   hmacOf(code: InviteCode): string;
+  /** Bindet eine Einladungsanfrage für `online_request`; ihr Hash ist mit dem Einladungs-Secret geschlüsselt. */
+  bindRequest(request: { requestId: string }, binding: { accountId: string; flow: OnlineFlow }): OnlineRequestBinding;
 };
 
 export function createInviteCodes(secret: string): InviteCodes {
@@ -40,5 +45,6 @@ export function createInviteCodes(secret: string): InviteCodes {
       return InviteCode.parse(value.toString().padStart(6, '0'));
     },
     hmacOf: (code) => hmac('einladung', code).digest('hex'),
+    bindRequest: (request, binding) => onlineRequestBinding({ hashKey: secret, request, ...binding }),
   };
 }
