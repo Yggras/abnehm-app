@@ -1,6 +1,6 @@
 ---
 name: ticket-uebersicht
-description: Zeigt zu Sessionbeginn die offenen Umsetzungstickets der Spezifikationen 0–5, empfiehlt eine Reihenfolge und unabhängige Tickets für parallele Sessions. Nur lesend: claimt nichts und startet keine Arbeit. Verwenden, wenn der Nutzer nach Ticketübersicht, Priorisierung oder Parallelisierung fragt.
+description: 'Zeigt zu Sessionbeginn die offenen Umsetzungstickets der Spezifikationen 0–5, empfiehlt eine Reihenfolge und unabhängige Tickets für parallele Sessions. Nur lesend: claimt nichts und startet keine Arbeit. Verwenden, wenn der Nutzer nach Ticketübersicht, Priorisierung oder Parallelisierung fragt.'
 ---
 
 # ticket-uebersicht – lesen, einordnen, empfehlen
