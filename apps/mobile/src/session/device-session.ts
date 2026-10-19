@@ -5,7 +5,7 @@ import { backendBaseUrl } from '../backend/client';
 import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDeviceLocalDatabases } from '../local-db';
-import { attachTodayPerson } from '../shell/app-today';
+import { appTodayRegistry, followTodayPerson } from '../shell/app-today';
 import { createAppSession, type AppSession } from './app-session';
 
 // Composition Root der App-Sitzung auf dem Gerät. Im Development Build umhüllen die Testfähigkeiten
@@ -16,6 +16,8 @@ import { createAppSession, type AppSession } from './app-session';
 export const appClock: Clock = testCapabilities?.clock ?? deviceClock;
 
 const onError = (error: unknown) => console.error('[sitzung]', error);
+/** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
+const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 let session: AppSession | null = null;
 
 /** Die Sitzung des Geräts; beim ersten Aufruf angelegt. */
@@ -30,7 +32,7 @@ export function deviceSession(): AppSession {
     sessionStore: adapters?.sessionStore(secureSessionStore) ?? secureSessionStore,
     databases: createDeviceLocalDatabases({ onError }),
     clock: appClock,
-    onAccountOpened: (database) => attachTodayPerson(database, appClock),
+    onAccountOpened: todayPersonOpened,
     onError,
   });
   return session;

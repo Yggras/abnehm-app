@@ -180,7 +180,7 @@ export function createAppAuth({ baseUrl, sessionStore, accountData, onError, fet
     const session = await storedSession();
     const headers = new Headers(init?.headers);
     if (session?.token != null) headers.set('authorization', `Bearer ${session.token}`);
-    const response = await fetchImpl(input, { ...init, headers });
+    const response = await fetchImpl(input, { ...init, headers, credentials: 'omit' });
     if (response.status === 401) await lock();
     return response;
   };
@@ -191,6 +191,10 @@ export function createAppAuth({ baseUrl, sessionStore, accountData, onError, fet
     try {
       const response = await viaFetch(`${baseUrl}${path}`, {
         method,
+        // Die Sitzung reist nur als Bearer-Token. Ohne `omit` speichert React Native das Cookie von
+        // Better Auth und sendet es mit (`withCredentials` ist dort standardmäßig an); Better Auth
+        // verlangt dann einen Origin-Header und lehnt jede weitere Anmeldung auf dem Gerät ab.
+        credentials: 'omit',
         headers: body === undefined ? undefined : { 'content-type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: abort.signal,
