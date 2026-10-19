@@ -59,10 +59,15 @@ export function pathOf(name: RouteName): string {
   return name === 'today' ? '/' : `/${name.replaceAll('.', '/')}`;
 }
 
-/** Pfade der modalen Routen ohne führenden `/`, als Namen der Screens im Wurzel-Stack. */
+/** Name des Screens einer Route im Wurzel-Stack: ihr Pfad ohne führenden `/`. */
+export function screenNameOf(name: RouteName): string {
+  return pathOf(name).slice(1);
+}
+
+/** Namen der Screens der modalen Routen im Wurzel-Stack. */
 export const modalScreens = (Object.keys(routeCatalog) as RouteName[])
   .filter((name) => routeCatalog[name].presentation === 'modal')
-  .map((name) => pathOf(name).slice(1));
+  .map(screenNameOf);
 
 /** Namen der Seiten im Wurzel-Stack; die Einstellungen sind je Abschnitt eine Datei unter `settings/`. */
 export const pageScreens = (Object.keys(routeCatalog) as RouteName[])
@@ -70,5 +75,5 @@ export const pageScreens = (Object.keys(routeCatalog) as RouteName[])
   .flatMap((name) =>
     name === 'settings'
       ? ['settings/index', ...Object.keys(settingsOwners).map((section) => `settings/${section}`)]
-      : [pathOf(name).slice(1)],
+      : [screenNameOf(name)],
   );

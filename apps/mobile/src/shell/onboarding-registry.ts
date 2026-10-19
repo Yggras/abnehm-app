@@ -10,12 +10,12 @@ import type { Owner } from '../navigation';
 // den Ablauf und zeichnet Rahmen, Fortschritt und „Überspringen“; ein Beitrag zeichnet Inhalt und
 // Hauptaktion und meldet nur `complete(outcome)`.
 
-/** Die Reihenfolge gehört der Shell, nicht der Reihenfolge der Registrierung. */
+/** Schritte 9, 10 und 11; die Reihenfolge gehört der Shell, nicht der Reihenfolge der Registrierung. */
 export const onboardingSteps = [
-  { key: 'health', step: 9, owner: 'tracker' },
-  { key: 'notifications', step: 10, owner: 'partner' },
-  { key: 'partner', step: 11, owner: 'partner' },
-] as const satisfies readonly { key: OnboardingStepKey; step: number; owner: Owner }[];
+  { key: 'health', owner: 'tracker' },
+  { key: 'notifications', owner: 'partner' },
+  { key: 'partner', owner: 'partner' },
+] as const satisfies readonly { key: OnboardingStepKey; owner: Owner }[];
 
 /** Die Ergebnisse, die der Schritt `K` melden darf; `skipped` gilt für alle. */
 export type OnboardingStepOutcomeOf<K extends OnboardingStepKey> = z.infer<(typeof onboardingStepOutcomes)[K]>;
@@ -47,10 +47,6 @@ export function createOnboardingRegistry() {
       return () => {
         if (contributions.get(key) === stored) contributions.delete(key);
       };
-    },
-    /** Der Beitrag zum Schritt oder `undefined`, solange sein Bereich fehlt. */
-    contribution<K extends OnboardingStepKey>(key: K): OnboardingStepContribution<K> | undefined {
-      return contributions.get(key) as OnboardingStepContribution<K> | undefined;
     },
     /** Der gerenderte Beitrag mit genau diesen Props oder `null`, solange sein Bereich fehlt. */
     element<K extends OnboardingStepKey>(key: K, props: OnboardingStepProps<K>): ReactElement | null {

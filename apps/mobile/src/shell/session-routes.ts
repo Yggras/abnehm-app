@@ -1,6 +1,6 @@
 import type { RouteName } from '@abnehm/contracts/routes';
 
-import { modalScreens, pageScreens, pathOf } from '../navigation';
+import { modalScreens, pageScreens, pathOf, screenNameOf } from '../navigation';
 import { sessionScreenGates, type SessionGate, type SessionScreenGate } from '../session/session-gate';
 
 // Welche Bildschirme die Sitzungs-Weiche in welchem Zustand freigibt (Spezifikation 0, Abschnitt 6).
@@ -17,7 +17,7 @@ export const sessionScreen = 'sitzung';
  */
 export const onboardingModalRoutes = ['partner.invite', 'partner.redeem', 'notifications.permission'] as const satisfies readonly RouteName[];
 
-const onboardingModals: readonly string[] = onboardingModalRoutes.map((name) => pathOf(name).slice(1));
+const onboardingModals: readonly string[] = onboardingModalRoutes.map(screenNameOf);
 
 /** Ein Screen des Wurzel-Stacks; modale Abläufe erscheinen über ihrem Aufrufer. */
 export type GatedScreen = Readonly<{ name: string; modal: boolean }>;
@@ -32,7 +32,7 @@ export const screenAccess = {
     ...screens(modalScreens.filter((name) => !onboardingModals.includes(name)), true),
   ],
   onboardingAndToday: screens(onboardingModals, true),
-  onboarding: screens([pathOf('onboarding').slice(1)], false),
+  onboarding: screens([screenNameOf('onboarding')], false),
   session: screens([sessionScreen], false),
 } as const satisfies Record<string, readonly GatedScreen[]>;
 

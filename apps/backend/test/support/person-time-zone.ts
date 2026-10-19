@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { EntityId } from '@abnehm/contracts/base';
+import { EntityId, Instant } from '@abnehm/contracts/base';
 import { personTimeZoneKey } from '@abnehm/contracts/person';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
 
@@ -21,7 +21,7 @@ export function timeZoneOp(personId: string, timeZone: string, changeId: string 
     payload: { timeZone },
     knownServerVersion: null,
     schemaVersion: currentSyncSchemaVersion,
-    createdAt: '2026-10-14T12:00:00.000Z' as never,
+    createdAt: Instant.parse('2026-10-14T12:00:00.000Z'),
   };
 }
 

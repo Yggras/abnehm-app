@@ -2,8 +2,7 @@ import type { Clock } from '@abnehm/clock';
 import type { EntityId } from '@abnehm/contracts/base';
 
 import type { LocalDatabase } from '../local-db';
-import { person } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
+import { readOwnPerson } from '../local-db/person-header';
 import { requestPersonTimeZone, type LocalCommandRegistry } from '../sync';
 
 // Zeitzone der Person (Spezifikation 0, Abschnitt 8): Sobald die kanonische Person auf dem Gerät ist,
@@ -43,7 +42,7 @@ export function followPersonTimeZone({ clock, commandsFor, newId, onError }: {
       current = own;
       let present = false;
       const stop = database.observe(
-        (tx) => sqliteOf(tx).select({ id: person.id }).from(person).limit(1).get() !== undefined,
+        (tx) => readOwnPerson(tx) !== undefined,
         (exists) => {
           const arrived = exists && !present;
           present = exists;

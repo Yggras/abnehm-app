@@ -2,8 +2,7 @@ import { EntityId, type TimeZone } from '@abnehm/contracts/base';
 import { personTimeZoneKey, UpdatePersonTimeZone } from '@abnehm/contracts/person';
 
 import type { LocalDatabase } from '../local-db';
-import { person } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
+import { readOwnPerson } from '../local-db/person-header';
 import type { LocalCommand, LocalCommandRegistry } from './commands';
 import { pendingCommandPayloads } from './outbox';
 
@@ -33,7 +32,7 @@ export function requestPersonTimeZone(
   newId: () => EntityId,
 ): PersonTimeZoneRequest {
   const known = database.read((tx) => {
-    const own = sqliteOf(tx).select({ id: person.id, timeZone: person.timeZone }).from(person).limit(1).get();
+    const own = readOwnPerson(tx);
     if (own === undefined) return null;
     const pending = pendingCommandPayloads(tx, 'updatePersonTimeZone').at(-1);
     return { personId: EntityId.parse(own.id), timeZone: pending === undefined ? own.timeZone : UpdatePersonTimeZone.parse(pending).timeZone };

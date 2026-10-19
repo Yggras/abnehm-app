@@ -26,9 +26,9 @@ function HealthStep({ complete }: OnboardingStepProps<'health'>) {
 
 test('die Steckplätze stehen in der Reihenfolge der Schritte 9–11 mit ihrem Bereich', () => {
   expect(onboardingSteps).toEqual([
-    { key: 'health', step: 9, owner: 'tracker' },
-    { key: 'notifications', step: 10, owner: 'partner' },
-    { key: 'partner', step: 11, owner: 'partner' },
+    { key: 'health', owner: 'tracker' },
+    { key: 'notifications', owner: 'partner' },
+    { key: 'partner', owner: 'partner' },
   ]);
 });
 
@@ -105,5 +105,5 @@ test('je Schritt meldet nur sein Bereich genau einen Beitrag an', () => {
   const unregister = registry.register('tracker', 'health', HealthStep);
   expect(() => registry.register('tracker', 'health', HealthStep)).toThrow('bereits registriert');
   unregister();
-  expect(registry.contribution('health')).toBeUndefined();
+  expect(registry.element('health', { complete: () => {} })).toBeNull();
 });

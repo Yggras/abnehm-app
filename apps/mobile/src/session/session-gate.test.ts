@@ -12,8 +12,8 @@ import { followSessionGate, sessionGate, type SessionGate } from './session-gate
 // Sitzungs-Weiche (Spezifikation 0, Abschnitt 6): jeder Zustand aus Auth-Zustand und eigener Person,
 // dazu die Übergänge mit der echten Kontodatenbank (better-sqlite3).
 
-const begonnen = { accountId: 'konto_a', onboardingStatus: 'begonnen' } as const;
-const abgeschlossen = { accountId: 'konto_a', onboardingStatus: 'abgeschlossen' } as const;
+const begonnen = { accountId: 'konto_a', onboardingCompleted: false } as const;
+const abgeschlossen = { accountId: 'konto_a', onboardingCompleted: true } as const;
 
 /** Was Spezifikation 1 am Ende des Onboardings über den Person-Upsert schreibt. */
 const completedOnboarding = {
