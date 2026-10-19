@@ -25,7 +25,7 @@ export async function runBackend(served: (backend: Backend, database: Database) 
     await database.close();
     process.exit(1);
   }
-  const backend = createBackend({ database, authSettings: config.auth });
+  const backend = createBackend({ database, authSettings: config.auth, invitationSettings: config.invitations });
   // Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts).
   const stopJobs = backend.jobs.start();
 

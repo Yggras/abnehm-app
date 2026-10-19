@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CatalogKey, EntityId, Instant, ServerVersion } from './base.ts';
+import { CatalogKey, EntityId, Instant, ServerVersion, TimeZone } from './base.ts';
 
 // Momo, Insel und gemeinsame Aktionen (Spezifikation 0, Abschnitte 5, 6 und 9). Die Spielregeln
 // selbst liefert Spezifikation 4; hier stehen nur die geteilten Formen.
@@ -65,6 +65,33 @@ export const IslandProgress = z
     path: ['members'],
   });
 export type IslandProgress = z.infer<typeof IslandProgress>;
+
+/** Zustand einer Insel: bis zum Schlüpfen wartet sie auf Rollen, nach dem Entkoppeln ist sie archiviert. */
+export const IslandState = z.enum(['wartet_auf_rollen', 'aktiv', 'archiviert']);
+export type IslandState = z.infer<typeof IslandState>;
+
+/**
+ * Kanonischer Datensatz einer Insel (`island`) im Sync. Schlüpfzeitpunkt und Zeitzone kommen
+ * gemeinsam mit dem Schlüpfen (Spezifikation 4); eine wartende Insel hat keines von beiden.
+ */
+export const IslandRecord = z
+  .strictObject({
+    couplingId: EntityId,
+    state: IslandState,
+    hatchedAt: Instant.nullable(),
+    timeZone: TimeZone.nullable(),
+    createdAt: Instant,
+    updatedAt: Instant,
+  })
+  .refine((record) => (record.hatchedAt === null) === (record.timeZone === null), {
+    message: 'Schlüpfzeitpunkt und Zeitzone nur gemeinsam',
+    path: ['timeZone'],
+  })
+  .refine((record) => (record.state === 'aktiv' ? record.hatchedAt !== null : record.state !== 'wartet_auf_rollen' || record.hatchedAt === null), {
+    message: 'Aktiv erst nach dem Schlüpfen, wartend nur davor',
+    path: ['hatchedAt'],
+  });
+export type IslandRecord = z.infer<typeof IslandRecord>;
 
 const sharedActionBase = {
   id: EntityId,

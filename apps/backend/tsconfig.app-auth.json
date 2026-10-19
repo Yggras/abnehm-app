@@ -15,5 +15,5 @@
     "types": ["node"]
   },
   // postgres-server.ts deklariert den von Vitest bereitgestellten Postgres-Zugang.
-  "include": ["test/app-auth.test.ts", "test/sync-app.test.ts", "test/seed-app.test.ts", "test/support/postgres-server.ts"]
+  "include": ["test/app-auth.test.ts", "test/sync-app.test.ts", "test/online-app.test.ts", "test/seed-app.test.ts", "test/support/postgres-server.ts"]
 }

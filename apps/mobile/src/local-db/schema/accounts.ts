@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, sqliteTable, unique, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import { AreaKey } from '@abnehm/contracts/base';
+import { CouplingStatus, PartnerSharingLevel, PhotoSharingLevel } from '@abnehm/contracts/coupling';
 import { IslandRole } from '@abnehm/contracts/island';
 
 import { flag, id, instant, json, localDate, mutable, oneOf, ref, small, text, whole } from './columns';
@@ -63,7 +64,7 @@ export const coupling = sqliteTable(
   (t) => [
     unique('coupling_pair_uq').on(t.personLowId, t.personHighId),
     unique('coupling_id_status_uq').on(t.id, t.status),
-    check('coupling_status_check', oneOf(t.status, ['aktiv', 'archiviert'])),
+    check('coupling_status_check', oneOf(t.status, CouplingStatus.options)),
     check('coupling_pair_order_check', sql`${t.personLowId} < ${t.personHighId}`),
     check('coupling_ended_check', sql`(${t.status} = 'archiviert') = (${t.endedAt} is not null)`),
   ],
@@ -135,7 +136,7 @@ export const partnerSharing = sqliteTable(
   (t) => [
     unique('partner_sharing_area_uq').on(t.ownerPersonId, t.couplingId, t.area),
     check('partner_sharing_area_check', oneOf(t.area, AreaKey.options)),
-    check('partner_sharing_level_check', oneOf(t.level, ['privat', 'zusammengefasst'])),
+    check('partner_sharing_level_check', oneOf(t.level, PartnerSharingLevel.options)),
   ],
 );
 
@@ -154,6 +155,6 @@ export const photoSharing = sqliteTable(
   },
   (t) => [
     unique('photo_sharing_owner_uq').on(t.ownerPersonId, t.couplingId),
-    check('photo_sharing_level_check', oneOf(t.level, ['privat', 'geteilt'])),
+    check('photo_sharing_level_check', oneOf(t.level, PhotoSharingLevel.options)),
   ],
 );

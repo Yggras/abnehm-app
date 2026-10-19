@@ -1,5 +1,7 @@
 import type { Clock } from '@abnehm/clock';
 
+import { createSlidingWindows, MINUTE_MS } from '../rate-limit.ts';
+
 // Begrenzung der Anmeldeversuche pro Konto und pro IP (#22; Spezifikation 0, Abschnitt 9). Gezählt
 // werden Fehlversuche. Der Kontoschlüssel ist die kleingeschriebene E-Mail, so wie Better Auth das Konto
 // sucht, und gilt auch für E-Mails ohne Konto, sonst verriete die Sperre, welche E-Mails registriert
@@ -7,12 +9,9 @@ import type { Clock } from '@abnehm/clock';
 // wissenschaftlich belegt.
 // Die Zähler liegen im Speicher des einen Backend-Prozesses; ein Neustart setzt sie zurück.
 
-const MINUTE_MS = 60_000;
-const MAX_TRACKED_KEYS = 10_000;
-
 export const loginLimits = {
-  perAccount: { maxFailures: 5, windowMs: 15 * MINUTE_MS },
-  perIp: { maxFailures: 20, windowMs: 60 * MINUTE_MS },
+  perAccount: { max: 5, windowMs: 15 * MINUTE_MS },
+  perIp: { max: 20, windowMs: 60 * MINUTE_MS },
 } as const;
 
 /** Wer anfragt: E-Mail (wie eingegeben) und Quelladresse, falls bekannt. */
@@ -29,8 +28,7 @@ export type LoginLimiter = {
 const accountKey = (email: string) => `konto:${email.toLowerCase()}`;
 
 export function createLoginLimiter({ clock }: { clock: Clock }): LoginLimiter {
-  const failures = new Map<string, number[]>();
-  const now = () => Date.parse(clock.read().instant);
+  const windows = createSlidingWindows({ clock, longestWindowMs: loginLimits.perIp.windowMs });
   const keys = ({ email, ipAddress }: LoginAttempt) => [
     { key: accountKey(email), limit: loginLimits.perAccount },
     // Ohne erkennbare Adresse greift nur die Begrenzung pro Konto: Ein gemeinsamer Zähler ließe
@@ -39,29 +37,13 @@ export function createLoginLimiter({ clock }: { clock: Clock }): LoginLimiter {
     ...(ipAddress === null ? [] : [{ key: `ip:${ipAddress}`, limit: loginLimits.perIp }]),
   ];
 
-  /** Fehlversuche im Fenster; ältere fallen heraus, leere Einträge verschwinden. */
-  function recent(key: string, windowMs: number, at: number): number[] {
-    const kept = (failures.get(key) ?? []).filter((time) => at - time < windowMs);
-    if (kept.length === 0) failures.delete(key);
-    else failures.set(key, kept);
-    return kept;
-  }
-
   return {
-    isBlocked(attempt) {
-      const at = now();
-      return keys(attempt).some(({ key, limit }) => recent(key, limit.windowMs, at).length >= limit.maxFailures);
-    },
+    isBlocked: (attempt) => keys(attempt).some(({ key, limit }) => windows.exhausted(key, limit)),
     recordFailure(attempt) {
-      const at = now();
-      // Viele verschiedene Schlüssel (etwa wechselnde IPs) dürfen den Speicher nicht füllen.
-      if (failures.size > MAX_TRACKED_KEYS) {
-        for (const key of [...failures.keys()]) recent(key, loginLimits.perIp.windowMs, at);
-      }
-      for (const { key, limit } of keys(attempt)) failures.set(key, [...recent(key, limit.windowMs, at), at]);
+      for (const { key, limit } of keys(attempt)) windows.add(key, limit);
     },
     recordSuccess(attempt) {
-      failures.delete(accountKey(attempt.email));
+      windows.clear(accountKey(attempt.email));
     },
   };
 }
