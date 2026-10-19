@@ -2,6 +2,7 @@ import type { z } from 'zod';
 
 import { authFixtures } from './auth.ts';
 import { baseFixtures } from './base.ts';
+import { couplingFixtures } from './coupling.ts';
 import { dailyGoalFixtures } from './daily-goals.ts';
 import type { SchemaFixtures } from './define.ts';
 import { energyFixtures } from './energy.ts';
@@ -32,6 +33,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   routes: routeFixtures,
   person: personFixtures,
   auth: authFixtures,
+  coupling: couplingFixtures,
   'daily-goals': dailyGoalFixtures,
   energy: energyFixtures,
   partner: partnerFixtures,

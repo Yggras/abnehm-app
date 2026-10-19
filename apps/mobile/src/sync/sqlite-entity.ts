@@ -29,8 +29,11 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
   deletable: boolean;
   record: z.ZodType<R>;
   table: T;
-  /** Die vollständige Zeile zum kanonischen Datensatz, ohne Serverversion und Löschmarkierung. */
-  row(entityId: EntityId, data: R): T['$inferInsert'];
+  /**
+   * Die vollständige Zeile zum kanonischen Datensatz, ohne Serverversion und Löschmarkierung. `tx` dient
+   * nur dem Lesen lokal gespiegelter Spalten, etwa des Kopplungsstatus am Mitglied.
+   */
+  row(entityId: EntityId, data: R, tx: TransactionContext): T['$inferInsert'];
   /** Wendet eine offene Operation erneut an, genau wie beim Erfassen. */
   replay(tx: TransactionContext, entityId: EntityId, change: PendingChange<U>): void;
 }): SyncEntityAdapter<U, R> {
@@ -45,7 +48,7 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
   function applyCanonical(tx: TransactionContext, record: CanonicalEntity<R>) {
     const local = localVersion(tx, record.entityId)?.serverVersion;
     if (local != null && BigInt(local) > BigInt(record.serverVersion)) return;
-    const row = { ...options.row(record.entityId, record.data), serverVersion: record.serverVersion, deletedAt: null };
+    const row = { ...options.row(record.entityId, record.data, tx), serverVersion: record.serverVersion, deletedAt: null };
     sqliteOf(tx)
       .insert(table)
       .values(row as never)

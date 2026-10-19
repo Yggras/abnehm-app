@@ -3,14 +3,16 @@ import {
   CommonStage,
   IslandEventKind,
   IslandProgress,
+  IslandRecord,
   IslandRole,
+  IslandState,
   MomoAppearance,
   MomoForm,
   MomoMood,
   SharedAction,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
-import { anna, coupling, island, islandObject, now, philipp, project, sharedAction } from './ids.ts';
+import { anna, coupling, island, islandObject, now, philipp, project, sharedAction, timeZone } from './ids.ts';
 
 const progress = {
   islandId: island,
@@ -24,6 +26,15 @@ const progress = {
   activeProject: { projectId: project, templateKey: 'leuchtturm', sequenceNumber: 2, stage: 'gut_unterwegs' },
   dataAsOf: now,
   serverVersion: '1834',
+} as const;
+
+const waitingIsland = {
+  couplingId: coupling,
+  state: 'wartet_auf_rollen',
+  hatchedAt: null,
+  timeZone: null,
+  createdAt: now,
+  updatedAt: now,
 } as const;
 
 const giftBase = {
@@ -75,6 +86,23 @@ export const islandFixtures = {
         activeProject: { ...progress.activeProject, partnerContribution: 12 },
       },
       'Level 0': { ...progress, level: 0 },
+    },
+  }),
+  IslandState: fixtures(IslandState, {
+    valid: { 'wartet auf Rollen': 'wartet_auf_rollen', 'archiviert': 'archiviert' },
+    invalid: { 'geschlüpft ist kein Zustand': 'geschluepft' },
+  }),
+  IslandRecord: fixtures(IslandRecord, {
+    valid: {
+      'wartet auf Rollen': waitingIsland,
+      'geschlüpft': { ...waitingIsland, state: 'aktiv', hatchedAt: now, timeZone },
+      'archiviert nach dem Schlüpfen': { ...waitingIsland, state: 'archiviert', hatchedAt: now, timeZone },
+      'archiviert vor dem Schlüpfen': { ...waitingIsland, state: 'archiviert' },
+    },
+    invalid: {
+      'aktiv ohne Schlüpfen': { ...waitingIsland, state: 'aktiv' },
+      'wartend, aber geschlüpft': { ...waitingIsland, hatchedAt: now, timeZone },
+      'Schlüpfzeitpunkt ohne Zone': { ...waitingIsland, state: 'aktiv', hatchedAt: now },
     },
   }),
   SharedAction: fixtures(SharedAction, {

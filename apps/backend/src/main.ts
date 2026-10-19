@@ -16,7 +16,7 @@ try {
   await database.close();
   process.exit(1);
 }
-const { app, jobs } = createBackend({ database, authSettings: config.auth });
+const { app, jobs } = createBackend({ database, authSettings: config.auth, invitationSettings: config.invitations });
 // Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts).
 const stopJobs = jobs.start();
 

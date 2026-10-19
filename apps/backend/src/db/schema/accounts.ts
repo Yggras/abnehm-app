@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, pgTable, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { AreaKey } from '@abnehm/contracts/base';
+import { CouplingStatus, PartnerSharingLevel, PhotoSharingLevel } from '@abnehm/contracts/coupling';
 import { IslandRole } from '@abnehm/contracts/island';
 
 import { user } from './auth.ts';
@@ -73,7 +74,7 @@ export const coupling = pgTable(
   (t) => [
     unique('coupling_pair_uq').on(t.personLowId, t.personHighId),
     unique('coupling_id_status_uq').on(t.id, t.status),
-    check('coupling_status_check', oneOf(t.status, ['aktiv', 'archiviert'])),
+    check('coupling_status_check', oneOf(t.status, CouplingStatus.options)),
     check('coupling_pair_order_check', sql`${t.personLowId} < ${t.personHighId}`),
     check('coupling_ended_check', sql`(${t.status} = 'archiviert') = (${t.endedAt} is not null)`),
   ],
@@ -175,7 +176,7 @@ export const partnerSharing = pgTable(
   (t) => [
     unique('partner_sharing_area_uq').on(t.ownerPersonId, t.couplingId, t.area),
     check('partner_sharing_area_check', oneOf(t.area, AreaKey.options)),
-    check('partner_sharing_level_check', oneOf(t.level, ['privat', 'zusammengefasst'])),
+    check('partner_sharing_level_check', oneOf(t.level, PartnerSharingLevel.options)),
   ],
 );
 
@@ -194,6 +195,6 @@ export const photoSharing = pgTable(
   },
   (t) => [
     unique('photo_sharing_owner_uq').on(t.ownerPersonId, t.couplingId),
-    check('photo_sharing_level_check', oneOf(t.level, ['privat', 'geteilt'])),
+    check('photo_sharing_level_check', oneOf(t.level, PhotoSharingLevel.options)),
   ],
 );

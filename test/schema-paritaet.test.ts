@@ -26,6 +26,7 @@ const serverOnly = [
   'photo_draft',
   'change_log',
   'processed_operation',
+  'online_request',
   'security_log',
   'sync_clock',
   'revocation_notice',

@@ -206,6 +206,34 @@ Der eigene Push/Pull-Sync ([#99](https://github.com/Yggras/abnehm-app/issues/99)
 - **Aufbewahrung:** Änderungsprotokoll, Löschmarkierungen und verarbeitete Operationen bleiben dauerhaft erhalten; es gibt keinen Job, der sie bereinigt.
 - **Tests:** `apps/backend/test/sync-push.test.ts`, `sync-pull.test.ts` und `sync-authorization.test.ts` prüfen das Protokoll über HTTP. `sync-app.test.ts` lässt Engine, Outbox und Adapter der App auf echtem SQLite gegen die echte Hono-App laufen. Deshalb gehört er wie `app-auth.test.ts` zu `tsconfig.app-auth.json`, und `vitest.config.ts` lädt die `.sql`-Migrationen der App als Text. `apps/mobile/src/sync/engine.test.ts` steuert den Transport selbst und prüft Transaktionen, Reconciliation und atomare Seiten. Als Entität dient beiden die Test-Entität auf `water_entry` (`TestWaterUpsert` aus `@abnehm/contracts/fixtures`, App-Seite in `src/sync/testing/`). Den echten Wassereintrag meldet Spezifikation 3 an.
 
+### Kopplung: Einladung, Code prüfen und Annahme
+
+Die drei Online-Abläufe zum Koppeln ([#103](https://github.com/Yggras/abnehm-app/issues/103), Abschnitt 9 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)) liegen in `apps/backend/src/coupling/`. Verträge, Fehlercodes und die kanonischen Datensätze stehen in `@abnehm/contracts/coupling`.
+
+- **Endpunkte:** `POST /v1/invitations` (Code erzeugen), `/v1/invitations/check` (Code prüfen, ohne ihn zu verbrauchen) und `/v1/invitations/accept` (annehmen). Alle verlangen eine Sitzung und eine Person.
+  - Fachliche Ablehnungen kommen mit `422` und einem Code aus `InvitationErrorCode`, die Begrenzung mit `429` und `invite_rate_limited`.
+  - Eine wiederverwendete `requestId` mit anderem Inhalt ergibt `409` mit `operation_conflict`, eine fremde `403` mit `forbidden`.
+- **Code:** sechs Ziffern, 24 Stunden gültig, einmal verwendbar. Gespeichert wird nur ein HMAC mit eigenem Secret (`secrets/invite_code_secret`). Der Code ist eine HMAC-Ableitung der zufälligen Einladungs-ID (`invite-codes.ts`). So liefert ein Retry derselben Erzeugung denselben Code, ohne dass der Klartext gespeichert wird.
+- **Aufbewahrung der Einladungen:** Verbrauchte Einladungen bleiben erhalten. Eine abgelaufene, nie verbrauchte Einladung ist ein technischer Rest ohne fachlichen Zweck, sperrt aber über den Unique-Index offener Codes ihren Wert. Braucht eine neue Einladung genau diesen HMAC, löscht das Erzeugen sie in derselben Transaktion. Das ist die Aufbewahrungsregel, nach der Abschnitt 8 der Spezifikation 0 technische Daten physisch löschen lässt.
+- **Idempotenz:** Erzeugen und Annehmen tragen eine clientseitige `requestId`. Das Ergebnis eines Erfolgs liegt in `online_request`, gebunden an Konto, Ablaufart und einen HMAC der Anfrage, und kommt bei identischem Retry unverändert zurück. Ablehnungen werden nicht gespeichert, ein Retry rechnet sie neu.
+- **Begrenzung** (`invitation-limiter.ts`): fünf Fehlversuche je Konto bzw. je Code in 15 Minuten, 20 Versuche je IP in der Stunde, für Prüfen und Annehmen. Die IP bestimmt das Auth-Modul (`ipAddressOf`) wie bei der Anmeldung. Die Zähler liegen wie dort im Speicher des Prozesses.
+  - Ein Versuch zählt schon zu Beginn als Fehlversuch und wird bei einem anderen Ausgang wieder freigegeben. So kommen auch gleichzeitige Anfragen nicht an der Sperre vorbei.
+  - `already_coupled` gilt nur für die eigene Kopplung und wird vor dem Code geprüft. Ist die einladende Person inzwischen gekoppelt, antwortet der Server mit `invite_invalid`, damit die Antwort nicht verrät, dass es den Code gibt.
+- **Annahme** in einer Transaktion: zuerst die Sync-Clock wie beim Push, dann die Einladung, dann beide Personen in ID-Reihenfolge. Unique-Verletzungen, Deadlocks und Serialisierungsfehler wiederholt der Ablauf und kommt so zu einem stabilen Ausgang, etwa `already_coupled`.
+  - Für dasselbe Paar reaktiviert `couple.ts` die archivierte Kopplung samt Insel, Rollen und Freigaben, sonst legt es alles neu an.
+  - Jede Zeile bekommt eine Serverversion und einen Eintrag im Änderungsprotokoll. Kopplung, Mitglieder und Insel sieht jedes aktive Mitglied, die Freigaben nur ihre Eigentümerin.
+  - Die Annahme schreibt den Sicherheitslog-Eintrag `kopplung`.
+- **Anzeigename:** Ändert der Person-Upsert den Namen, zieht `followDisplayName` ihn in derselben Transaktion bei allen Kopplungsmitgliedern der Person nach.
+- **Sync:** Kopplung, Mitglieder, Insel und Freigaben sind auf beiden Seiten angemeldet (`coupling-entities.ts`), ohne generisches Upsert oder Löschen. In der App übernimmt das Mitglied seinen `coupling_status` aus der lokalen Kopplung.
+- **App-Modul** `apps/mobile/src/online/`:
+  - Bildschirme nutzen nur `useCreateInvitationCode`, `useCheckInvitationCode` und `useAcceptInvitation` unter `OnlineFlowsProvider`. TanStack Query v5 ist dort reine flüchtige Orchestrierung (`gcTime: 0`, keine stillen Wiederholungen) und nur in diesem Modul erlaubt (Regel `abnehm/bibliotheksgrenzen`).
+  - Bis zum Erfolg trägt jede Wiederholung derselben Absicht dieselbe `requestId`. Nach der Annahme stößt das Modul einen Sync an; die Kopplung liest der Bildschirm aus SQLite.
+  - Den Provider bindet ein, wer die Bildschirme liefert ([#120](https://github.com/Yggras/abnehm-app/issues/120)), mit `createDeviceInvitationFlows({ fetch: auth.fetch, sync })`.
+- **Tests:**
+  - `apps/backend/test/invitations.test.ts` prüft die Abläufe über HTTP, einschließlich Konkurrenz und Reaktivierung.
+  - `online-app.test.ts` lässt Modul und App-Sync gegen die echte Hono-App laufen.
+  - Komponententests nutzen den Online-Test-Adapter `online/testing/fake-invitation-flows.ts` (`respond`, `hold`, `calls`).
+
 ## Befehle
 
 Alle Befehle laufen im Repo-Root:
@@ -229,7 +257,7 @@ Der CI-Workflow `.github/workflows/ci.yml` führt bei jedem Pull Request Typprü
 
 ## Secrets
 
-- Das Datenbankpasswort liegt in `secrets/postgres_password`, das Better-Auth-Secret in `secrets/better_auth_secret` (mindestens 32 Zeichen, nur das Backend erhält es). `scripts/dev-secrets` erzeugt beide zufällig, und `npm run backend` ruft das Skript selbst auf.
+- Das Datenbankpasswort liegt in `secrets/postgres_password`, das Better-Auth-Secret in `secrets/better_auth_secret` und das Secret für die HMACs der Einladungscodes in `secrets/invite_code_secret`. Die beiden letzten haben mindestens 32 Zeichen, nur das Backend erhält sie. `scripts/dev-secrets` erzeugt alle zufällig, und `npm run backend` ruft das Skript selbst auf.
 - `secrets/` ist von Git und vom Docker-Build-Kontext ausgeschlossen.
 - Docker Compose bindet die Datei zur Laufzeit als Secret unter `/run/secrets/` ein. Das Backend liest Geheimnisse nur aus Dateien (`*_FILE`), nie aus Umgebungsvariablen, Git oder dem Image ([#22](https://github.com/Yggras/abnehm-app/issues/22)).
 - Die Integrationstests erzeugen für jeden Lauf ein eigenes Zufallspasswort.

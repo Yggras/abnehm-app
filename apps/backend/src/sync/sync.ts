@@ -28,8 +28,9 @@ import {
   type PersonActor,
   type ResourcePolicy,
 } from '../authorization/authorization.ts';
+import { canonicalJson } from '../canonical-json.ts';
 import { jsonBody } from '../contract-validation.ts';
-import type { Database, DbExecutor } from '../database.ts';
+import { sqlStateOf, type Database, type DbExecutor } from '../database.ts';
 import { changeLog, couplingMember, processedOperation } from '../db/schema/index.ts';
 import { errorCodeForLog } from '../log.ts';
 import { currentServerVersion, lockSyncClock, nextServerVersion, recordChange } from './change-log.ts';
@@ -397,15 +398,10 @@ function rejected(operation: OutboxOperation, code: ContractErrorCode, canonical
  * ist ein vorübergehender Infrastrukturfehler.
  */
 function integrityViolation(error: unknown): ContractErrorCode | null {
-  const code = sqlState(error) ?? sqlState((error as { cause?: unknown } | null)?.cause);
+  const code = sqlStateOf(error);
   if (code === undefined) return null;
   if (code === '23505') return 'conflict';
   return code.startsWith('23') || code.startsWith('22') ? 'invalid_payload' : null;
-}
-
-function sqlState(error: unknown): string | undefined {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
 }
 
 /**
@@ -414,15 +410,4 @@ function sqlState(error: unknown): string | undefined {
  */
 export function payloadHash(operation: OutboxOperation): string {
   return createHash('sha256').update(canonicalJson(operation)).digest('hex');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
 }

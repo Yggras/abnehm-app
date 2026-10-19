@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, sqliteTable, unique, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
-import { ChallengeStatus, CommonStage, IslandEventKind, IslandRole } from '@abnehm/contracts/island';
+import { ChallengeStatus, CommonStage, IslandEventKind, IslandRole, IslandState } from '@abnehm/contracts/island';
 import { SharedEventType } from '@abnehm/contracts/wir';
 
 import { coupling, person } from './accounts';
@@ -12,7 +12,6 @@ import { dailyGoalCompletion } from './plan';
 // Inseldaten gehören der Kopplung (`coupling_id`), Energiebuchungen und Einzahlungen der Person.
 // Fremdschlüssel unveränderlicher Ereignisse und Buchungen verwenden `ON DELETE RESTRICT`.
 
-export const islandStates = ['wartet_auf_rollen', 'aktiv', 'archiviert'] as const;
 export const objectOrigins = ['gebaut', 'besucher', 'entdeckung', 'jahreszeit', 'challenge'] as const;
 export const eventStatuses = ['offen', 'erfuellbar', 'abgeschlossen'] as const;
 export const bookingTypes = [
@@ -39,7 +38,7 @@ export const island = sqliteTable(
   (t) => [
     unique('island_coupling_uq').on(t.couplingId),
     unique('island_owner_uq').on(t.id, t.couplingId),
-    check('island_state_check', oneOf(t.state, islandStates)),
+    check('island_state_check', oneOf(t.state, IslandState.options)),
     check(
       'island_hatched_check',
       sql`(${t.state} <> 'aktiv' or ${t.hatchedAt} is not null) and (${t.state} <> 'wartet_auf_rollen' or ${t.hatchedAt} is null) and (${t.hatchedAt} is null) = (${t.timeZone} is null)`,

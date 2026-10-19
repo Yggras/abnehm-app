@@ -1,3 +1,4 @@
+import { couplingSyncEntities } from './coupling-entities';
 import { personEntity } from './person-entity';
 import type { SyncEntityAdapter } from './registry';
 
@@ -30,4 +31,4 @@ export {
 export { sqliteEntity } from './sqlite-entity';
 
 /** Die Entitäten des Fundaments; Bereiche ergänzen ihre im Composition Root. */
-export const foundationSyncEntities: readonly SyncEntityAdapter[] = [personEntity];
+export const foundationSyncEntities: readonly SyncEntityAdapter[] = [personEntity, ...couplingSyncEntities];

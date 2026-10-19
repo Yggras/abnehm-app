@@ -59,6 +59,11 @@ export type AuthModule = {
    * sind `POST /v1/session/revoke` und später das Abmeldemodul (#111) mit `abmeldung`.
    */
   revokeSession(session: AuthenticatedSession, cause: SingleSessionRevocation): Promise<void>;
+  /**
+   * Quelladresse einer Anfrage, wie die Begrenzung der Anmeldung sie bestimmt: `X-Forwarded-For` nur von
+   * vertrauenswürdigen Proxys (`AUTH_TRUSTED_PROXIES`), sonst `null`. Weitere Begrenzungen nutzen sie.
+   */
+  ipAddressOf(request: Request): string | null;
 };
 
 export type AuthSettings = Readonly<{
@@ -261,5 +266,5 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
       return c.body(null, 204);
     });
 
-  return { routes, sessions, admin, revokeSession };
+  return { routes, sessions, admin, revokeSession, ipAddressOf: (request) => ipOf(request) };
 }
