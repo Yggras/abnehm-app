@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { EntityId, Instant, LocalDate, MealKey, ServerVersion } from './base.ts';
+import { EntityId, Instant, LocalDate, MealKey, ServerVersion, type AreaKey } from './base.ts';
 import { addDays, daysBetween, isoWeekdayIndex } from './calendar.ts';
 import { mealCategoryCount } from './units.ts';
 
@@ -87,6 +87,30 @@ export const PartnerSummaryEnvelope = z
   ])
   .refine(ownerIsNotRecipient, ownerIsNotRecipientRule);
 export type PartnerSummaryEnvelope = z.infer<typeof PartnerSummaryEnvelope>;
+
+type EnvelopeOf<A extends AreaKey> = Extract<PartnerSummaryEnvelope, { type: A }>;
+/** Inhalt der Zusammenfassung eines Bereichs, wie ihn sein Projector berechnet. */
+export type PartnerSummaryContent<A extends AreaKey = AreaKey> = EnvelopeOf<A>['content'];
+export type PartnerSummaryPeriod<A extends AreaKey = AreaKey> = EnvelopeOf<A>['period'];
+
+/**
+ * Aktueller Zeitraum der Zusammenfassung eines Bereichs am aktuellen lokalen Tag des Eigentümers:
+ * Ernährung und Wasser der Tag, Sport die Woche von Montag bis Sonntag, Gewicht die 14 Tage bis heute.
+ */
+export function partnerSummaryPeriod<A extends AreaKey>(area: A, today: LocalDate): PartnerSummaryPeriod<A>;
+export function partnerSummaryPeriod(area: AreaKey, today: LocalDate): PartnerSummaryPeriod {
+  switch (area) {
+    case 'ernaehrung':
+    case 'wasser':
+      return { type: 'tag', localDate: today };
+    case 'sport': {
+      const monday = addDays(today, -isoWeekdayIndex(today));
+      return { type: 'woche', from: LocalDate.parse(monday), to: LocalDate.parse(addDays(monday, 6)) };
+    }
+    case 'gewicht':
+      return { type: 'vierzehn_tage', from: LocalDate.parse(addDays(today, -13)), to: today };
+  }
+}
 
 /** Grober Tageszielstand des Partners: 0, 1, 2 oder 3 Tageszielerfüllungen, nie als Zahl. */
 export const PartnerDailyGoalStage = z.enum(['noch_nichts', 'unterwegs', 'fast_geschafft', 'geschafft']);
