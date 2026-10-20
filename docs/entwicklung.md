@@ -262,7 +262,7 @@ Die drei Online-Abläufe zum Koppeln ([#103](https://github.com/Yggras/abnehm-ap
   - Jede Zeile bekommt eine Serverversion und einen Eintrag im Änderungsprotokoll. Kopplung, Mitglieder und Insel sieht jedes aktive Mitglied, die Freigaben nur ihre Eigentümerin.
   - Die Annahme schreibt den Sicherheitslog-Eintrag `kopplung`.
 - **Anzeigename:** Ändert der Person-Upsert den Namen, zieht `followDisplayName` ihn in derselben Transaktion bei allen Kopplungsmitgliedern der Person nach.
-- **Sync:** Kopplung, Mitglieder, Insel und Freigaben sind auf beiden Seiten angemeldet (`coupling-entities.ts`), ohne generisches Upsert oder Löschen. In der App übernimmt das Mitglied seinen `coupling_status` aus der lokalen Kopplung.
+- **Sync:** Kopplung, Mitglieder und Insel sind auf beiden Seiten angemeldet (`coupling-entities.ts`), ohne generisches Upsert oder Löschen. In der App übernimmt das Mitglied seinen `coupling_status` aus der lokalen Kopplung. Die Freigaben ändert die Eigentümerin per Upsert (siehe „Partner-Projektionen und Partnercache“).
 - **App-Modul** `apps/mobile/src/online/`:
   - Bildschirme nutzen nur `useCreateInvitationCode`, `useCheckInvitationCode` und `useAcceptInvitation` unter `OnlineFlowsProvider`. TanStack Query v5 ist dort reine flüchtige Orchestrierung (`gcTime: 0`, keine stillen Wiederholungen) und nur in diesem Modul erlaubt (Regel `abnehm/bibliotheksgrenzen`).
   - Bis zum Erfolg trägt jede Wiederholung derselben Absicht dieselbe `requestId`. Nach der Annahme stößt das Modul einen Sync an; die Kopplung liest der Bildschirm aus SQLite.
@@ -271,6 +271,36 @@ Die drei Online-Abläufe zum Koppeln ([#103](https://github.com/Yggras/abnehm-ap
   - `apps/backend/test/invitations.test.ts` prüft die Abläufe über HTTP, einschließlich Konkurrenz und Reaktivierung.
   - `online-app.test.ts` lässt Modul und App-Sync gegen die echte Hono-App laufen.
   - Komponententests nutzen den Online-Test-Adapter `online/testing/fake-invitation-flows.ts` (`respond`, `hold`, `calls`).
+
+### Partner-Projektionen und Partnercache
+
+Partner-Zusammenfassungen, den groben Partner-Tageszielstand und die Revocation-Notices aus Abschnitt 5 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71) liefert [#106](https://github.com/Yggras/abnehm-app/issues/106). Der Server liegt in `apps/backend/src/partner-projections/`, die App-Seite in `apps/mobile/src/partner-cache/`.
+
+- **Projector anmelden:** Je Bereich ein `PartnerSummaryProjector` (`projector.ts`) über `backend.partnerProjections.registerProjector(...)` in `createBackend`.
+  - `project(tx, { ownerPersonId, period })` liefert genau den `content` aus `PartnerSummaryEnvelope`.
+  - Gelesen werden nur die eigenen Bereichstabellen. Alles andere kommt als `ReaderPort<T>` (`(tx) => T`) beim Bau des Projectors herein, etwa der `PlanReader`.
+  - Einen ungültigen Inhalt speichert das Fundament nicht; der Pull liefert dann alles andere.
+- **Invalidieren:** Wer Einträge eines Bereichs serverseitig annimmt, ruft in derselben Transaktion `invalidatePartnerSummaries(tx, { type: 'bereich', ownerPersonId, area, localDate }, at)` auf (`invalidations.ts`).
+  - Neue oder ersetzte Ziel- und Wochenplanversionen (Spezifikation 1) melden `{ type: 'plan', ownerPersonId, validFrom }`; das wirkt auf alle Bereiche.
+  - Freigabeänderungen invalidiert das Fundament selbst.
+- **Vor-Pull-Schritt** `partner_projections`, vor der ersten Seite jedes Pulls in eigener Transaktion:
+  - Für die abrufende Person und ihren Partner in der aktiven Kopplung rechnet er den aktuellen Zeitraum in der `time_zone` des Partners: Tag (Ernährung, Wasser), Woche Montag bis Sonntag (Sport), 14 Tage bis heute (Gewicht), siehe `partnerSummaryPeriod` in `@abnehm/contracts/partner`.
+  - Gerechnet wird eine Zusammenfassung, wenn sie fehlt, invalidiert ist oder ihr `dataAsOf` älter als 10 Minuten ist (`dataAsOfRefreshMs`). Geschrieben wird nur ein neuer Stand. Nach 10 Minuten bestätigt der Pull also einen unveränderten Stand. So verrät „Stand vor …“ nicht, wann der Partner zuletzt etwas erfasst hat.
+  - Je Bereich bleibt genau eine Zusammenfassung lebendig, die des aktuellen Zeitraums; ältere werden zur Löschmarkierung.
+  - Den Tageszielstand (`noch_nichts` bis `geschafft`) bildet der Schritt bei jedem Pull aus den Tageszielerfüllungen von heute, ohne Bereichsfreigabe.
+  - Eine Invalidierung mit künftigem Tag bleibt offen, bis der Tag erreicht ist. Eine Advisory-Sperre je Eigentümer verhindert doppelte Projektionen bei gleichzeitigen Pulls.
+- **Widerruf** (`revocation.ts`):
+  - Stellt die Eigentümerin einen Bereich auf `privat`, werden in derselben Transaktion seine Zusammenfassungen zur Löschmarkierung, und der Empfänger erhält eine Notice `partner_summary`/`freigabe_entzogen`.
+  - Der Entkopplungs-Kern ([#107](https://github.com/Yggras/abnehm-app/issues/107)) ruft in seiner Transaktion `revokeCoupling(tx, couplingId, at)` auf. Alle Projektionen der Kopplung werden zur Löschmarkierung, und beide Mitglieder erhalten eine Notice `kopplung`/`entkopplung`.
+  - Erneutes Freigeben erzeugt eine neue ID und Generation; Gelöschtes wird nie wiederbelebt.
+- **Freigaben:** `partner_sharing` und `photo_sharing` sind Upsert-Entitäten (`PartnerSharingUpsert`/`PhotoSharingUpsert`, nur `level`) mit Last-Write-Wins. Lesen und schreiben darf nur die Eigentümerin.
+  - Auf dem Server führt `sharing-entities.ts` bei geänderter Stufe Invalidierung, Widerruf und den Sicherheitslog-Eintrag `freigabeaenderung` in derselben Transaktion aus. Die Fotofreigabe schreibt nur den Logeintrag, weil Fotos keine Projektion sind.
+  - In der App schreiben `setPartnerSharing(tx, writer, { area, level }, at)` und `setPhotoSharing(tx, writer, level, at)` aus `apps/mobile/src/sync/` die Stufe lokal samt Outbox.
+- **Partnercache der App:** `partnerCacheEntities` übernimmt Projektionen nur als Lesecache. Eine Löschmarkierung löscht die Zeile ganz. Eine Notice wird nicht gespeichert, sondern löscht den betroffenen Inhalt (bei `kopplung` alles der Kopplung) in derselben Transaktion wie die Pull-Seite. „Wir“ und „Heute“ lesen den Partner ausschließlich über `readPartnerCache(tx)`.
+- **Tests:**
+  - `apps/backend/test/partner-projections.test.ts` prüft den Mechanismus über HTTP mit Test-Projectors: Freigaben, Zeitzonen, Planwechsel, Entkopplung, Nebenläufigkeit und Negativfälle.
+  - `partner-projections-app.test.ts` lässt Engine und Partnercache gegen die echte Hono-App laufen; `apps/mobile/src/partner-cache/partner-cache.test.ts` prüft den Cache mit vorgegebenen Pull-Seiten.
+  - **Konformitäts-Testkit:** `partnerProjectorConformanceCases(area, { projector, record })` aus `test/support/partner-projector-conformance.ts` prüft einen echten Projector auf die Zähl-, Rundungs-, Deckelungs- und Keine-Daten-Regeln. Jedes Ergebnis läuft zusätzlich durch `partnerResponse`, sodass zusätzliche Partnerwerte auffallen. Der Bereich liefert Schreiber für seine Daten; `testPlans()` aus `test/support/partner-projectors.ts` ist der `PlanReader`-Fake.
 
 ### Seeds und Testfähigkeiten
 
