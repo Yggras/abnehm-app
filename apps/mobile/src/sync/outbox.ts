@@ -1,7 +1,7 @@
 import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
-import { EntityId, Instant, type ServerVersion } from '@abnehm/contracts/base';
+import { Instant, type EntityId, type ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, OutboxOperation, type CommandType, type EntityData } from '@abnehm/contracts/sync';
 
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -94,7 +94,7 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
 
 /** Die ältesten offenen Operationen in Entstehungsreihenfolge. */
 export function pendingOperations(tx: ReadContext, limit: number): OutboxOperation[] {
-  return sqliteOf(tx).select().from(outbox).orderBy(asc(outbox.sequence)).limit(limit).all().map(toOperation);
+  return sqliteOf(tx).select().from(outbox).orderBy(asc(outbox.sequence)).limit(limit).all().map((row) => OutboxOperation.parse(decodeOutboxRow(row)));
 }
 
 /** Offene Operationen einer Entität in Entstehungsreihenfolge. */
@@ -105,7 +105,7 @@ export function pendingFor(tx: ReadContext, entityType: string, entityId: string
     .where(and(eq(outbox.entityType, entityType), eq(outbox.entityId, entityId)))
     .orderBy(asc(outbox.sequence))
     .all()
-    .map(toOperation)
+    .map((row) => OutboxOperation.parse(decodeOutboxRow(row)))
     .filter((operation) => !('businessKey' in operation))
     .map((operation) =>
       operation.type === 'upsert_entity'
@@ -184,17 +184,25 @@ export function recordAttempt(tx: TransactionContext, operationIds: readonly str
   }
 }
 
-function toOperation(row: typeof outbox.$inferSelect): OutboxOperation {
+export function recordFailure(tx: TransactionContext, operationIds: readonly string[], errorCode: string): void {
+  for (const operationId of operationIds) {
+    sqliteOf(tx).update(outbox).set({ lastErrorCode: errorCode }).where(eq(outbox.operationId, operationId)).run();
+  }
+}
+
+/** Rekonstruiert die unveränderten Transportbytes einer Zeile; der Aufrufer validiert fehlertolerant
+ * bei der Migration oder strikt vor dem Versand. */
+export function decodeOutboxRow(row: typeof outbox.$inferSelect): unknown {
   const common = {
-    operationId: EntityId.parse(row.operationId),
+    operationId: row.operationId,
     entityType: row.entityType,
     entityId: row.entityId,
     knownServerVersion: row.knownServerVersion,
     schemaVersion: row.schemaVersion,
     createdAt: row.createdAt,
   };
-  return OutboxOperation.parse(row.businessKey !== null
+  return row.businessKey !== null
     ? { type: row.type, operationId: common.operationId, businessKey: row.businessKey, payload: row.payload,
       knownServerVersion: row.knownServerVersion, schemaVersion: row.schemaVersion, createdAt: row.createdAt }
-    : row.type === 'upsert_entity' ? { ...common, type: row.type, payload: row.payload } : { ...common, type: row.type });
+    : row.type === 'upsert_entity' ? { ...common, type: row.type, payload: row.payload } : { ...common, type: row.type };
 }

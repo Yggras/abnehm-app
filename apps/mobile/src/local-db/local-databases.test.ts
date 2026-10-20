@@ -2,6 +2,11 @@
  * @jest-environment node
  */
 import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext, type TransactionContext } from '.';
+import { createTestClock } from '@abnehm/clock/testing';
+import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
+import { createSyncEngine, readSyncState } from '../sync/engine';
+import { createSyncRegistry } from '../sync/registry';
+import { appendOperation } from '../sync/outbox';
 import { createLocalDatabases } from './local-databases';
 import * as schema from './schema';
 import { sqliteOf } from './sqlite';
@@ -154,6 +159,58 @@ describe('kontogetrennte lokale Datenbanken', () => {
 
     expect(seen).toEqual([[]]);
     expect(errors).toEqual([]);
+  });
+
+  it('bewahrt bei einem Offline-Update über zwei Versionen Upsert, Delete und Fachbefehl samt Identität und Reihenfolge', async () => {
+    const { databases } = context;
+    const db = await databases.open('konto_a');
+    const id = EntityId.parse('10000000-0000-4000-8000-000000000001');
+    const at = Instant.parse('2026-10-14T12:00:00.000Z');
+    const operations = [
+      { type: 'upsert_entity' as const, operationId: id, entityType: 'water_entry', entityId: id,
+        payload: { amountMl: 250 }, knownServerVersion: null, schemaVersion: 1, createdAt: at },
+      { type: 'delete_entity' as const, operationId: EntityId.parse('10000000-0000-4000-8000-000000000002'),
+        entityType: 'water_entry', entityId: id, knownServerVersion: null, schemaVersion: 1, createdAt: at },
+      { type: 'completeDailyGoal' as const, operationId: EntityId.parse('10000000-0000-4000-8000-000000000003'),
+        businessKey: 'goal:1', payload: { goalId: id }, knownServerVersion: null, schemaVersion: 1, createdAt: at },
+    ];
+    db.transaction((tx) => { for (const operation of operations) appendOperation(tx, operation); });
+    databases.lock();
+    const upgraded = await databases.open('konto_a');
+    expect(upgraded.read(readSyncState).outbox).toEqual(operations.map((operation) => ({ ...operation, schemaVersion: 3 })));
+  });
+
+  it('bewahrt bereits gesendete Originaloperationen für sichere Wiederholungen', async () => {
+    const { databases } = context;
+    const db = await databases.open('konto_a');
+    const operation = { type: 'delete_entity' as const, operationId: EntityId.parse('10000000-0000-4000-8000-000000000001'),
+      entityType: 'water_entry', entityId: EntityId.parse('10000000-0000-4000-8000-000000000002'),
+      knownServerVersion: null, schemaVersion: 1, createdAt: Instant.parse('2026-10-14T12:00:00.000Z') };
+    db.transaction((tx) => {
+      appendOperation(tx, operation);
+      sqliteOf(tx).update(schema.outbox).set({ attemptCount: 1 }).run();
+    });
+    databases.lock();
+    const upgraded = await databases.open('konto_a');
+    expect(upgraded.read(readSyncState).outbox).toEqual([operation]);
+  });
+
+  it('meldet eine nicht transformierbare Operation diagnostizierbar und lässt die Absicht erhalten', async () => {
+    const { databases } = context;
+    const db = await databases.open('konto_a');
+    const operation = { type: 'delete_entity' as const, operationId: EntityId.parse('10000000-0000-4000-8000-000000000001'),
+      entityType: 'water_entry', entityId: EntityId.parse('10000000-0000-4000-8000-000000000002'),
+      knownServerVersion: null, schemaVersion: 99, createdAt: Instant.parse('2026-10-14T12:00:00.000Z') };
+    db.transaction((tx) => appendOperation(tx, operation));
+    databases.lock();
+    const upgraded = await databases.open('konto_a');
+    const engine = createSyncEngine({ database: upgraded, registry: createSyncRegistry([]), installationId: operation.operationId,
+      clock: createTestClock({ instant: operation.createdAt, timeZone: TimeZone.parse('Europe/Berlin') }),
+      transport: { push: async () => { throw new Error('Darf nicht senden'); },
+        pull: async () => ({ type: 'ok', body: { changes: [], next: { type: 'complete', cursor: '0' as never } } }) } });
+    expect(engine.status()).toEqual({ type: 'migration_failed', operationId: operation.operationId });
+    expect((await engine.sync()).push).toBe('rejected');
+    expect(upgraded.read(readSyncState).outbox).toEqual([operation]);
   });
 
   it('lässt keine Pfadzeichen in den Dateinamen', async () => {

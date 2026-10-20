@@ -9,7 +9,7 @@ import { ContractError } from './errors.ts';
 // Nutzlasten einer Entität prüft die Entitäts-Registry mit dem Transport-Schema der Entität.
 
 /** Aktuelle Vertragsversion des Syncs; jede Operation und jede Hülle nennt ihre Version. */
-export const currentSyncSchemaVersion = 1;
+export const currentSyncSchemaVersion = 3;
 
 export const SyncSchemaVersion = z.int().positive();
 export type SyncSchemaVersion = z.infer<typeof SyncSchemaVersion>;

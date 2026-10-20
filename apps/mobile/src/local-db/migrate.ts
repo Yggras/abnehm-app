@@ -1,10 +1,13 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { currentSyncSchemaVersion, OutboxOperation } from '@abnehm/contracts/sync';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 
 import type { SqliteDatabase } from './connection';
 import bundledMigrations from './migrations/migrations';
 import type * as schema from './schema';
+import { outbox } from './schema';
+import { decodeOutboxRow } from '../sync/outbox';
 
 /**
  * Führt die mit der App gebündelten Migrationen aus (`migrations/migrations.js`, erzeugt von
@@ -22,6 +25,21 @@ export async function migrateLocalDatabase(db: SqliteDatabase): Promise<void> {
     // (https://unpkg.com/drizzle-orm@0.45.4/expo-sqlite/migrator.js). Bei better-sqlite3 (Tests) sind
     // das derselbe synchrone SQLite-Dialekt und eine gleichwertige synchrone Sitzung.
     await migrate(db as unknown as ExpoSQLiteDatabase<typeof schema>, bundledMigrations);
+    // V1 und V2 hatten dieselbe Drahtnutzlast. Nur noch nie gesendete Operationen dürfen
+    // umversioniert werden: bereits versendete Bytes sind Teil des serverseitigen Request-Hashs.
+    // Die Identität, Fachschlüssel, Zeit und Sequenz bleiben in beiden Fällen unangetastet.
+    db.transaction((tx) => {
+      for (const row of tx.select().from(outbox).all()) {
+        if (row.schemaVersion === currentSyncSchemaVersion || row.attemptCount > 0) continue;
+        const parsed = OutboxOperation.safeParse(decodeOutboxRow(row));
+        if (!parsed.success || row.schemaVersion < 1 || row.schemaVersion > currentSyncSchemaVersion) {
+          tx.update(outbox).set({ lastErrorCode: 'outbox_migration_failed' }).where(eq(outbox.operationId, row.operationId)).run();
+          continue;
+        }
+        tx.update(outbox).set({ schemaVersion: currentSyncSchemaVersion, lastErrorCode: null })
+          .where(eq(outbox.operationId, row.operationId)).run();
+      }
+    });
     const violations = db.all(sql`PRAGMA foreign_key_check`);
     if (violations.length > 0) throw new Error(`Migration hinterlässt ${violations.length} Fremdschlüsselverletzungen`);
   } finally {
