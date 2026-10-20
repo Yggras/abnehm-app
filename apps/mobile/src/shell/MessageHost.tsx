@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { AccessibilityInfo, Animated, Easing, Platform, StyleSheet } from 'react-native';
 
 import { space, Toast, useMotion, type Motion, type ToastLine } from '../design';
+import { isTestArtifact } from '../test-artifact';
 import { messageTexts } from './message-texts';
 import { shellTexts } from './texts';
 
@@ -46,7 +47,7 @@ function lineOf({ messageKey, values }: Message): ToastLine {
   const entry = Object.prototype.hasOwnProperty.call(messageTexts, messageKey) ? messageTexts[messageKey] : undefined;
   const parsed = entry?.values.safeParse(values);
   if (entry && parsed?.success) return entry.render(parsed.data);
-  if (!__DEV__) throw new MissingMessageTextError(messageKey);
+  if (!isTestArtifact()) throw new MissingMessageTextError(messageKey);
   return { text: shellTexts.missingMessageText(messageKey) };
 }
 

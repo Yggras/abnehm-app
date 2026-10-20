@@ -21,11 +21,11 @@ import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
 import { syncStatusSource } from './sync-status-source';
 
-// Composition Root der App-Sitzung auf dem Gerät. Im Development Build umhüllen die Testfähigkeiten
-// Uhr, `fetch` und SessionStore mit ihren steuerbaren Adaptern (#112); im Produktions-Bundle ist
-// `testCapabilities` `null` und die Adapter fehlen ganz.
+// Composition Root der App-Sitzung auf dem Gerät. In Test-Artefakten (Development- und E2E-Build)
+// umhüllen die Testfähigkeiten Uhr, `fetch`, SessionStore und Netzstatus mit ihren steuerbaren
+// Adaptern (#112, #114); im Produktions-Bundle ist `testCapabilities` `null` und die Adapter fehlen ganz.
 
-/** Uhr der App: die Geräteuhr, im Development Build die Testuhr, die ein Seed stellt. */
+/** Uhr der App: die Geräteuhr, in Test-Artefakten die Testuhr, die ein Seed stellt. */
 export const appClock: Clock = testCapabilities?.clock ?? deviceClock;
 
 const onError = (error: unknown) => console.error('[sitzung]', error);
@@ -45,6 +45,12 @@ const timeZone = followPersonTimeZone({
 });
 let device: { session: AppSession; gate: SessionGateSource } | null = null;
 let sessionChecked = false;
+
+/** Ob das Gerät Internet hat, laut Expo Network; meldet nur Änderungen. */
+function observeDeviceNetwork(listener: (online: boolean) => void) {
+  const subscription = Network.addNetworkStateListener((state) => listener(state.isInternetReachable === true));
+  return () => subscription.remove();
+}
 
 /** Sitzung und Weiche des Geräts; beim ersten Aufruf angelegt. */
 function deviceState() {
@@ -75,6 +81,8 @@ function deviceState() {
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);
       const statusTimer = setInterval(publishStatus, 60_000);
+      // Die Testuhr springt in Test-Artefakten; der Status folgt sofort statt erst im Minutentakt (#114).
+      const stopClockStatus = testCapabilities?.clock.subscribe(publishStatus);
       const triggers = startSyncTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active',
         sync: () => engine.sync(),
         observePending: (listener) => observePendingSignature(database, listener),
@@ -82,13 +90,11 @@ function deviceState() {
           const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
           return () => subscription.remove();
         },
-        observeNetwork(listener) {
-          const subscription = Network.addNetworkStateListener((state) => listener(state.isInternetReachable === true));
-          return () => subscription.remove();
-        },
+        // In Test-Artefakten überlagert vom Transport-Fehlermodus, dem iOS-Ersatz für den Flugmodus (#114).
+        observeNetwork: adapters?.network(observeDeviceNetwork) ?? observeDeviceNetwork,
       });
       return () => {
-        triggers.dispose(); stopStatus(); clearInterval(statusTimer);
+        triggers.dispose(); stopStatus(); stopClockStatus?.(); clearInterval(statusTimer);
         if (activeEngine === engine) activeEngine = null;
         syncStatusSource.publish({ type: 'secured' });
         for (const stop of stops) stop?.();
@@ -105,6 +111,8 @@ function deviceState() {
     if (state === 'active') timeZone.check();
   });
   setInterval(() => timeZone.check(), 60_000);
+  // Eine neue Zone der Testuhr ist ein Zeitzonenwechsel wie eine Reise (#114).
+  testCapabilities?.clock.subscribe(() => timeZone.check());
   device = { session, gate };
   return device;
 }

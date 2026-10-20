@@ -13,7 +13,7 @@ import * as schema from '../schema';
  * mit denselben Pragmas wie der produktive expo-sqlite-Adapter. Nur in Tests mit
  * `@jest-environment node` nutzbar.
  */
-export function createBetterSqliteFiles(): { openSqlite: OpenSqlite; openedFileNames(): string[]; remove(): void } {
+export function createBetterSqliteFiles(): { openSqlite: OpenSqlite; openedFileNames(): string[]; removeFile(fileName: string): void; remove(): void } {
   const directory = mkdtempSync(join(tmpdir(), 'abnehm-local-db-'));
   const opened = new Set<string>();
   return {
@@ -25,6 +25,10 @@ export function createBetterSqliteFiles(): { openSqlite: OpenSqlite; openedFileN
       return { db: drizzle(client, { schema }), close: () => client.close() };
     },
     openedFileNames: () => [...opened].sort(),
+    /** Wie `removeExpoSqlite`: eine geschlossene Datei samt WAL-Dateien, falls es sie gibt. */
+    removeFile: (fileName) => {
+      for (const suffix of ['', '-wal', '-shm']) rmSync(join(directory, `${fileName}${suffix}`), { force: true });
+    },
     remove: () => rmSync(directory, { recursive: true, force: true }),
   };
 }

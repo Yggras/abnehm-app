@@ -108,16 +108,30 @@ type Bundle = { platform: string; js: string; sources: string[] };
 
 const execFileAsync = promisify(execFile);
 const exportDirectory = mkdtempSync(join(tmpdir(), 'abnehm-release-'));
-const bundles: Record<'production' | 'development', Bundle[]> = { production: [], development: [] };
+/** Produktion, Development Build und E2E-Build (#114): ein Release-Bundle mit den Testfähigkeiten. */
+type Artifact = 'production' | 'development' | 'e2e';
+const bundles: Record<Artifact, Bundle[]> = { production: [], development: [], e2e: [] };
 
-async function exportApp(mode: 'production' | 'development'): Promise<Bundle[]> {
-  const output = join(exportDirectory, mode);
+/** Umgebung des Bündelns je Artefakt, wie `scripts/e2e-build` sie für den E2E-Build setzt. */
+function exportEnvironment(artifact: Artifact, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  delete environment.EXPO_PUBLIC_E2E_BUILD;
+  const variant = artifact === 'e2e' ? { APP_VARIANT: 'e2e', NODE_ENV: 'production', EXPO_PUBLIC_E2E_BUILD: 'true' } : { APP_VARIANT: artifact, NODE_ENV: artifact };
+  return { ...environment, ...variant, ...extra };
+}
+
+async function runExport(artifact: Artifact, output: string, environment: NodeJS.ProcessEnv) {
   await execFileAsync(
     'npx',
-    ['expo', 'export', '--platform', 'ios', '--platform', 'android', '--no-bytecode', '--source-maps', '--output-dir', output, ...(mode === 'development' ? ['--dev'] : [])],
+    ['expo', 'export', '--platform', 'ios', '--platform', 'android', '--no-bytecode', '--source-maps', '--output-dir', output, ...(artifact === 'development' ? ['--dev'] : [])],
     // Wie ein Store-Build: Produktionsvariante, keine Entwicklungs-URL.
-    { cwd: join(root, 'apps/mobile'), env: { ...process.env, APP_VARIANT: mode, NODE_ENV: mode }, maxBuffer: 64 * 1024 * 1024 },
+    { cwd: join(root, 'apps/mobile'), env: environment, maxBuffer: 64 * 1024 * 1024 },
   );
+}
+
+async function exportApp(artifact: Artifact): Promise<Bundle[]> {
+  const output = join(exportDirectory, artifact);
+  await runExport(artifact, output, exportEnvironment(artifact));
   return ['ios', 'android'].map((platform) => {
     const directory = join(output, '_expo/static/js', platform);
     const files = readdirSync(directory);
@@ -130,7 +144,7 @@ async function exportApp(mode: 'production' | 'development'): Promise<Bundle[]> 
 }
 
 beforeAll(async () => {
-  [bundles.production, bundles.development] = await Promise.all([exportApp('production'), exportApp('development')]);
+  [bundles.production, bundles.development, bundles.e2e] = await Promise.all([exportApp('production'), exportApp('development'), exportApp('e2e')]);
 }, 600_000);
 
 afterAll(() => rmSync(exportDirectory, { recursive: true, force: true }));
@@ -158,7 +172,7 @@ describe('Registry der Testfähigkeiten', () => {
   it('jeder registrierte Deep Link wird ausschließlich im Deep-Link-Modul der Testfähigkeiten angenommen', () => {
     const handler = read(deepLinkHandler);
     const paths = testCapabilities.flatMap(({ entries }) => entries.deepLinks ?? []);
-    expect(paths.sort()).toEqual(['fehler', 'seed']);
+    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'seed', 'uhr']);
     for (const path of paths) expect(handler, path).toContain(`'${path}'`);
     expect(testCapabilities.some(({ modules }) => belongsTo(deepLinkHandler, modules))).toBe(true);
   });
@@ -246,7 +260,7 @@ describe('Produktions-Bundle der App', () => {
 
     it.runIf((capability.entries.deepLinks ?? []).length > 0)('nimmt keinen Deep Link der Fähigkeit an', () => {
       for (const bundle of bundles.production) expect(bundle.sources, bundle.platform).not.toContain(deepLinkHandler);
-      for (const bundle of bundles.development) expect(bundle.sources, bundle.platform).toContain(deepLinkHandler);
+      for (const bundle of [...bundles.development, ...bundles.e2e]) expect(bundle.sources, bundle.platform).toContain(deepLinkHandler);
     });
   });
 
@@ -257,16 +271,52 @@ describe('Produktions-Bundle der App', () => {
     }
   });
 
-  it('Gegenprobe: das Development-Bundle enthält jede Fähigkeit der App samt Markern', () => {
+  it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
-    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'seed', 'testgeruest', 'testuhr']);
-    for (const bundle of bundles.development) {
+    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'geraetetest', 'seed', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
+    for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {
         expect(bundle.sources.some((source) => belongsTo(source, capability.modules)), `${bundle.platform}: ${capability.key}`).toBe(true);
       }
-      for (const marker of ['/dev/seed', 'momo-insel-testpasswort', 'Fehler-Adapter', 'Seed fehlgeschlagen']) {
+      for (const marker of appCapabilities.flatMap(({ markers }) => markers).filter((marker) => marker !== '@abnehm/clock/testing')) {
         expect(bundle.js.includes(marker), `${bundle.platform}: ${marker}`).toBe(true);
       }
     }
   });
+});
+
+// E2E-Build (#114) ---------------------------------------------------------------------------------
+//
+// Der E2E-Build ist ein Release-Binary: Metro bündelt ohne `__DEV__`, minifiziert und faltet
+// Konstanten wie im Produktionsbuild. Nur `EXPO_PUBLIC_E2E_BUILD=true` unterscheidet ihn, und
+// `app.config.ts` lässt den Schalter ausschließlich mit `APP_VARIANT=e2e` zu. Der Transport-Fehlermodus,
+// der auf iOS Maestros `setAirplaneMode` ersetzt, existiert damit nur dort und im Development Build.
+
+describe('E2E-Build der App', () => {
+  it('ist ein minifiziertes Release-Bundle ohne Development-Code von React', () => {
+    for (const bundle of bundles.e2e) {
+      // Das Development-Bundle trägt Reacts Entwicklungsfassungen samt Warntexten, das Release-Bundle nicht.
+      expect(bundle.sources.some((source) => source.includes('.development.js')), bundle.platform).toBe(false);
+      expect(bundles.development.find(({ platform }) => platform === bundle.platform)!.sources.some((source) => source.includes('.development.js'))).toBe(true);
+    }
+  });
+
+  it('Transport-Fehlermodus: im E2E-Bundle vorhanden, im Produktions-Bundle weder Modul noch Marker', () => {
+    const mode = testCapabilities.find(({ key }) => key === 'transport-fehlermodus')!;
+    for (const bundle of bundles.e2e) {
+      expect(bundle.sources.some((source) => belongsTo(source, mode.modules)), bundle.platform).toBe(true);
+      for (const marker of mode.markers) expect(bundle.js.includes(marker), `${bundle.platform}: ${marker}`).toBe(true);
+    }
+    for (const bundle of bundles.production) {
+      expect(bundle.sources.filter((source) => belongsTo(source, mode.modules)), bundle.platform).toEqual([]);
+      for (const marker of mode.markers) expect(bundle.js.includes(marker), `${bundle.platform}: ${marker}`).toBe(false);
+    }
+  });
+
+  it('Transport-Fehlermodus und alle Testfähigkeiten lassen sich im Produktionsbuild nicht per Konfiguration einschalten', async () => {
+    // Der einzige Schalter der Testfähigkeiten bricht einen Produktions-Export schon an der App-Konfiguration ab.
+    await expect(runExport('production', join(exportDirectory, 'production-mit-e2e-schalter'), exportEnvironment('production', { EXPO_PUBLIC_E2E_BUILD: 'true' }))).rejects.toThrow(
+      'nur im E2E-Build',
+    );
+  }, 120_000);
 });

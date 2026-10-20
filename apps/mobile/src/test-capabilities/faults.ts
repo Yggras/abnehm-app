@@ -25,17 +25,24 @@ export type FaultController = {
   plan(): FaultPlan;
   set(change: Partial<FaultPlan>): void;
   reset(): void;
+  /** Nach jeder Änderung des Plans, etwa für den Netzstatus des Transport-Fehlermodus. */
+  subscribe(listener: () => void): () => void;
 };
 
 export function createFaultController(initial: Partial<FaultPlan> = {}): FaultController {
   let current = faultPlanSchema.parse({ ...noFaults, ...initial });
+  const listeners = new Set<() => void>();
+  const change = (next: FaultPlan) => {
+    current = next;
+    for (const listener of listeners) listener();
+  };
   return {
     plan: () => current,
-    set: (change) => {
-      current = faultPlanSchema.parse({ ...current, ...change });
-    },
-    reset: () => {
-      current = noFaults;
+    set: (partial) => change(faultPlanSchema.parse({ ...current, ...partial })),
+    reset: () => change(noFaults),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
   };
 }

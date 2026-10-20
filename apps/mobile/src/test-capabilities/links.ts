@@ -1,26 +1,46 @@
+import { z } from 'zod';
+
+import { TimeZone } from '@abnehm/contracts/base';
 import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
 import { targetFromLink } from '../navigation/href';
+import type { ClockAdjustment } from './clock';
+import type { DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
 
-// Deep Links der Testfähigkeiten (#112), nur im Development Build:
+// Deep Links der Testfähigkeiten (#112, #114), nur in Test-Artefakten (Development- und E2E-Build;
+// Schema `abnehmapp-dev` bzw. `abnehmapp-e2e`):
 //
 //   abnehmapp-dev://seed?szenario=solo[&installation=philipp-iphone][&ziel=/capture/water]
 //     seedet Backend und lokale Datenbank, meldet das Testkonto an und öffnet das Ziel (sonst „Heute“);
 //   abnehmapp-dev://fehler?transport=offline&server=unavailable&auth=session_rejected&storage=unavailable
-//     stellt die Fehler-Adapter; ohne Parameter stehen alle wieder auf `ok`.
+//     stellt die Fehler-Adapter; ohne Parameter stehen alle wieder auf `ok`. `transport=offline` ist
+//     zugleich der Transport-Fehlermodus, der auf iOS den Flugmodus ersetzt;
+//   abnehmapp-dev://uhr?stunden=25&zone=Pacific/Kiritimati
+//     stellt die Testuhr ganze Stunden vor und/oder auf eine neue eigene Zone (Reise);
+//   abnehmapp-dev://geraetetest?phase=vor_neustart|nach_neustart
+//     führt eine Phase der On-Device-Suite aus.
 //
 // Geparst wird von Hand: Die URL-Implementierung von React Native ist unvollständig.
 
 export type TestLink =
   | Readonly<{ type: 'seed'; scenario: SeedScenarioKey; installation: SeedKey | null; target: RouteTarget }>
   | Readonly<{ type: 'fehler'; plan: Partial<FaultPlan> }>
+  | Readonly<{ type: 'uhr'; adjustment: ClockAdjustment }>
+  | Readonly<{ type: 'geraetetest'; phase: DeviceSuitePhase }>
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
-  | Readonly<{ type: 'ungueltig'; capability: 'seed' | 'fehler' }>;
+  | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 /** Pfade der Deep Links; der Release-Test gleicht sie mit der Registry ab (`test/test-capabilities.ts`). */
-export const testLinkPaths = { seed: 'seed', fehler: 'fehler' } as const;
+export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', geraetetest: 'geraetetest' } as const;
+export type TestLinkPath = keyof typeof testLinkPaths;
+
+const clockParams = z
+  .strictObject({ stunden: z.string().regex(/^\d{1,4}$/).transform(Number).optional(), zone: TimeZone.optional() })
+  .refine((params) => params.stunden !== undefined || params.zone !== undefined);
+
+const deviceSuiteParams = z.strictObject({ phase: z.enum(['vor_neustart', 'nach_neustart']) });
 
 /** Der Link als Testfähigkeit, oder `null`, wenn er keiner ist. */
 export function parseTestLink(link: string): TestLink | null {
@@ -43,6 +63,16 @@ export function parseTestLink(link: string): TestLink | null {
   if (path === testLinkPaths.fehler) {
     const plan = faultPlanSchema.partial().safeParse(Object.fromEntries(params));
     return plan.success ? { type: 'fehler', plan: plan.data } : { type: 'ungueltig', capability: 'fehler' };
+  }
+  if (path === testLinkPaths.uhr) {
+    const clock = clockParams.safeParse(Object.fromEntries(params));
+    if (!clock.success) return { type: 'ungueltig', capability: 'uhr' };
+    const { stunden, zone } = clock.data;
+    return { type: 'uhr', adjustment: { ...(stunden === undefined ? {} : { advanceHours: stunden }), ...(zone === undefined ? {} : { timeZone: zone }) } };
+  }
+  if (path === testLinkPaths.geraetetest) {
+    const suite = deviceSuiteParams.safeParse(Object.fromEntries(params));
+    return suite.success ? { type: 'geraetetest', phase: suite.data.phase } : { type: 'ungueltig', capability: 'geraetetest' };
   }
   return null;
 }

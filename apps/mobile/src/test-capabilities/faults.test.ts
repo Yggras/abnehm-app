@@ -73,4 +73,20 @@ describe('Testuhr der App', () => {
     clock.release();
     expect(clock.read().instant).toBe('2030-01-01T00:00:00.000Z');
   });
+
+  it('stellt Zeit und Zone vor und meldet jede Änderung (#114)', () => {
+    const clock = createAppTestClock(device);
+    const changes = jest.fn();
+    clock.subscribe(changes);
+    clock.fix({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
+    clock.adjust({ advanceHours: 25, timeZone: TimeZone.parse('Pacific/Kiritimati') });
+    expect(clock.read()).toEqual({ instant: '2026-10-15T13:00:00.000Z', timeZone: 'Pacific/Kiritimati', localDate: '2026-10-16' });
+    expect(changes).toHaveBeenCalledTimes(2);
+  });
+
+  it('stellt eine noch freie Uhr zuerst auf die Geräteuhr', () => {
+    const clock = createAppTestClock(device);
+    clock.adjust({ advanceHours: 1 });
+    expect(clock.read()).toEqual({ instant: '2030-01-01T01:00:00.000Z', timeZone: 'UTC', localDate: '2030-01-01' });
+  });
 });

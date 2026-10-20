@@ -1,9 +1,25 @@
+import { Instant, TimeZone } from '@abnehm/contracts/base';
+
+import { deviceClock } from '../clock/device-clock';
+import { createAppTestClock } from './clock';
+import type { DeviceSuitePhase, DeviceSuiteReport } from './device-suite/suite';
 import { createFaultController } from './faults';
-import { createTestInbox } from './inbox';
+import { createTestInbox, type TestInboxOptions } from './inbox';
 import { parseTestLink } from './links';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
 
-// Nachweis für #112: Deep Links der Testfähigkeiten und ihr Eingang.
+// Nachweis für #112 und #114: Deep Links der Testfähigkeiten und ihr Eingang.
+
+const passed = (phase: DeviceSuitePhase): DeviceSuiteReport => ({ phase, results: [{ key: 'rollback', title: 'Transaktionsrollback samt Outbox', error: null }] });
+
+function inboxWith(options: Partial<TestInboxOptions> = {}) {
+  return createTestInbox({
+    faults: createFaultController(),
+    clock: createAppTestClock(deviceClock),
+    deviceSuite: async (phase) => passed(phase),
+    ...options,
+  });
+}
 
 describe('Deep Links der Testfähigkeiten', () => {
   it('Seed-Link mit Szenario, optionaler Installation und Ziel', () => {
@@ -33,8 +49,25 @@ describe('Deep Links der Testfähigkeiten', () => {
     expect(parseTestLink('abnehmapp-dev://fehler?transport=zufall')).toEqual({ type: 'ungueltig', capability: 'fehler' });
   });
 
+  it('Uhr-Link stellt Stunden vor und/oder eine neue Zone (#114)', () => {
+    expect(parseTestLink('abnehmapp-e2e://uhr?stunden=25&zone=Pacific%2FKiritimati')).toEqual({
+      type: 'uhr',
+      adjustment: { advanceHours: 25, timeZone: 'Pacific/Kiritimati' },
+    });
+    expect(parseTestLink('abnehmapp-e2e://uhr?zone=Europe/Lisbon')).toEqual({ type: 'uhr', adjustment: { timeZone: 'Europe/Lisbon' } });
+    for (const link of ['abnehmapp-e2e://uhr', 'abnehmapp-e2e://uhr?stunden=-1', 'abnehmapp-e2e://uhr?stunden=1.5', 'abnehmapp-e2e://uhr?zone=Mars/Olympus']) {
+      expect(parseTestLink(link)).toEqual({ type: 'ungueltig', capability: 'uhr' });
+    }
+  });
+
+  it('Gerätetest-Link nennt die Phase der On-Device-Suite (#114)', () => {
+    expect(parseTestLink('abnehmapp-e2e://geraetetest?phase=vor_neustart')).toEqual({ type: 'geraetetest', phase: 'vor_neustart' });
+    expect(parseTestLink('abnehmapp-e2e://geraetetest?phase=nach_neustart')).toEqual({ type: 'geraetetest', phase: 'nach_neustart' });
+    expect(parseTestLink('abnehmapp-e2e://geraetetest')).toEqual({ type: 'ungueltig', capability: 'geraetetest' });
+  });
+
   it('lässt alle anderen Links unverändert', () => {
-    for (const link of ['abnehmapp-dev://capture/water', '/', '/settings/goals', 'abnehmapp-dev://seedling']) expect(parseTestLink(link)).toBeNull();
+    for (const link of ['abnehmapp-dev://capture/water', '/', '/settings/goals', 'abnehmapp-dev://seedling', 'abnehmapp-e2e://uhrzeit']) expect(parseTestLink(link)).toBeNull();
   });
 });
 
@@ -44,7 +77,7 @@ describe('Eingang der Testfähigkeiten', () => {
 
   it('stellt Fehler-Adapter sofort und setzt sie mit einem leeren Link zurück', () => {
     const faults = createFaultController();
-    const inbox = createTestInbox(faults);
+    const inbox = inboxWith({ faults });
     inbox.receive({ type: 'fehler', plan: { server: 'unavailable' } });
     expect(faults.plan().server).toBe('unavailable');
     expect(inbox.status()).toEqual({ type: 'fehler_gestellt', plan: faults.plan() });
@@ -52,8 +85,37 @@ describe('Eingang der Testfähigkeiten', () => {
     expect(faults.plan()).toEqual({ transport: 'ok', server: 'ok', auth: 'ok', storage: 'ok' });
   });
 
+  it('stellt die Testuhr und meldet die neue Ablesung', () => {
+    const clock = createAppTestClock(deviceClock);
+    clock.fix({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
+    const inbox = inboxWith({ clock });
+    inbox.receive({ type: 'uhr', adjustment: { advanceHours: 25, timeZone: TimeZone.parse('Pacific/Kiritimati') } });
+    expect(inbox.status()).toEqual({ type: 'uhr_gestellt', reading: { instant: '2026-10-15T13:00:00.000Z', timeZone: 'Pacific/Kiritimati', localDate: '2026-10-16' } });
+  });
+
+  it('führt die On-Device-Suite je Link genau einmal und nacheinander aus', async () => {
+    const phases: DeviceSuitePhase[] = [];
+    let finish: () => void = () => {};
+    const inbox = inboxWith({
+      deviceSuite: async (phase) => {
+        phases.push(phase);
+        if (phase === 'vor_neustart') await new Promise<void>((resolve) => (finish = resolve));
+        return passed(phase);
+      },
+    });
+    inbox.receive({ type: 'geraetetest', phase: 'vor_neustart' });
+    inbox.receive({ type: 'geraetetest', phase: 'nach_neustart' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(inbox.status()).toEqual({ type: 'geraetetest_laeuft', phase: 'vor_neustart' });
+    expect(phases).toEqual(['vor_neustart']);
+    finish();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(phases).toEqual(['vor_neustart', 'nach_neustart']);
+    expect(inbox.status()).toEqual({ type: 'geraetetest_fertig', report: passed('nach_neustart') });
+  });
+
   it('hält einen Seed vom Kaltstart zurück, bis die App-Shell ihn ausführt, und führt ihn genau einmal aus', async () => {
-    const inbox = createTestInbox(createFaultController());
+    const inbox = inboxWith();
     inbox.receive({ type: 'seed', ...run });
     expect(inbox.status()).toEqual({ type: 'ruhe' });
     const handler = jest.fn(async () => done);
@@ -65,7 +127,7 @@ describe('Eingang der Testfähigkeiten', () => {
   });
 
   it('meldet Fehlschläge und unerwartete Ausnahmen', async () => {
-    const inbox = createTestInbox(createFaultController());
+    const inbox = inboxWith();
     const results: SeedOutcome[] = [{ type: 'fehlgeschlagen', step: 'backend' }];
     inbox.handleSeeds(async () => {
       const next = results.shift();

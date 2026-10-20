@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Notice, Text } from '../design';
 import { routeCatalog, routeScreen, type TargetOf } from '../navigation';
+import { isTestArtifact } from '../test-artifact';
 import { ScreenFrame } from './ScreenFrame';
 import { ownerNameOf, shellTexts, titleOf } from './texts';
 
@@ -15,12 +16,12 @@ export class MissingContributionError extends Error {
 }
 
 /**
- * Deutscher Platzhalter für einen Bildschirm, den ein Bereich noch nicht liefert. Nur Development
- * Builds zeigen ihn; in einem Release ist ein fehlender Beitrag ein Integrationsfehler
+ * Deutscher Platzhalter für einen Bildschirm, den ein Bereich noch nicht liefert. Nur Test-Artefakte
+ * (Development- und E2E-Build) zeigen ihn; in einem Release ist ein fehlender Beitrag ein Integrationsfehler
  * (Spezifikation 0, Abschnitt 6).
  */
 export function Placeholder({ target, children }: { target: RouteTarget; children?: ReactNode }) {
-  if (!__DEV__) throw new MissingContributionError(target);
+  if (!isTestArtifact()) throw new MissingContributionError(target);
   return (
     <ScreenFrame title={titleOf(target)} presentation={routeCatalog[target.type].presentation}>
       <Notice tone="neutral" icon="hammer" text={shellTexts.placeholder} />
