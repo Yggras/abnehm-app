@@ -3,15 +3,20 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import pg from 'pg';
 import type { TestProject } from 'vitest/node';
 
-import type { DatabaseSettings } from '../../src/database.ts';
+import { openDatabase, pgConnection, type DatabaseSettings } from '../../src/database.ts';
+import { migrateDatabase } from '../../src/db/migrate.ts';
 
 declare module 'vitest' {
   export interface ProvidedContext {
     postgres: DatabaseSettings;
   }
 }
+
+/** Vollständig migrierte Vorlage, die der Testlauf einmal anlegt (siehe `createMigratedTemplate`). */
+export const migratedTemplate = 'test_migrated_template';
 
 const run = promisify(execFile);
 const composeFile = fileURLToPath(new URL('../compose.yaml', import.meta.url));
@@ -35,15 +40,29 @@ export default async function startTestPostgres(project: TestProject) {
     throw new Error(`Unerwartete Portangabe von docker compose: ${stdout}`);
   }
 
-  project.provide('postgres', {
-    host: published.host,
-    port: Number(published.port),
-    user: 'test',
-    password,
-    name: 'test',
-  });
+  const server = { host: published.host, port: Number(published.port), user: 'test', password, name: 'test' };
+  await createMigratedTemplate(server);
+  project.provide('postgres', server);
 
   return async () => {
     await compose('down', '--volumes', '--timeout', '0');
   };
+}
+
+/** Migriert einmal pro Lauf in eine Vorlage, von der `createTestBackend` jede Testdatenbank kopiert. */
+async function createMigratedTemplate(server: DatabaseSettings) {
+  const admin = new pg.Client(pgConnection(server));
+  await admin.connect();
+  try {
+    await admin.query(`CREATE DATABASE "${migratedTemplate}"`);
+  } finally {
+    await admin.end();
+  }
+  const template = openDatabase({ ...server, name: migratedTemplate });
+  try {
+    await migrateDatabase(template);
+  } finally {
+    // Postgres kopiert eine Vorlage nur, solange niemand mit ihr verbunden ist.
+    await template.close();
+  }
 }

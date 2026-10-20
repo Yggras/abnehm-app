@@ -4,7 +4,7 @@ import type { Clock } from '@abnehm/clock';
 
 import { createBackend, type Backend } from '../../src/backend.ts';
 import type { Database } from '../../src/database.ts';
-import { migrateDatabase } from '../../src/db/migrate.ts';
+import { migratedTemplate } from './postgres-server.ts';
 import { createTestDatabase } from './postgres.ts';
 
 /** Basis-URL der Test-App; Anfragen gehen über `app.request`, nicht übers Netz. */
@@ -27,8 +27,7 @@ export type TestAppOptions = { clock?: Clock; syncPullPageSize?: number };
 
 /** Frisch migrierte, eigene Datenbank samt App; wird nach dem Test verworfen. */
 export async function createTestBackend(options: TestAppOptions = {}): Promise<TestBackend> {
-  const database = await createTestDatabase();
+  const database = await createTestDatabase({ template: migratedTemplate });
   onTestFinished(() => database.drop());
-  await migrateDatabase(database.handle);
   return createTestApp(database.handle, options);
 }
