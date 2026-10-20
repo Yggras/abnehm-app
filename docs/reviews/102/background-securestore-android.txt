@@ -1,0 +1,20 @@
+# Isolierter Geräteversuch #102, Fairphone 6 (Android), 20.10.2026
+# Nur Booleans und Zustandsnamen; keine Sitzungs-ID, kein Token, kein Datenbankinhalt.
+# Test-App: de.yggras.abnehmapp.ticket102bg (separat von .dev und Produktiv-App).
+# Expo SDK 58 expo-background-task + expo-task-manager; JS-Task beim Laden global definiert;
+# Task ruft secureSessionStore.read() aus der App auf (AFTER_FIRST_UNLOCK).
+# Die foreground-registration-Zeilen sind Kontrollmessungen, KEINE Hintergrundbeweise.
+2026-10-20T18:48:03.969Z | foreground-registration | active     | missing | token_present=0
+2026-10-20T18:50:26.883Z | foreground-registration | active     | ok      | token_present=0
+2026-10-20T18:52:35.286Z | foreground-registration | active     | ok      | token_present=1
+# Vor dem Task: adb shell input keyevent KEYCODE_HOME, dann KEYCODE_SLEEP.
+# adb shell dumpsys window: mCurrentFocus=NotificationShade, mDreamingLockscreen=true.
+# adb shell dumpsys jobscheduler: JOB #u0a271/0 für
+# de.yggras.abnehmapp.ticket102bg/androidx.work.impl.background.systemjob.SystemJobService.
+# Von außen den registrierten OS-Job ausgeführt (nicht BackgroundTask.triggerTaskWorkerForTestingAsync):
+# adb -s 50e980d4 shell cmd jobscheduler run -f de.yggras.abnehmapp.ticket102bg 0
+# CLI-Antwort: Running job [FORCED]. Erzwingung ist keine natürliche 15-Minuten-Planung.
+2026-10-20T18:52:51.392Z | os-task                 | background | ok      | token_present=1
+# Letzte Zeile stammt aus ticket102-bg-probe.db innerhalb der isolierten App und dem Metro-Log.
+# Sie belegt SecureStore.read() in einem echten WorkManager-Job bei Hintergrundzustand
+# und gesperrtem Gerät, aber NICHT einen automatisch vom OS ausgewählten Lauf.
