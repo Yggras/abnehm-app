@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { authErrorCodes, BootstrapPersonRequest, BootstrapPersonResult } from '@abnehm/contracts/auth';
+import { authErrorCodes, BootstrapPersonRequest, BootstrapPersonResult, LogoutResult } from '@abnehm/contracts/auth';
 
 // Auth-Modul der App (Spezifikation 0, Abschnitt 9). Bildschirme und Bereichscode kennen nur diese
 // Schnittstelle, nicht Better Auth: Registrieren, Anmelden, Sitzung prüfen, Passwort ändern und das
@@ -17,6 +17,13 @@ import { authErrorCodes, BootstrapPersonRequest, BootstrapPersonResult } from '@
 
 /** Was das Gerät über die Sitzung speichert. Nach `401` bleibt das Konto ohne Token stehen. */
 export type StoredSession = Readonly<{ accountId: string; token: string | null }>;
+
+/**
+ * Ausweis für den Widerruf der aktuellen Sitzung im Abmeldeablauf. Er hält das Sitzungstoken fest, damit
+ * ein identischer Retry auch nach dem Widerruf (und der Sperre nach `401`) dasselbe Token vorlegt. Das
+ * Abmeldemodul speichert ihn deshalb ebenso geschützt wie die Sitzung.
+ */
+export type SessionRevocation = Readonly<{ accountId: string; requestId: string; token: string }>;
 
 /** Geschützter Speicher der Sitzung; auf dem Gerät SecureStore. */
 export type SessionStore = {
@@ -86,8 +93,24 @@ export type AppAuth = {
   bootstrapPerson(input: BootstrapPersonRequest): Promise<BootstrapResult>;
   /** Widerruft alle Sitzungen des Kontos; dieses Gerät erhält eine neue. */
   changePassword(input: { currentPassword: string; newPassword: string }): Promise<ChangePasswordResult>;
-  /** Widerruft serverseitig die Sitzung dieses Geräts. Lokale Daten bleibt Sache des Abmeldemoduls. */
-  revokeCurrentSession(): Promise<RevokeResult>;
+  /** Der Ausweis für den Widerruf der aktuellen Sitzung unter `requestId`; `null` ohne Sitzungstoken. */
+  prepareRevocation(requestId: string): Promise<SessionRevocation | null>;
+  /**
+   * Ob der Ausweis noch die Sitzung dieses Geräts betrifft: dasselbe Token oder, nach der Sperre bei `401`,
+   * dasselbe Konto ohne Token. Nach einer erneuten Anmeldung ist er veraltet.
+   */
+  isCurrentSession(revocation: SessionRevocation): Promise<boolean>;
+  /**
+   * Widerruft serverseitig die Sitzung des Ausweises im idempotenten Abmeldeablauf. Ein identischer
+   * Retry erhält dasselbe Ergebnis, auch nach erfolgtem Widerruf. Lokale Daten bleiben Sache des
+   * Abmeldemoduls; nur ein `401` ohne gespeichertes Ergebnis sperrt wie jeder Fachaufruf.
+   */
+  revokeCurrentSession(revocation: SessionRevocation): Promise<RevokeResult>;
+  /**
+   * Vergisst die Sitzung auf dem Gerät und schließt die Kontodatenbank; danach ist das Modul
+   * `abgemeldet`. Nur das Abmeldemodul ruft das, nach bestätigtem Widerruf.
+   */
+  forgetSession(): Promise<void>;
   state(): AuthState;
   subscribe(listener: (state: AuthState) => void): () => void;
   /** Haken für `401`, etwa zum Abbrechen geplanter Tages-Check-ins (Spezifikation 5). */
@@ -293,11 +316,38 @@ export function createAppAuth({ baseUrl, sessionStore, accountData, onError, fet
       return { type: 'changed' };
     },
 
-    async revokeCurrentSession() {
-      const reply = await request('POST', '/v1/session/revoke', undefined, authorizedFetch);
+    async prepareRevocation(requestId) {
+      const session = await storedSession();
+      return session?.token == null ? null : { accountId: session.accountId, requestId, token: session.token };
+    },
+
+    async revokeCurrentSession({ accountId, requestId, token }) {
+      // Immer das Token des Ausweises, nicht das gespeicherte: Nach dem Widerruf hat die Sperre es verworfen.
+      const withRevokedToken: typeof fetch = (input, init) => {
+        const headers = new Headers(init?.headers);
+        headers.set('authorization', `Bearer ${token}`);
+        return fetchImpl(input, { ...init, headers, credentials: 'omit' });
+      };
+      const reply = await request('POST', '/v1/session/logout', { requestId }, withRevokedToken);
       if ('type' in reply) return reply;
-      if (reply.status === 401) return { type: 'unauthorized' };
-      return reply.status === 204 ? { type: 'revoked' } : { type: 'unreachable' };
+      if (reply.status === 401) {
+        if ((await storedSession())?.accountId === accountId) await lock();
+        return { type: 'unauthorized' };
+      }
+      return reply.status === 200 && LogoutResult.safeParse(reply.body).success ? { type: 'revoked' } : { type: 'unreachable' };
+    },
+
+    async isCurrentSession(revocation) {
+      const session = await storedSession();
+      return session !== null && session.accountId === revocation.accountId && (session.token === null || session.token === revocation.token);
+    },
+
+    async forgetSession() {
+      // Zuerst zu: Scheitert das Löschen im Speicher, zeigt die App trotzdem keine Fachdaten mehr.
+      stored = null;
+      accountData.lock();
+      setState({ type: 'abgemeldet' });
+      await sessionStore.clear();
     },
 
     state: () => current,

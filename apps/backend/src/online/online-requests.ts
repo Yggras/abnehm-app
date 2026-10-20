@@ -30,8 +30,12 @@ export function onlineRequestBinding({
   flow: OnlineFlow;
   request: { requestId: string };
 }): OnlineRequestBinding {
-  const requestHash = createHmac('sha256', hashKey).update(`anfrage:${flow}:${canonicalJson(request)}`).digest('hex');
-  return { requestId: request.requestId, accountId, flow, requestHash };
+  return { requestId: request.requestId, accountId, flow, requestHash: onlineRequestHash({ hashKey, flow, request }) };
+}
+
+/** Der Schlüssel-Hash einer Anfrage allein, ohne Konto; so bindet das Abmelden an die Sitzung. */
+export function onlineRequestHash({ hashKey, flow, request }: { hashKey: string; flow: OnlineFlow; request: { requestId: string } }): string {
+  return createHmac('sha256', hashKey).update(`anfrage:${flow}:${canonicalJson(request)}`).digest('hex');
 }
 
 export type StoredOnlineResult =
@@ -48,6 +52,18 @@ export async function storedOnlineResult(executor: DbExecutor, binding: OnlineRe
   if (stored.accountId !== binding.accountId) return { type: 'foreign' };
   if (stored.flow !== binding.flow || stored.requestHash !== binding.requestHash) return { type: 'conflict' };
   return { type: 'stored', result: stored.result };
+}
+
+/**
+ * Das gespeicherte Ergebnis genau dieser Anfrage, ohne Blick aufs Konto, oder `null`. Nur für Abläufe,
+ * deren Hash-Schlüssel selbst bindet: beim Abmelden die vorgelegte, womöglich schon widerrufene Sitzung.
+ */
+export async function storedResultOfHash(
+  executor: DbExecutor,
+  { requestId, flow, requestHash }: Omit<OnlineRequestBinding, 'accountId'>,
+): Promise<Record<string, unknown> | null> {
+  const [stored] = await executor.select().from(onlineRequest).where(eq(onlineRequest.requestId, requestId));
+  return stored !== undefined && stored.flow === flow && stored.requestHash === requestHash ? stored.result : null;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { DisplayName, EntityId, ServerVersion, TimeZone } from './base.ts';
+import { DisplayName, EntityId, Instant, ServerVersion, TimeZone } from './base.ts';
+import { OnlineRequestId } from './coupling.ts';
 
 // Konto und Sitzung (Spezifikation 0, Abschnitt 9). Konto, Sitzung und E-Mail gehören dem Auth-Modul;
 // hier stehen nur die Regeln und Nutzlasten, die App und Backend teilen.
@@ -49,3 +50,15 @@ export const BootstrapPersonResult = z.strictObject({
   serverVersion: ServerVersion,
 });
 export type BootstrapPersonResult = z.infer<typeof BootstrapPersonResult>;
+
+/**
+ * Body von `POST /v1/session/logout`, dem serverseitigen Teil des vollständigen Abmeldens. Die
+ * `requestId` speichert die App vor dem Aufruf (`logout_pending`); ein identischer Retry mit derselben
+ * Sitzung erhält dasselbe Ergebnis, auch nachdem die Sitzung widerrufen ist.
+ */
+export const LogoutRequest = z.strictObject({ requestId: OnlineRequestId });
+export type LogoutRequest = z.infer<typeof LogoutRequest>;
+
+/** Terminales Ergebnis der Serverabmeldung: Die Sitzung ist seit `loggedOutAt` widerrufen. */
+export const LogoutResult = z.strictObject({ loggedOutAt: Instant });
+export type LogoutResult = z.infer<typeof LogoutResult>;

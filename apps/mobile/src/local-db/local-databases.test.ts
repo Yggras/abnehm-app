@@ -221,4 +221,22 @@ describe('kontogetrennte lokale Datenbanken', () => {
     }
     expect(files.openedFileNames()).toEqual(['konto-abc_DEF-123.db']);
   });
+
+  it('löscht die geöffnete Datei eines Kontos endgültig und lässt die anderen stehen, auch wiederholt', async () => {
+    const { databases, files } = context;
+    const b = await databases.open('konto_b');
+    b.transaction((tx) => addPerson(tx, PERSON_B, 'konto_b'));
+    const a = await databases.open('konto_a');
+    a.transaction((tx) => addPerson(tx, PERSON_A, 'konto_a'));
+
+    databases.remove('konto_a');
+    databases.remove('konto_a');
+
+    expect(databases.current()).toBeNull();
+    expect(() => a.read(persons)).toThrow(LocalDatabaseClosedError);
+    expect(files.existingFileNames().filter((name) => name.startsWith('konto-a'))).toEqual([]);
+    expect((await databases.open('konto_a')).read(persons)).toEqual([]);
+    expect((await databases.open('konto_b')).read(persons)).toEqual([{ accountId: 'konto_b' }]);
+    expect(() => databases.remove('../konto')).toThrow(TypeError);
+  });
 });

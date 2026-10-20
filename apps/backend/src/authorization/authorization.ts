@@ -15,6 +15,7 @@ import {
   policyProblem,
   type AdminCommandPolicy,
   type AuthenticatedPolicy,
+  type LogoutPolicy,
   type Policy,
   type PublicPolicy,
   type ResourcePolicy,
@@ -83,6 +84,7 @@ type GuardDependencies = Readonly<Pick<Authorization, 'actorOf' | 'authorize'> &
 
 type GuardEnv = { Variables: { authorization: GuardDependencies } };
 type ActorEnv = { Variables: { authorization: GuardDependencies; actor: Actor } };
+type LogoutEnv = { Variables: { authorization: GuardDependencies; actor: Actor | null } };
 type ResourceEnv = { Variables: { authorization: GuardDependencies; actor: PersonActor; resource: ResourceFacts } };
 
 type Guarded = Readonly<{ policy: Policy; locates: boolean }>;
@@ -101,6 +103,7 @@ function deny(c: Context) {
  */
 export function guard(policy: PublicPolicy): MiddlewareHandler<GuardEnv>;
 export function guard(policy: AuthenticatedPolicy): MiddlewareHandler<ActorEnv>;
+export function guard(policy: LogoutPolicy): MiddlewareHandler<LogoutEnv>;
 export function guard(policy: ResourcePolicy, locate: Locate): MiddlewareHandler<ResourceEnv>;
 export function guard(policy: AdminCommandPolicy): MiddlewareHandler<GuardEnv>;
 export function guard(policy: Policy, locate?: Locate): MiddlewareHandler {
@@ -110,6 +113,10 @@ export function guard(policy: Policy, locate?: Locate): MiddlewareHandler {
     if (policy.kind === 'public') return next();
     if (policy.kind === 'adminCommand') return deny(c);
     const actor = await dependencies.actorOf(c.req.raw.headers);
+    if (policy.kind === 'logout') {
+      (c as unknown as Context<LogoutEnv>).set('actor', actor);
+      return next();
+    }
     if (actor === null) return c.body(null, 401);
     if (policy.kind === 'authenticated') {
       (c as unknown as Context<ActorEnv>).set('actor', actor);

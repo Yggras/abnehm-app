@@ -1,6 +1,8 @@
-import { BootstrapPersonRequest, BootstrapPersonResult, Password } from '../src/auth.ts';
+import { BootstrapPersonRequest, BootstrapPersonResult, LogoutRequest, LogoutResult, Password } from '../src/auth.ts';
 import { fixtures } from './define.ts';
-import { philipp, timeZone } from './ids.ts';
+import { now, philipp, timeZone } from './ids.ts';
+
+const requestId = '0f8b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
 
 export const authFixtures = {
   Password: fixtures(Password, {
@@ -39,6 +41,21 @@ export const authFixtures = {
         serverVersion: '1',
         accountId: philipp,
       },
+    },
+  }),
+  LogoutRequest: fixtures(LogoutRequest, {
+    valid: { 'mit requestId': { requestId } },
+    invalid: {
+      'ohne requestId': {},
+      'keine UUID': { requestId: 'abmelden-1' },
+      'mit Konto-ID': { requestId, accountId: philipp },
+    },
+  }),
+  LogoutResult: fixtures(LogoutResult, {
+    valid: { abgemeldet: { loggedOutAt: now } },
+    invalid: {
+      'ohne Zeitpunkt': {},
+      'mit Sitzungstoken': { loggedOutAt: now, token: 'abc' },
     },
   }),
 };

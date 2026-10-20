@@ -87,7 +87,10 @@ export const onlineRequest = pgTable(
       .notNull()
       .references(() => user.id),
     flow: text('flow').notNull(),
-    /** HMAC der kanonischen Anfrage mit dem Einladungs-Secret; ein Code steckt darin nie lesbar. */
+    /**
+     * HMAC der kanonischen Anfrage: bei Einladungen mit dem Einladungs-Secret, ein Code steckt darin nie
+     * lesbar; beim Abmelden mit dem Schlüssel der vorgelegten Sitzung.
+     */
     requestHash: text('request_hash').notNull(),
     result: json<Record<string, unknown>>('result').notNull(),
     createdAt: instant('created_at').notNull(),

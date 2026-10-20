@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, SyncCursor } from '@abnehm/contracts/base';
@@ -71,6 +71,8 @@ export type SyncEngine = {
   /** Ein einzelner Push ohne React-Baum und ohne Pull; auf dieselbe Installation serialisiert. */
   pushNow(options: { deadline: Instant }): Promise<PushNowResult>;
   status(): SyncStatus;
+  /** Wie viele Operationen der Outbox der Server noch nicht bestätigt hat. */
+  unsecuredOperations(): number;
 };
 
 export type SyncEngineOptions = {
@@ -265,6 +267,9 @@ export function createSyncEngine({ database, registry, transport, clock, install
         }
       })().finally(() => { backgroundPush = null; });
       return backgroundPush;
+    },
+    unsecuredOperations() {
+      return database.read((tx) => sqliteOf(tx).select({ value: count() }).from(outbox).get()?.value ?? 0);
     },
     status() {
       const migrationError = database.read((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox)

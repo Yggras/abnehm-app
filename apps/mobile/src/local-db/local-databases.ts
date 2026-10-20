@@ -15,6 +15,11 @@ export type LocalDatabases = {
    * Konto wieder anmeldet.
    */
   lock(): void;
+  /**
+   * Löscht die Datei des Kontos endgültig, beim vollständigen Abmelden; ist sie geöffnet, wird sie vorher
+   * geschlossen. Idempotent: Eine fehlende Datei gilt als gelöscht.
+   */
+  remove(accountId: string): void;
   /** Die geöffnete Datenbank oder `null`. */
   current(): LocalDatabase | null;
 };
@@ -44,6 +49,12 @@ export function createLocalDatabases({ openSqlite, onError }: LocalDatabasesOpti
   function closeCurrent() {
     opened?.close();
     opened = null;
+  }
+
+  function lock() {
+    generation++;
+    pending = null;
+    closeCurrent();
   }
 
   async function openFresh(accountId: string, fileName: string, ticket: number): Promise<LocalDatabase> {
@@ -80,10 +91,12 @@ export function createLocalDatabases({ openSqlite, onError }: LocalDatabasesOpti
       pending = { accountId, promise };
       return promise;
     },
-    lock() {
-      generation++;
-      pending = null;
-      closeCurrent();
+    lock,
+    remove(accountId) {
+      const fileName = databaseFileName(accountId);
+      if (opened?.database.accountId === accountId || pending?.accountId === accountId) lock();
+      // Öffnen legt eine fehlende Datei an; so löscht auch eine Wiederholung ohne Sonderfall.
+      openSqlite(fileName).destroy();
     },
     current() {
       return opened?.database ?? null;

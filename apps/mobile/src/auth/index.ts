@@ -11,6 +11,7 @@ export type {
   PasswordRejection,
   RegisterResult,
   RevokeResult,
+  SessionRevocation,
   SessionCheck,
   SignInResult,
 } from './app-auth';

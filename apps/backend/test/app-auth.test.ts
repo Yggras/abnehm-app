@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TimeZone } from '@abnehm/contracts/base';
@@ -50,6 +52,13 @@ type Phone = {
   /** Feste Antwort für einen Pfad statt der des Backends, etwa eine Begrenzung. */
   answer?: { path: string; status: number };
 };
+
+/** Widerruft die aktuelle Sitzung über den Abmeldeablauf des Servers, ohne lokales Aufräumen. */
+async function revoke(auth: AppAuth) {
+  const revocation = await auth.prepareRevocation(randomUUID());
+  if (revocation === null) throw new Error('Keine Sitzung zum Widerrufen');
+  return auth.revokeCurrentSession(revocation);
+}
 
 /** Ein Gerät mit eigenem Speicher, eigener Datenbank und eigener Quelladresse. */
 function phone(backend: TestBackend): Phone {
@@ -138,7 +147,7 @@ describe('Auth-Modul der App gegen das Backend', () => {
     const hook = vi.fn();
     device.auth.onUnauthorized(hook);
 
-    expect(await device.auth.revokeCurrentSession()).toEqual({ type: 'revoked' });
+    expect(await revoke(device.auth)).toEqual({ type: 'revoked' });
     expect(await device.auth.checkSession()).toEqual({ type: 'ungueltig' });
 
     expect(device.auth.state()).toEqual({ type: 'gesperrt', accountId });
@@ -158,7 +167,7 @@ describe('Auth-Modul der App gegen das Backend', () => {
     const backend = await createTestBackend();
     const anna = await registered(backend, 'anna@example.test');
     const philipp = await registered(backend, 'philipp@example.test');
-    await anna.device.auth.revokeCurrentSession();
+    await revoke(anna.device.auth);
     await anna.device.auth.checkSession();
 
     await anna.device.auth.signIn({ email: 'philipp@example.test', password: defaultPassword });
@@ -205,7 +214,7 @@ describe('Auth-Modul der App gegen das Backend', () => {
     expect(await device.auth.checkSession()).toEqual({ type: 'offline', accountId });
     expect(device.auth.state()).toEqual({ type: 'angemeldet', accountId });
     expect(device.data.opened).toBe(accountId);
-    expect(await device.auth.revokeCurrentSession()).toEqual({ type: 'unreachable' });
+    expect(await revoke(device.auth)).toEqual({ type: 'unreachable' });
     expect(await device.auth.signIn({ email: 'anna@example.test', password: defaultPassword })).toEqual({ type: 'unreachable' });
   });
 

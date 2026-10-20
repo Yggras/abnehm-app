@@ -171,11 +171,11 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 
 | Rolle | Interface | Ort |
 | --- | --- | --- |
-| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, `revokeCurrentSession`, dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch` | `apps/mobile/src/auth/` |
+| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, `revokeCurrentSession` (mit dem Ausweis aus `prepareRevocation`), dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch`; `isCurrentSession` und `forgetSession` nur für das Abmeldemodul | `apps/mobile/src/auth/` |
 | Backend-Endpunkte | `SessionAuthenticator.authenticate(headers)`; Endpunkte erhalten die Sitzung über den Guard der Autorisierung (unten) | `apps/backend/src/auth/` |
 | Betrieb | `AdminPasswordReset`, aufgerufen über das Kommando unten | `apps/backend/src/auth/admin-reset-command.ts` |
 
-- **Endpunkte:** Better Auth liegt unter `/v1/auth`. Freigegeben sind nur `sign-up/email`, `sign-in/email`, `get-session` und `change-password`, alles andere dort antwortet mit `404`. Dazu kommen `POST /v1/session/revoke` (aktuelle Sitzung widerrufen) und `POST /v1/person/bootstrap` (die eine Person des Kontos).
+- **Endpunkte:** Better Auth liegt unter `/v1/auth`. Freigegeben sind nur `sign-up/email`, `sign-in/email`, `get-session` und `change-password`, alles andere dort antwortet mit `404`. Dazu kommen `POST /v1/session/logout` (Serverteil des vollständigen Abmeldens, unten) und `POST /v1/person/bootstrap` (die eine Person des Kontos).
 - **Sitzung:** Die App sendet das Sitzungstoken als `Authorization: Bearer …` ([Bearer-Plugin](https://www.better-auth.com/docs/plugins/bearer)) und hält es nur in SecureStore. Sitzungen liegen in Postgres, ohne Cookie-Cache. Sie laufen nach 30 Tagen ohne Nutzung ab und verlängern sich bei Nutzung höchstens einmal täglich.
 - **Begrenzung:** Fehlversuche bei der Anmeldung sind pro E-Mail (5 in 15 Minuten) und pro IP (20 je Stunde) begrenzt (`login-limiter.ts`). Zusätzlich gilt die eingebaute Begrenzung von Better Auth: 3 Anfragen in 10 Sekunden pro IP und Pfad ([Quelltext v1.7.10](https://github.com/better-auth/better-auth/blob/v1.7.10/packages/better-auth/src/api/rate-limiter/index.ts)). Die IP kommt aus `X-Forwarded-For`. Hinter einem Reverse Proxy gehört dessen Adresse in `AUTH_TRUSTED_PROXIES`; ohne erkennbare Adresse greift nur die Begrenzung pro E-Mail. Lokal ohne Proxy warnt Better Auth bei Aufrufen ohne diesen Header, dass es keine Client-IP erkennt (beobachtet im Containerlauf für #97). Ohne vorgeschalteten Proxy kann ein Client `X-Forwarded-For` selbst setzen; die Einrichtung des Proxys gehört zum [Produktiv-Gate](https://github.com/Yggras/abnehm-app/issues/115).
 - **Passwörter:** 10 bis 128 Zeichen (`passwordPolicy` in `@abnehm/contracts/auth`), dazu eine Blocklist häufiger Passwörter (`apps/backend/src/auth/password-blocklist.txt`, Quelle im Dateikopf).
@@ -189,13 +189,26 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 - **Serverjobs:** Ein Job meldet Namen, Intervall und eine idempotente Funktion bei der Registry an (`apps/backend/src/jobs/job-registry.ts`). Angemeldet wird in `createBackend` (`apps/backend/src/backend.ts`), ohne die Registry zu ändern. Der Backend-Prozess prüft jede Minute, welche Jobs fällig sind; Tests lösen sie mit der Testuhr über `runDue()` aus. Erster Job ist `sicherheitslog_aufraeumen`, der Einträge nach 90 Tagen löscht.
 - **Tests:** `apps/backend/test/auth.test.ts` prüft die Abläufe über HTTP. `apps/backend/test/app-auth.test.ts` prüft das App-Modul `AppAuth` gegen die echte Hono-App. Dieser Test importiert App-Code und hat deshalb eine eigene tsconfig (`tsconfig.app-auth.json`, Bundler-Auflösung wie in der App).
 
+### Vollständiges Abmelden
+
+Vollständiges Abmelden ist ein Online-Ablauf ([#111](https://github.com/Yggras/abnehm-app/issues/111), Abschnitt 9 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)). Orchestriert wird er nur im Abmeldemodul der App (`apps/mobile/src/logout/`, `createLogout`); die Oberfläche unter „Konto“ liefert Spezifikation 5 und ruft `deviceLogout()` aus `apps/mobile/src/session/device-session.ts`.
+
+1. **Sync.** Ohne Netz liefert `logout()` `unreachable` und lässt alles bestehen. Bleiben Operationen ungesichert, liefert es `confirmation_required`; nach dem bestätigten Verzicht ruft die Oberfläche `logout({ discardUnsecured: true })`.
+2. **`logout_pending`.** Vor dem Serveraufruf speichert das Modul die `requestId` samt Ausweis der Sitzung (`SessionRevocation` mit Token) in SecureStore (`secureLogoutStore` in `apps/mobile/src/auth/secure-session-store.ts`).
+3. **Serverabmeldung** (`POST /v1/session/logout`, `apps/backend/src/logout/`): In einer Transaktion laufen die angemeldeten Server-Haken in Anmeldereihenfolge (`backend.logout.registerHook`, etwa die Push-Deaktivierung aus Spezifikation 5), dann Sicherheitslog (`abmeldung`, `sitzungswiderruf`) und Widerruf. Das Ergebnis liegt in `online_request` unter der `requestId`, mit einem Hash, dessen Schlüssel aus dem Sitzungstoken stammt. Ein identischer Retry erhält es auch nach dem Widerruf, mit diesem Token aber nichts anderes. Antwortverlust und `5xx` ergeben `unreachable`; der nächste Versuch wiederholt die Anfrage identisch.
+4. **`cleanup_pending`.** Erst nach bestätigtem Ergebnis laufen die lokalen Bereinigungshaken (`logout.onCleanup`, etwa die Tages-Check-ins aus Spezifikation 5), danach `forgetSession` und `LocalDatabases.remove`. Die kontogetrennte Datenbank enthält auch den Partnercache. Jeder Haken muss idempotent sein.
+5. **Neustart.** Statt `checkSession` ruft die App `logout.start()`. Eine offene Bereinigung läuft so, bevor eine Kontodatenbank öffnet; eine begonnene Abmeldung wird danach fortgesetzt. Hat sich die Person nach einem `401` neu angemeldet, widerruft `start` nur noch die alte Sitzung und meldet niemanden ab.
+
+Antwortet der Server mit `401` ohne gespeichertes Ergebnis (etwa nach einer Passwortänderung auf einem anderen Gerät), liefert `logout()` `unauthorized`: Das Auth-Modul ist gesperrt, lokale Daten bleiben bis zur nächsten Anmeldung. Die Tests stehen in `apps/backend/test/logout.test.ts` (HTTP) und `apps/backend/test/logout-app.test.ts` (App-Modul gegen die echte Hono-App).
+
 ### Autorisierung
 
 Jeder Zugriff läuft durch das zentrale Modul `apps/backend/src/authorization/` ([#98](https://github.com/Yggras/abnehm-app/issues/98), Abschnitt 11 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)). Es arbeitet nach „deny by default“, vor Body-Validierung, Datenzugriff und Fachlogik. Importiert wird aus `authorization/authorization.ts`.
 
 - **Policy je Route:** Jede Route beginnt mit `guard(policy)`. Die Policy kommt aus `policies`:
   - `public()` nur für Status und Auth-Abläufe ohne Sitzung (Registrieren, Anmelden, „Sitzung prüfen“);
-  - `authenticated()`, wenn eine Sitzung genügt, etwa beim Bootstrap, Passwort ändern und Sitzung widerrufen;
+  - `authenticated()`, wenn eine Sitzung genügt, etwa beim Bootstrap und Passwort ändern;
+  - `logout()` nur für `POST /v1/session/logout`: Ohne gültige Sitzung erhält die Route `actor = null` und liefert ausschließlich ihr an das vorgelegte Token gebundenes Ergebnis, sonst `401`;
   - `resource(entity, operation)` mit Fundstelle, z. B. `guard(policies.resource('partner_summary', 'lesen'), (c) => ({ id: c.req.param('id') }))`;
   - `adminCommand(command)` nur für Server-Kommandos, nie über HTTP.
 

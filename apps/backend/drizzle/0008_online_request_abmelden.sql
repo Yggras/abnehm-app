@@ -1,0 +1,2 @@
+ALTER TABLE "online_request" DROP CONSTRAINT "online_request_flow_check";--> statement-breakpoint
+ALTER TABLE "online_request" ADD CONSTRAINT "online_request_flow_check" CHECK ("online_request"."flow" in ('einladung_erzeugen', 'einladung_annehmen', 'abmelden'));

@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import { betterAuth, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -12,7 +12,7 @@ import { authErrorCodes, passwordPolicy } from '@abnehm/contracts/auth';
 import { EntityId } from '@abnehm/contracts/base';
 
 import { guard, policies } from '../authorization/authorization.ts';
-import type { Database } from '../database.ts';
+import type { Database, DbExecutor } from '../database.ts';
 import { account, session, user, verification } from '../db/schema/index.ts';
 import type { SecurityEvent, SecurityLog } from '../security-log/security-log.ts';
 import { createLoginLimiter } from './login-limiter.ts';
@@ -20,8 +20,9 @@ import type { PasswordBlocklist } from './password-blocklist.ts';
 
 // Auth-Modul (Spezifikation 0, Abschnitt 9). Better Auth bleibt hier gekapselt; Bereichscode erhält
 // nur das Interface seiner Rolle:
-// - die App die HTTP-Abläufe Registrieren, Anmelden, Sitzung prüfen, Passwort ändern und das
-//   Widerrufen der aktuellen Sitzung (`routes`);
+// - die App die HTTP-Abläufe Registrieren, Anmelden, Sitzung prüfen und Passwort ändern (`routes`);
+//   das Widerrufen der aktuellen Sitzung läuft über den Abmeldeablauf (`src/logout/`) auf
+//   `revokeSession`;
 // - Backend-Endpunkte ausschließlich `SessionAuthenticator` (Sitzung authentifizieren, Widerruf prüfen);
 // - der Betrieb das serverseitige Kommando `AdminPasswordReset`.
 // Konto löschen, E-Mail ändern und Sitzungen ohne Passwortwechsel widerrufen sind bewusst nicht
@@ -50,15 +51,21 @@ export type AdminPasswordReset = {
 export type SingleSessionRevocation = Extract<SecurityEvent, { type: 'sitzungswiderruf' }>['cause'] & ('widerruf' | 'abmeldung');
 
 export type AuthModule = {
-  /** Hono-Routen unter `/v1`: Better Auth in seinem Namensraum `/v1/auth` und `/v1/session/revoke`. */
+  /** Hono-Routen unter `/v1`: Better Auth in seinem Namensraum `/v1/auth`. */
   routes: Hono;
   sessions: SessionAuthenticator;
   admin: AdminPasswordReset;
   /**
-   * Serverseitiges Primitive: widerruft genau diese Sitzung und protokolliert es. Idempotent. Nutzer
-   * sind `POST /v1/session/revoke` und später das Abmeldemodul (#111) mit `abmeldung`.
+   * Serverseitiges Primitive: widerruft genau diese Sitzung und protokolliert es, auf Wunsch in der
+   * Transaktion des Aufrufers. Idempotent. Nutzer ist der Abmeldeablauf (`src/logout/`).
    */
-  revokeSession(session: AuthenticatedSession, cause: SingleSessionRevocation): Promise<void>;
+  revokeSession(session: AuthenticatedSession, cause: SingleSessionRevocation, executor?: DbExecutor): Promise<void>;
+  /**
+   * Schlüssel des vorgelegten Sitzungstokens (`Authorization: Bearer …`), gültig oder nicht, oder `null`
+   * ohne Token: ein HMAC mit dem Better-Auth-Secret, das Token selbst verlässt das Auth-Modul nie. Damit
+   * bindet der Abmeldeablauf sein Ergebnis an genau diese Sitzung, auch über ihren Widerruf hinaus.
+   */
+  presentedSessionKey(headers: Headers): string | null;
   /**
    * Quelladresse einer Anfrage, wie die Begrenzung der Anmeldung sie bestimmt: `X-Forwarded-For` nur von
    * vertrauenswürdigen Proxys (`AUTH_TRUSTED_PROXIES`), sonst `null`. Weitere Begrenzungen nutzen sie.
@@ -215,15 +222,22 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
     },
   };
 
-  async function revokeSession(current: AuthenticatedSession, cause: 'widerruf' | 'abmeldung') {
-    await database.db.transaction(async (tx) => {
+  async function revokeSession(current: AuthenticatedSession, cause: SingleSessionRevocation, executor?: DbExecutor) {
+    const revoke = async (tx: DbExecutor) => {
       const deleted = await tx
         .delete(session)
         .where(and(eq(session.id, current.sessionId), eq(session.userId, current.accountId)))
         .returning({ id: session.id });
       if (deleted.length === 0) return;
       await securityLog.record({ type: 'sitzungswiderruf', accountId: current.accountId, scope: 'aktuelle', cause }, tx);
-    });
+    };
+    if (executor === undefined) await database.db.transaction(revoke);
+    else await revoke(executor);
+  }
+
+  function presentedSessionKey(headers: Headers) {
+    const token = /^Bearer\s+(\S+)$/i.exec(headers.get('authorization') ?? '')?.[1];
+    return token === undefined ? null : createHmac('sha256', settings.secret).update(`sitzung:${token}`).digest('hex');
   }
 
   const admin: AdminPasswordReset = {
@@ -260,11 +274,7 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
     .post('/auth/sign-up/email', guard(policies.public()), handle)
     .post('/auth/sign-in/email', guard(policies.public()), handle)
     .post('/auth/change-password', guard(policies.authenticated()), handle)
-    .get('/auth/get-session', guard(policies.public()), handle)
-    .post('/session/revoke', guard(policies.authenticated()), async (c) => {
-      await revokeSession(c.var.actor, 'widerruf');
-      return c.body(null, 204);
-    });
+    .get('/auth/get-session', guard(policies.public()), handle);
 
-  return { routes, sessions, admin, revokeSession, ipAddressOf: (request) => ipOf(request) };
+  return { routes, sessions, admin, revokeSession, presentedSessionKey, ipAddressOf: (request) => ipOf(request) };
 }

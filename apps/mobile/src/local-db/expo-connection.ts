@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
-import { openDatabaseSync } from 'expo-sqlite';
+import { deleteDatabaseSync, openDatabaseSync } from 'expo-sqlite';
 
 import type { OpenSqlite } from './connection';
 import * as schema from './schema';
@@ -18,5 +18,12 @@ export const openExpoSqlite: OpenSqlite = (fileName) => {
   return {
     db: drizzle(client, { schema }),
     close: () => client.closeSync(),
+    // `deleteDatabaseSync` löscht auch die Begleitdateien, verlangt aber eine geschlossene, vorhandene
+    // Datei (expo-sqlite 58, `deleteDatabaseFiles` in `ios/DatabaseFileUtils.swift` und
+    // `android/…/SQLiteHelpers.kt`); `LocalDatabases.remove` öffnet sie deshalb vorher.
+    destroy: () => {
+      client.closeSync();
+      deleteDatabaseSync(fileName);
+    },
   };
 };
