@@ -1,0 +1,30 @@
+# Isolierter Geräteversuch #102, iPhone SE 3 (iOS), 20.10.2026
+# Nur Zeitpunkte, AppState und Booleans; keine Sitzungs-ID, kein Token, keine Konto-ID.
+# Test-App: de.yggras.abnehmapp.ticket102bg (separat von .dev und Produktiv-App).
+# Expo SDK 58 expo-background-task + expo-task-manager mit iOS-Plugin:
+# UIBackgroundModes=processing; BGTaskSchedulerPermittedIdentifiers=
+# com.expo.modules.backgroundtask.processing.
+# Test-Worker beim JS-Start global definiert, per registerTaskAsync(minimumInterval:15)
+# beim Start registriert. Er ruft secureSessionStore.read() der App auf
+# (Keychain: AFTER_FIRST_UNLOCK). Kein Debug-Trigger/Simulator verwendet.
+# Android-Seed hatte vorher das deterministische Testkonto neu angelegt;
+# iPhone-Seed stellte danach die echte Better-Auth-Sitzung wieder her.
+# Die foreground-registration-Zeilen sind Kontrollmessungen, KEINE Hintergrundbeweise.
+2026-10-20T18:49:12.436Z | foreground-registration | active     | missing | token_present=0
+2026-10-20T18:50:23.991Z | foreground-registration | active     | ok      | token_present=1
+# Danach aus der Test-App heraus iOS-Einstellungen (com.apple.Preferences)
+# geöffnet, kein Wischen/Force-Quit der Test-App. Während der Messung meldete
+# devicectl device info lockState: passcodeRequired=true, unlockedSinceBoot=true.
+# Die native iOS-Task wurde vom Scheduler ohne Expo-Debug-Trigger ausgeführt;
+# der Eintrag erschien beim Poll des separaten App-Container-SQLite-Logs nach
+# dem frühestmöglichen 15-Minuten-Intervall; um 19:04:26Z war er noch nicht da,
+# um 19:06:27Z enthalten. Zustand im JS-Worker: background.
+2026-10-20T19:05:23.355Z | os-task                 | background | ok      | token_present=1
+# Aus der isolierten App kopiert mit:
+# xcrun devicectl device copy from --device 00008110-001618483E60401E \
+#   --domain-type appDataContainer \
+#   --domain-identifier de.yggras.abnehmapp.ticket102bg \
+#   --source Documents/SQLite/ticket102-bg-probe.db \
+#   --destination /tmp/ticket102-bg-ios-poll.db
+# Ausgewertet: sqlite3 /tmp/ticket102-bg-ios-poll.db \
+#   'select id,at,source,state,read,token_present from observations order by id'
