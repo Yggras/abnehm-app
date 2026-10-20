@@ -3,19 +3,19 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { z } from 'zod';
 
 import type { EntityId } from '@abnehm/contracts/base';
-import { CouplingMemberRecord, CouplingRecord, PartnerSharingRecord, PhotoSharingRecord } from '@abnehm/contracts/coupling';
+import { CouplingMemberRecord, CouplingRecord } from '@abnehm/contracts/coupling';
 import { IslandRecord } from '@abnehm/contracts/island';
 import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
 
 import type { TransactionContext } from '../local-db';
-import { coupling, couplingMember, island, partnerSharing, photoSharing } from '../local-db/schema';
+import { coupling, couplingMember, island } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { SyncEntityAdapter } from './registry';
 import { sqliteEntity } from './sqlite-entity';
 
-// Kopplung, Mitglieder, Insel und Freigaben im App-Sync (Spezifikation 0, Abschnitte 8–10). Sie entstehen
-// nur auf dem Server und kommen per Pull; ein generisches Upsert oder Löschen gibt es nicht, deshalb auch
-// keine offenen Operationen, die erneut anzuwenden wären.
+// Kopplung, Mitglieder und Insel im App-Sync (Spezifikation 0, Abschnitte 8–10). Sie entstehen nur auf
+// dem Server und kommen per Pull; ein generisches Upsert oder Löschen gibt es nicht, deshalb auch keine
+// offenen Operationen, die erneut anzuwenden wären. Die Freigaben stehen in `sharing-entities.ts`.
 
 type SyncedTable = Parameters<typeof sqliteEntity>[0]['table'];
 
@@ -56,6 +56,4 @@ export const couplingSyncEntities: readonly SyncEntityAdapter[] = [
     },
   }),
   serverManaged({ entityType: 'island', ownerField: 'couplingId', record: IslandRecord, table: island }),
-  serverManaged({ entityType: 'partner_sharing', ownerField: 'ownerPersonId', record: PartnerSharingRecord, table: partnerSharing }),
-  serverManaged({ entityType: 'photo_sharing', ownerField: 'ownerPersonId', record: PhotoSharingRecord, table: photoSharing }),
 ];
