@@ -10,11 +10,14 @@ export function testServerSettings(): DatabaseSettings {
   return inject('postgres');
 }
 
-/** Legt eine leere, nur für den aufrufenden Test bestimmte Datenbank an. */
-export async function createTestDatabase(): Promise<{ handle: Database; drop(): Promise<void> }> {
+/**
+ * Legt eine nur für den aufrufenden Test bestimmte Datenbank an: leer oder als Kopie von `template`
+ * (https://www.postgresql.org/docs/current/manage-ag-templatedbs.html).
+ */
+export async function createTestDatabase({ template }: { template?: string } = {}): Promise<{ handle: Database; drop(): Promise<void> }> {
   const server = testServerSettings();
   const name = `test_${randomUUID().replaceAll('-', '')}`;
-  await withAdminClient(server, (admin) => admin.query(`CREATE DATABASE "${name}"`));
+  await withAdminClient(server, (admin) => admin.query(`CREATE DATABASE "${name}"${template === undefined ? '' : ` TEMPLATE "${template}"`}`));
   const handle = openDatabase({ ...server, name });
   return {
     handle,

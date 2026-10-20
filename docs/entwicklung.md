@@ -308,7 +308,7 @@ Alle Befehle laufen im Repo-Root:
 
 Native Abhängigkeiten der App kommen immer per `npx expo install <paket>` aus `apps/mobile`, damit die Version zum SDK passt ([Expo CLI](https://docs.expo.dev/more/expo-cli/#install)). Die Ordner `ios/` und `android/` erzeugt Expo bei Bedarf (Continuous Native Generation). Sie stehen nicht in Git und werden nicht von Hand bearbeitet.
 
-Der CI-Workflow `.github/workflows/ci.yml` führt bei jedem Pull Request Typprüfung, Lint und beide Testsuiten aus.
+Der CI-Workflow `.github/workflows/ci.yml` führt bei jedem Pull Request Typprüfung, Lint und beide Testsuiten aus. Die Runner des privaten Repos haben nur 2 vCPUs, Vitest arbeitet dort die Dateien nacheinander ab. Deshalb laufen die Tests in parallelen Jobs: Typprüfung, Lint und App-Tests in einem, die Vitest-Suite ohne Release-Sperren in zwei Teilen (`--project '!release' --shard 1/2` bzw. `2/2`) und die Release-Sperren als eigenes Vitest-Projekt `release` (`--project release`).
 
 ## Secrets
 
