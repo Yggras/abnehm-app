@@ -447,7 +447,9 @@ Jedes Bedienelement hat mindestens `touch-min` (48 × 48 dp); kleinere sichtbare
 
 ## Barrierefreiheit
 
-Ziel ist WCAG 2.2 Stufe AA, übertragen auf Mobil-Apps.
+**Nach V1 verschoben** ([#249](https://github.com/Yggras/abnehm-app/issues/249)): Die folgenden Werte bleiben als Entwurfsgrundlage erhalten, sind aber in V1 keine Abnahmekriterien, keine verpflichtenden Tests und kein Merge-Gate. Bereits implementierte Unterstützung bleibt erhalten. Visuelle und funktionale Prüfungen werden dadurch nicht aufgehoben.
+
+Ziel für die Zeit nach V1 ist WCAG 2.2 Stufe AA, übertragen auf Mobil-Apps.
 
 - **Kontrast:** Text mindestens 4,5:1, große Schrift 3:1 ([SC 1.4.3](https://www.w3.org/TR/WCAG22/#contrast-minimum)); Icons, Rahmen von Bedienelementen, Fokusring und Grafiken mit Bedeutung 3:1 ([SC 1.4.11](https://www.w3.org/TR/WCAG22/#non-text-contrast)). Laut Artifact bestehen alle 50 berechneten Token-Paare. Weiße Initiale auf `partner` (3,9:1) nur als großer, fetter Text (19 pt, 700). `energy` ist zu hell für Text und trägt die Kontur `energy-edge`. Deaktivierte Bedienelemente sind von der Kontrastpflicht ausgenommen; Inhalte stehen nie in `ink-disabled`.
 - **Dynamische Schriftgröße:** Alle Texte skalieren mit (`allowFontScaling`, [RN-Doku Text](https://reactnative.dev/docs/text#allowfontscaling); Faktor über `useWindowDimensions().fontScale`, [RN-Doku](https://reactnative.dev/docs/usewindowdimensions)). Layouts funktionieren bis Faktor 2,0 ([SC 1.4.4](https://www.w3.org/TR/WCAG22/#resize-text)). Ab Faktor 1,3 stapeln sich Mini-Tracker, Momo steht über dem Levelbalken, Partner-Zusammenfassungen werden einspaltig; `display` ist auf 1,6, `number-xl` auf 1,4 und `tab-label` auf 1,3 begrenzt (`maxFontSizeMultiplier`, Annahme 8). Keine festen Höhen für Textcontainer.
