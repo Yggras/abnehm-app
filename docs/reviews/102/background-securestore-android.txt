@@ -2,7 +2,12 @@
 # Nur Booleans und Zustandsnamen; keine Sitzungs-ID, kein Token, kein Datenbankinhalt.
 # Test-App: de.yggras.abnehmapp.ticket102bg (separat von .dev und Produktiv-App).
 # Expo SDK 58 expo-background-task + expo-task-manager; JS-Task beim Laden global definiert;
-# Task ruft secureSessionStore.read() aus der App auf (AFTER_FIRST_UNLOCK).
+# Task ruft secureSessionStore.read() aus der App auf. Auf Android speichert
+# expo-secure-store verschlüsselt in SharedPreferences mit Android Keystore.
+# Die native Android-SecureStoreOptions-Klasse hat kein keychainAccessible-Feld:
+# AFTER_FIRST_UNLOCK ist hier keine Android-Keychain-Zugriffsklasse.
+# Quellen: https://docs.expo.dev/versions/v58.0.0/sdk/securestore/#android
+# https://github.com/expo/expo/blob/sdk-58/packages/expo-secure-store/android/src/main/java/expo/modules/securestore/SecureStoreOptions.kt
 # Die foreground-registration-Zeilen sind Kontrollmessungen, KEINE Hintergrundbeweise.
 2026-10-20T18:48:03.969Z | foreground-registration | active     | missing | token_present=0
 2026-10-20T18:50:26.883Z | foreground-registration | active     | ok      | token_present=0
