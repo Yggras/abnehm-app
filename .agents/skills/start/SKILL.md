@@ -54,7 +54,7 @@ Umsetzungstickets sind die Sub-Issues der sechs Spezifikationen. Spezifikation 0
 9. **Umsetzen** nach dem Muster von `/implement`. Den Skill ruft nur der Nutzer auf, deshalb stehen seine Schritte hier:
    - Test-first mit dem Skill `tdd` an den Seams, die Ticket und Spezifikation festlegen.
    - Typecheck und einzelne Testdateien laufen regelmäßig, die komplette Testsuite einmal am Ende.
-   - Jedes Akzeptanzkriterium belegst du so, wie das Ticket es verlangt: mit einem Test, einem Gerätelauf oder der Impeccable-Prüfung aus der Definition of Done bei Tickets mit Bildschirm.
+   - Jedes in V1 geltende Akzeptanzkriterium belegst du so, wie das Ticket es verlangt: mit einem Test, einem Gerätelauf oder der visuellen Impeccable-`critique` aus der Definition of Done bei Tickets mit Bildschirm. **V1-Scope-Entscheidung [#249](https://github.com/Yggras/abnehm-app/issues/249):** Accessibility-/Barrierefreiheits-Anforderungen aus älteren Tickettexten und Spezifikationen sind nach V1 verschoben und keine V1-Merge-Gates (auch kein natives Impeccable-Accessibility-`audit`). Bereits implementierte Hilfen bleiben; andere Geräte-, Sicherheits- und Funktionsprüfungen gelten weiter.
    - Selbstständig committen, ohne KI als Co-Author.
    - Danach mit dem Skill `review-parallel` prüfen lassen und die Befunde beheben. Er startet zwei eigenständige Reviewer (Standards und Spec) in eigenen Herdr-Tabs, mit demselben Agenten wie diese Session. Ohne Herdr greift dessen Fallback auf `code-review`.
 10. **Abschließen:**

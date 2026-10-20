@@ -60,4 +60,4 @@ Ein gemeinsames Wesen und eine gemeinsame Insel wachsen nur aus den erfüllten T
 
 ## Accessibility & Inclusion
 
-Ziel ist WCAG 2.2 AA, übertragen auf Mobil-Apps: Schriftfaktor bis 2,0, Trefferflächen von mindestens 48 dp, Bedeutung nie nur über Farbe und „Bewegung reduzieren“ wird respektiert ([research/design-system.md › Barrierefreiheit](../research/design-system.md#barrierefreiheit), [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71), Abschnitt 7).
+**Nicht im V1-Umfang** ([Folgeticket #249](https://github.com/Yggras/abnehm-app/issues/249)): WCAG 2.2 AA, übertragen auf Mobil-Apps, sowie Screenreader, Schriftfaktor 2,0, Mindest-Trefferflächen, Kontrast-Audit und reduzierte Bewegung sind kein V1-Abnahmekriterium oder Merge-Gate. Bereits implementierte Hilfen bleiben bestehen; sie werden nicht gezielt entfernt. Die bisherigen Zielwerte sind für die Zeit nach V1 in [research/design-system.md › Barrierefreiheit](../research/design-system.md#barrierefreiheit) dokumentiert. Visuelle Design-`critique`, funktionale Tests und Sicherheitsnachweise bleiben V1-Umfang.
