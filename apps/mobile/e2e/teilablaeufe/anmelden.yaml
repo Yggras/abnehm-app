@@ -3,6 +3,12 @@
 # auf 2026-10-14T12:00:00Z in Europe/Berlin (Mittwoch).
 appId: ${APP_ID}
 ---
+# Ein abgebrochener Lauf kann den Flugmodus eingeschaltet hinterlassen.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
 - launchApp:
     clearState: true
     clearKeychain: true
