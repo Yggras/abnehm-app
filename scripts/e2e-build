@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Baut ein E2E-Binary (#114): ein Release-Build der Variante `e2e` mit den Testfähigkeiten.
+#   scripts/e2e-build ios                 # iOS-Simulator, Backend http://localhost:8788
+#   scripts/e2e-build ios --geraet        # echtes iPhone; braucht --api-url mit der LAN-Adresse
+#   scripts/e2e-build android             # Emulator und echtes Gerät (Backend per `adb reverse`)
+#   scripts/e2e-build ios --api-url http://192.168.178.20:8788 --geraet
+#
+# Ergebnis unter apps/mobile/build/e2e/<ziel>/ samt artefakt.json (Artefakt-ID = SHA-256 des Binarys,
+# Commit, Backend-Adresse). `expo prebuild --clean` erzeugt ios/ bzw. android/ für die Variante neu;
+# ein Development Build braucht danach wieder `npm run ios` bzw. `npm run android`.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mobile="$repo_root/apps/mobile"
+
+usage() {
+  sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+platform="${1:-}"
+[[ "$platform" == "ios" || "$platform" == "android" ]] || usage
+shift
+device=false
+api_url=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --geraet) device=true ;;
+    --api-url) api_url="${2:?--api-url braucht eine Adresse}"; shift ;;
+    *) usage ;;
+  esac
+  shift
+done
+
+port="${E2E_BACKEND_PORT:-8788}"
+if [[ -z "$api_url" ]]; then
+  if [[ "$platform" == "ios" && "$device" == true ]]; then
+    echo "Ein echtes iPhone erreicht localhost des Rechners nicht: --api-url http://<LAN-IP>:$port angeben." >&2
+    exit 2
+  fi
+  # iOS-Simulator teilt das Netz des Rechners; Android erreicht es über `adb reverse` (scripts/e2e-run).
+  api_url="http://localhost:$port"
+fi
+
+case "$platform" in
+  ios) target="ios-$([[ "$device" == true ]] && echo geraet || echo simulator)" ;;
+  android) target="android" ;;
+esac
+out="$mobile/build/e2e/$target"
+rm -rf "$out"
+mkdir -p "$out"
+
+# Variante und Bündel-Schalter gehören zusammen; app.config.ts prüft das (src/build-capabilities.ts).
+export APP_VARIANT=e2e
+export EXPO_PUBLIC_E2E_BUILD=true
+export EXPO_PUBLIC_API_URL="$api_url"
+export NODE_ENV=production
+
+cd "$mobile"
+echo "Erzeuge den nativen $platform-Ordner für die Variante e2e …" >&2
+npx expo prebuild --clean --platform "$platform" >&2
+
+if [[ "$platform" == "ios" ]]; then
+  workspace="$(ls -d ios/*.xcworkspace | head -n 1)"
+  scheme="$(basename "$workspace" .xcworkspace)"
+  if [[ "$device" == true ]]; then
+    team="${APPLE_TEAM_ID:-$(security find-certificate -c "Apple Development" -p 2>/dev/null | openssl x509 -noout -subject 2>/dev/null | sed -n 's/.*OU=\([A-Z0-9]*\).*/\1/p')}"
+    [[ -n "$team" ]] || { echo "Kein Signierteam gefunden; APPLE_TEAM_ID setzen." >&2; exit 1; }
+    sdk=(-sdk iphoneos -destination 'generic/platform=iOS' -allowProvisioningUpdates DEVELOPMENT_TEAM="$team")
+    products="Release-iphoneos"
+  else
+    sdk=(-sdk iphonesimulator -destination 'generic/platform=iOS Simulator')
+    products="Release-iphonesimulator"
+  fi
+  echo "Baue $scheme (Release) …" >&2
+  xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release "${sdk[@]}" \
+    -derivedDataPath "$out/derived" build -quiet >&2
+  app="$(ls -d "$out/derived/Build/Products/$products/"*.app | head -n 1)"
+  mv "$app" "$out/"
+  rm -rf "$out/derived"
+  binary="$out/$(basename "$app")"
+  # Die ID eines App-Ordners: SHA-256 über die sortierten Prüfsummen aller Dateien.
+  artifact_id="$(cd "$binary" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d ' ' -f 1)"
+  app_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$binary/Info.plist")"
+else
+  echo "Baue die Release-APK …" >&2
+  # Ohne Daemon: ein laufender Gradle-Daemon hätte die Umgebung eines früheren Aufrufs.
+  (cd android && ./gradlew --no-daemon --quiet :app:assembleRelease >&2)
+  mv android/app/build/outputs/apk/release/app-release.apk "$out/abnehm-app-e2e.apk"
+  binary="$out/abnehm-app-e2e.apk"
+  artifact_id="$(shasum -a 256 "$binary" | cut -d ' ' -f 1)"
+  app_id="de.yggras.abnehmapp.e2e"
+fi
+
+commit="$(cd "$repo_root" && git rev-parse HEAD)"
+dirty="$(cd "$repo_root" && [[ -z "$(git status --porcelain)" ]] && echo false || echo true)"
+version="$(node -p "require('./package.json').version")"
+cat > "$out/artefakt.json" <<JSON
+{
+  "ziel": "$target",
+  "variante": "e2e",
+  "appId": "$app_id",
+  "schema": "abnehmapp-e2e",
+  "binary": "$(basename "$binary")",
+  "artefaktId": "sha256:$artifact_id",
+  "version": "$version",
+  "commit": "$commit",
+  "ungespeicherteAenderungen": $dirty,
+  "backend": "$api_url",
+  "gebautUm": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+echo "$out/artefakt.json"
+cat "$out/artefakt.json" >&2

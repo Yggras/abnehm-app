@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Startet die festgelegte Maestro-Version (#114) und lädt sie beim ersten Aufruf in den Cache:
+#   scripts/e2e-maestro --version
+#   scripts/e2e-maestro test apps/mobile/e2e/sync-offline.yaml
+# Verwendet das Release-Zip direkt, ohne den Installer, der Shell-Profile ändert. Die Prüfsumme hält
+# die Version fest; eine neue Version ändert MAESTRO_VERSION und MAESTRO_SHA256 gemeinsam.
+set -euo pipefail
+
+MAESTRO_VERSION="2.11.0"
+MAESTRO_SHA256="5384593cb4e7a106489e75a821d157dd43f4e438df6bc308b72e82c685e1283a"
+
+cache="${ABNEHM_CACHE_DIR:-$HOME/Library/Caches/abnehm-app}/maestro-$MAESTRO_VERSION"
+binary="$cache/maestro/bin/maestro"
+
+if [[ ! -x "$binary" ]]; then
+  command -v java >/dev/null || { echo "Maestro braucht Java (JDK 17 oder neuer)." >&2; exit 1; }
+  mkdir -p "$cache"
+  download="$(mktemp -d)"
+  trap 'rm -rf "$download"' EXIT
+  echo "Lade Maestro $MAESTRO_VERSION …" >&2
+  curl --fail --silent --show-error --location --output "$download/maestro.zip" \
+    "https://github.com/mobile-dev-inc/maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+  actual="$(shasum -a 256 "$download/maestro.zip" | cut -d ' ' -f 1)"
+  if [[ "$actual" != "$MAESTRO_SHA256" ]]; then
+    echo "Prüfsumme von maestro.zip stimmt nicht: $actual" >&2
+    exit 1
+  fi
+  unzip -q -o "$download/maestro.zip" -d "$cache"
+fi
+
+# Keine Nutzungsstatistik an den Hersteller. Maestro 2.11.0 nennt den Schalter selbst: „To opt out, set
+# MAESTRO_CLI_NO_ANALYTICS environment variable to any value“ (Meldung in maestro-cli-2.11.0.jar).
+export MAESTRO_CLI_NO_ANALYTICS=1
+exec "$binary" "$@"

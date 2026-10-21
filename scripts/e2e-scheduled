@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Geplanter E2E-Lauf (#114), gestartet von launchd (scripts/e2e-schedule): läuft in einem eigenen
+# Klon von `main` unter ~/Library/Caches/abnehm-app/e2e-checkout, nie im Arbeits-Checkout. Baut beide
+# E2E-Binaries neu, lässt alle Maestro-Abläufe laufen und meldet das Ergebnis als Mitteilung.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+notify() {
+  osascript -e "display notification \"$1\" with title \"Abnehm-App E2E\"" >/dev/null 2>&1 || true
+}
+
+if ! docker info >/dev/null 2>&1; then
+  notify "Übersprungen: Docker läuft nicht."
+  echo "Docker läuft nicht; geplanter Lauf übersprungen." >&2
+  exit 1
+fi
+
+npm ci --no-audit --no-fund >&2
+if output="$(scripts/e2e-run alle --build)"; then
+  echo "$output"
+  notify "Maestro auf iOS und Android bestanden."
+else
+  echo "$output"
+  notify "Maestro FEHLGESCHLAGEN – Protokoll in ~/Library/Logs/abnehm-app/e2e/"
+  exit 1
+fi
