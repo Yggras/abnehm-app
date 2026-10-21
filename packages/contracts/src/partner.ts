@@ -112,6 +112,24 @@ export function partnerSummaryPeriod(area: AreaKey, today: LocalDate): PartnerSu
   }
 }
 
+/** Erster und letzter Tag eines Zeitraums, wie Datenbanken ihn speichern. */
+export function partnerSummaryBounds(period: PartnerSummaryPeriod): Readonly<{ from: LocalDate; to: LocalDate }> {
+  return period.type === 'tag' ? { from: period.localDate, to: period.localDate } : { from: period.from, to: period.to };
+}
+
+/** Der Zeitraum eines Bereichs aus seinen gespeicherten Grenzen; Gegenstück zu `partnerSummaryBounds`. */
+export function partnerSummaryPeriodOf(area: AreaKey, from: LocalDate, to: LocalDate): PartnerSummaryPeriod {
+  switch (area) {
+    case 'ernaehrung':
+    case 'wasser':
+      return { type: 'tag', localDate: from };
+    case 'sport':
+      return { type: 'woche', from, to };
+    case 'gewicht':
+      return { type: 'vierzehn_tage', from, to };
+  }
+}
+
 /** Grober Tageszielstand des Partners: 0, 1, 2 oder 3 Tageszielerfüllungen, nie als Zahl. */
 export const PartnerDailyGoalStage = z.enum(['noch_nichts', 'unterwegs', 'fast_geschafft', 'geschafft']);
 export type PartnerDailyGoalStage = z.infer<typeof PartnerDailyGoalStage>;

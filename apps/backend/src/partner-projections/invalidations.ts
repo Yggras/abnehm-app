@@ -12,21 +12,19 @@ import { projectionInvalidation } from '../db/schema/index.ts';
 export type ProjectionInvalidation =
   /** Ein Eintrag des Bereichs am lokalen Tag `localDate` ist entstanden, geändert oder gelöscht. */
   | Readonly<{ type: 'bereich'; ownerPersonId: EntityId; area: AreaKey; localDate: LocalDate }>
-  /** Eine Ziel- oder Wochenplanversion ab `validFrom` ist neu oder ersetzt; sie wirkt auf alle Bereiche. */
-  | Readonly<{ type: 'plan'; ownerPersonId: EntityId; validFrom: LocalDate }>;
-
-export async function invalidatePartnerSummaries(tx: DbExecutor, invalidation: ProjectionInvalidation, at: Date): Promise<void> {
-  const scope = invalidation.type === 'bereich'
-    ? { area: invalidation.area, fromDate: invalidation.localDate }
-    : { area: null, fromDate: invalidation.validFrom };
-  await recordInvalidation(tx, { ownerPersonId: invalidation.ownerPersonId, ...scope }, at);
-}
+  /**
+   * Eine Ziel- oder Wochenplanversion ab `validFrom` ist neu oder ersetzt; sie wirkt auf alle Bereiche.
+   * Pflicht für `createGoalVersion` und `createWeeklyPlanVersion` (Spezifikation 1) in deren Transaktion.
+   */
+  | Readonly<{ type: 'plan'; ownerPersonId: EntityId; validFrom: LocalDate }>
+  /** Eine Freigabe der Eigentümerin hat sich am lokalen Tag `localDate` geändert; nur das Fundament meldet das. */
+  | Readonly<{ type: 'freigabe'; ownerPersonId: EntityId; localDate: LocalDate }>;
 
 /** Ohne Bereich betrifft die Invalidierung alle Bereiche des Eigentümers. */
-export async function recordInvalidation(
-  tx: DbExecutor,
-  { ownerPersonId, area, fromDate }: { ownerPersonId: string; area: AreaKey | null; fromDate: string },
-  at: Date,
-): Promise<void> {
-  await tx.insert(projectionInvalidation).values({ id: randomUUID(), ownerPersonId, area, fromDate, createdAt: at });
+export async function invalidatePartnerSummaries(tx: DbExecutor, invalidation: ProjectionInvalidation, at: Date): Promise<void> {
+  const scope: { area: AreaKey | null; fromDate: LocalDate } =
+    invalidation.type === 'bereich' ? { area: invalidation.area, fromDate: invalidation.localDate }
+      : invalidation.type === 'plan' ? { area: null, fromDate: invalidation.validFrom }
+        : { area: null, fromDate: invalidation.localDate };
+  await tx.insert(projectionInvalidation).values({ id: randomUUID(), ownerPersonId: invalidation.ownerPersonId, ...scope, createdAt: at });
 }

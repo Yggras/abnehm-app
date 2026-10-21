@@ -1,8 +1,8 @@
 import { inArray } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
-import { AreaKey } from '@abnehm/contracts/base';
-import type { PartnerSummaryPeriod } from '@abnehm/contracts/partner';
+import { AreaKey, LocalDate } from '@abnehm/contracts/base';
+import { partnerSummaryPeriodOf } from '@abnehm/contracts/partner';
 import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
 
 import { partnerResponse } from '../authorization/authorization.ts';
@@ -47,19 +47,6 @@ function serverProjected<T extends PgTable & { id: AnyPgColumn<{ data: string }>
   };
 }
 
-/** Zeitraum einer gespeicherten Zusammenfassung; welche Form er hat, folgt aus dem Bereich. */
-export function periodOf(area: AreaKey, from: string, to: string): PartnerSummaryPeriod {
-  switch (area) {
-    case 'ernaehrung':
-    case 'wasser':
-      return { type: 'tag', localDate: from } as PartnerSummaryPeriod;
-    case 'sport':
-      return { type: 'woche', from, to } as PartnerSummaryPeriod;
-    case 'gewicht':
-      return { type: 'vierzehn_tage', from, to } as PartnerSummaryPeriod;
-  }
-}
-
 export function summaryEnvelope(row: typeof partnerSummary.$inferSelect) {
   const area = AreaKey.parse(row.area);
   return partnerResponse('partner_summary', {
@@ -69,7 +56,7 @@ export function summaryEnvelope(row: typeof partnerSummary.$inferSelect) {
     ownerPersonId: row.ownerPersonId,
     recipientPersonId: row.recipientPersonId,
     couplingId: row.couplingId,
-    period: periodOf(area, row.periodFrom, row.periodTo),
+    period: partnerSummaryPeriodOf(area, LocalDate.parse(row.periodFrom), LocalDate.parse(row.periodTo)),
     dataAsOf: iso(row.dataAsOf),
     serverVersion: row.serverVersion.toString(),
     content: row.content,

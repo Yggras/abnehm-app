@@ -4,7 +4,7 @@ import { and, count, eq, inArray, isNull, max, sql, type SQL } from 'drizzle-orm
 
 import type { Clock } from '@abnehm/clock';
 import { AreaKey, EntityId, TimeZone, type Instant, type LocalDate } from '@abnehm/contracts/base';
-import { partnerSummaryPeriod, type PartnerDailyGoalStage } from '@abnehm/contracts/partner';
+import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '@abnehm/contracts/partner';
 
 import { PartnerResponseRejected } from '../authorization/authorization.ts';
 import { canonicalJson } from '../canonical-json.ts';
@@ -102,17 +102,12 @@ export function createPartnerProjections({ clock }: { clock: Clock }): PartnerPr
  * Zeiträume werden zur Löschmarkierung. Gerechnet wird nur, wenn die Zusammenfassung fehlt,
  * invalidiert ist oder ihr `dataAsOf` bestätigt werden muss; geschrieben nur bei neuem Stand.
  */
-async function materializeSummary(tx: DbExecutor, area: AnyPartnerSummaryProjector, recipient: Recipient, invalidated: boolean) {
+async function materializeSummary(tx: DbExecutor, registered: AnyPartnerSummaryProjector, recipient: Recipient, invalidated: boolean) {
   // Zeitraum und Inhalt passen je Bereich zusammen; über die Union verfolgt TypeScript das nicht.
-  const projector: PartnerSummaryProjector = area;
+  const projector: PartnerSummaryProjector = registered;
   const period = partnerSummaryPeriod(projector.area, recipient.today);
-  const [periodFrom, periodTo] = period.type === 'tag' ? [period.localDate, period.localDate] : [period.from, period.to];
-  const key = and(
-    eq(partnerSummary.couplingId, recipient.couplingId),
-    eq(partnerSummary.ownerPersonId, recipient.ownerPersonId),
-    eq(partnerSummary.recipientPersonId, recipient.recipientPersonId),
-    eq(partnerSummary.area, projector.area),
-  );
+  const { from: periodFrom, to: periodTo } = partnerSummaryBounds(period);
+  const key = and(recipientKey(partnerSummary, recipient), eq(partnerSummary.area, projector.area));
   const live = await tx.select().from(partnerSummary).where(and(key, isNull(partnerSummary.deletedAt)));
   const current = live.find((row) => row.periodFrom === periodFrom);
   for (const row of live) if (row !== current) await tombstoneProjection(tx, partnerSummary, row, recipient.at);
@@ -162,8 +157,19 @@ function isValidEnvelope(row: typeof partnerSummary.$inferSelect): boolean {
   }
 }
 
+type ProjectionTable = typeof partnerSummary | typeof partnerDailyGoalStatus;
+
+/** Kopplung, Eigentümer und Empfänger: der gemeinsame Teil des natürlichen Schlüssels beider Projektionen. */
+function recipientKey(table: ProjectionTable, recipient: Recipient) {
+  return and(
+    eq(table.couplingId, recipient.couplingId),
+    eq(table.ownerPersonId, recipient.ownerPersonId),
+    eq(table.recipientPersonId, recipient.recipientPersonId),
+  );
+}
+
 /** Generation einer neuen Fassung: eins mehr als jede frühere desselben natürlichen Schlüssels. */
-async function nextGeneration(tx: DbExecutor, table: typeof partnerSummary | typeof partnerDailyGoalStatus, naturalKey: SQL | undefined) {
+async function nextGeneration(tx: DbExecutor, table: ProjectionTable, naturalKey: SQL | undefined) {
   const [previous] = await tx.select({ generation: max(table.generation) }).from(table).where(naturalKey);
   return (previous?.generation ?? 0) + 1;
 }
@@ -175,11 +181,7 @@ async function materializeDailyGoalStatus(tx: DbExecutor, recipient: Recipient) 
     .from(dailyGoalCompletion)
     .where(and(eq(dailyGoalCompletion.personId, recipient.ownerPersonId), eq(dailyGoalCompletion.localDate, recipient.today)));
   const stage = stages[Math.min(completions?.count ?? 0, stages.length - 1)]!;
-  const key = and(
-    eq(partnerDailyGoalStatus.couplingId, recipient.couplingId),
-    eq(partnerDailyGoalStatus.ownerPersonId, recipient.ownerPersonId),
-    eq(partnerDailyGoalStatus.recipientPersonId, recipient.recipientPersonId),
-  );
+  const key = recipientKey(partnerDailyGoalStatus, recipient);
   const live = await tx.select().from(partnerDailyGoalStatus).where(and(key, isNull(partnerDailyGoalStatus.deletedAt)));
   const current = live.find((row) => row.localDate === recipient.today);
   for (const row of live) if (row !== current) await tombstoneProjection(tx, partnerDailyGoalStatus, row, recipient.at);

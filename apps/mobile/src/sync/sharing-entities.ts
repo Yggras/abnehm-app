@@ -1,4 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
+import type { z } from 'zod';
 
 import { EntityId, type AreaKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import {
@@ -9,6 +10,7 @@ import {
   type PartnerSharingLevel,
   type PhotoSharingLevel,
 } from '@abnehm/contracts/coupling';
+import type { EntityData } from '@abnehm/contracts/sync';
 
 import type { TransactionContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
@@ -22,33 +24,26 @@ import { sqliteEntity } from './sqlite-entity';
 // derselben Transaktion den Upsert vor (Last-Write-Wins). Der Partner erhält sie nie. Den Widerruf beim
 // Partner, die Notices und das Sicherheitslog erledigt der Server bei der Annahme.
 
-export const partnerSharingEntity = sqliteEntity({
-  entityType: 'partner_sharing',
-  ownerField: 'ownerPersonId',
-  upsert: PartnerSharingUpsert,
-  deletable: false,
-  record: PartnerSharingRecord,
-  table: partnerSharing,
-  row: (id, data) => ({ id, ...data }),
-  replay(tx, entityId, change) {
-    if (change.type !== 'upsert_entity') return;
-    sqliteOf(tx).update(partnerSharing).set({ level: change.payload.level, updatedAt: change.createdAt }).where(eq(partnerSharing.id, entityId)).run();
-  },
-});
+/** Freigabe-Entität einer Tabelle: Upsert ändert nur die Stufe, Löschen gibt es nicht. */
+function sharingEntity<T extends typeof partnerSharing | typeof photoSharing, U extends { level: string }, R extends EntityData>(
+  options: { entityType: 'partner_sharing' | 'photo_sharing'; table: T; upsert: z.ZodType<U>; record: z.ZodType<R> },
+) {
+  // Beide Tabellen teilen die hier verwendeten Spalten; Drizzle kann über die Union nicht bauen.
+  const table = options.table as unknown as typeof photoSharing;
+  return sqliteEntity({
+    ...options,
+    ownerField: 'ownerPersonId',
+    deletable: false,
+    row: (id, data) => ({ id, ...data }) as unknown as T['$inferInsert'],
+    replay(tx, entityId, change) {
+      if (change.type !== 'upsert_entity') return;
+      sqliteOf(tx).update(table).set({ level: change.payload.level, updatedAt: change.createdAt }).where(eq(table.id, entityId)).run();
+    },
+  });
+}
 
-export const photoSharingEntity = sqliteEntity({
-  entityType: 'photo_sharing',
-  ownerField: 'ownerPersonId',
-  upsert: PhotoSharingUpsert,
-  deletable: false,
-  record: PhotoSharingRecord,
-  table: photoSharing,
-  row: (id, data) => ({ id, ...data }),
-  replay(tx, entityId, change) {
-    if (change.type !== 'upsert_entity') return;
-    sqliteOf(tx).update(photoSharing).set({ level: change.payload.level, updatedAt: change.createdAt }).where(eq(photoSharing.id, entityId)).run();
-  },
-});
+export const partnerSharingEntity = sharingEntity({ entityType: 'partner_sharing', table: partnerSharing, upsert: PartnerSharingUpsert, record: PartnerSharingRecord });
+export const photoSharingEntity = sharingEntity({ entityType: 'photo_sharing', table: photoSharing, upsert: PhotoSharingUpsert, record: PhotoSharingRecord });
 
 /** Ändert die eigene Partnerfreigabe eines Bereichs in der aktiven Kopplung. Ohne Kopplung ist das ein Aufruffehler. */
 export function setPartnerSharing(tx: TransactionContext, writer: SyncWriter, change: { area: AreaKey; level: PartnerSharingLevel }, at: Instant): void {

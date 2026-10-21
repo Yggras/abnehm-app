@@ -163,6 +163,13 @@ const cases: { [A in AreaKey]: readonly Case<A>[] } = {
       expect: is({ changeKg: 0, direction: 'stabil' }),
     },
     {
+      name: 'eine Veränderung, die auf 0,0 kg rundet, ist stabil',
+      arrange: async (record, tx, owner) => {
+        for (const [offset, weightG] of [[-10, 80_000], [-5, 80_020], [0, 80_040]] as const) await record.weighIn(tx, owner, day(offset), weightG);
+      },
+      expect: is({ changeKg: 0, direction: 'stabil' }),
+    },
+    {
       name: 'fallendes Gewicht sinkt, auf eine Nachkommastelle',
       arrange: async (record, tx, owner) => {
         for (const [offset, weightG] of [[-12, 81_000], [-6, 80_400], [0, 79_800]] as const) await record.weighIn(tx, owner, day(offset), weightG);

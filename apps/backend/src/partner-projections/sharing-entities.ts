@@ -8,7 +8,7 @@ import type { DbExecutor } from '../database.ts';
 import { partnerSharing, person, photoSharing } from '../db/schema/index.ts';
 import type { SecurityLog } from '../security-log/security-log.ts';
 import type { EntityWrite, ServerSyncEntity } from '../sync/registry.ts';
-import { recordInvalidation } from './invalidations.ts';
+import { invalidatePartnerSummaries } from './invalidations.ts';
 import { revokeSummaries } from './revocation.ts';
 
 // Partner- und Fotofreigabe als Upsert-Entitäten (Spezifikation 0, Abschnitte 5, 8 und 10). Angelegt
@@ -60,7 +60,7 @@ export function sharingSyncEntities({ clock, securityLog }: Dependencies): reado
         const owner = await ownerOf(tx, change.ownerPersonId);
         // Eine Freigabeänderung wirkt bereichsübergreifend ab dem aktuellen Tag der Eigentümerin.
         const today = clock.read(TimeZone.parse(owner.timeZone)).localDate;
-        await recordInvalidation(tx, { ownerPersonId: change.ownerPersonId, area: null, fromDate: today }, change.at);
+        await invalidatePartnerSummaries(tx, { type: 'freigabe', ownerPersonId: change.ownerPersonId, localDate: today }, change.at);
         if (level === 'privat') await revokeSummaries(tx, { ownerPersonId: change.ownerPersonId, couplingId, area }, change.at);
         await securityLog.record({ type: 'freigabeaenderung', accountId: EntityId.parse(owner.accountId), couplingId: EntityId.parse(couplingId), scope: area, level }, tx);
       },

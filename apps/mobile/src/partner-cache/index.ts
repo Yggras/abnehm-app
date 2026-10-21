@@ -1,7 +1,13 @@
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
-import { AreaKey, type EntityId } from '@abnehm/contracts/base';
-import { PartnerDailyGoalStatus, PartnerSummaryEnvelope, RevocationNotice } from '@abnehm/contracts/partner';
+import { AreaKey, LocalDate, type EntityId } from '@abnehm/contracts/base';
+import {
+  PartnerDailyGoalStatus,
+  partnerSummaryBounds,
+  PartnerSummaryEnvelope,
+  partnerSummaryPeriodOf,
+  RevocationNotice,
+} from '@abnehm/contracts/partner';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { coupling, partnerDailyGoalStatus, partnerSummary } from '../local-db/schema';
@@ -64,8 +70,8 @@ const summaryEntity = cacheEntity({
     ownerPersonId: summary.ownerPersonId,
     recipientPersonId: summary.recipientPersonId,
     area: summary.type,
-    periodFrom: summary.period.type === 'tag' ? summary.period.localDate : summary.period.from,
-    periodTo: summary.period.type === 'tag' ? summary.period.localDate : summary.period.to,
+    periodFrom: partnerSummaryBounds(summary.period).from,
+    periodTo: partnerSummaryBounds(summary.period).to,
     generation: summary.generation,
     content: summary.content,
     dataAsOf: summary.dataAsOf,
@@ -170,9 +176,7 @@ export function readPartnerCache(tx: ReadContext): PartnerCache {
         ownerPersonId: row.ownerPersonId,
         recipientPersonId: row.recipientPersonId,
         couplingId: row.couplingId,
-        period: area === 'sport' ? { type: 'woche', from: row.periodFrom, to: row.periodTo }
-          : area === 'gewicht' ? { type: 'vierzehn_tage', from: row.periodFrom, to: row.periodTo }
-            : { type: 'tag', localDate: row.periodFrom },
+        period: partnerSummaryPeriodOf(area, LocalDate.parse(row.periodFrom), LocalDate.parse(row.periodTo)),
         dataAsOf: row.dataAsOf,
         serverVersion: row.serverVersion,
         content: row.content,
