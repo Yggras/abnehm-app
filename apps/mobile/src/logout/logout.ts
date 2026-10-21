@@ -1,4 +1,4 @@
-import type { AppAuth, SessionRevocation } from '../auth/app-auth';
+import type { AppAuth, SessionRevocation, SessionRevocations } from '../auth/app-auth';
 import type { LocalDatabases } from '../local-db/local-databases';
 import type { SyncEngine } from '../sync/engine';
 
@@ -14,13 +14,14 @@ import type { SyncEngine } from '../sync/engine';
 //    die angemeldeten, danach SecureStore-Sitzung und kontogetrennte Datenbank samt Partnercache.
 //    Bleibt die App dabei stehen, setzt `start` die Bereinigung fort, bevor Fachdaten erscheinen.
 //
+// Ein gespeicherter Stand gilt nur für die Sitzung seines Ausweises. Hat sich die Person inzwischen neu
+// angemeldet, wird höchstens noch die alte Sitzung widerrufen; die neue Anmeldung bleibt unberührt.
+//
 // Die Datei kennt weder React Native noch Expo, damit Integrationstests sie gegen die echte Hono-App
 // laufen lassen.
 
 /** Dauerhafter Stand einer begonnenen Abmeldung; auf dem Gerät in SecureStore. */
-export type LogoutRecord =
-  | Readonly<{ phase: 'logout_pending'; revocation: SessionRevocation }>
-  | Readonly<{ phase: 'cleanup_pending'; accountId: string }>;
+export type LogoutRecord = Readonly<{ phase: 'logout_pending' | 'cleanup_pending'; revocation: SessionRevocation }>;
 
 export type LogoutStore = {
   read(): Promise<LogoutRecord | null>;
@@ -42,7 +43,8 @@ export type SyncBeforeLogout =
  */
 export type LogoutCleanupHook = Readonly<{ name: string; run(accountId: string): void | Promise<void> }>;
 
-export type LogoutResult =
+/** Ausgang eines Abmeldeversuchs (nicht zu verwechseln mit `LogoutResult` des Servers). */
+export type LogoutOutcome =
   | Readonly<{ type: 'logged_out' }>
   /** Ungesicherte Operationen; die Oberfläche fragt nach und ruft mit `discardUnsecured` erneut auf. */
   | Readonly<{ type: 'confirmation_required'; unsecuredOperations: number }>
@@ -54,21 +56,31 @@ export type LogoutResult =
   | Readonly<{ type: 'cleanup_pending' }>;
 
 export type Logout = {
-  /** Vollständiges Abmelden; gleichzeitige Aufrufe teilen sich denselben Ablauf. */
-  logout(options?: { discardUnsecured?: boolean }): Promise<LogoutResult>;
+  /**
+   * Vollständiges Abmelden. Gleichzeitige Aufrufe teilen sich denselben Ablauf; läuft gerade `start`,
+   * beginnt er danach.
+   */
+  logout(options?: { discardUnsecured?: boolean }): Promise<LogoutOutcome>;
   /**
    * Beim App-Start statt `auth.checkSession()`: setzt eine Bereinigung fort, bevor eine Kontodatenbank
    * öffnet, prüft sonst die Sitzung und setzt danach eine begonnene Abmeldung fort. `null` ohne Abmeldung.
    * Im Hintergrundfenster ohne Sync bleibt die begonnene Abmeldung für den nächsten Vordergrundstart
    * liegen (`resumeLogout: false`).
    */
-  start(options?: { resumeLogout?: boolean }): Promise<LogoutResult | null>;
+  start(options?: { resumeLogout?: boolean }): Promise<LogoutOutcome | null>;
+  /**
+   * Ob eine begonnene Abmeldung dieser Sitzung offen ist, etwa nach `unreachable` oder weil der beim
+   * Start fortgesetzte Ablauf eine Bestätigung braucht. Die Oberfläche unter „Konto“ bietet dann an, sie
+   * mit `logout` abzuschließen.
+   */
+  pending(): Promise<boolean>;
   /** Meldet einen lokalen Bereinigungshaken an; die Rückgabe meldet ihn ab. */
   onCleanup(hook: LogoutCleanupHook): () => void;
 };
 
 export type LogoutOptions = {
-  auth: Pick<AppAuth, 'checkSession' | 'prepareRevocation' | 'isCurrentSession' | 'revokeCurrentSession' | 'forgetSession'>;
+  auth: Pick<AppAuth, 'checkSession'>;
+  revocations: SessionRevocations;
   databases: Pick<LocalDatabases, 'remove'>;
   store: LogoutStore;
   /** Ein Sync-Zyklus der geöffneten Kontodatenbank, etwa `syncBeforeLogout(engine)`. */
@@ -89,25 +101,23 @@ export async function syncBeforeLogout(engine: Pick<SyncEngine, 'sync' | 'unsecu
   return operations === 0 ? { type: 'secured' } : { type: 'unsecured', operations };
 }
 
-export function createLogout({ auth, databases, store, sync, newId, onError }: LogoutOptions): Logout {
+export function createLogout({ auth, revocations, databases, store, sync, newId, onError }: LogoutOptions): Logout {
   const hooks = new Set<LogoutCleanupHook>();
-  let running: Promise<LogoutResult | null> | null = null;
+  // Abläufe laufen nacheinander; gleichzeitige `logout`-Aufrufe teilen sich einen.
+  let queue: Promise<unknown> = Promise.resolve();
+  let sharedLogout: Promise<LogoutOutcome> | null = null;
 
-  /** Ein Ablauf zur Zeit; ein zweiter Aufruf erhält das Ergebnis des laufenden. */
-  function exclusive<T extends LogoutResult | null>(work: () => Promise<T>): Promise<T> {
-    if (running !== null) return running as Promise<T>;
-    const promise = work().finally(() => {
-      running = null;
-    });
-    running = promise;
-    return promise;
+  function serialized<T>(work: () => Promise<T>): Promise<T> {
+    const next = queue.then(work, work);
+    queue = next.catch(() => {});
+    return next;
   }
 
   /** Alle Schritte laufen, auch wenn einer scheitert; erst wenn keiner scheitert, ist die Abmeldung fertig. */
-  async function cleanup(accountId: string): Promise<LogoutResult> {
+  async function cleanup(accountId: string): Promise<LogoutOutcome> {
     const steps: (() => void | Promise<void>)[] = [
       ...[...hooks].map((hook) => () => hook.run(accountId)),
-      () => auth.forgetSession(),
+      () => revocations.forgetSession(),
       () => databases.remove(accountId),
     ];
     let failed = false;
@@ -124,59 +134,75 @@ export function createLogout({ auth, databases, store, sync, newId, onError }: L
     return { type: 'logged_out' };
   }
 
-  /**
-   * Ein Ausweis aus einer Sitzung, die nicht mehr die des Geräts ist (erneute Anmeldung nach `401`):
-   * Der Server widerruft die alte Sitzung, falls noch nicht geschehen; lokal bleibt alles.
-   */
-  async function settleStale(revocation: SessionRevocation): Promise<boolean> {
-    const revoked = await auth.revokeCurrentSession(revocation);
-    if (revoked.type === 'unreachable') return false;
-    await store.clear();
-    return true;
+  /** Ob ein gespeicherter Stand noch die Sitzung des Geräts betrifft. */
+  async function isCurrent(record: LogoutRecord): Promise<boolean> {
+    const status = await revocations.revocationStatus(record.revocation);
+    // Nach `forgetSession` hat das Gerät keine Sitzung mehr; die Bereinigung gilt dann weiter.
+    return status === 'aktuell' || (status === 'keine' && record.phase === 'cleanup_pending');
   }
 
-  async function run(discardUnsecured: boolean): Promise<LogoutResult> {
-    let record = await store.read();
-    if (record?.phase === 'cleanup_pending') return cleanup(record.accountId);
-    if (record !== null && !(await auth.isCurrentSession(record.revocation))) {
-      if (!(await settleStale(record.revocation))) return { type: 'unreachable' };
-      record = null;
+  /**
+   * Der gespeicherte Stand, solange er die Sitzung des Geräts betrifft. Gehört er zu einer früheren
+   * Sitzung (erneute Anmeldung), widerruft der Server die alte, falls noch nicht geschehen; lokal bleibt
+   * alles. `unreachable`, solange das nicht gelingt.
+   */
+  async function currentRecord(): Promise<LogoutRecord | null | 'unreachable'> {
+    const record = await store.read();
+    if (record === null || (await isCurrent(record))) return record;
+    if (record.phase === 'logout_pending' && (await revocations.revokeCurrentSession(record.revocation)).type === 'unreachable') {
+      return 'unreachable';
     }
+    await store.clear();
+    return null;
+  }
+
+  async function run(discardUnsecured: boolean): Promise<LogoutOutcome> {
+    const record = await currentRecord();
+    if (record === 'unreachable') return { type: 'unreachable' };
+    if (record?.phase === 'cleanup_pending') return cleanup(record.revocation.accountId);
     const synced = await sync();
     if (synced.type === 'unreachable') return { type: 'unreachable' };
     if (synced.type === 'unsecured' && !discardUnsecured) return { type: 'confirmation_required', unsecuredOperations: synced.operations };
+    // Bei `unauthorized` geht es ohne Sync weiter: Ist der Widerruf schon geschehen, liefert der Retry
+    // sein Ergebnis; sonst fehlt ein Token und der Ablauf endet unten mit `unauthorized`.
     let revocation = record?.revocation ?? null;
     if (revocation === null) {
-      revocation = await auth.prepareRevocation(newId());
+      revocation = await revocations.prepareRevocation(newId());
       if (revocation === null) return { type: 'unauthorized' };
       await store.write({ phase: 'logout_pending', revocation });
     }
-    const revoked = await auth.revokeCurrentSession(revocation);
+    const revoked = await revocations.revokeCurrentSession(revocation);
     if (revoked.type === 'unreachable') return { type: 'unreachable' };
     if (revoked.type === 'unauthorized') {
       await store.clear();
       return { type: 'unauthorized' };
     }
-    await store.write({ phase: 'cleanup_pending', accountId: revocation.accountId });
+    await store.write({ phase: 'cleanup_pending', revocation });
     return cleanup(revocation.accountId);
   }
 
   return {
-    logout: ({ discardUnsecured = false } = {}) => exclusive(() => run(discardUnsecured)),
+    logout({ discardUnsecured = false } = {}) {
+      sharedLogout ??= serialized(() => run(discardUnsecured)).finally(() => {
+        sharedLogout = null;
+      });
+      return sharedLogout;
+    },
     start: ({ resumeLogout = true } = {}) =>
-      exclusive(async () => {
-        const record = await store.read();
-        // Vor `checkSession`: Die Kontodatenbank öffnet erst gar nicht.
-        if (record?.phase === 'cleanup_pending') return cleanup(record.accountId);
+      serialized(async () => {
+        // Vor `checkSession`: Bei offener Bereinigung öffnet die Kontodatenbank erst gar nicht.
+        const before = await store.read();
+        if (before?.phase === 'cleanup_pending' && (await isCurrent(before))) return cleanup(before.revocation.accountId);
         await auth.checkSession();
-        if (record === null || !resumeLogout) return null;
-        // Nach erneuter Anmeldung will die Person weitermachen; nur die alte Sitzung wird noch widerrufen.
-        if (!(await auth.isCurrentSession(record.revocation))) {
-          await settleStale(record.revocation);
-          return null;
-        }
+        if (before === null || !resumeLogout) return null;
+        const record = await currentRecord();
+        if (record === null || record === 'unreachable') return null;
         return run(false);
       }),
+    async pending() {
+      const record = await store.read();
+      return record !== null && (await isCurrent(record));
+    },
     onCleanup(hook) {
       hooks.add(hook);
       return () => hooks.delete(hook);

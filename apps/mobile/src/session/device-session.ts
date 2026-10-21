@@ -101,6 +101,7 @@ function deviceState() {
   gate = followSessionGate(session.auth);
   const logout = createLogout({
     auth: session.auth,
+    revocations: session.revocations,
     databases: session.databases,
     store: secureLogoutStore,
     sync: () => syncBeforeLogout(activeEngine),

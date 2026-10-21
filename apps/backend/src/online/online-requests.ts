@@ -47,23 +47,20 @@ export type StoredOnlineResult =
   | Readonly<{ type: 'foreign' }>;
 
 export async function storedOnlineResult(executor: DbExecutor, binding: OnlineRequestBinding): Promise<StoredOnlineResult> {
-  const [stored] = await executor.select().from(onlineRequest).where(eq(onlineRequest.requestId, binding.requestId));
-  if (stored === undefined) return { type: 'none' };
+  const stored = await storedOnlineRequest(executor, binding.requestId);
+  if (stored === null) return { type: 'none' };
   if (stored.accountId !== binding.accountId) return { type: 'foreign' };
   if (stored.flow !== binding.flow || stored.requestHash !== binding.requestHash) return { type: 'conflict' };
   return { type: 'stored', result: stored.result };
 }
 
 /**
- * Das gespeicherte Ergebnis genau dieser Anfrage, ohne Blick aufs Konto, oder `null`. Nur für Abläufe,
- * deren Hash-Schlüssel selbst bindet: beim Abmelden die vorgelegte, womöglich schon widerrufene Sitzung.
+ * Die gespeicherte Anfrage zur `requestId` samt Bindung, ohne Prüfung. Für Abläufe, deren Hash-Schlüssel
+ * selbst bindet: Beim Abmelden ist es die vorgelegte, womöglich schon widerrufene Sitzung.
  */
-export async function storedResultOfHash(
-  executor: DbExecutor,
-  { requestId, flow, requestHash }: Omit<OnlineRequestBinding, 'accountId'>,
-): Promise<Record<string, unknown> | null> {
+export async function storedOnlineRequest(executor: DbExecutor, requestId: string) {
   const [stored] = await executor.select().from(onlineRequest).where(eq(onlineRequest.requestId, requestId));
-  return stored !== undefined && stored.flow === flow && stored.requestHash === requestHash ? stored.result : null;
+  return stored ?? null;
 }
 
 /**

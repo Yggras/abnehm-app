@@ -63,8 +63,8 @@ test('legt den Ausweis von logout_pending wie die Sitzung in SecureStore ab', as
 
 test('ersetzt logout_pending durch cleanup_pending und vergisst die Abmeldung danach', async () => {
   await secureLogoutStore.write({ phase: 'logout_pending', revocation });
-  await secureLogoutStore.write({ phase: 'cleanup_pending', accountId: revocation.accountId });
-  expect(await secureLogoutStore.read()).toEqual({ phase: 'cleanup_pending', accountId: revocation.accountId });
+  await secureLogoutStore.write({ phase: 'cleanup_pending', revocation });
+  expect(await secureLogoutStore.read()).toEqual({ phase: 'cleanup_pending', revocation });
 
   await secureLogoutStore.clear();
   expect(await secureLogoutStore.read()).toBeNull();
@@ -75,6 +75,6 @@ test('liest unlesbare Einträge als keine Abmeldung', async () => {
   expect(await secureLogoutStore.read()).toBeNull();
   mockKeychain.set('abnehm.abmeldung', JSON.stringify({ phase: 'cleanup_pending' }));
   expect(await secureLogoutStore.read()).toBeNull();
-  mockKeychain.set('abnehm.abmeldung', JSON.stringify({ phase: 'cleanup_pending', accountId: 'konto', password: 'geheim' }));
+  mockKeychain.set('abnehm.abmeldung', JSON.stringify({ phase: 'cleanup_pending', revocation, password: 'geheim' }));
   expect(await secureLogoutStore.read()).toBeNull();
 });

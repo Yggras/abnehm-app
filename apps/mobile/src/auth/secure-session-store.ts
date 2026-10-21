@@ -33,17 +33,14 @@ export const secureSessionStore: SessionStore = {
   clear: () => SecureStore.deleteItemAsync(KEY, options),
 };
 
-// Stand einer begonnenen Abmeldung neben der Sitzung: `logout_pending` trägt den Ausweis mit dem
-// Sitzungstoken, das ein Retry nach dem Widerruf vorlegt (Abmeldemodul, `src/logout/`).
+// Stand einer begonnenen Abmeldung neben der Sitzung: Er trägt den Ausweis mit dem Sitzungstoken, das ein
+// Retry nach dem Widerruf vorlegt (Abmeldemodul, `src/logout/`).
 const LOGOUT_KEY = 'abnehm.abmeldung';
 
-const StoredLogout = z.discriminatedUnion('phase', [
-  z.strictObject({
-    phase: z.literal('logout_pending'),
-    revocation: z.strictObject({ accountId: z.string().min(1), requestId: z.string().min(1), token: z.string().min(1) }),
-  }),
-  z.strictObject({ phase: z.literal('cleanup_pending'), accountId: z.string().min(1) }),
-]);
+const StoredLogout = z.strictObject({
+  phase: z.enum(['logout_pending', 'cleanup_pending']),
+  revocation: z.strictObject({ accountId: z.string().min(1), requestId: z.string().min(1), token: z.string().min(1) }),
+});
 
 export const secureLogoutStore: LogoutStore = {
   async read() {

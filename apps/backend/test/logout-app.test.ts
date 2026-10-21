@@ -108,6 +108,7 @@ function install(backend: TestBackend, kept: Persisted, network: Network = { onl
   const errors: unknown[] = [];
   const logout = createLogout({
     auth: session.auth,
+    revocations: session.revocations,
     databases,
     store: kept.logoutStore,
     sync: () => syncBeforeLogout(engine),
@@ -214,7 +215,7 @@ describe('Vollständiges Abmelden', () => {
     expect(await sessionIsValid(world.backend, world.token)).toBe(false);
     expect(world.kept.logoutStore.value).toMatchObject({ phase: 'logout_pending', revocation: { accountId: world.accountId } });
     expect(accountFiles(world.kept, world.accountId)).not.toEqual([]);
-    const { requestId } = (world.kept.logoutStore.value as Extract<LogoutRecord, { phase: 'logout_pending' }>).revocation;
+    const { requestId } = world.kept.logoutStore.value!.revocation;
 
     const restarted = install(world.backend, world.kept);
     expect(await restarted.logout.start()).toEqual({ type: 'logged_out' });
@@ -240,7 +241,7 @@ describe('Vollständiges Abmelden', () => {
 
     expect(await world.phone.logout.logout()).toEqual({ type: 'unreachable' });
     await expectUnchanged(world, world.phone);
-    const pending = world.kept.logoutStore.value as Extract<LogoutRecord, { phase: 'logout_pending' }>;
+    const pending = world.kept.logoutStore.value!;
     expect(pending.phase).toBe('logout_pending');
     expect(await world.backend.database.db.select().from(onlineRequest)).toEqual([]);
 
@@ -258,7 +259,7 @@ describe('Vollständiges Abmelden', () => {
     void world.phone.logout.logout();
     await vi.waitFor(() => expect(stuck).toHaveBeenCalled());
     unregister();
-    expect(world.kept.logoutStore.value).toEqual({ phase: 'cleanup_pending', accountId: world.accountId });
+    expect(world.kept.logoutStore.value).toMatchObject({ phase: 'cleanup_pending', revocation: { accountId: world.accountId } });
     expect(world.kept.sessionStore.value).not.toBeNull();
 
     // Ohne Netz öffnete `checkSession` die Datenbank mit der gespeicherten Sitzung; die Bereinigung braucht keins.
@@ -286,5 +287,64 @@ describe('Vollständiges Abmelden', () => {
     expect(await sessionIsValid(world.backend, newToken)).toBe(true);
     expect(world.kept.logoutStore.value).toBeNull();
     expect(restarted.cleanedUp).toEqual([]);
+  });
+
+  it('löscht nach gescheiterter Bereinigung keine spätere Anmeldung beim Neustart', async () => {
+    const world = await setup();
+    world.phone.onCleanup({
+      name: 'scheitert',
+      run: () => {
+        throw new Error('Check-ins nicht abräumbar');
+      },
+    });
+    expect(await world.phone.logout.logout()).toEqual({ type: 'cleanup_pending' });
+    expect(world.phone.auth.state()).toEqual({ type: 'abgemeldet' });
+    expect(await world.phone.auth.signIn({ email, password: defaultPassword })).toEqual({ type: 'signed_in', accountId: world.accountId });
+    const newToken = world.kept.sessionStore.value!.token!;
+
+    const restarted = install(world.backend, world.kept);
+    expect(await restarted.logout.start()).toBeNull();
+
+    expect(restarted.auth.state()).toEqual({ type: 'angemeldet', accountId: world.accountId });
+    expect(world.kept.sessionStore.value).toEqual({ accountId: world.accountId, token: newToken });
+    expect(await sessionIsValid(world.backend, newToken)).toBe(true);
+    expect(world.kept.logoutStore.value).toBeNull();
+  });
+
+  it('meldet eine offene Abmeldung, die beim Start eine Bestätigung braucht, und schließt sie danach ab', async () => {
+    const world = await setup();
+    world.network.loseResponseOf = '/v1/session/logout';
+    world.network.answer = { path: '/v1/sync/push', status: 409, body: { code: 'schema_update_required', retryable: false } };
+    expect(await world.phone.logout.logout()).toEqual({ type: 'unreachable' });
+    expect(await world.phone.logout.pending()).toBe(true);
+    delete world.network.loseResponseOf;
+
+    // Der Server hat schon widerrufen; ohne Sitzung lässt sich die neue Änderung nicht mehr sichern.
+    const restarted = install(world.backend, world.kept);
+    const starting = restarted.logout.start();
+    // Ein gleichzeitiger Aufruf der Oberfläche wartet auf den Start, statt dessen `null` zu erhalten.
+    const fromScreen = restarted.logout.logout();
+
+    expect(await starting).toEqual({ type: 'logged_out' });
+    expect(await fromScreen).toEqual({ type: 'unauthorized' });
+    expect(await restarted.logout.pending()).toBe(false);
+    await expectLoggedOut(world, restarted);
+  });
+
+  it('fragt beim fortgesetzten Start nach, solange die Sitzung gilt und Operationen offen sind', async () => {
+    const world = await setup();
+    world.serverHook.failing = true;
+    expect(await world.phone.logout.logout()).toEqual({ type: 'unreachable' });
+    world.serverHook.failing = false;
+    world.network.answer = { path: '/v1/sync/push', status: 409, body: { code: 'schema_update_required', retryable: false } };
+
+    const restarted = install(world.backend, world.kept, world.network);
+    await restarted.logout.start({ resumeLogout: false });
+    restarted.rename('Anni');
+    expect(await restarted.logout.start()).toEqual({ type: 'confirmation_required', unsecuredOperations: 1 });
+    expect(await restarted.logout.pending()).toBe(true);
+
+    expect(await restarted.logout.logout({ discardUnsecured: true })).toEqual({ type: 'logged_out' });
+    await expectLoggedOut(world, restarted);
   });
 });

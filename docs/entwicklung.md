@@ -171,7 +171,8 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 
 | Rolle | Interface | Ort |
 | --- | --- | --- |
-| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, `revokeCurrentSession` (mit dem Ausweis aus `prepareRevocation`), dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch`; `isCurrentSession` und `forgetSession` nur für das Abmeldemodul | `apps/mobile/src/auth/` |
+| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch` | `apps/mobile/src/auth/` |
+| Abmeldemodul der App | `SessionRevocations` (`AppSession.revocations`): `revokeCurrentSession` mit dem Ausweis aus `prepareRevocation`, dazu `revocationStatus` und `forgetSession` | `apps/mobile/src/auth/` |
 | Backend-Endpunkte | `SessionAuthenticator.authenticate(headers)`; Endpunkte erhalten die Sitzung über den Guard der Autorisierung (unten) | `apps/backend/src/auth/` |
 | Betrieb | `AdminPasswordReset`, aufgerufen über das Kommando unten | `apps/backend/src/auth/admin-reset-command.ts` |
 
@@ -197,7 +198,7 @@ Vollständiges Abmelden ist ein Online-Ablauf ([#111](https://github.com/Yggras/
 2. **`logout_pending`.** Vor dem Serveraufruf speichert das Modul die `requestId` samt Ausweis der Sitzung (`SessionRevocation` mit Token) in SecureStore (`secureLogoutStore` in `apps/mobile/src/auth/secure-session-store.ts`).
 3. **Serverabmeldung** (`POST /v1/session/logout`, `apps/backend/src/logout/`): In einer Transaktion laufen die angemeldeten Server-Haken in Anmeldereihenfolge (`backend.logout.registerHook`, etwa die Push-Deaktivierung aus Spezifikation 5), dann Sicherheitslog (`abmeldung`, `sitzungswiderruf`) und Widerruf. Das Ergebnis liegt in `online_request` unter der `requestId`, mit einem Hash, dessen Schlüssel aus dem Sitzungstoken stammt. Ein identischer Retry erhält es auch nach dem Widerruf, mit diesem Token aber nichts anderes. Antwortverlust und `5xx` ergeben `unreachable`; der nächste Versuch wiederholt die Anfrage identisch.
 4. **`cleanup_pending`.** Erst nach bestätigtem Ergebnis laufen die lokalen Bereinigungshaken (`logout.onCleanup`, etwa die Tages-Check-ins aus Spezifikation 5), danach `forgetSession` und `LocalDatabases.remove`. Die kontogetrennte Datenbank enthält auch den Partnercache. Jeder Haken muss idempotent sein.
-5. **Neustart.** Statt `checkSession` ruft die App `logout.start()`. Eine offene Bereinigung läuft so, bevor eine Kontodatenbank öffnet; eine begonnene Abmeldung wird danach fortgesetzt. Hat sich die Person nach einem `401` neu angemeldet, widerruft `start` nur noch die alte Sitzung und meldet niemanden ab.
+5. **Neustart.** Statt `checkSession` ruft die App `logout.start()`. Eine offene Bereinigung läuft so, bevor eine Kontodatenbank öffnet; eine begonnene Abmeldung wird danach fortgesetzt und kann erneut eine Bestätigung verlangen. Ob eine Abmeldung offen ist, liefert `logout.pending()`. Jeder gespeicherte Stand gilt nur für die Sitzung seines Ausweises: Hat sich die Person inzwischen neu angemeldet, widerruft das Modul höchstens noch die alte Sitzung und lässt die neue Anmeldung samt Daten stehen.
 
 Antwortet der Server mit `401` ohne gespeichertes Ergebnis (etwa nach einer Passwortänderung auf einem anderen Gerät), liefert `logout()` `unauthorized`: Das Auth-Modul ist gesperrt, lokale Daten bleiben bis zur nächsten Anmeldung. Die Tests stehen in `apps/backend/test/logout.test.ts` (HTTP) und `apps/backend/test/logout-app.test.ts` (App-Modul gegen die echte Hono-App).
 

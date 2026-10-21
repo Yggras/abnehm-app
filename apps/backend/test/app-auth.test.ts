@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TimeZone } from '@abnehm/contracts/base';
 
-import { createAppAuth, type AccountData, type AppAuth, type SessionStore, type StoredSession } from '../../mobile/src/auth/app-auth.ts';
+import { createAppAuth, type AccountData, type SessionStore, type StoredSession } from '../../mobile/src/auth/app-auth.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { defaultPassword, newDevice } from './support/auth-client.ts';
 
@@ -45,7 +45,7 @@ function accountDataModel(): AccountData & { open: ReturnType<typeof vi.fn>; ope
 }
 
 type Phone = {
-  auth: AppAuth;
+  auth: ReturnType<typeof createAppAuth>;
   store: ReturnType<typeof memoryStore>;
   data: ReturnType<typeof accountDataModel>;
   online: boolean;
@@ -54,7 +54,7 @@ type Phone = {
 };
 
 /** Widerruft die aktuelle Sitzung über den Abmeldeablauf des Servers, ohne lokales Aufräumen. */
-async function revoke(auth: AppAuth) {
+async function revoke(auth: ReturnType<typeof createAppAuth>) {
   const revocation = await auth.prepareRevocation(randomUUID());
   if (revocation === null) throw new Error('Keine Sitzung zum Widerrufen');
   return auth.revokeCurrentSession(revocation);

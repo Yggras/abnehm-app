@@ -6,7 +6,7 @@ export {
   type Logout,
   type LogoutCleanupHook,
   type LogoutRecord,
-  type LogoutResult,
+  type LogoutOutcome,
   type LogoutStore,
   type SyncBeforeLogout,
 } from './logout';

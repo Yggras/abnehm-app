@@ -7,7 +7,7 @@ import type { AuthModule } from '../auth/auth-module.ts';
 import { forbiddenError, guard, policies, type Actor } from '../authorization/authorization.ts';
 import { jsonBody } from '../contract-validation.ts';
 import { transactionWithRetry, type Database, type DbExecutor } from '../database.ts';
-import { onlineRequestHash, storedOnlineResult, storedResultOfHash, storeOnlineResult } from '../online/online-requests.ts';
+import { onlineRequestHash, storedOnlineRequest, storeOnlineResult } from '../online/online-requests.ts';
 import type { SecurityLog } from '../security-log/security-log.ts';
 
 // Serverseitiger Teil des vollständigen Abmeldens (Spezifikation 0, Abschnitt 9; #111). Ein
@@ -20,7 +20,7 @@ import type { SecurityLog } from '../security-log/security-log.ts';
 export type LogoutHook = Readonly<{
   name: string;
   /** Läuft in der Transaktion des Ablaufs vor Sicherheitslog und Widerruf; wirft er, bleibt alles unverändert. */
-  run(tx: DbExecutor, session: Actor): Promise<void>;
+  run(tx: DbExecutor, actor: Actor): Promise<void>;
 }>;
 
 export type LogoutDependencies = Readonly<{
@@ -44,14 +44,13 @@ export function createLogout({ database, clock, auth, securityLog }: LogoutDepen
     if (sessionKey === null) return { type: 'unauthorized' };
     const requestHash = onlineRequestHash({ hashKey: sessionKey, flow: 'abmelden', request });
     return transactionWithRetry(database, async (tx) => {
-      const retried = await storedResultOfHash(tx, { requestId: request.requestId, flow: 'abmelden', requestHash });
-      if (retried !== null) return { type: 'ok', value: LogoutResult.parse(retried) };
+      const stored = await storedOnlineRequest(tx, request.requestId);
+      // Der Hash-Schlüssel stammt aus dem Token: Stimmt der Hash, ist es dieselbe Sitzung, gültig oder nicht.
+      if (stored?.flow === 'abmelden' && stored.requestHash === requestHash) return { type: 'ok', value: LogoutResult.parse(stored.result) };
       // Ohne gültige Sitzung gibt es nur das eigene gespeicherte Ergebnis.
       if (actor === null) return { type: 'unauthorized' };
+      if (stored !== null) return { type: 'error', error: stored.accountId === actor.accountId ? operationConflict : forbiddenError };
       const binding = { requestId: request.requestId, accountId: actor.accountId, flow: 'abmelden', requestHash } as const;
-      const other = await storedOnlineResult(tx, binding);
-      if (other.type === 'foreign') return { type: 'error', error: forbiddenError };
-      if (other.type !== 'none') return { type: 'error', error: operationConflict };
       for (const hook of hooks) await hook.run(tx, actor);
       await securityLog.record({ type: 'abmeldung', accountId: actor.accountId }, tx);
       await auth.revokeSession(actor, 'abmeldung', tx);
