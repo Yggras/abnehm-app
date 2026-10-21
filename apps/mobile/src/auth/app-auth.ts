@@ -121,9 +121,10 @@ export type SessionRevocations = {
   /**
    * Widerruft serverseitig die Sitzung des Ausweises im idempotenten Abmeldeablauf. Ein identischer
    * Retry erhält dasselbe Ergebnis, auch nach erfolgtem Widerruf. Lokale Daten bleiben Sache des
-   * Abmeldemoduls; nur ein `401` ohne gespeichertes Ergebnis sperrt wie jeder Fachaufruf.
+   * Abmeldemoduls. Ein `401` ohne gespeichertes Ergebnis sperrt wie jeder Fachaufruf, aber nur, solange
+   * der Ausweis die Sitzung des Geräts betrifft; eine spätere Anmeldung bleibt unberührt.
    */
-  revokeCurrentSession(revocation: SessionRevocation): Promise<RevokeResult>;
+  revokeSession(revocation: SessionRevocation): Promise<RevokeResult>;
   /** Vergisst die Sitzung auf dem Gerät und schließt die Kontodatenbank; danach ist das Modul `abgemeldet`. */
   forgetSession(): Promise<void>;
 };
@@ -139,6 +140,11 @@ export type AppAuthOptions = {
 };
 
 const TIMEOUT_MS = 10_000;
+
+function statusOf(session: StoredSession | null, revocation: SessionRevocation): RevocationStatus {
+  if (session === null) return 'keine';
+  return session.accountId === revocation.accountId && (session.token === null || session.token === revocation.token) ? 'aktuell' : 'andere';
+}
 
 const SignedIn = z.object({ token: z.string().min(1), user: z.object({ id: z.string().min(1) }) });
 const CurrentSession = z.object({ user: z.object({ id: z.string().min(1) }) }).nullable();
@@ -336,7 +342,8 @@ export function createAppAuth({
       return session?.token == null ? null : { accountId: session.accountId, requestId, token: session.token };
     },
 
-    async revokeCurrentSession({ accountId, requestId, token }) {
+    async revokeSession(revocation) {
+      const { requestId, token } = revocation;
       // Immer das Token des Ausweises, nicht das gespeicherte: Nach dem Widerruf hat die Sperre es verworfen,
       // und ein veralteter Ausweis gehört zu einer früheren Sitzung.
       const withRevocationToken: typeof fetch = (input, init) => {
@@ -347,17 +354,13 @@ export function createAppAuth({
       const reply = await request('POST', '/v1/session/logout', { requestId }, withRevocationToken);
       if ('type' in reply) return reply;
       if (reply.status === 401) {
-        if ((await storedSession())?.accountId === accountId) await lock();
+        if (statusOf(await storedSession(), revocation) === 'aktuell') await lock();
         return { type: 'unauthorized' };
       }
       return reply.status === 200 && LogoutResult.safeParse(reply.body).success ? { type: 'revoked' } : { type: 'unreachable' };
     },
 
-    async revocationStatus(revocation) {
-      const session = await storedSession();
-      if (session === null) return 'keine';
-      return session.accountId === revocation.accountId && (session.token === null || session.token === revocation.token) ? 'aktuell' : 'andere';
-    },
+    revocationStatus: async (revocation) => statusOf(await storedSession(), revocation),
 
     async forgetSession() {
       // Zuerst zu: Scheitert das Löschen im Speicher, zeigt die App trotzdem keine Fachdaten mehr.

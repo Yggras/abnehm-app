@@ -1,4 +1,4 @@
-import { count, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, SyncCursor } from '@abnehm/contracts/base';
@@ -21,7 +21,7 @@ import {
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { outbox, syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, recordFailure, removeOperation, rewritePendingOutboxReferences } from './outbox';
+import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, recordFailure, removeOperation, rewritePendingOutboxReferences, unsecuredOperationCount } from './outbox';
 import type { AffectedDay, PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
 import type { LocalCommandRegistry } from './commands';
 
@@ -268,9 +268,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
       })().finally(() => { backgroundPush = null; });
       return backgroundPush;
     },
-    unsecuredOperations() {
-      return database.read((tx) => sqliteOf(tx).select({ value: count() }).from(outbox).get()?.value ?? 0);
-    },
+    unsecuredOperations: () => unsecuredOperationCount(database),
     status() {
       const migrationError = database.read((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox)
         .where(eq(outbox.lastErrorCode, 'outbox_migration_failed')).get());

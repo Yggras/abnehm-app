@@ -57,7 +57,7 @@ type Phone = {
 async function revoke(auth: ReturnType<typeof createAppAuth>) {
   const revocation = await auth.prepareRevocation(randomUUID());
   if (revocation === null) throw new Error('Keine Sitzung zum Widerrufen');
-  return auth.revokeCurrentSession(revocation);
+  return auth.revokeSession(revocation);
 }
 
 /** Ein Gerät mit eigenem Speicher, eigener Datenbank und eigener Quelladresse. */

@@ -1,5 +1,6 @@
 import type { AppAuth, SessionRevocation, SessionRevocations } from '../auth/app-auth';
-import type { LocalDatabases } from '../local-db/local-databases';
+import type { LocalDatabases } from '../local-db';
+import { unsecuredOperationCount } from '../sync';
 import type { SyncEngine } from '../sync/engine';
 
 // Abmeldemodul (Spezifikation 0, Abschnitt 9; #111): die einzige Stelle, die vollständiges Abmelden
@@ -74,14 +75,14 @@ export type Logout = {
    * mit `logout` abzuschließen.
    */
   pending(): Promise<boolean>;
-  /** Meldet einen lokalen Bereinigungshaken an; die Rückgabe meldet ihn ab. */
+  /** Meldet einen lokalen Bereinigungshaken unter eindeutigem Namen an; die Rückgabe meldet ihn ab. */
   onCleanup(hook: LogoutCleanupHook): () => void;
 };
 
 export type LogoutOptions = {
   auth: Pick<AppAuth, 'checkSession'>;
   revocations: SessionRevocations;
-  databases: Pick<LocalDatabases, 'remove'>;
+  databases: Pick<LocalDatabases, 'open' | 'lock' | 'current' | 'remove'>;
   store: LogoutStore;
   /** Ein Sync-Zyklus der geöffneten Kontodatenbank, etwa `syncBeforeLogout(engine)`. */
   sync(): Promise<SyncBeforeLogout>;
@@ -134,6 +135,21 @@ export function createLogout({ auth, revocations, databases, store, sync, newId,
     return { type: 'logged_out' };
   }
 
+  /**
+   * Ungesicherte Operationen des Kontos. Nach `401` ist seine Datenbank geschlossen; sie öffnet dafür kurz,
+   * ohne die Fachoberfläche, die nur dem Auth-Modul folgt.
+   */
+  async function unsecuredOf(accountId: string): Promise<number> {
+    const open = databases.current();
+    if (open?.accountId === accountId) return unsecuredOperationCount(open);
+    const database = await databases.open(accountId);
+    try {
+      return unsecuredOperationCount(database);
+    } finally {
+      databases.lock();
+    }
+  }
+
   /** Ob ein gespeicherter Stand noch die Sitzung des Geräts betrifft. */
   async function isCurrent(record: LogoutRecord): Promise<boolean> {
     const status = await revocations.revocationStatus(record.revocation);
@@ -149,7 +165,7 @@ export function createLogout({ auth, revocations, databases, store, sync, newId,
   async function currentRecord(): Promise<LogoutRecord | null | 'unreachable'> {
     const record = await store.read();
     if (record === null || (await isCurrent(record))) return record;
-    if (record.phase === 'logout_pending' && (await revocations.revokeCurrentSession(record.revocation)).type === 'unreachable') {
+    if (record.phase === 'logout_pending' && (await revocations.revokeSession(record.revocation)).type === 'unreachable') {
       return 'unreachable';
     }
     await store.clear();
@@ -162,16 +178,19 @@ export function createLogout({ auth, revocations, databases, store, sync, newId,
     if (record?.phase === 'cleanup_pending') return cleanup(record.revocation.accountId);
     const synced = await sync();
     if (synced.type === 'unreachable') return { type: 'unreachable' };
-    if (synced.type === 'unsecured' && !discardUnsecured) return { type: 'confirmation_required', unsecuredOperations: synced.operations };
     // Bei `unauthorized` geht es ohne Sync weiter: Ist der Widerruf schon geschehen, liefert der Retry
-    // sein Ergebnis; sonst fehlt ein Token und der Ablauf endet unten mit `unauthorized`.
+    // sein Ergebnis; sonst fehlt ein Token und der Ablauf endet unten mit `unauthorized`. Ungesichert
+    // kann dann nur sein, was vor dem `401` entstand; auch das löscht die Bereinigung nicht ungefragt.
+    const unsecured =
+      synced.type === 'unsecured' ? synced.operations : synced.type === 'unauthorized' && record !== null ? await unsecuredOf(record.revocation.accountId) : 0;
+    if (unsecured > 0 && !discardUnsecured) return { type: 'confirmation_required', unsecuredOperations: unsecured };
     let revocation = record?.revocation ?? null;
     if (revocation === null) {
       revocation = await revocations.prepareRevocation(newId());
       if (revocation === null) return { type: 'unauthorized' };
       await store.write({ phase: 'logout_pending', revocation });
     }
-    const revoked = await revocations.revokeCurrentSession(revocation);
+    const revoked = await revocations.revokeSession(revocation);
     if (revoked.type === 'unreachable') return { type: 'unreachable' };
     if (revoked.type === 'unauthorized') {
       await store.clear();
@@ -204,6 +223,7 @@ export function createLogout({ auth, revocations, databases, store, sync, newId,
       return record !== null && (await isCurrent(record));
     },
     onCleanup(hook) {
+      if ([...hooks].some((registered) => registered.name === hook.name)) throw new Error(`Bereinigungshaken ${hook.name} ist schon angemeldet`);
       hooks.add(hook);
       return () => hooks.delete(hook);
     },

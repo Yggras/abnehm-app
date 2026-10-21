@@ -16,19 +16,22 @@ const options: SecureStore.SecureStoreOptions = { keychainAccessible: SecureStor
 
 const Stored = z.strictObject({ accountId: z.string().min(1), token: z.string().min(1).nullable() });
 
+/** Liest einen JSON-Eintrag; fehlende und unlesbare Einträge ergeben `null`. */
+async function readJson<T>(key: string, schema: z.ZodType<T>): Promise<T | null> {
+  const raw = await SecureStore.getItemAsync(key, options);
+  if (raw === null) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+  return schema.safeParse(value).data ?? null;
+}
+
 export const secureSessionStore: SessionStore = {
-  async read() {
-    const raw = await SecureStore.getItemAsync(KEY, options);
-    if (raw === null) return null;
-    let value: unknown;
-    try {
-      value = JSON.parse(raw) as unknown;
-    } catch {
-      return null;
-    }
-    // Unlesbare Einträge gelten als „abgemeldet“; die nächste Anmeldung überschreibt sie.
-    return Stored.safeParse(value).data ?? null;
-  },
+  // Unlesbare Einträge gelten als „abgemeldet“; die nächste Anmeldung überschreibt sie.
+  read: () => readJson(KEY, Stored),
   write: (session) => SecureStore.setItemAsync(KEY, JSON.stringify(session), options),
   clear: () => SecureStore.deleteItemAsync(KEY, options),
 };
@@ -43,18 +46,8 @@ const StoredLogout = z.strictObject({
 });
 
 export const secureLogoutStore: LogoutStore = {
-  async read() {
-    const raw = await SecureStore.getItemAsync(LOGOUT_KEY, options);
-    if (raw === null) return null;
-    let value: unknown;
-    try {
-      value = JSON.parse(raw) as unknown;
-    } catch {
-      return null;
-    }
-    // Ein unlesbarer Eintrag gilt als keine Abmeldung; die Sitzung selbst bleibt unberührt.
-    return StoredLogout.safeParse(value).data ?? null;
-  },
+  // Ein unlesbarer Eintrag gilt als keine Abmeldung; die Sitzung selbst bleibt unberührt.
+  read: () => readJson(LOGOUT_KEY, StoredLogout),
   write: (record) => SecureStore.setItemAsync(LOGOUT_KEY, JSON.stringify(record), options),
   clear: () => SecureStore.deleteItemAsync(LOGOUT_KEY, options),
 };

@@ -311,7 +311,7 @@ describe('Vollständiges Abmelden', () => {
     expect(world.kept.logoutStore.value).toBeNull();
   });
 
-  it('meldet eine offene Abmeldung, die beim Start eine Bestätigung braucht, und schließt sie danach ab', async () => {
+  it('setzt eine offene Abmeldung beim Start fort; ein gleichzeitiger Aufruf der Oberfläche wartet darauf', async () => {
     const world = await setup();
     world.network.loseResponseOf = '/v1/session/logout';
     world.network.answer = { path: '/v1/sync/push', status: 409, body: { code: 'schema_update_required', retryable: false } };
@@ -346,5 +346,45 @@ describe('Vollständiges Abmelden', () => {
 
     expect(await restarted.logout.logout({ discardUnsecured: true })).toEqual({ type: 'logged_out' });
     await expectLoggedOut(world, restarted);
+  });
+
+  it('fragt nach, wenn vor dem 401 Operationen offline entstanden sind, und lässt die Datenbank bis dahin stehen', async () => {
+    const world = await setup();
+    world.network.loseResponseOf = '/v1/session/logout';
+    expect(await world.phone.logout.logout()).toEqual({ type: 'unreachable' });
+    delete world.network.loseResponseOf;
+    world.network.online = false;
+    world.phone.rename('Anni');
+    world.network.online = true;
+
+    const restarted = install(world.backend, world.kept);
+    expect(await restarted.logout.start()).toEqual({ type: 'confirmation_required', unsecuredOperations: 1 });
+
+    expect(restarted.auth.state()).toEqual({ type: 'gesperrt', accountId: world.accountId });
+    expect(restarted.opened).not.toHaveBeenCalled();
+    expect(accountFiles(world.kept, world.accountId)).not.toEqual([]);
+    expect(await restarted.logout.logout({ discardUnsecured: true })).toEqual({ type: 'logged_out' });
+    await expectLoggedOut(world, restarted);
+  });
+
+  it('sperrt keine neue Anmeldung, wenn der Server die alte Sitzung ohne Abmeldeergebnis ablehnt', async () => {
+    const world = await setup();
+    world.serverHook.failing = true;
+    expect(await world.phone.logout.logout()).toEqual({ type: 'unreachable' });
+    world.serverHook.failing = false;
+    // Etwa eine Passwortänderung auf einem anderen Gerät: Die alte Sitzung endet ohne Abmeldeergebnis.
+    const old = await world.backend.auth.sessions.authenticate(new Headers({ authorization: `Bearer ${world.token}` }));
+    await world.backend.auth.revokeSession(old!, 'widerruf');
+    expect(await world.phone.auth.checkSession()).toEqual({ type: 'ungueltig' });
+    expect(await world.phone.auth.signIn({ email, password: defaultPassword })).toEqual({ type: 'signed_in', accountId: world.accountId });
+    const newToken = world.kept.sessionStore.value!.token!;
+
+    const restarted = install(world.backend, world.kept);
+    expect(await restarted.logout.start()).toBeNull();
+
+    expect(restarted.auth.state()).toEqual({ type: 'angemeldet', accountId: world.accountId });
+    expect(world.kept.sessionStore.value).toEqual({ accountId: world.accountId, token: newToken });
+    expect(world.kept.logoutStore.value).toBeNull();
+    expect(restarted.cleanedUp).toEqual([]);
   });
 });

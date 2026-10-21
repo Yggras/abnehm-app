@@ -1,10 +1,10 @@
-import { and, asc, eq, isNotNull, max, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, max, sql } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { Instant, type EntityId, type ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, OutboxOperation, type CommandType, type EntityData } from '@abnehm/contracts/sync';
 
-import type { ReadContext, TransactionContext } from '../local-db';
+import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { outbox } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { PendingChange, SyncRegistry } from './registry';
@@ -93,6 +93,11 @@ export function createSyncWriter({ registry, clock, newId }: { registry: SyncReg
 }
 
 /** Die ältesten offenen Operationen in Entstehungsreihenfolge. */
+/** Wie viele Operationen der Outbox der Server noch nicht bestätigt hat. */
+export function unsecuredOperationCount(database: LocalDatabase): number {
+  return database.read((tx) => sqliteOf(tx).select({ value: count() }).from(outbox).get()?.value ?? 0);
+}
+
 export function pendingOperations(tx: ReadContext, limit: number): OutboxOperation[] {
   return sqliteOf(tx).select().from(outbox).orderBy(asc(outbox.sequence)).limit(limit).all().map((row) => OutboxOperation.parse(decodeOutboxRow(row)));
 }
