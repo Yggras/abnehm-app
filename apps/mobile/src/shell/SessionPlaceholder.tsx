@@ -36,11 +36,14 @@ export function SessionPlaceholder() {
       <Text variant="caption" tone="inkMuted">
         {shellTexts.placeholderOwner(ownerName('ziele'))}
       </Text>
-      <Text variant="caption" tone="inkMuted">
-        {shellTexts.developer}
-      </Text>
-      <Button label={shellTexts.componentCatalog} variant="text" icon="layers" onPress={() => router.push('/katalog')} />
-      <Button label={shellTexts.technicalCheck} variant="text" icon="pulse" onPress={() => router.push('/technik')} />
+      {/* Die Werkzeuge gibt es nur im Development Build, nicht im E2E-Build (Wurzel-Layout). */}
+      {__DEV__ ? <>
+        <Text variant="caption" tone="inkMuted">
+          {shellTexts.developer}
+        </Text>
+        <Button label={shellTexts.componentCatalog} variant="text" icon="layers" onPress={() => router.push('/katalog')} />
+        <Button label={shellTexts.technicalCheck} variant="text" icon="pulse" onPress={() => router.push('/technik')} />
+      </> : null}
     </ScreenFrame>
   );
 }

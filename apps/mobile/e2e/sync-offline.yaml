@@ -8,8 +8,9 @@
 #
 # Lokale Änderung: Die Testuhr reist nach Pacific/Kiritimati (UTC+14). Die App setzt die Zeitzone der
 # Person wie bei jeder Reise über den Fachbefehl `updatePersonTimeZone` mit Outbox (#110); die Zone
-# ändert sie erst mit dem kanonischen Ergebnis. Solange die Operation offen ist, zeigt der Kopf den Tag
-# in Berlin, danach den in Kiritimati: Nach 25 Stunden ist es dort schon Freitag, in Berlin Donnerstag.
+# ändert sie erst mit dem kanonischen Ergebnis. Solange die Operation offen ist, bleibt die Zone der
+# Person Europe/Berlin; danach zeigt der Kopf den Tag in Kiritimati: Nach 25 Stunden ist es dort schon
+# Freitag, 16.10., in Berlin erst Donnerstag.
 # Sobald Spezifikation 3 `water.quick_add` liefert, kommt „+250 ml Wasser“ im ＋-Sheet als zweite
 # lokale Änderung dazu.
 appId: ${APP_ID}
@@ -36,8 +37,8 @@ name: Sync ohne Netz und kanonischer Sync
 - assertVisible: "Was möchtest du erfassen?"
 - assertVisible: "+250 ml Wasser"
 - tapOn: "Gewicht"
-- assertVisible: "Zurück"
-- tapOn: "Zurück"
+- assertVisible: "Kommt mit: Wasser, Sport, Gewicht & Health"
+- tapOn: "Fertig"
 - assertVisible: "Hallo, Philipp"
 
 # Transport aus -------------------------------------------------------------------------------------
@@ -50,18 +51,27 @@ name: Sync ohne Netz und kanonischer Sync
     when:
       platform: iOS
     commands:
-      - openLink: ${SCHEME}://fehler?transport=offline
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: fehler?transport=offline
       - extendedWaitUntil:
           visible: ".*Transport-Fehlermodus: kein Netz.*"
           timeout: 10000
 
 # Lokale Änderung und 24-Stunden-Hinweis ------------------------------------------------------------
-- openLink: ${SCHEME}://uhr?zone=Pacific%2FKiritimati
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: uhr?zone=Pacific%2FKiritimati
 - extendedWaitUntil:
     visible: ".*Pacific/Kiritimati.*"
     timeout: 10000
 - assertNotVisible: "Noch nicht gesichert – verbinde dich mit dem Internet"
-- openLink: ${SCHEME}://uhr?stunden=25
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: uhr?stunden=25
 - extendedWaitUntil:
     visible: "Noch nicht gesichert – verbinde dich mit dem Internet"
     timeout: 15000
@@ -77,7 +87,10 @@ name: Sync ohne Netz und kanonischer Sync
     when:
       platform: iOS
     commands:
-      - openLink: ${SCHEME}://fehler
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: fehler
 - extendedWaitUntil:
     visible: "Freitag, 16.10.2026"
     timeout: 90000

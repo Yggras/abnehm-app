@@ -6,7 +6,10 @@ appId: ${APP_ID}
 - launchApp:
     clearState: true
     clearKeychain: true
-- openLink: ${SCHEME}://seed?szenario=solo
+- runFlow:
+    file: link.yaml
+    env:
+      LINK: seed?szenario=solo
 - extendedWaitUntil:
     visible: "Hallo, Philipp"
     timeout: 30000

@@ -6,14 +6,20 @@ appId: ${APP_ID}
 name: On-Device-Suite
 ---
 - launchApp
-- openLink: ${SCHEME}://geraetetest?phase=vor_neustart
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: geraetetest?phase=vor_neustart
 - extendedWaitUntil:
     visible: "Gerätetest vor Neustart: 5 von 5 bestanden."
     timeout: 60000
 - takeScreenshot: geraetetest-vor-neustart
 - stopApp
 - launchApp
-- openLink: ${SCHEME}://geraetetest?phase=nach_neustart
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: geraetetest?phase=nach_neustart
 - extendedWaitUntil:
     visible: "Gerätetest nach Neustart: 1 von 1 bestanden."
     timeout: 60000

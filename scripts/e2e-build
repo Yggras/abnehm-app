@@ -2,7 +2,8 @@
 # Baut ein E2E-Binary (#114): ein Release-Build der Variante `e2e` mit den Testfähigkeiten.
 #   scripts/e2e-build ios                 # iOS-Simulator, Backend http://localhost:8788
 #   scripts/e2e-build ios --geraet        # echtes iPhone; braucht --api-url mit der LAN-Adresse
-#   scripts/e2e-build android             # Emulator und echtes Gerät (Backend per `adb reverse`)
+#   scripts/e2e-build android             # Emulator, Backend http://10.0.2.2:8788
+#   scripts/e2e-build android --geraet    # echtes Android-Gerät per Kabel (Backend per `adb reverse`)
 #   scripts/e2e-build ios --api-url http://192.168.178.20:8788 --geraet
 #
 # Ergebnis unter apps/mobile/build/e2e/<ziel>/ samt artefakt.json (Artefakt-ID = SHA-256 des Binarys,
@@ -14,7 +15,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mobile="$repo_root/apps/mobile"
 
 usage() {
-  sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
@@ -34,18 +35,22 @@ done
 
 port="${E2E_BACKEND_PORT:-8788}"
 if [[ -z "$api_url" ]]; then
-  if [[ "$platform" == "ios" && "$device" == true ]]; then
-    echo "Ein echtes iPhone erreicht localhost des Rechners nicht: --api-url http://<LAN-IP>:$port angeben." >&2
-    exit 2
-  fi
-  # iOS-Simulator teilt das Netz des Rechners; Android erreicht es über `adb reverse` (scripts/e2e-run).
-  api_url="http://localhost:$port"
+  case "$platform:$device" in
+    ios:true)
+      echo "Ein echtes iPhone erreicht localhost des Rechners nicht: --api-url http://<LAN-IP>:$port angeben." >&2
+      exit 2 ;;
+    # Der iOS-Simulator teilt das Netz des Rechners.
+    ios:false) api_url="http://localhost:$port" ;;
+    # Der Emulator erreicht den Rechner über sein virtuelles Netz, das der Flugmodus kappt
+    # (https://developer.android.com/studio/run/emulator-networking-address).
+    android:false) api_url="http://10.0.2.2:$port" ;;
+    # Ein echtes Gerät per Kabel über `adb reverse` (scripts/e2e-run). Das läuft über adb und bleibt im
+    # Flugmodus bestehen; für sync-offline auf einem echten Gerät deshalb --api-url mit der LAN-Adresse.
+    android:true) api_url="http://localhost:$port" ;;
+  esac
 fi
 
-case "$platform" in
-  ios) target="ios-$([[ "$device" == true ]] && echo geraet || echo simulator)" ;;
-  android) target="android" ;;
-esac
+target="$platform-$([[ "$device" == true ]] && echo geraet || ([[ "$platform" == ios ]] && echo simulator || echo emulator))"
 out="$mobile/build/e2e/$target"
 rm -rf "$out"
 mkdir -p "$out"

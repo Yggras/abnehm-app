@@ -19,10 +19,10 @@ name: Gerätesmoke der Shell
 - assertVisible: "Was möchtest du erfassen?"
 - takeScreenshot: smoke-erfassen
 
-# System-Zurück: Android-Zurück bzw. iOS-Randgeste schließt eine Seite und kehrt zum Aufrufer zurück ---
+# System-Zurück: Android-Zurück schließt den modalen Ablauf, auf iOS „Fertig“ ---------------------
 - tapOn: "Wasser"
-- assertVisible: "Zurück"
-- takeScreenshot: smoke-seite
+- assertVisible: "Fertig"
+- takeScreenshot: smoke-modal
 - runFlow:
     when:
       platform: Android
@@ -32,12 +32,12 @@ name: Gerätesmoke der Shell
     when:
       platform: iOS
     commands:
-      - swipe:
-          start: 1%, 50%
-          end: 80%, 50%
-          duration: 400
+      - tapOn: "Fertig"
 - assertVisible: "Hallo, Philipp"
+
+# System-Zurück auf einer Seite: Android-Zurück bzw. iOS-Randgeste kehrt zum Aufrufer zurück --------
 - tapOn: "Einstellungen"
+- takeScreenshot: smoke-seite
 - assertVisible: "Zurück"
 - runFlow:
     when:

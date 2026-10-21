@@ -3,7 +3,7 @@
 #   scripts/e2e-run                          # iOS-Simulator und Android-Emulator, alle Abläufe
 #   scripts/e2e-run ios --build              # vorher das E2E-Binary neu bauen
 #   scripts/e2e-run android --ablauf geraetetest
-#   scripts/e2e-run android --geraet <adb-serial>   # echtes Android-Gerät per Kabel
+#   scripts/e2e-run android --geraet <adb-serial> --ablauf geraetetest   # echtes Gerät per Kabel
 #
 # Abläufe (apps/mobile/e2e/): sync-offline (E2E), geraetesmoke (Shell), geraetetest (On-Device-Suite).
 # Das E2E-Backend ist ein eigener Compose-Stack `abnehm-e2e` (Development-Image mit Seed-Route) auf
@@ -84,23 +84,32 @@ android_device() {
 # Läufe ---------------------------------------------------------------------------------------------
 failed=0
 for platform in "${platforms[@]}"; do
-  target="$([[ "$platform" == ios ]] && echo ios-simulator || echo android)"
+  if [[ -n "$device" && "$platform" == ios ]]; then
+    # Maestro meldet ein per Kabel angeschlossenes iPhone als „not connected“ (#101); dort läuft der
+    # Ablauf von Hand, siehe docs/entwicklung.md › „Echte Geräte“.
+    echo "Maestro steuert nur den iOS-Simulator; echte iPhones prüft der Handablauf aus docs/entwicklung.md." >&2
+    exit 2
+  fi
+  target="$platform-$([[ -n "$device" ]] && echo geraet || ([[ "$platform" == ios ]] && echo simulator || echo emulator))"
   artifact="$mobile/build/e2e/$target/artefakt.json"
-  if [[ "$build" == true || ! -f "$artifact" ]]; then "$repo_root/scripts/e2e-build" "$platform" >/dev/null; fi
+  if [[ "$build" == true || ! -f "$artifact" ]]; then
+    "$repo_root/scripts/e2e-build" "$platform" ${device:+--geraet} >/dev/null
+  fi
   binary="$mobile/build/e2e/$target/$(node -p "require('$artifact').binary")"
   app_id="$(node -p "require('$artifact').appId")"
   backend="$(node -p "require('$artifact').backend")"
-  [[ "$backend" == "http://localhost:$port" ]] || echo "Hinweis: Das Binary nutzt $backend, das E2E-Backend lauscht auf Port $port." >&2
+  [[ "$backend" == *":$port" ]] || echo "Hinweis: Das Binary nutzt $backend, das E2E-Backend lauscht auf Port $port." >&2
 
   if [[ "$platform" == ios ]]; then
-    id="${device:-$(ios_simulator)}"
+    id="$(ios_simulator)"
     xcrun simctl install "$id" "$binary"
   else
     adb="$(adb_bin)"
     id="${device:-$(android_device)}"
     "$adb" -s "$id" install -r "$binary" >&2
-    # Emulator und Gerät erreichen das Backend über localhost (https://developer.android.com/tools/adb#forwardports).
-    "$adb" -s "$id" reverse "tcp:$port" "tcp:$port" >&2
+    # Ein echtes Gerät erreicht das Backend über localhost des Rechners
+    # (https://developer.android.com/tools/adb#forwardports); der Emulator über 10.0.2.2.
+    [[ -z "$device" ]] || "$adb" -s "$id" reverse "tcp:$port" "tcp:$port" >&2
   fi
 
   out="$log_dir/$platform"
