@@ -25,7 +25,7 @@ function appVariant(environment: NodeJS.ProcessEnv): AppVariant {
   return variant;
 }
 
-const names: Record<AppVariant, { name: string; identifier: string; scheme: string }> = {
+const variantIdentity: Record<AppVariant, { name: string; identifier: string; scheme: string }> = {
   development: { name: 'Abnehm-App Dev', identifier: 'de.yggras.abnehmapp.dev', scheme: 'abnehmapp-dev' },
   e2e: { name: 'Abnehm-App E2E', identifier: 'de.yggras.abnehmapp.e2e', scheme: 'abnehmapp-e2e' },
   production: { name: 'Abnehm-App', identifier: 'de.yggras.abnehmapp', scheme: 'abnehmapp' },
@@ -47,7 +47,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = appVariant(process.env);
   // Lokales HTTP zum Entwicklungsrechner bzw. zum lokalen Backend der E2E-Läufe.
   const localNetworking = variant !== 'production';
-  const { name, identifier, scheme } = names[variant];
+  const { name, identifier, scheme } = variantIdentity[variant];
 
   const expoConfig: ExpoConfig = {
     ...config,

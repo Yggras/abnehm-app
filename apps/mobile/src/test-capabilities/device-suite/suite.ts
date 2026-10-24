@@ -26,7 +26,9 @@ import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncE
 // Prozess und räumt auf. Jest führt dieselbe Suite mit better-sqlite3 aus (`suite.test.ts`); so ist
 // die Suite selbst geprüft, bevor sie auf dem Gerät läuft.
 
-export type DeviceSuitePhase = 'vor_neustart' | 'nach_neustart';
+/** Die Phasen der Suite; der Deep Link `geraetetest?phase=…` nimmt genau diese an. */
+export const deviceSuitePhases = ['vor_neustart', 'nach_neustart'] as const;
+export type DeviceSuitePhase = (typeof deviceSuitePhases)[number];
 
 /** Dateien der Suite: produktiv expo-sqlite, in Jest better-sqlite3. */
 export type DeviceSuiteFiles = Readonly<{ openSqlite: OpenSqlite; remove(fileName: string): void }>;
@@ -99,11 +101,6 @@ const readPerson = (database: LocalDatabase) => database.read((tx) => sqliteOf(t
 const readOutbox = (database: LocalDatabase) => database.read((tx) => sqliteOf(tx).select().from(outbox).all());
 const readCursor = (database: LocalDatabase) => database.read((tx) => sqliteOf(tx).select().from(syncCursor).get());
 
-/** Ein frischer Zustand: die eigenen Dateien der Suite, sonst nichts. */
-function suiteDatabases(files: DeviceSuiteFiles, errors: unknown[]): LocalDatabases {
-  return createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => errors.push(error) });
-}
-
 type Case = Readonly<{ key: string; title: string; run(files: DeviceSuiteFiles): Promise<void> }>;
 
 /** Wie `migrateLocalDatabase` es zählt: Drizzle führt je angewandter Migration eine Zeile. */
@@ -115,9 +112,8 @@ const schemaTables = (Object.values(schema) as unknown[])
   .map((table) => getTableName(table))
   .sort();
 
-/** Öffnet eine Datei der Suite frisch: vorher gelöscht und nachweislich leer. */
-function freshFile(files: DeviceSuiteFiles, account: string) {
-  const fileName = databaseFileName(account);
+/** Löscht eine Datei der Suite und prüft, dass sie danach leer ist. */
+function clearFile(files: DeviceSuiteFiles, fileName: string) {
   files.remove(fileName);
   const connection = files.openSqlite(fileName);
   try {
@@ -126,18 +122,51 @@ function freshFile(files: DeviceSuiteFiles, account: string) {
   } finally {
     connection.close();
   }
-  return fileName;
+}
+
+type SuiteDatabaseOptions = Readonly<{
+  /** Die bestehende Datei öffnen statt einer frischen, etwa nach dem Neustart. */
+  existing?: boolean;
+  /** Schreibt vor dem Öffnen in die leere Datei, etwa einen älteren App-Stand. */
+  prepare?(fileName: string): void;
+  /** Lässt die Datenbank offen wie bei einer beendeten App, statt sie zu schließen und zu löschen. */
+  keepOpen?(databases: LocalDatabases): void;
+}>;
+
+/**
+ * Öffnet die Kontodatenbank eines Falls über `LocalDatabases` (migriert dabei), führt `work` aus und
+ * prüft danach, dass weder Beobachter noch Nach-Commit-Rückmeldungen Fehler meldeten. Danach ist die
+ * Datei geschlossen und gelöscht, außer `keepOpen` übernimmt sie.
+ */
+async function withSuiteDatabase(
+  files: DeviceSuiteFiles,
+  account: string,
+  work: (database: LocalDatabase) => Promise<void> | void,
+  { existing = false, prepare, keepOpen }: SuiteDatabaseOptions = {},
+) {
+  const fileName = databaseFileName(account);
+  if (!existing) clearFile(files, fileName);
+  prepare?.(fileName);
+  const errors: unknown[] = [];
+  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => errors.push(error) });
+  try {
+    await work(await databases.open(account));
+    equal(errors, [], 'Fehler');
+  } finally {
+    if (keepOpen) {
+      keepOpen(databases);
+    } else {
+      databases.lock();
+      files.remove(fileName);
+    }
+  }
 }
 
 const migrationFresh: Case = {
   key: 'migration_frisch',
   title: 'Migration einer neuen Kontodatenbank',
-  async run(files) {
-    const fileName = freshFile(files, accounts.frisch);
-    const errors: unknown[] = [];
-    const databases = suiteDatabases(files, errors);
-    try {
-      const database = await databases.open(accounts.frisch);
+  run: (files) =>
+    withSuiteDatabase(files, accounts.frisch, (database) => {
       equal(appliedMigrations(database), bundledMigrations.journal.entries.length, 'angewandte Migrationen');
       const tables = database
         .read((tx) => sqliteOf(tx).all<{ name: string }>(sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != '__drizzle_migrations'`))
@@ -145,12 +174,7 @@ const migrationFresh: Case = {
         .sort();
       equal(tables, schemaTables, 'Tabellen');
       equal(database.read((tx) => sqliteOf(tx).all<{ foreign_keys: number }>(sql`pragma foreign_keys`))[0]?.foreign_keys, 1, 'Fremdschlüssel eingeschaltet');
-      equal(errors, [], 'Fehler');
-    } finally {
-      databases.lock();
-      files.remove(fileName);
-    }
-  },
+    }),
 };
 
 /**
@@ -182,42 +206,33 @@ function createOldestAppVersion(files: DeviceSuiteFiles, fileName: string) {
 const migrationUpdate: Case = {
   key: 'migration_update',
   title: 'Migration nach App-Update mit offener Outbox',
-  async run(files) {
-    const fileName = freshFile(files, accounts.update);
-    createOldestAppVersion(files, fileName);
-    const errors: unknown[] = [];
-    const databases = suiteDatabases(files, errors);
-    try {
-      const database = await databases.open(accounts.update);
-      equal(appliedMigrations(database), bundledMigrations.journal.entries.length, 'angewandte Migrationen');
-      equal(readPerson(database)?.displayName, 'Vor dem Update', 'Person');
-      equal(database.read((tx) => sqliteOf(tx).select({ revision: dirtyDay.revision }).from(dirtyDay).all()), [{ revision: 0 }], 'Dirty-Day-Revision');
-      const [operation, ...rest] = readOutbox(database);
-      equal(rest.length, 0, 'weitere Outbox-Operationen');
-      check(operation !== undefined, 'Die Outbox-Operation fehlt nach dem Update');
-      equal(
-        { id: operation.operationId, version: operation.schemaVersion, error: operation.lastErrorCode, refs: operation.affectedRefs, paths: operation.referencePaths },
-        { id: uuid(10), version: currentSyncSchemaVersion, error: null, refs: [], paths: [] },
-        'Outbox-Operation',
-      );
-      equal(operation.payload, upsert('Offline geändert'), 'Outbox-Nutzlast');
-      equal(errors, [], 'Fehler');
-    } finally {
-      databases.lock();
-      files.remove(fileName);
-    }
-  },
+  run: (files) =>
+    withSuiteDatabase(
+      files,
+      accounts.update,
+      (database) => {
+        equal(appliedMigrations(database), bundledMigrations.journal.entries.length, 'angewandte Migrationen');
+        equal(readPerson(database)?.displayName, 'Vor dem Update', 'Person');
+        equal(database.read((tx) => sqliteOf(tx).select({ revision: dirtyDay.revision }).from(dirtyDay).all()), [{ revision: 0 }], 'Dirty-Day-Revision');
+        const [operation, ...rest] = readOutbox(database);
+        equal(rest.length, 0, 'weitere Outbox-Operationen');
+        check(operation !== undefined, 'Die Outbox-Operation fehlt nach dem Update');
+        equal(
+          { id: operation.operationId, version: operation.schemaVersion, error: operation.lastErrorCode, refs: operation.affectedRefs, paths: operation.referencePaths },
+          { id: uuid(10), version: currentSyncSchemaVersion, error: null, refs: [], paths: [] },
+          'Outbox-Operation',
+        );
+        equal(operation.payload, upsert('Offline geändert'), 'Outbox-Nutzlast');
+      },
+      { prepare: (fileName) => createOldestAppVersion(files, fileName) },
+    ),
 };
 
 const rollback: Case = {
   key: 'rollback',
   title: 'Transaktionsrollback samt Outbox',
-  async run(files) {
-    const fileName = freshFile(files, accounts.rollback);
-    const errors: unknown[] = [];
-    const databases = suiteDatabases(files, errors);
-    try {
-      const database = await databases.open(accounts.rollback);
+  run: (files) =>
+    withSuiteDatabase(files, accounts.rollback, (database) => {
       insertPerson(database, 'Unverändert');
       let committed = false;
       let failed = false;
@@ -236,23 +251,14 @@ const rollback: Case = {
       check(!committed, 'afterCommit lief trotz Rollback');
       equal(readPerson(database)?.displayName, 'Unverändert', 'Person');
       equal(readOutbox(database), [], 'Outbox');
-      equal(errors, [], 'Fehler');
-    } finally {
-      databases.lock();
-      files.remove(fileName);
-    }
-  },
+    }),
 };
 
 const pullPageAndCursor: Case = {
   key: 'pull_seite_cursor',
   title: 'Pull-Seite und Cursor atomar',
-  async run(files) {
-    const fileName = freshFile(files, accounts.pull);
-    const errors: unknown[] = [];
-    const databases = suiteDatabases(files, errors);
-    try {
-      const database = await databases.open(accounts.pull);
+  run: (files) =>
+    withSuiteDatabase(files, accounts.pull, async (database) => {
       const pages: Record<'erste' | 'zweite', PullResponse> = {
         erste: {
           changes: [{ type: 'record', entityType: 'person', entityId: PERSON, serverVersion: ServerVersion.parse('3'), data: personRecord('Seite 1') }],
@@ -295,12 +301,7 @@ const pullPageAndCursor: Case = {
       await engine.sync();
       equal({ name: readPerson(database)?.displayName, version: readPerson(database)?.serverVersion }, { name: 'Seite 2', version: '4' }, 'nach Seite 2');
       equal({ cursor: readCursor(database)?.cursor, pageToken: readCursor(database)?.pageToken }, { cursor: '4', pageToken: null }, 'Cursor nach Seite 2');
-      equal(errors, [], 'Fehler');
-    } finally {
-      databases.lock();
-      files.remove(fileName);
-    }
-  },
+    }),
 };
 
 /** Die Kontodatenbank des Neustart-Falls bleibt bis zum Prozessende offen, wie bei einer beendeten App. */
@@ -309,54 +310,52 @@ let restartDatabases: LocalDatabases | null = null;
 const prepareRestart = (runtime: string): Case => ({
   key: 'neustart_vorbereiten',
   title: 'Stand für den Neustart anlegen',
-  async run(files) {
+  run(files) {
     restartDatabases?.lock();
-    freshFile(files, accounts.neustart);
-    const errors: unknown[] = [];
-    restartDatabases = suiteDatabases(files, errors);
-    const database = await restartDatabases.open(accounts.neustart);
-    insertPerson(database, 'Unverändert');
-    database.transaction((tx) => {
-      updateOwnPerson(tx, writer, { displayName: 'Vor dem Neustart' }, at);
-      sqliteOf(tx).insert(syncCursor).values({ scope: 'konto', cursor: '7', pageToken: null, updatedAt: at }).run();
-      sqliteOf(tx).insert(deviceState).values({ key: markerKey, value: { runtime }, updatedAt: at }).run();
-    });
-    try {
-      database.transaction((tx) => {
-        updateOwnPerson(tx, writer, { displayName: 'Nie gespeichert' }, at);
-        throw new Error('Abbruch in der Transaktion');
-      });
-    } catch {
-      // erwartet: Diese Änderung darf den Neustart nicht überstehen.
-    }
-    equal(readPerson(database)?.displayName, 'Vor dem Neustart', 'Person vor dem Neustart');
-    equal(errors, [], 'Fehler');
+    return withSuiteDatabase(
+      files,
+      accounts.neustart,
+      (database) => {
+        insertPerson(database, 'Unverändert');
+        database.transaction((tx) => {
+          updateOwnPerson(tx, writer, { displayName: 'Vor dem Neustart' }, at);
+          sqliteOf(tx).insert(syncCursor).values({ scope: 'konto', cursor: '7', pageToken: null, updatedAt: at }).run();
+          sqliteOf(tx).insert(deviceState).values({ key: markerKey, value: { runtime }, updatedAt: at }).run();
+        });
+        try {
+          database.transaction((tx) => {
+            updateOwnPerson(tx, writer, { displayName: 'Nie gespeichert' }, at);
+            throw new Error('Abbruch in der Transaktion');
+          });
+        } catch {
+          // erwartet: Diese Änderung darf den Neustart nicht überstehen.
+        }
+        equal(readPerson(database)?.displayName, 'Vor dem Neustart', 'Person vor dem Neustart');
+      },
+      { keepOpen: (databases) => (restartDatabases = databases) },
+    );
   },
 });
 
 const verifyRestart = (runtime: string): Case => ({
   key: 'neustart_pruefen',
   title: 'Persistenz nach Neustart',
-  async run(files) {
-    const fileName = databaseFileName(accounts.neustart);
-    const errors: unknown[] = [];
-    const databases = suiteDatabases(files, errors);
-    try {
-      const database = await databases.open(accounts.neustart);
-      const marker = database.read((tx) => sqliteOf(tx).select().from(deviceState).where(eq(deviceState.key, markerKey)).get());
-      check(marker !== undefined, 'Kein Stand vor dem Neustart; zuerst die Phase vor_neustart ausführen');
-      const before = (marker.value as { runtime: string }).runtime;
-      check(before !== runtime, 'Die App wurde seit der Phase vor_neustart nicht neu gestartet');
-      equal(readPerson(database)?.displayName, 'Vor dem Neustart', 'Person nach dem Neustart');
-      const operations = readOutbox(database);
-      equal(operations.map((operation) => (operation.payload as { displayName?: string }).displayName), ['Vor dem Neustart'], 'Outbox nach dem Neustart');
-      equal(readCursor(database)?.cursor, '7', 'Cursor nach dem Neustart');
-      equal(errors, [], 'Fehler');
-    } finally {
-      databases.lock();
-      files.remove(fileName);
-    }
-  },
+  run: (files) =>
+    withSuiteDatabase(
+      files,
+      accounts.neustart,
+      (database) => {
+        const marker = database.read((tx) => sqliteOf(tx).select().from(deviceState).where(eq(deviceState.key, markerKey)).get());
+        check(marker !== undefined, 'Kein Stand vor dem Neustart; zuerst die Phase vor_neustart ausführen');
+        const before = (marker.value as { runtime: string }).runtime;
+        check(before !== runtime, 'Die App wurde seit der Phase vor_neustart nicht neu gestartet');
+        equal(readPerson(database)?.displayName, 'Vor dem Neustart', 'Person nach dem Neustart');
+        const operations = readOutbox(database);
+        equal(operations.map((operation) => (operation.payload as { displayName?: string }).displayName), ['Vor dem Neustart'], 'Outbox nach dem Neustart');
+        equal(readCursor(database)?.cursor, '7', 'Cursor nach dem Neustart');
+      },
+      { existing: true },
+    ),
 });
 
 async function runCase(testCase: Case, files: DeviceSuiteFiles): Promise<DeviceCaseResult> {

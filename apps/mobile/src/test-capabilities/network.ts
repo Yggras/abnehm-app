@@ -1,3 +1,4 @@
+import type { ObserveNetwork } from '../sync/triggers';
 import type { FaultController } from './faults';
 
 // Transport-Fehlermodus (#114): iOS-Ersatz für Maestros `setAirplaneMode`, das nur Android unterstützt
@@ -9,9 +10,6 @@ import type { FaultController } from './faults';
 
 /** Name im Hinweis der Test-Artefakte; der Release-Test sucht ihn im Produktions-Bundle (Marker). */
 export const transportFaultModeName = 'Transport-Fehlermodus';
-
-/** Beobachtet, ob das Gerät Internet hat; meldet nur Änderungen. */
-export type ObserveNetwork = (listener: (online: boolean) => void) => () => void;
 
 /** Netzstatus des Geräts, überlagert vom Transport-Fehlermodus. */
 export function faultyNetwork(device: ObserveNetwork, faults: FaultController): ObserveNetwork {

@@ -50,14 +50,19 @@ echo "Starte das E2E-Backend auf 127.0.0.1:$port …" >&2
 (cd "$repo_root" && BACKEND_PORT="$port" docker compose --project-name abnehm-e2e up --detach --build --wait >&2)
 
 # Geräte --------------------------------------------------------------------------------------------
+booted_simulator() {
+  xcrun simctl list devices booted --json \
+    | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")).devices;for(const l of Object.values(d))for(const x of l)if(x.state==="Booted"){console.log(x.udid);process.exit(0)}'
+}
+
 ios_simulator() {
   local booted
-  booted="$(xcrun simctl list devices booted --json | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")).devices;for(const l of Object.values(d))for(const x of l)if(x.state==="Booted"){console.log(x.udid);process.exit(0)}')"
+  booted="$(booted_simulator)"
   if [[ -z "$booted" ]]; then
     local name="${E2E_IOS_SIMULATOR:-iPhone 17e}"
     echo "Starte den Simulator „$name“ …" >&2
     xcrun simctl boot "$name" >&2
-    booted="$(xcrun simctl list devices booted --json | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")).devices;for(const l of Object.values(d))for(const x of l)if(x.state==="Booted"){console.log(x.udid);process.exit(0)}')"
+    booted="$(booted_simulator)"
   fi
   echo "$booted"
 }
@@ -90,12 +95,11 @@ for platform in "${platforms[@]}"; do
     echo "Maestro steuert nur den iOS-Simulator; echte iPhones prüft der Handablauf aus docs/entwicklung.md." >&2
     exit 2
   fi
-  target="$platform-$([[ -n "$device" ]] && echo geraet || ([[ "$platform" == ios ]] && echo simulator || echo emulator))"
-  artifact="$mobile/build/e2e/$target/artefakt.json"
+  artifact="$("$repo_root/scripts/e2e-build" "$platform" ${device:+--geraet} --pfad)"
   if [[ "$build" == true || ! -f "$artifact" ]]; then
     "$repo_root/scripts/e2e-build" "$platform" ${device:+--geraet} >/dev/null
   fi
-  binary="$mobile/build/e2e/$target/$(node -p "require('$artifact').binary")"
+  binary="$(dirname "$artifact")/$(node -p "require('$artifact').binary")"
   app_id="$(node -p "require('$artifact').appId")"
   backend="$(node -p "require('$artifact').backend")"
   [[ "$backend" == *":$port" ]] || echo "Hinweis: Das Binary nutzt $backend, das E2E-Backend lauscht auf Port $port." >&2

@@ -4,12 +4,13 @@ import type { SessionStore } from '../auth/app-auth';
 import { deviceClock } from '../clock/device-clock';
 import { openExpoSqlite, removeExpoSqlite } from '../local-db/expo-connection';
 import type { AppSession } from '../session/app-session';
+import type { ObserveNetwork } from '../sync/triggers';
 import { createAppTestClock, type AppTestClock } from './clock';
 import { runDeviceSuite } from './device-suite/suite';
 import { createFaultController, faultyFetch, faultySessionStore } from './faults';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
-import { faultyNetwork, type ObserveNetwork } from './network';
+import { faultyNetwork } from './network';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
 // Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114): Seed-Deep-Link, Testuhr,

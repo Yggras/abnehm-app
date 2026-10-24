@@ -1,6 +1,6 @@
-import { startSyncTriggers } from '../sync/triggers';
+import { startSyncTriggers, type ObserveNetwork } from '../sync/triggers';
 import { createFaultController } from './faults';
-import { faultyNetwork, type ObserveNetwork } from './network';
+import { faultyNetwork } from './network';
 
 // Nachweis für #114: Der Transport-Fehlermodus ersetzt auf iOS Maestros `setAirplaneMode`. `offline`
 // meldet dem Sync wie der Flugmodus kein Netz, die Rückkehr zu `ok` meldet das Netz wieder; der Sync

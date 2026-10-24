@@ -6,7 +6,7 @@ import type { RouteTarget } from '@abnehm/contracts/routes';
 
 import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
-import type { DeviceSuitePhase } from './device-suite/suite';
+import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
 
 // Deep Links der Testfähigkeiten (#112, #114), nur in Test-Artefakten (Development- und E2E-Build;
@@ -40,7 +40,7 @@ const clockParams = z
   .strictObject({ stunden: z.string().regex(/^\d{1,4}$/).transform(Number).optional(), zone: TimeZone.optional() })
   .refine((params) => params.stunden !== undefined || params.zone !== undefined);
 
-const deviceSuiteParams = z.strictObject({ phase: z.enum(['vor_neustart', 'nach_neustart']) });
+const deviceSuiteParams = z.strictObject({ phase: z.enum(deviceSuitePhases) });
 
 /** Der Link als Testfähigkeit, oder `null`, wenn er keiner ist. */
 export function parseTestLink(link: string): TestLink | null {

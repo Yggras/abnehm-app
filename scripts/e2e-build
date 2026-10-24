@@ -5,6 +5,7 @@
 #   scripts/e2e-build android             # Emulator, Backend http://10.0.2.2:8788
 #   scripts/e2e-build android --geraet    # echtes Android-Gerät per Kabel (Backend per `adb reverse`)
 #   scripts/e2e-build ios --api-url http://192.168.178.20:8788 --geraet
+#   scripts/e2e-build android --geraet --pfad   # nur den Pfad der artefakt.json nennen, nicht bauen
 #
 # Ergebnis unter apps/mobile/build/e2e/<ziel>/ samt artefakt.json (Artefakt-ID = SHA-256 des Binarys,
 # Commit, Backend-Adresse). `expo prebuild --clean` erzeugt ios/ bzw. android/ für die Variante neu;
@@ -15,7 +16,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mobile="$repo_root/apps/mobile"
 
 usage() {
-  sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
@@ -24,9 +25,11 @@ platform="${1:-}"
 shift
 device=false
 api_url=""
+only_path=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --geraet) device=true ;;
+    --pfad) only_path=true ;;
     --api-url) api_url="${2:?--api-url braucht eine Adresse}"; shift ;;
     *) usage ;;
   esac
@@ -41,17 +44,19 @@ if [[ -z "$api_url" ]]; then
       exit 2 ;;
     # Der iOS-Simulator teilt das Netz des Rechners.
     ios:false) api_url="http://localhost:$port" ;;
-    # Der Emulator erreicht den Rechner über sein virtuelles Netz, das der Flugmodus kappt
-    # (https://developer.android.com/studio/run/emulator-networking-address).
+    # Der Emulator erreicht den Rechner über 10.0.2.2 (https://developer.android.com/studio/run/emulator-networking-address);
+    # anders als `adb reverse` trennt der Flugmodus diesen Weg (im Emulator beobachtet am 21.10.2026).
     android:false) api_url="http://10.0.2.2:$port" ;;
-    # Ein echtes Gerät per Kabel über `adb reverse` (scripts/e2e-run). Das läuft über adb und bleibt im
-    # Flugmodus bestehen; für sync-offline auf einem echten Gerät deshalb --api-url mit der LAN-Adresse.
+    # Ein echtes Gerät per Kabel über `adb reverse` (scripts/e2e-run). Im Emulator überstand dieser Weg den
+    # Flugmodus (beobachtet am 21.10.2026); für sync-offline auf einem echten Gerät deshalb --api-url mit
+    # der LAN-Adresse.
     android:true) api_url="http://localhost:$port" ;;
   esac
 fi
 
 target="$platform-$([[ "$device" == true ]] && echo geraet || ([[ "$platform" == ios ]] && echo simulator || echo emulator))"
 out="$mobile/build/e2e/$target"
+if [[ "$only_path" == true ]]; then echo "$out/artefakt.json"; exit 0; fi
 rm -rf "$out"
 mkdir -p "$out"
 
@@ -89,7 +94,7 @@ if [[ "$platform" == "ios" ]]; then
   app_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$binary/Info.plist")"
 else
   echo "Baue die Release-APK …" >&2
-  # Ohne Daemon: ein laufender Gradle-Daemon hätte die Umgebung eines früheren Aufrufs.
+  # Ohne Daemon, damit der Build sicher in der Umgebung dieses Aufrufs bündelt (Variante, Schalter, Backend).
   (cd android && ./gradlew --no-daemon --quiet :app:assembleRelease >&2)
   mv android/app/build/outputs/apk/release/app-release.apk "$out/abnehm-app-e2e.apk"
   binary="$out/abnehm-app-e2e.apk"

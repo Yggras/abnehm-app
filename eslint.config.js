@@ -166,7 +166,8 @@ export default defineConfig([
     },
   },
   {
-    // Die Grenze selbst lädt die Testfähigkeiten; sie fallen im Produktions-Bundle mit `__DEV__` weg (#112).
+    // Die Grenze selbst lädt die Testfähigkeiten; im Produktions-Bundle fallen sie weg, weil `__DEV__` und
+    // `EXPO_PUBLIC_E2E_BUILD` dort konstant falsch sind (#112, #114).
     files: ['apps/mobile/src/build-capabilities.ts'],
     rules: { 'no-restricted-imports': ['error', { patterns: [backendTypesOnly, testOnlyClock, testOnlyFixtures, testOnlySeeds] }] },
   },
