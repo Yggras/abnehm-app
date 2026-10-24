@@ -7,6 +7,11 @@ mkdir -p "$tmp/bin" "$tmp/main" "$tmp/work"
 git -C "$tmp/main" init -q
 git -C "$tmp/main" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
 git -C "$tmp/main" worktree add -qb work/900001-test "$tmp/work"
+mkdir -p "$tmp/work/.github/workflows"
+printf '%s\n' 'jobs:' '  checks:' '    name: Typprüfung, Lint und App-Tests' '    steps:' '      - name: Schritt' \
+  '  node-tests:' '    name: Backend- und Pakettests (Teil ${{ matrix.shard }}/2)' > "$tmp/work/.github/workflows/ci.yml"
+git -C "$tmp/work" add .github
+git -C "$tmp/work" -c user.name=Test -c user.email=test@example.com commit -qm ci
 head=$(git -C "$tmp/work" rev-parse HEAD)
 reviews="$(git -C "$tmp/work" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-reviews/900001"
 mkdir -p "$reviews"
@@ -19,13 +24,17 @@ printf '%s\n' '#!/bin/sh' \
   'esac' > "$tmp/bin/gh"
 chmod +x "$tmp/bin/gh"
 export PATH="$tmp/bin:$PATH" MOCK_HEAD="$head"
-MOCK_CHECKS='{"name":"Typprüfung, Lint und Tests","bucket":"pass"},{"name":"Backend-Image ohne App- und Test-Abhängigkeiten","bucket":"pass"}'
+MOCK_CHECKS='{"name":"Typprüfung, Lint und App-Tests","bucket":"pass"},{"name":"Backend- und Pakettests (Teil 1/2)","bucket":"pass"},{"name":"Backend- und Pakettests (Teil 2/2)","bucket":"pass"}'
 export MOCK_CHECKS
 "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output"
 grep -F 'Bereit:' "$tmp/output" >/dev/null
 MOCK_MERGEABLE=UNKNOWN "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1 && { echo 'UNKNOWN akzeptiert' >&2; exit 1; } || [ "$?" = 3 ]
-MOCK_CHECKS='{"name":"Typprüfung, Lint und Tests","bucket":"pending"},{"name":"Backend-Image ohne App- und Test-Abhängigkeiten","bucket":"pass"}' \
+MOCK_CHECKS='{"name":"Typprüfung, Lint und App-Tests","bucket":"pending"},{"name":"Backend- und Pakettests (Teil 1/2)","bucket":"pass"}' \
   "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1 && { echo 'Pending akzeptiert' >&2; exit 1; } || [ "$?" = 3 ]
+MOCK_CHECKS='{"name":"Typprüfung, Lint und App-Tests","bucket":"pass"}' \
+  "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1 && { echo 'Fehlender Job akzeptiert' >&2; exit 1; } || [ "$?" = 3 ]
+MOCK_CHECKS='{"name":"Typprüfung, Lint und App-Tests","bucket":"fail"},{"name":"Backend- und Pakettests (Teil 1/2)","bucket":"pass"}' \
+  "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1 && { echo 'Fehlschlag akzeptiert' >&2; exit 1; } || [ "$?" = 1 ]
 printf 'dirty\n' > "$tmp/work/file"
 if "$root/scripts/check-parallel-pr" 900001 "$tmp/work" > "$tmp/output" 2>&1; then echo 'Dirty akzeptiert' >&2; exit 1; fi
 printf 'check-parallel-pr: OK\n'

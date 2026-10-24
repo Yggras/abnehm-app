@@ -33,13 +33,19 @@ case "$mergeable" in
   *) echo "Mergekonflikt oder nicht mergefähiger PR #$ticket ($mergeable)." >&2; exit 1 ;;
 esac
 checks=$(gh pr checks "$branch" --repo "$repo" --json name,bucket) || { echo "CI für #$ticket nicht abrufbar." >&2; exit 1; }
-# Beide Jobs aus .github/workflows/ci.yml müssen für genau diesen Head bestehen
-# und erfolgreich sein; keine leere oder übersprungene CI als Erfolg werten.
-if printf '%s' "$checks" | jq -e '
-  length >= 2 and
+# Jeder Job aus .github/workflows/ci.yml dieses Heads muss bestehen; die Namen stehen in der
+# Workflow-Datei, damit umbenannte oder neue Jobs hier nichts ändern. Matrix-Namen wie
+# „… (Teil ${{ matrix.shard }}/2)“ gelten über das Präfix vor `${{`. Keine leere oder
+# übersprungene CI als Erfolg werten.
+workflow="$worktree/.github/workflows/ci.yml"
+required=$(sed -n 's/^    name: //p' "$workflow" | jq -R -s 'split("\n") | map(select(length > 0))')
+[ "$(printf '%s' "$required" | jq length)" -gt 0 ] || { echo "Keine Jobs in $workflow gefunden." >&2; exit 1; }
+if printf '%s' "$checks" | jq -e --argjson required "$required" '
+  . as $checks |
+  length > 0 and
   all(.[]; .bucket == "pass") and
-  ([.[] | select(.name == "Typprüfung, Lint und Tests" and .bucket == "pass")] | length) >= 1 and
-  ([.[] | select(.name == "Backend-Image ohne App- und Test-Abhängigkeiten" and .bucket == "pass")] | length) >= 1
+  all($required[]; . as $job | ($job | sub("\\$\\{\\{.*$"; "")) as $prefix |
+    any($checks[]; .name == $job or ($prefix != $job and (.name | startswith($prefix)))))
 ' >/dev/null; then
   printf 'Bereit: %s (Head %s)\n' "$(printf '%s' "$pr" | jq -r .url)" "$head"
   exit 0
