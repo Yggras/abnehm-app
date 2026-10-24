@@ -287,8 +287,11 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
   // Pull ----------------------------------------------------------------------------------------
 
   async function pull(actor: PersonActor, request: PullRequest): Promise<PullResponse | ContractError> {
-    for (const step of prePullSteps.values()) {
-      await database.db.transaction((tx) => step(tx, { personId: actor.personId, now: Instant.parse(clock.read().instant) }));
+    // Nur vor der ersten Seite: Was ein Schritt danach schreibt, läge ohnehin oberhalb der festen Obergrenze.
+    if (request.pageToken === null) {
+      for (const step of prePullSteps.values()) {
+        await database.db.transaction((tx) => step(tx, { personId: actor.personId, now: Instant.parse(clock.read().instant) }));
+      }
     }
     // Wiederholbares Lesen: ein Snapshot für Obergrenze, Änderungsprotokoll und Datensätze dieser Seite.
     return database.db.transaction(

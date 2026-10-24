@@ -323,10 +323,15 @@ describe('Einladung annehmen', () => {
       })),
       { entityType: 'photo_sharing', data: expect.objectContaining({ ownerPersonId, couplingId, level: 'geteilt' }) },
     ];
+    // Ab der Kopplung sieht jede Person auch den groben Tageszielstand des Partners (#106).
+    const partnerStatusFor = (recipientPersonId: string) => ({
+      entityType: 'partner_daily_goal_status',
+      data: expect.objectContaining({ couplingId, recipientPersonId, stage: 'noch_nichts' }),
+    });
     for (const own of [philipp, anna]) {
       const rows = await coupledRows(backend, own.device);
-      expect(rows).toEqual(expect.arrayContaining([...shared, ...sharingsOf(own.personId)]));
-      expect(rows).toHaveLength(shared.length + 5);
+      expect(rows).toEqual(expect.arrayContaining([...shared, ...sharingsOf(own.personId), partnerStatusFor(own.personId)]));
+      expect(rows).toHaveLength(shared.length + 6);
     }
     expect((await securityLogEntries(backend)).filter((entry) => entry.eventType === 'kopplung')).toEqual([
       { eventType: 'kopplung', accountId: anna.accountId, details: { accountId: anna.accountId, couplingId, reactivated: false } },

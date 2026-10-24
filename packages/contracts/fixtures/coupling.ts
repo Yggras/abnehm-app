@@ -14,8 +14,10 @@ import {
   OnlineRequestId,
   PartnerSharingLevel,
   PartnerSharingRecord,
+  PartnerSharingUpsert,
   PhotoSharingLevel,
   PhotoSharingRecord,
+  PhotoSharingUpsert,
 } from '../src/coupling.ts';
 import { fixtures, without } from './define.ts';
 import { anna, coupling, now, operation, philipp } from './ids.ts';
@@ -113,5 +115,17 @@ export const couplingFixtures = {
   PhotoSharingRecord: fixtures(PhotoSharingRecord, {
     valid: { 'geteilt': photoSharing },
     invalid: { 'Stufe zusammengefasst': { ...photoSharing, level: 'zusammengefasst' }, 'mit Bereich': { ...photoSharing, area: 'ernaehrung' } },
+  }),
+  PartnerSharingUpsert: fixtures(PartnerSharingUpsert, {
+    valid: { 'abschalten': { level: 'privat' }, 'einschalten': { level: 'zusammengefasst' } },
+    invalid: {
+      'Stufe geteilt': { level: 'geteilt' },
+      'mit Eigentümerin': { level: 'privat', ownerPersonId: anna },
+      'mit anderem Bereich': { level: 'privat', area: 'gewicht' },
+    },
+  }),
+  PhotoSharingUpsert: fixtures(PhotoSharingUpsert, {
+    valid: { 'abschalten': { level: 'privat' }, 'einschalten': { level: 'geteilt' } },
+    invalid: { 'Stufe zusammengefasst': { level: 'zusammengefasst' }, 'mit anderer Kopplung': { level: 'geteilt', couplingId: coupling } },
   }),
 };
