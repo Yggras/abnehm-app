@@ -11,6 +11,7 @@ import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession, registeredCommandCases } from './support/authorization.ts';
 import { bonusOp, completeOp, dailyGoalCommandScenarios, insertDailyGoals } from './support/daily-goals.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
+import { sharedActionCommandScenarios } from './support/shared-actions.ts';
 import { installationB, pullAll, push } from './support/sync.ts';
 
 // Nachweis für #105: `completeDailyGoal` und `grantDailyBonus` auf dem Server (Spezifikation 0,
@@ -133,8 +134,8 @@ describe('Gegenbuchung', () => {
 describe('Autorisierung der Fachbefehle', () => {
   it('das Backend meldet genau diese Fachbefehle an; für jeden gibt es ein Szenario', async () => {
     const { backend } = await setup();
-    // `updatePersonTimeZone` (#110) prüft person-time-zone.test.ts; hier steht es nur für die Vollständigkeit.
-    const all = { ...dailyGoalCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+    // `updatePersonTimeZone` (#110) und die gemeinsamen Aktionen (#107) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
+    const all = { ...dailyGoalCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });
 

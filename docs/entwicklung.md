@@ -215,7 +215,7 @@ Jeder Zugriff läuft durch das zentrale Modul `apps/backend/src/authorization/` 
 
   Ohne Sitzung antwortet der Guard mit `401` ohne Body, bei verweigertem Zugriff mit `403` und genau `{ code: 'forbidden', retryable: false }`. Ob es die Ressource gibt, verrät die Antwort nicht. Danach stehen `c.var.actor` (Konto, Sitzung, Person) und bei Ressourcen `c.var.resource` bereit. Beides stammt nur aus Sitzung und Postgres.
 - **Sperre für Routen ohne Policy:** `createApp` setzt `authorization.enforce` vor alle Routen. Eine Route, die nicht mit einem Guard beginnt, lehnt sie zur Laufzeit mit `forbidden` ab; ihr Handler läuft nicht. `findIncompletePolicies(app)` listet solche Routen und Fachbefehle. Der Test in `authorization-module.test.ts` erwartet an der echten App eine leere Liste.
-- **Ressourcen und Matrix:** `resources.ts` ordnet jede Tabelle des Schemas genau einer Ressourcenklasse der Matrix zu und enthält deren Regel. Eigentum, Mitgliedschaft und Freigaben liest die Regel aus Postgres. IDs aus dem Client finden eine Ressource nur. Weicht ein Eigentumsfeld der Nutzlast (`claimedOwnerPersonId`) von der Person der Sitzung ab, ist die Operation verboten. Welche Operationen eine Klasse kennt, steht in `operationMatrix` (`policy.ts`). Eine neue Tabelle braucht einen Eintrag in `resourceEntities`, sonst scheitert der Katalogtest.
+- **Ressourcen und Matrix:** `resources.ts` ordnet jede Tabelle des Schemas genau einer Ressourcenklasse der Matrix zu und enthält deren Regel. Eigentum, Mitgliedschaft und Freigaben liest die Regel aus Postgres. IDs aus dem Client finden eine Ressource nur. Weicht ein Eigentumsfeld der Nutzlast (`claimedOwnerPersonId`) von der Person der Sitzung ab, ist die Operation verboten. Ebenso prüft die Regel einer Entscheidung über eine gemeinsame Aktion die beanspruchte Beteiligung (`claimedParticipation`). Welche Operationen eine Klasse kennt, steht in `operationMatrix` (`policy.ts`). Eine neue Tabelle braucht einen Eintrag in `resourceEntities`, sonst scheitert der Katalogtest.
 - **Fachbefehle:** Ein Befehl meldet seine Policy in `createBackend` mit `authorization.registerCommand(name, policy)` an und wird mit `authorizeCommand(executor, actor, name, target)` geprüft, auf Wunsch in der Transaktion des Aufrufers. Einen nicht angemeldeten Befehl lehnt das Modul ab. Generisches Upsert und Löschen prüft `authorize(executor, actor, policies.resource(entity, operation), target)`. Den `actor` liefert auf Routen der Guard, außerhalb einer Route `actorOf(headers)`.
 - **Partnerantworten:** Was eine Person über ihren Partner erhält, geht vor dem Senden durch `partnerResponse(kind, value)`. Die geschlossenen Schemas aus `@abnehm/contracts` sind die einzige Positivliste; bei einem Verstoß wirft die Funktion `PartnerResponseRejected`, ohne Daten zu nennen.
 - **Sicherheitslog:** Verweigerte Fotozugriffe (Fotoliste, Bildabruf) schreibt die Regel selbst als `fotozugriff_verweigert`.
@@ -272,11 +272,11 @@ Die drei Online-Abläufe zum Koppeln ([#103](https://github.com/Yggras/abnehm-ap
   - Ein Versuch zählt schon zu Beginn als Fehlversuch und wird bei einem anderen Ausgang wieder freigegeben. So kommen auch gleichzeitige Anfragen nicht an der Sperre vorbei.
   - `already_coupled` gilt nur für die eigene Kopplung und wird vor dem Code geprüft. Ist die einladende Person inzwischen gekoppelt, antwortet der Server mit `invite_invalid`, damit die Antwort nicht verrät, dass es den Code gibt.
 - **Annahme** in einer Transaktion: zuerst die Sync-Clock wie beim Push, dann die Einladung, dann beide Personen in ID-Reihenfolge. Unique-Verletzungen, Deadlocks und Serialisierungsfehler wiederholt der Ablauf und kommt so zu einem stabilen Ausgang, etwa `already_coupled`.
-  - Für dasselbe Paar reaktiviert `couple.ts` die archivierte Kopplung samt Insel, Rollen und Freigaben, sonst legt es alles neu an.
-  - Jede Zeile bekommt eine Serverversion und einen Eintrag im Änderungsprotokoll. Kopplung, Mitglieder und Insel sieht jedes aktive Mitglied, die Freigaben nur ihre Eigentümerin.
+  - Für dasselbe Paar reaktiviert `couple.ts` die archivierte Kopplung samt Insel, Rollen und Freigaben, sonst legt es alles neu an. Bei der Reaktivierung bekommen auch alle gemeinsamen Aktionen der Kopplung eine neue Serverversion, und zwar nach der Kopplung. Ein Gerät ohne lokale Kopplung übernimmt Zeilen, die auf sie verweisen, sonst vor ihr, und der lokale Fremdschlüssel scheitert. Wer weitere Inhalte der Kopplung synchronisiert, stempelt sie dort ebenso neu.
+  - Jede Zeile bekommt eine Serverversion und einen Eintrag im Änderungsprotokoll. Kopplung, Mitglieder, Insel und gemeinsame Aktionen sieht jedes aktive Mitglied, die Freigaben nur ihre Eigentümerin. Die Kopplung selbst ist der Archivstatus. Sie bleibt auch nach dem Entkoppeln für beide früheren Mitglieder sichtbar (Ressource `coupling_archive_status`, Sonderfall in `visibleTo` des Pulls).
   - Die Annahme schreibt den Sicherheitslog-Eintrag `kopplung`.
 - **Anzeigename:** Ändert der Person-Upsert den Namen, zieht `followDisplayName` ihn in derselben Transaktion bei allen Kopplungsmitgliedern der Person nach.
-- **Sync:** Kopplung, Mitglieder und Insel sind auf beiden Seiten angemeldet (`coupling-entities.ts`), ohne generisches Upsert oder Löschen. In der App übernimmt das Mitglied seinen `coupling_status` aus der lokalen Kopplung. Die Freigaben ändert die Eigentümerin per Upsert (siehe „Partner-Projektionen und Partnercache“).
+- **Sync:** Kopplung, Mitglieder, Insel und gemeinsame Aktionen sind auf beiden Seiten angemeldet (`coupling-entities.ts`), ohne generisches Upsert oder Löschen. In der App übernimmt das Mitglied seinen `coupling_status` aus der lokalen Kopplung. Die Freigaben ändert die Eigentümerin per Upsert (siehe „Partner-Projektionen und Partnercache“).
 - **App-Modul** `apps/mobile/src/online/`:
   - Bildschirme nutzen nur `useCreateInvitationCode`, `useCheckInvitationCode` und `useAcceptInvitation` unter `OnlineFlowsProvider`. TanStack Query v5 ist dort reine flüchtige Orchestrierung (`gcTime: 0`, keine stillen Wiederholungen) und nur in diesem Modul erlaubt (Regel `abnehm/bibliotheksgrenzen`).
   - Bis zum Erfolg trägt jede Wiederholung derselben Absicht dieselbe `requestId`. Nach der Annahme stößt das Modul einen Sync an; die Kopplung liest der Bildschirm aus SQLite.
@@ -285,6 +285,29 @@ Die drei Online-Abläufe zum Koppeln ([#103](https://github.com/Yggras/abnehm-ap
   - `apps/backend/test/invitations.test.ts` prüft die Abläufe über HTTP, einschließlich Konkurrenz und Reaktivierung.
   - `online-app.test.ts` lässt Modul und App-Sync gegen die echte Hono-App laufen.
   - Komponententests nutzen den Online-Test-Adapter `online/testing/fake-invitation-flows.ts` (`respond`, `hold`, `calls`).
+
+### Gemeinsame Aktionen und Entkoppeln
+
+Rollenwahl, Rollentausch und Deko schenken laufen als gemeinsame Aktion `SharedAction` ([#107](https://github.com/Yggras/abnehm-app/issues/107), Abschnitt 9 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71)). Der Rahmen liegt in `apps/backend/src/coupling/shared-actions.ts`, der Entkopplungs-Kern in `uncoupling.ts`. Nutzlasten und fachliche Schlüssel stehen in `@abnehm/contracts/island`.
+
+- **Art anmelden:** Spezifikation 4 meldet jede Art in `createBackend` mit `backend.sharedActions.registerKind(kind)` an. Eine Art bringt mit:
+  - `type`: `rollenwahl`, `rollentausch` oder `deko_schenken`;
+  - `payload`: ihr Nutzlast-Schema in der Form, die `SharedAction` festlegt;
+  - optional `request(tx, context)`: prüft den Fachzustand beim Beantragen und legt etwa den Intent für den Partner an;
+  - `accept(tx, context)`: die fachliche Zustandsänderung bei Annahme.
+
+  Beide Haken laufen im Savepoint des Befehls. Wirft einer `CommandRejection`, entsteht keine Aktion beziehungsweise sie bleibt offen. Eine nicht angemeldete Art lehnt `requestSharedAction` als `invalid_payload` ab.
+- **Fachbefehle:** `requestSharedAction` (`RequestSharedAction`, Schlüssel `sharedActionRequestKey`) und `decideSharedAction` (`DecideSharedAction`, Schlüssel `sharedActionDecisionKey`).
+  - Die Autorisierung prüft Beteiligung und aktive Kopplung (Ressourcen `shared_action_request` und `shared_action_decision`). `annehmen` und `ablehnen` beanspruchen die Beteiligung `partner`, `zurueckziehen` die Beteiligung `antragsteller` (`claimedParticipation`). Wer in der falschen Rolle entscheidet, erhält `forbidden`.
+  - Eine Aktion geht genau einmal von `offen` in einen Endzustand. Jede spätere Entscheidung endet mit `conflict`, eine zweite, andere Entscheidung derselben Person mit `operation_conflict`.
+- **Entkopplungs-Kern:** `backend.uncoupling.uncouple(tx, { actionId, couplingId, requesterPersonId, at })` läuft in der Transaktion des Aufrufers. Spezifikation 5 ruft ihn aus `requestUncoupling` auf und ergänzt Intent und Sicherheitslog.
+  - Der Kern archiviert Kopplung und Insel, beendet offene Aktionen als `zurueckgezogen` und hält die Entkopplung als Aktion `entkoppeln` fest, sofort `angenommen`. Danach erzeugt er die Revocation-Notices (`revokeCoupling`).
+  - Ist die Kopplung schon archiviert, lautet das Ergebnis `abgelehnt`. Dann ändert der Kern nichts an der Kopplung.
+  - Beobachter meldet ein Bereich mit `backend.uncoupling.registerObserver(name, observer)` an, etwa Spezifikation 4 für Challenge-Vorschläge und aktive Challenge. Sie laufen in derselben Transaktion; wirft einer, rollt die ganze Entkopplung zurück.
+  - Ab dem Commit endet der Partnerzugriff. Der Pull liefert dann nur noch Notices, die Löschmarkierungen der Projektionen und die archivierte Kopplung. Die Mitglieder samt Anzeigenamen bleiben in der App erhalten.
+- **Tests:**
+  - `apps/backend/test/shared-actions.test.ts` und `uncoupling.test.ts` prüfen Rahmen und Kern über Push und Pull, einschließlich Reaktivierung und Negativtests. Die Test-Arten und Szenarien stehen in `test/support/shared-actions.ts`.
+  - `uncoupling-app.test.ts` lässt die App-Engine auf echtem SQLite dagegen laufen.
 
 ### Partner-Projektionen und Partnercache
 

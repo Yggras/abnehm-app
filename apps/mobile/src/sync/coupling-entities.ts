@@ -4,18 +4,20 @@ import type { z } from 'zod';
 
 import type { EntityId } from '@abnehm/contracts/base';
 import { CouplingMemberRecord, CouplingRecord } from '@abnehm/contracts/coupling';
-import { IslandRecord } from '@abnehm/contracts/island';
+import { IslandRecord, SharedAction } from '@abnehm/contracts/island';
 import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
 
 import type { TransactionContext } from '../local-db';
-import { coupling, couplingMember, island } from '../local-db/schema';
+import { coupling, couplingMember, island, sharedAction } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { SyncEntityAdapter } from './registry';
 import { sqliteEntity } from './sqlite-entity';
 
-// Kopplung, Mitglieder und Insel im App-Sync (Spezifikation 0, Abschnitte 8–10). Sie entstehen nur auf
-// dem Server und kommen per Pull; ein generisches Upsert oder Löschen gibt es nicht, deshalb auch keine
-// offenen Operationen, die erneut anzuwenden wären. Die Freigaben stehen in `sharing-entities.ts`.
+// Kopplung, Mitglieder, Insel und gemeinsame Aktionen im App-Sync (Spezifikation 0, Abschnitte 8–10).
+// Sie entstehen nur auf dem Server und kommen per Pull; ein generisches Upsert oder Löschen gibt es
+// nicht, deshalb auch keine offenen Operationen, die erneut anzuwenden wären. Nach einer Entkopplung
+// kommt nur noch die archivierte Kopplung; Mitglieder samt Anzeigenamen bleiben lokal erhalten. Die
+// Freigaben stehen in `sharing-entities.ts`.
 
 type SyncedTable = Parameters<typeof sqliteEntity>[0]['table'];
 
@@ -56,4 +58,23 @@ export const couplingSyncEntities: readonly SyncEntityAdapter[] = [
     },
   }),
   serverManaged({ entityType: 'island', ownerField: 'couplingId', record: IslandRecord, table: island }),
+  // Gemeinsame Aktion: Die Art steht im Vertrag als `type`, lokal als `kind`. Eine Aktion ändert sich nur
+  // einmal, mit ihrer Entscheidung; das ist ihr letzter Änderungszeitpunkt.
+  sqliteEntity({
+    entityType: 'shared_action',
+    ownerField: 'couplingId',
+    upsert: null,
+    deletable: false,
+    record: SharedAction,
+    table: sharedAction,
+    row: (id: EntityId, { type, decidedAt, createdAt, ...data }: SharedAction) => ({
+      ...data,
+      id,
+      kind: type,
+      decidedAt,
+      createdAt,
+      updatedAt: decidedAt ?? createdAt,
+    }),
+    replay: () => undefined,
+  }),
 ];

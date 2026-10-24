@@ -96,6 +96,8 @@ export type ResourceTarget = Readonly<{
   id?: unknown;
   /** Eigentums- bzw. Absenderfeld der Nutzlast; weicht es von der Person der Sitzung ab, ist das verboten. */
   claimedOwnerPersonId?: unknown;
+  /** Beteiligung, die eine Entscheidung über eine gemeinsame Aktion voraussetzt; die Regel prüft sie. */
+  claimedParticipation?: unknown;
 }>;
 
 /** Die maßgeblichen Fakten zur Ressource, aus Postgres gelesen; Fachlogik verwendet nur diese. */
@@ -397,6 +399,54 @@ const encouragementSendRule = byId(
   { onlyOperations: ['befehl'] },
 );
 
+async function sharedActionOf(db: DbExecutor, id: string) {
+  return first(
+    db
+      .select({ couplingId: sharedAction.couplingId, requester: sharedAction.requesterPersonId })
+      .from(sharedAction)
+      .where(eq(sharedAction.id, id)),
+  );
+}
+
+/**
+ * Gemeinsame Aktion beantragen: nur als aktives Mitglied, in der eigenen Kopplung. Ein Retry derselben
+ * ID durch den Antragsteller ist erlaubt, damit der Fachbefehl idempotent bleibt.
+ */
+const sharedActionRequestRule = byId(
+  'kopplungsinhalte',
+  sharedAction,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await sharedActionOf(context.db, id);
+    if (found !== null && found.requester !== personId) return denied;
+    const membership = await activeCouplingOf(context.db, personId);
+    if (membership === null || (found !== null && found.couplingId !== membership.couplingId)) return denied;
+    return allowed({ exists: found !== null, ownerPersonId: personId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
+/**
+ * Über eine gemeinsame Aktion entscheiden: nur aktive Mitglieder ihrer Kopplung und nur in der
+ * beanspruchten Beteiligung. `partner` (annehmen, ablehnen) ist die Person, die nicht beantragt hat,
+ * `antragsteller` (zurückziehen) die, die beantragt hat.
+ */
+const sharedActionDecisionRule = byId(
+  'kopplungsinhalte',
+  sharedAction,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await sharedActionOf(context.db, id);
+    if (found === null) return denied;
+    const membership = await activeMembership(context.db, found.couplingId, personId);
+    if (membership === null) return denied;
+    const participation = found.requester === personId ? 'antragsteller' : 'partner';
+    if (context.target.claimedParticipation !== participation) return denied;
+    return allowed({ ownerPersonId: found.requester, couplingId: found.couplingId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
 /** Revocation-Notice: nur der ehemals bezeichnete Empfänger, auch nach Rechteentzug. */
 const revocationNoticeRule = byId('widerrufshinweis', revocationNotice, async (context, id) => {
   const found = await first(
@@ -450,6 +500,8 @@ export const resourceEntities = {
   coupling_member: coupled('kopplungsinhalte', couplingMember, inCoupling(couplingMember)),
   island: coupled('kopplungsinhalte', island, inCoupling(island)),
   shared_action: coupled('kopplungsinhalte', sharedAction, inCoupling(sharedAction)),
+  shared_action_request: sharedActionRequestRule,
+  shared_action_decision: sharedActionDecisionRule,
   challenge: coupled('kopplungsinhalte', challenge, inCoupling(challenge)),
   blueprint_unlock: coupled('kopplungsinhalte', blueprintUnlock, inCoupling(blueprintUnlock)),
   area_unlock: coupled('kopplungsinhalte', areaUnlock, inCoupling(areaUnlock)),

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { AreaKey, EntityId, LocalDate, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
+import { sharedActionDecisionKey, sharedActionRequestKey } from '../src/island.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, partnerSummaryPeriodOf } from '../src/partner.ts';
 import { personOfTimeZoneKey, personTimeZoneKey } from '../src/person.ts';
@@ -130,6 +131,15 @@ describe('personTimeZoneKey', () => {
     ['ohne UUID', `person:${'x'.repeat(36)}:time_zone:${changeId}`],
   ])('erkennt %s nicht als Schlüssel', (_, key) => {
     expect(personOfTimeZoneKey(key)).toBeNull();
+  });
+});
+
+describe('Schlüssel gemeinsamer Aktionen', () => {
+  const actionId = EntityId.parse('3e5f7a9b-2c4d-4e6f-8a1b-3c5d7e9f1a01');
+
+  it('trennen Antrag und Entscheidung derselben Aktion', () => {
+    expect(sharedActionRequestKey(actionId)).toBe(`shared_action:${actionId}:antrag`);
+    expect(sharedActionDecisionKey(actionId)).toBe(`shared_action:${actionId}:entscheidung`);
   });
 });
 

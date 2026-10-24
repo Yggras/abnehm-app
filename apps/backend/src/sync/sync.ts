@@ -454,16 +454,26 @@ function continuedPage(actor: PersonActor, token: string, latest: bigint): Page 
 
 /**
  * Sichtbar sind adressierte Einträge nur dem Empfänger, alle übrigen dem Eigentümer und den aktiven
- * Mitgliedern ihrer Kopplung. Die Grenze kommt aus der Sitzung, nie aus Cursor, Token oder Installation.
+ * Mitgliedern ihrer Kopplung. Nur die Kopplung selbst, ihr Archivstatus, bleibt nach dem Entkoppeln
+ * auch den früheren Mitgliedern sichtbar (Spezifikation 0, Abschnitt 10). Die Grenze kommt aus der
+ * Sitzung, nie aus Cursor, Token oder Installation.
  */
 function visibleTo(tx: DbExecutor, personId: EntityId) {
-  const activeCouplings = tx
-    .select({ couplingId: couplingMember.couplingId })
-    .from(couplingMember)
-    .where(and(eq(couplingMember.personId, personId), eq(couplingMember.couplingStatus, 'aktiv')));
+  const memberships = (status?: 'aktiv') =>
+    tx
+      .select({ couplingId: couplingMember.couplingId })
+      .from(couplingMember)
+      .where(and(eq(couplingMember.personId, personId), status === undefined ? undefined : eq(couplingMember.couplingStatus, status)));
   return or(
     eq(changeLog.recipientPersonId, personId),
-    and(isNull(changeLog.recipientPersonId), or(eq(changeLog.ownerPersonId, personId), inArray(changeLog.couplingId, activeCouplings))),
+    and(
+      isNull(changeLog.recipientPersonId),
+      or(
+        eq(changeLog.ownerPersonId, personId),
+        inArray(changeLog.couplingId, memberships('aktiv')),
+        and(eq(changeLog.entityType, 'coupling'), inArray(changeLog.couplingId, memberships())),
+      ),
+    ),
   );
 }
 

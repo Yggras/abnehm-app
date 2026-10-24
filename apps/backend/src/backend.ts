@@ -8,6 +8,8 @@ import { couplingSyncEntities } from './coupling/coupling-entities.ts';
 import { createInvitationLimiter } from './coupling/invitation-limiter.ts';
 import { invitationRoutes } from './coupling/invitations.ts';
 import { createInviteCodes, type InvitationSettings } from './coupling/invite-codes.ts';
+import { createSharedActions } from './coupling/shared-actions.ts';
+import { createUncoupling } from './coupling/uncoupling.ts';
 import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
 import { energyBookingEntity } from './energy/bookings.ts';
 import type { Database } from './database.ts';
@@ -51,6 +53,11 @@ export function createBackend({
   sync.registerEntity(personEntity);
   sync.registerCommand(personTimeZoneCommand);
   for (const entity of couplingSyncEntities) sync.registerEntity(entity);
+  // Gemeinsame Aktionen: Spezifikation 4 meldet ihre Arten an `sharedActions` an.
+  const sharedActions = createSharedActions();
+  for (const command of sharedActions.commands) sync.registerCommand(command);
+  // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
+  const uncoupling = createUncoupling();
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
@@ -79,6 +86,8 @@ export function createBackend({
     sync,
     logout,
     partnerProjections,
+    sharedActions,
+    uncoupling,
     jobs,
   };
 }

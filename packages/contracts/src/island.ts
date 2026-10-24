@@ -128,6 +128,42 @@ export const SharedAction = z
   });
 export type SharedAction = z.infer<typeof SharedAction>;
 
+/** Arten, die `requestSharedAction` beantragt; Entkoppeln läuft einseitig über `requestUncoupling`. */
+export const RequestedSharedActionType = z.enum(['rollenwahl', 'rollentausch', 'deko_schenken']);
+export type RequestedSharedActionType = z.infer<typeof RequestedSharedActionType>;
+
+/**
+ * Nutzlast des Fachbefehls `requestSharedAction`. Die ID vergibt das Gerät; die Nutzlast der Art prüft
+ * der Server mit dem Schema, das die Art in seiner Art-Registry anmeldet (Spezifikation 4).
+ */
+export const RequestSharedAction = z.strictObject({
+  actionId: EntityId,
+  type: RequestedSharedActionType,
+  payload: z.record(z.string(), z.unknown()),
+});
+export type RequestSharedAction = z.infer<typeof RequestSharedAction>;
+
+/** Annehmen und Ablehnen darf nur der Partner, Zurückziehen nur der Antragsteller. */
+export const SharedActionDecision = z.enum(['annehmen', 'ablehnen', 'zurueckziehen']);
+export type SharedActionDecision = z.infer<typeof SharedActionDecision>;
+
+/** Nutzlast des Fachbefehls `decideSharedAction`. */
+export const DecideSharedAction = z.strictObject({ actionId: EntityId, decision: SharedActionDecision });
+export type DecideSharedAction = z.infer<typeof DecideSharedAction>;
+
+/** Fachlicher Schlüssel von `requestSharedAction`: je Aktion genau ein Antrag. */
+export function sharedActionRequestKey(actionId: EntityId): string {
+  return `shared_action:${actionId}:antrag`;
+}
+
+/**
+ * Fachlicher Schlüssel von `decideSharedAction`: je Aktion und Person eine Entscheidung. Eine zweite,
+ * andere Entscheidung derselben Person ist damit ein `operation_conflict`.
+ */
+export function sharedActionDecisionKey(actionId: EntityId): string {
+  return `shared_action:${actionId}:entscheidung`;
+}
+
 /** Entwicklungsform zum Level (Kaulquappe ab Level 1 … Lagunendrache ab Level 43). */
 export const MomoForm = z.enum([
   'kaulquappe',
