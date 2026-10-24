@@ -1,6 +1,7 @@
 import {
   ChallengeStatus,
   CommonStage,
+  DecideSharedAction,
   IslandEventKind,
   IslandProgress,
   IslandRecord,
@@ -9,7 +10,10 @@ import {
   MomoAppearance,
   MomoForm,
   MomoMood,
+  RequestedSharedActionType,
+  RequestSharedAction,
   SharedAction,
+  SharedActionDecision,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
 import { anna, coupling, island, islandObject, now, philipp, project, sharedAction, timeZone } from './ids.ts';
@@ -123,6 +127,35 @@ export const islandFixtures = {
       'entschieden ohne Zeitpunkt': { ...giftBase, status: 'abgelehnt' },
       'Rollenwahl ohne Rolle': { ...giftBase, type: 'rollenwahl', payload: {} },
       'unbekannter Status': { ...giftBase, status: 'abgelaufen' },
+    },
+  }),
+  RequestedSharedActionType: fixtures(RequestedSharedActionType, {
+    valid: { 'Rollentausch': 'rollentausch', 'Deko schenken': 'deko_schenken' },
+    invalid: { 'Entkoppeln beantragt niemand': 'entkoppeln' },
+  }),
+  RequestSharedAction: fixtures(RequestSharedAction, {
+    valid: {
+      'Deko schenken': { actionId: sharedAction, type: 'deko_schenken', payload: { islandObjectId: islandObject, decoKey: 'muschelkranz' } },
+      'Rollentausch ohne Nutzlast': { actionId: sharedAction, type: 'rollentausch', payload: {} },
+    },
+    invalid: {
+      'Entkoppeln': { actionId: sharedAction, type: 'entkoppeln', payload: {} },
+      'Nutzlast einer anderen Art': { actionId: sharedAction, type: 'rollentausch', payload: { proposerRole: 'bauen' } },
+      'Rollenwahl ohne Rolle': { actionId: sharedAction, type: 'rollenwahl', payload: {} },
+      'Antragsteller aus dem Client': { actionId: sharedAction, type: 'rollentausch', payload: {}, requesterPersonId: anna },
+      'ohne ID': { type: 'rollentausch', payload: {} },
+    },
+  }),
+  SharedActionDecision: fixtures(SharedActionDecision, {
+    valid: { 'annehmen': 'annehmen', 'zurückziehen': 'zurueckziehen' },
+    invalid: { 'Status statt Entscheidung': 'angenommen' },
+  }),
+  DecideSharedAction: fixtures(DecideSharedAction, {
+    valid: { 'Partner nimmt an': { actionId: sharedAction, decision: 'annehmen', timeZone } },
+    invalid: {
+      'ohne Entscheidung': { actionId: sharedAction, timeZone },
+      'ohne Zone des Geräts': { actionId: sharedAction, decision: 'annehmen' },
+      'Entscheider aus dem Client': { actionId: sharedAction, decision: 'ablehnen', timeZone, deciderPersonId: philipp },
     },
   }),
   MomoForm: fixtures(MomoForm, {

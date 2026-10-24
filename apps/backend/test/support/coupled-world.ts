@@ -34,7 +34,7 @@ import {
   weeklyPlanVersion,
 } from '../../src/db/schema/index.ts';
 import { createTestBackend, type TestBackend } from './app.ts';
-import type { Device } from './auth-client.ts';
+import { call, type Device } from './auth-client.ts';
 import { httpOutcome, personWithSession, resourceProbe } from './authorization.ts';
 
 // Gekoppelte Testwelt für Autorisierungstests: Anna und Philipp mit Sitzung, Person und aktiver
@@ -66,6 +66,15 @@ export async function coupledWorld(): Promise<CoupledWorld> {
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   return { backend, clock, anna, philipp, ...(await couple(backend, anna, philipp)) };
+}
+
+/** Kopplung über die echten Einladungsabläufe, damit Kopplung, Mitglieder und Freigaben per Pull ankommen. */
+export async function coupleByInvitation(backend: TestBackend, inviter: Device, invitee: Device) {
+  const created = await call(backend, 'POST', '/v1/invitations', inviter, { requestId: randomUUID() });
+  const { code } = created.body as { code: string };
+  const accepted = await call(backend, 'POST', '/v1/invitations/accept', invitee, { requestId: randomUUID(), code });
+  if (accepted.status !== 200) throw new Error(`Annahme fehlgeschlagen: ${accepted.status} ${JSON.stringify(accepted.body)}`);
+  return accepted.body as { couplingId: string; reactivated: boolean };
 }
 
 /** Ein zweites, fremdes Paar im selben Backend, etwa als Ziel manipulierter IDs. */

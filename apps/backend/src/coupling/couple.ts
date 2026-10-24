@@ -5,8 +5,8 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 import { AreaKey } from '@abnehm/contracts/base';
 
 import type { DbExecutor } from '../database.ts';
-import { coupling, couplingMember, island, partnerSharing, person, photoSharing } from '../db/schema/index.ts';
-import { nextServerVersion, recordChange } from '../sync/change-log.ts';
+import { coupling, couplingMember, island, partnerSharing, person, photoSharing, sharedAction } from '../db/schema/index.ts';
+import { changeWriter, updated } from './change-writer.ts';
 
 // Schreibseite der Kopplung (Spezifikation 0, Abschnitte 8 und 9). Jede geschriebene Zeile erhält eine
 // eigene Serverversion und einen Eintrag im Änderungsprotokoll, damit sie im Pull ankommt: Kopplung,
@@ -82,7 +82,10 @@ async function create(tx: DbExecutor, [low, high]: readonly [string, string], at
 /**
  * Reaktiviert Kopplung und Insel desselben Paars. Rollen, Partner- und Fotofreigaben bleiben, wie sie
  * waren; die Mitglieder übernehmen die aktuellen Anzeigenamen. Alle Zeilen erhalten eine neue
- * Serverversion, damit beide Geräte sie im nächsten Pull wieder erhalten.
+ * Serverversion, damit beide Geräte sie im nächsten Pull wieder erhalten, und zwar nach der Kopplung:
+ * Ein Gerät ohne lokale Kopplung übernimmt eine Zeile, die auf sie verweist, erst nach ihr. Das gilt
+ * auch für die gemeinsamen Aktionen. Die beim Entkoppeln beendeten lieferte der Pull ohnehin nicht aus,
+ * solange die Kopplung archiviert war.
  */
 async function reactivate(tx: DbExecutor, couplingId: string, at: Date) {
   const write = changeWriter(tx, at);
@@ -121,6 +124,13 @@ async function reactivate(tx: DbExecutor, couplingId: string, at: Date) {
       });
     }
   }
+  const actions = await tx.select({ id: sharedAction.id }).from(sharedAction).where(eq(sharedAction.couplingId, couplingId));
+  for (const action of actions) {
+    await write({ entityType: 'shared_action', couplingId }, async (stamp) => {
+      await tx.update(sharedAction).set(updated(stamp)).where(eq(sharedAction.id, action.id));
+      return action.id;
+    });
+  }
 }
 
 /**
@@ -140,21 +150,6 @@ export async function followDisplayName(tx: DbExecutor, personId: string, displa
     });
   }
 }
-
-type Stamp = { createdAt: Date; updatedAt: Date; serverVersion: bigint };
-type Scope = { entityType: string } & ({ couplingId: string } | { ownerPersonId: string });
-
-/** Vergibt je Zeile eine Serverversion und trägt die Änderung mit ihrer Sichtbarkeitsgrenze ein. */
-function changeWriter(tx: DbExecutor, at: Date) {
-  return async (scope: Scope, writeRow: (stamp: Stamp) => Promise<string>) => {
-    const serverVersion = await nextServerVersion(tx);
-    const entityId = await writeRow({ createdAt: at, updatedAt: at, serverVersion });
-    await recordChange(tx, { position: serverVersion, operation: 'upsert', createdAt: at, ...scope, entityId });
-  };
-}
-
-/** Bei einer Änderung bleibt `created_at` erhalten. */
-const updated = ({ updatedAt, serverVersion }: Stamp) => ({ updatedAt, serverVersion });
 
 async function displayNames(tx: DbExecutor, personIds: readonly string[]) {
   return tx

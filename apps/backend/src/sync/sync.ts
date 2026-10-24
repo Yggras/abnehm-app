@@ -203,7 +203,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
     if (decision.type === 'verweigert') return forbidden(operation);
     try {
       return await tx.transaction(async (savepoint) => {
-        const result = await command.execute(savepoint, { actor, payload: parsed.data, businessKey: operation.businessKey, at });
+        const result = await command.execute(savepoint, { actor, resource: decision.facts, payload: parsed.data, businessKey: operation.businessKey, at });
         if (command.identity === 'mapped' && !completeMappings(result.changes, result.idMappings)) {
           throw new CommandRejection('invalid_payload');
         }
@@ -252,9 +252,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
           ownerPersonId: actor.personId,
           createdAt: at,
         });
-        const canonical = await stateOf(savepoint, entity, operation.entityId);
-        if (canonical.type === 'absent') throw new Error(`Sync-Entität ${entity.entityType} nach dem Schreiben nicht lesbar`);
-        return { type: 'applied', operationId: operation.operationId, canonical } as const;
+        return { type: 'applied', operationId: operation.operationId, canonical: await canonicalAfterWrite(savepoint, entity, operation.entityId) } as const;
       });
     } catch (error) {
       const code = error instanceof Rejection ? error.code : integrityViolation(error);
@@ -299,10 +297,11 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         const latest = await currentServerVersion(tx);
         const page = request.pageToken === null ? firstPage(request.cursor, latest) : continuedPage(actor, request.pageToken, latest);
         if ('code' in page) return page;
+        const archiveStatusTypes = [...entities.values()].filter((entity) => entity.archiveStatus === true).map((entity) => entity.entityType);
         const entries = await tx
           .select()
           .from(changeLog)
-          .where(and(gt(changeLog.position, page.after), lte(changeLog.position, page.upper), visibleTo(tx, actor.personId)))
+          .where(and(gt(changeLog.position, page.after), lte(changeLog.position, page.upper), visibleTo(tx, actor.personId, archiveStatusTypes)))
           .orderBy(asc(changeLog.position))
           // Ein Eintrag mehr zeigt, ob eine weitere Seite folgt.
           .limit(pullPageSize + 1);
@@ -454,16 +453,29 @@ function continuedPage(actor: PersonActor, token: string, latest: bigint): Page 
 
 /**
  * Sichtbar sind adressierte Einträge nur dem Empfänger, alle übrigen dem Eigentümer und den aktiven
- * Mitgliedern ihrer Kopplung. Die Grenze kommt aus der Sitzung, nie aus Cursor, Token oder Installation.
+ * Mitgliedern ihrer Kopplung. Der Archivstatus einer Kopplung (`archiveStatus` der Entität) bleibt nach
+ * dem Entkoppeln auch den früheren Mitgliedern sichtbar (Spezifikation 0, Abschnitt 10). Die Grenze
+ * kommt aus der Sitzung, nie aus Cursor, Token oder Installation.
  */
-function visibleTo(tx: DbExecutor, personId: EntityId) {
+function visibleTo(tx: DbExecutor, personId: EntityId, archiveStatusTypes: readonly string[]) {
+  const ownMembership = eq(couplingMember.personId, personId);
   const activeCouplings = tx
     .select({ couplingId: couplingMember.couplingId })
     .from(couplingMember)
-    .where(and(eq(couplingMember.personId, personId), eq(couplingMember.couplingStatus, 'aktiv')));
+    .where(and(ownMembership, eq(couplingMember.couplingStatus, 'aktiv')));
+  const allCouplings = tx.select({ couplingId: couplingMember.couplingId }).from(couplingMember).where(ownMembership);
   return or(
     eq(changeLog.recipientPersonId, personId),
-    and(isNull(changeLog.recipientPersonId), or(eq(changeLog.ownerPersonId, personId), inArray(changeLog.couplingId, activeCouplings))),
+    and(
+      isNull(changeLog.recipientPersonId),
+      or(
+        eq(changeLog.ownerPersonId, personId),
+        inArray(changeLog.couplingId, activeCouplings),
+        archiveStatusTypes.length === 0
+          ? undefined
+          : and(inArray(changeLog.entityType, [...archiveStatusTypes]), inArray(changeLog.couplingId, allCouplings)),
+      ),
+    ),
   );
 }
 
@@ -474,6 +486,13 @@ export function canonicalOf(entity: ServerSyncEntity, entityId: EntityId, stored
     return { type: 'tombstone', entityType: entity.entityType, entityId, serverVersion, deletedAt: Instant.parse(stored.deletedAt.toISOString()) };
   }
   return { type: 'record', entityType: entity.entityType, entityId, serverVersion, data: stored.data };
+}
+
+/** Kanonischer Datensatz einer Entität, die der Aufrufer in seiner Transaktion gerade geschrieben hat. */
+export async function canonicalAfterWrite(tx: DbExecutor, entity: ServerSyncEntity, entityId: EntityId): Promise<CanonicalChange> {
+  const state = await stateOf(tx, entity, entityId);
+  if (state.type === 'absent') throw new Error(`Sync-Entität ${entity.entityType} nach dem Schreiben nicht lesbar`);
+  return state;
 }
 
 async function stateOf(tx: DbExecutor, entity: ServerSyncEntity, entityId: EntityId): Promise<CanonicalState> {

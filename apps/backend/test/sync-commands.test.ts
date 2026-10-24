@@ -13,6 +13,7 @@ import { authorizationCases, personWithSession, registeredCommandCases, httpOutc
 import { dailyGoalCommandScenarios } from './support/daily-goals.ts';
 import type { Device } from './support/auth-client.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
+import { sharedActionCommandScenarios } from './support/shared-actions.ts';
 import { push, pushRaw, testWaterEntity, upsertOp, water } from './support/sync.ts';
 import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
@@ -98,7 +99,7 @@ describe('Fachbefehl über Push', () => {
   it('erfasst alle registrierten Fachbefehle im Negativtest-Gerüst', async () => {
     const { backend } = await setup();
     // Die Welten der echten Fachbefehle sind andere; deren Fälle laufen in ihren eigenen Tests.
-    const real = { ...dailyGoalCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+    const real = { ...dailyGoalCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(() => registeredCommandCases(backend, real)).toThrow('saveMealFavorite');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),

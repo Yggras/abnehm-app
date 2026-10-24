@@ -23,9 +23,9 @@ import { coupling } from '../src/db/schema/index.ts';
 import { invalidatePartnerSummaries } from '../src/partner-projections/invalidations.ts';
 import { revokeCoupling } from '../src/partner-projections/revocation.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
-import { call, type Device } from './support/auth-client.ts';
+import type { Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
-import { worldStart, worldToday } from './support/coupled-world.ts';
+import { coupleByInvitation, worldStart, worldToday } from './support/coupled-world.ts';
 import { completeOp, insertDailyGoals } from './support/daily-goals.ts';
 import { testPlans, testRecorders, testWaterProjector } from './support/partner-projectors.ts';
 import { push } from './support/sync.ts';
@@ -77,15 +77,6 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
   };
 }
 
-/** Kopplung über die echten Einladungsabläufe, damit Kopplung und Freigaben per Pull ankommen. */
-async function couple(backend: TestBackend, inviter: Device, invitee: Device) {
-  const created = await call(backend, 'POST', '/v1/invitations', inviter, { requestId: randomUUID() });
-  const { code } = created.body as { code: string };
-  const accepted = await call(backend, 'POST', '/v1/invitations/accept', invitee, { requestId: randomUUID(), code });
-  expect(accepted.status).toBe(200);
-  return (accepted.body as { couplingId: string }).couplingId;
-}
-
 async function setup() {
   const clock = createTestClock(worldStart);
   const backend = await createTestBackend({ clock });
@@ -94,7 +85,7 @@ async function setup() {
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   plans.set(anna.personId, { validFrom: '2026-10-01', waterTargetMl: 1500, weeklySportTargetMinutes: 150 });
-  const couplingId = await couple(backend, anna.device, philipp.device);
+  const { couplingId } = await coupleByInvitation(backend, anna.device, philipp.device);
   const annasPhone = await phone(backend, anna.accountId, anna.device);
   const philippsPhone = await phone(backend, philipp.accountId, philipp.device);
   await annasPhone.sync();

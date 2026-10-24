@@ -20,6 +20,7 @@ import type { ServerCommand } from '../../src/sync/commands.ts';
 import { ownedEntity, type ServerSyncEntity } from '../../src/sync/registry.ts';
 import { call, type Device, type Reply } from './auth-client.ts';
 import type { TestBackend } from './app.ts';
+import { httpOutcome, type Outcome } from './authorization.ts';
 
 // Sync-Hilfen für Integrationstests (#99): die Test-Entität auf `water_entry` und Aufrufe von Push und
 // Pull über die echte Hono-App. Den echten Wassereintrag meldet Spezifikation 3 an.
@@ -145,6 +146,15 @@ export function deleteOp(entityId: string, options: { operationId?: string; enti
 
 export async function pushRaw(backend: TestBackend, device: Device, operations: unknown[], installationId: string = installationA): Promise<Reply> {
   return call(backend, 'POST', '/v1/sync/push', device, { schemaVersion: currentSyncSchemaVersion, installationId, operations });
+}
+
+/** Ausgang eines Pushs mit einer Operation für das Negativtest-Gerüst; `forbidden` ist die einzige Verweigerung. */
+export async function pushOutcome(backend: TestBackend, device: Device, operation: OutboxOperation): Promise<Outcome> {
+  const reply = await pushRaw(backend, device, [operation]);
+  if (reply.status !== 200) return httpOutcome(reply);
+  const [result] = PushResponse.parse(reply.body).results;
+  if (result?.type === 'applied' || result?.type === 'already_applied') return 'erlaubt';
+  return result?.error.code === 'forbidden' ? 'verweigert' : `unerwartet: ${JSON.stringify(result)}`;
 }
 
 /** Push, der gelingen muss; liefert die geprüften Ergebnisse. */

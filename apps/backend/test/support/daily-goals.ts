@@ -10,8 +10,8 @@ import { dailyGoal } from '../../src/db/schema/index.ts';
 import { nextServerVersion } from '../../src/sync/change-log.ts';
 import { createTestBackend, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
-import { httpOutcome, personWithSession, type AuthorizationScenario, type Outcome } from './authorization.ts';
-import { pushRaw } from './sync.ts';
+import { httpOutcome, personWithSession, type AuthorizationScenario } from './authorization.ts';
+import { pushOutcome, pushRaw } from './sync.ts';
 
 // Tagesziele und ihre Fachbefehle für Integrationstests (#105). Die Tagesziele materialisiert im
 // Betrieb Spezifikation 1 (`materializeDailyGoals`); bis dahin legen Tests sie direkt in Postgres an.
@@ -96,14 +96,6 @@ export function bonusOp(personId: string, localDate: string, overrides: { operat
   };
 }
 
-async function outcomeOf(backend: TestBackend, device: Device, operation: CommandOperation): Promise<Outcome> {
-  const reply = await pushRaw(backend, device, [operation]);
-  if (reply.status !== 200) return httpOutcome(reply);
-  const [result] = (reply.body as { results: { type: string; error?: { code: string } }[] }).results;
-  if (result?.type === 'applied' || result?.type === 'already_applied') return 'erlaubt';
-  return result?.error?.code === 'forbidden' ? 'verweigert' : `unerwartet: ${JSON.stringify(result)}`;
-}
-
 type World = { backend: TestBackend; actor: Device; personId: string; goals: ServerDailyGoal[] };
 
 async function arrange(): Promise<World> {
@@ -126,11 +118,11 @@ export const dailyGoalCommandScenarios = {
   completeDailyGoal: {
     policy: policies.resource('daily_goal_completion', 'befehl'),
     arrange,
-    attempt: (world: World, device: Device) => outcomeOf(world.backend, device, completeOp(world.goals[0]!)),
+    attempt: (world: World, device: Device) => pushOutcome(world.backend, device, completeOp(world.goals[0]!)),
     manipulierte_id: async (world: World) => {
       const { goals } = await foreignWithCompletions(world);
       // Die Anfrage nennt Schlüssel und Tagesziel der anderen Person.
-      return outcomeOf(world.backend, world.actor, completeOp(goals[0]!));
+      return pushOutcome(world.backend, world.actor, completeOp(goals[0]!));
     },
     verbotene_operation: async (world: World) => {
       const reply = await pushRaw(world.backend, world.actor, [{ type: 'upsert_entity', operationId: randomUUID(), entityType: 'daily_goal_completion',
@@ -147,10 +139,10 @@ export const dailyGoalCommandScenarios = {
       for (const goal of world.goals) await pushRaw(world.backend, world.actor, [completeOp(goal)]);
       return world;
     },
-    attempt: (world: World, device: Device) => outcomeOf(world.backend, device, bonusOp(world.personId, '2026-10-14')),
+    attempt: (world: World, device: Device) => pushOutcome(world.backend, device, bonusOp(world.personId, '2026-10-14')),
     manipulierte_id: async (world: World) => {
       const { philipp } = await foreignWithCompletions(world);
-      return outcomeOf(world.backend, world.actor, bonusOp(philipp.personId, '2026-10-14'));
+      return pushOutcome(world.backend, world.actor, bonusOp(philipp.personId, '2026-10-14'));
     },
     verbotene_operation: async (world: World) => {
       const reply = await pushRaw(world.backend, world.actor, [{ type: 'delete_entity', operationId: randomUUID(), entityType: 'energy_booking',

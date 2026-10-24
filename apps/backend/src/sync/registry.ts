@@ -38,6 +38,11 @@ export type ServerSyncEntity = Readonly<{
   upsert: z.ZodType<EntityData> | null;
   /** Ob `delete_entity` erlaubt ist; Löschen schreibt eine Löschmarkierung. */
   deletable: boolean;
+  /**
+   * Ob der Datensatz der Archivstatus seiner Kopplung ist: Dann liefert ihn der Pull auch früheren
+   * Mitgliedern (Spezifikation 0, Abschnitt 10). Lesen muss die Ressource es ebenso erlauben.
+   */
+  archiveStatus?: boolean;
   /** Liest Entitäten in der Transaktion des Aufrufers; fehlende IDs fehlen in der Antwort. */
   read(tx: DbExecutor, ids: readonly EntityId[]): Promise<ReadonlyMap<string, StoredEntity>>;
   /** Schreibt die vollständige Nutzlast (Last-Write-Wins) samt Serverversion. */
