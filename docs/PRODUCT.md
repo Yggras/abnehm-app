@@ -13,7 +13,7 @@ adaptive
 Genau zwei bekannte Personen, ein Paar ([AGENTS.md](../AGENTS.md)):
 
 - **Philipp** – iPhone SE (3. Generation) mit Fitbit Sense 2, deren Daten über Google Health nach Apple Health kommen. Er steuert und testet die Entwicklung ([Karte](https://github.com/Yggras/abnehm-app/issues/1), [Spike Health-Hintergrund](../spikes/health-hintergrund/RESULTS.md)).
-- **Seine Frau** – Android (Zielgerät Fairphone 6, Android 16) mit Fitbit, Daten über Health Connect ([Spike Insel-Rendering](../spikes/insel-rendering/RESULTS.md)). In Entwürfen heißt sie mit Platzhalternamen „Anna“.
+- **Seine Frau** – Android (Zielgerät Fairphone 6, Android 16) mit Fitbit, Daten über Health Connect ([Spike Insel-Rendering](../spikes/insel-rendering/RESULTS.md)). In Entwürfen heißt sie mit Platzhalternamen „Anna“. Entwickelt und geprüft wird auf Android seit 24.10.2026 mit einem Samsung Galaxy A34 (SM-A346B) statt des Fairphone 6 (Nutzerentscheidung, [Entwicklung](entwicklung.md)).
 
 Beide wollen gemeinsam abnehmen und sich gegenseitig unterstützen, ohne einander zu kontrollieren. Sie erfassen mehrmals täglich kurz, oft unterwegs und einhändig. Weitere Zielgruppen gibt es in V1 nicht; die Architektur soll eine spätere Veröffentlichung nicht verbauen.
 
