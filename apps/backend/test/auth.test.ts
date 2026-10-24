@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -138,7 +140,7 @@ describe('Bootstrap der Person', () => {
   it('antwortet ohne gültige Sitzung mit 401 ohne Body, noch vor der Prüfung der Nutzlast', async () => {
     const backend = await createTestBackend();
     const { device } = await signUp(backend, 'anna@example.test');
-    await call(backend, 'POST', '/v1/session/revoke', device);
+    await call(backend, 'POST', '/v1/session/logout', device, { requestId: randomUUID() });
 
     for (const caller of [newDevice(), device, { ...newDevice(), token: 'gefaelscht' }]) {
       for (const body of [bootstrap, { kaputt: true }]) {
@@ -267,21 +269,20 @@ describe('Sitzungen', () => {
     expect(await call(backend, 'GET', '/v1/auth/get-session', device)).toMatchObject({ status: 200, body: null });
   });
 
-  it('widerruft über das serverseitige Primitive genau die aktuelle Sitzung', async () => {
+  it('widerruft über das serverseitige Primitive genau die aktuelle Sitzung, idempotent', async () => {
     const backend = await createTestBackend();
     const { device: phone, accountId } = await signUp(backend, 'anna@example.test');
     const { device: tablet } = await signIn(backend, 'anna@example.test', defaultPassword);
+    const current = await backend.auth.sessions.authenticate(new Headers({ authorization: `Bearer ${phone.token}` }));
 
-    expect(await call(backend, 'POST', '/v1/session/revoke', phone)).toMatchObject({ status: 204, body: null });
+    await backend.auth.revokeSession(current!, 'widerruf');
+    await backend.auth.revokeSession(current!, 'widerruf');
 
     expect(await call(backend, 'GET', '/v1/auth/get-session', phone)).toMatchObject({ status: 200, body: null });
     expect(await sessionIsValid(backend, tablet)).toBe(true);
-    expect(await call(backend, 'POST', '/v1/session/revoke', phone)).toMatchObject({ status: 401 });
-    expect(await securityLogEntries(backend)).toContainEqual({
-      eventType: 'sitzungswiderruf',
-      accountId,
-      details: { accountId, scope: 'aktuelle', cause: 'widerruf' },
-    });
+    expect((await securityLogEntries(backend)).filter((entry) => entry.eventType === 'sitzungswiderruf')).toEqual([
+      { eventType: 'sitzungswiderruf', accountId, details: { accountId, scope: 'aktuelle', cause: 'widerruf' } },
+    ]);
   });
 
   it('kennt nur die freigegebenen Better-Auth-Abläufe; einen öffentlichen Reset gibt es nicht', async () => {

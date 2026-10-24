@@ -55,11 +55,11 @@ const endpoints = {
         await call(backend, 'POST', '/v1/auth/change-password', device, { currentPassword: defaultPassword, newPassword: defaultPassword }),
       ),
   }),
-  'POST /v1/session/revoke': authorizationCases({
-    policy: policies.authenticated(),
-    route: { method: 'POST', path: '/v1/session/revoke' },
+  'POST /v1/session/logout': authorizationCases({
+    policy: policies.logout(),
+    route: { method: 'POST', path: '/v1/session/logout' },
     arrange: signedUp,
-    attempt: async ({ backend }, device) => httpOutcome(await call(backend, 'POST', '/v1/session/revoke', device)),
+    attempt: async ({ backend }, device) => httpOutcome(await call(backend, 'POST', '/v1/session/logout', device, { requestId: randomUUID() })),
   }),
   'POST /v1/person/bootstrap': authorizationCases({
     policy: policies.authenticated(),

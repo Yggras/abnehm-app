@@ -9,6 +9,8 @@ export type SqliteDatabase = BaseSQLiteDatabase<'sync', unknown, typeof schema>;
 export type SqliteConnection = {
   db: SqliteDatabase;
   close(): void;
+  /** Schließt die Verbindung und löscht die Datei samt Begleitdateien (WAL, Journal). */
+  destroy(): void;
 };
 
 /**

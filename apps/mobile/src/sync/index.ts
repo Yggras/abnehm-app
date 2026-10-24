@@ -28,7 +28,7 @@ export {
 export { createHttpSyncTransport } from './http-transport';
 export { createLocalCommandRegistry, type LocalCommand, type LocalCommandRegistry } from './commands';
 export { immutableDayEntity } from './immutable-entity';
-export { createSyncWriter, type SyncWriter } from './outbox';
+export { createSyncWriter, unsecuredOperationCount, type SyncWriter } from './outbox';
 export { personEntity, updateOwnPerson, type PersonChange } from './person-entity';
 export { personTimeZoneCommand, requestPersonTimeZone, type PersonTimeZoneRequest } from './person-time-zone';
 export { setPartnerSharing, setPhotoSharing } from './sharing-entities';

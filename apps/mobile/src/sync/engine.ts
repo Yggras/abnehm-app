@@ -21,7 +21,7 @@ import {
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { outbox, syncCursor } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, recordFailure, removeOperation, rewritePendingOutboxReferences } from './outbox';
+import { appendOperation, hasPending, pendingFor, pendingOperations, recordAttempt, recordFailure, removeOperation, rewritePendingOutboxReferences, unsecuredOperationCount } from './outbox';
 import type { AffectedDay, PendingChange, SyncEntityAdapter, SyncRegistry } from './registry';
 import type { LocalCommandRegistry } from './commands';
 
@@ -71,6 +71,8 @@ export type SyncEngine = {
   /** Ein einzelner Push ohne React-Baum und ohne Pull; auf dieselbe Installation serialisiert. */
   pushNow(options: { deadline: Instant }): Promise<PushNowResult>;
   status(): SyncStatus;
+  /** Wie viele Operationen der Outbox der Server noch nicht bestätigt hat. */
+  unsecuredOperations(): number;
 };
 
 export type SyncEngineOptions = {
@@ -266,6 +268,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
       })().finally(() => { backgroundPush = null; });
       return backgroundPush;
     },
+    unsecuredOperations: () => unsecuredOperationCount(database),
     status() {
       const migrationError = database.read((tx) => sqliteOf(tx).select({ operationId: outbox.operationId }).from(outbox)
         .where(eq(outbox.lastErrorCode, 'outbox_migration_failed')).get());

@@ -70,13 +70,14 @@ export type DimensionsOf<E extends ResourceEntity, O extends Operation> =
 
 export type PublicPolicy = Readonly<{ kind: 'public'; dimensions: readonly never[] }>;
 export type AuthenticatedPolicy = Readonly<{ kind: 'authenticated'; dimensions: readonly 'ohne_sitzung'[] }>;
+export type LogoutPolicy = Readonly<{ kind: 'logout'; dimensions: readonly 'ohne_sitzung'[] }>;
 export type AdminCommandPolicy = Readonly<{ kind: 'adminCommand'; command: AdminCommand; dimensions: readonly never[] }>;
 export type ResourcePolicy<
   E extends ResourceEntity = ResourceEntity,
   O extends Operation = Operation,
   D extends ProtectionDimension = ProtectionDimension,
 > = Readonly<{ kind: 'resourceOperation'; entity: E; operation: O; dimensions: readonly D[] }>;
-export type Policy = PublicPolicy | AuthenticatedPolicy | AdminCommandPolicy | ResourcePolicy;
+export type Policy = PublicPolicy | AuthenticatedPolicy | LogoutPolicy | AdminCommandPolicy | ResourcePolicy;
 
 const created = new WeakSet<Policy>();
 
@@ -109,6 +110,12 @@ export const policies = {
   public: (): PublicPolicy => create({ kind: 'public', dimensions: [] }),
   /** Verlangt eine gültige Sitzung; Konto und Person stammen ausschließlich aus ihr. */
   authenticated: (): AuthenticatedPolicy => create({ kind: 'authenticated', dimensions: ['ohne_sitzung'] }),
+  /**
+   * Nur der Abmeldeablauf (Spezifikation 0, Abschnitt 9): wie `authenticated`, doch die Route erhält
+   * ohne gültige Sitzung `actor = null` statt einer `401`. Dann darf sie ausschließlich ihr eigenes, an
+   * das vorgelegte Sitzungstoken gebundenes Ergebnis liefern, sonst antwortet sie selbst mit `401`.
+   */
+  logout: (): LogoutPolicy => create({ kind: 'logout', dimensions: ['ohne_sitzung'] }),
   /** Serverseitiges Kommando des Betriebs; nie über HTTP oder Sync erreichbar. */
   adminCommand: (command: AdminCommand): AdminCommandPolicy => create({ kind: 'adminCommand', command, dimensions: [] }),
   /** Operation auf einer Ressource; die Regel ihrer Klasse aus der Matrix entscheidet. */

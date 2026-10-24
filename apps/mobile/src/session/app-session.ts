@@ -1,4 +1,4 @@
-import { createAppAuth, type AccountData, type AppAuth, type SessionStore } from '../auth/app-auth';
+import { createAppAuth, type AccountData, type AppAuth, type SessionRevocations, type SessionStore } from '../auth/app-auth';
 import type { LocalDatabase, LocalDatabases } from '../local-db';
 
 // App-Sitzung: setzt Auth-Modul und kontogetrennte lokale Datenbanken zusammen. Öffnet das
@@ -8,6 +8,8 @@ import type { LocalDatabase, LocalDatabases } from '../local-db';
 
 export type AppSession = Readonly<{
   auth: AppAuth;
+  /** Dasselbe Auth-Modul in der Rolle des Abmeldemoduls; nur dieses erhält sie. */
+  revocations: SessionRevocations;
   databases: LocalDatabases;
   /** `fetch` der Sitzung ohne Sitzungstoken, etwa für öffentliche Endpunkte. */
   fetch: typeof fetch;
@@ -43,5 +45,6 @@ export function createAppSession({ baseUrl, fetch, sessionStore, databases, onAc
       databases.lock();
     },
   };
-  return { auth: createAppAuth({ baseUrl, fetch, sessionStore, accountData, onError }), databases, fetch, baseUrl };
+  const auth = createAppAuth({ baseUrl, fetch, sessionStore, accountData, onError });
+  return { auth, revocations: auth, databases, fetch, baseUrl };
 }

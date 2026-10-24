@@ -12,6 +12,7 @@ import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/comp
 import { energyBookingEntity } from './energy/bookings.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
+import { createLogout } from './logout/logout.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
 import { createPartnerProjections } from './partner-projections/projections.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
@@ -65,15 +66,18 @@ export function createBackend({
     securityLog,
     ipAddressOf: auth.ipAddressOf,
   });
+  // Serverseitige Abmelde-Haken melden die Bereiche hier an, etwa Spezifikation 5 die Push-Deaktivierung.
+  const logout = createLogout({ database, clock, auth, securityLog });
   const jobs = createJobRegistry({ clock });
   jobs.register(securityLog.cleanupJob);
   return {
-    app: createApp({ database, clock, auth, authorization, sync, invitations }),
+    app: createApp({ database, clock, auth, authorization, sync, invitations, logout }),
     clock,
     securityLog,
     auth,
     authorization,
     sync,
+    logout,
     partnerProjections,
     jobs,
   };

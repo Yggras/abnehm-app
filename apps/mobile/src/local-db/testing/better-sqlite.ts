@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -13,18 +13,34 @@ import * as schema from '../schema';
  * mit denselben Pragmas wie der produktive expo-sqlite-Adapter. Nur in Tests mit
  * `@jest-environment node` nutzbar.
  */
-export function createBetterSqliteFiles(): { openSqlite: OpenSqlite; openedFileNames(): string[]; removeFile(fileName: string): void; remove(): void } {
+export function createBetterSqliteFiles(): {
+  openSqlite: OpenSqlite;
+  openedFileNames(): string[];
+  /** Die Dateien, die jetzt im Verzeichnis liegen, samt Begleitdateien. */
+  existingFileNames(): string[];
+  removeFile(fileName: string): void;
+  remove(): void;
+} {
   const directory = mkdtempSync(join(tmpdir(), 'abnehm-local-db-'));
   const opened = new Set<string>();
   return {
     openSqlite: (fileName) => {
       opened.add(fileName);
-      const client = new Database(join(directory, fileName));
+      const path = join(directory, fileName);
+      const client = new Database(path);
       client.pragma('journal_mode = WAL');
       client.pragma('foreign_keys = ON');
-      return { db: drizzle(client, { schema }), close: () => client.close() };
+      return {
+        db: drizzle(client, { schema }),
+        close: () => client.close(),
+        destroy: () => {
+          client.close();
+          for (const suffix of ['', '-wal', '-shm', '-journal']) rmSync(`${path}${suffix}`, { force: true });
+        },
+      };
     },
     openedFileNames: () => [...opened].sort(),
+    existingFileNames: () => readdirSync(directory).sort(),
     /** Wie `removeExpoSqlite`: eine geschlossene Datei samt WAL-Dateien, falls es sie gibt. */
     removeFile: (fileName) => {
       for (const suffix of ['', '-wal', '-shm']) rmSync(join(directory, `${fileName}${suffix}`), { force: true });

@@ -4,13 +4,14 @@ import { AppState } from 'react-native';
 import type { Clock } from '@abnehm/clock';
 import { EntityId, type Instant } from '@abnehm/contracts/base';
 
-import { secureSessionStore } from '../auth/secure-session-store';
+import { secureLogoutStore, secureSessionStore } from '../auth/secure-session-store';
 import { backendBaseUrl } from '../backend/client';
 import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
 import { createDeviceLocalDatabases } from '../local-db';
+import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { createDeviceInvitationFlows } from '../online';
 import { appTodayRegistry, followTodayPerson } from '../shell/app-today';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
@@ -43,7 +44,7 @@ const timeZone = followPersonTimeZone({
   onError,
   commandsFor: (database) => createLocalCommandRegistry({ database, writer: syncWriter, commands: foundationLocalCommands }),
 });
-let device: { session: AppSession; gate: SessionGateSource } | null = null;
+let device: { session: AppSession; gate: SessionGateSource; logout: Logout } | null = null;
 let sessionChecked = false;
 
 /** Ob das Gerät Internet hat, laut Expo Network; meldet nur Änderungen. */
@@ -104,6 +105,15 @@ function deviceState() {
   });
   // Die Weiche folgt dem Auth-Modul ab seiner Entstehung; vorher öffnet es keine Kontodatenbank.
   gate = followSessionGate(session.auth);
+  const logout = createLogout({
+    auth: session.auth,
+    revocations: session.revocations,
+    databases: session.databases,
+    store: secureLogoutStore,
+    sync: () => syncBeforeLogout(activeEngine),
+    newId,
+    onError,
+  });
   // Ein Zeitzonenwechsel zeigt sich spätestens bei der Rückkehr in den Vordergrund
   // (https://docs.expo.dev/versions/v58.0.0/sdk/localization/), bei offener App im selben Takt wie
   // der Kopf von „Heute“.
@@ -113,7 +123,7 @@ function deviceState() {
   setInterval(() => timeZone.check(), 60_000);
   // Eine neue Zone der Testuhr ist ein Zeitzonenwechsel wie eine Reise (#114).
   testCapabilities?.clock.subscribe(() => timeZone.check());
-  device = { session, gate };
+  device = { session, gate, logout };
   return device;
 }
 
@@ -125,10 +135,11 @@ export function deviceSession(): AppSession {
 /** Health-Hintergrundfenster: prüft die gespeicherte Sitzung, öffnet bei Bedarf SQLite und pusht ohne React. */
 export async function pushDeviceNow({ deadline }: { deadline: Instant }) {
   try {
-    const session = deviceSession();
+    const { session, logout } = deviceState();
     if (!session.databases.current()) {
       backgroundOpening = true;
-      try { await session.auth.checkSession(); }
+      // Eine offene Bereinigung zuerst, damit keine abgemeldete Kontodatenbank öffnet.
+      try { await logout.start({ resumeLogout: false }); }
       finally { backgroundOpening = false; }
     }
     return activeEngine ? await activeEngine.pushNow({ deadline }) : 'failed' as const;
@@ -148,12 +159,20 @@ export function deviceInvitationFlows() {
     sync: { sync: () => activeEngine?.sync() ?? Promise.resolve() } }), newId };
 }
 
-/** Die Sitzungs-Weiche des Geräts; beim ersten Aufruf prüft das Auth-Modul die gespeicherte Sitzung. */
+/**
+ * Die Sitzungs-Weiche des Geräts. Beim ersten Aufruf setzt das Abmeldemodul eine offene Bereinigung fort
+ * und prüft dann die gespeicherte Sitzung.
+ */
 export function deviceGate(): SessionGateSource {
-  const { session, gate } = deviceState();
+  const { logout, gate } = deviceState();
   if (!sessionChecked) {
     sessionChecked = true;
-    void session.auth.checkSession().catch(onError);
+    void logout.start().catch(onError);
   }
   return gate;
+}
+
+/** Das Abmeldemodul des Geräts für die Oberfläche unter „Konto“ (Spezifikation 5). */
+export function deviceLogout(): Logout {
+  return deviceState().logout;
 }

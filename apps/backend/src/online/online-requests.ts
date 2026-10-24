@@ -30,8 +30,12 @@ export function onlineRequestBinding({
   flow: OnlineFlow;
   request: { requestId: string };
 }): OnlineRequestBinding {
-  const requestHash = createHmac('sha256', hashKey).update(`anfrage:${flow}:${canonicalJson(request)}`).digest('hex');
-  return { requestId: request.requestId, accountId, flow, requestHash };
+  return { requestId: request.requestId, accountId, flow, requestHash: onlineRequestHash({ hashKey, flow, request }) };
+}
+
+/** Der Schlüssel-Hash einer Anfrage allein, ohne Konto; so bindet das Abmelden an die Sitzung. */
+export function onlineRequestHash({ hashKey, flow, request }: { hashKey: string; flow: OnlineFlow; request: { requestId: string } }): string {
+  return createHmac('sha256', hashKey).update(`anfrage:${flow}:${canonicalJson(request)}`).digest('hex');
 }
 
 export type StoredOnlineResult =
@@ -43,11 +47,20 @@ export type StoredOnlineResult =
   | Readonly<{ type: 'foreign' }>;
 
 export async function storedOnlineResult(executor: DbExecutor, binding: OnlineRequestBinding): Promise<StoredOnlineResult> {
-  const [stored] = await executor.select().from(onlineRequest).where(eq(onlineRequest.requestId, binding.requestId));
-  if (stored === undefined) return { type: 'none' };
+  const stored = await storedOnlineRequest(executor, binding.requestId);
+  if (stored === null) return { type: 'none' };
   if (stored.accountId !== binding.accountId) return { type: 'foreign' };
   if (stored.flow !== binding.flow || stored.requestHash !== binding.requestHash) return { type: 'conflict' };
   return { type: 'stored', result: stored.result };
+}
+
+/**
+ * Die gespeicherte Anfrage zur `requestId` samt Bindung, ohne Prüfung. Für Abläufe, deren Hash-Schlüssel
+ * selbst bindet: Beim Abmelden ist es die vorgelegte, womöglich schon widerrufene Sitzung.
+ */
+export async function storedOnlineRequest(executor: DbExecutor, requestId: string) {
+  const [stored] = await executor.select().from(onlineRequest).where(eq(onlineRequest.requestId, requestId));
+  return stored ?? null;
 }
 
 /**
