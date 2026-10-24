@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Plant den wöchentlichen E2E-Lauf (#114) auf diesem Rechner per launchd:
+#   scripts/e2e-schedule install     # sonntags 19:00; verpasste Läufe startet launchd beim Aufwachen
+#                                    # (man launchd.plist, StartCalendarInterval)
+#   scripts/e2e-schedule uninstall
+#   scripts/e2e-schedule status
+#   scripts/e2e-schedule jetzt       # den geplanten Lauf sofort starten
+#
+# Der Job klont `main` nach ~/Library/Caches/abnehm-app/e2e-checkout (einmalig), holt vor jedem Lauf den
+# aktuellen Stand und startet dort scripts/e2e-scheduled. Der Arbeits-Checkout bleibt unberührt.
+# Protokoll: ~/Library/Logs/abnehm-app/e2e/geplant.log, Einzelläufe daneben.
+set -euo pipefail
+
+label="de.yggras.abnehmapp.e2e"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+support="$HOME/Library/Application Support/abnehm-app"
+bootstrap="$support/e2e-geplant.sh"
+logs="$HOME/Library/Logs/abnehm-app/e2e"
+checkout="$HOME/Library/Caches/abnehm-app/e2e-checkout"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+origin="$(cd "$repo_root" && git remote get-url origin)"
+
+install() {
+  mkdir -p "$support" "$logs" "$(dirname "$plist")"
+  # Der Job verlässt sich nicht auf die Umgebung von launchd; er übernimmt PATH und JAVA_HOME der Installation.
+  cat > "$bootstrap" <<SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH="$PATH"
+export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 21 2>/dev/null || true)}"
+echo "=== Geplanter E2E-Lauf \$(date)"
+if [[ ! -d "$checkout/.git" ]]; then git clone --quiet "$origin" "$checkout"; fi
+cd "$checkout"
+git fetch --quiet origin main
+git checkout --quiet --detach origin/main
+git reset --quiet --hard origin/main
+git clean --quiet -fd
+exec scripts/e2e-scheduled
+SCRIPT
+  chmod +x "$bootstrap"
+  cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$bootstrap</string></array>
+  <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>$logs/geplant.log</string>
+  <key>StandardErrorPath</key><string>$logs/geplant.log</string>
+</dict>
+</plist>
+PLIST
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$plist"
+  echo "Geplant: sonntags 19:00 ($plist)."
+}
+
+case "${1:-}" in
+  install) install ;;
+  uninstall)
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    rm -f "$plist" "$bootstrap"
+    echo "Geplanter E2E-Lauf entfernt. Der Klon unter $checkout bleibt; löschen mit: rm -rf '$checkout'"
+    ;;
+  status) launchctl print "gui/$(id -u)/$label" 2>/dev/null | grep -E 'state|last exit|runs' || echo "Nicht geplant." ;;
+  jetzt) launchctl kickstart "gui/$(id -u)/$label" && echo "Gestartet; Protokoll: $logs/geplant.log" ;;
+  *) sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac

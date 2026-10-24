@@ -7,10 +7,12 @@ import { Notice, space } from '../design';
 import { hrefFor } from '../navigation';
 import type { AppSession } from '../session/app-session';
 import type { AppTestClock } from './clock';
+import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
+import { transportFaultModeName } from './network';
 import { runSeed } from './seed/seed-flow';
 
-// Wirt der Testfähigkeiten im Development Build (#112): führt Seeds mit der App-Sitzung aus, öffnet
+// Wirt der Testfähigkeiten in Test-Artefakten (#112, #114): führt Seeds mit der App-Sitzung aus, öffnet
 // danach das Ziel und zeigt kurz, was gerade passiert. Nur über `build-capabilities.ts` erreichbar.
 
 const failureText: Record<Extract<TestStatus, { type: 'seed_fehlgeschlagen' }>['step'], string> = {
@@ -32,12 +34,26 @@ function statusNotice(status: TestStatus) {
       return <Notice tone="problem" cause="technik" text={failureText[status.step]} />;
     case 'fehler_gestellt': {
       const active = Object.entries(status.plan).filter(([, value]) => value !== 'ok');
-      return <Notice tone="neutral" text={active.length === 0 ? 'Fehler-Adapter: alles normal.' : `Fehler-Adapter: ${active.map(([key, value]) => `${key} ${value}`).join(', ')}.`} />;
+      const network = status.plan.transport === 'offline' ? ` ${transportFaultModeName}: kein Netz.` : '';
+      return <Notice tone="neutral" text={active.length === 0 ? 'Fehler-Adapter: alles normal.' : `Fehler-Adapter: ${active.map(([key, value]) => `${key} ${value}`).join(', ')}.${network}`} />;
+    }
+    case 'uhr_gestellt':
+      return <Notice tone="neutral" text={`Testuhr: ${status.reading.instant}, ${status.reading.timeZone}.`} />;
+    case 'geraetetest_laeuft':
+      return <Notice tone="neutral" text={`Gerätetest ${phaseText[status.phase]} läuft …`} />;
+    case 'geraetetest_fertig': {
+      const { phase, results } = status.report;
+      const failed = results.filter((result) => result.error !== null);
+      return failed.length === 0
+        ? <Notice tone="neutral" text={`Gerätetest ${phaseText[phase]}: ${results.length} von ${results.length} bestanden.`} />
+        : <Notice tone="problem" cause="technik" text={`Gerätetest ${phaseText[phase]}: ${failed.length} von ${results.length} fehlgeschlagen. ${failed.map((result) => `${result.title}: ${result.error}`).join(' · ')}`} />;
     }
     case 'ungueltig':
-      return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger ${status.capability === 'seed' ? 'Seed' : 'Fehler'}-Link. Parameter stehen in docs/entwicklung.md.`} />;
+      return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger Link „${status.capability}“ der Testfähigkeiten. Parameter stehen in docs/entwicklung.md.`} />;
   }
 }
+
+const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
 
 export function TestCapabilityHost({ inbox, clock, session }: { inbox: TestInbox; clock: AppTestClock; session: () => AppSession }) {
   const status = useSyncExternalStore(inbox.subscribe, inbox.status);

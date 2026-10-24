@@ -40,7 +40,7 @@ export default function RootLayout() {
   const home = gateHome(gate);
   // Der Meldungs-Host liegt über allen Routen. Sichtbar wird die Meldung über der Tab-Leiste oder,
   // auf Seiten und in modalen Abläufen, am unteren Rand von `ScreenFrame`.
-  // Die Uhr der App gilt für alle Routen; im Development Build ist es die Testuhr, die ein Seed stellt.
+  // Die Uhr der App gilt für alle Routen; in Test-Artefakten ist es die Testuhr, die ein Seed stellt.
   return (
     <ClockProvider clock={appClock}>
       <MessageHostProvider>

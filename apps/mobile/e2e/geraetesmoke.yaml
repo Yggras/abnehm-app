@@ -1,0 +1,65 @@
+# Gerätesmoke der Shell (Spezifikation 0, Abschnitt 6 und Testing Decisions; #114): eigene Tab-Leiste
+# mit dem überstehenden ＋, sichere Bereiche, System-Zurück und die Sitzung aus SecureStore nach einem
+# Neustart. Die Bildschirmfotos sind der Nachweis für die sicheren Bereiche (Kopf unter der Statusleiste,
+# Tab-Leiste über dem Home-Indikator bzw. der Navigationsleiste). Rubik, Sockelkante und Haptik prüft
+# das Design-System-Ticket (#95).
+appId: ${APP_ID}
+name: Gerätesmoke der Shell
+---
+- runFlow: teilablaeufe/anmelden.yaml
+
+# Eigene Tab-Leiste und sichere Bereiche ------------------------------------------------------------
+- assertVisible:
+    id: tab-bar
+- assertVisible:
+    id: tab-capture
+- takeScreenshot: smoke-heute
+- tapOn:
+    id: tab-capture
+- assertVisible: "Was möchtest du erfassen?"
+- takeScreenshot: smoke-erfassen
+
+# System-Zurück: Android-Zurück schließt den modalen Ablauf, auf iOS „Fertig“ ---------------------
+- tapOn: "Wasser"
+- assertVisible: "Fertig"
+- takeScreenshot: smoke-modal
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Fertig"
+- assertVisible: "Hallo, Philipp"
+
+# System-Zurück auf einer Seite: Android-Zurück bzw. iOS-Randgeste kehrt zum Aufrufer zurück --------
+- tapOn: "Einstellungen"
+- takeScreenshot: smoke-seite
+- assertVisible: "Zurück"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 1%, 50%
+          end: 80%, 50%
+          duration: 400
+- assertVisible: "Hallo, Philipp"
+
+# SecureStore-Sitzung: Nach einem echten Neustart bleibt die Anmeldung erhalten --------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Hallo, Philipp"
+    timeout: 30000
+- assertVisible:
+    id: tab-bar
+- takeScreenshot: smoke-nach-neustart

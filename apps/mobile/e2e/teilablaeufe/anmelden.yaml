@@ -1,0 +1,22 @@
+# Teilablauf: frische App, Seed „solo“ über den Seed-Deep-Link (#112) und direkter Einstieg auf „Heute“.
+# Der Seed setzt das lokale E2E-Backend zurück, meldet philipp@example.test an und stellt die Testuhr
+# auf 2026-10-14T12:00:00Z in Europe/Berlin (Mittwoch).
+appId: ${APP_ID}
+---
+# Ein abgebrochener Lauf kann den Flugmodus eingeschaltet hinterlassen.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: link.yaml
+    env:
+      LINK: seed?szenario=solo
+- extendedWaitUntil:
+    visible: "Hallo, Philipp"
+    timeout: 30000
+- assertVisible: "Mittwoch, 14.10.2026"

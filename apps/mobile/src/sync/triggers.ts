@@ -1,10 +1,13 @@
+/** Beobachtet, ob das Gerät Internet hat; meldet nur Änderungen. */
+export type ObserveNetwork = (listener: (online: boolean) => void) => () => void;
+
 /** Lifecycle-Quellen sind Adapter: React Native und Expo Network hängen erst am Composition Root. */
 export function startSyncTriggers({ initialActive, sync, observePending, observeForeground, observeNetwork }: {
   initialActive: boolean;
   sync(): Promise<unknown>;
   observePending(listener: (signature: string) => void): () => void;
   observeForeground(listener: (active: boolean) => void): () => void;
-  observeNetwork(listener: (online: boolean) => void): () => void;
+  observeNetwork: ObserveNetwork;
 }) {
   let active = initialActive;
   let online: boolean | null = null;

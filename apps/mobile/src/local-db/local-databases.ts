@@ -29,7 +29,8 @@ export type LocalDatabasesOptions = {
 // Auth vergibt, legt das Auth-Modul fest; dass es in dieses Muster passt, ist hier nicht belegt.
 const accountIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
 
-function databaseFileName(accountId: string): string {
+/** Dateiname der Datenbank eines Kontos; eine Kennung mit Pfadzeichen ist ein Fehler. */
+export function databaseFileName(accountId: string): string {
   if (!accountIdPattern.test(accountId)) throw new TypeError('Ungültige Kontokennung');
   return `konto-${accountId}.db`;
 }

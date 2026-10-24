@@ -48,6 +48,7 @@ export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = fals
     return (
       <TabItem
         key={route.key}
+        testID={`tab-${tab.target.type}`}
         title={titleOf(tab.target)}
         icon={tab.icon}
         focused={focused}
@@ -78,6 +79,7 @@ export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = fals
       {items.slice(0, middle)}
       <View style={styles.plusSlot}>
         <Pressable
+          testID="tab-capture"
           accessibilityRole="button"
           accessibilityLabel={shellTexts.capture}
           accessibilityState={{ expanded: captureOpen }}
@@ -93,12 +95,14 @@ export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = fals
   );
 }
 
-type TabItemProps = { title: string; icon: IconName; focused: boolean; badge: boolean; onPress: () => void };
+/** `testID` je Ziel (`tab-today`, `tab-log`, …) für Maestro (#114); die Beschriftung „Heute“ steht auch als Titel auf der Seite. */
+type TabItemProps = { testID: string; title: string; icon: IconName; focused: boolean; badge: boolean; onPress: () => void };
 
 /** Ein Tab: aktiv mit Farbe, Pille und fetter Beschriftung, nie nur über Farbe. */
-function TabItem({ title, icon, focused, badge, onPress }: TabItemProps) {
+function TabItem({ testID, title, icon, focused, badge, onPress }: TabItemProps) {
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="tab"
       accessibilityLabel={shellTexts.tab(title, badge)}
       accessibilityState={{ selected: focused }}

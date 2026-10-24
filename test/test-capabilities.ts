@@ -1,8 +1,10 @@
-// Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112). Sie führt jede
-// Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Fehler-Adapter
-// und ihr gemeinsames Gerüst. `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit,
-// dass weder das Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält
-// (Gegenprobe: die Development-Artefakte enthalten sie) und dass jede Datei in den Ordnern der
+// Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112, #114). Sie führt jede
+// Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Fehler-Adapter,
+// Transport-Fehlermodus, On-Device-Suite und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
+// Development Build und der E2E-Build (`APP_VARIANT=e2e`, ein Release-Binary für Maestro).
+// `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit, dass weder das
+// Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält (Gegenprobe: die
+// Development-Artefakte und das E2E-Bundle enthalten sie) und dass jede Datei in den Ordnern der
 // Testfähigkeiten hier genau einer Fähigkeit gehört.
 //
 // Neue Testfähigkeit: Eintrag hier ergänzen (Module, Einstiege, Marker). Damit erhält sie ihre
@@ -18,7 +20,7 @@ export type TestCapability = Readonly<{
   entries: Readonly<{
     /** HTTP-Routen des Development-Backends, `METHODE /pfad`. */
     backendRoutes?: readonly string[];
-    /** Pfade der Deep Links im Development Build (`abnehmapp-dev://<pfad>`). */
+    /** Pfade der Deep Links in Development- und E2E-Build (`abnehmapp-dev://<pfad>`, `abnehmapp-e2e://<pfad>`). */
     deepLinks?: readonly string[];
     /** Server-Kommandos (Datei im Development-Image). */
     commands?: readonly string[];
@@ -55,9 +57,9 @@ export const testCapabilities: readonly TestCapability[] = [
   },
   {
     key: 'testuhr',
-    description: 'Steuerbare Testuhr: `@abnehm/clock/testing`, Konformitäts-Testkit und die Testuhr der App, die ein Seed stellt',
+    description: 'Steuerbare Testuhr: `@abnehm/clock/testing`, Konformitäts-Testkit und die Testuhr der App, die ein Seed stellt und der Uhr-Link vorstellt',
     modules: ['packages/clock/src/testing.ts', 'packages/clock/src/conformance.ts', 'apps/mobile/src/test-capabilities/clock.ts'],
-    entries: {},
+    entries: { deepLinks: ['uhr'] },
     markers: ['@abnehm/clock/testing'],
   },
   {
@@ -66,6 +68,21 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/mobile/src/test-capabilities/faults.ts'],
     entries: { deepLinks: ['fehler'] },
     markers: ['Fehler-Adapter'],
+  },
+  {
+    // #114: Maestros `setAirplaneMode` gibt es nur auf Android (https://docs.maestro.dev/api-reference/commands/setairplanemode).
+    key: 'transport-fehlermodus',
+    description: 'iOS-Ersatz für den Flugmodus im E2E-Build: `fehler?transport=offline` meldet dem Sync zusätzlich kein Netz, die Rückkehr zu `ok` eine Netzrückkehr',
+    modules: ['apps/mobile/src/test-capabilities/network.ts'],
+    entries: {},
+    markers: ['Transport-Fehlermodus'],
+  },
+  {
+    key: 'geraetetest',
+    description: 'On-Device-Suite mit expo-sqlite (#114): Migration, Transaktionsrollback, Persistenz nach Neustart, Pull-Seite und Cursor atomar',
+    modules: ['apps/mobile/src/test-capabilities/device-suite/'],
+    entries: { deepLinks: ['geraetetest'] },
+    markers: ['geraetetest_neustart'],
   },
   {
     key: 'testgeruest',

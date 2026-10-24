@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { onboardingStepOutcomes, type OnboardingStepKey, type OnboardingStepOutcome } from '@abnehm/contracts/onboarding';
 
 import { Button, Notice, space, Text } from '../design';
+import { isTestArtifact } from '../test-artifact';
 import {
   appOnboardingRegistry,
   MissingOnboardingStepError,
@@ -33,11 +34,11 @@ export function OnboardingStep<K extends OnboardingStepKey>({ stepKey, onComplet
 }
 
 /**
- * Development Build: überspringbarer deutscher Platzhalter mit dem liefernden Bereich. Im Release ist
+ * Development- und E2E-Build: überspringbarer deutscher Platzhalter mit dem liefernden Bereich. Im Release ist
  * ein fehlender Beitrag ein Integrationsfehler (Spezifikation 0, Abschnitt 6).
  */
 function MissingStep({ stepKey, complete }: { stepKey: OnboardingStepKey; complete(outcome: OnboardingStepOutcome): void }) {
-  if (!__DEV__) throw new MissingOnboardingStepError(stepKey);
+  if (!isTestArtifact()) throw new MissingOnboardingStepError(stepKey);
   const step = onboardingSteps.find((entry) => entry.key === stepKey)!;
   return (
     <View style={{ gap: space[4] }}>
