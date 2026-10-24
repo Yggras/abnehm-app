@@ -252,9 +252,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
           ownerPersonId: actor.personId,
           createdAt: at,
         });
-        const canonical = await stateOf(savepoint, entity, operation.entityId);
-        if (canonical.type === 'absent') throw new Error(`Sync-Entität ${entity.entityType} nach dem Schreiben nicht lesbar`);
-        return { type: 'applied', operationId: operation.operationId, canonical } as const;
+        return { type: 'applied', operationId: operation.operationId, canonical: await canonicalAfterWrite(savepoint, entity, operation.entityId) } as const;
       });
     } catch (error) {
       const code = error instanceof Rejection ? error.code : integrityViolation(error);
@@ -488,6 +486,13 @@ export function canonicalOf(entity: ServerSyncEntity, entityId: EntityId, stored
     return { type: 'tombstone', entityType: entity.entityType, entityId, serverVersion, deletedAt: Instant.parse(stored.deletedAt.toISOString()) };
   }
   return { type: 'record', entityType: entity.entityType, entityId, serverVersion, data: stored.data };
+}
+
+/** Kanonischer Datensatz einer Entität, die der Aufrufer in seiner Transaktion gerade geschrieben hat. */
+export async function canonicalAfterWrite(tx: DbExecutor, entity: ServerSyncEntity, entityId: EntityId): Promise<CanonicalChange> {
+  const state = await stateOf(tx, entity, entityId);
+  if (state.type === 'absent') throw new Error(`Sync-Entität ${entity.entityType} nach dem Schreiben nicht lesbar`);
+  return state;
 }
 
 async function stateOf(tx: DbExecutor, entity: ServerSyncEntity, entityId: EntityId): Promise<CanonicalState> {

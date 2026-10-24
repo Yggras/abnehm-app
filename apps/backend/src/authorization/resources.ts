@@ -412,17 +412,20 @@ async function sharedActionOf(db: DbExecutor, id: string) {
 }
 
 /**
- * Gemeinsame Aktion lesen: aktive Mitglieder ihrer Kopplung. Die eigene Entkopplung liest der
- * Antragsteller auch danach; sie ist inhaltsfrei, und nur so erfährt sein Gerät das Ergebnis.
+ * Gemeinsame Aktion: aktive Mitglieder ihrer Kopplung. Eine Entkopplung liest nur, wer sie beantragt
+ * hat, und zwar auch danach: Sie ist inhaltsfrei, und nur so erfährt sein Gerät das Ergebnis. Der
+ * Partner liest sie nie (Spezifikation 5, Abschnitt 11); er erhält den Intent `entkopplung`.
  */
 const sharedActionRule = byId('kopplungsinhalte', sharedAction, async (context, id) => {
   const { personId } = context.actor;
   const found = await sharedActionOf(context.db, id);
   if (found === null) return denied;
+  if (found.kind === 'entkoppeln') {
+    const ownUncoupling = context.operation === 'lesen' && found.requester === personId;
+    return ownUncoupling ? allowed({ ownerPersonId: personId, couplingId: found.couplingId }) : denied;
+  }
   const membership = await activeMembership(context.db, found.couplingId, personId);
-  if (membership !== null) return allowed({ ownerPersonId: found.requester, couplingId: found.couplingId, ...membership });
-  const ownUncoupling = context.operation === 'lesen' && found.kind === 'entkoppeln' && found.requester === personId;
-  return ownUncoupling ? allowed({ ownerPersonId: personId, couplingId: found.couplingId }) : denied;
+  return membership === null ? denied : allowed({ ownerPersonId: found.requester, couplingId: found.couplingId, ...membership });
 });
 
 /**

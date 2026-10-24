@@ -7,7 +7,7 @@ import type { DbExecutor } from '../database.ts';
 import { coupling, couplingMember, island } from '../db/schema/index.ts';
 import { revokeCoupling } from '../partner-projections/revocation.ts';
 import { lockSyncClock } from '../sync/change-log.ts';
-import { canonicalOf } from '../sync/sync.ts';
+import { canonicalAfterWrite } from '../sync/sync.ts';
 import { changeWriter, updated } from './change-writer.ts';
 import { couplingEntity } from './coupling-entities.ts';
 import { recordUncouplingAction, withdrawOpenSharedActions } from './shared-actions.ts';
@@ -66,7 +66,7 @@ export function createUncoupling(): Uncoupling {
 
       if (current.status === 'archiviert') {
         const rejected = await recordUncouplingAction(tx, { ...action, status: 'abgelehnt' });
-        return { status: 'abgelehnt', partnerPersonId, changes: [rejected, await archiveStatus(tx, couplingId)] };
+        return { status: 'abgelehnt', partnerPersonId, changes: [rejected, await canonicalAfterWrite(tx, couplingEntity, couplingId)] };
       }
       const write = changeWriter(tx, at);
       // Die Mitglieder folgen dem Status per `ON UPDATE CASCADE`; damit endet der Partnerzugriff.
@@ -84,13 +84,7 @@ export function createUncoupling(): Uncoupling {
       const accepted = await recordUncouplingAction(tx, { ...action, status: 'angenommen' });
       for (const observer of observers.values()) await observer(tx, { couplingId, at });
       await revokeCoupling(tx, couplingId, at);
-      return { status: 'angenommen', partnerPersonId, changes: [accepted, await archiveStatus(tx, couplingId)] };
+      return { status: 'angenommen', partnerPersonId, changes: [accepted, await canonicalAfterWrite(tx, couplingEntity, couplingId)] };
     },
   };
-}
-
-async function archiveStatus(tx: DbExecutor, couplingId: EntityId): Promise<CanonicalChange> {
-  const found = (await couplingEntity.read(tx, [couplingId])).get(couplingId);
-  if (found === undefined) throw new Error('Kopplung fehlt');
-  return canonicalOf(couplingEntity, couplingId, found);
 }

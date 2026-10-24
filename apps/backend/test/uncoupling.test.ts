@@ -3,16 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { createTestClock } from '@abnehm/clock/testing';
-import { EntityId } from '@abnehm/contracts/base';
-
 import { policies } from '../src/authorization/authorization.ts';
 import type { UncouplingObserver } from '../src/coupling/uncoupling.ts';
 import { coupling } from '../src/db/schema/index.ts';
-import { createTestBackend, type TestBackend } from './support/app.ts';
-import { httpOutcome, personWithSession, resourceProbe } from './support/authorization.ts';
+import type { TestBackend } from './support/app.ts';
+import { httpOutcome, resourceProbe } from './support/authorization.ts';
 import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
-import { actionIdOf, decideOp, recordsOf, roleSwapRequest, testRoleKind } from './support/shared-actions.ts';
+import { actionIdOf, decideOp, invitedCouple as setup, recordsOf, roleSwapRequest, uncoupleAs } from './support/shared-actions.ts';
 import { pullAll, push } from './support/sync.ts';
 
 // Nachweis für #107: der serverseitige Entkopplungs-Kern (Spezifikation 0, Abschnitte 9 und 10). Er nimmt
@@ -22,28 +19,8 @@ import { pullAll, push } from './support/sync.ts';
 
 const at = new Date('2026-10-14T13:00:00.000Z');
 
-async function setup() {
-  const clock = createTestClock(worldStart);
-  const backend = await createTestBackend({ clock });
-  backend.sharedActions.registerKind(testRoleKind);
-  const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
-  const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
-  const { couplingId } = await coupleByInvitation(backend, anna.device, philipp.device);
-  // Der erste Pull materialisiert auch den Partner-Tageszielstatus beider Personen.
-  const cursors = { anna: (await pullAll(backend, anna.device)).cursor, philipp: (await pullAll(backend, philipp.device)).cursor };
-  return { backend, anna, philipp, couplingId: EntityId.parse(couplingId), cursors };
-}
-
-function uncouple(backend: TestBackend, request: { couplingId: EntityId; requesterPersonId: string; actionId?: string }) {
-  return backend.database.db.transaction((tx) =>
-    backend.uncoupling.uncouple(tx, {
-      actionId: EntityId.parse(request.actionId ?? randomUUID()),
-      couplingId: request.couplingId,
-      requesterPersonId: EntityId.parse(request.requesterPersonId),
-      at,
-    }),
-  );
-}
+const uncouple = (backend: TestBackend, request: { couplingId: string; requesterPersonId: string; actionId?: string }) =>
+  uncoupleAs(backend, { ...request, at });
 
 describe('Entkopplungs-Kern', () => {
   it('Tracer Bullet: Nach angenommener Aktion entkoppelt Anna; Philipp verliert sofort den Zugriff und erhält nur Notice und Archivstatus', async () => {
@@ -146,8 +123,10 @@ describe('Reaktivierung nach dem Entkoppeln', () => {
       expect(Object.values(recordsOf(changes, 'island'))).toEqual([expect.objectContaining({ state: 'wartet_auf_rollen' })]);
       const actions = recordsOf(changes, 'shared_action');
       expect(actions[actionIdOf(open)]).toMatchObject({ status: 'zurueckgezogen', decidedAt: at.toISOString() });
-      // Entkoppeln ist nie ein offener Vorgang: Es ist sofort angenommen.
-      expect(actions[uncouplingId]).toMatchObject({ type: 'entkoppeln', requesterPersonId: anna.personId, status: 'angenommen' });
+      // Entkoppeln ist nie ein offener Vorgang: Es ist sofort angenommen, und nur Anna liest es.
+      expect(actions[uncouplingId]).toEqual(
+        person === anna ? expect.objectContaining({ type: 'entkoppeln', requesterPersonId: anna.personId, status: 'angenommen' }) : undefined,
+      );
     }
     // Der Partnerzugriff ist zurück; die beendete Aktion bleibt beendet.
     expect((await push(backend, philipp.device, [decideOp(actionIdOf(open), 'annehmen')]))[0]).toMatchObject({ error: { code: 'conflict' } });

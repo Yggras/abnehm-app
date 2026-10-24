@@ -16,7 +16,7 @@ import { policies, type SharedActionParticipation } from '../authorization/autho
 import type { DbExecutor } from '../database.ts';
 import { sharedAction } from '../db/schema/index.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
-import { canonicalOf } from '../sync/sync.ts';
+import { canonicalAfterWrite } from '../sync/sync.ts';
 import { changeWriter, updated } from './change-writer.ts';
 import { sharedActionEntity } from './coupling-entities.ts';
 
@@ -92,8 +92,8 @@ export function createSharedActions(): SharedActions {
         });
         return payload.actionId;
       });
-      const { action, change } = await stored(tx, payload.actionId);
-      await kind.request?.(tx, { action, partnerPersonId: EntityId.parse(resource.partnerPersonId), at });
+      const change = await canonicalAfterWrite(tx, sharedActionEntity, payload.actionId);
+      await kind.request?.(tx, { action: requested(change), partnerPersonId: EntityId.parse(resource.partnerPersonId), at });
       return { changes: [change], idMappings: [] };
     },
   };
@@ -121,8 +121,9 @@ export function createSharedActions(): SharedActions {
         await tx.update(sharedAction).set({ status: decided[payload.decision], decidedAt: at, ...updated(stamp) }).where(eq(sharedAction.id, payload.actionId));
         return payload.actionId;
       });
-      const { action, change } = await stored(tx, payload.actionId);
+      const change = await canonicalAfterWrite(tx, sharedActionEntity, payload.actionId);
       if (payload.decision === 'annehmen') {
+        const action = requested(change);
         const kind = kinds.get(action.type);
         // Beantragen ließ sich die Aktion nur mit angemeldeter Art; fehlt sie jetzt, ist das ein Integrationsfehler.
         if (kind === undefined) throw new Error(`Art ${action.type} gemeinsamer Aktionen ist nicht angemeldet`);
@@ -135,9 +136,9 @@ export function createSharedActions(): SharedActions {
   return {
     registerKind(kind) {
       if (kinds.has(kind.type)) throw new Error(`Art ${kind.type} gemeinsamer Aktionen ist schon angemeldet`);
-      kinds.set(kind.type, kind as unknown as SharedActionKind);
+      kinds.set(kind.type, kind);
     },
-    commands: [requestCommand, decideCommand] as unknown as readonly ServerCommand[],
+    commands: [requestCommand, decideCommand],
   };
 }
 
@@ -169,13 +170,12 @@ export async function recordUncouplingAction(
     await tx.insert(sharedAction).values({ id, couplingId, kind: 'entkoppeln', requesterPersonId, payload: {}, status, decidedAt: at, ...stamp });
     return id;
   });
-  return (await stored(tx, id)).change;
+  return canonicalAfterWrite(tx, sharedActionEntity, id);
 }
 
-/** Die gespeicherte Aktion, typisiert für die Arten und als kanonischer Datensatz für das Gerät. */
-async function stored(tx: DbExecutor, actionId: EntityId) {
-  const found = (await sharedActionEntity.read(tx, [actionId])).get(actionId);
-  if (found === undefined) throw new Error('Gemeinsame Aktion nach dem Schreiben nicht lesbar');
-  const action = SharedAction.parse(found.data) as ActionOf<RequestedSharedActionType>;
-  return { action, change: canonicalOf(sharedActionEntity, actionId, found) };
+/** Die beantragte Aktion eines kanonischen Datensatzes; nur sie hat eine Art in der Registry. */
+function requested(change: CanonicalChange): ActionOf<RequestedSharedActionType> {
+  const action = change.type === 'record' ? SharedAction.parse(change.data) : null;
+  if (action === null || action.type === 'entkoppeln') throw new Error('Keine beantragte gemeinsame Aktion');
+  return action;
 }

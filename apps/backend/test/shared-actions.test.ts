@@ -2,23 +2,20 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId } from '@abnehm/contracts/base';
 import { sharedActionRequestKey } from '@abnehm/contracts/island';
 
-import { createTestBackend } from './support/app.ts';
-import { authorizationCases, personWithSession } from './support/authorization.ts';
-import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
+import { authorizationCases } from './support/authorization.ts';
+import { worldStart } from './support/coupled-world.ts';
 import {
   actionIdOf,
   decideOp,
+  invitedCouple as setup,
   recordsOf,
   requestOp,
   roleSwapRequest,
   sharedActionCommandScenarios,
   sharedActionWorld,
-  testGiftKind,
-  testRoleKind,
   uncoupleWorld,
   unverschenkbar,
 } from './support/shared-actions.ts';
@@ -27,18 +24,6 @@ import { pullAll, push, pushOutcome } from './support/sync.ts';
 // Nachweis für #107: der Rahmen gemeinsamer Aktionen (Spezifikation 0, Abschnitt 9) über Push und Pull
 // der echten Hono-App. Test-Arten stehen für Rollenwahl, Rollentausch und Deko schenken aus
 // Spezifikation 4; der Rahmen selbst kennt keine Art.
-
-async function setup() {
-  const clock = createTestClock(worldStart);
-  const backend = await createTestBackend({ clock });
-  backend.sharedActions.registerKind(testRoleKind);
-  backend.sharedActions.registerKind(testGiftKind);
-  const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
-  const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
-  const { couplingId } = await coupleByInvitation(backend, anna.device, philipp.device);
-  const cursors = { anna: (await pullAll(backend, anna.device)).cursor, philipp: (await pullAll(backend, philipp.device)).cursor };
-  return { backend, clock, anna, philipp, couplingId, cursors };
-}
 
 describe('Gemeinsame Aktion beantragen und entscheiden', () => {
   it('Tracer Bullet: Anna beantragt eine Test-Aktion, Philipp nimmt an, und die Zustandsänderung kommt mit der Entscheidung', async () => {

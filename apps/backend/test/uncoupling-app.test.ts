@@ -15,7 +15,7 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.
 import type { Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
 import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
-import { actionIdOf, decideOp, roleSwapRequest, testRoleKind } from './support/shared-actions.ts';
+import { actionIdOf, decideOp, roleSwapRequest, testRoleKind, uncoupleAs } from './support/shared-actions.ts';
 import { push } from './support/sync.ts';
 
 // Tracer Bullet für #107 auf echten Geräten: Engine und Adapter der App auf echtem SQLite
@@ -89,14 +89,7 @@ describe('Gemeinsame Aktionen und Entkoppeln App ↔ Backend', () => {
     expect(philippsPhone.rows().partner.dailyGoalStatus).not.toBeNull();
 
     const uncouplingId = randomUUID();
-    await backend.database.db.transaction((tx) =>
-      backend.uncoupling.uncouple(tx, {
-        actionId: EntityId.parse(uncouplingId),
-        couplingId: EntityId.parse(couplingId),
-        requesterPersonId: EntityId.parse(anna.personId),
-        at: new Date('2026-10-14T13:00:00.000Z'),
-      }),
-    );
+    await uncoupleAs(backend, { couplingId, requesterPersonId: anna.personId, actionId: uncouplingId });
     await philippsPhone.sync();
 
     const archived = philippsPhone.rows();
@@ -111,11 +104,10 @@ describe('Gemeinsame Aktionen und Entkoppeln App ↔ Backend', () => {
     await philippsPhone.sync();
     await annasPhone.sync();
 
-    for (const device of [philippsPhone, annasPhone]) {
-      expect(device.rows()).toMatchObject({
-        coupling: [{ status: 'aktiv' }],
-        actions: { [acceptedId]: 'angenommen', [openId]: 'zurueckgezogen', [uncouplingId]: 'angenommen' },
-      });
-    }
+    const ended = { [acceptedId]: 'angenommen', [openId]: 'zurueckgezogen' };
+    // Die Entkopplung erhält nur Annas Gerät; Philipp liest sie nie.
+    expect(annasPhone.rows()).toMatchObject({ coupling: [{ status: 'aktiv' }], actions: { ...ended, [uncouplingId]: 'angenommen' } });
+    expect(philippsPhone.rows()).toMatchObject({ coupling: [{ status: 'aktiv' }], actions: ended });
+    expect(philippsPhone.rows().actions[uncouplingId]).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@ import { person } from '../db/schema/index.ts';
 import { nextServerVersion, recordChange } from '../sync/change-log.ts';
 import type { ServerCommand } from '../sync/commands.ts';
 import { personEntity } from '../sync/person-entity.ts';
-import { canonicalOf } from '../sync/sync.ts';
+import { canonicalAfterWrite } from '../sync/sync.ts';
 
 // Fachbefehl `updatePersonTimeZone` (Spezifikation 0, Abschnitt 8): ändert ausschließlich `time_zone`
 // der eigenen Person. Ein veralteter Person-Datensatz auf dem sendenden Gerät kann so keine anderen
@@ -42,8 +42,6 @@ export const personTimeZoneCommand: ServerCommand<UpdatePersonTimeZone> = {
       await recordChange(tx, { position: serverVersion, entityType: 'person', entityId: personId, operation: 'upsert',
         ownerPersonId: personId, createdAt: at });
     }
-    const stored = (await personEntity.read(tx, [personId])).get(personId);
-    if (stored === undefined) throw new Error('Person nach dem Schreiben nicht lesbar');
-    return { changes: [canonicalOf(personEntity, personId, stored)], idMappings: [] };
+    return { changes: [await canonicalAfterWrite(tx, personEntity, personId)], idMappings: [] };
   },
 };

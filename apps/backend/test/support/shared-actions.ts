@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
 
+import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
 import {
   sharedActionDecisionKey,
@@ -18,10 +19,11 @@ import type { SharedActionKind } from '../../src/coupling/shared-actions.ts';
 import type { DbExecutor } from '../../src/database.ts';
 import { couplingMember, island } from '../../src/db/schema/index.ts';
 import { CommandRejection } from '../../src/sync/commands.ts';
+import { createTestBackend, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
-import { httpOutcome, resourceProbe, type AuthorizationScenario } from './authorization.ts';
-import { coupledWorld, otherCouple, worldStart, type CoupledWorld, type WorldPerson } from './coupled-world.ts';
-import { pushOutcome } from './sync.ts';
+import { httpOutcome, personWithSession, resourceProbe, type AuthorizationScenario } from './authorization.ts';
+import { coupleByInvitation, coupledWorld, otherCouple, worldStart, type CoupledWorld, type WorldPerson } from './coupled-world.ts';
+import { pullAll, pushOutcome } from './sync.ts';
 
 // Gemeinsame Aktionen in Tests (#107): Push-Operationen der beiden Fachbefehle, Test-Arten für die
 // Art-Registry und die Negativtest-Szenarien für `registeredCommandCases`. Die echten Arten
@@ -128,16 +130,37 @@ async function requested(world: CoupledWorld, requester: WorldPerson) {
   return actionIdOf(operation);
 }
 
-/** Entkoppeln über den Kern; danach hat keine Person mehr Zugriff auf die Inhalte der Kopplung. */
-export async function uncoupleWorld(world: CoupledWorld, actionId: EntityId = EntityId.parse(randomUUID())) {
-  return world.backend.database.db.transaction((tx) =>
-    world.backend.uncoupling.uncouple(tx, {
-      actionId,
-      couplingId: EntityId.parse(world.couplingId),
-      requesterPersonId: EntityId.parse(world.anna.personId),
-      at: new Date(worldStart.instant),
+/** Entkoppeln über den Kern in eigener Transaktion, wie es `requestUncoupling` (Spezifikation 5) tun wird. */
+export function uncoupleAs(
+  backend: TestBackend,
+  { couplingId, requesterPersonId, actionId = randomUUID(), at = new Date(worldStart.instant) }: { couplingId: string; requesterPersonId: string; actionId?: string; at?: Date },
+) {
+  return backend.database.db.transaction((tx) =>
+    backend.uncoupling.uncouple(tx, {
+      actionId: EntityId.parse(actionId),
+      couplingId: EntityId.parse(couplingId),
+      requesterPersonId: EntityId.parse(requesterPersonId),
+      at,
     }),
   );
+}
+
+/** Anna entkoppelt; danach hat keine Person mehr Zugriff auf die Inhalte der Kopplung. */
+export const uncoupleWorld = (world: CoupledWorld) => uncoupleAs(world.backend, { couplingId: world.couplingId, requesterPersonId: world.anna.personId });
+
+/**
+ * Anna und Philipp, gekoppelt über die echte Einladung, mit beiden Test-Arten und dem Cursor nach dem
+ * ersten Pull; der materialisiert auch den Partner-Tageszielstatus beider Personen.
+ */
+export async function invitedCouple() {
+  const backend = await createTestBackend({ clock: createTestClock(worldStart) });
+  backend.sharedActions.registerKind(testRoleKind);
+  backend.sharedActions.registerKind(testGiftKind);
+  const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
+  const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
+  const { couplingId } = await coupleByInvitation(backend, anna.device, philipp.device);
+  const cursors = { anna: (await pullAll(backend, anna.device)).cursor, philipp: (await pullAll(backend, philipp.device)).cursor };
+  return { backend, anna, philipp, couplingId: EntityId.parse(couplingId), cursors };
 }
 
 const probe = (world: SharedActionWorld, entity: 'shared_action_request' | 'shared_action_decision') =>
