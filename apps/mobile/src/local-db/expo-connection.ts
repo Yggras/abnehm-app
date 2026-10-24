@@ -27,3 +27,16 @@ export const openExpoSqlite: OpenSqlite = (fileName) => {
     },
   };
 };
+
+/**
+ * Löscht eine geschlossene Datenbankdatei, falls es sie gibt. Nur die On-Device-Suite der
+ * Testfähigkeiten (#114) nutzt das, für ihre eigenen Dateien.
+ */
+export function removeExpoSqlite(fileName: string): void {
+  try {
+    deleteDatabaseSync(fileName);
+  } catch {
+    // Die Datei gab es nicht; die Doku nennt für diesen Fall kein Verhalten
+    // (https://docs.expo.dev/versions/v58.0.0/sdk/sqlite/).
+  }
+}

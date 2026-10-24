@@ -18,6 +18,7 @@ export function createBetterSqliteFiles(): {
   openedFileNames(): string[];
   /** Die Dateien, die jetzt im Verzeichnis liegen, samt Begleitdateien. */
   existingFileNames(): string[];
+  removeFile(fileName: string): void;
   remove(): void;
 } {
   const directory = mkdtempSync(join(tmpdir(), 'abnehm-local-db-'));
@@ -40,6 +41,10 @@ export function createBetterSqliteFiles(): {
     },
     openedFileNames: () => [...opened].sort(),
     existingFileNames: () => readdirSync(directory).sort(),
+    /** Wie `removeExpoSqlite`: eine geschlossene Datei samt WAL-Dateien, falls es sie gibt. */
+    removeFile: (fileName) => {
+      for (const suffix of ['', '-wal', '-shm']) rmSync(join(directory, `${fileName}${suffix}`), { force: true });
+    },
     remove: () => rmSync(directory, { recursive: true, force: true }),
   };
 }

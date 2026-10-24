@@ -134,3 +134,14 @@ export const PhotoSharingRecord = z.strictObject({
   ...syncTimes,
 });
 export type PhotoSharingRecord = z.infer<typeof PhotoSharingRecord>;
+
+/**
+ * Generisches Upsert einer Partnerfreigabe (Last-Write-Wins, nur die Eigentümerin). Kopplung und
+ * Bereich legt die Kopplungsannahme fest; geändert wird nur die Stufe.
+ */
+export const PartnerSharingUpsert = z.strictObject({ level: PartnerSharingLevel });
+export type PartnerSharingUpsert = z.infer<typeof PartnerSharingUpsert>;
+
+/** Generisches Upsert der Fotofreigabe (Last-Write-Wins, nur die Eigentümerin); geändert wird nur die Stufe. */
+export const PhotoSharingUpsert = z.strictObject({ level: PhotoSharingLevel });
+export type PhotoSharingUpsert = z.infer<typeof PhotoSharingUpsert>;

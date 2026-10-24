@@ -1,18 +1,18 @@
 import { inArray } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
-import { CouplingMemberRecord, CouplingRecord, PartnerSharingRecord, PhotoSharingRecord } from '@abnehm/contracts/coupling';
+import { CouplingMemberRecord, CouplingRecord } from '@abnehm/contracts/coupling';
 import { IslandRecord } from '@abnehm/contracts/island';
 import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
 
 import type { ResourceEntity } from '../authorization/authorization.ts';
-import { coupling, couplingMember, island, partnerSharing, photoSharing } from '../db/schema/index.ts';
+import { coupling, couplingMember, island } from '../db/schema/index.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
 
-// Kopplung, Mitglieder, Insel und Freigaben im Sync (Spezifikation 0, Abschnitte 8–10). Sie entstehen
-// nur serverseitig (Kopplungsannahme, später Fachbefehle aus Spezifikation 4 und 5); der Pull liefert
-// sie, ein generisches Upsert oder Löschen gibt es nicht. Wer sie lesen darf, entscheidet die Regel der
-// Ressource: Kopplungsinhalte aktive Mitglieder, Freigaben nur die Eigentümerin.
+// Kopplung, Mitglieder und Insel im Sync (Spezifikation 0, Abschnitte 8–10). Sie entstehen nur
+// serverseitig (Kopplungsannahme, später Fachbefehle aus Spezifikation 4 und 5); der Pull liefert sie
+// den aktiven Mitgliedern, ein generisches Upsert oder Löschen gibt es nicht. Die Freigaben, die die
+// Eigentümerin per Upsert ändert, meldet `partner-projections/sharing-entities.ts` an.
 
 const iso = (value: Date) => value.toISOString();
 const isoOrNull = (value: Date | null) => (value === null ? null : value.toISOString());
@@ -89,33 +89,6 @@ export const couplingSyncEntities: readonly ServerSyncEntity[] = [
         state: row.state,
         hatchedAt: isoOrNull(row.hatchedAt),
         timeZone: row.timeZone,
-        createdAt: iso(row.createdAt),
-        updatedAt: iso(row.updatedAt),
-      }),
-  }),
-  serverManaged({
-    entityType: 'partner_sharing',
-    resource: 'partner_sharing',
-    table: partnerSharing,
-    record: (row) =>
-      PartnerSharingRecord.parse({
-        ownerPersonId: row.ownerPersonId,
-        couplingId: row.couplingId,
-        area: row.area,
-        level: row.level,
-        createdAt: iso(row.createdAt),
-        updatedAt: iso(row.updatedAt),
-      }),
-  }),
-  serverManaged({
-    entityType: 'photo_sharing',
-    resource: 'photo_sharing',
-    table: photoSharing,
-    record: (row) =>
-      PhotoSharingRecord.parse({
-        ownerPersonId: row.ownerPersonId,
-        couplingId: row.couplingId,
-        level: row.level,
         createdAt: iso(row.createdAt),
         updatedAt: iso(row.updatedAt),
       }),

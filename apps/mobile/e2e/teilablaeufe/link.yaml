@@ -1,0 +1,28 @@
+# Teilablauf: öffnet einen Deep Link der Testfähigkeiten (${LINK}, ohne Schema) im E2E-Build.
+#
+# Im iOS-Simulator (iOS 27, beobachtet am 21.10.2026) kommt der Link bereits in der App an, danach
+# fragt das System trotzdem „In „Abnehm-App E2E“ öffnen?“. Die Rückfrage verdeckt die App für Maestro.
+# „Öffnen“ stellte den Link ein zweites Mal zu (ein Seed liefe doppelt), deshalb schließt der
+# Teilablauf sie mit „Abbrechen“, sofern sie erscheint.
+#
+# Vorher wartet er, bis ein Bildschirm der App steht (`sync-scroll` trägt jeder `ScreenFrame`): Auf
+# Android geht ein Link verloren, der kurz nach `launchApp` noch vor dem Start der App eintrifft
+# (im Emulator beobachtet am 21.10.2026).
+appId: ${APP_ID}
+---
+- extendedWaitUntil:
+    visible:
+      id: sync-scroll
+    timeout: 30000
+- openLink: ${SCHEME}://${LINK}
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Abbrechen|Cancel"
+          timeout: 5000
+          optional: true
+      - tapOn:
+          text: "Abbrechen|Cancel"
+          optional: true

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 
+import { isTestArtifact } from '../test-artifact';
 import { appQuickCommands } from './app-quick-commands';
 import { useMessageHost } from './MessageHost';
 import { MissingQuickCommandError, type QuickCommand } from './quick-commands';
@@ -7,7 +8,7 @@ import { MissingQuickCommandError, type QuickCommand } from './quick-commands';
 /**
  * Führt einen Quick-Command ohne Navigation aus und zeigt sein Ergebnis über den Meldungs-Host,
  * mit „Rückgängig“ für genau diese Buchung. Aufrufer sind das ＋-Sheet und die `quickAction` der
- * Mini-Tracker. Fehlt der Handler, zeigt der Development Build einen Hinweis; im Release ist das
+ * Mini-Tracker. Fehlt der Handler, zeigt ein Test-Artefakt einen Hinweis; im Release ist das
  * ein Integrationsfehler.
  */
 export function useQuickCommand(): (command: QuickCommand) => void {
@@ -25,7 +26,7 @@ export function useQuickCommand(): (command: QuickCommand) => void {
         outcome = appQuickCommands.execute(command);
       } catch (error) {
         if (!(error instanceof MissingQuickCommandError)) return failed(error);
-        if (!__DEV__) throw error;
+        if (!isTestArtifact()) throw error;
         return showMessage({ messageKey: 'shell.quick_command.in_arbeit', values: { commandKey: command.commandKey } });
       }
 

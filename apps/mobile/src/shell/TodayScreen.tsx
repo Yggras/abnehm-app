@@ -11,6 +11,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button, Card, color, EnergySymbol, Icon, IconButton, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
+import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
 import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContributionError } from './today-registry';
@@ -36,10 +37,10 @@ function staleLabel(dataAsOf: Instant): string {
 function useContribution<K extends TodaySlot>(registry: TodayRegistry, key: K): TodayState<K> | null {
   const [snapshot, setSnapshot] = useState<{ registry: TodayRegistry; value: TodayState<K> } | null>(null);
   // Im Release ist eine fehlende Quelle ein Integrationsfehler, nicht ein dauerhaftes Lade-Skelett.
-  if (!__DEV__) registry.read(key);
+  if (!isTestArtifact()) registry.read(key);
   useEffect(() => {
     try { return registry.subscribe(key, (value) => setSnapshot({ registry, value })); }
-    catch (error) { if (!(error instanceof MissingTodayContributionError) || !__DEV__) throw error; }
+    catch (error) { if (!(error instanceof MissingTodayContributionError) || !isTestArtifact()) throw error; }
   }, [registry, key]);
   return snapshot?.registry === registry ? snapshot.value : null;
 }
@@ -54,7 +55,7 @@ function State<K extends TodaySlot>({ registry, slot, children }: {
 function StateView<K extends TodaySlot>({ state, slot, children }: {
   state: TodayState<K> | null; slot: K; children: (data: Data<TodayState<K>>) => ReactNode;
 }) {
-  if (!state) return <Text tone="inkMuted">{__DEV__ ? `Beitrag für ${names[slot]} fehlt` : 'Lädt …'}</Text>;
+  if (!state) return <Text tone="inkMuted">{isTestArtifact() ? `Beitrag für ${names[slot]} fehlt` : 'Lädt …'}</Text>;
   switch (state.type) {
     case 'loading': return <View style={styles.group}><Text tone="inkMuted">{names[slot]} lädt …</Text><Skeleton width="100%" height={48} /></View>;
     case 'ready': return <>{children(state.data as Data<TodayState<K>>)}</>;

@@ -1,0 +1,26 @@
+# On-Device-Suite (Spezifikation 0, Testing Decisions; #114) mit dem produktiven expo-sqlite:
+# Migration (neu und nach App-Update mit offener Outbox), Transaktionsrollback, Pull-Seite und Cursor
+# atomar, Persistenz nach Neustart. Zwischen den Phasen beendet Maestro die App wirklich.
+# Braucht kein Backend; die Suite arbeitet nur auf eigenen Dateien (`konto-geraetetest-*.db`).
+appId: ${APP_ID}
+name: On-Device-Suite
+---
+- launchApp
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: geraetetest?phase=vor_neustart
+- extendedWaitUntil:
+    visible: "Gerätetest vor Neustart: 5 von 5 bestanden."
+    timeout: 60000
+- takeScreenshot: geraetetest-vor-neustart
+- stopApp
+- launchApp
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: geraetetest?phase=nach_neustart
+- extendedWaitUntil:
+    visible: "Gerätetest nach Neustart: 1 von 1 bestanden."
+    timeout: 60000
+- takeScreenshot: geraetetest-nach-neustart

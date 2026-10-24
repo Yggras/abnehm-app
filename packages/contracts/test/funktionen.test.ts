@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { EntityId, LocalDate, weekdayOf } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
+import { partnerSummaryBounds, partnerSummaryPeriod, partnerSummaryPeriodOf } from '../src/partner.ts';
 import { personOfTimeZoneKey, personTimeZoneKey } from '../src/person.ts';
 import { routeTargetOrToday } from '../src/routes.ts';
 import { needsResponse, WirContribution } from '../src/wir.ts';
@@ -129,5 +130,33 @@ describe('personTimeZoneKey', () => {
     ['ohne UUID', `person:${'x'.repeat(36)}:time_zone:${changeId}`],
   ])('erkennt %s nicht als Schlüssel', (_, key) => {
     expect(personOfTimeZoneKey(key)).toBeNull();
+  });
+});
+
+describe('partnerSummaryPeriod', () => {
+  it.each([
+    ['ernaehrung', '2026-10-14', { type: 'tag', localDate: '2026-10-14' }],
+    ['wasser', '2026-10-14', { type: 'tag', localDate: '2026-10-14' }],
+    ['sport', '2026-10-14', { type: 'woche', from: '2026-10-12', to: '2026-10-18' }],
+    ['sport', '2026-10-12', { type: 'woche', from: '2026-10-12', to: '2026-10-18' }],
+    ['sport', '2026-10-18', { type: 'woche', from: '2026-10-12', to: '2026-10-18' }],
+    ['gewicht', '2026-10-14', { type: 'vierzehn_tage', from: '2026-10-01', to: '2026-10-14' }],
+  ] as const)('%s am %s', (area, today, period) => {
+    expect(partnerSummaryPeriod(area, LocalDate.parse(today))).toEqual(period);
+  });
+
+  it('zerlegt jeden Zeitraum in seine Grenzen und setzt ihn daraus wieder zusammen', () => {
+    for (const area of AreaKey.options) {
+      const period = partnerSummaryPeriod(area, LocalDate.parse('2026-10-14'));
+      const { from, to } = partnerSummaryBounds(period);
+      expect(partnerSummaryPeriodOf(area, from, to)).toEqual(period);
+    }
+  });
+
+  it('endet für jeden Bereich am aktuellen Tag oder in dessen Woche', () => {
+    for (const area of AreaKey.options) {
+      const period = partnerSummaryPeriod(area, LocalDate.parse('2026-03-29'));
+      expect(period.type === 'tag' ? period.localDate : period.to).toBe('2026-03-29');
+    }
   });
 });

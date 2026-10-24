@@ -13,6 +13,9 @@ import { energyBookingEntity } from './energy/bookings.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
+import { partnerProjectionEntities } from './partner-projections/entities.ts';
+import { createPartnerProjections } from './partner-projections/projections.ts';
+import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
@@ -51,6 +54,10 @@ export function createBackend({
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
+  // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.
+  const partnerProjections = createPartnerProjections({ clock });
+  for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);
+  sync.registerPrePullStep('partner_projections', partnerProjections.prePullStep);
   const invitations = invitationRoutes({
     database,
     clock,
@@ -71,6 +78,7 @@ export function createBackend({
     authorization,
     sync,
     logout,
+    partnerProjections,
     jobs,
   };
 }

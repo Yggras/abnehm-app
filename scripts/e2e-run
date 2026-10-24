@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Lässt die Maestro-Abläufe (#114) gegen E2E-Binaries und das lokal laufende E2E-Backend laufen:
+#   scripts/e2e-run                          # iOS-Simulator und Android-Emulator, alle Abläufe
+#   scripts/e2e-run ios --build              # vorher das E2E-Binary neu bauen
+#   scripts/e2e-run android --ablauf geraetetest
+#   scripts/e2e-run android --geraet <adb-serial> --ablauf geraetetest   # echtes Gerät per Kabel
+#
+# Abläufe (apps/mobile/e2e/): sync-offline (E2E), geraetesmoke (Shell), geraetetest (On-Device-Suite).
+# Das E2E-Backend ist ein eigener Compose-Stack `abnehm-e2e` (Development-Image mit Seed-Route) auf
+# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Jeder Lauf
+# schreibt Protokoll, Bildschirmfotos, JUnit-Bericht und die Artefakt-IDs der getesteten Binaries nach
+# ~/Library/Logs/abnehm-app/e2e/<Zeitpunkt>/; die Zusammenfassung steht in zusammenfassung.txt.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mobile="$repo_root/apps/mobile"
+
+usage() {
+  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+platforms=(ios android)
+if [[ "${1:-}" == "ios" || "${1:-}" == "android" ]]; then platforms=("$1"); shift
+elif [[ "${1:-}" == "alle" ]]; then shift; fi
+build=false
+flows=(sync-offline geraetesmoke geraetetest)
+device=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build) build=true ;;
+    --ablauf) flows=("${2:?--ablauf braucht einen Namen}"); shift ;;
+    --geraet) device="${2:?--geraet braucht eine Geräte-ID}"; shift ;;
+    *) usage ;;
+  esac
+  shift
+done
+for flow in "${flows[@]}"; do [[ -f "$mobile/e2e/$flow.yaml" ]] || { echo "Unbekannter Ablauf: $flow" >&2; exit 2; }; done
+
+port="${E2E_BACKEND_PORT:-8788}"
+export E2E_BACKEND_PORT="$port"
+log_dir="${E2E_LOG_DIR:-$HOME/Library/Logs/abnehm-app/e2e}/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$log_dir"
+summary="$log_dir/zusammenfassung.txt"
+echo "E2E-Lauf $(date -u +%Y-%m-%dT%H:%M:%SZ), Commit $(cd "$repo_root" && git rev-parse HEAD)" > "$summary"
+
+# E2E-Backend ---------------------------------------------------------------------------------------
+echo "Starte das E2E-Backend auf 127.0.0.1:$port …" >&2
+"$repo_root/scripts/dev-secrets" >/dev/null
+(cd "$repo_root" && BACKEND_PORT="$port" docker compose --project-name abnehm-e2e up --detach --build --wait >&2)
+
+# Geräte --------------------------------------------------------------------------------------------
+booted_simulator() {
+  xcrun simctl list devices booted --json \
+    | node -e 'const d=JSON.parse(require("fs").readFileSync(0,"utf8")).devices;for(const l of Object.values(d))for(const x of l)if(x.state==="Booted"){console.log(x.udid);process.exit(0)}'
+}
+
+ios_simulator() {
+  local booted
+  booted="$(booted_simulator)"
+  if [[ -z "$booted" ]]; then
+    local name="${E2E_IOS_SIMULATOR:-iPhone 17e}"
+    echo "Starte den Simulator „${name}“ …" >&2
+    xcrun simctl boot "$name" >&2
+    booted="$(booted_simulator)"
+  fi
+  echo "$booted"
+}
+
+adb_bin() {
+  if command -v adb >/dev/null; then command -v adb; else echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"; fi
+}
+
+android_device() {
+  local adb serial
+  adb="$(adb_bin)"
+  serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+  if [[ -z "$serial" ]]; then
+    local avd="${E2E_ANDROID_AVD:-medium_phone}"
+    echo "Starte den Emulator „${avd}“ …" >&2
+    "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" -avd "$avd" -no-snapshot-save -no-boot-anim >/dev/null 2>&1 &
+    # Mit einem weiteren angeschlossenen Gerät braucht jeder adb-Aufruf die Seriennummer des Emulators.
+    until serial="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ { print $1; exit }')" && [[ -n "$serial" ]]; do sleep 2; done
+    "$adb" -s "$serial" wait-for-device
+    until [[ "$("$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do sleep 2; done
+  fi
+  echo "$serial"
+}
+
+# Läufe ---------------------------------------------------------------------------------------------
+failed=0
+for platform in "${platforms[@]}"; do
+  if [[ -n "$device" && "$platform" == ios ]]; then
+    # Maestro meldet ein per Kabel angeschlossenes iPhone als „not connected“ (#101); dort läuft der
+    # Ablauf von Hand, siehe docs/entwicklung.md › „Echte Geräte“.
+    echo "Maestro steuert nur den iOS-Simulator; echte iPhones prüft der Handablauf aus docs/entwicklung.md." >&2
+    exit 2
+  fi
+  artifact="$("$repo_root/scripts/e2e-build" "$platform" ${device:+--geraet} --pfad)"
+  if [[ "$build" == true || ! -f "$artifact" ]]; then
+    "$repo_root/scripts/e2e-build" "$platform" ${device:+--geraet} >/dev/null
+  fi
+  binary="$(dirname "$artifact")/$(node -p "require('$artifact').binary")"
+  app_id="$(node -p "require('$artifact').appId")"
+  backend="$(node -p "require('$artifact').backend")"
+  [[ "$backend" == *":$port" ]] || echo "Hinweis: Das Binary nutzt $backend, das E2E-Backend lauscht auf Port $port." >&2
+
+  if [[ "$platform" == ios ]]; then
+    id="$(ios_simulator)"
+    xcrun simctl install "$id" "$binary"
+  else
+    adb="$(adb_bin)"
+    id="${device:-$(android_device)}"
+    "$adb" -s "$id" install -r "$binary" >&2
+    # Ein echtes Gerät erreicht das Backend über localhost des Rechners
+    # (https://developer.android.com/tools/adb#forwardports); der Emulator über 10.0.2.2.
+    [[ -z "$device" ]] || "$adb" -s "$id" reverse "tcp:$port" "tcp:$port" >&2
+  fi
+
+  out="$log_dir/$platform"
+  mkdir -p "$out"
+  cp "$artifact" "$out/artefakt.json"
+  flow_files=()
+  for flow in "${flows[@]}"; do flow_files+=("$mobile/e2e/$flow.yaml"); done
+  echo "Maestro auf $platform ($id): ${flows[*]} …" >&2
+  status="bestanden"
+  if ! (cd "$mobile" && "$repo_root/scripts/e2e-maestro" --device "$id" test \
+      --env APP_ID="$app_id" --env SCHEME=abnehmapp-e2e \
+      --format JUNIT --output "$out/bericht.xml" --test-output-dir "$out" \
+      "${flow_files[@]}" 2>&1 | tee "$out/maestro.log" >&2; exit "${PIPESTATUS[0]}"); then
+    status="FEHLGESCHLAGEN"
+    failed=1
+  fi
+  echo "$platform: $status · ${flows[*]} · $(node -p "const a=require('$artifact'); a.artefaktId + ' · Commit ' + a.commit + (a.ungespeicherteAenderungen ? ' (mit ungespeicherten Änderungen)' : '')") · Gerät $id" >> "$summary"
+done
+
+cat "$summary"
+echo "Protokolle: $log_dir"
+exit "$failed"
