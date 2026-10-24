@@ -103,24 +103,24 @@ const sharedActionBase = {
   decidedAt: Instant.nullable(),
 };
 
+/** Nutzlast je Art; dieselben Schemas gelten für die Aktion und für ihren Antrag. */
+const sharedActionPayloads = {
+  rollenwahl: z.strictObject({ proposerRole: IslandRole }),
+  rollentausch: z.strictObject({}),
+  deko_schenken: z.strictObject({ islandObjectId: EntityId, decoKey: CatalogKey }),
+  entkoppeln: z.strictObject({}),
+};
+
 /**
  * Gemeinsame Aktion einer Person (Art im Feld `type`). Rollenwahl, Rollentausch und Deko schenken
  * entscheidet der Partner; Entkoppeln nimmt der Server einseitig an.
  */
 export const SharedAction = z
   .discriminatedUnion('type', [
-    z.strictObject({
-      type: z.literal('rollenwahl'),
-      ...sharedActionBase,
-      payload: z.strictObject({ proposerRole: IslandRole }),
-    }),
-    z.strictObject({ type: z.literal('rollentausch'), ...sharedActionBase, payload: z.strictObject({}) }),
-    z.strictObject({
-      type: z.literal('deko_schenken'),
-      ...sharedActionBase,
-      payload: z.strictObject({ islandObjectId: EntityId, decoKey: CatalogKey }),
-    }),
-    z.strictObject({ type: z.literal('entkoppeln'), ...sharedActionBase, payload: z.strictObject({}) }),
+    z.strictObject({ type: z.literal('rollenwahl'), ...sharedActionBase, payload: sharedActionPayloads.rollenwahl }),
+    z.strictObject({ type: z.literal('rollentausch'), ...sharedActionBase, payload: sharedActionPayloads.rollentausch }),
+    z.strictObject({ type: z.literal('deko_schenken'), ...sharedActionBase, payload: sharedActionPayloads.deko_schenken }),
+    z.strictObject({ type: z.literal('entkoppeln'), ...sharedActionBase, payload: sharedActionPayloads.entkoppeln }),
   ])
   .refine((action) => (action.status === 'offen') === (action.decidedAt === null), {
     message: '`decidedAt` ist genau bei entschiedenen Aktionen gesetzt',
@@ -132,23 +132,23 @@ export type SharedAction = z.infer<typeof SharedAction>;
 export const RequestedSharedActionType = z.enum(['rollenwahl', 'rollentausch', 'deko_schenken']);
 export type RequestedSharedActionType = z.infer<typeof RequestedSharedActionType>;
 
-/**
- * Nutzlast des Fachbefehls `requestSharedAction`. Die ID vergibt das Gerät; die Nutzlast der Art prüft
- * der Server mit dem Schema, das die Art in seiner Art-Registry anmeldet (Spezifikation 4).
- */
-export const RequestSharedAction = z.strictObject({
-  actionId: EntityId,
-  type: RequestedSharedActionType,
-  payload: z.record(z.string(), z.unknown()),
-});
+/** Nutzlast des Fachbefehls `requestSharedAction`; die ID vergibt das Gerät. */
+export const RequestSharedAction = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('rollenwahl'), actionId: EntityId, payload: sharedActionPayloads.rollenwahl }),
+  z.strictObject({ type: z.literal('rollentausch'), actionId: EntityId, payload: sharedActionPayloads.rollentausch }),
+  z.strictObject({ type: z.literal('deko_schenken'), actionId: EntityId, payload: sharedActionPayloads.deko_schenken }),
+]);
 export type RequestSharedAction = z.infer<typeof RequestSharedAction>;
 
 /** Annehmen und Ablehnen darf nur der Partner, Zurückziehen nur der Antragsteller. */
 export const SharedActionDecision = z.enum(['annehmen', 'ablehnen', 'zurueckziehen']);
 export type SharedActionDecision = z.infer<typeof SharedActionDecision>;
 
-/** Nutzlast des Fachbefehls `decideSharedAction`. */
-export const DecideSharedAction = z.strictObject({ actionId: EntityId, decision: SharedActionDecision });
+/**
+ * Nutzlast des Fachbefehls `decideSharedAction`. `timeZone` ist die Zone des entscheidenden Geräts;
+ * mit der angenommenen Rollenwahl wird sie die Zeitzone der Insel (Spezifikation 0, Abschnitt 8).
+ */
+export const DecideSharedAction = z.strictObject({ actionId: EntityId, decision: SharedActionDecision, timeZone: TimeZone });
 export type DecideSharedAction = z.infer<typeof DecideSharedAction>;
 
 /** Fachlicher Schlüssel von `requestSharedAction`: je Aktion genau ein Antrag. */

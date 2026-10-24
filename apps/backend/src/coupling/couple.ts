@@ -6,7 +6,7 @@ import { AreaKey } from '@abnehm/contracts/base';
 
 import type { DbExecutor } from '../database.ts';
 import { coupling, couplingMember, island, partnerSharing, person, photoSharing, sharedAction } from '../db/schema/index.ts';
-import { nextServerVersion, recordChange } from '../sync/change-log.ts';
+import { changeWriter, updated } from './change-writer.ts';
 
 // Schreibseite der Kopplung (Spezifikation 0, Abschnitte 8 und 9). Jede geschriebene Zeile erhält eine
 // eigene Serverversion und einen Eintrag im Änderungsprotokoll, damit sie im Pull ankommt: Kopplung,
@@ -150,21 +150,6 @@ export async function followDisplayName(tx: DbExecutor, personId: string, displa
     });
   }
 }
-
-type Stamp = { createdAt: Date; updatedAt: Date; serverVersion: bigint };
-type Scope = { entityType: string } & ({ couplingId: string } | { ownerPersonId: string });
-
-/** Vergibt je Zeile eine Serverversion und trägt die Änderung mit ihrer Sichtbarkeitsgrenze ein. */
-function changeWriter(tx: DbExecutor, at: Date) {
-  return async (scope: Scope, writeRow: (stamp: Stamp) => Promise<string>) => {
-    const serverVersion = await nextServerVersion(tx);
-    const entityId = await writeRow({ createdAt: at, updatedAt: at, serverVersion });
-    await recordChange(tx, { position: serverVersion, operation: 'upsert', createdAt: at, ...scope, entityId });
-  };
-}
-
-/** Bei einer Änderung bleibt `created_at` erhalten. */
-const updated = ({ updatedAt, serverVersion }: Stamp) => ({ updatedAt, serverVersion });
 
 async function displayNames(tx: DbExecutor, personIds: readonly string[]) {
   return tx

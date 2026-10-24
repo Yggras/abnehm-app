@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
-import { expect } from 'vitest';
-import { z } from 'zod';
 
-import { EntityId, Instant } from '@abnehm/contracts/base';
+import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
 import {
   sharedActionDecisionKey,
   sharedActionRequestKey,
@@ -15,16 +13,15 @@ import {
 import { currentSyncSchemaVersion, type CanonicalChange, type OutboxOperation } from '@abnehm/contracts/sync';
 
 import { policies } from '../../src/authorization/authorization.ts';
+import { changeWriter, updated } from '../../src/coupling/change-writer.ts';
 import type { SharedActionKind } from '../../src/coupling/shared-actions.ts';
 import type { DbExecutor } from '../../src/database.ts';
-import { couplingMember } from '../../src/db/schema/index.ts';
+import { couplingMember, island } from '../../src/db/schema/index.ts';
 import { CommandRejection } from '../../src/sync/commands.ts';
-import { nextServerVersion, recordChange } from '../../src/sync/change-log.ts';
-import type { TestBackend } from './app.ts';
-import { call, type Device } from './auth-client.ts';
-import { httpOutcome, resourceProbe, type AuthorizationScenario, type Outcome } from './authorization.ts';
+import type { Device } from './auth-client.ts';
+import { httpOutcome, resourceProbe, type AuthorizationScenario } from './authorization.ts';
 import { coupledWorld, otherCouple, worldStart, type CoupledWorld, type WorldPerson } from './coupled-world.ts';
-import { pushRaw } from './sync.ts';
+import { pushOutcome } from './sync.ts';
 
 // Gemeinsame Aktionen in Tests (#107): Push-Operationen der beiden Fachbefehle, Test-Arten für die
 // Art-Registry und die Negativtest-Szenarien für `registeredCommandCases`. Die echten Arten
@@ -46,13 +43,23 @@ export function requestOp(request: RequestSharedAction, overrides: { operationId
   };
 }
 
-export function decideOp(actionId: string, decision: SharedActionDecision, overrides: { operationId?: string; businessKey?: string } = {}): CommandOperation {
+/** Antrag der Test-Art `rollentausch` mit neuer ID. */
+export const roleSwapRequest = () => requestOp({ actionId: EntityId.parse(randomUUID()), type: 'rollentausch', payload: {} });
+
+/** Die ID der Aktion eines Antrags aus `requestOp`. */
+export const actionIdOf = (operation: CommandOperation) => EntityId.parse(operation.payload.actionId);
+
+export function decideOp(
+  actionId: string,
+  decision: SharedActionDecision,
+  overrides: { operationId?: string; businessKey?: string; timeZone?: string } = {},
+): CommandOperation {
   const id = EntityId.parse(actionId);
   return {
     type: 'decideSharedAction',
     operationId: EntityId.parse(overrides.operationId ?? randomUUID()),
     businessKey: overrides.businessKey ?? sharedActionDecisionKey(id),
-    payload: { actionId: id, decision },
+    payload: { actionId: id, decision, timeZone: TimeZone.parse(overrides.timeZone ?? worldStart.timeZone) },
     knownServerVersion: null,
     schemaVersion: currentSyncSchemaVersion,
     createdAt,
@@ -61,22 +68,30 @@ export function decideOp(actionId: string, decision: SharedActionDecision, overr
 
 /** Setzt die Rolle eines Mitglieds samt Serverversion, damit sie im Pull ankommt. */
 async function assignRole(tx: DbExecutor, couplingId: string, personId: string, role: IslandRole, at: Date) {
-  const serverVersion = await nextServerVersion(tx);
   const [member] = await tx
-    .update(couplingMember)
-    .set({ role, updatedAt: at, serverVersion })
-    .where(and(eq(couplingMember.couplingId, couplingId), eq(couplingMember.personId, personId)))
-    .returning({ id: couplingMember.id });
-  await recordChange(tx, { position: serverVersion, entityType: 'coupling_member', entityId: member!.id, operation: 'upsert', couplingId, createdAt: at });
+    .select({ id: couplingMember.id })
+    .from(couplingMember)
+    .where(and(eq(couplingMember.couplingId, couplingId), eq(couplingMember.personId, personId)));
+  await changeWriter(tx, at)({ entityType: 'coupling_member', couplingId }, async (stamp) => {
+    await tx.update(couplingMember).set({ role, ...updated(stamp) }).where(eq(couplingMember.id, member!.id));
+    return member!.id;
+  });
 }
 
-/** Test-Art auf `rollentausch`: Bei Annahme erhält der Antragsteller Bauen, der Partner Natur. */
+/**
+ * Test-Art auf `rollentausch`: Bei Annahme erhält der Antragsteller Bauen, der Partner Natur, und die Insel
+ * schlüpft in der Zone des annehmenden Geräts, wie es Spezifikation 4 für die Rollenwahl vorsieht.
+ */
 export const testRoleKind: SharedActionKind<'rollentausch'> = {
   type: 'rollentausch',
-  payload: z.strictObject({}),
-  async accept(tx, { action, partnerPersonId, at }) {
+  async accept(tx, { action, partnerPersonId, at, timeZone }) {
     await assignRole(tx, action.couplingId, action.requesterPersonId, 'bauen', at);
     await assignRole(tx, action.couplingId, partnerPersonId, 'natur', at);
+    const [hatching] = await tx.select({ id: island.id }).from(island).where(eq(island.couplingId, action.couplingId));
+    await changeWriter(tx, at)({ entityType: 'island', couplingId: action.couplingId }, async (stamp) => {
+      await tx.update(island).set({ state: 'aktiv', hatchedAt: at, timeZone, ...updated(stamp) }).where(eq(island.id, hatching!.id));
+      return hatching!.id;
+    });
   },
 };
 
@@ -89,7 +104,6 @@ export const unverschenkbar = 'unverschenkbar';
  */
 export const testGiftKind: SharedActionKind<'deko_schenken'> = {
   type: 'deko_schenken',
-  payload: z.strictObject({ islandObjectId: EntityId, decoKey: z.string() }),
   async request(_tx, { action }) {
     if (action.payload.decoKey === unverschenkbar) throw new CommandRejection('conflict');
   },
@@ -98,24 +112,6 @@ export const testGiftKind: SharedActionKind<'deko_schenken'> = {
     throw new CommandRejection('conflict');
   },
 };
-
-/** Kopplung über die echten Einladungsabläufe, damit Kopplung und Mitglieder per Pull ankommen. */
-export async function coupleByInvitation(backend: TestBackend, inviter: Device, invitee: Device) {
-  const created = await call(backend, 'POST', '/v1/invitations', inviter, { requestId: randomUUID() });
-  const { code } = created.body as { code: string };
-  const accepted = await call(backend, 'POST', '/v1/invitations/accept', invitee, { requestId: randomUUID(), code });
-  expect(accepted.status).toBe(200);
-  return accepted.body as { couplingId: string; reactivated: boolean };
-}
-
-/** Ergebnis eines Pushs als Ausgang der Autorisierung; `forbidden` ist die einzige Verweigerung. */
-export async function commandOutcome(backend: TestBackend, device: Device, operation: CommandOperation): Promise<Outcome> {
-  const reply = await pushRaw(backend, device, [operation]);
-  if (reply.status !== 200) return httpOutcome(reply);
-  const [result] = (reply.body as { results: { type: string; error?: { code: string } }[] }).results;
-  if (result?.type === 'applied') return 'erlaubt';
-  return result?.error?.code === 'forbidden' ? 'verweigert' : `unerwartet: ${JSON.stringify(result)}`;
-}
 
 export type SharedActionWorld = CoupledWorld & { actor: Device; actionId: EntityId };
 
@@ -127,16 +123,16 @@ export async function sharedActionWorld(): Promise<SharedActionWorld> {
 }
 
 async function requested(world: CoupledWorld, requester: WorldPerson) {
-  const actionId = EntityId.parse(randomUUID());
-  expect(await commandOutcome(world.backend, requester.device, requestOp({ actionId, type: 'rollentausch', payload: {} }))).toBe('erlaubt');
-  return actionId;
+  const operation = roleSwapRequest();
+  if ((await pushOutcome(world.backend, requester.device, operation)) !== 'erlaubt') throw new Error('Antrag fehlgeschlagen');
+  return actionIdOf(operation);
 }
 
 /** Entkoppeln über den Kern; danach hat keine Person mehr Zugriff auf die Inhalte der Kopplung. */
-export async function uncoupleWorld(world: CoupledWorld) {
-  await world.backend.database.db.transaction((tx) =>
+export async function uncoupleWorld(world: CoupledWorld, actionId: EntityId = EntityId.parse(randomUUID())) {
+  return world.backend.database.db.transaction((tx) =>
     world.backend.uncoupling.uncouple(tx, {
-      actionId: EntityId.parse(randomUUID()),
+      actionId,
       couplingId: EntityId.parse(world.couplingId),
       requesterPersonId: EntityId.parse(world.anna.personId),
       at: new Date(worldStart.instant),
@@ -152,15 +148,14 @@ export const sharedActionCommandScenarios = {
   requestSharedAction: {
     policy: policies.resource('shared_action_request', 'befehl'),
     arrange: sharedActionWorld,
-    attempt: (world: SharedActionWorld, device: Device) =>
-      commandOutcome(world.backend, device, requestOp({ actionId: EntityId.parse(randomUUID()), type: 'rollentausch', payload: {} })),
+    attempt: (world: SharedActionWorld, device: Device) => pushOutcome(world.backend, device, roleSwapRequest()),
     // Die ID einer Aktion des anderen Paars.
     manipulierte_id: async (world: SharedActionWorld) => {
       const other = await otherCouple(world);
       const actionId = await requested(other, other.anna);
-      return commandOutcome(world.backend, world.actor, requestOp({ actionId, type: 'rollentausch', payload: {} }));
+      return pushOutcome(world.backend, world.actor, requestOp({ actionId, type: 'rollentausch', payload: {} }));
     },
-    entkopplung: uncoupleWorld,
+    entkopplung: async (world: SharedActionWorld) => void (await uncoupleWorld(world)),
     verbotene_operation: (world: SharedActionWorld) => probe(world, 'shared_action_request'),
   },
   decideSharedAction: {
@@ -169,12 +164,12 @@ export const sharedActionCommandScenarios = {
       const world = await sharedActionWorld();
       return { ...world, actor: world.philipp.device };
     },
-    attempt: (world: SharedActionWorld, device: Device) => commandOutcome(world.backend, device, decideOp(world.actionId, 'annehmen')),
+    attempt: (world: SharedActionWorld, device: Device) => pushOutcome(world.backend, device, decideOp(world.actionId, 'annehmen')),
     manipulierte_id: async (world: SharedActionWorld) => {
       const other = await otherCouple(world);
-      return commandOutcome(world.backend, world.actor, decideOp(await requested(other, other.anna), 'annehmen'));
+      return pushOutcome(world.backend, world.actor, decideOp(await requested(other, other.anna), 'annehmen'));
     },
-    entkopplung: uncoupleWorld,
+    entkopplung: async (world: SharedActionWorld) => void (await uncoupleWorld(world)),
     verbotene_operation: (world: SharedActionWorld) => probe(world, 'shared_action_decision'),
   },
 } satisfies Record<

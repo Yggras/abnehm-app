@@ -40,6 +40,7 @@ export {
   type PersonActor,
   type ResourceClass,
   type ResourceEntity,
+  type SharedActionParticipation,
 } from './resources.ts';
 export type { ResourceFacts, ResourceTarget };
 

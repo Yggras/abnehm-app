@@ -14,8 +14,8 @@ import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, foundati
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import type { Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
-import { worldStart } from './support/coupled-world.ts';
-import { coupleByInvitation, decideOp, requestOp, testRoleKind } from './support/shared-actions.ts';
+import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
+import { actionIdOf, decideOp, roleSwapRequest, testRoleKind } from './support/shared-actions.ts';
 import { push } from './support/sync.ts';
 
 // Tracer Bullet für #107 auf echten Geräten: Engine und Adapter der App auf echtem SQLite
@@ -79,9 +79,8 @@ describe('Gemeinsame Aktionen und Entkoppeln App ↔ Backend', () => {
     const annasPhone = await phone(backend, anna.accountId, anna.device);
     const philippsPhone = await phone(backend, philipp.accountId, philipp.device);
 
-    const accepted = requestOp({ actionId: EntityId.parse(randomUUID()), type: 'rollentausch', payload: {} });
-    const open = requestOp({ actionId: EntityId.parse(randomUUID()), type: 'rollentausch', payload: {} });
-    const [acceptedId, openId] = [accepted.payload.actionId as string, open.payload.actionId as string];
+    const [accepted, open] = [roleSwapRequest(), roleSwapRequest()];
+    const [acceptedId, openId] = [actionIdOf(accepted), actionIdOf(open)];
     await push(backend, anna.device, [accepted]);
     await push(backend, philipp.device, [decideOp(acceptedId, 'annehmen')]);
     await push(backend, anna.device, [open]);

@@ -203,7 +203,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
     if (decision.type === 'verweigert') return forbidden(operation);
     try {
       return await tx.transaction(async (savepoint) => {
-        const result = await command.execute(savepoint, { actor, payload: parsed.data, businessKey: operation.businessKey, at });
+        const result = await command.execute(savepoint, { actor, resource: decision.facts, payload: parsed.data, businessKey: operation.businessKey, at });
         if (command.identity === 'mapped' && !completeMappings(result.changes, result.idMappings)) {
           throw new CommandRejection('invalid_payload');
         }
@@ -299,10 +299,11 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         const latest = await currentServerVersion(tx);
         const page = request.pageToken === null ? firstPage(request.cursor, latest) : continuedPage(actor, request.pageToken, latest);
         if ('code' in page) return page;
+        const archiveStatusTypes = [...entities.values()].filter((entity) => entity.archiveStatus === true).map((entity) => entity.entityType);
         const entries = await tx
           .select()
           .from(changeLog)
-          .where(and(gt(changeLog.position, page.after), lte(changeLog.position, page.upper), visibleTo(tx, actor.personId)))
+          .where(and(gt(changeLog.position, page.after), lte(changeLog.position, page.upper), visibleTo(tx, actor.personId, archiveStatusTypes)))
           .orderBy(asc(changeLog.position))
           // Ein Eintrag mehr zeigt, ob eine weitere Seite folgt.
           .limit(pullPageSize + 1);
@@ -454,24 +455,27 @@ function continuedPage(actor: PersonActor, token: string, latest: bigint): Page 
 
 /**
  * Sichtbar sind adressierte Einträge nur dem Empfänger, alle übrigen dem Eigentümer und den aktiven
- * Mitgliedern ihrer Kopplung. Nur die Kopplung selbst, ihr Archivstatus, bleibt nach dem Entkoppeln
- * auch den früheren Mitgliedern sichtbar (Spezifikation 0, Abschnitt 10). Die Grenze kommt aus der
- * Sitzung, nie aus Cursor, Token oder Installation.
+ * Mitgliedern ihrer Kopplung. Der Archivstatus einer Kopplung (`archiveStatus` der Entität) bleibt nach
+ * dem Entkoppeln auch den früheren Mitgliedern sichtbar (Spezifikation 0, Abschnitt 10). Die Grenze
+ * kommt aus der Sitzung, nie aus Cursor, Token oder Installation.
  */
-function visibleTo(tx: DbExecutor, personId: EntityId) {
-  const memberships = (status?: 'aktiv') =>
-    tx
-      .select({ couplingId: couplingMember.couplingId })
-      .from(couplingMember)
-      .where(and(eq(couplingMember.personId, personId), status === undefined ? undefined : eq(couplingMember.couplingStatus, status)));
+function visibleTo(tx: DbExecutor, personId: EntityId, archiveStatusTypes: readonly string[]) {
+  const ownMembership = eq(couplingMember.personId, personId);
+  const activeCouplings = tx
+    .select({ couplingId: couplingMember.couplingId })
+    .from(couplingMember)
+    .where(and(ownMembership, eq(couplingMember.couplingStatus, 'aktiv')));
+  const allCouplings = tx.select({ couplingId: couplingMember.couplingId }).from(couplingMember).where(ownMembership);
   return or(
     eq(changeLog.recipientPersonId, personId),
     and(
       isNull(changeLog.recipientPersonId),
       or(
         eq(changeLog.ownerPersonId, personId),
-        inArray(changeLog.couplingId, memberships('aktiv')),
-        and(eq(changeLog.entityType, 'coupling'), inArray(changeLog.couplingId, memberships())),
+        inArray(changeLog.couplingId, activeCouplings),
+        archiveStatusTypes.length === 0
+          ? undefined
+          : and(inArray(changeLog.entityType, [...archiveStatusTypes]), inArray(changeLog.couplingId, allCouplings)),
       ),
     ),
   );

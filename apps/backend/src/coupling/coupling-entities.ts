@@ -25,12 +25,14 @@ function serverManaged<T extends PgTable & { id: AnyPgColumn<{ data: string }> }
   resource: ResourceEntity;
   table: T;
   record(row: T['$inferSelect']): EntityData;
+  archiveStatus?: boolean;
 }): ServerSyncEntity {
   return {
     entityType: options.entityType,
     resource: options.resource,
     upsert: null,
     deletable: false,
+    archiveStatus: options.archiveStatus ?? false,
     async read(tx, ids) {
       if (ids.length === 0) return new Map();
       const rows = (await tx
@@ -49,7 +51,7 @@ function serverManaged<T extends PgTable & { id: AnyPgColumn<{ data: string }> }
 }
 
 /** Die gemeinsame Aktion einer Zeile in der Form des Vertrags. */
-export function sharedActionOf(row: typeof sharedAction.$inferSelect): SharedAction {
+function sharedActionRecord(row: typeof sharedAction.$inferSelect): SharedAction {
   return SharedAction.parse({
     id: row.id,
     couplingId: row.couplingId,
@@ -63,27 +65,30 @@ export function sharedActionOf(row: typeof sharedAction.$inferSelect): SharedAct
 }
 
 /** Gemeinsame Aktion; ändern nur `requestSharedAction`, `decideSharedAction` und der Entkopplungs-Kern. */
-export const sharedActionEntity = serverManaged({ entityType: 'shared_action', resource: 'shared_action', table: sharedAction, record: sharedActionOf });
+export const sharedActionEntity = serverManaged({ entityType: 'shared_action', resource: 'shared_action', table: sharedAction, record: sharedActionRecord });
+
+/** Die Kopplung ist zugleich ihr Archivstatus: lesbar und im Pull für beide Mitglieder, auch nach dem Entkoppeln. */
+export const couplingEntity = serverManaged({
+  entityType: 'coupling',
+  resource: 'coupling_archive_status',
+  archiveStatus: true,
+  table: coupling,
+  record: (row) =>
+    CouplingRecord.parse({
+      personLowId: row.personLowId,
+      personHighId: row.personHighId,
+      status: row.status,
+      startedAt: iso(row.startedAt),
+      endedAt: isoOrNull(row.endedAt),
+      reactivatedAt: isoOrNull(row.reactivatedAt),
+      createdAt: iso(row.createdAt),
+      updatedAt: iso(row.updatedAt),
+    }),
+});
 
 export const couplingSyncEntities: readonly ServerSyncEntity[] = [
+  couplingEntity,
   sharedActionEntity,
-  serverManaged({
-    entityType: 'coupling',
-    // Der Datensatz ist der Archivstatus: lesbar für beide Mitglieder, auch nach dem Entkoppeln.
-    resource: 'coupling_archive_status',
-    table: coupling,
-    record: (row) =>
-      CouplingRecord.parse({
-        personLowId: row.personLowId,
-        personHighId: row.personHighId,
-        status: row.status,
-        startedAt: iso(row.startedAt),
-        endedAt: isoOrNull(row.endedAt),
-        reactivatedAt: isoOrNull(row.reactivatedAt),
-        createdAt: iso(row.createdAt),
-        updatedAt: iso(row.updatedAt),
-      }),
-  }),
   serverManaged({
     entityType: 'coupling_member',
     resource: 'coupling_member',

@@ -8,13 +8,13 @@ import { sharedActionRequestKey } from '@abnehm/contracts/island';
 
 import { createTestBackend } from './support/app.ts';
 import { authorizationCases, personWithSession } from './support/authorization.ts';
-import { worldStart } from './support/coupled-world.ts';
+import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
 import {
-  commandOutcome,
-  coupleByInvitation,
+  actionIdOf,
   decideOp,
   recordsOf,
   requestOp,
+  roleSwapRequest,
   sharedActionCommandScenarios,
   sharedActionWorld,
   testGiftKind,
@@ -22,7 +22,7 @@ import {
   uncoupleWorld,
   unverschenkbar,
 } from './support/shared-actions.ts';
-import { pullAll, push } from './support/sync.ts';
+import { pullAll, push, pushOutcome } from './support/sync.ts';
 
 // Nachweis für #107: der Rahmen gemeinsamer Aktionen (Spezifikation 0, Abschnitt 9) über Push und Pull
 // der echten Hono-App. Test-Arten stehen für Rollenwahl, Rollentausch und Deko schenken aus
@@ -43,9 +43,10 @@ async function setup() {
 describe('Gemeinsame Aktion beantragen und entscheiden', () => {
   it('Tracer Bullet: Anna beantragt eine Test-Aktion, Philipp nimmt an, und die Zustandsänderung kommt mit der Entscheidung', async () => {
     const { backend, anna, philipp, couplingId, cursors } = await setup();
-    const actionId = EntityId.parse(randomUUID());
+    const request = roleSwapRequest();
+    const actionId = actionIdOf(request);
 
-    const [requested] = await push(backend, anna.device, [requestOp({ actionId, type: 'rollentausch', payload: {} })]);
+    const [requested] = await push(backend, anna.device, [request]);
     expect(requested).toMatchObject({
       type: 'applied',
       changes: [{ type: 'record', entityType: 'shared_action', entityId: actionId, data: { status: 'offen', requesterPersonId: anna.personId } }],
@@ -63,19 +64,22 @@ describe('Gemeinsame Aktion beantragen und entscheiden', () => {
       },
     });
 
-    const [decided] = await push(backend, philipp.device, [decideOp(actionId, 'annehmen')]);
+    const [decided] = await push(backend, philipp.device, [decideOp(actionId, 'annehmen', { timeZone: 'America/New_York' })]);
     expect(decided).toMatchObject({ type: 'applied', changes: [{ entityId: actionId, data: { status: 'angenommen', decidedAt: worldStart.instant } }] });
 
     const seenByAnna = (await pullAll(backend, anna.device, cursors.anna)).changes;
     expect(recordsOf(seenByAnna, 'shared_action')[actionId]).toMatchObject({ status: 'angenommen' });
     const roles = Object.values(recordsOf(seenByAnna, 'coupling_member')).map(({ personId, role }) => [personId, role]);
     expect(Object.fromEntries(roles)).toEqual({ [anna.personId]: 'bauen', [philipp.personId]: 'natur' });
+    // Die Art erhält die Zone des annehmenden Geräts, nicht die der Person.
+    expect(Object.values(recordsOf(seenByAnna, 'island'))).toEqual([expect.objectContaining({ state: 'aktiv', timeZone: 'America/New_York' })]);
   });
 
   it('geht genau einmal von offen in einen Endzustand; jede weitere Entscheidung ändert nichts', async () => {
     const { backend, anna, philipp } = await setup();
-    const actionId = EntityId.parse(randomUUID());
-    await push(backend, anna.device, [requestOp({ actionId, type: 'rollentausch', payload: {} })]);
+    const request = roleSwapRequest();
+    const actionId = actionIdOf(request);
+    await push(backend, anna.device, [request]);
     const declined = decideOp(actionId, 'ablehnen');
     const [first] = await push(backend, philipp.device, [declined]);
     expect(first).toMatchObject({ type: 'applied', changes: [{ data: { status: 'abgelehnt' } }] });
@@ -94,11 +98,11 @@ describe('Gemeinsame Aktion beantragen und entscheiden', () => {
 
   it('lässt den Antragsteller zurückziehen; danach nimmt der Partner nichts mehr an', async () => {
     const { backend, anna, philipp } = await setup();
-    const actionId = EntityId.parse(randomUUID());
-    await push(backend, anna.device, [requestOp({ actionId, type: 'rollentausch', payload: {} })]);
+    const request = roleSwapRequest();
+    await push(backend, anna.device, [request]);
 
-    const [withdrawn] = await push(backend, anna.device, [decideOp(actionId, 'zurueckziehen')]);
-    const [accepted] = await push(backend, philipp.device, [decideOp(actionId, 'annehmen')]);
+    const [withdrawn] = await push(backend, anna.device, [decideOp(actionIdOf(request), 'zurueckziehen')]);
+    const [accepted] = await push(backend, philipp.device, [decideOp(actionIdOf(request), 'annehmen')]);
 
     expect(withdrawn).toMatchObject({ type: 'applied', changes: [{ data: { status: 'zurueckgezogen' } }] });
     expect(accepted).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' } });
@@ -115,16 +119,16 @@ describe('Autorisierung', () => {
   it('Antragsteller entscheidet selbst: verweigert, die Gegenprobe des Partners gelingt', async () => {
     const world = await sharedActionWorld();
 
-    expect(await commandOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'annehmen'))).toBe('verweigert');
-    expect(await commandOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'ablehnen'))).toBe('verweigert');
-    expect(await commandOutcome(world.backend, world.philipp.device, decideOp(world.actionId, 'ablehnen'))).toBe('erlaubt');
+    expect(await pushOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'annehmen'))).toBe('verweigert');
+    expect(await pushOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'ablehnen'))).toBe('verweigert');
+    expect(await pushOutcome(world.backend, world.philipp.device, decideOp(world.actionId, 'ablehnen'))).toBe('erlaubt');
   });
 
   it('Partner zieht zurück: verweigert, die Gegenprobe des Antragstellers gelingt', async () => {
     const world = await sharedActionWorld();
 
-    expect(await commandOutcome(world.backend, world.philipp.device, decideOp(world.actionId, 'zurueckziehen'))).toBe('verweigert');
-    expect(await commandOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'zurueckziehen'))).toBe('erlaubt');
+    expect(await pushOutcome(world.backend, world.philipp.device, decideOp(world.actionId, 'zurueckziehen'))).toBe('verweigert');
+    expect(await pushOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'zurueckziehen'))).toBe('erlaubt');
   });
 
   it('nach der Entkopplung: weder beantragen noch entscheiden, auch nicht über eine vorher offene Aktion', async () => {
@@ -132,17 +136,16 @@ describe('Autorisierung', () => {
     await uncoupleWorld(world);
 
     for (const decision of ['annehmen', 'ablehnen'] as const) {
-      expect(await commandOutcome(world.backend, world.philipp.device, decideOp(world.actionId, decision))).toBe('verweigert');
+      expect(await pushOutcome(world.backend, world.philipp.device, decideOp(world.actionId, decision))).toBe('verweigert');
     }
-    expect(await commandOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'zurueckziehen'))).toBe('verweigert');
-    const request = requestOp({ actionId: EntityId.parse(randomUUID()), type: 'rollentausch', payload: {} });
-    expect(await commandOutcome(world.backend, world.anna.device, request)).toBe('verweigert');
+    expect(await pushOutcome(world.backend, world.anna.device, decideOp(world.actionId, 'zurueckziehen'))).toBe('verweigert');
+    expect(await pushOutcome(world.backend, world.anna.device, roleSwapRequest())).toBe('verweigert');
   });
 });
 
 describe('Atomarität', () => {
   const gift = (actionId: EntityId, decoKey = 'muschelkranz') =>
-    requestOp({ actionId, type: 'deko_schenken', payload: { islandObjectId: randomUUID(), decoKey } });
+    requestOp({ actionId, type: 'deko_schenken', payload: { islandObjectId: EntityId.parse(randomUUID()), decoKey } });
 
   it('scheitert die Zustandsänderung der Annahme, bleibt die Aktion offen und nichts davon bestehen', async () => {
     const { backend, anna, philipp } = await setup();
@@ -161,9 +164,8 @@ describe('Atomarität', () => {
 
   it('lehnt die Art einen Antrag ab, entsteht keine Aktion', async () => {
     const { backend, anna } = await setup();
-    const actionId = EntityId.parse(randomUUID());
 
-    const [requested] = await push(backend, anna.device, [gift(actionId, unverschenkbar)]);
+    const [requested] = await push(backend, anna.device, [gift(EntityId.parse(randomUUID()), unverschenkbar)]);
 
     expect(requested).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' } });
     expect(recordsOf((await pullAll(backend, anna.device)).changes, 'shared_action')).toEqual({});
@@ -172,13 +174,13 @@ describe('Atomarität', () => {
   it('lehnt nicht angemeldete Arten, Entkoppeln, eine falsche Nutzlast der Art und einen fremden Schlüssel als ungültig ab', async () => {
     const { backend, anna } = await setup();
     const id = () => EntityId.parse(randomUUID());
-    const other = id();
+    const raw = (payload: object) => ({ ...roleSwapRequest(), payload: { actionId: id(), ...payload } }) as never;
 
     const results = await push(backend, anna.device, [
       requestOp({ actionId: id(), type: 'rollenwahl', payload: { proposerRole: 'bauen' } }),
-      requestOp({ actionId: id(), type: 'entkoppeln' as never, payload: {} }),
-      requestOp({ actionId: id(), type: 'rollentausch', payload: { proposerRole: 'bauen' } }),
-      requestOp({ actionId: id(), type: 'rollentausch', payload: {} }, { businessKey: sharedActionRequestKey(other) }),
+      raw({ type: 'entkoppeln', payload: {} }),
+      raw({ type: 'rollentausch', payload: { proposerRole: 'bauen' } }),
+      requestOp({ actionId: id(), type: 'rollentausch', payload: {} }, { businessKey: sharedActionRequestKey(id()) }),
     ]);
 
     expect(results.map((result) => (result.type === 'permanently_rejected' ? result.error.code : result.type))).toEqual([

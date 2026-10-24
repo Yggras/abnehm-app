@@ -140,6 +140,8 @@ export const islandFixtures = {
     },
     invalid: {
       'Entkoppeln': { actionId: sharedAction, type: 'entkoppeln', payload: {} },
+      'Nutzlast einer anderen Art': { actionId: sharedAction, type: 'rollentausch', payload: { proposerRole: 'bauen' } },
+      'Rollenwahl ohne Rolle': { actionId: sharedAction, type: 'rollenwahl', payload: {} },
       'Antragsteller aus dem Client': { actionId: sharedAction, type: 'rollentausch', payload: {}, requesterPersonId: anna },
       'ohne ID': { type: 'rollentausch', payload: {} },
     },
@@ -149,10 +151,11 @@ export const islandFixtures = {
     invalid: { 'Status statt Entscheidung': 'angenommen' },
   }),
   DecideSharedAction: fixtures(DecideSharedAction, {
-    valid: { 'Partner nimmt an': { actionId: sharedAction, decision: 'annehmen' } },
+    valid: { 'Partner nimmt an': { actionId: sharedAction, decision: 'annehmen', timeZone } },
     invalid: {
-      'ohne Entscheidung': { actionId: sharedAction },
-      'Entscheider aus dem Client': { actionId: sharedAction, decision: 'ablehnen', deciderPersonId: philipp },
+      'ohne Entscheidung': { actionId: sharedAction, timeZone },
+      'ohne Zone des Geräts': { actionId: sharedAction, decision: 'annehmen' },
+      'Entscheider aus dem Client': { actionId: sharedAction, decision: 'ablehnen', timeZone, deciderPersonId: philipp },
     },
   }),
   MomoForm: fixtures(MomoForm, {

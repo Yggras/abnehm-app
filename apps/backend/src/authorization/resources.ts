@@ -97,8 +97,11 @@ export type ResourceTarget = Readonly<{
   /** Eigentums- bzw. Absenderfeld der Nutzlast; weicht es von der Person der Sitzung ab, ist das verboten. */
   claimedOwnerPersonId?: unknown;
   /** Beteiligung, die eine Entscheidung über eine gemeinsame Aktion voraussetzt; die Regel prüft sie. */
-  claimedParticipation?: unknown;
+  claimedParticipation?: SharedActionParticipation;
 }>;
+
+/** Wer an einer gemeinsamen Aktion beteiligt ist: wer sie beantragt hat, oder der Partner, der antwortet. */
+export type SharedActionParticipation = 'antragsteller' | 'partner';
 
 /** Die maßgeblichen Fakten zur Ressource, aus Postgres gelesen; Fachlogik verwendet nur diese. */
 export type ResourceFacts = Readonly<{
@@ -402,11 +405,25 @@ const encouragementSendRule = byId(
 async function sharedActionOf(db: DbExecutor, id: string) {
   return first(
     db
-      .select({ couplingId: sharedAction.couplingId, requester: sharedAction.requesterPersonId })
+      .select({ couplingId: sharedAction.couplingId, requester: sharedAction.requesterPersonId, kind: sharedAction.kind })
       .from(sharedAction)
       .where(eq(sharedAction.id, id)),
   );
 }
+
+/**
+ * Gemeinsame Aktion lesen: aktive Mitglieder ihrer Kopplung. Die eigene Entkopplung liest der
+ * Antragsteller auch danach; sie ist inhaltsfrei, und nur so erfährt sein Gerät das Ergebnis.
+ */
+const sharedActionRule = byId('kopplungsinhalte', sharedAction, async (context, id) => {
+  const { personId } = context.actor;
+  const found = await sharedActionOf(context.db, id);
+  if (found === null) return denied;
+  const membership = await activeMembership(context.db, found.couplingId, personId);
+  if (membership !== null) return allowed({ ownerPersonId: found.requester, couplingId: found.couplingId, ...membership });
+  const ownUncoupling = context.operation === 'lesen' && found.kind === 'entkoppeln' && found.requester === personId;
+  return ownUncoupling ? allowed({ ownerPersonId: personId, couplingId: found.couplingId }) : denied;
+});
 
 /**
  * Gemeinsame Aktion beantragen: nur als aktives Mitglied, in der eigenen Kopplung. Ein Retry derselben
@@ -440,7 +457,7 @@ const sharedActionDecisionRule = byId(
     if (found === null) return denied;
     const membership = await activeMembership(context.db, found.couplingId, personId);
     if (membership === null) return denied;
-    const participation = found.requester === personId ? 'antragsteller' : 'partner';
+    const participation: SharedActionParticipation = found.requester === personId ? 'antragsteller' : 'partner';
     if (context.target.claimedParticipation !== participation) return denied;
     return allowed({ ownerPersonId: found.requester, couplingId: found.couplingId, ...membership });
   },
@@ -499,7 +516,7 @@ export const resourceEntities = {
   coupling: coupled('kopplungsinhalte', coupling, { id: coupling.id, coupling: coupling.id }),
   coupling_member: coupled('kopplungsinhalte', couplingMember, inCoupling(couplingMember)),
   island: coupled('kopplungsinhalte', island, inCoupling(island)),
-  shared_action: coupled('kopplungsinhalte', sharedAction, inCoupling(sharedAction)),
+  shared_action: sharedActionRule,
   shared_action_request: sharedActionRequestRule,
   shared_action_decision: sharedActionDecisionRule,
   challenge: coupled('kopplungsinhalte', challenge, inCoupling(challenge)),

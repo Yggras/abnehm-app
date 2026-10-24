@@ -6,12 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId } from '@abnehm/contracts/base';
 
+import { policies } from '../src/authorization/authorization.ts';
 import type { UncouplingObserver } from '../src/coupling/uncoupling.ts';
 import { coupling } from '../src/db/schema/index.ts';
 import { createTestBackend, type TestBackend } from './support/app.ts';
-import { personWithSession } from './support/authorization.ts';
-import { worldStart } from './support/coupled-world.ts';
-import { coupleByInvitation, decideOp, recordsOf, requestOp, testRoleKind } from './support/shared-actions.ts';
+import { httpOutcome, personWithSession, resourceProbe } from './support/authorization.ts';
+import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
+import { actionIdOf, decideOp, recordsOf, roleSwapRequest, testRoleKind } from './support/shared-actions.ts';
 import { pullAll, push } from './support/sync.ts';
 
 // Nachweis für #107: der serverseitige Entkopplungs-Kern (Spezifikation 0, Abschnitte 9 und 10). Er nimmt
@@ -44,25 +45,23 @@ function uncouple(backend: TestBackend, request: { couplingId: EntityId; request
   );
 }
 
-const rollentausch = () => requestOp({ actionId: EntityId.parse(randomUUID()), type: 'rollentausch', payload: {} });
-
 describe('Entkopplungs-Kern', () => {
   it('Tracer Bullet: Nach angenommener Aktion entkoppelt Anna; Philipp verliert sofort den Zugriff und erhält nur Notice und Archivstatus', async () => {
     const { backend, anna, philipp, couplingId, cursors } = await setup();
-    const accepted = rollentausch();
+    const accepted = roleSwapRequest();
     await push(backend, anna.device, [accepted]);
-    await push(backend, philipp.device, [decideOp(accepted.payload.actionId as string, 'annehmen')]);
-    const open = rollentausch();
+    await push(backend, philipp.device, [decideOp(actionIdOf(accepted), 'annehmen')]);
+    const open = roleSwapRequest();
     await push(backend, anna.device, [open]);
     const before = (await pullAll(backend, philipp.device, cursors.philipp)).cursor;
 
-    expect(await uncouple(backend, { couplingId, requesterPersonId: anna.personId })).toEqual({
+    expect(await uncouple(backend, { couplingId, requesterPersonId: anna.personId })).toMatchObject({
       status: 'angenommen',
       partnerPersonId: philipp.personId,
     });
 
-    const [request] = await push(backend, philipp.device, [rollentausch()]);
-    const [decision] = await push(backend, philipp.device, [decideOp(open.payload.actionId as string, 'ablehnen')]);
+    const [request] = await push(backend, philipp.device, [roleSwapRequest()]);
+    const [decision] = await push(backend, philipp.device, [decideOp(actionIdOf(open), 'ablehnen')]);
     expect(request).toMatchObject({ type: 'permanently_rejected', error: { code: 'forbidden' } });
     expect(decision).toMatchObject({ type: 'permanently_rejected', error: { code: 'forbidden' } });
 
@@ -79,16 +78,30 @@ describe('Entkopplungs-Kern', () => {
     expect(changes.filter((change) => change.type === 'tombstone').map((change) => change.entityType)).toEqual(['partner_daily_goal_status']);
   });
 
-  it('lehnt eine zweite Entkopplung ab, ohne etwas zu ändern', async () => {
+  it('liefert der Antragstellerin ihre Entkopplung, sofort angenommen, samt Archivstatus; nur sie darf sie lesen', async () => {
+    const { backend, anna, philipp, couplingId } = await setup();
+    const actionId = randomUUID();
+
+    const result = await uncouple(backend, { couplingId, requesterPersonId: anna.personId, actionId });
+
+    expect(result.changes).toEqual([
+      expect.objectContaining({ entityType: 'shared_action', entityId: actionId, data: expect.objectContaining({ type: 'entkoppeln', status: 'angenommen', decidedAt: at.toISOString() }) }),
+      expect.objectContaining({ entityType: 'coupling', entityId: couplingId, data: expect.objectContaining({ status: 'archiviert' }) }),
+    ]);
+    const read = resourceProbe(backend, policies.resource('shared_action', 'lesen'));
+    expect(httpOutcome(await read(anna.device, { id: actionId }))).toBe('erlaubt');
+    expect(httpOutcome(await read(philipp.device, { id: actionId }))).toBe('verweigert');
+  });
+
+  it('lehnt eine zweite Entkopplung ab, ohne die Kopplung zu ändern oder neue Notices zu erzeugen', async () => {
     const { backend, anna, philipp, couplingId } = await setup();
     await uncouple(backend, { couplingId, requesterPersonId: anna.personId });
     const cursors = { anna: (await pullAll(backend, anna.device)).cursor, philipp: (await pullAll(backend, philipp.device)).cursor };
 
-    expect(await uncouple(backend, { couplingId, requesterPersonId: philipp.personId })).toEqual({
-      status: 'abgelehnt',
-      partnerPersonId: anna.personId,
-    });
+    const second = await uncouple(backend, { couplingId, requesterPersonId: philipp.personId });
 
+    expect(second).toMatchObject({ status: 'abgelehnt', partnerPersonId: anna.personId });
+    expect(second.changes.map((change) => change.type === 'record' && change.data.status)).toEqual(['abgelehnt', 'archiviert']);
     expect((await pullAll(backend, anna.device, cursors.anna)).changes).toEqual([]);
     expect((await pullAll(backend, philipp.device, cursors.philipp)).changes).toEqual([]);
     const [archived] = await backend.database.db.select({ endedAt: coupling.endedAt }).from(coupling).where(eq(coupling.id, couplingId));
@@ -108,7 +121,7 @@ describe('Entkopplungs-Kern', () => {
     expect(() => backend.uncoupling.registerObserver('test', observer)).toThrow('schon angemeldet');
 
     await expect(uncouple(backend, { couplingId, requesterPersonId: anna.personId })).rejects.toThrow('Beobachter scheitert');
-    expect((await push(backend, philipp.device, [rollentausch()]))[0]?.type).toBe('applied');
+    expect((await push(backend, philipp.device, [roleSwapRequest()]))[0]?.type).toBe('applied');
 
     fail = false;
     expect((await uncouple(backend, { couplingId, requesterPersonId: anna.personId })).status).toBe('angenommen');
@@ -119,7 +132,7 @@ describe('Entkopplungs-Kern', () => {
 describe('Reaktivierung nach dem Entkoppeln', () => {
   it('nimmt dasselbe Paar eine Einladung an, kehrt die Kopplung zurück, und die beim Entkoppeln beendeten Aktionen kommen entschieden an', async () => {
     const { backend, anna, philipp, couplingId } = await setup();
-    const open = rollentausch();
+    const open = roleSwapRequest();
     await push(backend, anna.device, [open]);
     const uncouplingId = randomUUID();
     await uncouple(backend, { couplingId, requesterPersonId: anna.personId, actionId: uncouplingId });
@@ -132,12 +145,12 @@ describe('Reaktivierung nach dem Entkoppeln', () => {
       expect(recordsOf(changes, 'coupling')[couplingId]).toMatchObject({ status: 'aktiv', endedAt: null, reactivatedAt: worldStart.instant });
       expect(Object.values(recordsOf(changes, 'island'))).toEqual([expect.objectContaining({ state: 'wartet_auf_rollen' })]);
       const actions = recordsOf(changes, 'shared_action');
-      expect(actions[open.payload.actionId as string]).toMatchObject({ status: 'zurueckgezogen', decidedAt: at.toISOString() });
+      expect(actions[actionIdOf(open)]).toMatchObject({ status: 'zurueckgezogen', decidedAt: at.toISOString() });
       // Entkoppeln ist nie ein offener Vorgang: Es ist sofort angenommen.
       expect(actions[uncouplingId]).toMatchObject({ type: 'entkoppeln', requesterPersonId: anna.personId, status: 'angenommen' });
     }
     // Der Partnerzugriff ist zurück; die beendete Aktion bleibt beendet.
-    expect((await push(backend, philipp.device, [decideOp(open.payload.actionId as string, 'annehmen')]))[0]).toMatchObject({ error: { code: 'conflict' } });
-    expect((await push(backend, philipp.device, [rollentausch()]))[0]?.type).toBe('applied');
+    expect((await push(backend, philipp.device, [decideOp(actionIdOf(open), 'annehmen')]))[0]).toMatchObject({ error: { code: 'conflict' } });
+    expect((await push(backend, philipp.device, [roleSwapRequest()]))[0]?.type).toBe('applied');
   });
 });
