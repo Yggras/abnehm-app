@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { LocalDate } from '../src/base.ts';
-import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from '../src/goal-calculator.ts';
+import {
+  calculateGoals,
+  calorieNeeds,
+  sportSessionThreshold,
+  type GoalCalculation,
+  type GoalCalculatorInput,
+} from '../src/goal-calculator.ts';
 
 // Nachweis für #127: Wahrheitstabellen des Zielrechners (Spezifikation 1, Abschnitt 3). Erwartete
 // Werte sind von Hand nachgerechnet, nicht mit der Formel des Rechners erzeugt.
@@ -321,4 +327,189 @@ describe('Zielgewicht', () => {
   ])('ist %s ungültig', (_, goalWeightG, error) => {
     expect(fehler({ goalWeightG })).toEqual([error]);
   });
+});
+
+describe('Manuelles Budget', () => {
+  // Referenzfall: Untergrenze 1.514 kcal, Gesamtumsatz 2.119,6 kcal (im Haltemodus 2.120 kcal).
+  it('reicht in 10-kcal-Schritten von der Untergrenze bis zum Gesamtumsatz', () => {
+    expect(berechnet().manualBudgetRange).toEqual({ min: 1_520, max: 2_120, step: 10 });
+  });
+
+  it.each([
+    ['an der unteren Grenze', 1_520],
+    ['an der oberen Grenze', 2_120],
+  ])('gilt %s anstelle der Rechnung', (_, manualBudgetKcal) => {
+    const result = berechnet({ manualBudgetKcal });
+
+    expect(result.calorieBudget).toEqual({ kcal: manualBudgetKcal, milliKcal: manualBudgetKcal * 1_000 });
+    expect(result.budgetSource).toBe('manuell');
+    expect(result.deficit?.kcal).toBe(500);
+    expect(result.budgetRaisedToLowerBound).toBe(false);
+  });
+
+  it.each([
+    ['unter der Untergrenze', 1_510, 'manual_budget_out_of_range'],
+    ['über dem Gesamtumsatz', 2_130, 'manual_budget_out_of_range'],
+    ['nicht in 10-kcal-Schritten', 1_625, 'manual_budget_not_on_step'],
+  ])('ist %s ungültig', (_, manualBudgetKcal, error) => {
+    expect(fehler({ manualBudgetKcal })).toEqual([error]);
+  });
+
+  it('gibt es im erzwungenen Haltemodus nicht', () => {
+    expect(berechnet({ pregnantOrBreastfeeding: true }).manualBudgetRange).toBeNull();
+    expect(fehler({ pregnantOrBreastfeeding: true, manualBudgetKcal: 1_800 })).toEqual(['manual_budget_in_forced_maintenance']);
+  });
+
+  it('gilt im gewählten Haltemodus, ohne Defizit (Nutzerentscheidung zu #127)', () => {
+    const result = berechnet({ pace: null, manualBudgetKcal: 1_800 });
+
+    expect(result.maintenanceReason).toBe('gewaehlt');
+    expect(result.manualBudgetRange).toEqual({ min: 1_520, max: 2_120, step: 10 });
+    expect(result.calorieBudget.kcal).toBe(1_800);
+    expect(result.budgetSource).toBe('manuell');
+    expect(result.deficit).toBeNull();
+  });
+});
+
+describe('Prognose', () => {
+  // Berechnungstag 28.10.2026; Wochen = (Basisgewicht − Zielgewicht) ÷ 0,5 bzw. 0,75 kg je Woche.
+  it('schätzt im Onboarding aus dem eingegebenen Gewicht: 4 kg ÷ 0,5 kg = 8 Wochen → Dezember 2026', () => {
+    expect(berechnet().forecast).toEqual({
+      type: 'schaetzung',
+      weeks: 8,
+      year: 2026,
+      month: 12,
+      hintKey: 'weight_loss_slows_after_three_months',
+    });
+  });
+
+  it('nimmt den Gewichtstrend als Basisgewicht, wenn es einen gibt', () => {
+    // 79 kg − 76 kg = 3 kg ÷ 0,5 kg = 6 Wochen.
+    expect(berechnet({ weightTrendG: 79_000 }).forecast?.weeks).toBe(6);
+  });
+
+  it('rundet angebrochene Tage auf: 3,6 kg ÷ 0,75 kg = 4,8 Wochen = 33,6 Tage → 1. Dezember', () => {
+    expect(berechnet({ goalWeightG: 76_400, pace: 'zuegiger' }).forecast).toMatchObject({ weeks: 4.8, year: 2026, month: 12 });
+  });
+
+  it('reicht über den Jahreswechsel: 20 kg ÷ 0,5 kg = 40 Wochen → August 2027', () => {
+    expect(berechnet({ goalWeightG: 60_000 }).forecast).toMatchObject({ weeks: 40, year: 2027, month: 8 });
+  });
+
+  it('schätzt 0 Wochen, wenn der Trend schon auf dem Zielgewicht liegt', () => {
+    expect(berechnet({ weightTrendG: 75_800 }).forecast).toMatchObject({ weeks: 0, year: 2026, month: 10 });
+  });
+
+  it.each([
+    ['im erzwungenen Haltemodus', { knownEatingDisorder: true }],
+    ['im gewählten Haltemodus', { pace: null }],
+    ['bei einem Zielgewicht nicht unter dem aktuellen Gewicht', { goalWeightG: 80_000 }],
+  ])('gibt es %s nicht', (_, changes) => {
+    expect(berechnet(changes).forecast).toBeNull();
+  });
+});
+
+describe('Wasserziel', () => {
+  it.each([
+    ['18 Jahren', '2008-10-28', 1_500],
+    ['50 Jahren, am 50. Geburtstag', '1976-10-28', 1_500],
+    ['50 Jahren, am Tag vor dem 51. Geburtstag', '1975-10-29', 1_500],
+    ['51 Jahren', '1975-10-28', 1_250],
+  ])('schlägt mit %s %i ml vor', (_, birthDate, suggestedMl) => {
+    const { water } = berechnet({ birthDate: day(birthDate) });
+
+    expect(water).toMatchObject({ targetMl: suggestedMl, suggestedMl, range: { min: 500, max: 5_000, step: 250 } });
+  });
+
+  it('übernimmt eine Wahl in 250-ml-Schritten von 500 bis 5.000 ml', () => {
+    for (const waterTargetMl of [500, 2_250, 5_000]) expect(berechnet({ waterTargetMl }).water.targetMl).toBe(waterTargetMl);
+  });
+
+  it.each([
+    [250, 'water_target_out_of_range'],
+    [5_250, 'water_target_out_of_range'],
+    [1_600, 'water_target_not_on_step'],
+  ])('lehnt %i ml ab', (waterTargetMl, error) => {
+    expect(fehler({ waterTargetMl })).toEqual([error]);
+  });
+
+  it('nennt immer den Mehrbedarf bei Hitze und Sport', () => {
+    expect(berechnet().water.hintKey).toBe('water_need_higher_in_heat_and_sport');
+    expect(berechnet({ pregnantOrBreastfeeding: true }).water.hintKey).toBe('water_need_higher_in_heat_and_sport');
+  });
+});
+
+describe('Sportwochenziel', () => {
+  it('schlägt 150 aktive Minuten vor', () => {
+    expect(berechnet().sport).toEqual({ weeklyTargetMinutes: 150, suggestedMinutes: 150, range: { min: 30, max: 600, step: 10 } });
+  });
+
+  it('übernimmt eine Wahl in 10-Minuten-Schritten von 30 bis 600', () => {
+    for (const minutes of [30, 210, 600]) {
+      expect(berechnet({ weeklySportTargetMinutes: minutes }).sport.weeklyTargetMinutes).toBe(minutes);
+    }
+  });
+
+  it.each([
+    [20, 'sport_target_out_of_range'],
+    [610, 'sport_target_out_of_range'],
+    [155, 'sport_target_not_on_step'],
+  ])('lehnt %i Minuten ab', (weeklySportTargetMinutes, error) => {
+    expect(fehler({ weeklySportTargetMinutes })).toEqual([error]);
+  });
+});
+
+describe('calorieNeeds: Prüfung einer Zielversion aus ihren Berechnungswerten', () => {
+  it('ergibt aus Körperdaten samt Alter dieselben Werte wie der Referenzfall', () => {
+    expect(
+      calorieNeeds({ calculationSex: 'weiblich', ageYears: 35, heightCm: 168, weightG: 80_000, activityLevel: 'wenig_aktiv' }),
+    ).toEqual({
+      basalMetabolicRate: { kcal: 1_514, milliKcal: 1_514_000 },
+      totalEnergyExpenditure: { kcal: 2_120, milliKcal: 2_120_000 },
+      lowerBound: { kcal: 1_514, milliKcal: 1_514_000 },
+    });
+  });
+
+  it.each([
+    ['Untergrenze 1.200 kcal', { calculationSex: 'weiblich', birthDate: day('1966-01-01'), heightCm: 155, weightG: 50_000, goalWeightG: 47_500 }],
+    ['Viertel-kcal im Grundumsatz', { calculationSex: 'maennlich', birthDate: day('1996-01-01'), heightCm: 173, weightG: 94_400, goalWeightG: 90_000 }],
+    ['aktiv', { calculationSex: 'maennlich', activityLevel: 'aktiv' }],
+  ] as const)('stimmt mit calculateGoals überein (%s)', (_, changes) => {
+    const result = berechnet(changes);
+    const { calculationSex, heightCm, weightG, activityLevel } = { ...referenz, ...changes };
+
+    expect(calorieNeeds({ calculationSex, ageYears: result.ageYears, heightCm, weightG, activityLevel })).toEqual({
+      basalMetabolicRate: result.basalMetabolicRate,
+      totalEnergyExpenditure: result.totalEnergyExpenditure,
+      lowerBound: result.lowerBound,
+    });
+  });
+});
+
+describe('Schwelle der Sporteinheit', () => {
+  it.each([
+    [0, null],
+    [1, 150],
+    [2, 75],
+    [3, 50],
+    [4, 38], // 37,5 aufgerundet
+    [5, 30],
+    [6, 25],
+    [7, 22], // 21,43 aufgerundet; nur im Wochenplan-Editor möglich
+  ])('150 Minuten auf %i Sporttage: %s Minuten', (sportDayCount, minutes) => {
+    expect(sportSessionThreshold(150, sportDayCount)).toBe(minutes);
+  });
+
+  it('rundet auf ganze Minuten auf: 200 Minuten auf 3 Sporttage = 66,67 → 67', () => {
+    expect(sportSessionThreshold(200, 3)).toBe(67);
+  });
+});
+
+it('meldet mehrere Verstöße der Ziele zugleich', () => {
+  expect(fehler({ goalWeightG: 40_000, manualBudgetKcal: 1_000, waterTargetMl: 100, weeklySportTargetMinutes: 5 })).toEqual([
+    'goal_weight_below_lower_limit',
+    'manual_budget_out_of_range',
+    'water_target_out_of_range',
+    'sport_target_out_of_range',
+  ]);
 });

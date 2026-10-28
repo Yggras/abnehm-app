@@ -157,6 +157,21 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
 - **Validieren:** Jede Rückgabe wird gegen ihr Vertragsschema geprüft. Ein Verstoß wirft `PortContractError`. Eine ungültige Eingabe an `recordManualWeight` beantwortet die Prüfung mit `invalid_payload`, ohne den Port aufzurufen.
 - **Fake-Ports für Tests** in `area-ports/testing/fakes.ts`: `fakePlanReader` (Fassungen nach `validFrom` und Wochentag), `fakeWeightTrendReader`, `fakeIntakeReader` (jeder Tag, sonst 0), `fakeWeightRecorder(localDateOf)` (idempotent je `entryId`; den lokalen Tag liefert der Test, etwa über die Testuhr) und `fakeIslandCheckInHintReader`. `fakeAreaPorts(overrides)` setzt sie geprüft zusammen.
 
+### Zielrechner
+
+`@abnehm/contracts/goal-calculator` ([#127](https://github.com/Yggras/abnehm-app/issues/127), Abschnitt 3 der [Spezifikation 1](https://github.com/Yggras/abnehm-app/issues/82)) enthält die Rechenregeln für Ziele. App und Server nutzen dieselben reinen Funktionen.
+
+- **`calculateGoals(input)`** liefert die vollständige Berechnung, die die Oberfläche direkt anzeigt:
+  - Grundumsatz, Gesamtumsatz, Defizit, Untergrenze und Budget samt Herkunft;
+  - Haltemodus mit Grund und Sicherheitsanlässen;
+  - Zielgewicht mit Vorschlag und Grenzen, die Prognose, das Wasser- und das Sportziel.
+
+  Verstöße gegen die Eingabegrenzen ergeben `{ type: 'ungueltig', errors }` mit typisierten Fehlerschlüsseln (`GoalInputError`), keine Ausnahmen. Hinweise sind Schlüssel (`GoalHintKey`); den Text erzeugt die App.
+- **Rundung:** Kalorien rechnet der Rechner exakt als Ganzzahl in 1/4000 kcal, gerundet wird erst die Ausgabe. Anzeige und Snapshots erhalten ganze kcal, die Speicherung erhält `milliKcal` derselben ganzen kcal. Das Budget liegt immer auf einem Vielfachen von 10 kcal und nie unter der Untergrenze.
+- **`calorieNeeds(body)`** liefert Grundumsatz, Gesamtumsatz und Untergrenze aus den Berechnungswerten einer Zielversion. Diese enthalten das Alter, nicht das Geburtsdatum. Damit prüft der Server, ob eine Zielversion in sich stimmig ist.
+- **`sportSessionThreshold(minuten, sporttage)`** gibt die Schwelle der Sporteinheit für Wochenplan und Tagesziel-Snapshot an. Ohne Sporttag ist sie `null`.
+- Ein manuelles Budget ist auch im gewählten Haltemodus erlaubt, nur im erzwungenen nicht (Nutzerentscheidung zu #127).
+
 ### Typisierte Endpunkte (Hono RPC)
 
 Die App ruft das Backend über `hc<AppType>` auf ([Hono RPC](https://hono.dev/docs/guides/rpc)). Fachliche Pfade sind versioniert (`/v1/…`).

@@ -1,10 +1,11 @@
 import type { LocalDate } from './base.ts';
+import { addDays } from './calendar.ts';
 import type { PersonUpsert } from './person.ts';
 import type { EffectivePlan, MaintenanceReason } from './ports.ts';
 
-// Zielrechner (Spezifikation 1, Abschnitt 3): eine reine Funktion für App und Server. Die App zeigt
+// Zielrechner (Spezifikation 1, Abschnitt 3): reine Funktionen für App und Server. Die App zeigt
 // damit Vorschau, Ergebnis und Neuberechnung, der Server prüft damit die Stimmigkeit einer Zielversion.
-// Grenzen und Rundungen ohne Quelle sind Designwerte der Spezifikation.
+// Quellen der Zahlen stehen in der Spezifikation; Werte ohne Quelle sind dort als Designwert markiert.
 
 type CalculationSex = NonNullable<PersonUpsert['calculationSex']>;
 type ActivityLevel = NonNullable<PersonUpsert['activityLevel']>;
@@ -12,19 +13,27 @@ type Pace = NonNullable<Extract<EffectivePlan, { type: 'gueltig' }>['goal']['pac
 
 /** Eingaben des Zielrechners; Gewichte in g, Größe in cm (Spezifikation 0, Abschnitt 8). */
 export type GoalCalculatorInput = {
+  /** Tag, an dem gerechnet wird: Alter und Prognose beziehen sich darauf. */
   calculationDate: LocalDate;
   calculationSex: CalculationSex;
   birthDate: LocalDate;
   heightCm: number;
+  /** Aktuelles Gewicht: im Onboarding die Eingabe, sonst das letzte Tagesgewicht. */
   weightG: number;
+  /** Gewichtstrend, sobald es einen gibt; Basisgewicht der Prognose. */
   weightTrendG: number | null;
   activityLevel: ActivityLevel;
   pregnantOrBreastfeeding: boolean;
   knownEatingDisorder: boolean;
+  /** `null` übernimmt die Vorauswahl. */
   goalWeightG: number | null;
+  /** `null` wählt den Haltemodus. */
   pace: Pace | null;
+  /** `null` übernimmt das berechnete Budget. */
   manualBudgetKcal: number | null;
+  /** `null` übernimmt den Vorschlag. */
   waterTargetMl: number | null;
+  /** `null` übernimmt den Vorschlag. */
   weeklySportTargetMinutes: number | null;
 };
 
@@ -47,6 +56,19 @@ export type GoalWeight = {
   range: StepRange;
 };
 
+/**
+ * Geschätzter Zeitpunkt des Zielgewichts: Wochen = (Basisgewicht − Zielgewicht) ÷ Abnahme je Woche
+ * des Tempos, ab dem Berechnungstag. Angebrochene Tage zählen als ganzer Tag (Designwert).
+ */
+export type GoalForecast = {
+  type: 'schaetzung';
+  weeks: number;
+  year: number;
+  month: number;
+  hintKey: 'weight_loss_slows_after_three_months';
+};
+
+/** Vollständige Berechnung mit allen Zwischenwerten, wie sie die Oberfläche anzeigt. */
 export type GoalCalculation = {
   type: 'berechnet';
   ageYears: number;
@@ -61,23 +83,39 @@ export type GoalCalculation = {
   activityFactor: number;
   basalMetabolicRate: KcalAmount;
   totalEnergyExpenditure: KcalAmount;
+  /** Defizit des Tempos; im Haltemodus `null`. */
   deficit: KcalAmount | null;
   lowerBound: KcalAmount;
   calorieBudget: KcalAmount;
   budgetSource: 'berechnet' | 'manuell';
   /** Die Rechnung lag unter der Untergrenze; dazu gehört der Hinweis `budget_raised_to_lower_bound`. */
   budgetRaisedToLowerBound: boolean;
+  /**
+   * Erlaubtes manuelles Budget in kcal: vom auf die Untergrenze angehobenen Budget bis zum Budget im
+   * Haltemodus. Im erzwungenen Haltemodus gibt es keines.
+   */
+  manualBudgetRange: StepRange | null;
   goalWeight: GoalWeight;
-  hints: GoalHintKey[];
+  /** Nur mit Defizit; die Oberfläche zeigt Monat und Jahr als „etwa …“. */
+  forecast: GoalForecast | null;
+  water: { targetMl: number; suggestedMl: number; range: StepRange; hintKey: 'water_need_higher_in_heat_and_sport' };
+  sport: { weeklyTargetMinutes: number; suggestedMinutes: number; range: StepRange };
+  /** Hinweise, die nur in bestimmten Lagen erscheinen, in der Reihenfolge des Onboardings. */
+  hints: ('maintenance_forced' | 'goal_weight_not_below_current' | 'budget_raised_to_lower_bound')[];
 };
 
 /**
- * Hinweise, die die Oberfläche zur Berechnung anzeigt; den Text erzeugt die App aus dem Schlüssel.
+ * Hinweise zur Berechnung; den Text erzeugt die App aus dem Schlüssel.
  * - `maintenance_forced`: Der Sicherheits-Check erzwingt den Haltemodus, mit Hinweis auf ärztliche Begleitung.
  * - `goal_weight_not_below_current`: Das Zielgewicht liegt nicht unter dem aktuellen Gewicht, daher Haltemodus.
  * - `budget_raised_to_lower_bound`: Das Budget wurde auf die Untergrenze angehoben, mit Verweis auf ärztliche Begleitung.
+ * - `weight_loss_slows_after_three_months`: zur Prognose; die Abnahme verlangsamt sich nach etwa drei Monaten.
+ * - `water_need_higher_in_heat_and_sport`: zum Wasserziel; bei Hitze und Sport braucht man mehr.
  */
-export type GoalHintKey = 'maintenance_forced' | 'goal_weight_not_below_current' | 'budget_raised_to_lower_bound';
+export type GoalHintKey =
+  | GoalCalculation['hints'][number]
+  | GoalForecast['hintKey']
+  | GoalCalculation['water']['hintKey'];
 
 /** Verletzte Eingabegrenze: Wert außerhalb des Bereichs oder nicht im Raster der Eingabe. */
 export type GoalInputError =
@@ -88,10 +126,24 @@ export type GoalInputError =
   | 'underage'
   | 'goal_weight_below_lower_limit'
   | 'goal_weight_out_of_range'
-  | 'goal_weight_not_on_step';
+  | 'goal_weight_not_on_step'
+  | 'manual_budget_out_of_range'
+  | 'manual_budget_not_on_step'
+  | 'manual_budget_in_forced_maintenance'
+  | 'water_target_out_of_range'
+  | 'water_target_not_on_step'
+  | 'sport_target_out_of_range'
+  | 'sport_target_not_on_step';
 
 /** Ergebnis des Zielrechners; Verstöße gegen die Eingabegrenzen sind Fehlerschlüssel, keine Ausnahmen. */
 export type GoalCalculatorResult = GoalCalculation | { type: 'ungueltig'; errors: GoalInputError[] };
+
+/** Körperdaten samt Alter, wie sie eine Zielversion als Berechnungswerte speichert. */
+export type CalorieNeedsInput = Pick<GoalCalculatorInput, 'calculationSex' | 'heightCm' | 'weightG' | 'activityLevel'> & {
+  ageYears: number;
+};
+
+export type CalorieNeeds = Pick<GoalCalculation, 'basalMetabolicRate' | 'totalEnergyExpenditure' | 'lowerBound'>;
 
 // Kalorien rechnet der Rechner exakt als Ganzzahl in 1/4000 kcal: 6,25 × cm ist ein Vielfaches von
 // 1/4 kcal, 10 × kg bei ganzen Gramm eines von 1/100 kcal, und die Aktivitätsstufe multipliziert mit
@@ -103,9 +155,30 @@ const kcalUnits = (kcal: number) => kcal * UNITS_PER_KCAL;
 /** Aktivitätsstufe als PAL in Zehnteln (DGE: 1,4 / 1,6 / 1,8). */
 const palTenths: Record<ActivityLevel, number> = { wenig_aktiv: 14, maessig_aktiv: 16, aktiv: 18 };
 
+/** Defizit je Tempo: S3-Leitlinie Adipositas 2024 (Empf. 5.11) bzw. AHA/ACC/TOS 2013. */
 const deficitKcal: Record<Pace, number> = { entspannt: 500, zuegiger: 750 };
 
+/** Erwartete Abnahme je Woche und Tempo in g (#14). */
+const weeklyLossG: Record<Pace, number> = { entspannt: 500, zuegiger: 750 };
+
+/** Feste Untergrenze des Kalorienbudgets (#14); höher ist sie, wenn der Grundumsatz darüber liegt. */
 const minimumBudgetKcal = 1_200;
+
+/** Eingabegrenzen (Designwerte): Bereich und Raster je Eingabe. */
+const limits = {
+  heightCm: { min: 120, max: 230, step: 1 },
+  weightG: { min: 30_000, max: 300_000, step: 100 },
+  waterTargetMl: { min: 500, max: 5_000, step: 250 },
+  weeklySportTargetMinutes: { min: 30, max: 600, step: 10 },
+} as const satisfies Record<string, StepRange>;
+
+const minimumAgeYears = 18;
+
+/** Gerundete DGE-Richtwerte für Getränke; 18-Jährige erhalten ebenfalls 1.500 ml (Designwert). */
+const suggestedWaterMl = (ageYears: number) => (ageYears <= 50 ? 1_500 : 1_250);
+
+/** Wöchentliche aktive Minuten nach WHO 2020. */
+const suggestedSportMinutes = 150;
 
 /** Kaufmännisch auf ganze kcal gerundet. */
 function amount(units: number): KcalAmount {
@@ -128,17 +201,17 @@ function ageInFullYears(birthDate: LocalDate, onDate: LocalDate): number {
   return onDate.slice(5) < birthDate.slice(5) ? years - 1 : years;
 }
 
-/** Eingabegrenzen (Designwerte): Bereich und Raster je Eingabe. */
-const limits = {
-  heightCm: { min: 120, max: 230, step: 1 },
-  weightG: { min: 30_000, max: 300_000, step: 100 },
-} as const satisfies Record<string, StepRange>;
-
-const minimumAgeYears = 18;
-
 function checkLimit<E extends GoalInputError>(value: number, limit: StepRange, outOfRange: E, notOnStep: E): E[] {
   if (value < limit.min || value > limit.max) return [outOfRange];
   return Number.isInteger(value / limit.step) ? [] : [notOnStep];
+}
+
+/** Mifflin-St Jeor (1990): 10 × kg + 6,25 × cm − 5 × Alter + 5 bzw. − 161, hier mal 4000. */
+function needsInUnits(body: CalorieNeedsInput) {
+  const sexTerm = kcalUnits(body.calculationSex === 'maennlich' ? 5 : -161);
+  const basal = body.weightG * 40 + body.heightCm * 25_000 - body.ageYears * 20_000 + sexTerm;
+  const total = (basal * palTenths[body.activityLevel]) / 10;
+  return { basal, total, lowerBound: Math.max(kcalUnits(minimumBudgetKcal), basal) };
 }
 
 /**
@@ -166,6 +239,29 @@ function goalWeightErrors({ goalWeightG, range }: GoalWeight): GoalInputError[] 
   return checkLimit(goalWeightG, range, 'goal_weight_out_of_range', 'goal_weight_not_on_step');
 }
 
+function manualBudgetErrors(manualBudgetKcal: number | null, range: StepRange | null): GoalInputError[] {
+  if (manualBudgetKcal === null) return [];
+  if (range === null) return ['manual_budget_in_forced_maintenance'];
+  return checkLimit(manualBudgetKcal, range, 'manual_budget_out_of_range', 'manual_budget_not_on_step');
+}
+
+/** Basisgewicht ist der Gewichtstrend, sonst das aktuelle Gewicht. */
+function forecastOf(input: GoalCalculatorInput, goalWeightG: number, pace: Pace): GoalForecast {
+  const lossG = Math.max(0, (input.weightTrendG ?? input.weightG) - goalWeightG);
+  const estimate = addDays(input.calculationDate, Math.ceil((lossG * 7) / weeklyLossG[pace]));
+  return {
+    type: 'schaetzung',
+    weeks: lossG / weeklyLossG[pace],
+    year: Number(estimate.slice(0, 4)),
+    month: Number(estimate.slice(5, 7)),
+    hintKey: 'weight_loss_slows_after_three_months',
+  };
+}
+
+/**
+ * Berechnet Kalorienbudget, Haltemodus, Zielgewicht, Prognose, Wasser- und Sportziel aus den Eingaben.
+ * Erst werden Körperdaten und Alter geprüft, danach die Ziele gegen die daraus folgenden Grenzen.
+ */
 export function calculateGoals(input: GoalCalculatorInput): GoalCalculatorResult {
   const ageYears = ageInFullYears(input.birthDate, input.calculationDate);
   const bodyErrors: GoalInputError[] = [
@@ -176,8 +272,6 @@ export function calculateGoals(input: GoalCalculatorInput): GoalCalculatorResult
   if (bodyErrors.length > 0) return { type: 'ungueltig', errors: bodyErrors };
 
   const goalWeight = goalWeightOf(input);
-  const errors = goalWeightErrors(goalWeight);
-  if (errors.length > 0) return { type: 'ungueltig', errors };
 
   // BMI < 18,5 ⟺ 10 × g / cm² < 18,5 ⟺ 100 × g < 185 × cm², ganzzahlig und ohne Rundungsfehler.
   const safetyTriggers: SafetyTrigger[] = [];
@@ -190,19 +284,42 @@ export function calculateGoals(input: GoalCalculatorInput): GoalCalculatorResult
     safetyTriggers.length > 0 ? 'sicherheits_check' : input.pace === null || goalNotBelowCurrent ? 'gewaehlt' : null;
   const pace = maintenanceReason === null ? input.pace : null;
 
-  // Mifflin-St Jeor: 10 × kg + 6,25 × cm − 5 × Alter + 5 bzw. − 161, hier mal 4000.
-  const basal =
-    input.weightG * 40 + input.heightCm * 25_000 - ageYears * 20_000 + kcalUnits(input.calculationSex === 'maennlich' ? 5 : -161);
-  const total = (basal * palTenths[input.activityLevel]) / 10;
-  const lowerBound = Math.max(kcalUnits(minimumBudgetKcal), basal);
+  const { basal, total, lowerBound } = needsInUnits({ ...input, ageYears });
   const deficit = pace === null ? null : kcalUnits(deficitKcal[pace]);
-
   const raw = deficit === null ? total : total - deficit;
-  const raised = raw < lowerBound;
-  const rounded = roundToTen(Math.max(raw, lowerBound));
-  const budget = rounded < lowerBound ? ceilToTen(lowerBound) : rounded;
 
-  const hints: GoalHintKey[] = [];
+  // Das Budget wird auf 10 kcal gerundet; läge es danach unter der Untergrenze, gilt das nächste
+  // Vielfache von 10 darüber.
+  const budgetFrom = (units: number) => {
+    const rounded = roundToTen(Math.max(units, lowerBound));
+    return rounded < lowerBound ? ceilToTen(lowerBound) : rounded;
+  };
+  const manualBudgetRange =
+    maintenanceReason === 'sicherheits_check'
+      ? null
+      : { min: budgetFrom(lowerBound) / UNITS_PER_KCAL, max: budgetFrom(total) / UNITS_PER_KCAL, step: 10 };
+
+  const water = { targetMl: input.waterTargetMl ?? suggestedWaterMl(ageYears), suggestedMl: suggestedWaterMl(ageYears) };
+  const sport = {
+    weeklyTargetMinutes: input.weeklySportTargetMinutes ?? suggestedSportMinutes,
+    suggestedMinutes: suggestedSportMinutes,
+  };
+
+  const errors: GoalInputError[] = [
+    ...goalWeightErrors(goalWeight),
+    ...manualBudgetErrors(input.manualBudgetKcal, manualBudgetRange),
+    ...checkLimit(water.targetMl, limits.waterTargetMl, 'water_target_out_of_range', 'water_target_not_on_step'),
+    ...checkLimit(
+      sport.weeklyTargetMinutes,
+      limits.weeklySportTargetMinutes,
+      'sport_target_out_of_range',
+      'sport_target_not_on_step',
+    ),
+  ];
+  if (errors.length > 0) return { type: 'ungueltig', errors };
+
+  const raised = input.manualBudgetKcal === null && raw < lowerBound;
+  const hints: GoalCalculation['hints'] = [];
   if (maintenanceReason === 'sicherheits_check') hints.push('maintenance_forced');
   else if (input.pace !== null && goalNotBelowCurrent) hints.push('goal_weight_not_below_current');
   if (raised) hints.push('budget_raised_to_lower_bound');
@@ -219,10 +336,32 @@ export function calculateGoals(input: GoalCalculatorInput): GoalCalculatorResult
     totalEnergyExpenditure: amount(total),
     deficit: deficit === null ? null : amount(deficit),
     lowerBound: amount(lowerBound),
-    calorieBudget: amount(budget),
-    budgetSource: 'berechnet',
+    calorieBudget: amount(input.manualBudgetKcal === null ? budgetFrom(raw) : kcalUnits(input.manualBudgetKcal)),
+    budgetSource: input.manualBudgetKcal === null ? 'berechnet' : 'manuell',
     budgetRaisedToLowerBound: raised,
+    manualBudgetRange,
     goalWeight,
+    forecast: pace === null ? null : forecastOf(input, goalWeight.goalWeightG, pace),
+    water: { ...water, range: { ...limits.waterTargetMl }, hintKey: 'water_need_higher_in_heat_and_sport' },
+    sport: { ...sport, range: { ...limits.weeklySportTargetMinutes } },
     hints,
   };
+}
+
+/**
+ * Grundumsatz, Gesamtumsatz und Untergrenze aus den Berechnungswerten einer Zielversion, gerundet wie
+ * in `calculateGoals`. Damit prüft der Server, ob eine Zielversion in sich stimmig ist; die Eingaben
+ * prüft er vorher gegen ihre Grenzen.
+ */
+export function calorieNeeds(body: CalorieNeedsInput): CalorieNeeds {
+  const { basal, total, lowerBound } = needsInUnits(body);
+  return { basalMetabolicRate: amount(basal), totalEnergyExpenditure: amount(total), lowerBound: amount(lowerBound) };
+}
+
+/**
+ * Mindestdauer einer Sporteinheit: Sportwochenziel ÷ Zahl der Wochentage mit Baustein Sporteinheit,
+ * auf ganze Minuten aufgerundet (Rundung Designwert). Ohne Sporttag gibt es keine Schwelle.
+ */
+export function sportSessionThreshold(weeklySportTargetMinutes: number, sportDayCount: number): number | null {
+  return sportDayCount === 0 ? null : Math.ceil(weeklySportTargetMinutes / sportDayCount);
 }
