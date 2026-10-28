@@ -61,7 +61,7 @@ describe('Fehler-Adapter', () => {
 });
 
 describe('Testuhr der App', () => {
-  const device = { read: () => ({ instant: Instant.parse('2030-01-01T00:00:00.000Z'), timeZone: TimeZone.parse('UTC'), localDate: '2030-01-01' as never }) };
+  const device = { read: () => ({ instant: Instant.parse('2030-01-01T00:00:00.000Z'), timeZone: TimeZone.parse('UTC'), localDate: '2030-01-01' as never, utcOffsetMinutes: 0 }) };
 
   it('liest die Geräteuhr, bis ein Seed sie stellt, und steht dann auf dessen Uhr', () => {
     const clock = createAppTestClock(device);

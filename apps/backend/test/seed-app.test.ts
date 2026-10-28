@@ -31,7 +31,7 @@ afterEach(() => {
 });
 
 /** Was ein Gerät vor dem Seed zeigt: irgendeine echte Uhrzeit, nicht die des Manifests. */
-const deviceClock = { read: () => ({ instant: Instant.parse('2026-10-19T08:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin'), localDate: '2026-10-19' as LocalDate }) };
+const deviceClock = { read: () => ({ instant: Instant.parse('2026-10-19T08:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin'), localDate: '2026-10-19' as LocalDate, utcOffsetMinutes: 120 }) };
 
 function memoryStore(): SessionStore {
   let value: StoredSession | null = null;
