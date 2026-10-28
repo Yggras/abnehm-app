@@ -67,10 +67,9 @@ describe('Seed-Manifest', () => {
     expect((server.water_entry ?? []).every((row) => row.origin === 'manuell')).toBe(true);
     expect(devices['philipp-iphone']!.rows.water_entry ?? []).toEqual(server.water_entry ?? []);
     // Nur das Wasser unterscheidet die Varianten von solo.
-    const { water_entry: _water, change_log: _log, sync_clock: _clock, ...rest } = server;
-    const { water_entry: _soloWater, change_log: _soloLog, sync_clock: _soloClock, ...soloRest } = solo.initial.server;
-    expect(Object.keys(rest).sort()).toEqual(Object.keys(soloRest).sort());
-    expect(rest.goal_version).toEqual(soloRest.goal_version);
+    const tablesBesideWater = (rows: object) => Object.keys(rows).filter((table) => !['water_entry', 'change_log', 'sync_clock'].includes(table)).sort();
+    expect(tablesBesideWater(server)).toEqual(tablesBesideWater(solo.initial.server));
+    expect(server.goal_version).toEqual(solo.initial.server.goal_version);
   });
 
   it('solo: fertige Person ohne Kopplung und ohne Insel, mit Zielen, Wochenplan, drei Tageszielen und eigenen Daten', () => {
