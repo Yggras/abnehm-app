@@ -28,12 +28,14 @@ export function countedWaterMl(entries: readonly WaterEntryFacts[], localDate: s
   return sum;
 }
 
-/** Neutraler Status eines Mini-Trackers auf „Heute“; nie `problem` (Spezifikation 3, Abschnitt 7). */
-export type TrackerStatus = 'leer' | 'teil' | 'erreicht' | 'ueber_ziel';
+/** Neutrale Status eines Mini-Trackers auf „Heute“; nie `problem` (Spezifikation 3, Abschnitt 7). */
+export const trackerStatuses = ['leer', 'teil', 'erreicht', 'ueber_ziel'] as const;
+export type TrackerStatus = (typeof trackerStatuses)[number];
 
 /**
- * Status aus Wert und Ziel. Die Spezifikation nennt nur die vier Werte; die Grenzen sind eine
- * Festlegung von #171: `erreicht` genau auf dem Ziel, `ueber_ziel` darüber.
+ * Status aus Wert und Ziel. Spezifikation 3 nennt nur die vier Werte, keine Grenzen. #171 legt
+ * fest: `erreicht` genau auf dem Ziel, `ueber_ziel` darüber. Gälte `erreicht` ab dem Ziel, wäre
+ * `ueber_ziel` nie erreichbar; jede andere Grenze über dem Ziel wäre ein frei erfundener Wert.
  */
 export function trackerStatus(value: number, target: number): TrackerStatus {
   if (value <= 0) return 'leer';

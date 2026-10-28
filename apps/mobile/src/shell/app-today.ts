@@ -1,9 +1,8 @@
 import type { Clock } from '@abnehm/clock';
-import { AppState } from 'react-native';
 
 import type { LocalDatabase } from '../local-db';
 import { observePersonHeader } from '../local-db/person-header';
-import { registerTodayHeader, type HeaderPerson } from './header-source';
+import { todayHeaderSource, type HeaderPerson } from './header-source';
 import { createTodayRegistry, type TodayOwner, type TodayRegistry, type TodaySlot, type TodaySource, type TodayState } from './today-registry';
 
 /** Composition Root der Heute-Beiträge. Bereiche registrieren genau ihren Slot, bevor Heute gerendert wird. */
@@ -21,35 +20,8 @@ export function followTodayPerson(
   clock: Clock,
   observe: ObservePerson = observePersonHeader,
 ): (database: LocalDatabase) => () => void {
-  let current: LocalDatabase | null = null;
-  const followers = new Set<() => void>();
-  const changed = () => {
-    for (const follow of followers) follow();
-  };
-  registerTodayHeader(registry, clock, (listener) => {
-    let stop: (() => void) | null = null;
-    const follow = () => {
-      stop?.();
-      stop = null;
-      if (current === null) listener(null);
-      else stop = observe(current, listener);
-    };
-    followers.add(follow);
-    follow();
-    return () => {
-      followers.delete(follow);
-      stop?.();
-    };
-  });
-  return (database) => {
-    current = database;
-    changed();
-    return () => {
-      if (current !== database) return;
-      current = null;
-      changed();
-    };
-  };
+  const opened = followTodayContribution(registry, 'fundament', 'header');
+  return (database) => opened(todayHeaderSource(clock, (listener) => observe(database, listener)));
 }
 
 /**
@@ -92,20 +64,5 @@ export function followTodayContribution<K extends TodaySlot>(
       current = null;
       changed();
     };
-  };
-}
-
-/**
- * Anstoß für Beiträge, die „heute“ ohne Datenbankänderung neu lesen: im Minutentakt und bei Rückkehr
- * in den Vordergrund, im selben Takt wie der Kopf (`header-source.ts`).
- */
-export function todayRefresh(update: () => void): () => void {
-  const interval = setInterval(update, 60_000);
-  const appState = AppState.addEventListener('change', (state) => {
-    if (state === 'active') update();
-  });
-  return () => {
-    clearInterval(interval);
-    appState.remove();
   };
 }

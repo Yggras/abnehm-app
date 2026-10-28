@@ -2,9 +2,7 @@ import { EntityId, LocalDate } from '@abnehm/contracts/base';
 import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
 import { countedWaterMl, trackerStatus } from '@abnehm/contracts/tracker-rules';
 
-import type { ReadContext } from '../local-db';
-// Direkt aus dem Modul statt über den Index, der expo-sqlite lädt: Node-Integrationstests nutzen das Tracker-Modul.
-import { LocalDatabaseClosedError } from '../local-db/local-database';
+import { LocalDatabaseClosedError, type ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { TrackerDependencies } from './trackers';

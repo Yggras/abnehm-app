@@ -10,11 +10,12 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
-import { createDeviceLocalDatabases } from '../local-db';
+import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { createDeviceInvitationFlows } from '../online';
 import { appQuickCommands } from '../shell/app-quick-commands';
-import { appTodayRegistry, followTodayContribution, followTodayPerson, todayRefresh } from '../shell/app-today';
+import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
+import { todayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
@@ -38,11 +39,13 @@ const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
 /**
  * Wasserziel für den Mini-Tracker. Bis Spezifikation 1 ihren `PlanReader` anmeldet, gibt es ihn nur in
- * Test-Artefakten als Attrappe aus den Seed-Manifesten (#171); im Release fehlt `trackers.water` dann
- * wie die übrigen Beiträge der Bereiche, und das ist dort ein Integrationsfehler.
+ * Test-Artefakten als Attrappe aus den Seed-Manifesten (Nutzerentscheidung vom 28.10.2026 in #171); im
+ * Release fehlt `trackers.water` dann wie die übrigen Beiträge der Bereiche, und das ist dort ein
+ * Integrationsfehler. Der echte `PlanReader` ersetzt die Attrappe hier auch in Test-Artefakten.
  */
-const planReader = testCapabilities?.planReader ?? null;
-const waterTodayOpened = planReader === null ? null : followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
+const waterToday = testCapabilities === null
+  ? null
+  : { planReader: testCapabilities.planReader, opened: followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water') };
 /** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
 const refreshToday: Refresh = (update) => {
   const stopTicks = todayRefresh(update);
@@ -101,7 +104,7 @@ function deviceState() {
       const stops = [
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
         appQuickCommands.opened(database, trackers.quickCommands),
-        planReader === null ? undefined : waterTodayOpened?.(trackers.waterToday(planReader, refreshToday)),
+        waterToday?.opened(trackers.waterToday(waterToday.planReader, refreshToday)),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

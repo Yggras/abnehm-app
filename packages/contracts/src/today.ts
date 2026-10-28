@@ -7,7 +7,7 @@ import { MomoAppearance } from './island.ts';
 import { EncouragementKey, PartnerDailyGoalStage } from './partner.ts';
 import { MaintenanceReason } from './ports.ts';
 import { actionTo, UiActionIntent } from './routes.ts';
-import { trackerStatus as trackerStatusOf } from './tracker-rules.ts';
+import { trackerStatus, trackerStatuses } from './tracker-rules.ts';
 import { bodyWeightG } from './units.ts';
 
 // Ready-Payloads der „Heute“-Steckplätze (Spezifikation 0, Abschnitt 6). Die Shell besitzt
@@ -139,7 +139,7 @@ export const QuickCommandOutcome = z.strictObject({
 });
 export type QuickCommandOutcome = z.infer<typeof QuickCommandOutcome>;
 
-const trackerStatus = z.enum(['leer', 'teil', 'erreicht', 'ueber_ziel']);
+const TrackerStatus = z.enum(trackerStatuses);
 
 /**
  * Leer-Grund der Mini-Tracker Wasser und Sport: Es gibt für den Tag keine gültige Zielversion
@@ -157,11 +157,11 @@ export const TrackerWaterReady = z
     key: z.literal('wasser'),
     countedMl: z.int().nonnegative(),
     targetMl: z.int().positive(),
-    status: trackerStatus,
+    status: TrackerStatus,
     detailAction: actionTo('capture.water'),
     quickAction: waterQuickAdd,
   })
-  .refine((water) => water.status === trackerStatusOf(water.countedMl, water.targetMl), {
+  .refine((water) => water.status === trackerStatus(water.countedMl, water.targetMl), {
     message: 'Status passt nicht zu gezählten ml und Wasserziel',
     path: ['status'],
   });
@@ -171,7 +171,7 @@ export const TrackerSportReady = z.strictObject({
   key: z.literal('sport'),
   weekMinutes: z.int().nonnegative(),
   weeklyTargetMinutes: z.int().positive(),
-  status: trackerStatus,
+  status: TrackerStatus,
   detailAction: actionTo('capture.sport'),
   quickAction: TrackerQuickAction,
 });

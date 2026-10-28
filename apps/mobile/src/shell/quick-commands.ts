@@ -1,9 +1,7 @@
 import type { MessageKey, MessageValues } from '@abnehm/contracts/base';
 import type { QuickCommandKey, QuickCommandOutcome, TrackerQuickAction } from '@abnehm/contracts/today';
 
-import type { LocalDatabase, TransactionContext } from '../local-db';
-// Direkt aus dem Modul statt über den Index, der expo-sqlite lädt: Node-Integrationstests nutzen die Registry.
-import { LocalDatabaseClosedError } from '../local-db/local-database';
+import { LocalDatabaseClosedError, type LocalDatabase, type TransactionContext } from '../local-db';
 import { createUndoTokens, type UndoOutcome } from './undo-tokens';
 
 // Quick-Command-Registry der App-Shell (Spezifikation 0, Abschnitt 6): Bereiche liefern je

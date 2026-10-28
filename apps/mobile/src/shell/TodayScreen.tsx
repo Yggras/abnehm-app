@@ -4,7 +4,8 @@ import type { UiActionIntent } from '@abnehm/contracts/routes';
 import type { EncouragementKey } from '@abnehm/contracts/partner';
 import type {
   HeaderReady, MomoCharacterReady, MomoDailyGoalsReady, NutritionBudgetReady, NutritionLogReady,
-  PartnerCardReady, TopNoticeReady, TrackerSportReady, TrackerWaterReady, TrackerWeightReady, TrackerQuickAction,
+  MomoCharacterEmptyReason, PartnerCardReady, TopNoticeReady, TrackerEmptyReason, TrackerSportReady, TrackerWaterReady,
+  TrackerWeightReady, TrackerQuickAction,
 } from '@abnehm/contracts/today';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -28,17 +29,21 @@ const names: Record<TodaySlot, string> = {
   'trackers.sport': 'Sport', 'trackers.weight': 'Gewicht', partner: 'Partner',
 };
 function action(intent: UiActionIntent) { openTarget(intent.target); }
-/** Texte der Leer-Gründe; ein unbekannter Grund zeigt den allgemeinen Satz. */
-const emptyTexts: Record<string, string> = {
+/** Texte der festgelegten Leer-Gründe; ein anderer Grund zeigt den allgemeinen Satz. */
+const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason | 'noch_keine_eintraege', string>> = {
   momo_wartet_im_ei: 'Momo wartet im Ei',
   rollenwahl_offen: 'Momo wartet auf eure Rollenwahl',
   noch_keine_eintraege: 'Noch keine Einträge',
   // Mini-Tracker Wasser und Sport ohne gültige Zielversion (Spezifikation 3, Abschnitt 7).
   ohne_zielversion: 'Noch kein Ziel festgelegt.',
 };
-/** Liter mit einer Nachkommastelle, nur an der Oberfläche umgerechnet (Spezifikation 3, Abschnitt 1). */
-function liters(ml: number): string {
-  return (ml / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const emptyTextOf = (reasonKey: string) => (emptyTexts as Readonly<Record<string, string>>)[reasonKey] ?? 'Hier gibt es noch nichts zu zeigen.';
+/**
+ * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg oder ml als l; umgerechnet
+ * nur an der Oberfläche (Spezifikation 3, Abschnitt 1).
+ */
+function thousandthsWithOneDecimal(value: number): string {
+  return (value / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 function staleLabel(dataAsOf: Instant): string {
   const [date, time] = dataAsOf.split('T');
@@ -73,7 +78,7 @@ function StateView<K extends TodaySlot>({ state, slot, children }: {
     case 'ready': return <>{children(state.data as Data<TodayState<K>>)}</>;
     case 'stale': return <View style={styles.group}><Text tone="inkMuted">{staleLabel(state.dataAsOf)}</Text>{children(state.data as Data<TodayState<K>>)}</View>;
     case 'empty': return <View style={styles.group}>
-      <Text>{emptyTexts[state.reasonKey] ?? 'Hier gibt es noch nichts zu zeigen.'}</Text>
+      <Text>{emptyTextOf(state.reasonKey)}</Text>
       {state.action ? <Button variant="secondary" label="Jetzt öffnen" onPress={() => action(state.action!)} /> : null}
     </View>;
     case 'error': return <View style={styles.group}><Text>{names[slot]} ist gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => action(state.retryAction!)} /> : null}</View>;
@@ -201,9 +206,9 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
     <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b, stale) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} stale={stale} />}</CardPair></View>
     <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b, stale) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} stale={stale} />}</CardPair></View>
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${liters(d.countedMl)} von ${liters(d.targetMl)} l`} progress={{ value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${(d.value.weightG / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>
   </View>;

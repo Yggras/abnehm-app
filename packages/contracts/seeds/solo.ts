@@ -137,10 +137,10 @@ const ziele: SeedPart = {
 type WaterToday = readonly (readonly [amountMl: number, loggedAt: string])[];
 
 /**
- * Wasser heute je Szenario; das Wasserziel ist 2500 ml. `solo` steht im Status `teil`, die Varianten
- * zeigen die übrigen Status des Mini-Trackers (`trackerStatus` der Tracker-Regeln).
+ * Wasser heute in `solo` und seinen Varianten; das Wasserziel ist 2500 ml. `solo` steht im Status
+ * `teil`, die Varianten zeigen die übrigen Status des Mini-Trackers (`trackerStatus` der Tracker-Regeln).
  */
-const waterToday: Readonly<Record<SeedScenarioKey, WaterToday>> = {
+const waterToday = {
   solo: [[500, '2026-10-14T06:30:00.000Z'], [750, '2026-10-14T10:15:00.000Z']],
   'solo-wasser-leer': [],
   'solo-wasser-erreicht': [[500, '2026-10-14T06:30:00.000Z'], [750, '2026-10-14T10:15:00.000Z'], [750, '2026-10-14T11:00:00.000Z'], [500, '2026-10-14T11:30:00.000Z']],
@@ -148,7 +148,9 @@ const waterToday: Readonly<Record<SeedScenarioKey, WaterToday>> = {
     [500, '2026-10-14T06:30:00.000Z'], [750, '2026-10-14T10:15:00.000Z'], [750, '2026-10-14T11:00:00.000Z'],
     [500, '2026-10-14T11:30:00.000Z'], [250, '2026-10-14T11:45:00.000Z'],
   ],
-};
+} as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
+
+type SoloScenario = keyof typeof waterToday;
 
 /** Tracker (Spezifikation 3): Wasser heute je Szenario, eine Radtour gestern, zwei Wiegungen. */
 const trackerOf = (water: WaterToday): SeedPart => ({
@@ -210,9 +212,9 @@ const trackerOf = (water: WaterToday): SeedPart => ({
 export const soloParts: readonly SeedPart[] = [fundament, ziele, trackerOf(waterToday.solo)];
 
 /** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute. */
-function soloScenario(scenario: SeedScenarioKey, parts: readonly SeedPart[]): SeedManifest {
+function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
-    parts,
+    parts: [fundament, ziele, trackerOf(waterToday[scenario])],
     createdAt: seedClock.instant,
     devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
   });
@@ -233,11 +235,8 @@ function soloScenario(scenario: SeedScenarioKey, parts: readonly SeedPart[]): Se
   });
 }
 
-export const soloManifest = soloScenario('solo', soloParts);
+/** `solo` und seine Varianten für jeden Status des Wasser-Mini-Trackers (#171). */
+export const soloManifests = Object.fromEntries(
+  (Object.keys(waterToday) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
+) as Readonly<Record<SoloScenario, SeedManifest>>;
 
-/** Varianten von `solo` für jeden Status des Wasser-Mini-Trackers (#171). */
-export const soloWaterManifests = {
-  'solo-wasser-leer': soloScenario('solo-wasser-leer', [fundament, ziele, trackerOf(waterToday['solo-wasser-leer'])]),
-  'solo-wasser-erreicht': soloScenario('solo-wasser-erreicht', [fundament, ziele, trackerOf(waterToday['solo-wasser-erreicht'])]),
-  'solo-wasser-ueber-ziel': soloScenario('solo-wasser-ueber-ziel', [fundament, ziele, trackerOf(waterToday['solo-wasser-ueber-ziel'])]),
-} as const;

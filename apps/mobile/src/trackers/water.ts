@@ -1,9 +1,10 @@
-import { type EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { isValidWaterAmount, waterOrigin } from '@abnehm/contracts/tracker-rules';
 import { WaterEntryUpsert, type WaterAddedValues } from '@abnehm/contracts/trackers';
 
 import type { TransactionContext } from '../local-db';
-import { ownPersonId, waterEntryEntity } from './water-entity';
+import { requireOwnPerson } from '../local-db/person-header';
+import { waterEntryEntity } from './water-entity';
 import { readWaterEntry, tombstoneWaterEntry, writeWaterEntry } from './water-repository';
 import type { TrackerDependencies } from './trackers';
 
@@ -22,16 +23,12 @@ export type WaterAdded = Readonly<{ messageKey: 'wasser.hinzugefuegt'; values: W
 
 type Dependencies = Pick<TrackerDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
 
-/** Prüft die Menge, bevor eine Transaktion beginnt. */
-export function checkWaterAmount(ml: number): void {
-  if (!isValidWaterAmount(ml)) throw new InvalidTrackerInputError(`Ungültige Wassermenge: ${ml} ml (erlaubt 1–3000 ml)`);
-}
-
 /** Bucht Wasser jetzt. Lokaler Tag, Zone und Offset stammen aus derselben Ablesung der Uhr. */
 export function addWaterEntry(tx: TransactionContext, { clock, writer, persistence, newId }: Dependencies, ml: number): WaterAdded {
-  checkWaterAmount(ml);
+  // Vor dem ersten Schreibzugriff: Eine ungültige Menge hinterlässt nichts.
+  if (!isValidWaterAmount(ml)) throw new InvalidTrackerInputError(`Ungültige Wassermenge: ${ml} ml (erlaubt 1–3000 ml)`);
   const reading = clock.read();
-  const personId = ownPersonId(tx);
+  const personId = EntityId.parse(requireOwnPerson(tx).id);
   const entryId = newId();
   const payload = WaterEntryUpsert.parse({
     amountMl: ml,

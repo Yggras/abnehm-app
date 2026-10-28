@@ -1,6 +1,4 @@
-import type { LocalDatabase, TransactionContext } from '../local-db';
-// Direkt aus dem Modul statt über den Index, der expo-sqlite lädt: Node-Integrationstests nutzen die Tokens.
-import { LocalDatabaseClosedError } from '../local-db/local-database';
+import { LocalDatabaseClosedError, type LocalDatabase, type TransactionContext } from '../local-db';
 
 // Flüchtige Undo-Tokens für „Rückgängig“ im Meldungs-Host (Spezifikation 0, Abschnitt 6;
 // Spezifikation 3, Abschnitt 4). Ein Token ist nie synchronisiert, wird höchstens einmal eingelöst
