@@ -1,7 +1,7 @@
 import { EnergyBooking } from '@abnehm/contracts/energy';
 
 import { baseIsland } from '../content/base-island.ts';
-import { rect, stageArt as stages } from '../content/define.ts';
+import { rect, stageArt } from '../content/define.ts';
 import type { Area, Blueprint, Deko, GameCatalog, LandscapeTemplate } from '../src/catalog.ts';
 
 // Fixtures der Spielregeln; nur in Tests verwenden.
@@ -48,7 +48,7 @@ export const tracer = {
   /** Beide ≥ Schwelle(2) = 11, < Schwelle(3) = 23; Bedarf(2) = 12: 4/12 → 33 %, 1/12 → 8 %. */
   expected: {
     spent: [15, 12],
-    progress: { level: 2, levelNeed: 12, halves: [{ percent: 33, full: false }, { percent: 8, full: false }] },
+    progress: { level: 2, levelNeed: 12, halves: [{ halfPercent: 33, halfFull: false }, { halfPercent: 8, halfFull: false }] },
     startPrice: 3,
   },
 } as const;
@@ -58,7 +58,7 @@ export const tracer = {
 // späteren Inhalten.
 
 const blueprint = (key: string, role: Blueprint['role'], origin: 'level' | 'entdeckung' | 'besucher', priceLevel: number): Blueprint => ({
-  key, name: key, role, origin, priceLevel, art: stages(key),
+  key, name: key, role, origin, priceLevel, art: stageArt(key),
 });
 const deko = (key: string): Deko => ({ key, name: key, origin: 'entdeckung', art: key });
 
@@ -97,12 +97,12 @@ export function testCatalog(): GameCatalog {
   return {
     version: 1,
     blueprints: [
-      { key: 't_weg', name: 'Weg', role: 'bauen', origin: 'start', startPrice: 1, art: stages('t_weg') },
-      { key: 't_bank', name: 'Bank', role: 'bauen', origin: 'start', startPrice: 2, art: stages('t_bank') },
-      { key: 't_laterne', name: 'Laterne', role: 'bauen', origin: 'start', startPrice: 3, art: stages('t_laterne') },
-      { key: 't_blumen', name: 'Blumen', role: 'natur', origin: 'start', startPrice: 1, art: stages('t_blumen') },
-      { key: 't_busch', name: 'Busch', role: 'natur', origin: 'start', startPrice: 2, art: stages('t_busch') },
-      { key: 't_baum', name: 'Baum', role: 'natur', origin: 'start', startPrice: 3, art: stages('t_baum') },
+      { key: 't_weg', name: 'Weg', role: 'bauen', origin: 'start', startPrice: 1, art: stageArt('t_weg') },
+      { key: 't_bank', name: 'Bank', role: 'bauen', origin: 'start', startPrice: 2, art: stageArt('t_bank') },
+      { key: 't_laterne', name: 'Laterne', role: 'bauen', origin: 'start', startPrice: 3, art: stageArt('t_laterne') },
+      { key: 't_blumen', name: 'Blumen', role: 'natur', origin: 'start', startPrice: 1, art: stageArt('t_blumen') },
+      { key: 't_busch', name: 'Busch', role: 'natur', origin: 'start', startPrice: 2, art: stageArt('t_busch') },
+      { key: 't_baum', name: 'Baum', role: 'natur', origin: 'start', startPrice: 3, art: stageArt('t_baum') },
       blueprint('t_bauen_2', 'bauen', 'level', 2),
       blueprint('t_natur_2', 'natur', 'level', 2),
       blueprint('t_bauen_4', 'bauen', 'level', 4),

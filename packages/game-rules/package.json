@@ -6,6 +6,7 @@
   "exports": {
     "./catalog": "./src/catalog.ts",
     "./catalog-check": "./src/catalog-check.ts",
+    "./catalog-versions": "./src/catalog-versions.ts",
     "./progress": "./src/progress.ts",
     "./prices": "./src/prices.ts",
     "./fields": "./src/fields.ts",

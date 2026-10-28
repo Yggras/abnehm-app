@@ -1,6 +1,6 @@
 import { summarizeEnergy, type EnergyBooking } from '@abnehm/contracts/energy';
 
-import { assertWholeNumber } from './whole-number.ts';
+import { assertLevel, assertWholeNumber } from './whole-number.ts';
 
 // Verbaute Energie, Levelkurve und Hälften (Spezifikation 4, Abschnitt 3; Werte aus #18, nicht belegt).
 // Eingabe sind die Buchungen je Person, Ausgabe Level und Hälften für `IslandProgress`. Bestand und
@@ -42,15 +42,19 @@ const cappedNeed = 30;
 /** Schwelle(20) = Σ (10 + k) für k = 1 … 19. */
 const cappedThreshold = 380;
 
-/** Anteil einer Person am Levelbalken; `percent` ist abgerundet und nur bei voller Hälfte 100. */
-export type Half = Readonly<{ percent: number; full: boolean }>;
+/**
+ * Hälfte einer Person am Levelbalken, mit den Feldnamen von `IslandProgress`: `halfPercent` ist
+ * abgerundet und nur bei voller Hälfte 100.
+ */
+export type MemberHalf = Readonly<{ halfPercent: number; halfFull: boolean }>;
 
-export type IslandLevel = Readonly<{
+/** Die berechneten Werte von `IslandProgress`; Personen, Projekt und Versionen ergänzt der Projector. */
+export type LevelProgress = Readonly<{
   level: number;
   /** Bedarf je Hälfte im aktuellen Level. */
   levelNeed: number;
   /** In der Reihenfolge der übergebenen Stände. */
-  halves: readonly [Half, Half];
+  halves: readonly [MemberHalf, MemberHalf];
 }>;
 
 /** Bedarf(L) = min(10 + L, 30): verbaute Energie, die jede Hälfte in Level L braucht. */
@@ -71,7 +75,7 @@ export function levelThreshold(level: number): number {
  * Level, Bedarf und beide Hälften aus der verbauten Energie beider Personen (`S_A`, `S_B`). Das Level
  * ist das größte L, bei dem beide die Schwelle erreichen; Überschuss bleibt in der Hälfte erhalten.
  */
-export function islandProgress(spent: readonly [number, number]): IslandLevel {
+export function islandProgress(spent: readonly [number, number]): LevelProgress {
   const [a, b] = spent;
   const level = levelReachedBy(Math.min(assertSpent(a), assertSpent(b)));
   return { level, levelNeed: levelNeed(level), halves: [memberHalf(a, level), memberHalf(b, level)] };
@@ -81,10 +85,10 @@ export function islandProgress(spent: readonly [number, number]): IslandLevel {
  * Hälfte einer Person auf einem Level: `min(S − Schwelle(L), Bedarf(L)) / Bedarf(L)`. Auf dem Gerät
  * kommt das Level aus der Projektion; liegt der lokale Stand darunter, ist die Hälfte leer.
  */
-export function memberHalf(spent: number, level: number): Half {
+export function memberHalf(spent: number, level: number): MemberHalf {
   const need = levelNeed(level);
   const filled = Math.min(Math.max(assertSpent(spent) - levelThreshold(level), 0), need);
-  return { percent: Math.floor((100 * filled) / need), full: filled === need };
+  return { halfPercent: Math.floor((100 * filled) / need), halfFull: filled === need };
 }
 
 /** Größtes L mit S ≥ Schwelle(L); oberhalb des Deckels direkt berechnet. */
@@ -95,5 +99,4 @@ function levelReachedBy(spent: number): number {
   return level;
 }
 
-const assertLevel = (level: number) => assertWholeNumber(level, 1, 'Level');
 const assertSpent = (spent: number) => assertWholeNumber(spent, 0, 'Verbaute Energie');

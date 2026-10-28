@@ -39,10 +39,11 @@ export type FieldKind = SharedFieldKind | OwnedFieldKind;
  */
 export type FieldSide = 'a' | 'b';
 
+/** Art eines Felds; gehört es einer Person, dazu ihre Seite. */
+export type FieldAssignment = Readonly<{ kind: SharedFieldKind } | { kind: OwnedFieldKind; side: FieldSide }>;
+
 /** Ein Feld eines Feldplans; der Feldschlüssel ist `‹gebiet›:‹x›:‹y›`. */
-export type FieldPlanEntry = Readonly<
-  { x: number; y: number } & ({ kind: SharedFieldKind } | { kind: OwnedFieldKind; side: FieldSide })
->;
+export type FieldPlanEntry = Readonly<{ x: number; y: number }> & FieldAssignment;
 
 /** Grundinsel: Strand, Lichtung, Gemeinschaftsplatz und die Startfelder beider Seiten. */
 export type BaseIsland = Readonly<{ fields: readonly FieldPlanEntry[] }>;
@@ -151,22 +152,29 @@ export function fieldKey(area: string, field: Readonly<{ x: number; y: number }>
   return `${area}:${field.x}:${field.y}`;
 }
 
-/**
- * Ein Feldplan des Katalogs. Grundinsel und feste Gebiete liegen auf demselben Raster; die Felder
- * einer Landschaftsvorlage sind relativ und entstehen je Ausprägung unter ihrem eigenen Gebiet.
- */
+/** Ein Feldplan des Katalogs. */
 export type FieldPlan = Readonly<{
   area: string;
   source: 'grundinsel' | 'gebiet' | 'landschaftsvorlage';
+  /**
+   * Grundinsel und feste Gebiete liegen auf einem gemeinsamen Raster. Die Felder einer
+   * Landschaftsvorlage sind relativ und entstehen je Ausprägung unter deren eigenem Gebiet.
+   */
+  onIslandGrid: boolean;
   fields: readonly FieldPlanEntry[];
 }>;
 
 /** Alle Feldpläne des Katalogs. */
 export function fieldPlans(catalog: GameCatalog): FieldPlan[] {
   return [
-    { area: baseIslandKey, source: 'grundinsel', fields: catalog.baseIsland.fields },
-    ...catalog.areas.map((area) => ({ area: area.key, source: 'gebiet' as const, fields: area.fields })),
-    ...catalog.landscapeTemplates.map((template) => ({ area: template.key, source: 'landschaftsvorlage' as const, fields: template.fields })),
+    { area: baseIslandKey, source: 'grundinsel', onIslandGrid: true, fields: catalog.baseIsland.fields },
+    ...catalog.areas.map((area) => ({ area: area.key, source: 'gebiet' as const, onIslandGrid: true, fields: area.fields })),
+    ...catalog.landscapeTemplates.map((template) => ({
+      area: template.key,
+      source: 'landschaftsvorlage' as const,
+      onIslandGrid: false,
+      fields: template.fields,
+    })),
   ];
 }
 
@@ -225,7 +233,7 @@ export function indexCatalog(catalog: GameCatalog): CatalogIndex {
   const fields = new Map<string, CatalogField>();
   const templates = new Map<string, FieldPlan>();
   for (const plan of fieldPlans(catalog)) {
-    if (plan.source === 'landschaftsvorlage') templates.set(plan.area, plan);
+    if (!plan.onIslandGrid) templates.set(plan.area, plan);
     else for (const field of plan.fields) fields.set(fieldKey(plan.area, field), { key: fieldKey(plan.area, field), area: plan.area, ...field });
   }
 

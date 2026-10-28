@@ -155,13 +155,14 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
 
 | Teilpfad | liefert |
 | --- | --- |
-| `progress` | `spentOnIsland(buchungen, insel)` ist `S_p(I)`. `islandProgress([S_A, S_B])` liefert Level, `levelNeed` und beide Hälften für `IslandProgress`. `memberHalf(S, level)` gibt die eigene Hälfte zum Level der Projektion; `full` ist dort `waitingForPartner`. |
+| `progress` | `spentOnIsland(buchungen, insel)` ist `S_p(I)`. `islandProgress([S_A, S_B])` liefert Level, `levelNeed` und beide Hälften für `IslandProgress`. `memberHalf(S, level)` gibt die eigene Hälfte zum Level der Projektion; `halfFull` ist dort `waitingForPartner`. Die Hälften tragen die Feldnamen des Vertrags (`halfPercent`, `halfFull`). |
 | `prices` | `basePrice(bauplan)`, `upgradePrice(bauplan, stufe)` |
 | `fields` | `fieldQuota(gebiete)`; `placement({ field, person, object })` ergibt `erlaubt` oder `verboten` mit Grund `gemeinsamer_bereich`, `fremdes_feld` bzw. `falsche_rolle` |
 | `unlocks` | `unlocksAt(katalog, level)`: Baupläne samt Grund (`start`, `level`, `entdeckung`), neue Form und Gebiet (fest oder endlos). Dazu `formAt(level)`. |
 | `projects` | `projectNeed(n)` und `commonStage([a, b])`, die gemeinsame Stufe von Projekt und Challenge |
 | `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `entriesOf`, `fieldPlans`, `fieldKey`, `endlessAreaKey` |
-| `catalog-check` | `checkCatalog`, `catalogDedications`, `catalogChanges` |
+| `catalog-check` | `checkCatalog`, die Prüfung von Format und Regeln |
+| `catalog-versions` | `catalogDedications` (Widmung je Schlüssel, bei Bauplänen Rolle und Herkunft), `catalogChanges` |
 | `content` | `gameCatalog`, der ausgelieferte Katalog |
 | `fixtures` | nur für Tests: `testCatalog()` mit Gebieten und Landschaftsvorlagen, `tracer` |
 

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { readSnapshots, snapshotOf } from '../catalog-versions/snapshots.ts';
 import { gameCatalog } from '../content/index.ts';
 import { testCatalog } from '../fixtures/index.ts';
-import { catalogChanges, catalogDedications } from '../src/catalog-check.ts';
+import { catalogChanges, catalogDedications } from '../src/catalog-versions.ts';
 
 // Nachweis für #179: Der Katalog ist versioniert und additiv (Abschnitt 4 von #83). Jede Version hat
 // einen Schnappschuss mit Digest und den Schlüsseln samt Widmung. Gegenüber der vorigen Version darf
@@ -21,7 +21,9 @@ describe('Widmung der Schlüssel', () => {
 
   it('hält je Schlüssel fest, wofür er steht', () => {
     expect(dedications).toMatchObject({
-      t_weg: 'bauplan:bauen',
+      // Mit Herkunft: Besucher-Belohnungen und gespeicherte Freischaltungen hängen an ihr.
+      t_weg: 'bauplan:bauen:start',
+      t_ent_bauen_1a: 'bauplan:bauen:entdeckung',
       t_ent_deko_1: 'deko:entdeckung',
       t_gebiet_1: 'gebiet:4',
       't_gebiet_1:0:-5': 'feld:ecke:a',

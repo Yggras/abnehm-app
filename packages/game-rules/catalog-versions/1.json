@@ -2,9 +2,9 @@
   "version": 1,
   "digest": "sha256:614d7f07c1fbf5e531436a7e6ff35f86a38daba7443c4884d08aa2631f109efb",
   "keys": {
-    "apfelbaum": "bauplan:natur",
-    "beerenstrauch": "bauplan:natur",
-    "blumenwiese": "bauplan:natur",
+    "apfelbaum": "bauplan:natur:start",
+    "beerenstrauch": "bauplan:natur:start",
+    "blumenwiese": "bauplan:natur:start",
     "gartenhaeuschen": "gemeinschaftsprojekt:1",
     "grundinsel:0:0": "feld:ecke:a",
     "grundinsel:0:1": "feld:ecke:a",
@@ -198,8 +198,8 @@
     "grundinsel:9:7": "feld:lichtung",
     "grundinsel:9:8": "feld:lichtung",
     "grundinsel:9:9": "feld:lichtung",
-    "holzweg": "bauplan:bauen",
-    "laterne": "bauplan:bauen",
-    "sitzbank": "bauplan:bauen"
+    "holzweg": "bauplan:bauen:start",
+    "laterne": "bauplan:bauen:start",
+    "sitzbank": "bauplan:bauen:start"
   }
 }

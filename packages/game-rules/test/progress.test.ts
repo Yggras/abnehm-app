@@ -78,20 +78,20 @@ describe('Level der Insel', () => {
 describe('Hälften', () => {
   it('beginnt nach dem Aufstieg leer', () => {
     expect(islandProgress([11, 11]).halves).toEqual([
-      { percent: 0, full: false },
-      { percent: 0, full: false },
+      { halfPercent: 0, halfFull: false },
+      { halfPercent: 0, halfFull: false },
     ]);
   });
 
   it('rundet ab und ist nur bei voller Hälfte 100', () => {
     // Level 2, Bedarf 12: 4/12 = 33,3 %, 6/12 = 50 %, 11/12 = 91,7 %, 12/12 = 100 %
     expect(islandProgress([15, 17]).halves).toEqual([
-      { percent: 33, full: false },
-      { percent: 50, full: false },
+      { halfPercent: 33, halfFull: false },
+      { halfPercent: 50, halfFull: false },
     ]);
     expect(islandProgress([22, 23]).halves).toEqual([
-      { percent: 91, full: false },
-      { percent: 100, full: true },
+      { halfPercent: 91, halfFull: false },
+      { halfPercent: 100, halfFull: true },
     ]);
   });
 
@@ -99,8 +99,8 @@ describe('Hälften', () => {
     expect(islandProgress([100, 11])).toMatchObject({
       level: 2,
       halves: [
-        { percent: 100, full: true },
-        { percent: 0, full: false },
+        { halfPercent: 100, halfFull: true },
+        { halfPercent: 0, halfFull: false },
       ],
     });
   });
@@ -110,28 +110,28 @@ describe('Hälften', () => {
     expect(islandProgress([30, 23])).toMatchObject({
       level: 3,
       halves: [
-        { percent: 53, full: false },
-        { percent: 0, full: false },
+        { halfPercent: 53, halfFull: false },
+        { halfPercent: 0, halfFull: false },
       ],
     });
   });
 
   it('nutzt ab Level 20 den Deckel 30', () => {
     expect(islandProgress([395, 380]).halves).toEqual([
-      { percent: 50, full: false },
-      { percent: 0, full: false },
+      { halfPercent: 50, halfFull: false },
+      { halfPercent: 0, halfFull: false },
     ]);
   });
 });
 
 describe('eigene Hälfte zum Level der Projektion', () => {
   it.each([
-    [11, 2, { percent: 0, full: false }],
-    [15, 2, { percent: 33, full: false }],
-    [22, 2, { percent: 91, full: false }],
-    [23, 2, { percent: 100, full: true }], // voll: Momo wartet auf den Partner
-    [500, 2, { percent: 100, full: true }],
-    [10, 2, { percent: 0, full: false }], // lokal unter der Schwelle, etwa nach einer Gegenbuchung
+    [11, 2, { halfPercent: 0, halfFull: false }],
+    [15, 2, { halfPercent: 33, halfFull: false }],
+    [22, 2, { halfPercent: 91, halfFull: false }],
+    [23, 2, { halfPercent: 100, halfFull: true }], // voll: Momo wartet auf den Partner
+    [500, 2, { halfPercent: 100, halfFull: true }],
+    [10, 2, { halfPercent: 0, halfFull: false }], // lokal unter der Schwelle, etwa nach einer Gegenbuchung
   ])('verbaut %i auf Level %i', (spent, level, half) => {
     expect(memberHalf(spent, level)).toEqual(half);
   });

@@ -2,7 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { serialize, snapshotDirectory, snapshotOf, type StoredSnapshot } from '../catalog-versions/snapshots.ts';
 import { gameCatalog } from '../content/index.ts';
-import { catalogChanges, checkCatalog } from '../src/catalog-check.ts';
+import { checkCatalog } from '../src/catalog-check.ts';
+import { catalogChanges } from '../src/catalog-versions.ts';
 
 // Legt den Schnappschuss der aktuellen Katalogversion unter `catalog-versions/` an. Aufruf nach jeder
 // Katalogänderung mit erhöhter `version`: `npm run catalog:snapshot --workspace @abnehm/game-rules`.

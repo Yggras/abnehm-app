@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 
-import { catalogDedications, type CatalogSnapshot } from '../src/catalog-check.ts';
+import { catalogDedications, type CatalogSnapshot } from '../src/catalog-versions.ts';
 import type { GameCatalog } from '../src/catalog.ts';
 
 // Schnappschüsse der Katalogversionen, je Version eine Datei `‹version›.json`. Nur für Test und

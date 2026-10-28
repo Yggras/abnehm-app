@@ -1,5 +1,5 @@
 import { CatalogKey } from '@abnehm/contracts/base';
-import type { IslandRole } from '@abnehm/contracts/island';
+import { IslandRole } from '@abnehm/contracts/island';
 
 import {
   baseIslandKey,
@@ -8,17 +8,17 @@ import {
   fieldPlans,
   isReservedKey,
   keyedEntryKinds,
-  type CatalogEntries,
   type FieldPlan,
+  type FieldSide,
   type GameCatalog,
-  type KeyedEntryKind,
+  type OwnedFieldKind,
 } from './catalog.ts';
 import { fieldQuota } from './fields.ts';
 import { areaLevels } from './unlocks.ts';
+import { isWholeNumber } from './whole-number.ts';
 
-// Prüfung des Spielkatalogs gegen Format und Spielregeln (Spezifikation 4, Abschnitte 3–5) und Widmung
-// seiner Schlüssel für die Versionsprüfung. Läuft in den Tests über den ausgelieferten Katalog; jedes
-// Inhalts-Ticket hält sie grün.
+// Prüfung des Spielkatalogs gegen Format und Spielregeln (Spezifikation 4, Abschnitte 3–5). Läuft in
+// den Tests über den ausgelieferten Katalog; jedes Inhalts-Ticket hält sie grün.
 
 export type CatalogRule =
   | 'version'
@@ -38,15 +38,15 @@ export type CatalogRule =
 
 export type CatalogIssue = Readonly<{ rule: CatalogRule; key: string }>;
 
-const roles: readonly IslandRole[] = ['bauen', 'natur'];
-const isWholeNumberFrom = (value: number, min: number) => Number.isInteger(value) && value >= min;
+const roles = IslandRole.options;
+const sides: readonly FieldSide[] = ['a', 'b'];
 
 /** Alle Verstöße des Katalogs; leer, wenn er gültig ist. */
 export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
   const issues: CatalogIssue[] = [];
   const issue = (rule: CatalogRule, key: string) => issues.push({ rule, key });
 
-  if (!isWholeNumberFrom(catalog.version, 1)) issue('version', String(catalog.version));
+  if (!isWholeNumber(catalog.version, 1)) issue('version', String(catalog.version));
 
   // Schlüssel: ein gemeinsamer Raum, weil ein Inselobjekt einen Bauplan- oder Dekoschlüssel trägt.
   const seen = new Set<string>();
@@ -70,14 +70,14 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
     if (prices.join() !== '1,2,3') issue('start_bauplaene', role);
   }
   for (const blueprint of catalog.blueprints) {
-    if (blueprint.origin !== 'start' && !isWholeNumberFrom(blueprint.priceLevel, 1)) issue('preislevel', blueprint.key);
+    if (blueprint.origin !== 'start' && !isWholeNumber(blueprint.priceLevel, 1)) issue('preislevel', blueprint.key);
   }
 
   // Level-Freischaltungen.
   const unlocked = new Set<string>();
   for (const { level, role, blueprint } of catalog.levelUnlocks) {
     const key = `${level}:${role}`;
-    if (!isWholeNumberFrom(level, 2) || unlocked.has(key)) issue('level_freischaltung', key);
+    if (!isWholeNumber(level, 2) || unlocked.has(key)) issue('level_freischaltung', key);
     unlocked.add(key);
     if (!checkReference(blueprints, blueprint)) continue;
     const entry = blueprints.get(blueprint)!;
@@ -92,18 +92,17 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
       : { ecke: fieldQuota(1).ecke - atHatching.ecke, rollenbereich: fieldQuota(1).rollenbereich - atHatching.rollenbereich };
   const onIsland = new Set<string>();
   for (const plan of fieldPlans(catalog)) {
-    // Grundinsel und feste Gebiete teilen ein Raster; Vorlagen haben je ein eigenes.
-    const occupied = plan.source === 'landschaftsvorlage' ? new Set<string>() : onIsland;
+    const occupied = plan.onIslandGrid ? onIsland : new Set<string>();
     for (const field of plan.fields) {
       if (!Number.isInteger(field.x) || !Number.isInteger(field.y)) issue('feld_koordinate', fieldKey(plan.area, field));
       const position = `${field.x}:${field.y}`;
-      if (occupied.has(position)) issue('feld_doppelt', plan.source === 'landschaftsvorlage' ? fieldKey(plan.area, field) : position);
+      if (occupied.has(position)) issue('feld_doppelt', plan.onIslandGrid ? position : fieldKey(plan.area, field));
       occupied.add(position);
     }
     const quota = quotaOf(plan);
-    const count = (side: 'a' | 'b', kind: 'ecke' | 'rollenbereich') =>
+    const count = (side: FieldSide, kind: OwnedFieldKind) =>
       plan.fields.filter((field) => field.kind === kind && 'side' in field && field.side === side).length;
-    if ((['a', 'b'] as const).some((side) => count(side, 'ecke') !== quota.ecke || count(side, 'rollenbereich') !== quota.rollenbereich)) {
+    if (sides.some((side) => count(side, 'ecke') !== quota.ecke || count(side, 'rollenbereich') !== quota.rollenbereich)) {
       issue('feldkontingent', plan.area);
     }
   }
@@ -127,7 +126,7 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
 
   // Deko, Besucher, Challenges und Projekte.
   for (const entry of catalog.deko) {
-    if (entry.origin === 'jahreszeit' && !isWholeNumberFrom(entry.yearIndex, 1)) issue('jahreszeit', entry.key);
+    if (entry.origin === 'jahreszeit' && !isWholeNumber(entry.yearIndex, 1)) issue('jahreszeit', entry.key);
   }
   for (const visitor of catalog.visitorTemplates) {
     visitor.rewards.blueprints.forEach((key) => checkReference(blueprints, key));
@@ -142,46 +141,4 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
   }
 
   return issues;
-}
-
-/** Schlüssel einer Katalogversion mit ihrer Widmung, sortiert; liegt je Version unter `catalog-versions/`. */
-export type CatalogSnapshot = Readonly<{ version: number; keys: Readonly<Record<string, string>> }>;
-
-// Wofür ein Schlüssel steht: Art und die Eigenschaften, von denen gespeicherte Inseln abhängen. Eine
-// neue Art in `CatalogEntries` ist hier ein Typfehler, bis ihre Widmung eingetragen ist.
-const dedications: { [K in KeyedEntryKind]: (entry: CatalogEntries[K]) => string } = {
-  bauplan: (blueprint) => `bauplan:${blueprint.role}`,
-  deko: (entry) => (entry.origin === 'jahreszeit' ? `deko:jahreszeit:${entry.season}:${entry.yearIndex}` : `deko:${entry.origin}`),
-  gebiet: (area) => `gebiet:${area.unlockLevel}`,
-  landschaftsvorlage: () => 'landschaftsvorlage',
-  besuchervorlage: () => 'besuchervorlage',
-  accessoire: (accessory) => `accessoire:${accessory.slot}`,
-  gemeinschaftsprojekt: (project) => `gemeinschaftsprojekt:${project.sequenceNumber}`,
-  challenge_vorlage: () => 'challenge_vorlage',
-};
-
-/**
- * Widmung aller Schlüssel: Einträge je Art, Felder als `feld:‹art›[:‹seite›]` (Felder einer
- * Landschaftsvorlage unter `‹vorlage›:‹x›:‹y›`) und Level-Freischaltungen als `level:‹L›:‹rolle›`.
- */
-export function catalogDedications(catalog: GameCatalog): Record<string, string> {
-  const keys: Record<string, string> = {};
-  for (const kind of keyedEntryKinds) {
-    const dedicate = dedications[kind] as (entry: CatalogEntries[KeyedEntryKind]) => string;
-    for (const entry of entriesOf(catalog, kind)) keys[entry.key] = dedicate(entry);
-  }
-  for (const { level, role, blueprint } of catalog.levelUnlocks) keys[`level:${level}:${role}`] = blueprint;
-  for (const plan of fieldPlans(catalog)) {
-    for (const field of plan.fields) keys[fieldKey(plan.area, field)] = 'side' in field ? `feld:${field.kind}:${field.side}` : `feld:${field.kind}`;
-  }
-  return Object.fromEntries(Object.entries(keys).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-}
-
-/** Schlüssel der vorigen Version, die fehlen oder anders gewidmet sind; Ergänzungen sind erlaubt. */
-export function catalogChanges(previous: CatalogSnapshot, current: CatalogSnapshot): { removed: string[]; rededicated: string[] } {
-  const entries = Object.entries(previous.keys);
-  return {
-    removed: entries.filter(([key]) => !Object.hasOwn(current.keys, key)).map(([key]) => key),
-    rededicated: entries.filter(([key, dedication]) => Object.hasOwn(current.keys, key) && current.keys[key] !== dedication).map(([key]) => key),
-  };
 }
