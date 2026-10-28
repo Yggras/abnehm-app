@@ -4,6 +4,7 @@ import {
   IslandCheckInHint,
   LatestWeight,
   MaintenanceReason,
+  Pace,
   RecordManualWeight,
   RecordManualWeightResult,
   WeightTrendSeries,
@@ -43,6 +44,10 @@ const latest = {
 const manualWeight = { entryId: weightEntry, personId: philipp, weightG: 79_400, measuredAt: now } as const;
 
 export const portFixtures = {
+  Pace: fixtures(Pace, {
+    valid: { entspannt: 'entspannt', zügiger: 'zuegiger' },
+    invalid: { 'Umlaut statt Umschreibung': 'zügiger', 'Defizit statt Tempo': 500 },
+  }),
   MaintenanceReason: fixtures(MaintenanceReason, {
     valid: { 'Sicherheits-Check': 'sicherheits_check', 'gewählt': 'gewaehlt' },
     invalid: { 'Haltemodus ohne Grund': true },

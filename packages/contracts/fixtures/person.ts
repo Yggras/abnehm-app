@@ -1,4 +1,11 @@
-import { PersonRecord, PersonUpsert, UpdatePersonTimeZone, UpdatePersonTimeZoneResult } from '../src/person.ts';
+import {
+  ActivityLevel,
+  CalculationSex,
+  PersonRecord,
+  PersonUpsert,
+  UpdatePersonTimeZone,
+  UpdatePersonTimeZoneResult,
+} from '../src/person.ts';
 import { fixtures } from './define.ts';
 import { account, now, philipp, timeZone } from './ids.ts';
 
@@ -31,6 +38,14 @@ const completed = {
 } as const;
 
 export const personFixtures = {
+  CalculationSex: fixtures(CalculationSex, {
+    valid: { männlich: 'maennlich', weiblich: 'weiblich' },
+    invalid: { 'ein dritter Wert': 'divers', Großschreibung: 'Weiblich' },
+  }),
+  ActivityLevel: fixtures(ActivityLevel, {
+    valid: { 'wenig aktiv': 'wenig_aktiv', 'mäßig aktiv': 'maessig_aktiv', aktiv: 'aktiv' },
+    invalid: { 'PAL-Wert statt Stufe': 1.4, 'unbekannte Stufe': 'sehr_aktiv' },
+  }),
   PersonUpsert: fixtures(PersonUpsert, {
     valid: {
       'nach dem Bootstrap': started,

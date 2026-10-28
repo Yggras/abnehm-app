@@ -157,6 +157,26 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
 - **Validieren:** Jede Rückgabe wird gegen ihr Vertragsschema geprüft. Ein Verstoß wirft `PortContractError`. Eine ungültige Eingabe an `recordManualWeight` beantwortet die Prüfung mit `invalid_payload`, ohne den Port aufzurufen.
 - **Fake-Ports für Tests** in `area-ports/testing/fakes.ts`: `fakePlanReader` (Fassungen nach `validFrom` und Wochentag), `fakeWeightTrendReader`, `fakeIntakeReader` (jeder Tag, sonst 0), `fakeWeightRecorder(localDateOf)` (idempotent je `entryId`; den lokalen Tag liefert der Test, etwa über die Testuhr) und `fakeIslandCheckInHintReader`. `fakeAreaPorts(overrides)` setzt sie geprüft zusammen.
 
+### Zielrechner
+
+`@abnehm/contracts/goal-calculator` ([#127](https://github.com/Yggras/abnehm-app/issues/127), Abschnitt 3 der [Spezifikation 1](https://github.com/Yggras/abnehm-app/issues/82)) enthält die Rechenregeln für Ziele. App und Server nutzen dieselben reinen Funktionen.
+
+- **`calculateGoals(input)`** liefert die vollständige Berechnung, die die Oberfläche direkt anzeigt:
+  - Grundumsatz, Gesamtumsatz, Defizit, Untergrenze und Budget samt Budgetquelle (`budgetSource`);
+  - Haltemodus mit Grund und Sicherheitsanlässen;
+  - Zielgewicht mit Vorschlag und Grenzen, die Prognose, das Wasser- und das Sportziel.
+
+  Verstöße gegen die Eingabegrenzen ergeben `{ type: 'ungueltig', errors }` mit typisierten Fehlerschlüsseln (`GoalInputError`), keine Ausnahmen. Hinweise sind Schlüssel (`GoalHintKey`); den Text erzeugt die App.
+- **Alter:** Der Rechner nimmt das Alter (`ageYears`), wie es auch die Zielversion speichert. Die App bestimmt es mit `ageOn(birthDate, calculationDate)`. So kann der Server eine Zielversion aus ihren gespeicherten Berechnungswerten mit `calculateGoals` nachrechnen.
+  - Grundumsatz, Gesamtumsatz, Untergrenze, Defizit und Haltemodus gelten unabhängig von der Budgetquelle.
+  - Das Budget selbst hängt von `budgetSource` ab:
+    - `berechnet`: Es entspricht dem berechneten Budget ohne manuellen Wert.
+    - `manuell`: Der Server übergibt es als `manualBudgetKcal`.
+    - `budgetvorschlag`: Es erfüllt nicht unbedingt das 10-kcal-Raster, denn der Vorschlag ist auf Untergrenze und Gesamtumsatz begrenzt (Abschnitt 7 der Spezifikation 1). Hier rechnet der Server ohne manuellen Wert und prüft nur, dass das Budget zwischen Untergrenze und Gesamtumsatz liegt.
+- **Rundung:** Kalorien rechnet der Rechner exakt als Ganzzahl in 1/4000 kcal, gerundet wird erst die Ausgabe. Anzeige und Snapshots erhalten ganze kcal, die Speicherung erhält `milliKcal` derselben ganzen kcal. Ein berechnetes Budget liegt immer auf einem Vielfachen von 10 kcal und nie unter der Untergrenze, auch im Haltemodus nicht.
+- **`sportSessionThreshold(weeklySportTargetMinutes, sportDayCount)`** gibt die Schwelle der Sporteinheit für Wochenplan und Tagesziel-Snapshot an. Ohne Sporttag ist sie `null`.
+- Ein manuelles Budget ist auch im gewählten Haltemodus erlaubt, nur im erzwungenen nicht (Nutzerentscheidung vom 28.10.2026, festgehalten in [#260](https://github.com/Yggras/abnehm-app/pull/260); Grundlage ist Abschnitt 10 der [Spezifikation 1](https://github.com/Yggras/abnehm-app/issues/82)).
+
 ### Typisierte Endpunkte (Hono RPC)
 
 Die App ruft das Backend über `hc<AppType>` auf ([Hono RPC](https://hono.dev/docs/guides/rpc)). Fachliche Pfade sind versioniert (`/v1/…`).
