@@ -22,7 +22,7 @@ export function canonicalRows(rows: SeedRows): SeedRows {
     Object.keys(rows)
       .sort()
       .filter((table) => (rows[table] ?? []).length > 0)
-      .map((table) => [table, [...(rows[table] as SeedRow[])].sort((a, b) => compare(canonicalJson(a), canonicalJson(b)))]),
+      .map((table) => [table, [...(rows[table] as SeedRow[])].sort((a, b) => compareCodeUnits(canonicalJson(a), canonicalJson(b)))]),
   );
 }
 
@@ -42,6 +42,7 @@ export function dependencyOrder(tables: readonly Readonly<{ name: string; refere
   return ordered;
 }
 
-function compare(a: string, b: string): number {
+/** Vergleicht Zeichenfolgen nach Code-Einheiten, unabhängig von Sprache und Umgebung. */
+export function compareCodeUnits(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }

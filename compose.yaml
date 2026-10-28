@@ -73,6 +73,12 @@ services:
         - action: sync+restart
           path: ./packages/clock/src
           target: /app/packages/clock/src
+        - action: sync+restart
+          path: ./packages/game-rules/src
+          target: /app/packages/game-rules/src
+        - action: sync+restart
+          path: ./packages/game-rules/content
+          target: /app/packages/game-rules/content
         - action: rebuild
           path: ./package-lock.json
 

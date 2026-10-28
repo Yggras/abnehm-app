@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { AreaKey, EntityId, LocalDate, weekdayOf } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, ServerVersion, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
 import { sharedActionDecisionKey, sharedActionRequestKey } from '../src/island.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
-import { partnerSummaryBounds, partnerSummaryPeriod, partnerSummaryPeriodOf } from '../src/partner.ts';
+import { partnerSummaryBounds, partnerSummaryPeriod, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
 import { personOfTimeZoneKey, personTimeZoneKey } from '../src/person.ts';
 import { routeTargetOrToday } from '../src/routes.ts';
 import { needsResponse, WirContribution } from '../src/wir.ts';
@@ -168,5 +168,14 @@ describe('partnerSummaryPeriod', () => {
       const period = partnerSummaryPeriod(area, LocalDate.parse('2026-03-29'));
       expect(period.type === 'tag' ? period.localDate : period.to).toBe('2026-03-29');
     }
+  });
+});
+
+describe('revocationNoticeId', () => {
+  it('leitet aus derselben Serverversion dieselbe UUIDv5 ab, aus jeder anderen eine andere', () => {
+    const id = revocationNoticeId(ServerVersion.parse('42'));
+    expect(revocationNoticeId(ServerVersion.parse('42'))).toBe(id);
+    expect(revocationNoticeId(ServerVersion.parse('43'))).not.toBe(id);
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });

@@ -9,6 +9,7 @@ import { energyFixtures } from './energy.ts';
 import { errorFixtures } from './errors.ts';
 import { islandFixtures } from './island.ts';
 import { notificationFixtures } from './notifications.ts';
+import { nutritionFixtures } from './nutrition.ts';
 import { onboardingFixtures } from './onboarding.ts';
 import { partnerFixtures } from './partner.ts';
 import { personFixtures } from './person.ts';
@@ -47,6 +48,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   onboarding: onboardingFixtures,
   status: statusFixtures,
   sync: syncFixtures,
+  nutrition: nutritionFixtures,
 };
 
 export type FixtureCase = Readonly<{ name: string; schema: z.ZodType; value: unknown; valid: boolean }>;

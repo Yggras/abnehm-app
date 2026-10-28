@@ -17,9 +17,16 @@ export const seedFormatVersion = 1;
 
 /**
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
- * Wasser-Mini-Trackers (#171). Die übrigen aus Abschnitt 12 folgen in #113, #116 und #117.
+ * Wasser-Mini-Trackers (#171). Die übrigen aus Abschnitt 12 folgen in #113 und #116.
  */
-export const SeedScenarioKey = z.enum(['solo', 'solo-wasser-leer', 'solo-wasser-erreicht', 'solo-wasser-ueber-ziel']);
+export const SeedScenarioKey = z.enum([
+  'solo',
+  'solo-wasser-leer',
+  'solo-wasser-erreicht',
+  'solo-wasser-ueber-ziel',
+  'gekoppelt',
+  'nach_entkopplung',
+]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 
 /** Pfad der Seed-Route des Development-Backends; nur dort gibt es sie. */
@@ -86,9 +93,57 @@ export const SeedState = z.strictObject({
 });
 export type SeedState = z.infer<typeof SeedState>;
 
-/** Benannte Operation zwischen Ausgangs- und Sollzustand; weitere Arten ergänzen #113, #116 und #117. */
-export const SeedStep = z.discriminatedUnion('type', [z.strictObject({ type: z.literal('sync'), installation: SeedKey })]);
+/** Benannte Operation zwischen Ausgangs- und Sollzustand; weitere Arten ergänzen #113 und #116. */
+export const SeedStep = z.discriminatedUnion('type', [
+  /** Push und Pull einer Installation. */
+  z.strictObject({ type: z.literal('sync'), installation: SeedKey }),
+  /**
+   * Ein Mitglied entkoppelt über den Entkopplungs-Kern (#107) in eigener Transaktion, wie es der Befehl
+   * `requestUncoupling` (Spezifikation 5) tun wird. Der Server nimmt die Entkopplung sofort an.
+   */
+  z.strictObject({ type: z.literal('entkoppeln'), account: SeedKey, couplingId: EntityId, actionId: EntityId, at: Instant }),
+]);
 export type SeedStep = z.infer<typeof SeedStep>;
+
+/**
+ * Versionierte Erweiterungspunkte eines Szenarios (#117). Ein Punkt reserviert Inhalte, die ein späterer
+ * Bereich liefert, samt fester IDs und Erwartungen. Der liefernde Bereich füllt ihn, indem er eine neue
+ * Fassung (`version`) ergänzt; Tests erkennen an der Fassung, was schon vorliegt.
+ */
+export const SeedExtensions = z.strictObject({
+  /**
+   * Geteilte Mahlzeitenfotos von heute. Fassung 1: Fotos samt Ernährungseintrag als Zeilen mit festen IDs
+   * und ihrer erwarteten Online-Sichtbarkeit (Fotoliste, Bildabruf). Die Bilddaten ergänzt Spezifikation 2
+   * (#162) als Fassung 2.
+   */
+  mealPhotos: z
+    .discriminatedUnion('version', [
+      z.strictObject({
+        version: z.literal(1),
+        photos: z.array(
+          z.strictObject({
+            id: EntityId,
+            /** Eigentümer des Fotos. */
+            account: SeedKey,
+            nutritionEntryId: EntityId,
+            /** Konten außer dem Eigentümer, die das Foto im Ausgangszustand online sehen dürfen. */
+            visibleTo: z.array(SeedKey),
+          }),
+        ),
+      }),
+    ])
+    .optional(),
+  /**
+   * Der antwortbedürftige Vorgang: ein offenes Deko-Geschenk. Fassung 1 reserviert nur ID und Beteiligte;
+   * Art `deko_schenken`, Deko-Katalog und Lager liefert Spezifikation 4 (#198) als Fassung 2.
+   */
+  decoGift: z
+    .discriminatedUnion('version', [
+      z.strictObject({ version: z.literal(1), state: z.literal('reserviert'), actionId: EntityId, from: SeedKey, to: SeedKey }),
+    ])
+    .optional(),
+});
+export type SeedExtensions = z.infer<typeof SeedExtensions>;
 
 /** Tabellen des Auth-Moduls; ihr Inhalt entsteht aus `accounts` bzw. erst bei der Anmeldung. */
 export const authTables = ['user', 'account', 'session', 'verification'] as const;
@@ -110,6 +165,7 @@ export const SeedManifest = z
     initial: SeedState,
     steps: z.array(SeedStep),
     target: SeedState,
+    extensions: SeedExtensions.optional(),
   })
   .superRefine((manifest, context) => {
     const problem = (message: string) => context.addIssue({ code: 'custom', message });
@@ -134,7 +190,27 @@ export const SeedManifest = z
       if (emailPattern.test(JSON.stringify(state))) problem(`${name}: E-Mail-Adresse außerhalb der Konten`);
     }
     for (const step of manifest.steps) {
-      if (!installationKeys.has(step.installation)) problem(`Schritt ${step.type}: unbekannte Installation ${step.installation}`);
+      if (step.type === 'sync' && !installationKeys.has(step.installation)) problem(`Schritt ${step.type}: unbekannte Installation ${step.installation}`);
+      if (step.type === 'entkoppeln' && !accountKeys.has(step.account)) problem(`Schritt ${step.type}: unbekanntes Konto ${step.account}`);
+    }
+
+    const { mealPhotos, decoGift } = manifest.extensions ?? {};
+    const personOf = new Map(manifest.accounts.map((account) => [account.key, account.personId]));
+    const rows = (table: string) => manifest.initial.server[table] ?? [];
+    for (const photo of mealPhotos?.photos ?? []) {
+      for (const key of [photo.account, ...photo.visibleTo]) if (!accountKeys.has(key)) problem(`Mahlzeitenfoto ${photo.id}: unbekanntes Konto ${key}`);
+      const owner = personOf.get(photo.account);
+      if (!rows('meal_photo').some((row) => row.id === photo.id && row.person_id === owner)) problem(`Mahlzeitenfoto ${photo.id} fehlt im Ausgangszustand`);
+      if (!rows('nutrition_entry').some((row) => row.id === photo.nutritionEntryId && row.meal_photo_id === photo.id)) {
+        problem(`Mahlzeitenfoto ${photo.id}: Ernährungseintrag ${photo.nutritionEntryId} fehlt`);
+      }
+    }
+    if (decoGift !== undefined) {
+      for (const key of [decoGift.from, decoGift.to]) if (!accountKeys.has(key)) problem(`Deko-Geschenk: unbekanntes Konto ${key}`);
+      // Reserviert heißt: Die ID belegt noch keine Zeile, bis Spezifikation 4 den Punkt füllt.
+      for (const [name, state] of [['initial', manifest.initial], ['target', manifest.target]] as const) {
+        if (JSON.stringify(state).includes(decoGift.actionId)) problem(`${name}: reservierte ID des Deko-Geschenks ist belegt`);
+      }
     }
   });
 export type SeedManifest = z.infer<typeof SeedManifest>;

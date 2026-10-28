@@ -1,9 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
-import { and, eq, isNull } from 'drizzle-orm';
-
-import type { AreaKey } from '@abnehm/contracts/base';
-import type { RevocationNotice } from '@abnehm/contracts/partner';
+import { ServerVersion, type AreaKey } from '@abnehm/contracts/base';
+import { revocationNoticeId, type RevocationNotice } from '@abnehm/contracts/partner';
 
 import type { DbExecutor } from '../database.ts';
 import { couplingMember, partnerDailyGoalStatus, partnerSummary, revocationNotice } from '../db/schema/index.ts';
@@ -14,6 +12,8 @@ import { nextServerVersion, recordChange } from '../sync/change-log.ts';
 // und der frühere Empfänger erhält eine adressierte, inhaltsfreie Revocation-Notice. Beides bleibt für
 // ihn auch nach dem Rechteentzug abrufbar, damit sein Gerät den alten Cache löscht. Eine gelöschte
 // Projektion wird nie wiederbelebt; eine erneute Freigabe erzeugt eine neue ID und Generation.
+// Projektionen und Empfänger werden in fester Reihenfolge widerrufen, und die ID einer Notice folgt aus
+// ihrer Serverversion. Derselbe Ausgangszustand ergibt so exakt denselben Widerruf (Seed-Sollzustand, #117).
 
 type ProjectionTable = typeof partnerSummary | typeof partnerDailyGoalStatus;
 type ProjectionRow = { id: string; recipientPersonId: string };
@@ -50,7 +50,8 @@ export async function revokeSummaries(
         eq(partnerSummary.area, area),
         isNull(partnerSummary.deletedAt),
       ),
-    );
+    )
+    .orderBy(asc(partnerSummary.id));
   for (const row of live) {
     await tombstoneProjection(tx, partnerSummary, row, at);
     await addNotice(tx, { recipientPersonId: row.recipientPersonId, couplingId, target: { type: 'partner_summary', projectionId: row.id }, reason: 'freigabe_entzogen' }, at);
@@ -66,10 +67,15 @@ export async function revokeCoupling(tx: DbExecutor, couplingId: string, at: Dat
     const live = await tx
       .select({ id: table.id, recipientPersonId: table.recipientPersonId })
       .from(table)
-      .where(and(eq(table.couplingId, couplingId), isNull(table.deletedAt)));
+      .where(and(eq(table.couplingId, couplingId), isNull(table.deletedAt)))
+      .orderBy(asc(table.id));
     for (const row of live) await tombstoneProjection(tx, table, row, at);
   }
-  const members = await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(eq(couplingMember.couplingId, couplingId));
+  const members = await tx
+    .select({ personId: couplingMember.personId })
+    .from(couplingMember)
+    .where(eq(couplingMember.couplingId, couplingId))
+    .orderBy(asc(couplingMember.personId));
   for (const member of members) {
     await addNotice(tx, { recipientPersonId: member.personId, couplingId, target: { type: 'kopplung' }, reason: 'entkopplung' }, at);
   }
@@ -83,8 +89,8 @@ type Notice = Readonly<{
 }>;
 
 async function addNotice(tx: DbExecutor, notice: Notice, at: Date): Promise<void> {
-  const id = randomUUID();
   const serverVersion = await nextServerVersion(tx);
+  const id = revocationNoticeId(ServerVersion.parse(serverVersion.toString()));
   await tx.insert(revocationNotice).values({
     id,
     recipientPersonId: notice.recipientPersonId,

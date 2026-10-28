@@ -32,11 +32,11 @@ Spezifikationen zerlegt der Nutzer parallel mit dem Skill **`to-tickets-parallel
 
 ## Codebasis
 
-Aufbau (npm-Workspace mit `apps/mobile`, `apps/backend`, `packages/contracts`, `packages/clock`), Befehle, Secrets und der Ablauf für Simulatoren und echte Geräte stehen in [`docs/entwicklung.md`](docs/entwicklung.md). Für jede Änderung gilt:
+Aufbau (npm-Workspace mit `apps/mobile`, `apps/backend`, `packages/contracts`, `packages/clock`, `packages/game-rules`), Befehle, Secrets und der Ablauf für Simulatoren und echte Geräte stehen in [`docs/entwicklung.md`](docs/entwicklung.md). Für jede Änderung gilt:
 
 - Native App-Abhängigkeiten nur per `npx expo install` aus `apps/mobile`. `ios/` und `android/` werden generiert und nie von Hand bearbeitet. Vor Code gegen Expo- oder React-Native-APIs die Doku der genutzten SDK-Version lesen (`https://docs.expo.dev/versions/v58.0.0/`), nicht aus dem Gedächtnis arbeiten.
 - Zeitpunkt, Zeitzone und lokaler Tag kommen nur aus der `Clock`-Schnittstelle von `@abnehm/clock`, nie aus `Date.now()`, `new Date()` oder `Intl`. Das prüft `npm run lint`, ebenso die Importgrenzen des Vertragsmoduls.
-- Zod-Schemas und Typen, die App und Backend teilen, liegen nur im Vertragsmodul `@abnehm/contracts`.
+- Zod-Schemas und Typen, die App und Backend teilen, liegen nur im Vertragsmodul `@abnehm/contracts`. Einzige Ausnahme sind die Spielregeln samt Katalogformat und Spielkatalog im reinen Paket `@abnehm/game-rules` ([Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83), Abschnitt 1); Spielformeln stehen nur dort.
 - Das Datenmodell ändert sich nur in beiden Drizzle-Schemas zugleich (Postgres und SQLite), samt mit `drizzle-kit generate` erzeugter Migration je Workspace. Bereichscode schreibt lokal nur über `LocalDatabase.transaction` aus `apps/mobile/src/local-db/`.
 - Vor dem Pull Request laufen `npm run typecheck`, `npm run lint` und `npm test`; die CI wiederholt sie.
 

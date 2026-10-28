@@ -10,7 +10,7 @@ Wie die Codebasis aufgebaut ist und wie App, Backend und Datenbank lokal laufen.
 
 ## Aufbau
 
-Ein npm-Workspace mit zwei Anwendungen und zwei gemeinsamen Paketen:
+Ein npm-Workspace mit zwei Anwendungen und drei gemeinsamen Paketen:
 
 | Ordner | Paket | Inhalt |
 | --- | --- | --- |
@@ -18,6 +18,7 @@ Ein npm-Workspace mit zwei Anwendungen und zwei gemeinsamen Paketen:
 | `apps/backend` | `@abnehm/backend` | Hono und Drizzle auf Node, Postgres; Integrationstests mit Vitest gegen ein flüchtiges Postgres und die echte Hono-App |
 | `packages/contracts` | `@abnehm/contracts` | Vertragsmodul: Zod-Schemas und Typen, die App und Backend teilen |
 | `packages/clock` | `@abnehm/clock` | Uhr/Zeitzone: aktueller Zeitpunkt, IANA-Zeitzone, lokaler Tag |
+| `packages/game-rules` | `@abnehm/game-rules` | Spielregeln und ausgelieferter Spielkatalog von Spezifikation 4, rein und ohne I/O |
 
 Node führt die TypeScript-Quellen von Backend und Paketen direkt aus ([Type Stripping](https://nodejs.org/api/typescript.html)). Deshalb tragen relative Importe dort die Endung `.ts`, und es gibt keinen Build-Schritt.
 
@@ -27,6 +28,7 @@ Node führt die TypeScript-Quellen von Backend und Paketen direkt aus ([Type Str
 
 - **Vertragsmodul:** nur Zod und eigene Dateien. Verboten sind React-, Drizzle-, Netzwerk- und Plattform-APIs, auch als Typimport oder dynamischer Import. Die tsconfig des Pakets kennt keine DOM- und Node-Typen. `fetch` oder `process` sind dort also schon Typfehler.
 - **Uhr:** nur das Vertragsmodul sowie `Date` und `Intl` aus dem Sprachstandard.
+- **Spielregeln:** `src/`, `content/` und `fixtures/` von `@abnehm/game-rules` importieren nur das Vertragsmodul und eigene Dateien. Sie lesen keine Uhr (`Date.now()`, `new Date()`, `Intl…resolvedOptions()`); Zeitpunkte kommen als Fakten herein. `@abnehm/game-rules/fixtures` ist wie die Vertrags-Fixtures nur in Tests erlaubt.
 - **Zeit im Bereichscode:** In `apps/*/src` sind `Date.now()`, `new Date()`, `Date()` und `Intl…resolvedOptions()` verboten, in der App außerdem `expo-localization`. Ausgenommen sind nur der Geräteadapter `apps/mobile/src/clock/` und Tests.
 - **App → Backend:** nur `import type` aus `@abnehm/backend/rpc`. Laufzeitcode des Backends gelangt nie ins App-Bundle.
 - **Farben:** In `apps/mobile/src` stehen Farben nur als Design-Token aus `apps/mobile/src/design/tokens.ts`. Rohe Hex-, `rgb()`- oder `hsl()`-Werte und Farbnamen in Farbeigenschaften verbietet die Regel `abnehm/token-farben`; ausgenommen sind die Token-Datei und Tests.
@@ -103,13 +105,13 @@ Das vollständige V1-Schema ([#96](https://github.com/Yggras/abnehm-app/issues/9
 
 ### Lokale Datenbank der App
 
-`apps/mobile/src/local-db/` kapselt expo-sqlite und Drizzle. Bereichscode kennt nur die Schnittstelle aus `local-db/index.ts`. Sie lädt kein expo-sqlite, damit Node-Integrationstests App-Module samt `LocalDatabaseClosedError` laden; die Datenbanken des Geräts erzeugt der Composition Root mit `createDeviceLocalDatabases` aus `local-db/device-databases.ts`.
+`apps/mobile/src/local-db/` kapselt expo-sqlite und Drizzle. Bereichscode kennt nur die Schnittstelle aus `local-db/index.ts`. Sie lädt kein expo-sqlite, damit Node-Integrationstests App-Module samt `LocalDatabaseClosedError` laden. Was expo-sqlite braucht, hat deshalb einen eigenen Einstieg: Die Datenbanken des Geräts erzeugt der Composition Root mit `createDeviceLocalDatabases` aus `local-db/device-databases.ts`, mitgelieferte Kataloge öffnet `CatalogProvider` aus `local-db/CatalogProvider.tsx` (siehe „Ernährung: BLS-Katalog und Lebensmittelsuche“).
 
 - **Je Konto eine Datei** (`konto-<konto-id>.db`). `LocalDatabases.open(kontoId)` öffnet und migriert sie, `lock()` schließt sie bei `401`. `remove(kontoId)` löscht sie beim vollständigen Abmelden endgültig, schließt sie vorher und ist idempotent. Wer ein anderes Konto öffnet oder sperrt, beendet alle Handles und Beobachtungen des bisherigen; sie werfen danach `LocalDatabaseClosedError`.
 - **Transaktionen:** `LocalDatabase.transaction(work)` reicht einen opaken `TransactionContext` an fachliche Repositories und Befehle; `read(work)` einen `ReadContext`, in dem Schreiben scheitert. `work` ist synchron, Verschachteln ist verboten. `tx.afterCommit(callback)` läuft nur nach erfolgreichem Commit; Fehler darin gehen an `onError` und rollen nichts zurück.
 - **Repositories** öffnen den Kontext mit `sqliteOf(tx)` aus `local-db/sqlite.ts` und bauen ihre Abfragen mit Drizzle über `local-db/schema`. Nur sie sehen Drizzle-Typen.
 - **Beobachten:** `observe(read, listener)` liest sofort und nach jedem Commit dieser Datenbank erneut. Drizzles `useLiveQuery` wird nicht verwendet: Es hört auf den globalen Change-Listener von expo-sqlite und vergleicht nur den Tabellennamen, nicht die Datei ([Quelltext](https://unpkg.com/drizzle-orm@0.45.4/expo-sqlite/query.js)). Vom Kontowechsel wüsste es nichts.
-- **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`).
+- **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint in `src/` nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`). Außerhalb von `src/` nutzt nur das Build-Skript des BLS-Katalogs (`scripts/bls-catalog/`) better-sqlite3; Test-Helfer erreichen es darüber.
 
 ### Tagesziel-Auswertung und Tages-Check-in
 
@@ -159,6 +161,38 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
 - **Sync:** Der Wassereintrag ist auf beiden Seiten angemeldet, in der App mit `waterEntryEntity` aus dem Tracker-Modul und im Backend mit `apps/backend/src/trackers/water-entity.ts`.
 - **Tests:** `trackers/trackers.test.ts` und `water-today.test.ts` laufen gegen echtes SQLite mit der Testuhr. `WaterMiniTracker.test.tsx` prüft den gerenderten Mini-Tracker samt Meldung, `apps/backend/test/water-sync-app.test.ts` zwei Geräte gegen die echte Hono-App.
 
+### Spielregeln und Spielkatalog
+
+`@abnehm/game-rules` ist die einzige Implementierung der Spielformeln ([#179](https://github.com/Yggras/abnehm-app/issues/179), Abschnitte 1 und 3–5 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83)). App und Server nutzen dasselbe Paket. Eingabe sind Katalog und Fakten, Ausgabe Werte oder Entscheidungen. Wie beim Vertragsmodul hat jeder Bereich einen eigenen Teilpfad, ein Barrel gibt es nicht:
+
+| Teilpfad | liefert |
+| --- | --- |
+| `progress` | `spentOnIsland(buchungen, insel)` ist `S_p(I)`. `islandProgress([S_A, S_B])` liefert Level, `levelNeed` und beide Hälften für `IslandProgress`. `memberHalf(S, level)` gibt die eigene Hälfte zum Level der Projektion; `halfFull` ist dort `waitingForPartner`. Die Hälften tragen die Feldnamen des Vertrags (`halfPercent`, `halfFull`). |
+| `prices` | `basePrice(bauplan)`, `upgradePrice(bauplan, stufe)` |
+| `fields` | `fieldQuota(gebiete)`; `placement({ field, person, object })` ergibt `erlaubt` oder `verboten` mit Grund `gemeinsamer_bereich`, `fremdes_feld` bzw. `falsche_rolle` |
+| `unlocks` | `unlocksAt(katalog, level)`: Baupläne samt Grund (`start`, `level`, `entdeckung`), neue Form und Gebiet (fest oder endlos). Dazu `formAt(level)`. |
+| `projects` | `projectNeed(n)` und `commonStage([a, b])`, die gemeinsame Stufe von Projekt und Challenge |
+| `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `entriesOf`, `fieldPlans`, `fieldKey`, `endlessAreaKey` |
+| `catalog-check` | `checkCatalog`, die Prüfung von Format und Regeln |
+| `catalog-versions` | `catalogDedications` (Widmung je Schlüssel, bei Bauplänen Rolle und Herkunft), `catalogChanges` |
+| `content` | `gameCatalog`, der ausgelieferte Katalog |
+| `fixtures` | nur für Tests: `testCatalog()` mit Gebieten und Landschaftsvorlagen, `tracer` |
+
+- **Energie:** Bestand und Anzeige `max(0, Summe)` bleiben `summarizeEnergy` und `shownEnergy` im Vertragsmodul. Die Levelhälfte je Insel kommt nur aus `spentOnIsland`. `readEnergy(…).levelHalf` zählt dagegen die Ausgaben aller Inseln.
+- **Felder:** Ein Feldschlüssel hat die Form `‹gebiet›:‹x›:‹y›`.
+  - Die Grundinsel heißt `grundinsel`. Endlose Gebiete heißen `endlos_‹k›_‹vorlage›`. Die Vorlage steht im Schlüssel, damit Felder gültig bleiben, wenn spätere Kataloge Vorlagen ergänzen.
+  - Feldart und Seite (`a` oder `b`) stehen im Katalog, den Besitzer trägt das Inselfeld. Die Felder einer Seite gehören einer Person und bleiben bei ihr, auch nach einem Rollentausch. Welche Person welche Seite bekommt, legt das Schlüpfen fest (#184).
+  - Ein Gebiet bringt je Seite 10 Felder Ecke und 30 Felder Rollenbereich. Die „eigenen Gebietsfelder“, die laut Abschnitt 3 an die Rolle binden, sind die Rollenbereich-Felder. Die Ecke-Felder eines Gebiets gehören zur Ecke und nehmen alle Baupläne (Auslegung aus #179, `test/fields.test.ts`).
+  - Das Raster der Grundinsel (16 × 12, je Seite 20 Ecke und 40 Rollenbereich, dazu Gemeinschaftsplatz, Lichtung und Strand; `content/base-island.ts`) legt die Spezifikation nicht fest. Es ist ein Designwert aus #179, nicht belegt, ebenso die Motive der Start-Baupläne und von Gemeinschaftsprojekt 1.
+- **Schlüssel:** Alle Arten teilen sich einen Schlüsselraum, weil ein Inselobjekt einen Bauplan- oder einen Dekoschlüssel trägt. Erlaubt sind Kleinbuchstaben, Ziffern und `_`. Grafiken nennt der Katalog nur als Schlüssel (`art`, `landmark`, `animal`), zeichnen tut sie die App.
+- **Katalog ändern:** Inhalte liegen unter `packages/game-rules/content/`.
+  - `checkCatalog` muss leer bleiben (`test/catalog-check.test.ts`).
+  - Jede Änderung erhöht `version` in `content/index.ts`. Danach legt `npm run catalog:snapshot --workspace @abnehm/game-rules` den Schnappschuss `catalog-versions/<version>.json` an. Er enthält einen Digest des ganzen Katalogs und alle Schlüssel mit ihrer Widmung.
+  - `test/catalog-versions.test.ts` scheitert in vier Fällen: Der Schnappschuss fehlt. Er passt nicht zum Katalog, auch bei geänderten Namen oder Preisen. Gegenüber der vorigen Version fehlt ein Schlüssel oder ist anders gewidmet. Oder ein Schnappschuss, der auf `main` liegt, wurde geändert oder gelöscht. Für den letzten Vergleich holt die CI `origin/main` nach.
+  - Legen zwei Branches dieselbe Version an, kollidieren sie beim Merge. Der spätere erhöht die Version erneut und erzeugt seinen Schnappschuss neu.
+- **Backend-Image:** Es kopiert `src/` und `content/`, nicht `fixtures/` und `catalog-versions/`.
+- **Tests:** Die Wahrheitstabellen liegen unter `packages/game-rules/test/`. Der Tracer läuft in der App (`apps/mobile/src/game-rules/tracer.test.ts`) und im Backend (`apps/backend/test/game-rules.test.ts`) mit denselben Buchungsfakten.
+
 ### Ports zwischen Bereichen
 
 `PlanReader`, `WeightTrendReader`, `IntakeReader`, `WeightRecorder` und der optionale `IslandCheckInHintReader` (Schnittstellen in `@abnehm/contracts/ports`) sind keine Registry. Ein Modul, das einen Port braucht, nimmt ihn als Pflichtparameter entgegen.
@@ -168,6 +202,26 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
   - Fehlende Pflichtports und Methoden meldet `IncompleteAreaPortsError` auf einmal. Ohne Insel-Hinweis ist `islandCheckInHintReader` `null`.
 - **Validieren:** Jede Rückgabe wird gegen ihr Vertragsschema geprüft. Ein Verstoß wirft `PortContractError`. Eine ungültige Eingabe an `recordManualWeight` beantwortet die Prüfung mit `invalid_payload`, ohne den Port aufzurufen.
 - **Fake-Ports für Tests** in `area-ports/testing/fakes.ts`: `fakePlanReader` (Fassungen nach `validFrom` und Wochentag), `fakeWeightTrendReader`, `fakeIntakeReader` (jeder Tag, sonst 0), `fakeWeightRecorder(localDateOf)` (idempotent je `entryId`; den lokalen Tag liefert der Test, etwa über die Testuhr) und `fakeIslandCheckInHintReader`. `fakeAreaPorts(overrides)` setzt sie geprüft zusammen.
+
+### Zielrechner
+
+`@abnehm/contracts/goal-calculator` ([#127](https://github.com/Yggras/abnehm-app/issues/127), Abschnitt 3 der [Spezifikation 1](https://github.com/Yggras/abnehm-app/issues/82)) enthält die Rechenregeln für Ziele. App und Server nutzen dieselben reinen Funktionen.
+
+- **`calculateGoals(input)`** liefert die vollständige Berechnung, die die Oberfläche direkt anzeigt:
+  - Grundumsatz, Gesamtumsatz, Defizit, Untergrenze und Budget samt Budgetquelle (`budgetSource`);
+  - Haltemodus mit Grund und Sicherheitsanlässen;
+  - Zielgewicht mit Vorschlag und Grenzen, die Prognose, das Wasser- und das Sportziel.
+
+  Verstöße gegen die Eingabegrenzen ergeben `{ type: 'ungueltig', errors }` mit typisierten Fehlerschlüsseln (`GoalInputError`), keine Ausnahmen. Hinweise sind Schlüssel (`GoalHintKey`); den Text erzeugt die App.
+- **Alter:** Der Rechner nimmt das Alter (`ageYears`), wie es auch die Zielversion speichert. Die App bestimmt es mit `ageOn(birthDate, calculationDate)`. So kann der Server eine Zielversion aus ihren gespeicherten Berechnungswerten mit `calculateGoals` nachrechnen.
+  - Grundumsatz, Gesamtumsatz, Untergrenze, Defizit und Haltemodus gelten unabhängig von der Budgetquelle.
+  - Das Budget selbst hängt von `budgetSource` ab:
+    - `berechnet`: Es entspricht dem berechneten Budget ohne manuellen Wert.
+    - `manuell`: Der Server übergibt es als `manualBudgetKcal`.
+    - `budgetvorschlag`: Es erfüllt nicht unbedingt das 10-kcal-Raster, denn der Vorschlag ist auf Untergrenze und Gesamtumsatz begrenzt (Abschnitt 7 der Spezifikation 1). Hier rechnet der Server ohne manuellen Wert und prüft nur, dass das Budget zwischen Untergrenze und Gesamtumsatz liegt.
+- **Rundung:** Kalorien rechnet der Rechner exakt als Ganzzahl in 1/4000 kcal, gerundet wird erst die Ausgabe. Anzeige und Snapshots erhalten ganze kcal, die Speicherung erhält `milliKcal` derselben ganzen kcal. Ein berechnetes Budget liegt immer auf einem Vielfachen von 10 kcal und nie unter der Untergrenze, auch im Haltemodus nicht.
+- **`sportSessionThreshold(weeklySportTargetMinutes, sportDayCount)`** gibt die Schwelle der Sporteinheit für Wochenplan und Tagesziel-Snapshot an. Ohne Sporttag ist sie `null`.
+- Ein manuelles Budget ist auch im gewählten Haltemodus erlaubt, nur im erzwungenen nicht (Nutzerentscheidung vom 28.10.2026, festgehalten in [#260](https://github.com/Yggras/abnehm-app/pull/260); Grundlage ist Abschnitt 10 der [Spezifikation 1](https://github.com/Yggras/abnehm-app/issues/82)).
 
 ### Typisierte Endpunkte (Hono RPC)
 
@@ -343,6 +397,7 @@ Partner-Zusammenfassungen, den groben Partner-Tageszielstand und die Revocation-
   - Stellt die Eigentümerin einen Bereich auf `privat`, werden in derselben Transaktion seine Zusammenfassungen zur Löschmarkierung, und der Empfänger erhält eine Notice `partner_summary`/`freigabe_entzogen`.
   - Der Entkopplungs-Kern ([#107](https://github.com/Yggras/abnehm-app/issues/107)) ruft in seiner Transaktion `revokeCoupling(tx, couplingId, at)` auf. Alle Projektionen der Kopplung werden zur Löschmarkierung, und beide Mitglieder erhalten eine Notice `kopplung`/`entkopplung`.
   - Erneutes Freigeben erzeugt eine neue ID und Generation; Gelöschtes wird nie wiederbelebt.
+  - Widerrufen wird in fester Reihenfolge (Projektionen nach ID, Empfänger nach Personen-ID), und die ID einer Notice ist `revocationNoticeId(serverVersion)` aus `@abnehm/contracts/partner`. Derselbe Ausgangszustand ergibt so exakt denselben Widerruf, was der Sollzustand von `nach_entkopplung` voraussetzt (#117).
 - **Freigaben:** `partner_sharing` und `photo_sharing` sind Upsert-Entitäten (`PartnerSharingUpsert`/`PhotoSharingUpsert`, nur `level`) mit Last-Write-Wins. Lesen und schreiben darf nur die Eigentümerin.
   - Auf dem Server führt `sharing-entities.ts` bei geänderter Stufe Invalidierung, Widerruf und den Sicherheitslog-Eintrag `freigabeaenderung` in derselben Transaktion aus. Die Fotofreigabe schreibt nur den Logeintrag, weil Fotos keine Projektion sind.
   - In der App schreiben `setPartnerSharing(tx, writer, { area, level }, at)` und `setPhotoSharing(tx, writer, level, at)` aus `apps/mobile/src/sync/` die Stufe lokal samt Outbox.
@@ -359,10 +414,18 @@ Synthetische Szenarien, steuerbare Test-Adapter und Release-Sperren nach Abschni
 - **Registry:** `test/test-capabilities.ts` führt jede Testfähigkeit mit Modulen, Einstiegen (Routen, Deep Links, Kommandos) und Markern: `seed`, `testuhr`, `fehler-adapter`, `testgeruest`. Jede Datei unter `apps/backend/dev/`, `apps/mobile/src/test-capabilities/` und `packages/contracts/seeds/` muss genau einer Fähigkeit gehören. Eine neue Testfähigkeit trägt sich dort ein und erhält damit ihre eigenen negativen Produktionsartefakt-Tests.
 - **Release-Sperren:** `test/release-sperren.test.ts` prüft je Fähigkeit das Produktions-Image des Backends (COPY-Anweisungen der Stage `production` abzüglich `.dockerignore`) und das mit `expo export` erzeugte Produktions-Bundle der App (Source Maps und Bundle-Text). Die Gegenprobe an den Development-Artefakten zeigt, dass die Prüfung anschlagen würde. `apps/backend/test/release-sperren.test.ts` ergänzt, dass das laufende produktive Backend jede registrierte Route mit `404` beantwortet. Der App-Teil exportiert beide Bundles und dauert deshalb einige zehn Sekunden.
 - **Manifeste:** `@abnehm/contracts/seeds` (Ordner `packages/contracts/seeds/`, außerhalb von `src/`) enthält Format (`SeedManifest`), gemeinsame IDs (`seedIds`, Konten, Installationen, feste Uhr `2026-10-14T12:00:00Z` in `Europe/Berlin`) und die Szenarien. Ein Manifest nennt Konten, Installationen, Katalogversion, Ausgangszustand (`initial`: Zeilen in Postgres, je Installation lokale Zeilen, Cursor und Outbox), die benannten Schritte und den Sollzustand (`target`). Zeilen stehen in kanonischer JSON-Form unter ihren SQL-Namen. E-Mails stehen nur in `accounts`, ausschließlich `.test`-Adressen.
-- **Bereiche ergänzen Szenarien:** Ein Szenario setzt sich aus Beiträgen je Bereich zusammen (`soloParts` in `seeds/solo.ts`). `buildSeedState` vergibt die Serverversionen in Beitragsreihenfolge, schreibt Änderungsprotokoll und Sync-Clock und spiegelt die eigenen Entitäten auf die Installationen. Einträge im Änderungsprotokoll entstehen nur für Entitäten mit `entityType`, also solche, die beim Sync angemeldet sind; ein Bereich ergänzt `entityType`, sobald er seine Entität anmeldet. Eine schon belegte ID lehnt der Baukasten ab.
+- **Bereiche ergänzen Szenarien:** Ein Szenario setzt sich aus Beiträgen je Bereich zusammen (`soloParts` in `seeds/solo.ts`, `gekoppeltParts` in `seeds/gekoppelt.ts`); wiederkehrende Zeilenformen stehen in `seeds/rows.ts`. `buildSeedState` vergibt die Serverversionen in Beitragsreihenfolge, schreibt Änderungsprotokoll und Sync-Clock und spiegelt auf jede Installation, was ihr Pull liefern würde: eigene Entitäten, Kopplungsdaten nur aktiven Mitgliedern (die Kopplung selbst als Archivstatus auch früheren) und Adressiertes nur dem Empfänger. Einträge im Änderungsprotokoll entstehen nur für Entitäten mit `entityType`, also solche, die beim Sync angemeldet sind; ein Bereich ergänzt `entityType`, sobald er seine Entität anmeldet. Eine schon belegte ID lehnt der Baukasten ab.
 - **Varianten von `solo`:** `solo-wasser-leer`, `solo-wasser-erreicht` und `solo-wasser-ueber-ziel` unterscheiden sich von `solo` (Status `teil`) nur im Wasser von heute. So ist jeder Status des Wasser-Mini-Trackers per Seed-Link erreichbar, etwa `abnehmapp-dev://seed?szenario=solo-wasser-erreicht` (#171).
+- **Partner-Szenarien ([#117](https://github.com/Yggras/abnehm-app/issues/117)):**
+  - `gekoppelt`: Philipp (`philipp-iphone`, Rolle Bauen) und Anna (`anna-android`, Rolle Natur), beide mit fertigem Onboarding, Zielen, Wochenplan, drei Tageszielen von heute und teilweise erfüllten Trackern. Philipp hat ein Tagesziel erfüllt, Anna zwei, jeweils mit `+1`. Philipp teilt alle vier Bereiche, Anna hält Ernährung privat. Beide teilen ihre Fotos, und jede Person hat heute ein geteiltes Mahlzeitenfoto. Zusammenfassungen und grober Tageszielstand sind zur festen Uhr berechnet und liegen auf den Geräten. Ein Sync beider Geräte ändert nichts.
+  - `nach_entkopplung`: startet im Zustand von `gekoppelt`. Schritt `entkoppeln` ruft den Entkopplungs-Kern ([#107](https://github.com/Yggras/abnehm-app/issues/107)) auf, danach synchronisieren beide Geräte. Den Sollzustand leitet `uncoupledState` (`seeds/nach-entkopplung.ts`) ausdrücklich aus dem Ausgangszustand ab: Kopplung und Insel archiviert, offene Aktionen beendet, Projektionen gelöscht, Notices an beide, Partnercaches leer. Spezifikation 5 erweitert das Szenario später um ihren Befehl `requestUncoupling`; er ruft denselben Kern auf und ergänzt den Sollzustand um Intent und Sicherheitslog, ohne den Kernübergang zu duplizieren. Den Schritt `entkoppeln` lösen Seeder, Tests und Sollzustand gemeinsam mit `uncouplingRequestOf` auf.
+  - **Erweiterungspunkte** (`extensions` im Manifest, versioniert über `version`): `mealPhotos` nennt die Fotos mit fester ID und ihre erwartete Online-Sichtbarkeit; die Bilddaten ergänzt [#162](https://github.com/Yggras/abnehm-app/issues/162) als Fassung 2. `decoGift` reserviert ID und Beteiligte des offenen Deko-Geschenks von Anna an Philipp; [#198](https://github.com/Yggras/abnehm-app/issues/198) füllt es mit Art, Katalog und Lager. Solange es reserviert ist, darf keine Zeile seine ID tragen.
+  - Testkonten: `philipp@example.test` und `anna@example.test`, beide mit `momo-insel-testpasswort`. Seed-Link etwa `abnehmapp-dev://seed?szenario=gekoppelt&installation=anna-android`. Seeden setzt Postgres samt Sitzungen zurück; wer ein zweites Gerät seedet, meldet das erste damit ab.
+  - **Serverschritte:** Seed-Route und Seed-Kommando stellen den Ausgangszustand her und führen danach die Serverschritte des Manifests aus (`seedScenario` in `apps/backend/dev/seed/server-seed.ts`), bisher nur `entkoppeln` über den Entkopplungs-Kern; eine nicht angenommene Entkopplung bricht das Seeden ab. Die Geräte starten im Ausgangszustand und holen die Schritte mit ihrem Sync nach. `nach_entkopplung` per Seed-Link zeigt also zuerst den Partner, und der erste Sync widerruft ihn tatsächlich. Tests seeden mit `seedServer` nur den Ausgangszustand und führen die Schritte selbst aus.
+  - Das Development-Backend nutzt die Systemuhr. Ein Pull rechnet den Tageszielstand deshalb für den echten Tag neu; die Werte des Manifests zeigen die Tests mit Testuhr (siehe „Uhr“).
+  - `apps/backend/test/seed-partner-app.test.ts` prüft beide Szenarien auf Postgres und zwei Geräten (better-sqlite3) gegen die echte Hono-App: Ausgangszustand exakt und wiederholbar, Sollzustand nach den Schritten, vollständiger Pull, Fotosichtbarkeit sowie Projektions-, Entkopplungs- und Kopplungsübergänge.
 - **Seed-Strategie:** Seeden setzt die ganze Datenbank auf den Ausgangszustand zurück, in Postgres per `TRUNCATE` aller Tabellen in einer Transaktion (die Zeilen-Trigger unveränderlicher Entitäten feuern dabei nicht), lokal durch Leeren aller Tabellen der Kontodatenbank. Konten entstehen mit fester ID und gesalzenem Passwort-Hash, ohne Sitzung. Wiederholtes Seeden ergibt für Fach- und Sync-Daten exakt denselben kanonischen Stand (`dumpServer`, `dumpLocalDatabase`). Better-Auth-Tabellen prüfen die Tests semantisch (ID, E-Mail, Hash passt zum Testpasswort). Das Sicherheitslog vergleichen sie nicht, denn jede Anmeldung schreibt dort. Nach dem Einfügen prüft der Seeder, dass außerhalb der Better-Auth-Tabellen keine Spalte eine E-Mail enthält (`tablesWithEmail`), sonst rollt er zurück.
-- **Uhr:** In Tests steuern `createTestClock` (Backend: `createTestBackend({ clock })`) und `createAppTestClock` (App) die Zeit. Das laufende Development-Backend nutzt die Systemuhr; nach einem Seed steht nur die App auf der Uhr des Manifests. Für `solo` genügt das, weil kein Serverschritt einen lokalen Tag braucht. Eine steuerbare Serveruhr im Development-Backend trägt das Szenario-Ticket nach, das sie braucht (#113, #116), samt Eintrag in der Registry.
+- **Uhr:** In Tests steuern `createTestClock` (Backend: `createTestBackend({ clock })`) und `createAppTestClock` (App) die Zeit. Das laufende Development-Backend nutzt die Systemuhr; nach einem Seed steht nur die App auf der Uhr des Manifests. Für `solo` genügt das, weil kein Serverschritt einen lokalen Tag braucht. `gekoppelt` bräuchte sie für den Vor-Pull-Schritt der Partner-Projektionen; seine Tests laufen mit Testuhr, im Development-Backend rechnet der erste Pull den Partnerstand für den echten Tag neu. Eine steuerbare Serveruhr im Development-Backend tragen #113 oder #116 nach, je nachdem, welches zuerst kommt, samt Eintrag in der Registry; sie gilt dann für alle Szenarien, auch die Partner-Szenarien. #117 baut sie bewusst nicht ein: Sie braucht eine öffentliche Zeitverschiebung im Uhr-Paket, und der Uhr-Link der App müsste die Serveruhr mitstellen. Das betrifft die E2E-Abläufe und gehört in ein Ticket, das beide Uhren zusammen festlegt.
 - **Grenze für E2E-Builds ([#114](https://github.com/Yggras/abnehm-app/issues/114)):** `src/build-capabilities.ts` lädt die Testfähigkeiten bei `__DEV__` oder `EXPO_PUBLIC_E2E_BUILD=true`. Den Schalter setzt Expo beim Bündeln als Literal ein; im Produktions-Bundle sind beide Bedingungen `false`, und Metro entfernt den Zweig samt Modulen. `app.config.ts` lässt den Schalter nur zusammen mit `APP_VARIANT=e2e` zu und bricht jeden anderen Build damit ab. Fehlende Beiträge der Bereiche zeigen in beiden Test-Artefakten Platzhalter (`isTestArtifact()` in `src/test-artifact.ts`), im Produktionsbuild sind sie Integrationsfehler. Der Release-Test prüft das Produktions-Bundle und als Gegenprobe Development- und E2E-Bundle.
 - **Development-Backend:** `apps/backend/dev/` bettet die App des Backends in die Testfähigkeiten ein (`POST /dev/seed` mit `{ "scenario": "solo" }`). Das Dockerfile hat die Stages `development` (mit `apps/backend/dev/` und den Manifesten, von `compose.yaml` genutzt) und `production` (Standard, ohne beides). Seeden von der Kommandozeile: `scripts/dev-seed solo`.
 - **Seed-Deep-Link (App, nur Test-Artefakte):** `abnehmapp-dev://seed?szenario=solo` (im E2E-Build `abnehmapp-e2e://…`) seedet das Development-Backend, stellt die Testuhr auf die Uhr des Manifests, meldet das Testkonto über das Auth-Modul an, seedet die lokale Datenbank der Installation und öffnet „Heute“. Optional `installation=<schlüssel>` und `ziel=<pfad>`, etwa `ziel=/capture/water`. Testkonto von `solo`: `philipp@example.test`, Passwort `momo-insel-testpasswort`. Im Simulator etwa `xcrun simctl openurl booted 'abnehmapp-dev://seed?szenario=solo'` bzw. `adb shell am start -a android.intent.action.VIEW -d 'abnehmapp-dev://seed?szenario=solo'`.
@@ -399,6 +462,38 @@ Maestro-Abläufe gegen fertige Release-Binaries und eine On-Device-Suite mit dem
 - **Kein EAS-Workflow:** Expo bietet E2E-Tests mit Maestro als EAS-Workflow an ([Expo](https://docs.expo.dev/eas/workflows/examples/e2e-tests/)). Dort entsteht das Binary „on EAS servers“, und EAS testet es auf einem Emulator bzw. Simulator. Das Backend läuft aber bis auf Weiteres nur auf diesem Rechner ([#21](https://github.com/Yggras/abnehm-app/issues/21), [#115](https://github.com/Yggras/abnehm-app/issues/115)) und ist aus der Cloud nicht erreichbar. Ein Cloud-Lauf bräuchte ein öffentlich erreichbares Test-Backend; das widerspräche den nicht öffentlichen Ports des Gates.
 - **Gate-Nachweis:** Die Testfähigkeiten fehlen im Produktionsbinary (Release-Sperren); On-Device-Suite und die Maestro-Abläufe laufen deshalb gegen die E2E-Binaries desselben Commits wie das freizugebende Produktionsbinary. Der Nachweis nennt die Artefakt-IDs aus `zusammenfassung.txt` und den Commit; Commit und Prüfsumme des Produktionsbinarys hält die Release-Checkliste aus #115 fest (Nutzerentscheidung vom 24.10.2026 in #114). Die sicheren Bereiche belegen nur die Bildschirmfotos `smoke-*.png` des Laufs; für den Gate-Nachweis sieht ein Mensch sie an und vermerkt das Ergebnis, ein geplanter Lauf prüft nur das Verhalten.
 
+### Ernährung: BLS-Katalog und Lebensmittelsuche
+
+Den mitgelieferten Lebensmittelkatalog, die lokale Suche und die Rechenregeln der Ernährung (Abschnitte 2–4 der [Spezifikation 2](https://github.com/Yggras/abnehm-app/issues/81)) liefert [#154](https://github.com/Yggras/abnehm-app/issues/154).
+
+- **Quelle:** Bundeslebensmittelschlüssel 4.0 des Max Rubner-Instituts, ZIP-Archiv `BLS_4_0_2025_DE.zip` von der [Downloadseite](https://www.blsdb.de/download). Laut dieser Seite gilt CC BY 4.0, und das Max Rubner-Institut ist als Herausgeber zu nennen. Die App nennt „Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0“ als Quellenangabe jedes BLS-Snapshots.
+- **Asset:** `apps/mobile/assets/catalog/bls-katalog.db` ist eine schreibgeschützte SQLite-Datei.
+  - Tabelle `food`: Schlüssel, Name, normalisierte Suchnamen sowie kcal, Eiweiß, Kohlenhydrate und Fett je 100 g in `milli_kcal` bzw. mg. Dazu kommen der FTS5-Index `food_search` und die Version in `catalog_info`.
+  - Von den 7.140 Lebensmitteln sind 7.137 enthalten. Spuren und Werte unter der Nachweis- oder Bestimmungsgrenze zählen als 0. Drei Zusatzstoffe ohne Fettwert fehlen, denn ein fehlender Wert ist laut BLS-Dokumentation (Abschnitt 4.4) „nicht als Null“ zu lesen.
+- **Neu bauen:** `npm run bls-katalog --workspace @abnehm/mobile` lädt die Quelle, prüft ihre SHA-256 und schreibt das Asset.
+  - `-- --quelle <zip>` nutzt eine schon geladene Datei, `-- --pruefen` vergleicht nur. Dieselbe Quelle ergibt dieselben Bytes.
+  - Ändert sich das Asset, wird `blsCatalogVersion` in `src/nutrition/bls-catalog-version.ts` erhöht. `src/nutrition/bls-catalog-asset.test.ts` scheitert, solange Asset, Version und Normalisierung nicht zusammenpassen.
+- **Öffnen:** `CatalogProvider` aus `local-db/CatalogProvider.tsx` öffnet einen mitgelieferten Katalog über `SQLiteProvider` mit `assetSource`. Er hat einen eigenen Einstieg neben `local-db/index.ts`, weil er expo-sqlite lädt; die Typen (`CatalogDatabase`, `BundledCatalog`) kommen aus `local-db/index.ts`.
+  - Der Katalog hat eine eigene Verbindung, getrennt von den Kontodatenbanken, und ist schreibgeschützt (`query_only`).
+  - `forceOverwrite` setzt der Provider nur, wenn die installierte Datei eine andere Version trägt oder kein Katalog ist (`catalogAssetSource`).
+  - Bildschirme mit Suche liegen in `BlsCatalogProvider` aus `src/nutrition` und suchen mit `useFoodSearch()`. Bis die Datei offen ist, rendert der Provider nichts.
+- **Suche** (`createFoodSearch`): Sie startet ab zwei getippten Buchstaben oder Ziffern; Leerraum und Satzzeichen zählen nicht. Asset und Anfrage nutzen dieselbe Normalisierung (`src/nutrition/search-text.ts`): Groß- und Kleinschreibung, ä → a und ae, ß → ss, Satzzeichen und mehrfache Leerzeichen als ein Trenner. Die Rangfolge innerhalb einer Gruppe:
+  1. Der Name beginnt mit der Anfrage, und dort endet ein Wort. Leerzeichen zählen beim Namensanfang nicht: „Haferflocken“ findet so „Hafer Flocken“ und „Hafer Flocken, gekocht“.
+  2. Der Name beginnt mit der Anfrage, das Wort geht weiter („Apfelmus“ bei „Apfel“).
+  3. Ein Wort beginnt mit jedem Suchwort (FTS5-Präfixsuche).
+  4. Ein Suchwort ab drei Zeichen steckt im Wortinneren, etwa „saft“ in „Apfelsaft“ (Nutzerentscheidung in #154).
+
+  Danach stehen kürzere Namen zuerst. Es gibt höchstens 50 Treffer, jeder mit Quellenmarke, Lebensmittelreferenz, Snapshot und kcal je 100 g. Die übrigen Gruppen (Favoriten, Zuletzt verwendet, eigene Lebensmittel, gescannte Produkte) ergänzen #157, #158 und #160 in `groups` von `food-search.ts`.
+- **Verträge und Rechenregeln** liegen in `@abnehm/contracts/nutrition`: `FoodRef` (Typ `FoodRefType`, BLS-Schlüssel `BlsKey`), `NutritionSnapshot`, `EntryAmount` und `EntryTotals`. Makros höchstens in Höhe der Bezugsmenge prüft der Snapshot nur bei der Basiseinheit g, wie die CHECKs beider Datenbankschemas; bei ml hinge der Vergleich von der Dichte ab.
+  - `entryAmount` macht aus der Eingabe die Basismenge. Stück und Portion gehen nur mit bekannter Umrechnung, die Menge liegt über 0 und höchstens bei 5 kg bzw. 5 l.
+  - `entryTotals` rechnet die Eintragssummen aus Snapshot und Basismenge, kaufmännisch gerundet auf `milli_kcal` bzw. mg.
+  - Für die Anzeige gibt es `roundKcal`, `dailyIntakeKcal` (gerundete Summe der `milli_kcal`) und `roundMacroGrams` (ganze g, unter 10 g eine Nachkommastelle).
+  - Beide Drizzle-Schemas nehmen Einheiten, Quellen und Referenztypen von dort.
+- **Tests:**
+  - `src/nutrition/food-search.test.ts` läuft mit better-sqlite3 (`local-db/testing/better-sqlite-catalog.ts`) gegen einen kleinen Testkatalog (`src/nutrition/testing/test-catalog.ts`). Ihn baut `writeCatalogFile` wie das Asset, mit Werten aus dem Asset.
+  - `src/local-db/catalog.test.ts` belegt: Bei gleicher Version bleibt die installierte Datei, eine neue Version ersetzt sie.
+  - Die Tests des Build-Skripts liegen unter `scripts/bls-catalog/`, einem eigenen Jest-Root. `node-loading.test.ts` lädt die Skriptmodule wie `npm run bls-katalog` unter Node; so fällt auf, wenn `search-text.ts` oder `bls-catalog-version.ts` einen Import bekommen, den Node ohne Bundler nicht laden kann.
+
 ## Befehle
 
 Alle Befehle laufen im Repo-Root:
@@ -406,7 +501,7 @@ Alle Befehle laufen im Repo-Root:
 | Befehl | Wirkung |
 | --- | --- |
 | `npm install` | Abhängigkeiten aller Workspaces |
-| `npm run backend` | Legt fehlende lokale Secrets an, baut und startet Backend und Postgres. Der Watch-Modus spielt Änderungen an `apps/backend/src` und `packages/*/src` ein. |
+| `npm run backend` | Legt fehlende lokale Secrets an, baut und startet Backend und Postgres. Der Watch-Modus spielt Änderungen an `apps/backend/src`, `packages/*/src` und dem Spielkatalog (`packages/game-rules/content`) ein. |
 | `npm run backend:lan` | Wie `backend`, gibt das Backend zusätzlich auf der LAN-Adresse frei (siehe „Echte Geräte“) |
 | `npm run backend:down` | Stoppt beide Container; die Datenbank bleibt im Volume erhalten |
 | `npm run ios --workspace @abnehm/mobile` | Development Build im iOS-Simulator |
@@ -415,6 +510,7 @@ Alle Befehle laufen im Repo-Root:
 | `npm run lint` | ESLint über das ganze Repo, einschließlich der Importgrenzen |
 | `npm run test:app` | App-Tests (Jest) |
 | `npm run test:node` | Backend-, Paket- und repoweite Tests (Vitest, `test/`). Startet dafür ein eigenes Postgres in Docker. |
+| `npm run bls-katalog --workspace @abnehm/mobile` | BLS-Katalog-Asset aus dem BLS 4.0 neu bauen (siehe „Ernährung: BLS-Katalog und Lebensmittelsuche“) |
 | `scripts/e2e-run --build` | E2E-Binaries bauen und Maestro auf iOS-Simulator und Android-Emulator ausführen (siehe „E2E, On-Device-Suite und Gerätesmoke“) |
 
 Native Abhängigkeiten der App kommen immer per `npx expo install <paket>` aus `apps/mobile`, damit die Version zum SDK passt ([Expo CLI](https://docs.expo.dev/more/expo-cli/#install)). Die Ordner `ios/` und `android/` erzeugt Expo bei Bedarf (Continuous Native Generation). Sie stehen nicht in Git und werden nicht von Hand bearbeitet.

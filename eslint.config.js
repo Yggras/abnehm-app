@@ -42,8 +42,20 @@ const testOnlyClock = {
 };
 
 const testOnlyFixtures = {
-  group: ['@abnehm/contracts/fixtures'],
-  message: 'Vertrags-Fixtures sind nur in Testdateien erlaubt.',
+  group: ['@abnehm/contracts/fixtures', '@abnehm/game-rules/fixtures'],
+  message: 'Fixtures von Vertragsmodul und Spielregeln sind nur in Testdateien erlaubt.',
+};
+
+const gameRulesImports = onlyImports(
+  ['@abnehm/contracts'],
+  'Die Spielregeln sind rein: nur das Vertragsmodul und eigene Dateien, keine Bibliotheks-, Netzwerk- oder Plattform-APIs.',
+);
+
+/** Ausdrücke, die Zeitpunkt oder Zone der Laufzeit lesen. */
+const readsCurrentTime = {
+  now: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+  date: "NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date']",
+  zone: "CallExpression[callee.property.name='resolvedOptions']",
 };
 
 const testOnlySeeds = {
@@ -115,6 +127,20 @@ export default defineConfig([
     ),
   },
   {
+    // Spielregeln und Spielkatalog (#179): kein I/O, auch keine Uhr; Zeitpunkte kommen als Fakten herein.
+    files: ['packages/game-rules/src/**', 'packages/game-rules/content/**', 'packages/game-rules/fixtures/**'],
+    rules: {
+      ...gameRulesImports,
+      'no-restricted-syntax': [
+        ...gameRulesImports['no-restricted-syntax'],
+        {
+          selector: Object.values(readsCurrentTime).join(', '),
+          message: 'Die Spielregeln lesen weder Uhr noch Zone; Zeitpunkt und lokaler Tag kommen als Fakten herein.',
+        },
+      ],
+    },
+  },
+  {
     files: ['apps/backend/src/**'],
     rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock, testOnlyFixtures, testOnlySeeds, noDevelopmentBackend] }] },
   },
@@ -132,15 +158,15 @@ export default defineConfig([
       'no-restricted-syntax': [
         'error',
         {
-          selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          selector: readsCurrentTime.now,
           message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus Date.now().',
         },
         {
-          selector: "NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date']",
+          selector: readsCurrentTime.date,
           message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus Date().',
         },
         {
-          selector: "CallExpression[callee.property.name='resolvedOptions']",
+          selector: readsCurrentTime.zone,
           message: 'Die Zeitzone kommt aus der Uhr (reading.timeZone), nicht aus Intl.',
         },
       ],
@@ -227,13 +253,17 @@ export default defineConfig([
           {
             // Auch `useLiveQuery` von Drizzle: Beobachtet wird über `LocalDatabase.observe`, das den Kontowechsel kennt.
             modules: ['expo-sqlite', 'drizzle-orm/expo-sqlite'],
-            allowedIn: ['apps/mobile/src/local-db/expo-connection.ts', 'apps/mobile/src/local-db/migrate.ts'],
-            message: 'Die lokale Datenbank läuft über `LocalDatabases` aus apps/mobile/src/local-db/.',
+            allowedIn: [
+              'apps/mobile/src/local-db/expo-connection.ts',
+              'apps/mobile/src/local-db/migrate.ts',
+              'apps/mobile/src/local-db/CatalogProvider.tsx',
+            ],
+            message: 'Die lokale Datenbank läuft über `LocalDatabases`, Kataloge über `CatalogProvider` aus apps/mobile/src/local-db/.',
           },
           {
             modules: ['better-sqlite3', 'drizzle-orm/better-sqlite3'],
             allowedIn: ['apps/mobile/src/local-db/testing/'],
-            message: 'better-sqlite3 ist nur der Test-Adapter der lokalen Datenbank (local-db/testing/).',
+            message: 'better-sqlite3 ist in der App nur der Test-Adapter der lokalen Datenbank (local-db/testing/); außerhalb von src/ baut es den BLS-Katalog (scripts/bls-catalog/).',
           },
           {
             // Nur flüchtige Orchestrierung der Online-Abläufe; Fachdaten liegen in SQLite, nie im Query-Cache.

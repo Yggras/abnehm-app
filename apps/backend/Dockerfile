@@ -17,6 +17,7 @@ COPY apps/backend/package.json apps/backend/
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/clock/package.json packages/clock/
+COPY packages/game-rules/package.json packages/game-rules/
 # drizzle-orm/better-auth deklarieren optionale Peers für Expo, Jest und Drizzle Kit.
 # Ohne diese Option installiert npm sie trotz --workspace/--omit=dev ins Backend-Image.
 # Alle zur Laufzeit verwendeten Peers (z. B. drizzle-orm) sind direkte Backend-Abhängigkeiten.
@@ -28,6 +29,9 @@ RUN npm ci --workspace @abnehm/backend --omit=dev --ignore-scripts --legacy-peer
 
 COPY packages/contracts/src packages/contracts/src
 COPY packages/clock/src packages/clock/src
+# Spielregeln und ausgelieferter Spielkatalog; Fixtures und Versionsschnappschüsse nur in Tests.
+COPY packages/game-rules/src packages/game-rules/src
+COPY packages/game-rules/content packages/game-rules/content
 COPY apps/backend/src apps/backend/src
 # Migrationen laufen beim Start (src/main.ts) und per `npm run db:migrate`.
 COPY apps/backend/drizzle apps/backend/drizzle

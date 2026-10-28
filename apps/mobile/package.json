@@ -8,11 +8,13 @@
     "ios": "APP_VARIANT=development expo run:ios",
     "android": "APP_VARIANT=development expo run:android",
     "typecheck": "tsc --noEmit",
+    "bls-katalog": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/bls-catalog/build.ts",
     "test": "jest"
   },
   "dependencies": {
     "@abnehm/clock": "*",
     "@abnehm/contracts": "*",
+    "@abnehm/game-rules": "*",
     "@expo-google-fonts/rubik": "^0.4.2",
     "@expo/ui": "~58.0.20",
     "@tanstack/react-query": "^5.104.4",

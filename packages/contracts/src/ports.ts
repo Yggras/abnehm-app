@@ -17,6 +17,10 @@ const weightG = bodyWeightG;
 export const MaintenanceReason = z.enum(['sicherheits_check', 'gewaehlt']);
 export type MaintenanceReason = z.infer<typeof MaintenanceReason>;
 
+/** Tempo: die gewählte Abnehmgeschwindigkeit, ausgedrückt als tägliches Defizit. */
+export const Pace = z.enum(['entspannt', 'zuegiger']);
+export type Pace = z.infer<typeof Pace>;
+
 /** Gültige Zielversion eines Tags. Im Haltemodus gibt es kein Tempo, sonst immer eines. */
 const GoalVersion = z
   .strictObject({
@@ -25,7 +29,7 @@ const GoalVersion = z
     calorieBudgetMilliKcal: milliKcal,
     lowerBoundMilliKcal: milliKcal,
     maintenanceReason: MaintenanceReason.nullable(),
-    pace: z.enum(['entspannt', 'zuegiger']).nullable(),
+    pace: Pace.nullable(),
     goalWeightG: weightG,
     waterTargetMl: z.int().positive(),
     weeklySportTargetMinutes: z.int().positive(),
