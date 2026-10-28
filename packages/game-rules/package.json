@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./catalog": "./src/catalog.ts",
+    "./catalog-check": "./src/catalog-check.ts",
     "./progress": "./src/progress.ts",
     "./prices": "./src/prices.ts",
     "./fields": "./src/fields.ts",

@@ -63,6 +63,36 @@ describe('Importgrenze der Uhr', () => {
   });
 });
 
+describe('Grenze der Spielregeln (#179)', () => {
+  const paths = ['packages/game-rules/src/probe.ts', 'packages/game-rules/content/probe.ts', 'packages/game-rules/fixtures/probe.ts'];
+
+  it.each([
+    ["import { z } from 'zod';", 'Bibliotheks-APIs'],
+    ["import { View } from 'react-native';", 'React Native'],
+    ["import { readFileSync } from 'node:fs';", 'Plattform (Node)'],
+    ["import { createTestClock } from '@abnehm/clock/testing';", 'die Uhr'],
+  ])('verbietet %s (%s)', async (code) => {
+    for (const path of paths) expect(await violations(code, path)).toContain('no-restricted-imports');
+  });
+
+  it.each(['export const t = Date.now();', 'export const t = new Date();', 'export const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;'])(
+    'liest keine Uhr: %s',
+    async (code) => {
+      for (const path of paths) expect(await violations(code, path)).toContain('no-restricted-syntax');
+    },
+  );
+
+  it('verbietet dynamische Importe und globale Plattform-APIs', async () => {
+    expect(await violations("export const load = () => import('pg');", paths[0]!)).toContain('no-restricted-syntax');
+    expect(await violations('export const env = process.env;', paths[0]!)).toContain('no-restricted-globals');
+  });
+
+  it('erlaubt das Vertragsmodul und eigene Dateien', async () => {
+    const code = "import { summarizeEnergy } from '@abnehm/contracts/energy';\nimport { rect } from './layout.ts';\nexport const s = [summarizeEnergy, rect];";
+    for (const path of paths) expect(await violations(code, path)).toEqual([]);
+  });
+});
+
 describe('Bereichscode liest Zeit und Zone nur über die Uhr', () => {
   it.each([
     'export const t = Date.now();',
@@ -120,6 +150,15 @@ describe('Vertrags-Fixtures nur in Tests', () => {
       expect(await violations(fixturesImport, filePath)).toEqual([]);
     },
   );
+
+  it.each([
+    ['apps/backend/src/probe.ts', 'apps/backend/test/probe.test.ts'],
+    ['apps/mobile/src/probe.ts', 'apps/mobile/src/probe.test.ts'],
+  ])('sperrt auch die Fixtures der Spielregeln in Produktionscode (%s), nicht in Tests (%s)', async (productionPath, testPath) => {
+    const code = "import { tracer } from '@abnehm/game-rules/fixtures';\nexport const t = tracer;";
+    expect(await violations(code, productionPath)).toContain('no-restricted-imports');
+    expect(await violations(code, testPath)).toEqual([]);
+  });
 
   it('die Fixtures selbst nutzen wie das Vertragsmodul nur Zod und eigene Dateien', async () => {
     const code = "import { Hono } from 'hono';\nexport const h = Hono;";

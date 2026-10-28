@@ -42,9 +42,14 @@ const testOnlyClock = {
 };
 
 const testOnlyFixtures = {
-  group: ['@abnehm/contracts/fixtures'],
-  message: 'Vertrags-Fixtures sind nur in Testdateien erlaubt.',
+  group: ['@abnehm/contracts/fixtures', '@abnehm/game-rules/fixtures'],
+  message: 'Fixtures von Vertragsmodul und Spielregeln sind nur in Testdateien erlaubt.',
 };
+
+const gameRulesImports = onlyImports(
+  ['@abnehm/contracts'],
+  'Die Spielregeln sind rein: nur das Vertragsmodul und eigene Dateien, keine Bibliotheks-, Netzwerk- oder Plattform-APIs.',
+);
 
 const testOnlySeeds = {
   group: ['@abnehm/contracts/seeds'],
@@ -113,6 +118,21 @@ export default defineConfig([
       ['@abnehm/contracts'],
       'Die Uhr nutzt nur das Vertragsmodul und den Sprachstandard (Date, Intl).',
     ),
+  },
+  {
+    // Spielregeln und Spielkatalog (#179): kein I/O, auch keine Uhr; Zeitpunkte kommen als Fakten herein.
+    files: ['packages/game-rules/src/**', 'packages/game-rules/content/**', 'packages/game-rules/fixtures/**'],
+    rules: {
+      ...gameRulesImports,
+      'no-restricted-syntax': [
+        ...gameRulesImports['no-restricted-syntax'],
+        {
+          selector:
+            "CallExpression[callee.object.name='Date'][callee.property.name='now'], NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date'], CallExpression[callee.property.name='resolvedOptions']",
+          message: 'Die Spielregeln lesen weder Uhr noch Zone; Zeitpunkt und lokaler Tag kommen als Fakten herein.',
+        },
+      ],
+    },
   },
   {
     files: ['apps/backend/src/**'],
