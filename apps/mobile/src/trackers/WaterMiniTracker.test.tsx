@@ -88,7 +88,7 @@ const progress = () => screen.getByRole('progressbar', { name: 'Wasser heute' })
 
 test('„+250 ml“ bucht ohne Navigation, zeigt „+250 ml Wasser“ mit „Rückgängig“ und aktualisiert den Mini-Tracker', async () => {
   const { rows } = await renderToday();
-  expect(progress()).toHaveAccessibilityValue({ min: 0, max: 2500, now: 0, text: '0,0 von 2,5 l' });
+  expect(progress()).toHaveAccessibilityValue({ min: 0, max: 2500, now: 0, text: '0,0 l von 2,5 l' });
 
   await user.press(screen.getByRole('button', { name: 'Wasser: +250 ml' }));
   await act(async () => {});
@@ -97,7 +97,7 @@ test('„+250 ml“ bucht ohne Navigation, zeigt „+250 ml Wasser“ mit „Rü
   expect(rows()).toEqual([expect.objectContaining({ amountMl: 250, deletedAt: null })]);
   expect(within(screen.getByTestId('message-slot')).getByText('+250 ml Wasser')).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: 'Rückgängig' })).toBeOnTheScreen();
-  expect(progress()).toHaveAccessibilityValue({ min: 0, max: 2500, now: 250, text: '0,3 von 2,5 l' });
+  expect(progress()).toHaveAccessibilityValue({ min: 0, max: 2500, now: 250, text: '0,3 l von 2,5 l' });
   expect(screen.getByText('Unterwegs')).toBeOnTheScreen();
 });
 
@@ -112,14 +112,14 @@ test('„Rückgängig“ löscht die Buchung genau einmal, auch bei Doppeltipp',
 
   expect(rows()).toEqual([expect.objectContaining({ deletedAt: expect.any(String) })]);
   expect(operations()).toEqual(['upsert_entity', 'delete_entity']);
-  expect(progress()).toHaveAccessibilityValue({ min: 0, max: 2500, now: 0, text: '0,0 von 2,5 l' });
+  expect(progress()).toHaveAccessibilityValue({ min: 0, max: 2500, now: 0, text: '0,0 l von 2,5 l' });
   expect(screen.queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
 });
 
 test('die Fläche öffnet den Detailbildschirm capture.water', async () => {
   await renderToday();
 
-  await user.press(screen.getByRole('button', { name: 'Wasser: 0,0 von 2,5 l, Noch offen. Details öffnen' }));
+  await user.press(screen.getByRole('button', { name: 'Wasser: 0,0 l von 2,5 l, Noch offen. Details öffnen' }));
 
   expect(openTarget).toHaveBeenCalledWith({ type: 'capture.water' });
 });
@@ -127,7 +127,7 @@ test('die Fläche öffnet den Detailbildschirm capture.water', async () => {
 test('Aktionen haben deutsche zugängliche Namen und mindestens 48 × 48 dp', async () => {
   await renderToday();
 
-  for (const name of ['Wasser: +250 ml', 'Wasser: 0,0 von 2,5 l, Noch offen. Details öffnen']) {
+  for (const name of ['Wasser: +250 ml', 'Wasser: 0,0 l von 2,5 l, Noch offen. Details öffnen']) {
     const area = hitArea(screen.getByRole('button', { name }));
     expect(area.height).toBeGreaterThanOrEqual(48);
     expect(area.width).toBeGreaterThanOrEqual(48);

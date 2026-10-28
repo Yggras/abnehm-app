@@ -83,7 +83,7 @@ name: Sync ohne Netz und kanonischer Sync
 - assertVisible: "Rückgängig"
 - scrollUntilVisible:
     element:
-      text: "Wasser: 0,3 von 2,5 l.*"
+      text: "Wasser: 0,3 l von 2,5 l.*"
 - takeScreenshot: wasser-offline
 - scrollUntilVisible:
     element:
@@ -111,5 +111,5 @@ name: Sync ohne Netz und kanonischer Sync
 - takeScreenshot: gesichert
 - scrollUntilVisible:
     element:
-      text: "Wasser: 0,3 von 2,5 l.*"
+      text: "Wasser: 0,3 l von 2,5 l.*"
 - takeScreenshot: wasser-gesichert

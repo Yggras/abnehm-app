@@ -54,7 +54,10 @@ export type ButtonProps = PressState & {
   disabled?: boolean;
   /** Drei Punkte statt Beschriftung; die Breite bleibt, Screenreader hören weiter die Beschriftung. */
   loading?: boolean;
-  /** Volle Breite. */
+  /**
+   * Volle Breite. Die Form kommt dann aus der Breite, deshalb bleibt nur ein schmaler Seitenabstand:
+   * So passt „+250 ml“ einzeilig in die drei Mini-Tracker auf dem iPhone SE (#171).
+   */
   block?: boolean;
   /** Ausführlicher Name für Screenreader, wenn die Beschriftung allein nicht reicht. */
   accessibilityLabel?: string;
@@ -167,7 +170,7 @@ const styles = StyleSheet.create({
   regularPadding: { paddingHorizontal: space[5] },
   compact: { paddingHorizontal: space[4] },
   textPadding: { paddingHorizontal: space[3] },
-  block: { alignSelf: 'stretch' },
+  block: { alignSelf: 'stretch', paddingHorizontal: space[1] },
   content: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   label: { textAlign: 'center', flexShrink: 1 },
   hidden: { opacity: 0 },

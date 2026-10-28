@@ -28,3 +28,11 @@ test('über dem Ziel bleibt der Balken voll, der Wert läuft weiter', async () =
   expect(screen.getByRole('progressbar')).toHaveAccessibilityValue({ now: 1500, max: 1500 });
   expect(screen.getByText('1,75 von 1,5 l')).toBeOnTheScreen();
 });
+
+test('ohne Legende zeigt nur die Spur; die Ansage nennt Wert und „erreicht“ weiter', async () => {
+  await render(<ProgressBar label="Wasser heute" value={2500} target={2500} valueText="2,5 l von 2,5 l" legend={false} />);
+
+  expect(screen.queryByText('2,5 l von 2,5 l')).not.toBeOnTheScreen();
+  expect(screen.queryByText('erreicht')).not.toBeOnTheScreen();
+  expect(screen.getByRole('progressbar', { name: 'Wasser heute' })).toHaveAccessibilityValue({ text: '2,5 l von 2,5 l, erreicht' });
+});
