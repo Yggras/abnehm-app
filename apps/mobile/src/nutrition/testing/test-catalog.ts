@@ -2,7 +2,7 @@ import { writeCatalogFile, type CatalogFood } from '../../../scripts/bls-catalog
 import { openCatalog } from '../../local-db/testing/better-sqlite-catalog';
 
 /**
- * Kleiner BLS-Katalog für Modultests: zehn Lebensmittel mit ihren Werten aus dem BLS 4.0
+ * Kleiner BLS-Katalog für Modultests: elf Lebensmittel mit ihren Werten aus dem BLS 4.0
  * (`BLS_4_0_Daten_2025_DE.xlsx`; „Spuren“ und Werte unter der Nachweisgrenze als 0).
  */
 export const testCatalogFoods: readonly CatalogFood[] = [
@@ -15,6 +15,7 @@ export const testCatalogFoods: readonly CatalogFood[] = [
   food('X537063', 'Rotkohl mit Apfel gedünstet', 62, 1.01, 4.9, 3.74),
   food('F506100', 'Granatapfel roh', 79, 0.7, 16.1, 0.6),
   food('C133000', 'Hafer Flocken', 348, 13.22, 53.3, 6.65),
+  food('D701600', 'Haferflockenplätzchen', 448, 8.67, 51.8, 21.87),
   food('K240400', 'Kartoffelkloß (aus rohen Kartoffeln) Trockenprodukt', 320, 6.03, 70.7, 0.227),
 ];
 

@@ -63,33 +63,45 @@ export function createBlsCatalog(database: CatalogDatabase): BlsCatalog {
  * 0–9; in FTS5-Phrasen und LIKE-Mustern haben sie keine Sonderbedeutung.
  */
 function rankedSearch(query: SearchQuery, limit: number): { sql: string; params: CatalogValue[] } {
-  const prefixMatch = query.terms.map((term) => `"${term}"*`).join(' AND ');
-  const startsWith = `${query.text}%`;
+  // Parameter in der Reihenfolge ihres Platzhalters im Text; nummerierte Platzhalter (`?2`) bindet
+  // better-sqlite3 nicht aus einer Liste.
+  const params: CatalogValue[] = [];
+  const bind = (value: CatalogValue) => {
+    params.push(value);
+    return '?';
+  };
+
+  // Der Namensanfang zählt ohne Leerzeichen: Der BLS schreibt etwa „Hafer Flocken“, gesucht wird
+  // „Haferflocken“. Endet die Anfrage an einer Wortgrenze des Namens („Apfel roh“), steht der Treffer
+  // vor Namen, in denen das Wort weitergeht („Apfelmus“).
+  const compact = query.terms.join('');
+  const compactName = (column: string) => `replace(${column}, ' ', '')`;
+  const either = (condition: (column: string) => string) => `(${condition('search_name')} OR ${condition('search_alt')})`;
+  const endsAtWordBoundary = () =>
+    either((column) => `${column} = ${bind(query.text)} OR ${column} LIKE ${bind(`${query.text} %`)} OR ${compactName(column)} = ${bind(compact)}`);
+  const startsWithQuery = () => either((column) => `${compactName(column)} LIKE ${bind(`${compact}%`)}`);
 
   // Treffer im Wortinneren nur, wenn ein Suchwort mindestens drei Zeichen hat. Kürzere Suchwörter
   // müssen dann am Wortanfang stehen: Wörter sind durch genau ein Leerzeichen getrennt.
   const withinWords = query.terms.some((term) => term.length >= withinWordMinimumLength);
-  const withinWordTerms = withinWords
-    ? query.terms.map((term) =>
-        term.length >= withinWordMinimumLength ? { padding: '', needle: term } : { padding: `' ' || `, needle: ` ${term}` },
-      )
-    : [];
-  const withinWordCondition = withinWordTerms
-    .map(({ padding }) => `(instr(${padding}search_name, ?) > 0 OR instr(${padding}search_alt, ?) > 0)`)
-    .join(' AND ');
+  const withinWordCondition = () =>
+    query.terms
+      .map((term) => {
+        const inside = term.length >= withinWordMinimumLength;
+        const [name, alt] = inside ? ['search_name', 'search_alt'] : [`' ' || search_name`, `' ' || search_alt`];
+        const needle = inside ? term : ` ${term}`;
+        return `(instr(${name}, ${bind(needle)}) > 0 OR instr(${alt}, ${bind(needle)}) > 0)`;
+      })
+      .join(' AND ');
 
-  return {
-    sql: `
-      WITH prefix AS (SELECT rowid FROM food_search WHERE food_search MATCH ?)
-      SELECT key, name, milli_kcal_per_100 AS milliKcal, protein_mg_per_100 AS proteinMg,
-             carbs_mg_per_100 AS carbsMg, fat_mg_per_100 AS fatMg,
-             CASE WHEN rowid NOT IN prefix THEN 2
-                  WHEN search_name LIKE ? OR search_alt LIKE ? THEN 0
-                  ELSE 1 END AS tier
-      FROM food
-      WHERE rowid IN prefix ${withinWords ? `OR (${withinWordCondition})` : ''}
-      ORDER BY tier, length(search_name), search_name, key
-      LIMIT ?`,
-    params: [prefixMatch, startsWith, startsWith, ...withinWordTerms.flatMap(({ needle }) => [needle, needle]), limit],
-  };
+  const sql = `
+    WITH prefix AS (SELECT rowid FROM food_search WHERE food_search MATCH ${bind(query.terms.map((term) => `"${term}"*`).join(' AND '))})
+    SELECT key, name, milli_kcal_per_100 AS milliKcal, protein_mg_per_100 AS proteinMg,
+           carbs_mg_per_100 AS carbsMg, fat_mg_per_100 AS fatMg,
+           CASE WHEN ${endsAtWordBoundary()} THEN 0 WHEN ${startsWithQuery()} THEN 1 WHEN rowid IN prefix THEN 2 ELSE 3 END AS tier
+    FROM food
+    WHERE rowid IN prefix OR ${startsWithQuery()} ${withinWords ? `OR (${withinWordCondition()})` : ''}
+    ORDER BY tier, length(search_name), search_name, key
+    LIMIT ${bind(limit)}`;
+  return { sql, params };
 }

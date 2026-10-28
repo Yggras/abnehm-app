@@ -40,12 +40,12 @@ describe('Normalisierung', () => {
     expect(foods.search('')).toEqual({ type: 'zu_kurz' });
     expect(foods.search(' a ')).toEqual({ type: 'zu_kurz' });
     expect(foods.search('ß')).toEqual({ type: 'zu_kurz' });
-    expect(names(foods.search('Ha'))).toEqual(['Hafer Flocken']);
+    expect(names(foods.search('Ha'))).toEqual(['Hafer Flocken', 'Haferflockenplätzchen']);
   });
 
   it('behandelt Sonderzeichen der Eingabe als Worttrenner, nicht als Suchsyntax', () => {
     expect(names(foods.search('"Hafer" OR *'))).toEqual([]);
-    expect(names(foods.search('hafer-flocken'))).toEqual(['Hafer Flocken']);
+    expect(names(foods.search('granat-apfel'))).toEqual(['Granatapfel roh']);
     expect(names(foods.search('%%'))).toEqual([]);
   });
 });
@@ -53,11 +53,12 @@ describe('Normalisierung', () => {
 describe('Rangfolge', () => {
   it('stellt Namensanfang vor Wortanfang vor Treffer im Wortinneren, kürzere Namen zuerst', () => {
     expect(names(foods.search('Apfel'))).toEqual([
-      // Der Name beginnt mit „Apfel“.
+      // Der Name beginnt mit dem Wort „Apfel“.
       'Apfel roh',
+      'Apfel geschält, roh',
+      // Der Name beginnt mit „Apfel“, das Wort geht weiter.
       'Apfelsaft',
       'Apfelessig',
-      'Apfel geschält, roh',
       // Ein späteres Wort beginnt mit „Apfel“.
       'Rotkohl mit Apfel gedünstet',
       // „apfel“ steckt im Wortinneren.
@@ -71,6 +72,14 @@ describe('Rangfolge', () => {
     expect(names(foods.search('apf'))).toContain('Granatapfel roh');
   });
 
+  it('zählt beim Namensanfang keine Leerzeichen: „Haferflocken“ findet „Hafer Flocken“ zuerst', () => {
+    const oats = ['Hafer Flocken', 'Haferflockenplätzchen'];
+
+    expect(names(foods.search('Haferflocken'))).toEqual(oats);
+    expect(names(foods.search('Hafer Flocken'))).toEqual(oats);
+    expect(names(foods.search('haferfl'))).toEqual(oats);
+  });
+
   it('verlangt jedes Suchwort und bewertet den Namensanfang über die ganze Anfrage', () => {
     expect(names(foods.search('apfel roh'))).toEqual(['Apfel roh', 'Apfel geschält, roh', 'Granatapfel roh']);
     // Kein Name beginnt mit „ro apfel“: Alle Wortanfangs-Treffer stehen in einer Stufe, kürzere zuerst.
@@ -80,23 +89,23 @@ describe('Rangfolge', () => {
 
 describe('Treffer', () => {
   it('enthält Name, kcal je 100 g, Quellenmarke BLS und den Snapshot ohne Portionsumrechnung', () => {
-    const result = foods.search('Hafer Flocken');
+    const result = foods.search('Apfelessig');
 
     expect(result).toEqual({
       type: 'treffer',
       hits: [
         {
           mark: 'bls',
-          ref: { type: 'bls', key: 'C133000' },
-          kcalPer100: 348,
+          ref: { type: 'bls', key: 'R123100' },
+          kcalPer100: 18,
           snapshot: {
-            name: 'Hafer Flocken',
+            name: 'Apfelessig',
             baseUnit: 'g',
             referenceAmount: 100_000,
-            milliKcal: 348_000,
-            proteinMg: 13_220,
-            carbsMg: 53_300,
-            fatMg: 6_650,
+            milliKcal: 18_000,
+            proteinMg: 200,
+            carbsMg: 147,
+            fatMg: 0,
             portions: [],
             source: 'bls',
             attribution: 'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0',
