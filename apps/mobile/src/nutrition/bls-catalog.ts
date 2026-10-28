@@ -1,6 +1,6 @@
 import { NutritionSnapshot } from '@abnehm/contracts/nutrition';
 
-import type { CatalogDatabase, CatalogValue } from '../local-db/catalog';
+import type { CatalogDatabase, CatalogValue } from '../local-db';
 import { withinWordMinimumLength, type SearchQuery } from './search-text';
 
 // Lesender Zugriff auf den BLS-Katalog (Spezifikation 2, Abschnitte 3 und 4). Die Datei baut
@@ -52,12 +52,14 @@ export function createBlsCatalog(database: CatalogDatabase): BlsCatalog {
 
   return {
     search(query, limit) {
-      if (query.terms.length === 0) return [];
       const { sql, params } = rankedSearch(query, limit);
       return database.all<FoodRow>(sql, params).map(snapshotOf);
     },
   };
 }
+
+/** Über so viele Wörter des Namens darf sich die Anfrage am Namensanfang erstrecken (Designwert, nicht belegt). */
+const maxSpacesBeforeBoundary = 7;
 
 /**
  * Abfrage über beide Schreibweisen (`search_name`, `search_alt`). Suchwörter bestehen nur aus a–z und
@@ -73,14 +75,20 @@ function rankedSearch(query: SearchQuery, limit: number): { sql: string; params:
   };
 
   // Der Namensanfang zählt ohne Leerzeichen: Der BLS schreibt etwa „Hafer Flocken“, gesucht wird
-  // „Haferflocken“. Endet die Anfrage an einer Wortgrenze des Namens („Apfel roh“), steht der Treffer
-  // vor Namen, in denen das Wort weitergeht („Apfelmus“).
+  // „Haferflocken“. Endet die Anfrage an einer Wortgrenze des Namens („Apfel roh“, „Hafer Flocken,
+  // gekocht“), steht der Treffer vor Namen, in denen das Wort weitergeht („Apfelmus“). Die Grenze
+  // liegt hinter den ersten `compact.length + s` Zeichen des Namens, wenn diese genau `s` Leerzeichen
+  // enthalten; geprüft werden bis zu `maxSpacesBeforeBoundary` Leerzeichen.
   const compact = query.terms.join('');
-  const compactName = (column: string) => `replace(${column}, ' ', '')`;
   const either = (condition: (column: string) => string) => `(${condition('search_name')} OR ${condition('search_alt')})`;
   const endsAtWordBoundary = () =>
-    either((column) => `${column} = ${bind(query.text)} OR ${column} LIKE ${bind(`${query.text} %`)} OR ${compactName(column)} = ${bind(compact)}`);
-  const startsWithQuery = () => either((column) => `${compactName(column)} LIKE ${bind(`${compact}%`)}`);
+    either((column) =>
+      Array.from({ length: maxSpacesBeforeBoundary + 1 }, (_, spaces) => {
+        const end = compact.length + spaces;
+        return `(replace(substr(${column}, 1, ${bind(end)}), ' ', '') = ${bind(compact)} AND substr(${column}, ${bind(end + 1)}, 1) IN ('', ' '))`;
+      }).join(' OR '),
+    );
+  const startsWithQuery = () => either((column) => `replace(${column}, ' ', '') LIKE ${bind(`${compact}%`)}`);
 
   // Treffer im Wortinneren nur, wenn ein Suchwort mindestens drei Zeichen hat. Kürzere Suchwörter
   // müssen dann am Wortanfang stehen: Wörter sind durch genau ein Leerzeichen getrennt.

@@ -36,17 +36,19 @@ describe('Normalisierung', () => {
     expect(names(foods.search('  Kartoffelkloss   roh  '))).toEqual(kloss);
   });
 
-  it('sucht erst ab zwei Zeichen, gezählt wie getippt', () => {
+  it('sucht erst ab zwei getippten Buchstaben oder Ziffern', () => {
     expect(foods.search('')).toEqual({ type: 'zu_kurz' });
     expect(foods.search(' a ')).toEqual({ type: 'zu_kurz' });
+    expect(foods.search('a.')).toEqual({ type: 'zu_kurz' });
+    // „ß“ ist ein getipptes Zeichen, auch wenn daraus „ss“ wird.
     expect(foods.search('ß')).toEqual({ type: 'zu_kurz' });
-    expect(names(foods.search('Ha'))).toEqual(['Hafer Flocken', 'Haferflockenplätzchen']);
+    expect(names(foods.search('Ha'))).toEqual(['Hafer Flocken', 'Hafer Flocken, gekocht', 'Haferflockenplätzchen', 'Haferflocken-Nussplätzchen']);
   });
 
   it('behandelt Sonderzeichen der Eingabe als Worttrenner, nicht als Suchsyntax', () => {
     expect(names(foods.search('"Hafer" OR *'))).toEqual([]);
     expect(names(foods.search('granat-apfel'))).toEqual(['Granatapfel roh']);
-    expect(names(foods.search('%%'))).toEqual([]);
+    expect(foods.search('%%')).toEqual({ type: 'zu_kurz' });
   });
 });
 
@@ -73,11 +75,19 @@ describe('Rangfolge', () => {
   });
 
   it('zählt beim Namensanfang keine Leerzeichen: „Haferflocken“ findet „Hafer Flocken“ zuerst', () => {
-    const oats = ['Hafer Flocken', 'Haferflockenplätzchen'];
+    const oats = [
+      // Die Anfrage endet an einer Wortgrenze des Namens, auch wenn der Name dort ein Leerzeichen hat.
+      'Hafer Flocken',
+      'Hafer Flocken, gekocht',
+      'Haferflocken-Nussplätzchen',
+      // Das Wort geht weiter.
+      'Haferflockenplätzchen',
+    ];
 
     expect(names(foods.search('Haferflocken'))).toEqual(oats);
     expect(names(foods.search('Hafer Flocken'))).toEqual(oats);
-    expect(names(foods.search('haferfl'))).toEqual(oats);
+    // Keine Wortgrenze nach „haferfl“: eine Stufe, kürzere Namen zuerst.
+    expect(names(foods.search('haferfl'))).toEqual(['Hafer Flocken', 'Hafer Flocken, gekocht', 'Haferflockenplätzchen', 'Haferflocken-Nussplätzchen']);
   });
 
   it('verlangt jedes Suchwort und bewertet den Namensanfang über die ganze Anfrage', () => {

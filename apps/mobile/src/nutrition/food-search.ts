@@ -1,11 +1,11 @@
-import { entryTotals, roundKcal, type BaseUnit, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import { entryAmount, entryTotals, roundKcal, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
 
-import type { CatalogDatabase } from '../local-db/catalog';
+import type { CatalogDatabase } from '../local-db';
 import { createBlsCatalog } from './bls-catalog';
 import { searchQuery, type SearchQuery } from './search-text';
 
 // Lokale Lebensmittelsuche des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 4). Sie läuft bei jeder
-// Eingabe ab zwei Zeichen, ohne Netz. Die Treffer kommen in Gruppen in fester Rangfolge: Favoriten,
+// Eingabe ab zwei Buchstaben oder Ziffern, ohne Netz. Die Treffer kommen in Gruppen in fester Rangfolge: Favoriten,
 // „Zuletzt verwendet“, eigene Lebensmittel, gescannte Produkte, BLS. Bisher gibt es nur die Gruppe
 // BLS; spätere Tickets (#157, #158, #160) ergänzen ihre Gruppe in `groups`, ohne die Schnittstelle zu
 // ändern.
@@ -55,13 +55,9 @@ export function createFoodSearch(sources: { catalog: CatalogDatabase }): FoodSea
   };
 }
 
-const per100: Readonly<Record<BaseUnit, number>> = { g: 100_000, ml: 100 };
-
 function hit(mark: SearchMark, ref: FoodRef, snapshot: NutritionSnapshot): FoodSearchHit {
-  const milliKcal = entryTotals(snapshot, {
-    baseAmount: per100[snapshot.baseUnit],
-    displayUnit: snapshot.baseUnit,
-    displayAmountMilli: 100_000,
-  }).milliKcal;
-  return { mark, ref, snapshot, kcalPer100: roundKcal(milliKcal) };
+  // 100 g bzw. 100 ml sind immer eine gültige Menge der Basiseinheit (höchstens 5 kg bzw. 5 l).
+  const hundred = entryAmount(snapshot, snapshot.baseUnit, 100_000);
+  if (hundred.type === 'problem') throw new Error(`100 ${snapshot.baseUnit} ergeben ${hundred.problem}`);
+  return { mark, ref, snapshot, kcalPer100: roundKcal(entryTotals(snapshot, hundred.amount).milliKcal) };
 }

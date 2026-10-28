@@ -12,7 +12,7 @@ const minimumInputLength = 2;
 /** Ab dieser Länge darf ein Suchwort auch im Wortinneren treffen („saft“ in „Apfelsaft“). */
 export const withinWordMinimumLength = 3;
 
-/** Normalisierte Anfrage: die Wörter der Eingabe und ihr Text, durch je ein Leerzeichen getrennt. */
+/** Normalisierte Anfrage: mindestens ein Wort und ihr Text, durch je ein Leerzeichen getrennt. */
 export type SearchQuery = Readonly<{ text: string; terms: readonly string[] }>;
 
 /**
@@ -25,12 +25,13 @@ export function searchNames(name: string): { searchName: string; searchAlt: stri
   return { searchName, searchAlt: searchAlt === searchName ? null : searchAlt };
 }
 
-/** Die Anfrage zur Eingabe der Person; `null`, solange sie kürzer als zwei Zeichen ist. */
+/** Die Anfrage zur Eingabe der Person; `null`, solange sie weniger als zwei Buchstaben oder Ziffern hat. */
 export function searchQuery(input: string): SearchQuery | null {
   // Gezählt wird, was die Person getippt hat: „ß“ ist ein Zeichen, auch wenn daraus „ss“ wird.
-  if ([...input.trim().replace(/\s+/g, ' ')].length < minimumInputLength) return null;
+  // Leerraum und Satzzeichen sind nur Trenner und zählen nicht.
+  if ([...input].filter((character) => normalized(character, false) !== '').length < minimumInputLength) return null;
   const text = normalized(input, false);
-  return { text, terms: text === '' ? [] : text.split(' ') };
+  return { text, terms: text.split(' ') };
 }
 
 const accents: Readonly<Record<string, string>> = {

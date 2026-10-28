@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, primaryKey, sqliteTable, unique, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import { MealKey } from '@abnehm/contracts/base';
-import { BaseUnit, DisplayUnit, FoodRef, SnapshotSource, type PortionConversion } from '@abnehm/contracts/nutrition';
+import { BaseUnit, DisplayUnit, FoodRefType, SnapshotSource, type PortionConversion } from '@abnehm/contracts/nutrition';
 
 import { person } from './accounts';
 import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from './columns';
@@ -13,7 +13,6 @@ import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from '
 // Fotoentwürfe gibt es nur auf dem Server, den Open-Food-Facts-Cache nur hier. Einheiten, Quellen und
 // Lebensmittelreferenzen kommen aus dem Vertragsmodul (`@abnehm/contracts/nutrition`).
 
-const foodRefTypes = FoodRef.options.map((option) => option.shape.type.value);
 export const captureMethods = [
   'suche',
   'barcode',
@@ -74,7 +73,7 @@ export const foodFavorite = sqliteTable(
   },
   (t) => [
     unique('food_favorite_ref_uq').on(t.personId, t.foodRefType, t.foodRefKey),
-    check('food_favorite_ref_type_check', oneOf(t.foodRefType, foodRefTypes)),
+    check('food_favorite_ref_type_check', oneOf(t.foodRefType, FoodRefType.options)),
   ],
 );
 
@@ -111,7 +110,7 @@ export const mealFavoriteItem = sqliteTable(
       columns: [t.mealFavoriteId, t.personId],
       foreignColumns: [mealFavorite.id, mealFavorite.personId],
     }),
-    check('meal_favorite_item_ref_type_check', oneOf(t.foodRefType, foodRefTypes)),
+    check('meal_favorite_item_ref_type_check', oneOf(t.foodRefType, FoodRefType.options)),
     check('meal_favorite_item_display_unit_check', oneOf(t.displayUnit, DisplayUnit.options)),
     check(
       'meal_favorite_item_amount_check',

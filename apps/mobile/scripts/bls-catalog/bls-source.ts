@@ -1,3 +1,5 @@
+import { BlsKey } from '@abnehm/contracts/nutrition';
+
 import type { CatalogFood } from './catalog-file.ts';
 import { readSingleSheet, readZip } from './xlsx.ts';
 
@@ -65,7 +67,7 @@ export function blsFoodsFromRows(rows: readonly ReadonlyMap<string, string | num
   const keys = new Set<string>();
   for (const row of data) {
     const key = String(row.get(keyColumn) ?? '');
-    if (!/^[A-Z][0-9A-Z]{6}$/.test(key)) throw new Error(`Unerwarteter BLS-Schlüssel: „${key}“`);
+    if (!BlsKey.safeParse(key).success) throw new Error(`Unerwarteter BLS-Schlüssel: „${key}“`);
     if (keys.has(key)) throw new Error(`BLS-Schlüssel doppelt: ${key}`);
     keys.add(key);
     const name = String(row.get(nameColumn) ?? '').trim().replace(/\s+/g, ' ');

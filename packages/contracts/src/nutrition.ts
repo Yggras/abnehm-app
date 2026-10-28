@@ -16,16 +16,26 @@ export const maxBaseAmount: Readonly<Record<BaseUnit, number>> = { g: 5_000_000,
 
 const amountWithin = (baseUnit: BaseUnit, amount: number) => amount <= maxBaseAmount[baseUnit];
 
-/** Text ohne Leerraum am Rand, 1 bis `max` Zeichen. */
+/**
+ * Text ohne Leerraum am Rand, 1 bis `max` Zeichen, gezählt in Unicode-Codepunkten wie bei
+ * `DisplayName`. Die Höchstlängen unten sind Designwerte (nicht belegt).
+ */
 const trimmedText = (max: number) =>
   z
     .string()
-    .min(1)
-    .max(max)
-    .refine((value) => value === value.trim(), { message: 'Kein Leerraum am Rand' });
+    .refine((value) => value === value.trim(), { message: 'Kein Leerraum am Rand' })
+    .refine((value) => [...value].length >= 1 && [...value].length <= max, { message: `1–${max} Zeichen` });
+
+/** Herkunft der Werte eines Snapshots; `ki` hat keine Lebensmittelreferenz. */
+export const SnapshotSource = z.enum(['bls', 'off', 'eigen', 'ki']);
+export type SnapshotSource = z.infer<typeof SnapshotSource>;
+
+/** Art einer Lebensmittelreferenz: jede Quelle außer der KI-Schätzung (Spezifikation 2, Abschnitt 2). */
+export const FoodRefType = SnapshotSource.exclude(['ki']);
+export type FoodRefType = z.infer<typeof FoodRefType>;
 
 /** BLS-Schlüssel: Buchstabe der Hauptgruppe und sechs Stellen (BLS-4.0-Dokumentation, Abschnitt 2.4). */
-const BlsKey = z.string().regex(/^[A-Z][0-9A-Z]{6}$/);
+export const BlsKey = z.string().regex(/^[A-Z][0-9A-Z]{6}$/);
 
 /** Barcode als GTIN-8, -12, -13 oder -14 (https://www.gs1.org/standards/id-keys/gtin); UPC-E hat 8 Stellen. */
 const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
@@ -35,9 +45,9 @@ const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
  * steht sie als `food_ref_type` und `food_ref_key`.
  */
 export const FoodRef = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('bls'), key: BlsKey }),
-  z.strictObject({ type: z.literal('off'), key: Barcode }),
-  z.strictObject({ type: z.literal('eigen'), key: EntityId }),
+  z.strictObject({ type: z.literal(FoodRefType.enum.bls), key: BlsKey }),
+  z.strictObject({ type: z.literal(FoodRefType.enum.off), key: Barcode }),
+  z.strictObject({ type: z.literal(FoodRefType.enum.eigen), key: EntityId }),
 ]);
 export type FoodRef = z.infer<typeof FoodRef>;
 
@@ -50,10 +60,6 @@ export const PortionConversion = z.strictObject({
   baseAmount: z.int().positive(),
 });
 export type PortionConversion = z.infer<typeof PortionConversion>;
-
-/** Herkunft der Werte eines Snapshots; `ki` hat keine Lebensmittelreferenz. */
-export const SnapshotSource = z.enum(['bls', 'off', 'eigen', 'ki']);
-export type SnapshotSource = z.infer<typeof SnapshotSource>;
 
 const nutrient = z.int().nonnegative();
 
@@ -77,6 +83,8 @@ export const NutritionSnapshot = z
     /** Quellenangabe, etwa für BLS und Open Food Facts; eigene Lebensmittel und KI-Schätzungen brauchen keine. */
     attribution: trimmedText(300).nullable(),
   })
+  // Bezugsmenge und Umrechnungen begrenzt wie die Menge je Eintrag (Designwert, nicht belegt): Größere
+  // Werte ergäben keinen erfassbaren Eintrag und halten die Rechnung im sicheren Ganzzahlbereich.
   .refine((s) => amountWithin(s.baseUnit, s.referenceAmount), {
     message: 'Bezugsmenge höchstens 5 kg bzw. 5 l',
     path: ['referenceAmount'],

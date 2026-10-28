@@ -237,7 +237,7 @@ export default defineConfig([
           {
             modules: ['better-sqlite3', 'drizzle-orm/better-sqlite3'],
             allowedIn: ['apps/mobile/src/local-db/testing/'],
-            message: 'better-sqlite3 ist nur der Test-Adapter der lokalen Datenbank (local-db/testing/).',
+            message: 'better-sqlite3 ist in der App nur der Test-Adapter der lokalen Datenbank (local-db/testing/); außerhalb von src/ baut es den BLS-Katalog (scripts/bls-catalog/).',
           },
           {
             // Nur flüchtige Orchestrierung der Online-Abläufe; Fachdaten liegen in SQLite, nie im Query-Cache.

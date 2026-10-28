@@ -1,9 +1,11 @@
 import {
   BaseUnit,
+  BlsKey,
   DisplayUnit,
   EntryAmount,
   EntryTotals,
   FoodRef,
+  FoodRefType,
   NutritionSnapshot,
   PortionConversion,
   SnapshotSource,
@@ -51,6 +53,14 @@ export const nutritionFixtures = {
   SnapshotSource: fixtures(SnapshotSource, {
     valid: { 'BLS': 'bls', 'Open Food Facts': 'off', 'eigenes Lebensmittel': 'eigen', 'KI-Schätzung': 'ki' },
     invalid: { 'unbekannte Quelle': 'usda' },
+  }),
+  FoodRefType: fixtures(FoodRefType, {
+    valid: { 'BLS': 'bls', 'Open Food Facts': 'off', 'eigenes Lebensmittel': 'eigen' },
+    invalid: { 'KI-Schätzung hat keine Referenz': 'ki' },
+  }),
+  BlsKey: fixtures(BlsKey, {
+    valid: { 'Buchstabe und sechs Ziffern': 'C133000', 'mit Buchstaben in der Mitte': 'B6A2100' },
+    invalid: { 'sechs Stellen': 'C13300', 'kleingeschrieben': 'c133000', 'Ziffer vorn': '1133000' },
   }),
   FoodRef: fixtures(FoodRef, {
     valid: {

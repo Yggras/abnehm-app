@@ -54,7 +54,10 @@ describe('BLS-Katalog-Asset', () => {
     expect(outdated.map((row) => row.key)).toEqual([]);
   });
 
-  it('ergibt für jedes Lebensmittel einen gültigen Nährwert-Snapshot', () => {
+  // Die Abbildung einer Zeile auf den Snapshot prüft food-search.test.ts über die Suche. Hier geht es um
+  // die Daten: Jede der 7.137 Zeilen über die Suche zu laden, dauerte zu lange.
+  it('hält in jeder Zeile die Regeln des Nährwert-Snapshots ein', () => {
+    const [{ attribution } = { attribution: '' }] = catalog.all<{ attribution: string }>('SELECT attribution FROM catalog_info');
     const invalid = rows.filter(
       (row) =>
         !NutritionSnapshot.safeParse({
@@ -67,7 +70,7 @@ describe('BLS-Katalog-Asset', () => {
           fatMg: row.fat_mg_per_100,
           portions: [],
           source: 'bls',
-          attribution: 'BLS',
+          attribution,
         }).success,
     );
 
@@ -77,7 +80,7 @@ describe('BLS-Katalog-Asset', () => {
   it('findet typische Lebensmittel', () => {
     const foods = createFoodSearch({ catalog });
 
-    expect(names(foods.search('Haferflocken'))[0]).toBe('Hafer Flocken');
+    expect(names(foods.search('Haferflocken')).slice(0, 2)).toEqual(['Hafer Flocken', 'Hafer Flocken, gekocht']);
     expect(names(foods.search('Musli'))).toEqual(names(foods.search('Muesli')));
     expect(names(foods.search('Musli'))[0]).toMatch(/^Müsli/);
     expect(names(foods.search('Apfel'))[0]).toBe('Apfel roh');

@@ -6,7 +6,7 @@ import { createLocalDatabases, type LocalDatabases } from './local-databases';
 // Beobachtungen. Drizzle- und expo-sqlite-Typen tauchen hier nicht auf; fachliche Repositories
 // öffnen den Kontext mit `sqliteOf` aus `./sqlite`. Dazu kommen die mitgelieferten, schreibgeschützten
 // Kataloge (Spezifikation 2, Abschnitt 3) über `CatalogProvider` und `useCatalogDatabase`.
-export type { BundledCatalog, CatalogDatabase } from './catalog';
+export type { BundledCatalog, CatalogDatabase, CatalogValue } from './catalog';
 export { CatalogProvider, useCatalogDatabase } from './CatalogProvider';
 export type { ReadContext, TransactionContext } from './context';
 export { LocalDatabaseClosedError, type LocalDatabase } from './local-database';
