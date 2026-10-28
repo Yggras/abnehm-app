@@ -10,8 +10,9 @@ import type { SyncWriter } from '../outbox';
 import type { SyncEntityAdapter } from '../registry';
 import { sqliteEntity } from '../sqlite-entity';
 
-// Test-Entität auf `water_entry` (#99): Sie steht für einen Bereich, der eine eigene Entität anmeldet.
-// Den echten Wassereintrag liefert Spezifikation 3; diese Fassung gibt es nur in Tests.
+// Test-Entität `test_water_entry` auf der Tabelle `water_entry` (#99): Sie steht für einen Bereich,
+// der eine eigene Entität anmeldet. Den echten Wassereintrag (`water_entry`) meldet das Tracker-Modul
+// an (#171); der eigene Typ hält beide im Sync auseinander. Diese Fassung gibt es nur in Tests.
 
 /** Die einzige lokale Person; Eigentümerin neuer Einträge. */
 function ownPersonId(tx: ReadContext): string {
@@ -34,7 +35,7 @@ function deleteLocal(tx: TransactionContext, entityId: EntityId, at: Instant) {
 }
 
 const sqliteWaterEntity = sqliteEntity({
-  entityType: 'water_entry',
+  entityType: 'test_water_entry',
   ownerField: 'personId',
   upsert: TestWaterUpsert,
   deletable: true,
@@ -81,18 +82,18 @@ export function testWaterRepository(writer: SyncWriter, now: () => Instant) {
   return {
     save(tx: TransactionContext, entityId: EntityId, payload: TestWaterUpsert) {
       writeLocal(tx, entityId, payload, now());
-      writer.upsert(tx, { entityType: 'water_entry', entityId, payload, knownServerVersion: knownVersion(tx, entityId) });
+      writer.upsert(tx, { entityType: 'test_water_entry', entityId, payload, knownServerVersion: knownVersion(tx, entityId) });
     },
     /** Nur im Test-Artefakt: zwei Geräte erzeugen dieselbe fachliche Zeile unabhängig. */
     saveTestCommand(tx: TransactionContext, entityId: EntityId, businessKey: string, payload: TestWaterUpsert) {
       writeLocal(tx, entityId, payload, now());
       writer.command(tx, { type: 'saveMealFavorite', businessKey, payload: { ...payload, localId: entityId },
-        knownServerVersion: null, affectedRefs: [{ entityType: 'water_entry', entityId }],
+        knownServerVersion: null, affectedRefs: [{ entityType: 'test_water_entry', entityId }],
         referencePaths: [['payload', 'localId'], ['businessKey']] });
     },
     remove(tx: TransactionContext, entityId: EntityId) {
       deleteLocal(tx, entityId, now());
-      writer.delete(tx, { entityType: 'water_entry', entityId, knownServerVersion: knownVersion(tx, entityId) });
+      writer.delete(tx, { entityType: 'test_water_entry', entityId, knownServerVersion: knownVersion(tx, entityId) });
     },
     /** Sichtbare (nicht gelöschte) Einträge. */
     visible(tx: ReadContext) {

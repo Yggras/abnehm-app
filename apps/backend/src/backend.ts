@@ -22,6 +22,7 @@ import { personTimeZoneCommand } from './person/time-zone.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
+import { waterEntryEntity } from './trackers/water-entity.ts';
 
 /**
  * Setzt die Module des Backends über einer Datenbank zusammen; gemeinsam genutzt von `main.ts`, den
@@ -61,6 +62,8 @@ export function createBackend({
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
+  // Wasser, Sport und Gewicht (Spezifikation 3).
+  sync.registerEntity(waterEntryEntity);
   // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.
   const partnerProjections = createPartnerProjections({ clock });
   for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);

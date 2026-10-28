@@ -34,7 +34,7 @@ it('schreibt Fachzeile und genau eine Operation atomar; eine Ablehnung rollt bei
           loggedAt: now, localDate: '2026-10-14', timeZone: 'Europe/Berlin', utcOffsetMinutes: 120,
           createdAt: now, updatedAt: now }).run();
         if (reject) throw new Error('Fachregel abgelehnt');
-        return [{ entityType: 'water_entry', entityId: entryId }];
+        return [{ entityType: 'test_water_entry', entityId: entryId }];
       },
       reconcileRejected(tx) { sqliteOf(tx).delete(waterEntry).run(); },
     }] });

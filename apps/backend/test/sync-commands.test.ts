@@ -32,9 +32,9 @@ async function setup() {
     payload: payloadSchema,
     target: (operation) => ({ id: operation.payload.localId as string }),
     duplicate: (operation, original) => {
-      const canonical = original.changes?.find((change) => change.type === 'record' && change.entityType === 'water_entry');
+      const canonical = original.changes?.find((change) => change.type === 'record' && change.entityType === 'test_water_entry');
       if (canonical === undefined) throw new Error('Kanonische Identität fehlt');
-      return [{ entityType: 'water_entry', from: EntityId.parse(operation.payload.localId), to: canonical.entityId }];
+      return [{ entityType: 'test_water_entry', from: EntityId.parse(operation.payload.localId), to: canonical.entityId }];
     },
     canonicalRequest: (operation) => ({ amountMl: operation.payload.amountMl }),
     async execute(tx, { actor, payload, at }) {
@@ -50,9 +50,9 @@ async function setup() {
         createdAt: at, updatedAt: at, serverVersion: 1n });
       const row = (await testWaterEntity.read(tx, [input.localId])).get(input.localId);
       if (row === undefined) throw new Error('Testzeile fehlt');
-      return { changes: [{ type: 'record', entityType: 'water_entry', entityId: input.localId,
+      return { changes: [{ type: 'record', entityType: 'test_water_entry', entityId: input.localId,
         serverVersion: ServerVersion.parse(row.serverVersion.toString()), data: row.data }],
-        idMappings: [{ entityType: 'water_entry', from: input.localId, to: input.localId }] };
+        idMappings: [{ entityType: 'test_water_entry', from: input.localId, to: input.localId }] };
     },
   });
   return { backend, anna };
@@ -158,7 +158,7 @@ describe('Fachbefehl über Push', () => {
       async execute(tx, { payload }) {
         const row = (await testWaterEntity.read(tx, [EntityId.parse(payload.disclosedId)])).get(String(payload.disclosedId));
         if (row === undefined) throw new Error('Testdatensatz fehlt');
-        return { idMappings: [], changes: [{ type: 'record', entityType: 'water_entry', entityId: EntityId.parse(payload.disclosedId),
+        return { idMappings: [], changes: [{ type: 'record', entityType: 'test_water_entry', entityId: EntityId.parse(payload.disclosedId),
           serverVersion: ServerVersion.parse(row.serverVersion.toString()), data: row.data }] };
       },
     });

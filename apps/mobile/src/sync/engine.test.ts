@@ -39,7 +39,7 @@ const recordData = (amountMl: number): TestWaterRecord => ({ ...water(amountMl),
 
 const record = (entityId: string, amountMl: number, serverVersion: string): CanonicalChange => ({
   type: 'record',
-  entityType: 'water_entry',
+  entityType: 'test_water_entry',
   entityId: EntityId.parse(entityId),
   serverVersion: ServerVersion.parse(serverVersion),
   data: recordData(amountMl),
@@ -225,8 +225,8 @@ describe('Sync der App', () => {
     expect(await context.engine.sync()).toEqual({ push: 'nothing_to_do', pull: 'done' });
     const day = (localDate: string) => ({ type: 'tag', personId: PERSON, localDate });
     expect(context.hookCalls).toEqual([[
-      { entityType: 'water_entry', entityId: id, type: 'record', days: [day('2026-10-13'), day('2026-10-14')] },
-      { entityType: 'water_entry', entityId: fresh, type: 'record', days: [day('2026-10-14')] },
+      { entityType: 'test_water_entry', entityId: id, type: 'record', days: [day('2026-10-13'), day('2026-10-14')] },
+      { entityType: 'test_water_entry', entityId: fresh, type: 'record', days: [day('2026-10-14')] },
     ]]);
     context.databases.lock(); context.files.remove();
   });
@@ -249,7 +249,7 @@ describe('Sync der App', () => {
       expect(request.operations).toHaveLength(1);
       return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
         canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
-        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
+        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'test_water_entry', from: local, to: canonical }] }] } };
     };
     expect((await context.engine.sync()).push).toBe('unavailable');
     expect(pushes).toBe(2);
@@ -269,7 +269,7 @@ describe('Sync der App', () => {
       context.database.transaction((tx) => context.repository.save(tx, local, water(300)));
       return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
         canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
-        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
+        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'test_water_entry', from: local, to: canonical }] }] } };
     };
     expect((await context.engine.sync()).push).toBe('unavailable');
     expect(context.database.read((tx) => context.repository.visible(tx))).toMatchObject([{ id: canonical, amountMl: 300 }]);
@@ -299,7 +299,7 @@ describe('Sync der App', () => {
       });
       return { type: 'ok', body: { results: [{ type: 'applied', operationId: request.operations[0]!.operationId,
         canonical: { type: 'absent', entityType: 'command_result', entityId: request.operations[0]!.operationId },
-        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'water_entry', from: local, to: canonical }] }] } };
+        changes: [record(canonical, 250, '1')], idMappings: [{ entityType: 'test_water_entry', from: local, to: canonical }] }] } };
     };
     expect((await context.engine.sync()).push).toBe('unavailable');
     expect(context.database.read((tx) => context.repository.visible(tx))).toMatchObject([{ id: canonical }]);
@@ -332,7 +332,7 @@ describe('Sync der App', () => {
 
     expect(database.read((tx) => repository.visible(tx)).map((row) => row.amountMl)).toEqual([250]);
     expect(outboxRows(database)).toEqual([
-      expect.objectContaining({ type: 'upsert_entity', entityType: 'water_entry', entityId: kept, sequence: 1, knownServerVersion: null, schemaVersion: 3 }),
+      expect.objectContaining({ type: 'upsert_entity', entityType: 'test_water_entry', entityId: kept, sequence: 1, knownServerVersion: null, schemaVersion: 3 }),
     ]);
   });
 
@@ -341,10 +341,10 @@ describe('Sync der App', () => {
     const writer = createSyncWriter({ registry: createSyncRegistry([testWaterEntity]), clock: createTestClock(start), newId: () => EntityId.parse(randomUUID()) });
     const entityId = EntityId.parse(randomUUID());
     expect(() =>
-      database.transaction((tx) => writer.upsert(tx, { entityType: 'water_entry', entityId, payload: { ...water(250), personId: PERSON }, knownServerVersion: null })),
+      database.transaction((tx) => writer.upsert(tx, { entityType: 'test_water_entry', entityId, payload: { ...water(250), personId: PERSON }, knownServerVersion: null })),
     ).toThrow('Eigentumsgrenze');
     expect(() =>
-      database.transaction((tx) => writer.upsert(tx, { entityType: 'water_entry', entityId, payload: { amountMl: 250 }, knownServerVersion: null })),
+      database.transaction((tx) => writer.upsert(tx, { entityType: 'test_water_entry', entityId, payload: { amountMl: 250 }, knownServerVersion: null })),
     ).toThrow();
     expect(() => database.transaction((tx) => writer.delete(tx, { entityType: 'person', entityId, knownServerVersion: null }))).toThrow('nicht angemeldet');
     expect(outboxRows(database)).toEqual([]);
@@ -405,7 +405,7 @@ describe('Sync der App', () => {
     expect(database.read((tx) => repository.row(tx, id))).toMatchObject({ amountMl: 400, serverVersion: '5' });
     expect(outboxRows(database)).toEqual([expect.objectContaining({ entityId: id, payload: expect.objectContaining({ amountMl: 400 }) })]);
     const today = { type: 'tag', personId: PERSON, localDate: '2026-10-14' };
-    expect(hookCalls[0]).toEqual([{ entityType: 'water_entry', entityId: id, type: 'reconciled', days: [today, today] }]);
+    expect(hookCalls[0]).toEqual([{ entityType: 'test_water_entry', entityId: id, type: 'reconciled', days: [today, today] }]);
   });
 
   it('entfernt eine abgelehnte Entität ohne kanonischen Zustand lokal', async () => {
@@ -420,7 +420,7 @@ describe('Sync der App', () => {
             type: 'permanently_rejected',
             operationId: request.operations[0]!.operationId,
             error: { code: 'forbidden', retryable: false },
-            canonical: { type: 'absent', entityType: 'water_entry', entityId: id },
+            canonical: { type: 'absent', entityType: 'test_water_entry', entityId: id },
           },
         ],
       },
@@ -443,7 +443,7 @@ describe('Sync der App', () => {
             type: 'permanently_rejected',
             operationId: request.operations[0]!.operationId,
             error: { code: 'forbidden', retryable: false },
-            canonical: { type: 'absent', entityType: 'water_entry', entityId: id },
+            canonical: { type: 'absent', entityType: 'test_water_entry', entityId: id },
           },
         ],
       },
@@ -474,7 +474,7 @@ describe('Sync der App', () => {
     transport.onPull = (request) =>
       request.pageToken === null
         ? { type: 'ok', body: { changes: [record(a, 100, '3')], next: { type: 'page', pageToken: 'v1.seite.2' } } }
-        : { type: 'ok', body: { changes: [record(b, 200, '4'), { type: 'tombstone', entityType: 'water_entry', entityId: a, serverVersion: '5' as never, deletedAt: start.instant }], next: { type: 'complete', cursor: '5' as never } } };
+        : { type: 'ok', body: { changes: [record(b, 200, '4'), { type: 'tombstone', entityType: 'test_water_entry', entityId: a, serverVersion: '5' as never, deletedAt: start.instant }], next: { type: 'complete', cursor: '5' as never } } };
     let failSecondPage = true;
     setHook((_tx, changes) => {
       if (failSecondPage && changes.some((change) => change.entityId === b)) throw new Error('Seite scheitert');

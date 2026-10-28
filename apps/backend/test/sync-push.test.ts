@@ -36,7 +36,7 @@ describe('Push', () => {
     expect(result).toMatchObject({
       type: 'applied',
       operationId: operation.operationId,
-      canonical: { type: 'record', entityType: 'water_entry', entityId: id, data: { amountMl: 250 } },
+      canonical: { type: 'record', entityType: 'test_water_entry', entityId: id, data: { amountMl: 250 } },
     });
     const [row] = await backend.database.db.select().from(waterEntry).where(eq(waterEntry.id, id));
     expect(row?.personId).toBe(anna.personId);
@@ -46,13 +46,13 @@ describe('Push', () => {
       operationId: operation.operationId,
       personId: anna.personId,
       operationType: 'upsert_entity',
-      entityType: 'water_entry',
+      entityType: 'test_water_entry',
       entityId: id,
       payloadHash: payloadHash(operation),
       outcome: 'applied',
     });
     const entries = await changeEntries(backend);
-    expect(entries.at(-1)).toMatchObject({ entityType: 'water_entry', entityId: id, operation: 'upsert', ownerPersonId: anna.personId });
+    expect(entries.at(-1)).toMatchObject({ entityType: 'test_water_entry', entityId: id, operation: 'upsert', ownerPersonId: anna.personId });
   });
 
   it('beantwortet den identischen Retry nach verlorener Antwort unverändert mit already_applied', async () => {
@@ -89,7 +89,7 @@ describe('Push', () => {
       type: 'permanently_rejected',
       operationId: operation.operationId,
       error: { code: 'forbidden', retryable: false },
-      canonical: { type: 'absent', entityType: 'water_entry', entityId: id },
+      canonical: { type: 'absent', entityType: 'test_water_entry', entityId: id },
     });
   });
 
