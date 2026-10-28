@@ -12,6 +12,7 @@ import {
   ServerVersion,
   SyncCursor,
   TimeZone,
+  UtcOffsetMinutes,
   Weekday,
 } from '../src/base.ts';
 import { fixtures } from './define.ts';
@@ -37,6 +38,10 @@ export const baseFixtures = {
   TimeZone: fixtures(TimeZone, {
     valid: { 'Berlin': timeZone, 'Halbstundenzone': 'Asia/Kolkata' },
     invalid: { 'Versatz': '+02:00', 'unbekannt': 'Mars/Olympus_Mons', 'falsche Schreibweise': 'europe/berlin' },
+  }),
+  UtcOffsetMinutes: fixtures(UtcOffsetMinutes, {
+    valid: { 'Berlin im Sommer': 120, 'New York': -240, 'Kathmandu': 345, 'Kiritimati': 840, 'Baker Island': -720 },
+    invalid: { 'Bruchteil einer Minute': 120.5, 'über 14 Stunden': 841, 'als Text': '+02:00' },
   }),
   ServerVersion: fixtures(ServerVersion, {
     valid: { 'erste Version': '1', 'größtes bigint': '9223372036854775807' },

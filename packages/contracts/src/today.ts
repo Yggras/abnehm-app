@@ -7,6 +7,7 @@ import { MomoAppearance } from './island.ts';
 import { EncouragementKey, PartnerDailyGoalStage } from './partner.ts';
 import { MaintenanceReason } from './ports.ts';
 import { actionTo, UiActionIntent } from './routes.ts';
+import { trackerStatus as trackerStatusOf } from './tracker-rules.ts';
 import { bodyWeightG } from './units.ts';
 
 // Ready-Payloads der „Heute“-Steckplätze (Spezifikation 0, Abschnitt 6). Die Shell besitzt
@@ -113,14 +114,20 @@ export type NutritionLogReady = z.infer<typeof NutritionLogReady>;
 export const QuickCommandKey = z.enum(['water.quick_add']);
 export type QuickCommandKey = z.infer<typeof QuickCommandKey>;
 
+/** Nutzlast von `water.quick_add`: genau ein Glas (Spezifikation 3, Abschnitt 4). */
+export const WaterQuickAddParams = z.strictObject({ ml: z.literal(250) });
+export type WaterQuickAddParams = z.infer<typeof WaterQuickAddParams>;
+
+const waterQuickAdd = z.strictObject({
+  type: z.literal('command'),
+  commandKey: z.literal('water.quick_add'),
+  params: WaterQuickAddParams,
+});
+
 /** Knopf eines Mini-Trackers: Navigation oder lokaler Quick-Command. */
 export const TrackerQuickAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('navigate'), intent: UiActionIntent }),
-  z.strictObject({
-    type: z.literal('command'),
-    commandKey: z.literal('water.quick_add'),
-    params: z.strictObject({ ml: z.literal(250) }),
-  }),
+  waterQuickAdd,
 ]);
 export type TrackerQuickAction = z.infer<typeof TrackerQuickAction>;
 
@@ -134,14 +141,30 @@ export type QuickCommandOutcome = z.infer<typeof QuickCommandOutcome>;
 
 const trackerStatus = z.enum(['leer', 'teil', 'erreicht', 'ueber_ziel']);
 
-export const TrackerWaterReady = z.strictObject({
-  key: z.literal('wasser'),
-  countedMl: z.int().nonnegative(),
-  targetMl: z.int().positive(),
-  status: trackerStatus,
-  detailAction: actionTo('capture.water'),
-  quickAction: TrackerQuickAction,
-});
+/**
+ * Leer-Grund der Mini-Tracker Wasser und Sport: Es gibt für den Tag keine gültige Zielversion
+ * (Spezifikation 3, Abschnitt 7). Nach abgeschlossenem Onboarding sollte das nicht vorkommen.
+ */
+export const TrackerEmptyReason = z.enum(['ohne_zielversion']);
+export type TrackerEmptyReason = z.infer<typeof TrackerEmptyReason>;
+
+/**
+ * Wasser-Mini-Tracker: heute gezählte ml und Wasserziel der gültigen Zielversion. Der Status folgt
+ * aus beiden (`trackerStatus` der Tracker-Regeln); der Knopf bucht immer `water.quick_add`.
+ */
+export const TrackerWaterReady = z
+  .strictObject({
+    key: z.literal('wasser'),
+    countedMl: z.int().nonnegative(),
+    targetMl: z.int().positive(),
+    status: trackerStatus,
+    detailAction: actionTo('capture.water'),
+    quickAction: waterQuickAdd,
+  })
+  .refine((water) => water.status === trackerStatusOf(water.countedMl, water.targetMl), {
+    message: 'Status passt nicht zu gezählten ml und Wasserziel',
+    path: ['status'],
+  });
 export type TrackerWaterReady = z.infer<typeof TrackerWaterReady>;
 
 export const TrackerSportReady = z.strictObject({

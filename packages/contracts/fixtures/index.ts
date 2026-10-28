@@ -17,6 +17,7 @@ import { routeFixtures } from './routes.ts';
 import { statusFixtures } from './status.ts';
 import { syncFixtures } from './sync.ts';
 import { todayFixtures } from './today.ts';
+import { trackerFixtures } from './trackers.ts';
 import { wirFixtures } from './wir.ts';
 
 /** Test-Entität der Sync-Tests in App und Backend; kein Teil des Transportkatalogs. */
@@ -42,6 +43,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   notifications: notificationFixtures,
   ports: portFixtures,
   today: todayFixtures,
+  trackers: trackerFixtures,
   onboarding: onboardingFixtures,
   status: statusFixtures,
   sync: syncFixtures,
