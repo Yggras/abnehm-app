@@ -1,0 +1,25 @@
+{
+  "name": "@abnehm/game-rules",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./catalog": "./src/catalog.ts",
+    "./catalog-check": "./src/catalog-check.ts",
+    "./catalog-versions": "./src/catalog-versions.ts",
+    "./progress": "./src/progress.ts",
+    "./prices": "./src/prices.ts",
+    "./fields": "./src/fields.ts",
+    "./unlocks": "./src/unlocks.ts",
+    "./projects": "./src/projects.ts",
+    "./content": "./content/index.ts",
+    "./fixtures": "./fixtures/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "catalog:snapshot": "node scripts/catalog-snapshot.ts"
+  },
+  "dependencies": {
+    "@abnehm/contracts": "*"
+  }
+}
