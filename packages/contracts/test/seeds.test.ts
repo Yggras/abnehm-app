@@ -132,18 +132,18 @@ describe('Bereichsbeiträge', () => {
 
   it('spiegeln Kopplungsdaten nur auf Geräte aktiver Mitglieder, Adressiertes nur auf das des Empfängers', () => {
     const couplingId = '5eed0040-0000-4000-8000-000000000099';
-    const member = (personId: string, status: string) => ({
+    const member = (id: string, personId: string, status: string) => ({
       table: 'coupling_member',
       couplingId,
-      row: { id: `5eed0041-0000-4000-8000-0000000000${personId.endsWith('1') ? '91' : '92'}`, coupling_id: couplingId, person_id: personId, coupling_status: status },
+      row: { id, coupling_id: couplingId, person_id: personId, coupling_status: status },
     });
     const parts = (status: string): SeedPart[] => [
       {
         area: 'fundament',
         entities: [
           { table: 'coupling', entityType: 'coupling', couplingId, row: { id: couplingId } },
-          member(philipp, status),
-          member(seedIds.person.anna, status),
+          member('5eed0041-0000-4000-8000-000000000091', philipp, status),
+          member('5eed0041-0000-4000-8000-000000000092', seedIds.person.anna, status),
           { table: 'island', couplingId, row: { id: '5eed0042-0000-4000-8000-000000000099' } },
           { table: 'partner_summary', recipientPersonId: seedIds.person.anna, row: { id: '5eed0050-0000-4000-8000-000000000099' } },
         ],

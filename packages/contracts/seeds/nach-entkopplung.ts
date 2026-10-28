@@ -39,13 +39,13 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
   const changeLog: SeedRow[] = [];
   let position = Number(rowsOf(server, 'sync_clock')[0]?.position ?? 0);
   /** Vergibt die nächste Serverversion und trägt die Änderung im Änderungsprotokoll ein. */
-  const change = (entityType: string, entityId: (version: string) => string, operation: 'upsert' | 'delete', scope: { couplingId?: string; recipientPersonId?: string }) => {
+  const change = (entityType: string, entityId: string, operation: 'upsert' | 'delete', scope: { couplingId?: string; recipientPersonId?: string }) => {
     position += 1;
     const version = String(position);
     changeLog.push({
       position: version,
       entity_type: entityType,
-      entity_id: entityId(version),
+      entity_id: entityId,
       operation,
       owner_person_id: null,
       coupling_id: scope.couplingId ?? null,
@@ -59,18 +59,18 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
   };
   const ofCoupling = (table: string) => rowsOf(server, table).filter((row) => row.coupling_id === couplingId);
 
-  patch('coupling', couplingId, { status: 'archiviert', ended_at: at, updated_at: at, server_version: change('coupling', () => couplingId, 'upsert', { couplingId }) });
+  patch('coupling', couplingId, { status: 'archiviert', ended_at: at, updated_at: at, server_version: change('coupling', couplingId, 'upsert', { couplingId }) });
   server.coupling_member = rowsOf(server, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
 
   const island = ofCoupling('island')[0];
   if (island === undefined) throw new Error('Seed: Insel der Kopplung fehlt');
-  patch('island', island.id, { state: 'archiviert', updated_at: at, server_version: change('island', () => String(island.id), 'upsert', { couplingId }) });
+  patch('island', island.id, { state: 'archiviert', updated_at: at, server_version: change('island', String(island.id), 'upsert', { couplingId }) });
 
   for (const action of ofCoupling('shared_action').filter((row) => row.status === 'offen').sort(byText('id'))) {
-    const version = change('shared_action', () => String(action.id), 'upsert', { couplingId });
+    const version = change('shared_action', String(action.id), 'upsert', { couplingId });
     patch('shared_action', action.id, { status: 'zurueckgezogen', decided_at: at, updated_at: at, server_version: version });
   }
-  const uncouplingVersion = change('shared_action', () => actionId, 'upsert', { couplingId });
+  const uncouplingVersion = change('shared_action', actionId, 'upsert', { couplingId });
   server.shared_action = [
     ...rowsOf(server, 'shared_action'),
     {
@@ -90,18 +90,20 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
 
   for (const table of ['partner_summary', 'partner_daily_goal_status']) {
     for (const projection of ofCoupling(table).filter((row) => row.deleted_at === null).sort(byText('id'))) {
-      const version = change(table, () => String(projection.id), 'delete', { recipientPersonId: String(projection.recipient_person_id) });
+      const version = change(table, String(projection.id), 'delete', { recipientPersonId: String(projection.recipient_person_id) });
       patch(table, projection.id, { deleted_at: at, updated_at: at, server_version: version });
     }
   }
 
   for (const member of ofCoupling('coupling_member').sort(byText('person_id'))) {
     const recipientPersonId = String(member.person_id);
-    const version = change('revocation_notice', (next) => revocationNoticeId(ServerVersion.parse(next)), 'upsert', { recipientPersonId });
+    // Die ID folgt aus der Serverversion, die die Notice gleich erhält.
+    const id = revocationNoticeId(ServerVersion.parse(String(position + 1)));
+    const version = change('revocation_notice', id, 'upsert', { recipientPersonId });
     server.revocation_notice = [
       ...rowsOf(server, 'revocation_notice'),
       {
-        id: revocationNoticeId(ServerVersion.parse(version)),
+        id,
         recipient_person_id: recipientPersonId,
         coupling_id: couplingId,
         target_type: 'kopplung',

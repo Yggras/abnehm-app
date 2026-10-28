@@ -268,7 +268,7 @@ describe('Szenario gekoppelt', () => {
 });
 
 describe('Szenario nach_entkopplung', () => {
-  it('startet im Zustand von gekoppelt: Beide Geräte zeigen den Partner', async () => {
+  it('startet im Zustand von gekoppelt, idempotent: Beide Geräte zeigen den Partner', async () => {
     expect(nachEntkopplung.initial).toEqual(gekoppelt.initial);
     const world = await seeded(nachEntkopplung);
     expect(await stateOf(world)).toEqual(canonical(nachEntkopplung.initial));
@@ -276,6 +276,12 @@ describe('Szenario nach_entkopplung', () => {
       expect(partner().dailyGoalStatus).not.toBeNull();
       expect(partner().summaries.length).toBeGreaterThan(0);
     }
+
+    // Nach den Schritten setzt erneutes Seeden exakt auf den Ausgangszustand zurück.
+    await runSteps(world);
+    await seedServer(world.backend.database, nachEntkopplung);
+    for (const [key, { database }] of Object.entries(world.phones)) seedLocalDatabase(database, nachEntkopplung, key);
+    expect(await stateOf(world)).toEqual(canonical(nachEntkopplung.initial));
   });
 
   it('erreicht nach Entkopplungs-Kern und Sync beider Geräte exakt den Sollzustand in Postgres und SQLite', async () => {
