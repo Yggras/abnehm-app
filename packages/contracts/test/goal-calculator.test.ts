@@ -273,6 +273,13 @@ describe('ageOn: Alter in vollen Jahren am Berechnungstag', () => {
     expect(ageOn(day('2008-02-29'), day('2028-02-29'))).toBe(20);
   });
 
+  it('führt vom Geburtsdatum zur Altersgrenze des Rechners', () => {
+    const calculationDate = day('2026-10-28');
+
+    expect(fehler({ calculationDate, ageYears: ageOn(day('2008-10-28'), calculationDate) })).toEqual([]);
+    expect(fehler({ calculationDate, ageYears: ageOn(day('2008-10-29'), calculationDate) })).toEqual(['underage']);
+  });
+
   it('ist vor der Geburt negativ, der Rechner meldet dann `underage`', () => {
     expect(ageOn(day('2026-10-29'), day('2026-10-28'))).toBe(-1);
     expect(fehler({ ageYears: -1 })).toEqual(['underage']);

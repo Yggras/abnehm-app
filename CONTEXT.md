@@ -35,7 +35,7 @@ Die gewählte Abnehmgeschwindigkeit, ausgedrückt als tägliches Defizit: „ent
 _Avoid_: Abnehmrate, Defizitstufe
 
 **Haltemodus**:
-Der Zustand ohne Defizit, in dem das Kalorienbudget dem Gesamtumsatz entspricht.
+Der Zustand ohne Defizit, in dem das berechnete Kalorienbudget dem Gesamtumsatz entspricht, nie unter der Untergrenze. Im gewählten Haltemodus kann die Person das Kalorienbudget von Hand anpassen, im erzwungenen nicht.
 _Avoid_: Erhaltungsphase, Maintenance
 
 **Zielgewicht**:

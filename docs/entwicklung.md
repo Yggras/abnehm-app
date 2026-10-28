@@ -167,7 +167,12 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
   - Zielgewicht mit Vorschlag und Grenzen, die Prognose, das Wasser- und das Sportziel.
 
   Verstöße gegen die Eingabegrenzen ergeben `{ type: 'ungueltig', errors }` mit typisierten Fehlerschlüsseln (`GoalInputError`), keine Ausnahmen. Hinweise sind Schlüssel (`GoalHintKey`); den Text erzeugt die App.
-- **Alter:** Der Rechner nimmt das Alter (`ageYears`), wie es auch die Zielversion speichert. Die App bestimmt es mit `ageOn(birthDate, calculationDate)`. So rechnet der Server eine Zielversion aus ihren gespeicherten Berechnungswerten mit `calculateGoals` nach, ohne Regeln oder Grenzen zu wiederholen.
+- **Alter:** Der Rechner nimmt das Alter (`ageYears`), wie es auch die Zielversion speichert. Die App bestimmt es mit `ageOn(birthDate, calculationDate)`. So kann der Server eine Zielversion aus ihren gespeicherten Berechnungswerten mit `calculateGoals` nachrechnen.
+  - Grundumsatz, Gesamtumsatz, Untergrenze, Defizit und Haltemodus gelten unabhängig von der Budgetquelle.
+  - Das Budget selbst hängt von `budgetSource` ab:
+    - `berechnet`: Es entspricht dem berechneten Budget ohne manuellen Wert.
+    - `manuell`: Der Server übergibt es als `manualBudgetKcal`.
+    - `budgetvorschlag`: Es erfüllt nicht unbedingt das 10-kcal-Raster, denn der Vorschlag ist auf Untergrenze und Gesamtumsatz begrenzt (Abschnitt 7 der Spezifikation 1). Hier rechnet der Server ohne manuellen Wert und prüft nur, dass das Budget zwischen Untergrenze und Gesamtumsatz liegt.
 - **Rundung:** Kalorien rechnet der Rechner exakt als Ganzzahl in 1/4000 kcal, gerundet wird erst die Ausgabe. Anzeige und Snapshots erhalten ganze kcal, die Speicherung erhält `milliKcal` derselben ganzen kcal. Ein berechnetes Budget liegt immer auf einem Vielfachen von 10 kcal und nie unter der Untergrenze, auch im Haltemodus nicht.
 - **`sportSessionThreshold(weeklySportTargetMinutes, sportDayCount)`** gibt die Schwelle der Sporteinheit für Wochenplan und Tagesziel-Snapshot an. Ohne Sporttag ist sie `null`.
 - Ein manuelles Budget ist auch im gewählten Haltemodus erlaubt, nur im erzwungenen nicht (Nutzerentscheidung vom 28.10.2026, festgehalten im Pull Request zu #127).

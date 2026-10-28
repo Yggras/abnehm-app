@@ -19,7 +19,7 @@ export function addDays(localDate: string, days: number): string {
 
 /**
  * Volle Jahre von `from` bis `to`: Der Jahrestag selbst zählt schon. Ein 29. Februar wird in
- * Nichtschaltjahren erst am 1. März voll.
+ * Nichtschaltjahren erst am 1. März voll (Designwert für das Alter in Spezifikation 1).
  */
 export function fullYearsBetween(from: string, to: string): number {
   const years = Number(to.slice(0, 4)) - Number(from.slice(0, 4));
