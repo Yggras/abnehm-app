@@ -3,7 +3,16 @@ import { getTableColumns, is, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { EntityId } from '@abnehm/contracts/base';
-import { authTables, canonicalRows, dependencyOrder, type SeedManifest, type SeedRow, type SeedRows, type SeedValue } from '@abnehm/contracts/seeds';
+import {
+  authTables,
+  canonicalRows,
+  dependencyOrder,
+  uncouplingRequestOf,
+  type SeedManifest,
+  type SeedRow,
+  type SeedRows,
+  type SeedValue,
+} from '@abnehm/contracts/seeds';
 
 import type { Uncoupling } from '../../src/coupling/uncoupling.ts';
 import type { Database, DbExecutor } from '../../src/database.ts';
@@ -81,16 +90,17 @@ export async function seedScenario(database: Database, uncoupling: Uncoupling, m
   await seedServer(database, manifest);
   for (const step of manifest.steps) {
     if (step.type !== 'entkoppeln') continue;
-    const requester = manifest.accounts.find((account) => account.key === step.account);
-    if (requester === undefined) throw new Error(`Seed: unbekanntes Konto ${step.account}`);
-    await database.db.transaction((tx) =>
+    const request = uncouplingRequestOf(step, manifest.accounts);
+    const result = await database.db.transaction((tx) =>
       uncoupling.uncouple(tx, {
-        actionId: step.actionId,
-        couplingId: step.couplingId,
-        requesterPersonId: EntityId.parse(requester.personId),
-        at: new Date(step.at),
+        actionId: EntityId.parse(request.actionId),
+        couplingId: EntityId.parse(request.couplingId),
+        requesterPersonId: EntityId.parse(request.requesterPersonId),
+        at: new Date(request.at),
       }),
     );
+    // Das Manifest erwartet eine angenommene Entkopplung; alles andere ist ein Fehler des Szenarios.
+    if (result.status !== 'angenommen') throw new Error(`Seed: Entkopplung ${result.status}`);
   }
 }
 

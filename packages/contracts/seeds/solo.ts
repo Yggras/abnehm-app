@@ -1,15 +1,7 @@
-import {
-  buildSeedState,
-  seedCreated as created,
-  seedDailyGoals,
-  seedDay as day,
-  seedManualOrigin,
-  seedWeeklyPlan,
-  type SeedPart,
-  type SeedWeeklyPlan,
-} from './build.ts';
+import { buildSeedState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest } from './manifest.ts';
+import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat

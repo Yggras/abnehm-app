@@ -3,19 +3,10 @@ import type { PartnerSharingLevel } from '../src/coupling.ts';
 import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { energyBookingId } from '../src/energy.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
-import {
-  buildSeedState,
-  seedCreated as created,
-  seedDailyGoals,
-  seedDay as day,
-  seedManualOrigin,
-  seedWeeklyPlan,
-  type SeedEntity,
-  type SeedPart,
-  type SeedWeeklyPlan,
-} from './build.ts';
+import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow } from './manifest.ts';
+import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
 import { soloParts } from './solo.ts';
 
 // Szenario `gekoppelt` (Spezifikation 0, Abschnitt 12; #117): Philipp (iPhone, Rolle Bauen) und Anna

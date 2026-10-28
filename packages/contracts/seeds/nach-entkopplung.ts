@@ -1,6 +1,6 @@
 import { ServerVersion } from '../src/base.ts';
 import { revocationNoticeId } from '../src/partner.ts';
-import { compare } from './canonical.ts';
+import { compareCodeUnits } from './canonical.ts';
 import { gekoppeltExtensions, gekoppeltState } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedRow, type SeedRows, type SeedState } from './manifest.ts';
@@ -10,17 +10,28 @@ import { SeedManifest, type SeedRow, type SeedRows, type SeedState } from './man
 // Anna über den Entkopplungs-Kern (#107), und beide Geräte synchronisieren. Der Sollzustand ist also
 // ein tatsächlich ausgeführter Widerruf, kein direkt geseedeter, bereinigter Zustand.
 //
-// Spezifikation 5 ersetzt den Schritt `entkoppeln` später durch ihren Befehl `requestUncoupling` (lokal
-// `offen`, vom Server sofort angenommen); der Sollzustand des Kerns bleibt derselbe.
+// Spezifikation 5 erweitert das Szenario später um ihren Befehl `requestUncoupling` (lokal `offen`, vom
+// Server sofort angenommen). Der ruft denselben Kern auf und ergänzt den Sollzustand um seinen Intent
+// `entkopplung` und den Sicherheitslog-Eintrag, ohne den hier beschriebenen Kernübergang zu duplizieren.
 
-/** Der Schritt `entkoppeln` mit der Person statt des Kontos. */
-type Uncoupling = Readonly<{ couplingId: string; actionId: string; at: string; requesterPersonId: string }>;
+/** Anfrage des Schritts `entkoppeln` an den Entkopplungs-Kern: das Konto als Person aufgelöst. */
+export type SeedUncouplingRequest = Readonly<{ couplingId: string; actionId: string; at: string; requesterPersonId: string }>;
+
+/** Löst den Schritt `entkoppeln` über die Konten des Manifests auf; Seeder, Tests und Sollzustand teilen das. */
+export function uncouplingRequestOf(
+  step: Readonly<{ account: string; couplingId: string; actionId: string; at: string }>,
+  accounts: readonly Readonly<{ key: string; personId: string }>[],
+): SeedUncouplingRequest {
+  const requester = accounts.find((account) => account.key === step.account);
+  if (requester === undefined) throw new Error(`Seed: unbekanntes Konto ${step.account}`);
+  return { couplingId: step.couplingId, actionId: step.actionId, at: step.at, requesterPersonId: requester.personId };
+}
 
 /** Widerrufbare Partner-Projektionen; der Kern löscht sie in dieser Reihenfolge. */
 const projectionTables = ['partner_summary', 'partner_daily_goal_status'] as const;
 
 const rowsOf = (rows: SeedRows, table: string): SeedRow[] => rows[table] ?? [];
-const byField = (field: string) => (a: SeedRow, b: SeedRow) => compare(String(a[field]), String(b[field]));
+const byField = (field: string) => (a: SeedRow, b: SeedRow) => compareCodeUnits(String(a[field]), String(b[field]));
 /** Die Mitglieder folgen dem Status ihrer Kopplung per `ON UPDATE CASCADE`, ohne neue Version. */
 const archiveMembers = (rows: SeedRows, couplingId: string): SeedRow[] =>
   rowsOf(rows, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
@@ -41,7 +52,7 @@ const archiveMembers = (rows: SeedRows, couplingId: string): SeedRow[] =>
  * der Partnercache der Kopplung ist leer. Insel und gemeinsame Aktionen bleiben dort, wie sie waren; die
  * beim Entkoppeln beendeten Aktionen kommen erst mit einer Reaktivierung an (#107).
  */
-export function uncoupledState(state: SeedState, { couplingId, actionId, at, requesterPersonId }: Uncoupling): SeedState {
+export function uncoupledState(state: SeedState, { couplingId, actionId, at, requesterPersonId }: SeedUncouplingRequest): SeedState {
   const server: Record<string, SeedRow[]> = { ...state.server };
   const changeLog: SeedRow[] = [];
   let position = Number(rowsOf(server, 'sync_clock')[0]?.position ?? 0);
@@ -137,6 +148,7 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
   return { server, devices };
 }
 
+const accounts = [seedAccounts.philipp, seedAccounts.anna];
 const uncoupling = {
   type: 'entkoppeln',
   account: seedAccounts.anna.key,
@@ -152,7 +164,7 @@ export const nachEntkopplungManifest = SeedManifest.parse({
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,
-  accounts: [seedAccounts.philipp, seedAccounts.anna],
+  accounts,
   installations: [seedInstallations.philippIphone, seedInstallations.annaAndroid],
   initial: gekoppeltState,
   steps: [
@@ -160,6 +172,6 @@ export const nachEntkopplungManifest = SeedManifest.parse({
     { type: 'sync', installation: seedInstallations.philippIphone.key },
     { type: 'sync', installation: seedInstallations.annaAndroid.key },
   ],
-  target: uncoupledState(gekoppeltState, { ...uncoupling, requesterPersonId: seedAccounts.anna.personId }),
+  target: uncoupledState(gekoppeltState, uncouplingRequestOf(uncoupling, accounts)),
   extensions: gekoppeltExtensions,
 });

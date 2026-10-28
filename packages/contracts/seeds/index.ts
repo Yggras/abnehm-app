@@ -29,7 +29,7 @@ export { canonicalJson, canonicalRows, dependencyOrder } from './canonical.ts';
 export { buildSeedState, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedInstallations, seedPassword } from './ids.ts';
-export { uncoupledState } from './nach-entkopplung.ts';
+export { uncoupledState, uncouplingRequestOf, type SeedUncouplingRequest } from './nach-entkopplung.ts';
 
 /** Alle Szenarien mit Manifest. */
 export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {

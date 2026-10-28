@@ -18,6 +18,7 @@ import {
   type SeedKey,
   type SeedPart,
   type SeedState,
+  uncouplingRequestOf,
 } from '@abnehm/contracts/seeds';
 import { InstallationId } from '@abnehm/contracts/sync';
 
@@ -40,7 +41,8 @@ import {
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { dumpServer, seedServer } from '../dev/seed/server-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
-import { partnerSummary, revocationNotice } from '../src/db/schema/index.ts';
+import { partnerSummary, revocationNotice, waterEntry } from '../src/db/schema/index.ts';
+import { nextServerVersion } from '../src/sync/change-log.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { signIn, type Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
@@ -133,13 +135,18 @@ async function runSteps({ backend, manifest, phones }: World) {
         await phones[step.installation]!.sync();
         break;
       case 'entkoppeln': {
-        const requester = manifest.accounts.find((account) => account.key === step.account)!;
-        const result = await uncoupleAs(backend, { couplingId: step.couplingId, requesterPersonId: requester.personId, actionId: step.actionId, at: new Date(step.at) });
-        expect(result.status).toBe('angenommen');
+        const { at, ...request } = uncouplingRequestOf(step, manifest.accounts);
+        expect((await uncoupleAs(backend, { ...request, at: new Date(at) })).status).toBe('angenommen');
         break;
       }
     }
   }
+}
+
+/** Seedet Postgres und alle Geräte erneut, etwa nach Änderungen oder den Schritten. */
+async function reseed({ backend, manifest, phones }: World) {
+  await seedServer(backend.database, manifest);
+  for (const [key, { database }] of Object.entries(phones)) seedLocalDatabase(database, manifest, key);
 }
 
 /** Kanonischer Gesamtzustand: Postgres ohne Better-Auth-Tabellen und Sicherheitslog, je Installation SQLite. */
@@ -164,8 +171,7 @@ describe('Szenario gekoppelt', () => {
 
     await world.backend.database.db.update(partnerSummary).set({ content: { progressPercent: 1 } });
     await world.phones['anna-android']!.sync();
-    await seedServer(world.backend.database, gekoppelt);
-    for (const [key, { database }] of Object.entries(world.phones)) seedLocalDatabase(database, gekoppelt, key);
+    await reseed(world);
 
     // Kanonisch gleich, nicht nur dieselbe Zeilenzahl.
     expect(await stateOf(world)).toEqual(canonical(gekoppelt.initial));
@@ -256,10 +262,28 @@ describe('Szenario gekoppelt', () => {
     expect(notice).toMatchObject({ reason: 'freigabe_entzogen', id: revocationNoticeId(ServerVersion.parse(notice!.serverVersion.toString())) });
   });
 
-  it('Projektionsübergang: Philipp erfüllt ein weiteres Tagesziel; Annas Gerät zeigt „fast geschafft“', async () => {
+  it('Projektionsübergang: Philipp trinkt sein Wasserziel voll und erfüllt es; Annas Gerät zeigt „fast geschafft“', async () => {
     const { backend, phones } = await seeded(gekoppelt);
     const anna = phones['anna-android']!;
-    const water = { id: EntityId.parse(seedIds.dailyGoal.philippHeute[1]), personId: EntityId.parse(seedIds.person.philipp), localDate: LocalDate.parse('2026-10-14'), slot: 2, baustein: 'wasserziel' } as const;
+    const philipp = EntityId.parse(seedIds.person.philipp);
+    const heute = LocalDate.parse('2026-10-14');
+    // 1250 ml zu den geseedeten 1250 ml. Den Wassereintrag synchronisiert erst Spezifikation 3; bis dahin direkt in Postgres.
+    await backend.database.db.transaction(async (tx) =>
+      tx.insert(waterEntry).values({
+        id: randomUUID(),
+        personId: philipp,
+        amountMl: 1_250,
+        origin: 'manuell',
+        loggedAt: new Date('2026-10-14T11:45:00.000Z'),
+        localDate: heute,
+        timeZone: 'Europe/Berlin',
+        utcOffsetMinutes: 120,
+        createdAt: new Date('2026-10-14T11:45:00.000Z'),
+        updatedAt: new Date('2026-10-14T11:45:00.000Z'),
+        serverVersion: await nextServerVersion(tx),
+      }),
+    );
+    const water = { id: EntityId.parse(seedIds.dailyGoal.philippHeute[1]), personId: philipp, localDate: heute, slot: 2, baustein: 'wasserziel' } as const;
 
     expect((await push(backend, phones['philipp-iphone']!.device, [completeOp(water, { completedAt: '2026-10-14T11:50:00.000Z' })]))[0]?.type).toBe('applied');
     await anna.sync();
@@ -280,8 +304,7 @@ describe('Szenario nach_entkopplung', () => {
 
     // Nach den Schritten setzt erneutes Seeden exakt auf den Ausgangszustand zurück.
     await runSteps(world);
-    await seedServer(world.backend.database, nachEntkopplung);
-    for (const [key, { database }] of Object.entries(world.phones)) seedLocalDatabase(database, nachEntkopplung, key);
+    await reseed(world);
     expect(await stateOf(world)).toEqual(canonical(nachEntkopplung.initial));
   });
 
@@ -359,7 +382,7 @@ describe('Szenario nach_entkopplung', () => {
     const manifest = SeedManifest.parse({
       ...nachEntkopplung,
       initial,
-      target: uncoupledState(initial, { ...step, requesterPersonId: seedIds.person.anna }),
+      target: uncoupledState(initial, uncouplingRequestOf(step, nachEntkopplung.accounts)),
     });
     const world = await seeded(manifest);
 
