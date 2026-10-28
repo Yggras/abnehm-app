@@ -54,11 +54,13 @@ export type ButtonProps = PressState & {
   disabled?: boolean;
   /** Drei Punkte statt Beschriftung; die Breite bleibt, Screenreader hören weiter die Beschriftung. */
   loading?: boolean;
-  /**
-   * Volle Breite. Die Form kommt dann aus der Breite, deshalb bleibt nur ein schmaler Seitenabstand:
-   * So passt „+250 ml“ einzeilig in die drei Mini-Tracker auf dem iPhone SE (#171).
-   */
+  /** Volle Breite. */
   block?: boolean;
+  /**
+   * Schmaler Seitenabstand für die schmalen Spalten der Mini-Tracker: So passt „+250 ml“ auf dem
+   * iPhone SE einzeilig, wenn drei nebeneinander stehen (#171). Nur zusammen mit `block` sinnvoll.
+   */
+  dense?: boolean;
   /** Ausführlicher Name für Screenreader, wenn die Beschriftung allein nicht reicht. */
   accessibilityLabel?: string;
 };
@@ -73,6 +75,7 @@ export function Button({
   disabled = false,
   loading = false,
   block = false,
+  dense = false,
   accessibilityLabel,
   testOnly_pressed,
 }: ButtonProps) {
@@ -93,6 +96,7 @@ export function Button({
         { minHeight: visibleHeight },
         compact ? styles.compact : variant === 'text' ? styles.textPadding : styles.regularPadding,
         block && styles.block,
+        dense && styles.dense,
         lookStyle(lookFor(pressed)),
       ]}
     >
@@ -170,7 +174,8 @@ const styles = StyleSheet.create({
   regularPadding: { paddingHorizontal: space[5] },
   compact: { paddingHorizontal: space[4] },
   textPadding: { paddingHorizontal: space[3] },
-  block: { alignSelf: 'stretch', paddingHorizontal: space[1] },
+  block: { alignSelf: 'stretch' },
+  dense: { paddingHorizontal: space[1] },
   content: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   label: { textAlign: 'center', flexShrink: 1 },
   hidden: { opacity: 0 },

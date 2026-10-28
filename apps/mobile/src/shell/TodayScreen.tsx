@@ -173,7 +173,7 @@ function Tracker({ label, value, of, status, detail, quick, quickLabel, progress
     </Pressable>
     {progress ? <ProgressBar label={`${label} heute`} value={progress.value} target={progress.target} valueText={valueText} legend={false} /> : null}
     <Text variant="label" tone="inkMuted">{status}</Text>
-    <Button compact block variant="secondary" label={quickLabel} accessibilityLabel={`${label}: ${quickLabel}`}
+    <Button compact block dense variant="secondary" label={quickLabel} accessibilityLabel={`${label}: ${quickLabel}`}
       onPress={() => quick.type === 'navigate' ? action(quick.intent) : runCommand(quick)} />
   </View>;
 }

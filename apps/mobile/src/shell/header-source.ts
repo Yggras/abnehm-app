@@ -2,7 +2,7 @@ import type { Clock } from '@abnehm/clock';
 import type { TimeZone } from '@abnehm/contracts/base';
 
 import { headerFor } from './TodayScreen';
-import type { TodayRegistry, TodaySource } from './today-registry';
+import type { TodaySource } from './today-registry';
 import { todayRefresh } from './today-refresh';
 
 /** Person wird aus ihrer eigenen Kontodatenbank gelesen, nie aus fremden Bereichstabellen. */
@@ -22,8 +22,4 @@ export function todayHeaderSource(clock: Clock, observePerson: ObserveHeaderPers
       return () => { stop(); stopRefresh(); };
     },
   };
-}
-
-export function registerTodayHeader(registry: TodayRegistry, clock: Clock, observePerson: ObserveHeaderPerson) {
-  return registry.register('fundament', 'header', todayHeaderSource(clock, observePerson));
 }

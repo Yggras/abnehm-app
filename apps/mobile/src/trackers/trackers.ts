@@ -31,7 +31,11 @@ export type Trackers = Readonly<{
    * 1–3000 ml, ohne etwas zu schreiben.
    */
   addWater(input: Readonly<{ ml: number }>): WaterAddedOutcome;
-  /** Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. */
+  /**
+   * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
+   * Tokens aus `addWater`; Buchungen über `water.quick_add` nimmt die Quick-Command-Registry mit ihren
+   * eigenen Tokens zurück.
+   */
   undo(undoToken: string): UndoOutcome;
   /** Beendet einen Token, sobald seine Meldung kein „Rückgängig“ mehr anbietet. */
   expire(undoToken: string): void;

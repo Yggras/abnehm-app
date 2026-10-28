@@ -40,7 +40,7 @@ function localFields(epochMilliseconds: number, timeZone: TimeZone): LocalFields
     year: part('year'),
     month: part('month'),
     day: part('day'),
-    // Manche Engines schreiben Mitternacht trotz `h23` als 24.
+    // Absicherung, falls eine Engine Mitternacht als 24 statt 0 schreibt; beobachtet ist das hier nicht.
     hour: part('hour') % 24,
     minute: part('minute'),
     second: part('second'),
@@ -48,8 +48,9 @@ function localFields(epochMilliseconds: number, timeZone: TimeZone): LocalFields
 }
 
 /**
- * Offset der Zone zum Zeitpunkt in Minuten: Wanduhrzeit als UTC gelesen minus Zeitpunkt. Sekunden
- * und Millisekunden fallen weg, weil heutige Offsets ganze Minuten sind.
+ * Offset der Zone zum Zeitpunkt in Minuten: Wanduhrzeit als UTC gelesen minus Zeitpunkt. Der Zeitpunkt
+ * zählt in ganzen Sekunden wie die Wanduhrzeit; gerundet wird auf ganze Minuten, wie
+ * `UtcOffsetMinutes` den Offset speichert.
  */
 function utcOffsetMinutes(epochMilliseconds: number, local: LocalFields): number {
   const wallClock = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, local.second);
