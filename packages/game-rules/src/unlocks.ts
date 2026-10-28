@@ -41,7 +41,9 @@ export type LevelUnlocks = Readonly<{
 /** Die Form mit der höchsten Formschwelle ≤ Level. */
 export function formAt(level: number): MomoForm {
   assertLevel(level);
-  return forms.findLast(([from]) => from <= level)![1];
+  let form: MomoForm = 'kaulquappe';
+  for (const [from, next] of forms) if (from <= level) form = next;
+  return form;
 }
 
 /**

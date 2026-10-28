@@ -53,7 +53,10 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
 
   const blueprints = new Map(catalog.blueprints.map((blueprint) => [blueprint.key, blueprint]));
   const deko = new Map(catalog.deko.map((entry) => [entry.key, entry]));
-  const known = (map: ReadonlyMap<string, unknown>, key: string) => map.has(key) || (issue('verweis_unbekannt', key), false);
+  const known = (map: ReadonlyMap<string, unknown>, key: string) => {
+    if (!map.has(key)) issue('verweis_unbekannt', key);
+    return map.has(key);
+  };
 
   // Baupläne und Preise.
   for (const role of roles) {
