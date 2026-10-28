@@ -27,12 +27,33 @@ export const seedIds = {
   account: { philipp: id('0001', 1), anna: id('0001', 2) },
   person: { philipp: id('0002', 1), anna: id('0002', 2) },
   installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2) },
-  goalVersion: { philipp: id('0010', 1) },
-  weeklyPlanVersion: { philipp: id('0011', 1) },
-  dailyGoal: { philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)] },
-  waterEntry: { philippHeute: [id('0020', 1), id('0020', 2)] },
-  weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2) },
-  sportEntry: { philippGestern: id('0022', 1) },
+  goalVersion: { philipp: id('0010', 1), anna: id('0010', 2) },
+  weeklyPlanVersion: { philipp: id('0011', 1), anna: id('0011', 2) },
+  dailyGoal: {
+    philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
+    annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
+  },
+  waterEntry: { philippHeute: [id('0020', 1), id('0020', 2)], annaHeute: [id('0020', 3), id('0020', 4)] },
+  weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2), annaGestern: id('0021', 3) },
+  sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
+  nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2) },
+  mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
+  coupling: { philippAnna: id('0040', 1) },
+  couplingMember: { philipp: id('0041', 1), anna: id('0041', 2) },
+  island: { philippAnna: id('0042', 1) },
+  partnerSharing: {
+    philipp: { ernaehrung: id('0043', 1), wasser: id('0043', 2), sport: id('0043', 3), gewicht: id('0043', 4) },
+    anna: { ernaehrung: id('0043', 5), wasser: id('0043', 6), sport: id('0043', 7), gewicht: id('0043', 8) },
+  },
+  photoSharing: { philipp: id('0044', 1), anna: id('0044', 2) },
+  sharedAction: { dekoGeschenk: id('0045', 1), annasEntkopplung: id('0045', 2) },
+  /** Zusammenfassungen je Eigentümer, also an den jeweils anderen Partner. */
+  partnerSummary: {
+    philipp: { ernaehrung: id('0050', 1), wasser: id('0050', 2), sport: id('0050', 3), gewicht: id('0050', 4) },
+    anna: { wasser: id('0050', 6), sport: id('0050', 7), gewicht: id('0050', 8) },
+  },
+  /** Tageszielstand je Eigentümer, also an den jeweils anderen Partner. */
+  partnerDailyGoalStatus: { philipp: id('0051', 1), anna: id('0051', 2) },
 } as const;
 
 /** Dokumentiertes Testpasswort aller Seed-Konten; nur in Development- und Testartefakten. */

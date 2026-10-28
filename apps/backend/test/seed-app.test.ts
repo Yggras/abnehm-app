@@ -5,6 +5,8 @@ import { canonicalRows, seedManifests, type SeedManifest } from '@abnehm/contrac
 import { InstallationId } from '@abnehm/contracts/sync';
 
 import type { SessionStore, StoredSession } from '../../mobile/src/auth/app-auth.ts';
+import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
+import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
@@ -161,6 +163,38 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(device.session.auth.state()).toEqual({ type: 'unbekannt' });
     expect(device.clock.read().instant).toBe('2026-10-19T08:00:00.000Z');
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows({ sync_clock: [{ id: 1, position: '0' }] }));
+  });
+
+  it('Partner-Szenario (#117): `gekoppelt` mit Annas Android-Installation meldet Anna an und seedet ihr Gerät', async () => {
+    const backend = await createTestBackend();
+    const device = phone(backend);
+    const gekoppelt = seedManifests.gekoppelt;
+    const run = { scenario: 'gekoppelt', installation: 'anna-android', target: { type: 'today' } } as const;
+
+    expect(await runSeed(run, device)).toEqual({ type: 'geseedet', scenario: 'gekoppelt', installation: 'anna-android', target: { type: 'today' } });
+
+    expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(gekoppelt.initial.server));
+    expect(device.session.auth.state()).toEqual({ type: 'angemeldet', accountId: gekoppelt.accounts[1]!.accountId });
+    expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(gekoppelt.initial.devices['anna-android']!));
+  });
+
+  it('Partner-Szenario (#117): `nach_entkopplung` startet das Gerät gekoppelt, sein erster Sync widerruft den Partnercache', async () => {
+    const backend = await createTestBackend();
+    const device = phone(backend);
+    const manifest = seedManifests.nach_entkopplung;
+    const run = { scenario: 'nach_entkopplung', installation: 'philipp-iphone', target: { type: 'today' } } as const;
+
+    expect((await runSeed(run, device)).type).toBe('geseedet');
+    expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.initial.devices['philipp-iphone']!));
+
+    const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
+    const installationId = InstallationId.parse(manifest.installations[0]!.installationId);
+    const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });
+    const engine = createSyncEngine({ database: device.session.databases.current()!, registry, transport, clock: device.clock, installationId });
+    expect(await engine.sync()).toEqual({ push: 'nothing_to_do', pull: 'done' });
+
+    expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(manifest.target.server));
+    expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.target.devices['philipp-iphone']!));
   });
 
   it('Auth-Adapter: lehnt der Server die Sitzung ab, sperrt die App und schließt die Kontodatenbank', async () => {

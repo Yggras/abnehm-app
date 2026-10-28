@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, MealKey, ServerVersion, type AreaKey } from './base.ts';
 import { addDays, daysBetween, isoWeekdayIndex } from './calendar.ts';
+import { uuidV5 } from './ids.ts';
 import { mealCategoryCount } from './units.ts';
 
 // Partner-Projektionen (Spezifikation 0, Abschnitt 5): serverseitig erzeugte, widerrufbare Lesemodelle
@@ -162,6 +163,17 @@ export const RevocationNotice = z
     path: ['target'],
   });
 export type RevocationNotice = z.infer<typeof RevocationNotice>;
+
+const revocationNoticeNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b62';
+
+/**
+ * ID einer Revocation-Notice aus ihrer Serverversion. Jede Position der Sync-Clock gehört genau einer
+ * Zeile, also ist die ID eindeutig; aus demselben Ausgangszustand entsteht dieselbe ID. So kann ein
+ * Seed-Manifest den Sollzustand nach einem Widerruf vollständig angeben (#117).
+ */
+export function revocationNoticeId(serverVersion: ServerVersion): EntityId {
+  return EntityId.parse(uuidV5(revocationNoticeNamespace, `revocation_notice:${serverVersion}`));
+}
 
 /** Feste Anfeuerungsbotschaften (Spezifikation 5, Abschnitt 4); kein Freitext. */
 export const EncouragementKey = z.enum([

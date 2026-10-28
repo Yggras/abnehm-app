@@ -57,6 +57,7 @@ export function buildSeedState({
 }): SeedState {
   const server: Record<string, SeedRow[]> = {};
   const deviceRows: Record<string, SeedRows> = Object.fromEntries(Object.keys(devices).map((key) => [key, {}]));
+  const members = membershipsOf(parts);
   const seen = new Set<string>();
   const add = (rows: Record<string, SeedRow[]>, table: string, row: SeedRow) => (rows[table] ??= []).push(row);
   let position = 0;
@@ -84,7 +85,7 @@ export function buildSeedState({
       }
       for (const [table, rows] of Object.entries(entity.children ?? {})) for (const row of rows) add(server, table, row);
       for (const [key, plan] of Object.entries(devices)) {
-        if (!visibleTo(entity, plan.personId)) continue;
+        if (!visibleTo(entity, plan.personId, members)) continue;
         const local = deviceRows[key] as Record<string, SeedRow[]>;
         add(local, entity.table, versioned);
         for (const [table, rows] of Object.entries(entity.children ?? {})) for (const row of rows) add(local, table, row);
@@ -108,7 +109,28 @@ export function buildSeedState({
   };
 }
 
-/** Eigene Entitäten und solche an die Person; Kopplungsdaten ergänzen die Partner-Szenarien (#117). */
-function visibleTo(entity: SeedEntity, personId: string): boolean {
-  return entity.ownerPersonId === personId || entity.recipientPersonId === personId;
+type Memberships = ReadonlyMap<string, readonly Readonly<{ personId: string; active: boolean }>[]>;
+
+/** Mitglieder je Kopplung aus den Zeilen `coupling_member` der Beiträge. */
+function membershipsOf(parts: readonly SeedPart[]): Memberships {
+  const members = new Map<string, { personId: string; active: boolean }[]>();
+  for (const { row } of parts.flatMap((part) => part.entities).filter((entity) => entity.table === 'coupling_member')) {
+    const couplingId = String(row.coupling_id);
+    members.set(couplingId, [...(members.get(couplingId) ?? []), { personId: String(row.person_id), active: row.coupling_status === 'aktiv' }]);
+  }
+  return members;
+}
+
+/**
+ * Wer eine Entität im Pull erhält, wie in `visibleTo` des Sync-Kerns: Adressiertes nur der Empfänger,
+ * sonst der Eigentümer und die aktiven Mitglieder der Kopplung. Die Kopplung selbst ist ihr
+ * Archivstatus und bleibt auch früheren Mitgliedern sichtbar (#103, #107). Der Sync-Kern liest die
+ * Archivstatus-Entitäten aus der Registry (`archiveStatus`); hier steht die einzige, `coupling`, fest.
+ */
+function visibleTo(entity: SeedEntity, personId: string, memberships: Memberships): boolean {
+  if (entity.recipientPersonId !== undefined) return entity.recipientPersonId === personId;
+  if (entity.ownerPersonId === personId) return true;
+  if (entity.couplingId === undefined) return false;
+  const member = memberships.get(entity.couplingId)?.find((candidate) => candidate.personId === personId);
+  return member !== undefined && (member.active || entity.entityType === 'coupling');
 }

@@ -105,6 +105,17 @@ describe('Seed-Route des Development-Backends', () => {
     );
   });
 
+  it('führt nach dem Seeden die Serverschritte aus: `nach_entkopplung` endet mit echtem Widerruf im Sollzustand (#117)', async () => {
+    const backend = await createTestBackend();
+    const development = { app: createDevelopmentApp({ backend, database: backend.database }) };
+    const manifest = seedManifests.nach_entkopplung;
+
+    expect((await call(development, 'POST', seedRoutePath, newDevice(), { scenario: 'nach_entkopplung' })).status).toBe(204);
+
+    // Die Sync-Schritte ändern Postgres nicht; der Server steht also schon im Sollzustand.
+    expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(manifest.target.server));
+  });
+
   it('reicht alle übrigen Anfragen samt Autorisierung an die App des Backends durch', async () => {
     const backend = await createTestBackend();
     const development = { app: createDevelopmentApp({ backend, database: backend.database }) };
