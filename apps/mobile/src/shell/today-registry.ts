@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import { contributionState } from '@abnehm/contracts/contribution';
 import {
   HeaderReady, MomoCharacterState, MomoDailyGoalsReady, NutritionBudgetReady, NutritionLogReady,
-  PartnerCardReady, TopNoticeReady, TrackerSportReady, TrackerWaterReady, TrackerWeightReady,
+  PartnerCardReady, TopNoticeReady, TrackerEmptyReason, TrackerSportReady, TrackerWaterReady, TrackerWeightReady,
 } from '@abnehm/contracts/today';
 
 /** Die Reihenfolge gehört der Shell, nicht der Reihenfolge der Registrierung. */
@@ -14,7 +14,7 @@ export const todaySlots = [
   { key: 'momo.daily_goals', owner: 'ziele', schema: contributionState(MomoDailyGoalsReady) },
   { key: 'nutrition.budget', owner: 'ziele', schema: contributionState(NutritionBudgetReady) },
   { key: 'nutrition.log', owner: 'ernaehrung', schema: contributionState(NutritionLogReady) },
-  { key: 'trackers.water', owner: 'tracker', schema: contributionState(TrackerWaterReady) },
+  { key: 'trackers.water', owner: 'tracker', schema: contributionState(TrackerWaterReady, TrackerEmptyReason) },
   { key: 'trackers.sport', owner: 'tracker', schema: contributionState(TrackerSportReady) },
   { key: 'trackers.weight', owner: 'tracker', schema: contributionState(TrackerWeightReady) },
   { key: 'partner', owner: 'partner', schema: contributionState(PartnerCardReady) },

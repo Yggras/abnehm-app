@@ -1,0 +1,9 @@
+// Tracker-Modul für Wasser, Sport und Gewicht (Spezifikation 3, Abschnitt 2): die einzige
+// Schnittstelle des Bereichs nach außen. Jeder Befehl ist genau eine lokale Transaktion aus
+// Fachänderung, Outbox-Operation und `reevaluateDailyGoals`; Ergebnisse tragen `messageKey`, Werte
+// und einen flüchtigen Undo-Token. Kein anderer Bereich liest die Tracker-Tabellen. Die Regeln
+// stehen im geteilten Modul `@abnehm/contracts/tracker-rules`.
+export { createTrackers, type TrackerDependencies, type Trackers } from './trackers';
+export { InvalidTrackerInputError } from './water';
+export { waterEntryEntity } from './water-entity';
+export type { Refresh } from './water-today';
