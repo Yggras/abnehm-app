@@ -33,7 +33,7 @@ export const seedIds = {
     philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
     annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
   },
-  // Philipps Einträge 3–5 tragen nur die Varianten `solo-wasser-*` (#171); 3 und 4 gehören Anna (#117).
+  // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171); 0020/3–4 gehören Anna (#117).
   waterEntry: {
     philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
     annaHeute: [id('0020', 3), id('0020', 4)],

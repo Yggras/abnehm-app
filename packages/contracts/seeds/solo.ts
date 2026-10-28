@@ -175,12 +175,15 @@ const trackerOf = (water: WaterToday): SeedPart => ({
 });
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-export const soloParts: readonly SeedPart[] = [fundament, ziele, trackerOf(waterToday.solo)];
+const soloPartsWith = (water: WaterToday): readonly SeedPart[] => [fundament, ziele, trackerOf(water)];
+
+/** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
+export const soloParts = soloPartsWith(waterToday.solo);
 
 /** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute. */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
-    parts: [fundament, ziele, trackerOf(waterToday[scenario])],
+    parts: soloPartsWith(waterToday[scenario]),
     createdAt: seedClock.instant,
     devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
   });
