@@ -24,6 +24,7 @@
     "./onboarding": "./src/onboarding.ts",
     "./status": "./src/status.ts",
     "./sync": "./src/sync.ts",
+    "./nutrition": "./src/nutrition.ts",
     "./fixtures": "./fixtures/index.ts",
     "./seeds": "./seeds/index.ts"
   },
