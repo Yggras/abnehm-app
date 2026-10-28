@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, pgTable, primaryKey, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { MealKey } from '@abnehm/contracts/base';
+import { BaseUnit, DisplayUnit, FoodRef, SnapshotSource, type PortionConversion } from '@abnehm/contracts/nutrition';
 
 import { person } from './accounts.ts';
 import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from './columns.ts';
@@ -9,10 +10,9 @@ import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from '
 // Ernährung und Fotos (Spezifikation 0, Abschnitt 8; Spezifikation 2, Abschnitte 2, 3, 7–9 und 11).
 // Energie in `milli_kcal`, Nährstoffe und Lebensmittelmasse in mg, Volumen in ml. Die Bezugsmenge
 // und die verzehrte Basismenge stehen in der Basiseinheit des Lebensmittels (g → mg, ml → ml).
+// Einheiten, Quellen und Lebensmittelreferenzen kommen aus dem Vertragsmodul (`@abnehm/contracts/nutrition`).
 
-export const foodRefTypes = ['bls', 'off', 'eigen'] as const;
-export const snapshotSources = ['bls', 'off', 'eigen', 'ki'] as const;
-export const displayUnits = ['g', 'ml', 'stueck', 'portion'] as const;
+const foodRefTypes = FoodRef.options.map((option) => option.shape.type.value);
 export const captureMethods = [
   'suche',
   'barcode',
@@ -23,8 +23,6 @@ export const captureMethods = [
   'eigenes_lebensmittel',
 ] as const;
 
-/** Bekannte Portionsumrechnung: Anzeigeeinheit und ihre Basismenge (mg bzw. ml). */
-export type PortionConversion = { unit: 'stueck' | 'portion'; label: string | null; baseAmount: number };
 /** Vollständige Lebensmittelfassung einer Favoritenzeile, an der Anwendungsgrenze per Zod geprüft. */
 export type NutritionSnapshotJson = Record<string, unknown>;
 
@@ -50,7 +48,7 @@ export const ownFood = pgTable(
   },
   (t) => [
     uniqueIndex('own_food_barcode_uq').on(t.personId, t.originKey).where(sql`${t.originType} = 'off'`),
-    check('own_food_base_unit_check', oneOf(t.baseUnit, ['g', 'ml'])),
+    check('own_food_base_unit_check', oneOf(t.baseUnit, BaseUnit.options)),
     check('own_food_origin_type_check', oneOf(t.originType, ['bls', 'off'])),
     check('own_food_origin_check', sql`(${t.originType} is null) = (${t.originKey} is null)`),
     check(
@@ -115,7 +113,7 @@ export const mealFavoriteItem = pgTable(
       foreignColumns: [mealFavorite.id, mealFavorite.personId],
     }),
     check('meal_favorite_item_ref_type_check', oneOf(t.foodRefType, foodRefTypes)),
-    check('meal_favorite_item_display_unit_check', oneOf(t.displayUnit, displayUnits)),
+    check('meal_favorite_item_display_unit_check', oneOf(t.displayUnit, DisplayUnit.options)),
     check(
       'meal_favorite_item_amount_check',
       sql`${t.position} >= 0 and ${t.baseAmount} > 0 and ${t.displayAmountMilli} > 0`,
@@ -184,9 +182,9 @@ export const nutritionEntry = pgTable(
     }),
     check('nutrition_entry_meal_check', oneOf(t.meal, MealKey.options)),
     check('nutrition_entry_capture_method_check', oneOf(t.captureMethod, captureMethods)),
-    check('nutrition_entry_display_unit_check', oneOf(t.displayUnit, displayUnits)),
-    check('nutrition_entry_base_unit_check', oneOf(t.snapshotBaseUnit, ['g', 'ml'])),
-    check('nutrition_entry_source_check', oneOf(t.snapshotSource, snapshotSources)),
+    check('nutrition_entry_display_unit_check', oneOf(t.displayUnit, DisplayUnit.options)),
+    check('nutrition_entry_base_unit_check', oneOf(t.snapshotBaseUnit, BaseUnit.options)),
+    check('nutrition_entry_source_check', oneOf(t.snapshotSource, SnapshotSource.options)),
     check(
       'nutrition_entry_ref_check',
       sql`(${t.foodRefType} is null) = (${t.foodRefKey} is null) and (${t.foodRefType} is null) = (${t.snapshotSource} = 'ki') and (${t.foodRefType} is null or ${t.foodRefType} = ${t.snapshotSource})`,
