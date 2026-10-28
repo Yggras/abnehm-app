@@ -10,7 +10,7 @@ Wie die Codebasis aufgebaut ist und wie App, Backend und Datenbank lokal laufen.
 
 ## Aufbau
 
-Ein npm-Workspace mit zwei Anwendungen und zwei gemeinsamen Paketen:
+Ein npm-Workspace mit zwei Anwendungen und drei gemeinsamen Paketen:
 
 | Ordner | Paket | Inhalt |
 | --- | --- | --- |
@@ -18,6 +18,7 @@ Ein npm-Workspace mit zwei Anwendungen und zwei gemeinsamen Paketen:
 | `apps/backend` | `@abnehm/backend` | Hono und Drizzle auf Node, Postgres; Integrationstests mit Vitest gegen ein flüchtiges Postgres und die echte Hono-App |
 | `packages/contracts` | `@abnehm/contracts` | Vertragsmodul: Zod-Schemas und Typen, die App und Backend teilen |
 | `packages/clock` | `@abnehm/clock` | Uhr/Zeitzone: aktueller Zeitpunkt, IANA-Zeitzone, lokaler Tag |
+| `packages/game-rules` | `@abnehm/game-rules` | Spielregeln und ausgelieferter Spielkatalog von Spezifikation 4, rein und ohne I/O |
 
 Node führt die TypeScript-Quellen von Backend und Paketen direkt aus ([Type Stripping](https://nodejs.org/api/typescript.html)). Deshalb tragen relative Importe dort die Endung `.ts`, und es gibt keinen Build-Schritt.
 
@@ -27,6 +28,7 @@ Node führt die TypeScript-Quellen von Backend und Paketen direkt aus ([Type Str
 
 - **Vertragsmodul:** nur Zod und eigene Dateien. Verboten sind React-, Drizzle-, Netzwerk- und Plattform-APIs, auch als Typimport oder dynamischer Import. Die tsconfig des Pakets kennt keine DOM- und Node-Typen. `fetch` oder `process` sind dort also schon Typfehler.
 - **Uhr:** nur das Vertragsmodul sowie `Date` und `Intl` aus dem Sprachstandard.
+- **Spielregeln:** `src/`, `content/` und `fixtures/` von `@abnehm/game-rules` importieren nur das Vertragsmodul und eigene Dateien. Sie lesen keine Uhr (`Date.now()`, `new Date()`, `Intl…resolvedOptions()`); Zeitpunkte kommen als Fakten herein. `@abnehm/game-rules/fixtures` ist wie die Vertrags-Fixtures nur in Tests erlaubt.
 - **Zeit im Bereichscode:** In `apps/*/src` sind `Date.now()`, `new Date()`, `Date()` und `Intl…resolvedOptions()` verboten, in der App außerdem `expo-localization`. Ausgenommen sind nur der Geräteadapter `apps/mobile/src/clock/` und Tests.
 - **App → Backend:** nur `import type` aus `@abnehm/backend/rpc`. Laufzeitcode des Backends gelangt nie ins App-Bundle.
 - **Farben:** In `apps/mobile/src` stehen Farben nur als Design-Token aus `apps/mobile/src/design/tokens.ts`. Rohe Hex-, `rgb()`- oder `hsl()`-Werte und Farbnamen in Farbeigenschaften verbietet die Regel `abnehm/token-farben`; ausgenommen sind die Token-Datei und Tests.
@@ -146,6 +148,36 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
   - Ein begrenztes Hintergrundfenster wartet mit `dispatcher.drain(ms)`.
 - **Energie:** `apps/mobile/src/energy/` legt Buchungen nur an (`appendBooking`) und liest sie. `readEnergy` liefert Bestand und Levelhälfte, `bookingByKey` die Buchung zu einem Schlüssel. Die Regeln (`summarizeEnergy`, `shownEnergy`) stehen im Vertragsmodul. Auf dem Server legt `insertBooking` in `apps/backend/src/energy/bookings.ts` Buchungen samt Änderungsprotokoll an, `bookCounterBooking` die einzige zulässige Korrektur.
 - **Tests:** `daily-goals/persistence.test.ts` und `days-changed.test.ts` (App), `apps/backend/test/daily-goal-commands.test.ts` (Server, samt Negativtest-Szenarien in `test/support/daily-goals.ts`) und `daily-goals-app.test.ts` (zwei Installationen gegen die echte Hono-App). Tagesziele legen Tests bis zu Spezifikation 1 direkt an (`insertDailyGoals`, `insertDailyGoalForTest`).
+
+### Spielregeln und Spielkatalog
+
+`@abnehm/game-rules` ist die einzige Implementierung der Spielformeln ([#179](https://github.com/Yggras/abnehm-app/issues/179), Abschnitte 1 und 3–5 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83)). App und Server nutzen dasselbe Paket. Eingabe sind Katalog und Fakten, Ausgabe Werte oder Entscheidungen. Wie beim Vertragsmodul hat jeder Bereich einen eigenen Teilpfad, ein Barrel gibt es nicht:
+
+| Teilpfad | liefert |
+| --- | --- |
+| `progress` | `spentOnIsland(buchungen, insel)` ist `S_p(I)`. `islandProgress([S_A, S_B])` liefert Level, `levelNeed` und beide Hälften für `IslandProgress`. `memberHalf(S, level)` gibt die eigene Hälfte zum Level der Projektion; `full` ist dort `waitingForPartner`. |
+| `prices` | `basePrice(bauplan)`, `upgradePrice(bauplan, stufe)` |
+| `fields` | `fieldQuota(gebiete)`; `placement({ field, person, object })` ergibt `erlaubt` oder `verboten` mit Grund `gemeinsamer_bereich`, `fremdes_feld` bzw. `falsche_rolle`; `hatchingSide(rolle)` |
+| `unlocks` | `unlocksAt(katalog, level)`: Baupläne samt Grund (`start`, `level`, `entdeckung`), neue Form und Gebiet (fest oder endlos). Dazu `formAt(level)`. |
+| `projects` | `projectNeed(n)` und `commonStage([a, b])`, die gemeinsame Stufe von Projekt und Challenge |
+| `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `fieldKey`, `endlessAreaKey` |
+| `catalog-check` | `checkCatalog`, `catalogDedications`, `catalogChanges` |
+| `content` | `gameCatalog`, der ausgelieferte Katalog |
+| `fixtures` | nur für Tests: `testCatalog()` mit Gebieten und Landschaftsvorlagen, `tracer` |
+
+- **Energie:** Bestand und Anzeige `max(0, Summe)` bleiben `summarizeEnergy` und `shownEnergy` im Vertragsmodul. Die Levelhälfte je Insel kommt nur aus `spentOnIsland`. `readEnergy(…).levelHalf` zählt dagegen die Ausgaben aller Inseln.
+- **Felder:** Ein Feldschlüssel hat die Form `‹gebiet›:‹x›:‹y›`.
+  - Die Grundinsel heißt `grundinsel`. Endlose Gebiete heißen `endlos_‹k›_‹vorlage›`. Die Vorlage steht im Schlüssel, damit Felder gültig bleiben, wenn spätere Kataloge Vorlagen ergänzen.
+  - Feldart und Seite stehen im Katalog, den Besitzer trägt das Inselfeld.
+  - Beim Schlüpfen bekommt die Person mit Rolle Bauen die Seite `a`, die mit Natur die Seite `b` (`hatchingSide`). Neue Gebietsfelder einer Seite gehören derselben Person, auch nach einem Rollentausch.
+- **Schlüssel:** Alle Arten teilen sich einen Schlüsselraum, weil ein Inselobjekt einen Bauplan- oder einen Dekoschlüssel trägt. Erlaubt sind Kleinbuchstaben, Ziffern und `_`. Grafiken nennt der Katalog nur als Schlüssel (`art`, `landmark`, `animal`), zeichnen tut sie die App.
+- **Katalog ändern:** Inhalte liegen unter `packages/game-rules/content/`.
+  - `checkCatalog` muss leer bleiben (`test/catalog-check.test.ts`).
+  - Jede Änderung erhöht `version` in `content/index.ts`. Danach legt `npm run catalog:snapshot --workspace @abnehm/game-rules` den Schnappschuss `catalog-versions/<version>.json` an.
+  - `test/catalog-versions.test.ts` scheitert, wenn der Schnappschuss fehlt oder nicht zum Katalog passt. Er scheitert auch, wenn gegenüber der vorigen Version ein Schlüssel fehlt oder anders gewidmet ist.
+  - Legen zwei Branches dieselbe Version an, kollidieren sie beim Merge. Der spätere erhöht die Version erneut und erzeugt seinen Schnappschuss neu.
+- **Backend-Image:** Es kopiert `src/` und `content/`, nicht `fixtures/` und `catalog-versions/`.
+- **Tests:** Die Wahrheitstabellen liegen unter `packages/game-rules/test/`. Der Tracer läuft in der App (`apps/mobile/src/game-rules/tracer.test.ts`) und im Backend (`apps/backend/test/game-rules.test.ts`) mit denselben Buchungsfakten.
 
 ### Ports zwischen Bereichen
 
@@ -393,7 +425,7 @@ Alle Befehle laufen im Repo-Root:
 | Befehl | Wirkung |
 | --- | --- |
 | `npm install` | Abhängigkeiten aller Workspaces |
-| `npm run backend` | Legt fehlende lokale Secrets an, baut und startet Backend und Postgres. Der Watch-Modus spielt Änderungen an `apps/backend/src` und `packages/*/src` ein. |
+| `npm run backend` | Legt fehlende lokale Secrets an, baut und startet Backend und Postgres. Der Watch-Modus spielt Änderungen an `apps/backend/src`, `packages/*/src` und dem Spielkatalog (`packages/game-rules/content`) ein. |
 | `npm run backend:lan` | Wie `backend`, gibt das Backend zusätzlich auf der LAN-Adresse frei (siehe „Echte Geräte“) |
 | `npm run backend:down` | Stoppt beide Container; die Datenbank bleibt im Volume erhalten |
 | `npm run ios --workspace @abnehm/mobile` | Development Build im iOS-Simulator |
