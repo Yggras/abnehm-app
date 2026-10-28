@@ -1,4 +1,13 @@
-import { buildSeedState, seedCreated as created, seedDay as day, type SeedPart } from './build.ts';
+import {
+  buildSeedState,
+  seedCreated as created,
+  seedDailyGoals,
+  seedDay as day,
+  seedManualOrigin,
+  seedWeeklyPlan,
+  type SeedPart,
+  type SeedWeeklyPlan,
+} from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest } from './manifest.ts';
 
@@ -51,15 +60,7 @@ const weeklyPlan = {
   freitag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
   samstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
   sonntag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
-} as const;
-
-const snapshot = (slot: 1 | 2 | 3) => ({
-  personId: philipp,
-  localDate: seedDays.heute,
-  slot,
-  timeZone: seedClock.timeZone,
-  dayEndsAt: seedDayEnds.heute,
-});
+} as const satisfies SeedWeeklyPlan;
 
 /** Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). */
 const ziele: SeedPart = {
@@ -91,42 +92,25 @@ const ziele: SeedPart = {
         ...created('2026-10-01T07:05:00.000Z'),
       },
     },
-    {
-      table: 'weekly_plan_version',
-      ownerPersonId: philipp,
-      row: { id: seedIds.weeklyPlanVersion.philipp, person_id: philipp, valid_from: seedDays.zielstart, ...created('2026-10-01T07:05:00.000Z') },
-      children: {
-        weekly_plan_day: Object.entries(weeklyPlan).map(([weekday, [baustein1, baustein2, baustein3]]) => ({
-          weekly_plan_version_id: seedIds.weeklyPlanVersion.philipp,
-          person_id: philipp,
-          weekday,
-          baustein_1: baustein1,
-          baustein_2: baustein2,
-          baustein_3: baustein3,
-        })),
-      },
-    },
-    ...weeklyPlan.mittwoch.map((baustein, index) => {
-      const slot = (index + 1) as 1 | 2 | 3;
-      const thresholds: Readonly<Record<string, number>> = {
+    seedWeeklyPlan({
+      id: seedIds.weeklyPlanVersion.philipp,
+      personId: philipp,
+      validFrom: seedDays.zielstart,
+      createdAt: '2026-10-01T07:05:00.000Z',
+      plan: weeklyPlan,
+    }),
+    ...seedDailyGoals({
+      personId: philipp,
+      ids: seedIds.dailyGoal.philippHeute,
+      localDate: seedDays.heute,
+      dayEndsAt: seedDayEnds.heute,
+      createdAt: '2026-10-14T05:00:00.000Z',
+      bausteine: weeklyPlan.mittwoch,
+      thresholds: {
         ernaehrung_erfasst: { minimumMealCategories: 3 },
         wasserziel: { targetMl: 2_500 },
         sporteinheit: { minimumSingleSessionMinutes: 20 },
-      }[baustein];
-      return {
-        table: 'daily_goal',
-        ownerPersonId: philipp,
-        row: {
-          id: seedIds.dailyGoal.philippHeute[index] as string,
-          person_id: philipp,
-          ...day(seedDays.heute),
-          slot,
-          baustein,
-          snapshot: { type: baustein, ...snapshot(slot), ...thresholds },
-          day_ends_at: seedDayEnds.heute,
-          created_at: '2026-10-14T05:00:00.000Z',
-        },
-      };
+      },
     }),
   ],
 };
@@ -154,11 +138,7 @@ const tracker: SeedPart = {
         started_at: '2026-10-13T16:00:00.000Z',
         duration_minutes: 35,
         active_milli_kcal: null,
-        origin: 'manuell',
-        external_key: null,
-        source_app_id: null,
-        source_app_name: null,
-        hidden_at: null,
+        ...seedManualOrigin,
         replaced_by_entry_id: null,
         reactivated_at: null,
         ...day(seedDays.gestern),
@@ -176,11 +156,7 @@ const tracker: SeedPart = {
         person_id: philipp,
         weight_g: weight,
         measured_at: at,
-        origin: 'manuell',
-        external_key: null,
-        source_app_id: null,
-        source_app_name: null,
-        hidden_at: null,
+        ...seedManualOrigin,
         ...day(localDate),
         ...created(at),
       },

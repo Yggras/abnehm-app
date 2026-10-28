@@ -2,8 +2,10 @@ import { hashPassword } from 'better-auth/crypto';
 import { getTableColumns, is, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
+import { EntityId } from '@abnehm/contracts/base';
 import { authTables, canonicalRows, dependencyOrder, type SeedManifest, type SeedRow, type SeedRows, type SeedValue } from '@abnehm/contracts/seeds';
 
+import type { Uncoupling } from '../../src/coupling/uncoupling.ts';
 import type { Database, DbExecutor } from '../../src/database.ts';
 import * as schema from '../../src/db/schema/index.ts';
 
@@ -68,6 +70,28 @@ export async function seedServer(database: Database, manifest: SeedManifest): Pr
     const withEmail = await tablesWithEmail(tx);
     if (withEmail.length > 0) throw new Error(`Seed: E-Mail außerhalb der Better-Auth-Tabellen in ${withEmail.join(', ')}`);
   });
+}
+
+/**
+ * Seed der Development-Abläufe (Seed-Route und Seed-Kommando, #117): Ausgangszustand herstellen, dann die
+ * Serverschritte des Manifests ausführen. `entkoppeln` läuft über den Entkopplungs-Kern (#107), der
+ * Widerruf ist also echt. Die Geräte starten im Ausgangszustand und holen die Schritte mit ihrem Sync nach.
+ */
+export async function seedScenario(database: Database, uncoupling: Uncoupling, manifest: SeedManifest): Promise<void> {
+  await seedServer(database, manifest);
+  for (const step of manifest.steps) {
+    if (step.type !== 'entkoppeln') continue;
+    const requester = manifest.accounts.find((account) => account.key === step.account);
+    if (requester === undefined) throw new Error(`Seed: unbekanntes Konto ${step.account}`);
+    await database.db.transaction((tx) =>
+      uncoupling.uncouple(tx, {
+        actionId: step.actionId,
+        couplingId: step.couplingId,
+        requesterPersonId: EntityId.parse(requester.personId),
+        at: new Date(step.at),
+      }),
+    );
+  }
 }
 
 /** Kanonischer Stand der Fach- und Sync-Daten, vergleichbar mit `manifest.initial.server`. */

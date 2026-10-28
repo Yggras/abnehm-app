@@ -42,6 +42,7 @@ export function dependencyOrder(tables: readonly Readonly<{ name: string; refere
   return ordered;
 }
 
-function compare(a: string, b: string): number {
+/** Vergleicht Zeichenfolgen nach Code-Einheiten, unabhängig von Sprache und Umgebung. */
+export function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }

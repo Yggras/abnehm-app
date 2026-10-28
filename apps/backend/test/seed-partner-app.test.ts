@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, LocalDate, ServerVersion, type AreaKey } from '@abnehm/contracts/base';
+import type { PartnerSharingLevel } from '@abnehm/contracts/coupling';
 import { revocationNoticeId } from '@abnehm/contracts/partner';
 import {
   buildSeedState,
@@ -72,7 +73,7 @@ type Phone = Readonly<{
   database: LocalDatabase;
   sync(): Promise<void>;
   partner(): ReturnType<typeof readPartnerCache>;
-  setSharing(area: AreaKey, level: 'privat' | 'zusammengefasst'): void;
+  setSharing(area: AreaKey, level: PartnerSharingLevel): void;
 }>;
 
 /** Ein angemeldetes Gerät einer Installation, die lokale Datenbank im Ausgangszustand des Manifests. */

@@ -1,5 +1,6 @@
 import { ServerVersion } from '../src/base.ts';
 import { revocationNoticeId } from '../src/partner.ts';
+import { compare } from './canonical.ts';
 import { gekoppeltExtensions, gekoppeltState } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedRow, type SeedRows, type SeedState } from './manifest.ts';
@@ -15,8 +16,14 @@ import { SeedManifest, type SeedRow, type SeedRows, type SeedState } from './man
 /** Der Schritt `entkoppeln` mit der Person statt des Kontos. */
 type Uncoupling = Readonly<{ couplingId: string; actionId: string; at: string; requesterPersonId: string }>;
 
+/** Widerrufbare Partner-Projektionen; der Kern löscht sie in dieser Reihenfolge. */
+const projectionTables = ['partner_summary', 'partner_daily_goal_status'] as const;
+
 const rowsOf = (rows: SeedRows, table: string): SeedRow[] => rows[table] ?? [];
-const byText = (field: string) => (a: SeedRow, b: SeedRow) => (String(a[field]) < String(b[field]) ? -1 : String(a[field]) > String(b[field]) ? 1 : 0);
+const byField = (field: string) => (a: SeedRow, b: SeedRow) => compare(String(a[field]), String(b[field]));
+/** Die Mitglieder folgen dem Status ihrer Kopplung per `ON UPDATE CASCADE`, ohne neue Version. */
+const archiveMembers = (rows: SeedRows, couplingId: string): SeedRow[] =>
+  rowsOf(rows, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
 
 /**
  * Sollzustand nach `entkoppeln` und dem anschließenden Sync aller Installationen, abgeleitet aus einem
@@ -60,13 +67,13 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
   const ofCoupling = (table: string) => rowsOf(server, table).filter((row) => row.coupling_id === couplingId);
 
   patch('coupling', couplingId, { status: 'archiviert', ended_at: at, updated_at: at, server_version: change('coupling', couplingId, 'upsert', { couplingId }) });
-  server.coupling_member = rowsOf(server, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
+  server.coupling_member = archiveMembers(server, couplingId);
 
   const island = ofCoupling('island')[0];
   if (island === undefined) throw new Error('Seed: Insel der Kopplung fehlt');
   patch('island', island.id, { state: 'archiviert', updated_at: at, server_version: change('island', String(island.id), 'upsert', { couplingId }) });
 
-  for (const action of ofCoupling('shared_action').filter((row) => row.status === 'offen').sort(byText('id'))) {
+  for (const action of ofCoupling('shared_action').filter((row) => row.status === 'offen').sort(byField('id'))) {
     const version = change('shared_action', String(action.id), 'upsert', { couplingId });
     patch('shared_action', action.id, { status: 'zurueckgezogen', decided_at: at, updated_at: at, server_version: version });
   }
@@ -88,14 +95,14 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
     },
   ];
 
-  for (const table of ['partner_summary', 'partner_daily_goal_status']) {
-    for (const projection of ofCoupling(table).filter((row) => row.deleted_at === null).sort(byText('id'))) {
+  for (const table of projectionTables) {
+    for (const projection of ofCoupling(table).filter((row) => row.deleted_at === null).sort(byField('id'))) {
       const version = change(table, String(projection.id), 'delete', { recipientPersonId: String(projection.recipient_person_id) });
       patch(table, projection.id, { deleted_at: at, updated_at: at, server_version: version });
     }
   }
 
-  for (const member of ofCoupling('coupling_member').sort(byText('person_id'))) {
+  for (const member of ofCoupling('coupling_member').sort(byField('person_id'))) {
     const recipientPersonId = String(member.person_id);
     // Die ID folgt aus der Serverversion, die die Notice gleich erhält.
     const id = revocationNoticeId(ServerVersion.parse(String(position + 1)));
@@ -122,8 +129,8 @@ export function uncoupledState(state: SeedState, { couplingId, actionId, at, req
     Object.entries(state.devices).map(([key, device]) => {
       const rows: Record<string, SeedRow[]> = { ...device.rows };
       rows.coupling = rowsOf(rows, 'coupling').map((row) => (row.id === couplingId ? archived : row));
-      rows.coupling_member = rowsOf(rows, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
-      for (const table of ['partner_summary', 'partner_daily_goal_status']) rows[table] = rowsOf(rows, table).filter((row) => row.coupling_id !== couplingId);
+      rows.coupling_member = archiveMembers(rows, couplingId);
+      for (const table of projectionTables) rows[table] = rowsOf(rows, table).filter((row) => row.coupling_id !== couplingId);
       return [key, { ...device, rows, cursor: String(position) as SeedState['devices'][string]['cursor'] }];
     }),
   );

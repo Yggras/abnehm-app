@@ -1,8 +1,19 @@
-import { partnerSummaryBounds, partnerSummaryPeriod } from '../src/partner.ts';
 import { AreaKey, EntityId, LocalDate, type BausteinKey } from '../src/base.ts';
+import type { PartnerSharingLevel } from '../src/coupling.ts';
 import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { energyBookingId } from '../src/energy.ts';
-import { buildSeedState, seedCreated as created, seedDay as day, type SeedEntity, type SeedPart } from './build.ts';
+import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
+import {
+  buildSeedState,
+  seedCreated as created,
+  seedDailyGoals,
+  seedDay as day,
+  seedManualOrigin,
+  seedWeeklyPlan,
+  type SeedEntity,
+  type SeedPart,
+  type SeedWeeklyPlan,
+} from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow } from './manifest.ts';
 import { soloParts } from './solo.ts';
@@ -28,6 +39,9 @@ const couplingId = seedIds.coupling.philippAnna;
 const heute = LocalDate.parse(seedDays.heute);
 /** Zeitpunkt, zu dem der Server die Projektionen berechnet hat; so sind sie zur festen Uhr frisch. */
 const projectedAt = seedClock.instant;
+
+type Partner = 'philipp' | 'anna';
+const partnerOf = (owner: Partner): Partner => (owner === 'philipp' ? 'anna' : 'philipp');
 
 /** Fundament: Anna, fertig mit dem Onboarding am Abend des Zielstarts. */
 const annaPerson: SeedPart = {
@@ -70,16 +84,7 @@ const annaWeeklyPlan = {
   freitag: ['wasserziel', 'sporteinheit', 'ernaehrung_erfasst'],
   samstag: ['wasserziel', 'sporteinheit', 'im_kalorienbudget'],
   sonntag: ['wasserziel', 'ernaehrung_erfasst', 'gewogen'],
-} as const satisfies Record<string, readonly [BausteinKey, BausteinKey, BausteinKey]>;
-
-/** Schwellen der Tagesziele aus Annas Zielversion. */
-const annaThresholds: Readonly<Record<BausteinKey, Readonly<Record<string, number>>>> = {
-  ernaehrung_erfasst: { minimumMealCategories: 3 },
-  im_kalorienbudget: { budgetKcal: 1_930, lowerBoundKcal: 1_459 },
-  wasserziel: { targetMl: 2_000 },
-  sporteinheit: { minimumSingleSessionMinutes: 20 },
-  gewogen: {},
-};
+} as const satisfies SeedWeeklyPlan;
 
 /** Ziele (Spezifikation 1): Annas Zielversion, Wochenplan und ihre drei Tagesziele von heute. */
 const annaZiele: SeedPart = {
@@ -111,50 +116,22 @@ const annaZiele: SeedPart = {
         ...created('2026-10-01T18:10:00.000Z'),
       },
     },
-    {
-      table: 'weekly_plan_version',
-      ownerPersonId: anna,
-      row: { id: seedIds.weeklyPlanVersion.anna, person_id: anna, valid_from: seedDays.zielstart, ...created('2026-10-01T18:10:00.000Z') },
-      children: {
-        weekly_plan_day: Object.entries(annaWeeklyPlan).map(([weekday, [baustein1, baustein2, baustein3]]) => ({
-          weekly_plan_version_id: seedIds.weeklyPlanVersion.anna,
-          person_id: anna,
-          weekday,
-          baustein_1: baustein1,
-          baustein_2: baustein2,
-          baustein_3: baustein3,
-        })),
+    seedWeeklyPlan({ id: seedIds.weeklyPlanVersion.anna, personId: anna, validFrom: seedDays.zielstart, createdAt: '2026-10-01T18:10:00.000Z', plan: annaWeeklyPlan }),
+    ...seedDailyGoals({
+      personId: anna,
+      ids: seedIds.dailyGoal.annaHeute,
+      localDate: seedDays.heute,
+      dayEndsAt: seedDayEnds.heute,
+      createdAt: '2026-10-14T05:00:00.000Z',
+      bausteine: annaWeeklyPlan.mittwoch,
+      thresholds: {
+        wasserziel: { targetMl: 2_000 },
+        sporteinheit: { minimumSingleSessionMinutes: 20 },
+        im_kalorienbudget: { budgetKcal: 1_930, lowerBoundKcal: 1_459 },
       },
-    },
-    ...annaWeeklyPlan.mittwoch.map((baustein, index): SeedEntity => {
-      const slot = (index + 1) as DailyGoalSlot;
-      return {
-        table: 'daily_goal',
-        ownerPersonId: anna,
-        row: {
-          id: seedIds.dailyGoal.annaHeute[index] as string,
-          person_id: anna,
-          ...day(seedDays.heute),
-          slot,
-          baustein,
-          snapshot: {
-            type: baustein,
-            personId: anna,
-            localDate: seedDays.heute,
-            slot,
-            timeZone: seedClock.timeZone,
-            dayEndsAt: seedDayEnds.heute,
-            ...annaThresholds[baustein],
-          },
-          day_ends_at: seedDayEnds.heute,
-          created_at: '2026-10-14T05:00:00.000Z',
-        },
-      };
     }),
   ],
 };
-
-const manual = { origin: 'manuell', external_key: null, source_app_id: null, source_app_name: null, hidden_at: null } as const;
 
 /**
  * Tracker (Spezifikation 3): Philipps Krafttraining heute; Anna hat ihr Wasserziel voll, ist heute
@@ -177,7 +154,7 @@ const tracker: SeedPart = {
         started_at: at,
         duration_minutes: minutes,
         active_milli_kcal: null,
-        ...manual,
+        ...seedManualOrigin,
         replaced_by_entry_id: null,
         reactivated_at: null,
         ...day(seedDays.heute),
@@ -200,7 +177,7 @@ const tracker: SeedPart = {
         person_id: anna,
         weight_g: 73_600,
         measured_at: '2026-10-13T05:15:00.000Z',
-        ...manual,
+        ...seedManualOrigin,
         ...day(seedDays.gestern),
         ...created('2026-10-13T05:15:00.000Z'),
       },
@@ -342,7 +319,7 @@ const hatchedAt = '2026-10-01T18:40:00.000Z';
 /** Anna hat Ernährung kurz nach der Kopplung auf `privat` gestellt. */
 const annaPrivateAt = '2026-10-01T18:45:00.000Z';
 
-const sharingLevels: Readonly<Record<'philipp' | 'anna', Readonly<Record<AreaKey, 'privat' | 'zusammengefasst'>>>> = {
+const sharingLevels: Readonly<Record<Partner, Readonly<Record<AreaKey, PartnerSharingLevel>>>> = {
   philipp: { ernaehrung: 'zusammengefasst', wasser: 'zusammengefasst', sport: 'zusammengefasst', gewicht: 'zusammengefasst' },
   anna: { ernaehrung: 'privat', wasser: 'zusammengefasst', sport: 'zusammengefasst', gewicht: 'zusammengefasst' },
 };
@@ -434,8 +411,8 @@ const kopplung: SeedPart = {
 };
 
 /** Zusammenfassung eines Bereichs für den Partner, im Zeitraum von heute (#106). */
-function summary(owner: 'philipp' | 'anna', area: AreaKey, id: string, content: Readonly<Record<string, number | string | null>>): SeedEntity {
-  const recipient = owner === 'philipp' ? anna : philipp;
+function summary(owner: Partner, area: AreaKey, id: string, content: Readonly<Record<string, number | string | null>>): SeedEntity {
+  const recipient = seedIds.person[partnerOf(owner)];
   const { from, to } = partnerSummaryBounds(partnerSummaryPeriod(area, heute));
   return {
     table: 'partner_summary',
@@ -459,8 +436,8 @@ function summary(owner: 'philipp' | 'anna', area: AreaKey, id: string, content: 
 }
 
 /** Grober Tageszielstand von heute für den Partner, aus den Tageszielerfüllungen des Eigentümers. */
-function dailyGoalStatus(owner: 'philipp' | 'anna', stage: 'unterwegs' | 'fast_geschafft'): SeedEntity {
-  const recipient = owner === 'philipp' ? anna : philipp;
+function dailyGoalStatus(owner: Partner, stage: PartnerDailyGoalStage): SeedEntity {
+  const recipient = seedIds.person[partnerOf(owner)];
   return {
     table: 'partner_daily_goal_status',
     entityType: 'partner_daily_goal_status',
