@@ -9,8 +9,10 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    // Wie in der App: die gebündelten SQLite-Migrationen (`migrations.js`) sind JavaScript.
+    // Wie in der App: die gebündelten SQLite-Migrationen (`migrations.js`) sind JavaScript, und
+    // Typimporte aus `local-db/index.ts` erreichen Komponenten mit JSX (`CatalogProvider.tsx`).
     "allowJs": true,
+    "jsx": "react-jsx",
     "resolveJsonModule": true,
     "types": ["node"]
   },
