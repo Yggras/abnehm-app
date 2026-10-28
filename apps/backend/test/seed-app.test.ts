@@ -163,6 +163,19 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows({ sync_clock: [{ id: 1, position: '0' }] }));
   });
 
+  it('Partner-Szenario (#117): `gekoppelt` mit Annas Android-Installation meldet Anna an und seedet ihr Gerät', async () => {
+    const backend = await createTestBackend();
+    const device = phone(backend);
+    const gekoppelt = seedManifests.gekoppelt;
+    const run = { scenario: 'gekoppelt', installation: 'anna-android', target: { type: 'today' } } as const;
+
+    expect(await runSeed(run, device)).toEqual({ type: 'geseedet', scenario: 'gekoppelt', installation: 'anna-android', target: { type: 'today' } });
+
+    expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(gekoppelt.initial.server));
+    expect(device.session.auth.state()).toEqual({ type: 'angemeldet', accountId: gekoppelt.accounts[1]!.accountId });
+    expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(gekoppelt.initial.devices['anna-android']!));
+  });
+
   it('Auth-Adapter: lehnt der Server die Sitzung ab, sperrt die App und schließt die Kontodatenbank', async () => {
     const backend = await createTestBackend();
     const device = phone(backend);

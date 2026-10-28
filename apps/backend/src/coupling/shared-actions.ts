@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import { EntityId, type TimeZone } from '@abnehm/contracts/base';
 import {
@@ -148,6 +148,8 @@ export async function withdrawOpenSharedActions(tx: DbExecutor, couplingId: Enti
     .select({ id: sharedAction.id })
     .from(sharedAction)
     .where(and(eq(sharedAction.couplingId, couplingId), eq(sharedAction.status, 'offen')))
+    // Feste Reihenfolge der Serverversionen, damit ein Seed-Sollzustand sie angeben kann (#117).
+    .orderBy(asc(sharedAction.id))
     .for('update');
   const write = changeWriter(tx, at);
   for (const { id } of open) {

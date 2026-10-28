@@ -1,0 +1,156 @@
+import { ServerVersion } from '../src/base.ts';
+import { revocationNoticeId } from '../src/partner.ts';
+import { gekoppeltExtensions, gekoppeltState } from './gekoppelt.ts';
+import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
+import { SeedManifest, type SeedRow, type SeedRows, type SeedState } from './manifest.ts';
+
+// Szenario `nach_entkopplung` (Spezifikation 0, Abschnitt 12; #117). Es startet im Zustand von
+// `gekoppelt`: Beide Geräte zeigen Zusammenfassungen und Tageszielstand des Partners. Dann entkoppelt
+// Anna über den Entkopplungs-Kern (#107), und beide Geräte synchronisieren. Der Sollzustand ist also
+// ein tatsächlich ausgeführter Widerruf, kein direkt geseedeter, bereinigter Zustand.
+//
+// Spezifikation 5 ersetzt den Schritt `entkoppeln` später durch ihren Befehl `requestUncoupling` (lokal
+// `offen`, vom Server sofort angenommen); der Sollzustand des Kerns bleibt derselbe.
+
+/** Der Schritt `entkoppeln` mit der Person statt des Kontos. */
+type Uncoupling = Readonly<{ couplingId: string; actionId: string; at: string; requesterPersonId: string }>;
+
+const rowsOf = (rows: SeedRows, table: string): SeedRow[] => rows[table] ?? [];
+const byText = (field: string) => (a: SeedRow, b: SeedRow) => (String(a[field]) < String(b[field]) ? -1 : String(a[field]) > String(b[field]) ? 1 : 0);
+
+/**
+ * Sollzustand nach `entkoppeln` und dem anschließenden Sync aller Installationen, abgeleitet aus einem
+ * Ausgangszustand mit aktiver Kopplung. Er beschreibt, was der Entkopplungs-Kern (#107) samt Widerruf
+ * (#106) schreibt, in dessen Reihenfolge der Serverversionen:
+ *
+ * 1. Kopplung archiviert; die Mitglieder folgen per `ON UPDATE CASCADE` ohne neue Version.
+ * 2. Insel archiviert.
+ * 3. Offene gemeinsame Aktionen nach ID: `zurueckgezogen`.
+ * 4. Die Entkopplung als gemeinsame Aktion `entkoppeln`, sofort `angenommen`.
+ * 5. Lebendige Projektionen der Kopplung nach ID, erst Zusammenfassungen, dann Tageszielstand: Löschmarkierung.
+ * 6. Je Mitglied nach Personen-ID eine Revocation-Notice `kopplung`/`entkopplung`.
+ *
+ * Danach hat jedes Gerät gezogen: Es kennt die archivierte Kopplung, seine Mitglieder sind archiviert und
+ * der Partnercache der Kopplung ist leer. Insel und gemeinsame Aktionen bleiben dort, wie sie waren; die
+ * beim Entkoppeln beendeten Aktionen kommen erst mit einer Reaktivierung an (#107).
+ */
+export function uncoupledState(state: SeedState, { couplingId, actionId, at, requesterPersonId }: Uncoupling): SeedState {
+  const server: Record<string, SeedRow[]> = { ...state.server };
+  const changeLog: SeedRow[] = [];
+  let position = Number(rowsOf(server, 'sync_clock')[0]?.position ?? 0);
+  /** Vergibt die nächste Serverversion und trägt die Änderung im Änderungsprotokoll ein. */
+  const change = (entityType: string, entityId: (version: string) => string, operation: 'upsert' | 'delete', scope: { couplingId?: string; recipientPersonId?: string }) => {
+    position += 1;
+    const version = String(position);
+    changeLog.push({
+      position: version,
+      entity_type: entityType,
+      entity_id: entityId(version),
+      operation,
+      owner_person_id: null,
+      coupling_id: scope.couplingId ?? null,
+      recipient_person_id: scope.recipientPersonId ?? null,
+      created_at: at,
+    });
+    return version;
+  };
+  const patch = (table: string, id: unknown, values: SeedRow) => {
+    server[table] = rowsOf(server, table).map((row) => (row.id === id ? { ...row, ...values } : row));
+  };
+  const ofCoupling = (table: string) => rowsOf(server, table).filter((row) => row.coupling_id === couplingId);
+
+  patch('coupling', couplingId, { status: 'archiviert', ended_at: at, updated_at: at, server_version: change('coupling', () => couplingId, 'upsert', { couplingId }) });
+  server.coupling_member = rowsOf(server, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
+
+  const island = ofCoupling('island')[0];
+  if (island === undefined) throw new Error('Seed: Insel der Kopplung fehlt');
+  patch('island', island.id, { state: 'archiviert', updated_at: at, server_version: change('island', () => String(island.id), 'upsert', { couplingId }) });
+
+  for (const action of ofCoupling('shared_action').filter((row) => row.status === 'offen').sort(byText('id'))) {
+    const version = change('shared_action', () => String(action.id), 'upsert', { couplingId });
+    patch('shared_action', action.id, { status: 'zurueckgezogen', decided_at: at, updated_at: at, server_version: version });
+  }
+  const uncouplingVersion = change('shared_action', () => actionId, 'upsert', { couplingId });
+  server.shared_action = [
+    ...rowsOf(server, 'shared_action'),
+    {
+      id: actionId,
+      coupling_id: couplingId,
+      kind: 'entkoppeln',
+      requester_person_id: requesterPersonId,
+      payload: {},
+      status: 'angenommen',
+      decided_at: at,
+      created_at: at,
+      updated_at: at,
+      deleted_at: null,
+      server_version: uncouplingVersion,
+    },
+  ];
+
+  for (const table of ['partner_summary', 'partner_daily_goal_status']) {
+    for (const projection of ofCoupling(table).filter((row) => row.deleted_at === null).sort(byText('id'))) {
+      const version = change(table, () => String(projection.id), 'delete', { recipientPersonId: String(projection.recipient_person_id) });
+      patch(table, projection.id, { deleted_at: at, updated_at: at, server_version: version });
+    }
+  }
+
+  for (const member of ofCoupling('coupling_member').sort(byText('person_id'))) {
+    const recipientPersonId = String(member.person_id);
+    const version = change('revocation_notice', (next) => revocationNoticeId(ServerVersion.parse(next)), 'upsert', { recipientPersonId });
+    server.revocation_notice = [
+      ...rowsOf(server, 'revocation_notice'),
+      {
+        id: revocationNoticeId(ServerVersion.parse(version)),
+        recipient_person_id: recipientPersonId,
+        coupling_id: couplingId,
+        target_type: 'kopplung',
+        projection_id: null,
+        reason: 'entkopplung',
+        created_at: at,
+        server_version: version,
+      },
+    ];
+  }
+  server.change_log = [...rowsOf(server, 'change_log'), ...changeLog];
+  server.sync_clock = [{ id: 1, position: String(position) }];
+
+  const archived = rowsOf(server, 'coupling').find((row) => row.id === couplingId)!;
+  const devices = Object.fromEntries(
+    Object.entries(state.devices).map(([key, device]) => {
+      const rows: Record<string, SeedRow[]> = { ...device.rows };
+      rows.coupling = rowsOf(rows, 'coupling').map((row) => (row.id === couplingId ? archived : row));
+      rows.coupling_member = rowsOf(rows, 'coupling_member').map((row) => (row.coupling_id === couplingId ? { ...row, coupling_status: 'archiviert' } : row));
+      for (const table of ['partner_summary', 'partner_daily_goal_status']) rows[table] = rowsOf(rows, table).filter((row) => row.coupling_id !== couplingId);
+      return [key, { ...device, rows, cursor: String(position) as SeedState['devices'][string]['cursor'] }];
+    }),
+  );
+  return { server, devices };
+}
+
+const uncoupling = {
+  type: 'entkoppeln',
+  account: seedAccounts.anna.key,
+  couplingId: seedIds.coupling.philippAnna,
+  actionId: seedIds.sharedAction.annasEntkopplung,
+  at: seedClock.instant,
+} as const;
+
+export const nachEntkopplungManifest = SeedManifest.parse({
+  formatVersion: 1,
+  scenario: 'nach_entkopplung',
+  revision: 1,
+  clock: seedClock,
+  localDates: seedDays,
+  catalogVersion: null,
+  accounts: [seedAccounts.philipp, seedAccounts.anna],
+  installations: [seedInstallations.philippIphone, seedInstallations.annaAndroid],
+  initial: gekoppeltState,
+  steps: [
+    uncoupling,
+    { type: 'sync', installation: seedInstallations.philippIphone.key },
+    { type: 'sync', installation: seedInstallations.annaAndroid.key },
+  ],
+  target: uncoupledState(gekoppeltState, { ...uncoupling, requesterPersonId: seedAccounts.anna.personId }),
+  extensions: gekoppeltExtensions,
+});

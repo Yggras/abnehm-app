@@ -1,5 +1,5 @@
-import { buildSeedState, type SeedPart } from './build.ts';
-import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations, seedUtcOffsetMinutes } from './ids.ts';
+import { buildSeedState, seedCreated as created, seedDay as day, type SeedPart } from './build.ts';
+import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest } from './manifest.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
@@ -10,8 +10,6 @@ import { SeedManifest } from './manifest.ts';
 // plausibel, aber nicht mit dem Zielrechner aus Spezifikation 1 berechnet.
 
 const philipp = seedIds.person.philipp;
-const day = (localDate: string) => ({ local_date: localDate, time_zone: seedClock.timeZone, utc_offset_minutes: seedUtcOffsetMinutes });
-const created = (at: string) => ({ created_at: at, updated_at: at, deleted_at: null });
 
 /** Fundament: die fertige Person ohne Kopplung. */
 const fundament: SeedPart = {
