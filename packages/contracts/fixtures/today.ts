@@ -10,10 +10,12 @@ import {
   QuickCommandKey,
   QuickCommandOutcome,
   TopNoticeReady,
+  TrackerEmptyReason,
   TrackerQuickAction,
   TrackerSportReady,
   TrackerWaterReady,
   TrackerWeightReady,
+  WaterQuickAddParams,
 } from '../src/today.ts';
 import { fixtures, without } from './define.ts';
 import { goalVersion, now, suggestion, today } from './ids.ts';
@@ -211,11 +213,27 @@ export const todayFixtures = {
       'fertiger Text': { message: '+250 ml Wasser · Rückgängig', values: {}, undoToken: 'undo-7f3a' },
     },
   }),
+  WaterQuickAddParams: fixtures(WaterQuickAddParams, {
+    valid: { 'ein Glas': { ml: 250 } },
+    invalid: { 'Flasche': { ml: 500 }, 'ohne Menge': {}, 'mit Zeitpunkt': { ml: 250, loggedAt: now } },
+  }),
+  TrackerEmptyReason: fixtures(TrackerEmptyReason, {
+    valid: { 'ohne gültige Zielversion': 'ohne_zielversion' },
+    invalid: { 'beliebiger Grund': 'noch_keine_eintraege' },
+  }),
   TrackerWaterReady: fixtures(TrackerWaterReady, {
-    valid: { 'halb voll': water },
+    valid: {
+      'halb voll': water,
+      'leer': { ...water, countedMl: 0, status: 'leer' },
+      'genau erreicht': { ...water, countedMl: 1500, status: 'erreicht' },
+      'über dem Ziel': { ...water, countedMl: 1750, status: 'ueber_ziel' },
+    },
     invalid: {
       'Status im Ton problem': { ...water, status: 'problem' },
       'Detailaktion zur falschen Route': { ...water, detailAction: action('tracker.water.open', { type: 'capture.sport' }) },
+      'Status passt nicht zum Wert': { ...water, countedMl: 1500, status: 'teil' },
+      'erreicht schon unter dem Ziel': { ...water, countedMl: 1499, status: 'erreicht' },
+      'Knopf navigiert statt zu buchen': { ...water, quickAction: { type: 'navigate', intent: action('tracker.water.open', { type: 'capture.water' }) } },
     },
   }),
   TrackerSportReady: fixtures(TrackerSportReady, {

@@ -11,13 +11,18 @@ export type ProgressBarProps = {
   target: number;
   /** Wert und Ziel als deutscher Text, etwa „1,0 von 1,5 l“; über dem Ziel läuft er weiter. */
   valueText: string;
+  /**
+   * Zeigt Wert und „erreicht“ unter der Spur (Standard). Ohne Legende nennt die Umgebung beides
+   * sichtbar selbst, etwa der Mini-Tracker; Screenreader hören den Wert weiterhin.
+   */
+  legend?: boolean;
 };
 
 /**
  * Fortschrittsanzeige für eigene Werte (Füllung `self`). Ist das Ziel erreicht, sagen Häkchen und
  * „erreicht“ es zusätzlich zur vollen Spur; über dem Ziel bleibt der Balken voll.
  */
-export function ProgressBar({ label, value, target, valueText }: ProgressBarProps) {
+export function ProgressBar({ label, value, target, valueText, legend = true }: ProgressBarProps) {
   const reached = target > 0 && value >= target;
   const share = target > 0 ? Math.min(Math.max(value / target, 0), 1) : 0;
   return (
@@ -36,7 +41,7 @@ export function ProgressBar({ label, value, target, valueText }: ProgressBarProp
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${share * 100}%` }]} />
       </View>
-      <View style={styles.legend}>
+      {legend ? <View style={styles.legend}>
         {reached ? (
           <View style={styles.reached}>
             <Icon name="check" size="sm" tone="success" />
@@ -48,7 +53,7 @@ export function ProgressBar({ label, value, target, valueText }: ProgressBarProp
         <Text variant="label" style={styles.value}>
           {valueText}
         </Text>
-      </View>
+      </View> : null}
     </View>
   );
 }

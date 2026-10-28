@@ -160,7 +160,8 @@ const uncoupling = {
 export const nachEntkopplungManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'nach_entkopplung',
-  revision: 1,
+  // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll.
+  revision: 2,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

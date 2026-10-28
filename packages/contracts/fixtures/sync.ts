@@ -152,9 +152,9 @@ export const syncFixtures = {
 };
 
 /**
- * Test-Entität für Sync-Tests auf der Tabelle `water_entry`. Sie ist kein Teil des Transportkatalogs:
- * Den echten Wassereintrag meldet Spezifikation 3 an. Die Mengengrenze fehlt bewusst, damit Tests auch
- * eine Nutzlast schicken können, die erst an der Datenbankregel scheitert.
+ * Test-Entität `test_water_entry` für Sync-Tests auf der Tabelle `water_entry`. Sie ist kein Teil des
+ * Transportkatalogs: Den echten Wassereintrag beschreibt `@abnehm/contracts/trackers`. Die Mengengrenze
+ * fehlt bewusst, damit Tests auch eine Nutzlast schicken können, die erst an der Datenbankregel scheitert.
  */
 export const TestWaterUpsert = z.strictObject({
   amountMl: z.int().positive(),

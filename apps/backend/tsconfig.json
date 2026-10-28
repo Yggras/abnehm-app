@@ -5,5 +5,5 @@
   },
   "include": ["src", "dev", "test", "*.ts"],
   // Prüft tsconfig.app-auth.json; diese Tests importieren App-Code.
-  "exclude": ["test/app-auth.test.ts", "test/sync-app.test.ts", "test/person-sync-app.test.ts", "test/online-app.test.ts", "test/seed-app.test.ts", "test/daily-goals-app.test.ts", "test/logout-app.test.ts", "test/partner-projections-app.test.ts", "test/uncoupling-app.test.ts", "test/seed-partner-app.test.ts"]
+  "exclude": ["test/app-auth.test.ts", "test/sync-app.test.ts", "test/person-sync-app.test.ts", "test/online-app.test.ts", "test/seed-app.test.ts", "test/daily-goals-app.test.ts", "test/logout-app.test.ts", "test/partner-projections-app.test.ts", "test/uncoupling-app.test.ts", "test/seed-partner-app.test.ts", "test/water-sync-app.test.ts"]
 }

@@ -22,6 +22,8 @@
     "./notification-texts": "./src/notification-texts.ts",
     "./ports": "./src/ports.ts",
     "./today": "./src/today.ts",
+    "./trackers": "./src/trackers.ts",
+    "./tracker-rules": "./src/tracker-rules.ts",
     "./onboarding": "./src/onboarding.ts",
     "./status": "./src/status.ts",
     "./sync": "./src/sync.ts",

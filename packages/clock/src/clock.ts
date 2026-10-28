@@ -2,11 +2,13 @@ import { TimeZone, type Instant, type LocalDate } from '@abnehm/contracts/base';
 
 import { readingAt } from './reading.ts';
 
-/** Eine Ablesung der Uhr: Zeitpunkt, Zone und lokaler Tag gehören zum selben Moment. */
+/** Eine Ablesung der Uhr: Zeitpunkt, Zone, lokaler Tag und Offset gehören zum selben Moment. */
 export type ClockReading = Readonly<{
   instant: Instant;
   timeZone: TimeZone;
   localDate: LocalDate;
+  /** Offset der Zone zu UTC in Minuten zu diesem Zeitpunkt, etwa 120 für Berlin im Sommer. */
+  utcOffsetMinutes: number;
 }>;
 
 /**

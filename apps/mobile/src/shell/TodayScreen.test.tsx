@@ -31,7 +31,7 @@ test('komponiert feste Reihenfolge mit Ernährung, drei Zielen und Mini-Trackern
   expect(slots).toEqual(['today-slot-header', 'today-slot-top_notice', 'today-slot-momo', 'today-slot-nutrition', 'today-slot-trackers', 'today-slot-partner']);
   expect(screen.getByText(/Philipp/)).toBeOnTheScreen();
   expect(screen.getByText(/Budgetvorschlag/)).toBeOnTheScreen();
-  expect(screen.getByText(/750 ml/)).toBeOnTheScreen();
+  expect(screen.getByRole('progressbar', { name: 'Wasser heute' })).toHaveAccessibilityValue({ min: 0, max: 1500, now: 750, text: '0,8 l von 1,5 l' });
 });
 
 test('fehlender Pflichtbeitrag hat im Development einen sichtbaren Platzhalter', async () => {

@@ -56,6 +56,11 @@ export type ButtonProps = PressState & {
   loading?: boolean;
   /** Volle Breite. */
   block?: boolean;
+  /**
+   * Schmaler Seitenabstand für die schmalen Spalten der Mini-Tracker: So passt „+250 ml“ auf dem
+   * iPhone SE einzeilig, wenn drei nebeneinander stehen (#171). Nur zusammen mit `block` sinnvoll.
+   */
+  dense?: boolean;
   /** Ausführlicher Name für Screenreader, wenn die Beschriftung allein nicht reicht. */
   accessibilityLabel?: string;
 };
@@ -70,6 +75,7 @@ export function Button({
   disabled = false,
   loading = false,
   block = false,
+  dense = false,
   accessibilityLabel,
   testOnly_pressed,
 }: ButtonProps) {
@@ -90,6 +96,7 @@ export function Button({
         { minHeight: visibleHeight },
         compact ? styles.compact : variant === 'text' ? styles.textPadding : styles.regularPadding,
         block && styles.block,
+        dense && styles.dense,
         lookStyle(lookFor(pressed)),
       ]}
     >
@@ -168,6 +175,7 @@ const styles = StyleSheet.create({
   compact: { paddingHorizontal: space[4] },
   textPadding: { paddingHorizontal: space[3] },
   block: { alignSelf: 'stretch' },
+  dense: { paddingHorizontal: space[1] },
   content: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   label: { textAlign: 'center', flexShrink: 1 },
   hidden: { opacity: 0 },

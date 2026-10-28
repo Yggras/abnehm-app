@@ -168,6 +168,34 @@ export function clockConformanceCases(createHarness: ClockHarnessFactory): Clock
       },
     },
     {
+      name: 'liefert den Offset der Zone zum abgelesenen Zeitpunkt',
+      run: () => {
+        const offsets: ReadonlyArray<readonly [instant: string, timeZone: string, utcOffsetMinutes: number]> = [
+          ['2026-10-14T12:00:00.000Z', 'Europe/Berlin', 120],
+          ['2026-12-14T12:00:00.000Z', 'Europe/Berlin', 60],
+          // Sommerzeitende: dieselbe lokale Stunde erst mit +2, dann mit +1.
+          ['2026-10-25T00:30:00.000Z', 'Europe/Berlin', 120],
+          ['2026-10-25T01:30:00.000Z', 'Europe/Berlin', 60],
+          ['2026-10-14T12:00:00.000Z', 'America/New_York', -240],
+          ['2026-10-14T12:00:00.000Z', 'Asia/Kolkata', 330],
+          ['2026-10-14T12:00:00.000Z', 'Asia/Kathmandu', 345],
+          ['2026-10-14T10:00:00.000Z', 'Pacific/Kiritimati', 840],
+          ['2026-10-14T10:00:00.000Z', 'Pacific/Pago_Pago', -660],
+          ['2026-10-14T12:00:00.000Z', 'UTC', 0],
+        ];
+        for (const [instant, timeZone, utcOffsetMinutes] of offsets) {
+          const reading = start(instant, timeZone).clock.read();
+          check(
+            reading.utcOffsetMinutes === utcOffsetMinutes,
+            `${timeZone} um ${instant}: erwartet ${utcOffsetMinutes} min, gelesen ${reading.utcOffsetMinutes}`,
+          );
+        }
+        // Eine andere Zone liefert ihren eigenen Offset aus derselben Ablesung.
+        const other = start('2026-10-14T10:00:00.000Z', 'Europe/Berlin').clock.read(TimeZone.parse('Asia/Kolkata'));
+        check(other.utcOffsetMinutes === 330, `Asia/Kolkata über read(zone): gelesen ${other.utcOffsetMinutes}`);
+      },
+    },
+    {
       name: 'lehnt eine ungültige Zone beim Ablesen ab',
       run: () => {
         const harness = start('2026-10-14T12:00:00.000Z', 'Europe/Berlin');

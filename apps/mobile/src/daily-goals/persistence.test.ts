@@ -267,7 +267,7 @@ describe('Pull-Übernahme', () => {
     world.facts.set(anna, yesterday, { countedMl: 1500 });
     world.database.transaction((tx) =>
       world.persistence.onCanonicalChanges(tx, [
-        { entityType: 'water_entry', entityId: anna, type: 'record', days: [{ type: 'tag', personId: anna, localDate: yesterday }, { type: 'tag', personId: anna, localDate: today }] },
+        { entityType: 'test_water_entry', entityId: anna, type: 'record', days: [{ type: 'tag', personId: anna, localDate: yesterday }, { type: 'tag', personId: anna, localDate: today }] },
         { entityType: 'goal_version', entityId: anna, type: 'record', days: [{ type: 'plan', personId: anna, validFrom: LocalDate.parse('2026-10-01') }] },
       ]),
     );

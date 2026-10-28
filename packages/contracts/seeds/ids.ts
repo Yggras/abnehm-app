@@ -33,7 +33,11 @@ export const seedIds = {
     philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
     annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
   },
-  waterEntry: { philippHeute: [id('0020', 1), id('0020', 2)], annaHeute: [id('0020', 3), id('0020', 4)] },
+  // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171); 0020/3–4 gehören Anna (#117).
+  waterEntry: {
+    philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
+    annaHeute: [id('0020', 3), id('0020', 4)],
+  },
   weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2), annaGestern: id('0021', 3) },
   sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
   nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2) },

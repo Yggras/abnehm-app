@@ -4,6 +4,7 @@ import {
   buildSeedState,
   SeedManifest,
   seedClock,
+  seedDays,
   seedIds,
   seedManifests,
   seedPassword,
@@ -14,10 +15,12 @@ import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
 import { PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
+import { countedWaterMl, trackerStatus } from '../src/tracker-rules.ts';
 
 // Nachweis für #112 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
-// Partner-Szenarien `gekoppelt` und `nach_entkopplung`. Dass Server und Geräte die Manifeste tatsächlich
-// so herstellen und erreichen, prüft `apps/backend/test/seed-partner-app.test.ts`.
+// Partner-Szenarien `gekoppelt` und `nach_entkopplung`; für #171 die Wassereinträge von solo und seine
+// Varianten je Status des Wasser-Mini-Trackers. Dass Server und Geräte die Manifeste tatsächlich so
+// herstellen und erreichen, prüft `apps/backend/test/seed-partner-app.test.ts`.
 
 const solo = seedManifests.solo;
 const philipp = seedIds.person.philipp;
@@ -50,7 +53,29 @@ describe('Seed-Manifest', () => {
   it('schreibt das Änderungsprotokoll nur für beim Sync angemeldete Entitäten', () => {
     expect(solo.initial.server.change_log).toEqual([
       expect.objectContaining({ entity_type: 'person', entity_id: philipp, owner_person_id: philipp, operation: 'upsert' }),
+      ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
+        expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
+  });
+
+  it.each([
+    ['solo', 1250, 'teil'],
+    ['solo-wasser-leer', 0, 'leer'],
+    ['solo-wasser-erreicht', 2500, 'erreicht'],
+    ['solo-wasser-ueber-ziel', 2750, 'ueber_ziel'],
+  ] as const)('%s: heute %s ml Wasser ohne Importe, Mini-Tracker %s', (scenario, ml, status) => {
+    const { server, devices } = seedManifests[scenario].initial;
+    const entries = (server.water_entry ?? []).map((row) => ({ amountMl: Number(row.amount_ml), localDate: String(row.local_date), deletedAt: null }));
+    const target = Number(server.goal_version?.[0]?.water_target_ml);
+
+    expect(countedWaterMl(entries, seedDays.heute)).toBe(ml);
+    expect(trackerStatus(ml, target)).toBe(status);
+    expect((server.water_entry ?? []).every((row) => row.origin === 'manuell')).toBe(true);
+    expect(devices['philipp-iphone']!.rows.water_entry ?? []).toEqual(server.water_entry ?? []);
+    // Nur das Wasser unterscheidet die Varianten von solo.
+    const tablesBesideWater = (rows: object) => Object.keys(rows).filter((table) => !['water_entry', 'change_log', 'sync_clock'].includes(table)).sort();
+    expect(tablesBesideWater(server)).toEqual(tablesBesideWater(solo.initial.server));
+    expect(server.goal_version).toEqual(solo.initial.server.goal_version);
   });
 
   it('solo: fertige Person ohne Kopplung und ohne Insel, mit Zielen, Wochenplan, drei Tageszielen und eigenen Daten', () => {

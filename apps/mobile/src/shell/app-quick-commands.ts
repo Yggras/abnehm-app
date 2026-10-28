@@ -1,14 +1,9 @@
-import { createQuickCommandRegistry, type QuickCommandHandlers } from './quick-commands';
+import { createQuickCommandRegistry } from './quick-commands';
 
 /**
- * Handler der Bereiche je `commandKey` aus dem festen Katalog. Spezifikation 3 trägt hier den
- * Handler für `water.quick_add` ein; bis dahin zeigt der Development Build einen Platzhalter-Hinweis.
+ * Registry der App. Die App-Sitzung meldet jede geöffnete Kontodatenbank samt den Handlern ihrer
+ * Bereiche mit `opened` an (`src/session/device-session.ts`); Spezifikation 3 liefert dort den
+ * Handler für `water.quick_add` aus dem Tracker-Modul. Fehlt ein Handler, zeigt ein Test-Artefakt
+ * einen Platzhalter-Hinweis; im Release ist das ein Integrationsfehler.
  */
-const handlers: QuickCommandHandlers = {};
-
-/**
- * Registry der App. Sie bucht in der geöffneten Kontodatenbank (`LocalDatabases.current`); die
- * reicht das Auth-Modul herein, das Konten öffnet und sperrt
- * ([#97](https://github.com/Yggras/abnehm-app/issues/97)). Bis dahin ist keine geöffnet.
- */
-export const appQuickCommands = createQuickCommandRegistry(() => null, handlers);
+export const appQuickCommands = createQuickCommandRegistry();

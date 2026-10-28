@@ -22,12 +22,13 @@ import { call, type Device, type Reply } from './auth-client.ts';
 import type { TestBackend } from './app.ts';
 import { httpOutcome, type Outcome } from './authorization.ts';
 
-// Sync-Hilfen für Integrationstests (#99): die Test-Entität auf `water_entry` und Aufrufe von Push und
-// Pull über die echte Hono-App. Den echten Wassereintrag meldet Spezifikation 3 an.
+// Sync-Hilfen für Integrationstests (#99): die Test-Entität `test_water_entry` auf der Tabelle
+// `water_entry` und Aufrufe von Push und Pull über die echte Hono-App. Den echten Wassereintrag
+// (`water_entry`) meldet `createBackend` an (#171); der eigene Typ hält beide im Sync auseinander.
 
 /** Serverseite der Test-Entität; nur in Tests angemeldet. */
 export const testWaterEntity = ownedEntity({
-  entityType: 'water_entry',
+  entityType: 'test_water_entry',
   resource: 'water_entry',
   table: waterEntry,
   upsert: TestWaterUpsert,
@@ -66,9 +67,9 @@ export const testWaterCommand: ServerCommand = {
     return values;
   },
   duplicate(operation, original) {
-    const record = original.changes?.find((change) => change.type === 'record' && change.entityType === 'water_entry');
+    const record = original.changes?.find((change) => change.type === 'record' && change.entityType === 'test_water_entry');
     if (record === undefined) throw new Error('Kanonischer Datensatz des Fachbefehls fehlt');
-    return [{ entityType: 'water_entry', from: EntityId.parse(operation.payload.localId), to: record.entityId }];
+    return [{ entityType: 'test_water_entry', from: EntityId.parse(operation.payload.localId), to: record.entityId }];
   },
   async execute(tx, { actor, payload, at }) {
     const values = TestGoalCommand.parse(payload);
@@ -77,13 +78,13 @@ export const testWaterCommand: ServerCommand = {
     const serverVersion = await nextServerVersion(tx);
     await testWaterEntity.write(tx, { entityId: values.localId, ownerPersonId: actor.personId, payload: values,
       exists: false, serverVersion, at });
-    await recordChange(tx, { position: serverVersion, entityType: 'water_entry', entityId: values.localId,
+    await recordChange(tx, { position: serverVersion, entityType: 'test_water_entry', entityId: values.localId,
       operation: 'upsert', ownerPersonId: actor.personId, createdAt: at });
     const stored = (await testWaterEntity.read(tx, [values.localId])).get(values.localId);
     if (stored === undefined) throw new Error('Fachbefehl lieferte keine Zeile');
-    return { changes: [{ type: 'record', entityType: 'water_entry', entityId: values.localId,
+    return { changes: [{ type: 'record', entityType: 'test_water_entry', entityId: values.localId,
       serverVersion: ServerVersion.parse(serverVersion.toString()), data: stored.data }],
-      idMappings: [{ entityType: 'water_entry', from: values.localId, to: values.localId }] };
+      idMappings: [{ entityType: 'test_water_entry', from: values.localId, to: values.localId }] };
   },
 };
 
@@ -130,7 +131,7 @@ export function upsertOp(
   return {
     type: 'upsert_entity',
     operationId: EntityId.parse(options.operationId ?? randomUUID()),
-    entityType: options.entityType ?? 'water_entry',
+    entityType: options.entityType ?? 'test_water_entry',
     entityId: EntityId.parse(entityId),
     payload,
     knownServerVersion: options.knownServerVersion == null ? null : ServerVersion.parse(options.knownServerVersion),

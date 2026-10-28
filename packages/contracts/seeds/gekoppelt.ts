@@ -157,6 +157,8 @@ const tracker: SeedPart = {
       { id: seedIds.waterEntry.annaHeute[1], amount: 800, at: '2026-10-14T11:30:00.000Z' },
     ].map(({ id, amount, at }) => ({
       table: 'water_entry',
+      // Seit #171 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+      entityType: 'water_entry',
       ownerPersonId: anna,
       row: { id, person_id: anna, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
     })),
@@ -496,7 +498,8 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
-  revision: 1,
+  // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll.
+  revision: 2,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

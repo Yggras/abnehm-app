@@ -10,13 +10,16 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
-import { createDeviceLocalDatabases } from '../local-db';
+import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { createDeviceInvitationFlows } from '../online';
-import { appTodayRegistry, followTodayPerson } from '../shell/app-today';
+import { appQuickCommands } from '../shell/app-quick-commands';
+import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
+import { todayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
+import { createTrackers, waterEntryEntity, type Refresh } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -33,7 +36,25 @@ const onError = (error: unknown) => console.error('[sitzung]', error);
 const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
-const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
+const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
+/**
+ * Wasserziel für den Mini-Tracker. Bis Spezifikation 1 ihren `PlanReader` anmeldet, gibt es ihn nur in
+ * Test-Artefakten als Attrappe aus den Seed-Manifesten (Nutzerentscheidung vom 28.10.2026 in #171); im
+ * Release fehlt `trackers.water` dann wie die übrigen Beiträge der Bereiche, und das ist dort ein
+ * Integrationsfehler. Der echte `PlanReader` ersetzt die Attrappe hier auch in Test-Artefakten.
+ */
+const waterToday = testCapabilities === null
+  ? null
+  : { planReader: testCapabilities.planReader, opened: followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water') };
+/** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
+const refreshToday: Refresh = (update) => {
+  const stopTicks = todayRefresh(update);
+  const stopClock = testCapabilities?.clock.subscribe(update);
+  return () => {
+    stopTicks();
+    stopClock?.();
+  };
+};
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 let activeEngine: SyncEngine | null = null;
 let backgroundOpening = false;
@@ -71,6 +92,8 @@ function deviceState() {
       const persistence = createDailyGoalPersistence({
         registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock: appClock, writer: syncWriter, dispatcher,
       });
+      // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add` und Beitrag `trackers.water`.
+      const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
@@ -78,7 +101,11 @@ function deviceState() {
       });
       activeEngine = engine;
       void dispatcher.deliver();
-      const stops = [todayPersonOpened(database), timeZone.opened(database), gate?.opened(database)];
+      const stops = [
+        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
+        appQuickCommands.opened(database, trackers.quickCommands),
+        waterToday?.opened(trackers.waterToday(waterToday.planReader, refreshToday)),
+      ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);
       const statusTimer = setInterval(publishStatus, 60_000);

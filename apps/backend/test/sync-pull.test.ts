@@ -31,7 +31,7 @@ describe('Pull', () => {
     await push(backend, anna.device, [upsertOp(a, water(250)), upsertOp(b, water(300))]);
 
     const full = await pullAll(backend, anna.device);
-    expect(ids(full.changes)).toEqual([`person:${anna.personId}`, `water_entry:${a}`, `water_entry:${b}`]);
+    expect(ids(full.changes)).toEqual([`person:${anna.personId}`, `test_water_entry:${a}`, `test_water_entry:${b}`]);
     expect(full.changes[0]).toMatchObject({ type: 'record', data: { displayName: 'Anna', timeZone: 'Europe/Berlin', accountId: anna.accountId } });
 
     await push(backend, anna.device, [upsertOp(a, water(400)), deleteOp(b)]);
@@ -70,7 +70,7 @@ describe('Pull', () => {
     }
     expect(pages).toBe(3);
     // Der geänderte Eintrag liegt jetzt oberhalb der Obergrenze und kommt nicht in seinem alten Stand.
-    expect(ids(changes)).toEqual([`person:${anna.personId}`, ...entries.slice(0, 4).map((id) => `water_entry:${id}`)]);
+    expect(ids(changes)).toEqual([`person:${anna.personId}`, ...entries.slice(0, 4).map((id) => `test_water_entry:${id}`)]);
     if (next.type !== 'complete') throw new Error('Pull nicht abgeschlossen');
 
     const following = await pullAll(backend, anna.device, next.cursor);
@@ -134,11 +134,11 @@ describe('Pull', () => {
       const position = await nextServerVersion(tx);
       const at = new Date(context.now);
       await testWaterEntity.write(tx, { entityId: stepEntry, payload: water(150), ownerPersonId: context.personId, exists: false, serverVersion: position, at });
-      await recordChange(tx, { position, entityType: 'water_entry', entityId: stepEntry, operation: 'upsert', ownerPersonId: context.personId, createdAt: at });
+      await recordChange(tx, { position, entityType: 'test_water_entry', entityId: stepEntry, operation: 'upsert', ownerPersonId: context.personId, createdAt: at });
     });
 
     const pulled = await pullAll(backend, anna.device, cursor);
-    expect(ids(pulled.changes)).toEqual([`water_entry:${stepEntry}`]);
+    expect(ids(pulled.changes)).toEqual([`test_water_entry:${stepEntry}`]);
     expect(calls).toEqual([{ personId: anna.personId, now: expect.any(String) }]);
     expect((await pullAll(backend, anna.device, pulled.cursor)).changes).toEqual([]);
   });
@@ -152,7 +152,7 @@ describe('Pull', () => {
       const position = await nextServerVersion(tx);
       const at = new Date('2026-10-14T12:00:00.000Z');
       await testWaterEntity.write(tx, { entityId: EntityId.parse(id), payload: water(150), ownerPersonId: EntityId.parse(anna.personId), exists: false, serverVersion: position, at });
-      await recordChange(tx, { position, entityType: 'water_entry', entityId: id, operation: 'upsert', ownerPersonId: anna.personId, createdAt: at });
+      await recordChange(tx, { position, entityType: 'test_water_entry', entityId: id, operation: 'upsert', ownerPersonId: anna.personId, createdAt: at });
     });
     expect((await pullRaw(backend, anna.device)).status).toBe(503);
   });

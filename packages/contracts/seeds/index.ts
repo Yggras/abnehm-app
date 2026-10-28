@@ -1,7 +1,7 @@
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
-import { soloManifest } from './solo.ts';
+import { soloManifests } from './solo.ts';
 
 // Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Nur für Development- und Testartefakte:
 // Lint erlaubt `@abnehm/contracts/seeds` nur in Tests und in den registrierten Testfähigkeiten, das
@@ -33,7 +33,7 @@ export { uncoupledState, uncouplingRequestOf, type SeedUncouplingRequest } from 
 
 /** Alle Szenarien mit Manifest. */
 export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
-  solo: soloManifest,
+  ...soloManifests,
   gekoppelt: gekoppeltManifest,
   nach_entkopplung: nachEntkopplungManifest,
 };

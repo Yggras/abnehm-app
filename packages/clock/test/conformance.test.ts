@@ -58,6 +58,7 @@ describe('Testuhr', () => {
       instant: '2026-10-14T13:30:00.000Z',
       timeZone: 'Europe/Berlin',
       localDate: '2026-10-14',
+      utcOffsetMinutes: 120,
     });
     expect(clock.read()).toEqual(clock.read());
   });

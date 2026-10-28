@@ -2,10 +2,12 @@ import type { MessageKey, MessageValues } from '@abnehm/contracts/base';
 import type { QuickCommandKey, QuickCommandOutcome, TrackerQuickAction } from '@abnehm/contracts/today';
 
 import { LocalDatabaseClosedError, type LocalDatabase, type TransactionContext } from '../local-db';
+import { createUndoTokens, type UndoOutcome } from './undo-tokens';
 
-// Quick-Command-Registry der App-Shell (Spezifikation 0, Abschnitt 6): Bereiche registrieren je
-// `commandKey` aus dem festen Katalog einen Handler. Die Registry öffnet die lokale Transaktion,
-// bindet den flüchtigen Undo-Token an den erzeugenden Handler und löst ihn höchstens einmal ein.
+// Quick-Command-Registry der App-Shell (Spezifikation 0, Abschnitt 6): Bereiche liefern je
+// `commandKey` aus dem festen Katalog einen Handler, die App-Sitzung meldet sie mit der geöffneten
+// Kontodatenbank an. Die Registry öffnet die lokale Transaktion, bindet den flüchtigen Undo-Token an
+// den erzeugenden Handler und löst ihn höchstens einmal ein (`./undo-tokens`).
 
 /** Ein Quick-Command, wie ihn `TrackerQuickAction` und das ＋-Sheet auslösen. */
 export type QuickCommand = Extract<TrackerQuickAction, { type: 'command' }>;
@@ -33,12 +35,13 @@ export function quickCommandHandler<K extends QuickCommandKey, U>(handler: Quick
 export type QuickCommandHandlers = { readonly [K in QuickCommandKey]?: QuickCommandHandler<K> };
 
 /** Ergebnis von `undo`: rückgängig gemacht oder nichts zu tun, weil der Token nicht mehr gilt. */
-export type QuickCommandUndoOutcome = { type: 'undone' } | { type: 'noop' };
+export type QuickCommandUndoOutcome = UndoOutcome;
 
 export type QuickCommandRegistry = {
   /**
-   * Führt den Befehl in einer lokalen Transaktion der geöffneten Kontodatenbank aus. Wirft, wenn sie
-   * scheitert, keine Datenbank geöffnet ist (`LocalDatabaseClosedError`) oder der Handler fehlt.
+   * Führt den Befehl in einer lokalen Transaktion der geöffneten Kontodatenbank aus, mit dem Handler
+   * dieses Kontos. Wirft, wenn sie scheitert, keine Datenbank geöffnet ist (`LocalDatabaseClosedError`)
+   * oder der Handler fehlt.
    */
   execute(command: QuickCommand): QuickCommandOutcome;
   /**
@@ -49,6 +52,11 @@ export type QuickCommandRegistry = {
   undo(token: string): QuickCommandUndoOutcome;
   /** Beendet die Lebensdauer eines Tokens, sobald seine Meldung kein „Rückgängig“ mehr anbietet. */
   expire(token: string): void;
+  /**
+   * Die App-Sitzung meldet die geöffnete Kontodatenbank samt den Handlern ihrer Bereiche; die
+   * Rückgabe löst sie beim Sperren wieder. Ein später geöffnetes Konto löst das frühere ab.
+   */
+  opened(database: LocalDatabase, handlers: QuickCommandHandlers): () => void;
 };
 
 /** Für einen Quick-Command fehlt der Handler seines Bereichs. */
@@ -59,48 +67,33 @@ export class MissingQuickCommandError extends Error {
   }
 }
 
-type PendingUndo = { database: LocalDatabase; handler: QuickCommandHandler<QuickCommandKey>; undoData: unknown };
-
-// Fortlaufend über alle Registries, damit ein Token nie zu einer späteren Registry passt.
-let issuedTokens = 0;
+type OpenedAccount = Readonly<{ database: LocalDatabase; handlers: QuickCommandHandlers }>;
 
 /**
- * Registry über der jeweils geöffneten Kontodatenbank (`LocalDatabases.current`). Ein Token gehört
- * zu der Datenbank, in der er entstand, und lebt von `execute` bis `undo`, `expire` oder dem
- * Schließen dieser Datenbank, etwa bei `401` oder Kontowechsel.
+ * Registry über der jeweils geöffneten Kontodatenbank. Ein Token gehört zu der Datenbank, in der er
+ * entstand, und lebt von `execute` bis `undo`, `expire` oder dem Schließen dieser Datenbank.
  */
-export function createQuickCommandRegistry(
-  currentDatabase: () => LocalDatabase | null,
-  handlers: QuickCommandHandlers,
-): QuickCommandRegistry {
-  const pending = new Map<string, PendingUndo>();
+export function createQuickCommandRegistry(): QuickCommandRegistry {
+  const tokens = createUndoTokens();
+  let account: OpenedAccount | null = null;
 
   return {
     execute(command) {
-      const handler = handlers[command.commandKey];
+      const handler = account?.handlers[command.commandKey];
+      if (!account) throw new LocalDatabaseClosedError();
       if (!handler) throw new MissingQuickCommandError(command.commandKey);
-      const database = currentDatabase();
-      if (!database) throw new LocalDatabaseClosedError();
+      const { database } = account;
       const { messageKey, values, undoData } = database.transaction((tx) => handler.execute(tx, command.params));
-      const undoToken = `undo-${++issuedTokens}`;
-      pending.set(undoToken, { database, handler, undoData });
-      return { messageKey, values, undoToken };
+      return { messageKey, values, undoToken: tokens.issue(database, (tx) => handler.undo(tx, undoData)) };
     },
-    undo(token) {
-      const claimed = pending.get(token);
-      if (!claimed) return { type: 'noop' };
-      // Vor der Transaktion beansprucht: Ein zweiter Aufruf findet den Token nicht mehr.
-      pending.delete(token);
-      try {
-        claimed.database.transaction((tx) => claimed.handler.undo(tx, claimed.undoData));
-      } catch (error) {
-        if (error instanceof LocalDatabaseClosedError) return { type: 'noop' };
-        throw error;
-      }
-      return { type: 'undone' };
-    },
-    expire(token) {
-      pending.delete(token);
+    undo: (token) => tokens.undo(token),
+    expire: (token) => tokens.expire(token),
+    opened(database, handlers) {
+      const opened = { database, handlers };
+      account = opened;
+      return () => {
+        if (account === opened) account = null;
+      };
     },
   };
 }

@@ -15,8 +15,18 @@ import { InstallationId, OutboxOperation } from '../src/sync.ts';
 /** Version des Formats; ein inkompatibles Format zählt sie hoch. */
 export const seedFormatVersion = 1;
 
-/** Szenarien mit Manifest. Die übrigen aus Abschnitt 12 folgen in #113 und #116. */
-export const SeedScenarioKey = z.enum(['solo', 'gekoppelt', 'nach_entkopplung']);
+/**
+ * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
+ * Wasser-Mini-Trackers (#171). Die übrigen aus Abschnitt 12 folgen in #113 und #116.
+ */
+export const SeedScenarioKey = z.enum([
+  'solo',
+  'solo-wasser-leer',
+  'solo-wasser-erreicht',
+  'solo-wasser-ueber-ziel',
+  'gekoppelt',
+  'nach_entkopplung',
+]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 
 /** Pfad der Seed-Route des Development-Backends; nur dort gibt es sie. */

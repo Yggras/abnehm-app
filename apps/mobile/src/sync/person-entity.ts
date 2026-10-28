@@ -4,7 +4,7 @@ import { EntityId, type Instant, type ServerVersion } from '@abnehm/contracts/ba
 import { PersonRecord, PersonUpsert } from '@abnehm/contracts/person';
 
 import type { TransactionContext } from '../local-db';
-import { readOwnPerson } from '../local-db/person-header';
+import { requireOwnPerson } from '../local-db/person-header';
 import { person } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { SyncWriter } from './outbox';
@@ -37,8 +37,7 @@ export type PersonChange = Partial<Omit<PersonUpsert, 'id'>>;
  * nur `updatePersonTimeZone`. Vor dem ersten Pull gibt es keine Person, das ist ein Aufruffehler.
  */
 export function updateOwnPerson(tx: TransactionContext, writer: SyncWriter, change: PersonChange, at: Instant): PersonUpsert {
-  const row = readOwnPerson(tx);
-  if (row === undefined) throw new Error('Die eigene Person ist lokal noch nicht angekommen');
+  const row = requireOwnPerson(tx);
   // Die Spalten tragen dieselben Namen wie die Upsert-Felder; das Schema prüft die Werte der Zeile.
   const payload = PersonUpsert.parse({ id: row.id, ...personFields(row as unknown as PersonUpsert), ...change });
   sqliteOf(tx).update(person).set({ ...personFields(payload), updatedAt: at }).where(eq(person.id, row.id)).run();

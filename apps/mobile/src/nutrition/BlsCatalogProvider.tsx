@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 
-import { CatalogProvider, useCatalogDatabase, type BundledCatalog } from '../local-db';
+import type { BundledCatalog } from '../local-db';
+import { CatalogProvider, useCatalogDatabase } from '../local-db/CatalogProvider';
 import { blsCatalogVersion } from './bls-catalog-version';
 import { createFoodSearch, type FoodSearch } from './food-search';
 

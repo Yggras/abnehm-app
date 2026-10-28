@@ -29,6 +29,14 @@ export const TimeZone = z
   .brand<'TimeZone'>();
 export type TimeZone = z.infer<typeof TimeZone>;
 
+/**
+ * Offset einer Zone zu UTC in ganzen Minuten, wie er beim Anlegen eines tagesbezogenen Eintrags galt
+ * (Spezifikation 0, Abschnitt 8). Heutige Zonen liegen zwischen −12 und +14 Stunden
+ * (https://www.iana.org/time-zones, Zonen `Etc/GMT+12` und `Pacific/Kiritimati`).
+ */
+export const UtcOffsetMinutes = z.int().min(-12 * 60).max(14 * 60);
+export type UtcOffsetMinutes = z.infer<typeof UtcOffsetMinutes>;
+
 // Nur bekannte Zonen werden gemerkt: Davon gibt es wenige Hundert, von unbekannten Eingaben beliebig viele.
 const knownTimeZones = new Set<string>();
 

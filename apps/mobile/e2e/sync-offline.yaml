@@ -11,8 +11,9 @@
 # ändert sie erst mit dem kanonischen Ergebnis. Solange die Operation offen ist, bleibt die Zone der
 # Person Europe/Berlin; danach zeigt der Kopf den Tag in Kiritimati: Nach 25 Stunden ist es dort schon
 # Freitag, 16.10., in Berlin erst Donnerstag.
-# Sobald Spezifikation 3 `water.quick_add` liefert, kommt „+250 ml Wasser“ im ＋-Sheet als zweite
-# lokale Änderung dazu.
+# Zweite lokale Änderung (#171): „+250 ml Wasser“ im ＋-Sheet bucht über `water.quick_add` auf den
+# Freitag in Kiritimati. Nach der Netzrückkehr zählt der Mini-Tracker den kanonischen Eintrag weiter
+# auf diesen Tag; das Wasserziel (2,5 l) liefert im E2E-Build die PlanReader-Attrappe.
 appId: ${APP_ID}
 name: Sync ohne Netz und kanonischer Sync
 ---
@@ -76,6 +77,18 @@ name: Sync ohne Netz und kanonischer Sync
     visible: "Noch nicht gesichert – verbinde dich mit dem Internet"
     timeout: 15000
 - takeScreenshot: nicht-gesichert
+- tapOn:
+    id: tab-capture
+- tapOn: "\\+250 ml Wasser"
+- assertVisible: "Rückgängig"
+- scrollUntilVisible:
+    element:
+      text: "Wasser: 0,3 l von 2,5 l.*"
+- takeScreenshot: wasser-offline
+- scrollUntilVisible:
+    element:
+      text: "Hallo, Philipp"
+    direction: UP
 
 # Transport zurück und kanonischer Sync -------------------------------------------------------------
 - runFlow:
@@ -96,3 +109,7 @@ name: Sync ohne Netz und kanonischer Sync
     timeout: 90000
 - assertNotVisible: "Noch nicht gesichert – verbinde dich mit dem Internet"
 - takeScreenshot: gesichert
+- scrollUntilVisible:
+    element:
+      text: "Wasser: 0,3 l von 2,5 l.*"
+- takeScreenshot: wasser-gesichert

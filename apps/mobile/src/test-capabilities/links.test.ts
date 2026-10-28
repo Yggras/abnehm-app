@@ -90,7 +90,7 @@ describe('Eingang der Testfähigkeiten', () => {
     clock.fix({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
     const inbox = inboxWith({ clock });
     inbox.receive({ type: 'uhr', adjustment: { advanceHours: 25, timeZone: TimeZone.parse('Pacific/Kiritimati') } });
-    expect(inbox.status()).toEqual({ type: 'uhr_gestellt', reading: { instant: '2026-10-15T13:00:00.000Z', timeZone: 'Pacific/Kiritimati', localDate: '2026-10-16' } });
+    expect(inbox.status()).toEqual({ type: 'uhr_gestellt', reading: { instant: '2026-10-15T13:00:00.000Z', timeZone: 'Pacific/Kiritimati', localDate: '2026-10-16', utcOffsetMinutes: 840 } });
   });
 
   it('führt die On-Device-Suite je Link genau einmal und nacheinander aus', async () => {

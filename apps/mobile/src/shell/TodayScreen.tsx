@@ -4,12 +4,13 @@ import type { UiActionIntent } from '@abnehm/contracts/routes';
 import type { EncouragementKey } from '@abnehm/contracts/partner';
 import type {
   HeaderReady, MomoCharacterReady, MomoDailyGoalsReady, NutritionBudgetReady, NutritionLogReady,
-  PartnerCardReady, TopNoticeReady, TrackerSportReady, TrackerWaterReady, TrackerWeightReady, TrackerQuickAction,
+  MomoCharacterEmptyReason, PartnerCardReady, TopNoticeReady, TrackerEmptyReason, TrackerSportReady, TrackerWaterReady,
+  TrackerWeightReady, TrackerQuickAction,
 } from '@abnehm/contracts/today';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Button, Card, color, EnergySymbol, Icon, IconButton, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
+import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
@@ -28,6 +29,23 @@ const names: Record<TodaySlot, string> = {
   'trackers.sport': 'Sport', 'trackers.weight': 'Gewicht', partner: 'Partner',
 };
 function action(intent: UiActionIntent) { openTarget(intent.target); }
+/** Texte der festgelegten Leer-Gründe; ein anderer Grund zeigt den allgemeinen Satz. */
+const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason | 'noch_keine_eintraege', string>> = {
+  momo_wartet_im_ei: 'Momo wartet im Ei',
+  rollenwahl_offen: 'Momo wartet auf eure Rollenwahl',
+  noch_keine_eintraege: 'Noch keine Einträge',
+  // Mini-Tracker Wasser und Sport ohne gültige Zielversion (Spezifikation 3, Abschnitt 7).
+  ohne_zielversion: 'Noch kein Ziel festgelegt.',
+};
+const emptyTextOf = (reasonKey: string) => (emptyTexts as Readonly<Record<string, string>>)[reasonKey] ?? 'Hier gibt es noch nichts zu zeigen.';
+/**
+ * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg oder ml als l; umgerechnet
+ * nur an der Oberfläche (Spezifikation 3, Abschnitt 1). Gerundet wird hier kaufmännisch: Hermes
+ * zeigte für 250 ml im iOS-Simulator „0,2 l“, Node „0,3 l“ (beobachtet am 28.10.2026, #171).
+ */
+function thousandthsWithOneDecimal(value: number): string {
+  return (Math.round(value / 100) / 10).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
 function staleLabel(dataAsOf: Instant): string {
   const [date, time] = dataAsOf.split('T');
   return `Stand: ${date!.split('-').reverse().join('.')} · ${time!.slice(0, 5)} UTC`;
@@ -61,7 +79,7 @@ function StateView<K extends TodaySlot>({ state, slot, children }: {
     case 'ready': return <>{children(state.data as Data<TodayState<K>>)}</>;
     case 'stale': return <View style={styles.group}><Text tone="inkMuted">{staleLabel(state.dataAsOf)}</Text>{children(state.data as Data<TodayState<K>>)}</View>;
     case 'empty': return <View style={styles.group}>
-      <Text>{state.reasonKey === 'momo_wartet_im_ei' ? 'Momo wartet im Ei' : state.reasonKey === 'rollenwahl_offen' ? 'Momo wartet auf eure Rollenwahl' : state.reasonKey === 'noch_keine_eintraege' ? 'Noch keine Einträge' : 'Hier gibt es noch nichts zu zeigen.'}</Text>
+      <Text>{emptyTextOf(state.reasonKey)}</Text>
       {state.action ? <Button variant="secondary" label="Jetzt öffnen" onPress={() => action(state.action!)} /> : null}
     </View>;
     case 'error': return <View style={styles.group}><Text>{names[slot]} ist gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => action(state.retryAction!)} /> : null}</View>;
@@ -131,20 +149,33 @@ function Nutrition({ budget, log, stale }: { budget: NutritionBudgetReady; log: 
   </Card>;
 }
 
-function Tracker({ label, value, status, detail, quick, quickLabel }: {
+/**
+ * Mini-Tracker: eigene, dichte Fläche (radius-md wie im Design-System, Innenabstand space-3), damit
+ * drei nebeneinander auch auf dem iPhone SE ohne Umbruch mitten im Wort passen. Die Fläche öffnet die
+ * Details, der Knopf navigiert oder bucht als Quick-Command ohne Navigation. Mit `progress` zeigt ein
+ * Balken den Fortschritt; er liegt außerhalb der Fläche, damit Screenreader ihn als eigene
+ * Fortschrittsanzeige erreichen, und der Status sagt „erreicht“ in Worten.
+ */
+function Tracker({ label, value, of, status, detail, quick, quickLabel, progress }: {
   label: string; value: string; status: string; detail: UiActionIntent; quick: TrackerQuickAction; quickLabel: string;
+  /** Bezug des Werts, etwa „von 2,5 l“. */
+  of?: string;
+  progress?: { value: number; target: number };
 }) {
   const runCommand = useQuickCommand();
-  return <Card>
-    <View style={styles.tracker}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}, ${status}. Details öffnen`}
-        style={styles.trackerDetail} onPress={() => action(detail)}>
-        <Text variant="headline">{label}</Text><Text variant="numberM">{value}</Text><Text tone="inkMuted">{status}</Text>
-      </Pressable>
-      <Button compact variant="secondary" label={quickLabel} accessibilityLabel={`${label}: ${quickLabel}`}
-        onPress={() => quick.type === 'navigate' ? action(quick.intent) : runCommand(quick)} />
-    </View>
-  </Card>;
+  const valueText = of ? `${value} ${of}` : value;
+  return <View style={styles.tracker}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${valueText}, ${status}. Details öffnen`}
+      style={styles.trackerDetail} onPress={() => action(detail)}>
+      <Text variant="headline">{label}</Text>
+      <Text variant="numberM">{value}</Text>
+      {of ? <Text variant="caption" tone="inkMuted">{of}</Text> : null}
+    </Pressable>
+    {progress ? <ProgressBar label={`${label} heute`} value={progress.value} target={progress.target} valueText={valueText} legend={false} /> : null}
+    <Text variant="label" tone="inkMuted">{status}</Text>
+    <Button compact block dense variant="secondary" label={quickLabel} accessibilityLabel={`${label}: ${quickLabel}`}
+      onPress={() => quick.type === 'navigate' ? action(quick.intent) : runCommand(quick)} />
+  </View>;
 }
 
 function Partner({ data }: { data: PartnerCardReady }) {
@@ -178,9 +209,9 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
     <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b, stale) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} stale={stale} />}</CardPair></View>
     <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b, stale) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} stale={stale} />}</CardPair></View>
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${d.countedMl.toLocaleString('de-DE')} ml / ${d.targetMl.toLocaleString('de-DE')} ml`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} l`} of={`von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${(d.value.weightG / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>
   </View>;
@@ -213,5 +244,6 @@ const styles = StyleSheet.create({
   trackerColumn: { flex: 1, minWidth: 0 },
   levelbar: { flexDirection: 'row', height: size.levelbarHeight, borderRadius: size.levelbarHeight / 2, overflow: 'hidden', backgroundColor: color.surfaceSunken },
   levelHalf: { flex: 1 }, ownFill: { height: '100%', backgroundColor: color.self }, partnerFill: { height: '100%', alignSelf: 'flex-end', backgroundColor: color.partner },
-  tracker: { gap: space[2], alignItems: 'flex-start' }, trackerDetail: { minHeight: size.touchMin, minWidth: size.touchMin, gap: space[1] },
+  tracker: { gap: space[2], padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceCard, boxShadow: boxShadow.card },
+  trackerDetail: { minHeight: size.touchMin, minWidth: size.touchMin, gap: space[1] },
 });

@@ -35,13 +35,13 @@ jest.mock('./app-quick-commands', () => {
   const { createQuickCommandRegistry } = jest.requireActual<typeof quickCommands>('./quick-commands');
   const tx = { afterCommit() {} };
   const database = { accountId: 'konto_a', transaction: (work: (context: unknown) => unknown) => work(tx) };
-  return {
-    appQuickCommands: createQuickCommandRegistry(() => database as never, {
-      get 'water.quick_add'() {
-        return mockQuickCommands.handler;
-      },
-    }),
-  };
+  const appQuickCommands = createQuickCommandRegistry();
+  appQuickCommands.opened(database as never, {
+    get 'water.quick_add'() {
+      return mockQuickCommands.handler;
+    },
+  });
+  return { appQuickCommands };
 });
 jest.mock('./message-texts', () => {
   const actual = jest.requireActual<typeof MessageTextsModule>('./message-texts');
@@ -462,7 +462,7 @@ describe('Schriftfaktor 2,0', () => {
   test('Heute-Vorschau stapelt Momo und Mini-Tracker, deren getrennte Aktionen bedienbar bleiben', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
-    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 750 ml / 1.500 ml, Unterwegs. Details öffnen'];
+    const controls = ['Wasser: +250 ml', 'Sport: + Einheit', 'Gewicht: Eintragen', 'Wasser: 0,8 l von 1,5 l, Unterwegs. Details öffnen'];
     for (const name of controls) {
       const control = screen.getByRole('button', { name });
       const area = hitArea(control);

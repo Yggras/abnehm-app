@@ -39,17 +39,17 @@ import {
   setPartnerSharing,
 } from '../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
+import { waterEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { dumpServer, seedServer } from '../dev/seed/server-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
-import { partnerSummary, revocationNotice, waterEntry } from '../src/db/schema/index.ts';
-import { nextServerVersion } from '../src/sync/change-log.ts';
+import { partnerSummary, revocationNotice } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { signIn, type Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
 import { coupleByInvitation } from './support/coupled-world.ts';
 import { completeOp } from './support/daily-goals.ts';
 import { uncoupleAs } from './support/shared-actions.ts';
-import { push } from './support/sync.ts';
+import { push, upsertOp } from './support/sync.ts';
 
 // Nachweis für #117: die Partner-Szenarien `gekoppelt` und `nach_entkopplung` (Spezifikation 0,
 // Abschnitt 12) auf Postgres und auf beiden Geräten, deren Engine und Adapter auf echtem SQLite
@@ -67,7 +67,7 @@ afterEach(() => {
 });
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
-const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
+const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
 
 type Phone = Readonly<{
   device: Device;
@@ -186,8 +186,9 @@ describe('Szenario gekoppelt', () => {
 
   it('ein vollständiger Pull ergibt genau den geseedeten Gerätezustand: Sichtbarkeit und Partnercache passen zum Server', async () => {
     const world = await seeded(gekoppelt);
-    // Was der Sync heute überträgt: Entitäten mit Eintrag im Änderungsprotokoll. Tagesziele, Einträge und Fotos
-    // melden erst die Spezifikationen 1–3 an; die behält das Gerät samt eigener Person, an der sie hängen.
+    // Was der Sync heute überträgt: Entitäten mit Eintrag im Änderungsprotokoll, seit #171 auch Wassereinträge.
+    // Tagesziele, Sport-, Gewichts- und Ernährungseinträge sowie Fotos melden erst die Spezifikationen 1–3 an;
+    // die behält das Gerät samt eigener Person, an der sie hängen.
     const synced = new Set(gekoppelt.initial.server.change_log!.map((entry) => String(entry.entity_type)));
     synced.delete('person');
 
@@ -267,25 +268,15 @@ describe('Szenario gekoppelt', () => {
     const anna = phones['anna-android']!;
     const philipp = EntityId.parse(seedIds.person.philipp);
     const heute = LocalDate.parse('2026-10-14');
-    // 1250 ml zu den geseedeten 1250 ml. Den Wassereintrag synchronisiert erst Spezifikation 3; bis dahin direkt in Postgres.
-    await backend.database.db.transaction(async (tx) =>
-      tx.insert(waterEntry).values({
-        id: randomUUID(),
-        personId: philipp,
-        amountMl: 1_250,
-        origin: 'manuell',
-        loggedAt: new Date('2026-10-14T11:45:00.000Z'),
-        localDate: heute,
-        timeZone: 'Europe/Berlin',
-        utcOffsetMinutes: 120,
-        createdAt: new Date('2026-10-14T11:45:00.000Z'),
-        updatedAt: new Date('2026-10-14T11:45:00.000Z'),
-        serverVersion: await nextServerVersion(tx),
-      }),
-    );
+    // 1250 ml zu den geseedeten 1250 ml, per Push wie vom Gerät (Wassereintrag seit #171 beim Sync angemeldet).
+    const drink = { amountMl: 1_250, origin: 'manuell', loggedAt: '2026-10-14T11:45:00.000Z', localDate: heute, timeZone: 'Europe/Berlin', utcOffsetMinutes: 120 };
     const water = { id: EntityId.parse(seedIds.dailyGoal.philippHeute[1]), personId: philipp, localDate: heute, slot: 2, baustein: 'wasserziel' } as const;
 
-    expect((await push(backend, phones['philipp-iphone']!.device, [completeOp(water, { completedAt: '2026-10-14T11:50:00.000Z' })]))[0]?.type).toBe('applied');
+    const results = await push(backend, phones['philipp-iphone']!.device, [
+      upsertOp(randomUUID(), drink, { entityType: 'water_entry' }),
+      completeOp(water, { completedAt: '2026-10-14T11:50:00.000Z' }),
+    ]);
+    expect(results.map(({ type }) => type)).toEqual(['applied', 'applied']);
     await anna.sync();
 
     expect(anna.partner().dailyGoalStatus).toMatchObject({ id: seedIds.partnerDailyGoalStatus.philipp, stage: 'fast_geschafft' });
