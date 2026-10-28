@@ -111,7 +111,7 @@ Das vollständige V1-Schema ([#96](https://github.com/Yggras/abnehm-app/issues/9
 - **Transaktionen:** `LocalDatabase.transaction(work)` reicht einen opaken `TransactionContext` an fachliche Repositories und Befehle; `read(work)` einen `ReadContext`, in dem Schreiben scheitert. `work` ist synchron, Verschachteln ist verboten. `tx.afterCommit(callback)` läuft nur nach erfolgreichem Commit; Fehler darin gehen an `onError` und rollen nichts zurück.
 - **Repositories** öffnen den Kontext mit `sqliteOf(tx)` aus `local-db/sqlite.ts` und bauen ihre Abfragen mit Drizzle über `local-db/schema`. Nur sie sehen Drizzle-Typen.
 - **Beobachten:** `observe(read, listener)` liest sofort und nach jedem Commit dieser Datenbank erneut. Drizzles `useLiveQuery` wird nicht verwendet: Es hört auf den globalen Change-Listener von expo-sqlite und vergleicht nur den Tabellennamen, nicht die Datei ([Quelltext](https://unpkg.com/drizzle-orm@0.45.4/expo-sqlite/query.js)). Vom Kontowechsel wüsste es nichts.
-- **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`).
+- **Tests** nutzen `local-db/testing/better-sqlite.ts`: echte SQLite-Dateien über better-sqlite3 mit denselben gebündelten Migrationen, in Jest mit `@jest-environment node`. `expo-sqlite`, `drizzle-orm/expo-sqlite` und better-sqlite3 erlaubt Lint in `src/` nur in `local-db/` (Regel `abnehm/bibliotheksgrenzen`). Außerhalb von `src/` nutzt nur das Build-Skript des BLS-Katalogs (`scripts/bls-catalog/`) better-sqlite3; Test-Helfer erreichen es darüber.
 
 ### Tagesziel-Auswertung und Tages-Check-in
 
@@ -449,6 +449,38 @@ Maestro-Abläufe gegen fertige Release-Binaries und eine On-Device-Suite mit dem
 - **Kein EAS-Workflow:** Expo bietet E2E-Tests mit Maestro als EAS-Workflow an ([Expo](https://docs.expo.dev/eas/workflows/examples/e2e-tests/)). Dort entsteht das Binary „on EAS servers“, und EAS testet es auf einem Emulator bzw. Simulator. Das Backend läuft aber bis auf Weiteres nur auf diesem Rechner ([#21](https://github.com/Yggras/abnehm-app/issues/21), [#115](https://github.com/Yggras/abnehm-app/issues/115)) und ist aus der Cloud nicht erreichbar. Ein Cloud-Lauf bräuchte ein öffentlich erreichbares Test-Backend; das widerspräche den nicht öffentlichen Ports des Gates.
 - **Gate-Nachweis:** Die Testfähigkeiten fehlen im Produktionsbinary (Release-Sperren); On-Device-Suite und die Maestro-Abläufe laufen deshalb gegen die E2E-Binaries desselben Commits wie das freizugebende Produktionsbinary. Der Nachweis nennt die Artefakt-IDs aus `zusammenfassung.txt` und den Commit; Commit und Prüfsumme des Produktionsbinarys hält die Release-Checkliste aus #115 fest (Nutzerentscheidung vom 24.10.2026 in #114). Die sicheren Bereiche belegen nur die Bildschirmfotos `smoke-*.png` des Laufs; für den Gate-Nachweis sieht ein Mensch sie an und vermerkt das Ergebnis, ein geplanter Lauf prüft nur das Verhalten.
 
+### Ernährung: BLS-Katalog und Lebensmittelsuche
+
+Den mitgelieferten Lebensmittelkatalog, die lokale Suche und die Rechenregeln der Ernährung (Abschnitte 2–4 der [Spezifikation 2](https://github.com/Yggras/abnehm-app/issues/81)) liefert [#154](https://github.com/Yggras/abnehm-app/issues/154).
+
+- **Quelle:** Bundeslebensmittelschlüssel 4.0 des Max Rubner-Instituts, ZIP-Archiv `BLS_4_0_2025_DE.zip` von der [Downloadseite](https://www.blsdb.de/download). Laut dieser Seite gilt CC BY 4.0, und das Max Rubner-Institut ist als Herausgeber zu nennen. Die App nennt „Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0“ als Quellenangabe jedes BLS-Snapshots.
+- **Asset:** `apps/mobile/assets/catalog/bls-katalog.db` ist eine schreibgeschützte SQLite-Datei.
+  - Tabelle `food`: Schlüssel, Name, normalisierte Suchnamen sowie kcal, Eiweiß, Kohlenhydrate und Fett je 100 g in `milli_kcal` bzw. mg. Dazu kommen der FTS5-Index `food_search` und die Version in `catalog_info`.
+  - Von den 7.140 Lebensmitteln sind 7.137 enthalten. Spuren und Werte unter der Nachweis- oder Bestimmungsgrenze zählen als 0. Drei Zusatzstoffe ohne Fettwert fehlen, denn ein fehlender Wert ist laut BLS-Dokumentation (Abschnitt 4.4) „nicht als Null“ zu lesen.
+- **Neu bauen:** `npm run bls-katalog --workspace @abnehm/mobile` lädt die Quelle, prüft ihre SHA-256 und schreibt das Asset.
+  - `-- --quelle <zip>` nutzt eine schon geladene Datei, `-- --pruefen` vergleicht nur. Dieselbe Quelle ergibt dieselben Bytes.
+  - Ändert sich das Asset, wird `blsCatalogVersion` in `src/nutrition/bls-catalog-version.ts` erhöht. `src/nutrition/bls-catalog-asset.test.ts` scheitert, solange Asset, Version und Normalisierung nicht zusammenpassen.
+- **Öffnen:** `CatalogProvider` aus `local-db` öffnet einen mitgelieferten Katalog über `SQLiteProvider` mit `assetSource`.
+  - Der Katalog hat eine eigene Verbindung, getrennt von den Kontodatenbanken, und ist schreibgeschützt (`query_only`).
+  - `forceOverwrite` setzt der Provider nur, wenn die installierte Datei eine andere Version trägt oder kein Katalog ist (`catalogAssetSource`).
+  - Bildschirme mit Suche liegen in `BlsCatalogProvider` aus `src/nutrition` und suchen mit `useFoodSearch()`. Bis die Datei offen ist, rendert der Provider nichts.
+- **Suche** (`createFoodSearch`): Sie startet ab zwei getippten Buchstaben oder Ziffern; Leerraum und Satzzeichen zählen nicht. Asset und Anfrage nutzen dieselbe Normalisierung (`src/nutrition/search-text.ts`): Groß- und Kleinschreibung, ä → a und ae, ß → ss, Satzzeichen und mehrfache Leerzeichen als ein Trenner. Die Rangfolge innerhalb einer Gruppe:
+  1. Der Name beginnt mit der Anfrage, und dort endet ein Wort. Leerzeichen zählen beim Namensanfang nicht: „Haferflocken“ findet so „Hafer Flocken“ und „Hafer Flocken, gekocht“.
+  2. Der Name beginnt mit der Anfrage, das Wort geht weiter („Apfelmus“ bei „Apfel“).
+  3. Ein Wort beginnt mit jedem Suchwort (FTS5-Präfixsuche).
+  4. Ein Suchwort ab drei Zeichen steckt im Wortinneren, etwa „saft“ in „Apfelsaft“ (Nutzerentscheidung in #154).
+
+  Danach stehen kürzere Namen zuerst. Es gibt höchstens 50 Treffer, jeder mit Quellenmarke, Lebensmittelreferenz, Snapshot und kcal je 100 g. Die übrigen Gruppen (Favoriten, Zuletzt verwendet, eigene Lebensmittel, gescannte Produkte) ergänzen #157, #158 und #160 in `groups` von `food-search.ts`.
+- **Verträge und Rechenregeln** liegen in `@abnehm/contracts/nutrition`: `FoodRef` (Typ `FoodRefType`, BLS-Schlüssel `BlsKey`), `NutritionSnapshot`, `EntryAmount` und `EntryTotals`. Makros höchstens in Höhe der Bezugsmenge prüft der Snapshot nur bei der Basiseinheit g, wie die CHECKs beider Datenbankschemas; bei ml hinge der Vergleich von der Dichte ab.
+  - `entryAmount` macht aus der Eingabe die Basismenge. Stück und Portion gehen nur mit bekannter Umrechnung, die Menge liegt über 0 und höchstens bei 5 kg bzw. 5 l.
+  - `entryTotals` rechnet die Eintragssummen aus Snapshot und Basismenge, kaufmännisch gerundet auf `milli_kcal` bzw. mg.
+  - Für die Anzeige gibt es `roundKcal`, `dailyIntakeKcal` (gerundete Summe der `milli_kcal`) und `roundMacroGrams` (ganze g, unter 10 g eine Nachkommastelle).
+  - Beide Drizzle-Schemas nehmen Einheiten, Quellen und Referenztypen von dort.
+- **Tests:**
+  - `src/nutrition/food-search.test.ts` läuft mit better-sqlite3 (`local-db/testing/better-sqlite-catalog.ts`) gegen einen kleinen Testkatalog (`src/nutrition/testing/test-catalog.ts`). Ihn baut `writeCatalogFile` wie das Asset, mit Werten aus dem Asset.
+  - `src/local-db/catalog.test.ts` belegt: Bei gleicher Version bleibt die installierte Datei, eine neue Version ersetzt sie.
+  - Die Tests des Build-Skripts liegen unter `scripts/bls-catalog/`, einem eigenen Jest-Root. `node-loading.test.ts` lädt die Skriptmodule wie `npm run bls-katalog` unter Node; so fällt auf, wenn `search-text.ts` oder `bls-catalog-version.ts` einen Import bekommen, den Node ohne Bundler nicht laden kann.
+
 ## Befehle
 
 Alle Befehle laufen im Repo-Root:
@@ -465,6 +497,7 @@ Alle Befehle laufen im Repo-Root:
 | `npm run lint` | ESLint über das ganze Repo, einschließlich der Importgrenzen |
 | `npm run test:app` | App-Tests (Jest) |
 | `npm run test:node` | Backend-, Paket- und repoweite Tests (Vitest, `test/`). Startet dafür ein eigenes Postgres in Docker. |
+| `npm run bls-katalog --workspace @abnehm/mobile` | BLS-Katalog-Asset aus dem BLS 4.0 neu bauen (siehe „Ernährung: BLS-Katalog und Lebensmittelsuche“) |
 | `scripts/e2e-run --build` | E2E-Binaries bauen und Maestro auf iOS-Simulator und Android-Emulator ausführen (siehe „E2E, On-Device-Suite und Gerätesmoke“) |
 
 Native Abhängigkeiten der App kommen immer per `npx expo install <paket>` aus `apps/mobile`, damit die Version zum SDK passt ([Expo CLI](https://docs.expo.dev/more/expo-cli/#install)). Die Ordner `ios/` und `android/` erzeugt Expo bei Bedarf (Continuous Native Generation). Sie stehen nicht in Git und werden nicht von Hand bearbeitet.

@@ -259,6 +259,7 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     ["import { MenuView } from '@expo/ui/community/menu';\nexport const m = MenuView;", 'apps/mobile/src/design/native/probe.tsx'],
     ["import { useFonts } from 'expo-font';\nexport const f = useFonts;", 'apps/mobile/src/design/fonts.ts'],
     ["import { openDatabaseSync } from 'expo-sqlite';\nexport const o = openDatabaseSync;", 'apps/mobile/src/local-db/expo-connection.ts'],
+    ["import { SQLiteProvider } from 'expo-sqlite';\nexport const p = SQLiteProvider;", 'apps/mobile/src/local-db/CatalogProvider.tsx'],
     ["import Database from 'better-sqlite3';\nexport const d = Database;", 'apps/mobile/src/local-db/testing/probe.ts'],
     ["import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;", 'apps/mobile/src/auth/secure-session-store.ts'],
     ["import { useMutation } from '@tanstack/react-query';\nexport const m = useMutation;", 'apps/mobile/src/online/probe.ts'],
