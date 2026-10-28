@@ -67,7 +67,7 @@ describe('Testuhr der App', () => {
     const clock = createAppTestClock(device);
     expect(clock.read().instant).toBe('2030-01-01T00:00:00.000Z');
     clock.fix({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
-    expect(clock.read()).toEqual({ instant: '2026-10-14T12:00:00.000Z', timeZone: 'Europe/Berlin', localDate: '2026-10-14' });
+    expect(clock.read()).toEqual({ instant: '2026-10-14T12:00:00.000Z', timeZone: 'Europe/Berlin', localDate: '2026-10-14', utcOffsetMinutes: 120 });
     clock.fixed()!.advanceBy(12 * 60 * 60 * 1000);
     expect(clock.read().localDate).toBe('2026-10-15');
     clock.release();
@@ -80,13 +80,13 @@ describe('Testuhr der App', () => {
     clock.subscribe(changes);
     clock.fix({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
     clock.adjust({ advanceHours: 25, timeZone: TimeZone.parse('Pacific/Kiritimati') });
-    expect(clock.read()).toEqual({ instant: '2026-10-15T13:00:00.000Z', timeZone: 'Pacific/Kiritimati', localDate: '2026-10-16' });
+    expect(clock.read()).toEqual({ instant: '2026-10-15T13:00:00.000Z', timeZone: 'Pacific/Kiritimati', localDate: '2026-10-16', utcOffsetMinutes: 840 });
     expect(changes).toHaveBeenCalledTimes(2);
   });
 
   it('stellt eine noch freie Uhr zuerst auf die Geräteuhr', () => {
     const clock = createAppTestClock(device);
     clock.adjust({ advanceHours: 1 });
-    expect(clock.read()).toEqual({ instant: '2030-01-01T01:00:00.000Z', timeZone: 'UTC', localDate: '2030-01-01' });
+    expect(clock.read()).toEqual({ instant: '2030-01-01T01:00:00.000Z', timeZone: 'UTC', localDate: '2030-01-01', utcOffsetMinutes: 0 });
   });
 });

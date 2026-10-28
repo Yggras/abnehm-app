@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, type LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import { WaterAddedOutcome, WaterEntryUpsert } from '@abnehm/contracts/trackers';
 

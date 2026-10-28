@@ -1,4 +1,4 @@
-import { EntityId, Instant, LocalDate, TimeZone, type ServerVersion } from '@abnehm/contracts/base';
+import { type EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { isValidWaterAmount, waterOrigin } from '@abnehm/contracts/tracker-rules';
 import { WaterEntryUpsert, type WaterAddedValues } from '@abnehm/contracts/trackers';
 
@@ -55,6 +55,6 @@ export function undoWater(tx: TransactionContext, { clock, writer, persistence }
   const entry = readWaterEntry(tx, undo.entryId);
   if (entry === undefined || entry.deletedAt !== null) return;
   tombstoneWaterEntry(tx, undo.entryId, Instant.parse(clock.read().instant));
-  writer.delete(tx, { entityType: waterEntryEntity.entityType, entityId: undo.entryId, knownServerVersion: entry.serverVersion as ServerVersion | null });
+  writer.delete(tx, { entityType: waterEntryEntity.entityType, entityId: undo.entryId, knownServerVersion: entry.serverVersion });
   persistence.reevaluateDailyGoals(tx, entry.personId, [entry.localDate], 'rueckgaengig');
 }
