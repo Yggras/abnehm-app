@@ -36,11 +36,11 @@ describe('Nachschlagen im Katalog', () => {
       ['besuchervorlage', 'igel'],
     ] as const) {
       const result = shipped.find(kind, key);
-      expect(result).toEqual({ type: 'contract_error', error: { code: 'unknown_catalog_key', context: { kind, key }, retryable: false } });
+      expect(result).toEqual({ type: 'contract_error', error: { code: 'unknown_catalog_key', context: { kind }, retryable: false } });
     }
   });
 
-  it('liefert einen gültigen `ContractError` ohne sichtbaren Text, auch bei manipulierten Schlüsseln', () => {
+  it('liefert einen gültigen `ContractError` ohne den Schlüssel, damit ein manipulierter Schlüssel kein Text im Kontext wird', () => {
     const result = shipped.find('bauplan', 'Ein ganzer Satz mit Leerzeichen');
     expect(result).toEqual({ type: 'contract_error', error: { code: 'unknown_catalog_key', context: { kind: 'bauplan' }, retryable: false } });
     if (result.type === 'contract_error') expect(ContractError.safeParse(result.error).success).toBe(true);

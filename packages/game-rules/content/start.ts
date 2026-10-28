@@ -1,10 +1,9 @@
 import type { Blueprint, ProjectTemplate } from '../src/catalog.ts';
+import { stageArt as stages } from './define.ts';
 
 // Inhalt zum Schlüpfen (Spezifikation 4, Abschnitt 5): je Rolle drei Start-Baupläne zu 1, 2 und 3
-// Energie und Gemeinschaftsprojekt 1. Motive beim Schneiden von #179 gewählt (Designwerte, nicht
-// belegt); die Grafiken je Stufe kommen mit dem Bau-Modus (#192), das Wahrzeichen mit #209.
-
-const stages = (key: string) => [`${key}_1`, `${key}_2`, `${key}_3`] as const;
+// Energie und Gemeinschaftsprojekt 1. Die Motive sind Designwerte aus der Umsetzung von #179, nicht
+// belegt; die Grafiken je Stufe kommen mit dem Bau-Modus (#192), das Wahrzeichen mit #209.
 
 export const startBlueprints: readonly Blueprint[] = [
   { key: 'holzweg', name: 'Holzweg', role: 'bauen', origin: 'start', startPrice: 1, art: stages('holzweg') },

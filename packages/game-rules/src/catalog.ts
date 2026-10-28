@@ -27,13 +27,15 @@ export type Blueprint =
 /** Level-Freischaltung: ab Level 2 je Level und Rolle höchstens ein Bauplan der Herkunft `level`. */
 export type LevelUnlock = Readonly<{ level: number; role: IslandRole; blueprint: string }>;
 
-export type SharedFieldKind = 'strand' | 'lichtung' | 'gemeinschaftsplatz';
+/** Gemeinsame Bereiche ohne Besitzer; dort baut niemand. */
+export const sharedFieldKinds = ['strand', 'lichtung', 'gemeinschaftsplatz'] as const;
+export type SharedFieldKind = (typeof sharedFieldKinds)[number];
 export type OwnedFieldKind = 'ecke' | 'rollenbereich';
 export type FieldKind = SharedFieldKind | OwnedFieldKind;
 
 /**
- * Seite einer Person auf der Insel. Felder gehören der Person ihrer Seite und bleiben bei ihr, auch
- * nach einem Rollentausch; welche Person welche Seite bekommt, regelt `hatchingSide`.
+ * Seite einer Person auf der Insel. Die Felder einer Seite gehören einer Person und bleiben bei ihr,
+ * auch nach einem Rollentausch. Welche Person welche Seite bekommt, legt das Schlüpfen fest (#184).
  */
 export type FieldSide = 'a' | 'b';
 
@@ -106,16 +108,8 @@ export type ProjectTemplate = Readonly<{
 
 export type ChallengeTemplate = Readonly<{ key: string; name: string; deko: string }>;
 
-/**
- * Schlüssel der k-ten Ausprägung eines endlosen Gebiets. Die Vorlage steht im Schlüssel, damit ein
- * Feld `endlos_‹k›_‹vorlage›:‹x›:‹y›` gültig bleibt, wenn spätere Kataloge Vorlagen ergänzen.
- */
-export function endlessAreaKey(k: number, template: string): string {
-  return `endlos_${k}_${template}`;
-}
-
 export type GameCatalog = Readonly<{
-  /** Steigt mit jeder Änderung; je Version gibt es einen Schnappschuss der Schlüssel (`catalog-versions/`). */
+  /** Steigt mit jeder Änderung; je Version gibt es einen Schnappschuss (`catalog-versions/`). */
   version: number;
   blueprints: readonly Blueprint[];
   levelUnlocks: readonly LevelUnlock[];
@@ -132,9 +126,48 @@ export type GameCatalog = Readonly<{
 /** Schlüssel der Grundinsel in Feldschlüsseln. */
 export const baseIslandKey = 'grundinsel';
 
+const endlessPrefix = 'endlos_';
+
+/**
+ * Schlüssel der k-ten Ausprägung eines endlosen Gebiets. Die Vorlage steht im Schlüssel, damit ein
+ * Feld `endlos_‹k›_‹vorlage›:‹x›:‹y›` gültig bleibt, wenn spätere Kataloge Vorlagen ergänzen.
+ */
+export function endlessAreaKey(k: number, template: string): string {
+  return `${endlessPrefix}${k}_${template}`;
+}
+
+function parseEndlessAreaKey(area: string): { k: number; template: string } | undefined {
+  const match = new RegExp(`^${endlessPrefix}([1-9][0-9]*)_(.+)$`).exec(area);
+  return match === null ? undefined : { k: Number(match[1]), template: match[2]! };
+}
+
+/** Schlüssel, die Feldschlüssel bilden, ohne Katalogeintrag zu sein; kein Eintrag darf sie tragen. */
+export function isReservedKey(key: string): boolean {
+  return key === baseIslandKey || key.startsWith(endlessPrefix);
+}
+
 /** Feldschlüssel `‹gebiet›:‹x›:‹y›`. */
 export function fieldKey(area: string, field: Readonly<{ x: number; y: number }>): string {
   return `${area}:${field.x}:${field.y}`;
+}
+
+/**
+ * Ein Feldplan des Katalogs. Grundinsel und feste Gebiete liegen auf demselben Raster; die Felder
+ * einer Landschaftsvorlage sind relativ und entstehen je Ausprägung unter ihrem eigenen Gebiet.
+ */
+export type FieldPlan = Readonly<{
+  area: string;
+  source: 'grundinsel' | 'gebiet' | 'landschaftsvorlage';
+  fields: readonly FieldPlanEntry[];
+}>;
+
+/** Alle Feldpläne des Katalogs. */
+export function fieldPlans(catalog: GameCatalog): FieldPlan[] {
+  return [
+    { area: baseIslandKey, source: 'grundinsel', fields: catalog.baseIsland.fields },
+    ...catalog.areas.map((area) => ({ area: area.key, source: 'gebiet' as const, fields: area.fields })),
+    ...catalog.landscapeTemplates.map((template) => ({ area: template.key, source: 'landschaftsvorlage' as const, fields: template.fields })),
+  ];
 }
 
 /** Ein Feld des Katalogs mit seinem Schlüssel und Gebiet. */
@@ -154,6 +187,29 @@ export type CatalogEntries = {
 };
 export type CatalogEntryKind = keyof CatalogEntries;
 
+/** Arten mit eigenem Schlüssel; Felder tragen Feldschlüssel aus ihrem Feldplan. */
+export type KeyedEntryKind = Exclude<CatalogEntryKind, 'feld'>;
+
+// Eine neue Art in `CatalogEntries` ist hier ein Typfehler, bis sie eingetragen ist. So erreichen
+// Nachschlagen, Schlüsselprüfung und Schnappschuss jede Art.
+const keyedEntries: { [K in KeyedEntryKind]: (catalog: GameCatalog) => readonly CatalogEntries[K][] } = {
+  bauplan: (catalog) => catalog.blueprints,
+  deko: (catalog) => catalog.deko,
+  gebiet: (catalog) => catalog.areas,
+  landschaftsvorlage: (catalog) => catalog.landscapeTemplates,
+  besuchervorlage: (catalog) => catalog.visitorTemplates,
+  accessoire: (catalog) => catalog.accessories,
+  gemeinschaftsprojekt: (catalog) => catalog.projects.map((project, index) => ({ ...project, sequenceNumber: index + 1 })),
+  challenge_vorlage: (catalog) => catalog.challengeTemplates,
+};
+
+export const keyedEntryKinds = Object.keys(keyedEntries) as KeyedEntryKind[];
+
+/** Die Einträge einer Art in Katalogreihenfolge. */
+export function entriesOf<K extends KeyedEntryKind>(catalog: GameCatalog, kind: K): readonly CatalogEntries[K][] {
+  return keyedEntries[kind](catalog);
+}
+
 export type CatalogLookup<T> = Readonly<{ type: 'found'; entry: T }> | Readonly<{ type: 'contract_error'; error: ContractError }>;
 
 export type CatalogIndex = Readonly<{
@@ -163,44 +219,31 @@ export type CatalogIndex = Readonly<{
 
 /** Nachschlagen im Katalog, etwa für die Prüfung eines Befehls auf dem Server. */
 export function indexCatalog(catalog: GameCatalog): CatalogIndex {
-  const byKey = <T extends { key: string }>(entries: readonly T[]) => new Map(entries.map((entry) => [entry.key, entry]));
-  const fixedFields = new Map<string, CatalogField>();
-  const addFields = (area: string, fields: readonly FieldPlanEntry[]) => {
-    for (const field of fields) fixedFields.set(fieldKey(area, field), { key: fieldKey(area, field), area, ...field });
-  };
-  addFields(baseIslandKey, catalog.baseIsland.fields);
-  for (const area of catalog.areas) addFields(area.key, area.fields);
-  const templates = byKey(catalog.landscapeTemplates);
-
-  const entries: { [K in Exclude<CatalogEntryKind, 'feld'>]: ReadonlyMap<string, CatalogEntries[K]> } = {
-    bauplan: byKey(catalog.blueprints),
-    deko: byKey(catalog.deko),
-    gebiet: byKey(catalog.areas),
-    landschaftsvorlage: templates,
-    besuchervorlage: byKey(catalog.visitorTemplates),
-    accessoire: byKey(catalog.accessories),
-    gemeinschaftsprojekt: byKey(catalog.projects.map((project, index) => ({ ...project, sequenceNumber: index + 1 }))),
-    challenge_vorlage: byKey(catalog.challengeTemplates),
-  };
+  const entries = new Map(
+    keyedEntryKinds.map((kind) => [kind, new Map<string, unknown>(entriesOf(catalog, kind).map((entry) => [entry.key, entry]))]),
+  );
+  const fields = new Map<string, CatalogField>();
+  const templates = new Map<string, FieldPlan>();
+  for (const plan of fieldPlans(catalog)) {
+    if (plan.source === 'landschaftsvorlage') templates.set(plan.area, plan);
+    else for (const field of plan.fields) fields.set(fieldKey(plan.area, field), { key: fieldKey(plan.area, field), area: plan.area, ...field });
+  }
 
   const findField = (key: string): CatalogField | undefined => {
-    const fixed = fixedFields.get(key);
+    const fixed = fields.get(key);
     if (fixed !== undefined) return fixed;
     const parsed = parseFieldKey(key);
-    if (parsed === undefined) return undefined;
-    const endless = /^endlos_[1-9][0-9]*_(.+)$/.exec(parsed.area);
-    const template = endless === null ? undefined : templates.get(endless[1]!);
-    const field = template?.fields.find(({ x, y }) => x === parsed.x && y === parsed.y);
-    return field === undefined ? undefined : { key, area: parsed.area, ...field };
+    const endless = parsed === undefined ? undefined : parseEndlessAreaKey(parsed.area);
+    const field = endless && templates.get(endless.template)?.fields.find(({ x, y }) => x === parsed!.x && y === parsed!.y);
+    return field ? { key, area: parsed!.area, ...field } : undefined;
   };
 
   return {
     find(kind, key) {
-      const entry = kind === 'feld' ? findField(key) : entries[kind as Exclude<CatalogEntryKind, 'feld'>].get(key);
+      const entry = kind === 'feld' ? findField(key) : entries.get(kind)!.get(key);
       if (entry !== undefined) return { type: 'found', entry: entry as CatalogEntries[typeof kind] };
-      // Kontextwerte dürfen keinen Text tragen; ein manipulierter Schlüssel bleibt deshalb weg.
-      const context: Record<string, string> = /^[A-Za-z0-9_.:+/-]{1,200}$/.test(key) ? { kind, key } : { kind };
-      return { type: 'contract_error', error: { code: 'unknown_catalog_key', context, retryable: false } };
+      // Ohne den Schlüssel selbst: Ein manipulierter Schlüssel wäre sonst Text im Kontext.
+      return { type: 'contract_error', error: { code: 'unknown_catalog_key', context: { kind }, retryable: false } };
     },
   };
 }

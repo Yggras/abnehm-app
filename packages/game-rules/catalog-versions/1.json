@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "digest": "sha256:614d7f07c1fbf5e531436a7e6ff35f86a38daba7443c4884d08aa2631f109efb",
   "keys": {
     "apfelbaum": "bauplan:natur",
     "beerenstrauch": "bauplan:natur",

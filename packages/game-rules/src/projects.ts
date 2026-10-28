@@ -1,5 +1,7 @@
 import type { CommonStage } from '@abnehm/contracts/island';
 
+import { assertWholeNumber } from './whole-number.ts';
+
 // Gemeinschaftsprojekte und gemeinsame Stufe (Spezifikation 4, Abschnitt 8; Werte neu festgelegt,
 // nicht belegt). Die Stufe gilt für Gemeinschaftsprojekt und Challenge gleichermaßen.
 
@@ -8,10 +10,7 @@ export type Share = Readonly<{ paid: number; need: number }>;
 
 /** Bedarf je Anteil von Projekt Nummer n: `min(20 + 10 × (n − 1), 100)`; danach Ausbau mit 100. */
 export function projectNeed(sequenceNumber: number): number {
-  if (!Number.isInteger(sequenceNumber) || sequenceNumber < 1) {
-    throw new RangeError(`Projektnummer muss eine ganze Zahl ab 1 sein: ${sequenceNumber}`);
-  }
-  return Math.min(20 + 10 * (sequenceNumber - 1), 100);
+  return Math.min(20 + 10 * (assertWholeNumber(sequenceNumber, 1, 'Projektnummer') - 1), 100);
 }
 
 /**

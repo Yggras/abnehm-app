@@ -1,6 +1,7 @@
 import type { IslandRole } from '@abnehm/contracts/island';
 
-import type { FieldKind, FieldSide } from './catalog.ts';
+import { sharedFieldKinds, type FieldKind } from './catalog.ts';
+import { assertWholeNumber } from './whole-number.ts';
 
 // Feldkontingente und Platzierungsregeln (Spezifikation 4, Abschnitt 3; Feldaufteilung neu
 // festgelegt, nicht belegt). Ein Objekt belegt genau ein Feld; ob das Feld frei ist, entscheidet
@@ -10,18 +11,8 @@ export type FieldQuota = Readonly<{ ecke: number; rollenbereich: number }>;
 
 /** Felder je Person: zum Schlüpfen 20 Ecke und 40 Rollenbereich, je freigeschaltetem Gebiet +10 und +30. */
 export function fieldQuota(unlockedAreas: number): FieldQuota {
-  if (!Number.isInteger(unlockedAreas) || unlockedAreas < 0) {
-    throw new RangeError(`Zahl der Gebiete muss eine ganze Zahl ab 0 sein: ${unlockedAreas}`);
-  }
-  return { ecke: 20 + 10 * unlockedAreas, rollenbereich: 40 + 30 * unlockedAreas };
-}
-
-/**
- * Seite, deren Felder eine Person beim Schlüpfen bekommt (beim Schneiden von #179 festgelegt, nicht
- * belegt). Neue Gebietsfelder einer Seite gehören derselben Person, auch nach einem Rollentausch.
- */
-export function hatchingSide(role: IslandRole): FieldSide {
-  return role === 'bauen' ? 'a' : 'b';
+  const areas = assertWholeNumber(unlockedAreas, 0, 'Zahl der Gebiete');
+  return { ecke: 20 + 10 * areas, rollenbereich: 40 + 30 * areas };
 }
 
 export type PlacementRequest = Readonly<{
@@ -36,15 +27,16 @@ export type PlacementDecision =
   | Readonly<{ type: 'erlaubt' }>
   | Readonly<{ type: 'verboten'; reason: 'gemeinsamer_bereich' | 'fremdes_feld' | 'falsche_rolle' }>;
 
+const shared: ReadonlySet<FieldKind> = new Set(sharedFieldKinds);
+
 /**
- * Darf das Objekt auf das Feld? Eigene Ecke: alle Baupläne und Deko. Rollenbereich und eigene
- * Gebietsfelder: Baupläne der aktuellen eigenen Rolle und Deko. Strand, Lichtung, Gemeinschaftsplatz
- * und Felder des Partners: nichts.
+ * Darf das Objekt auf das Feld? Eigene Ecke: alle Baupläne und Deko. Rollenbereich: Baupläne der
+ * aktuellen eigenen Rolle und Deko. Strand, Lichtung, Gemeinschaftsplatz und Felder des Partners:
+ * nichts. Ein Gebiet bringt je Person 10 Felder Ecke und 30 Felder Rollenbereich; seine „eigenen
+ * Gebietsfelder“ im Sinne von Abschnitt 3 sind die Rollenbereich-Felder (Auslegung aus #179).
  */
 export function placement({ field, person, object }: PlacementRequest): PlacementDecision {
-  if (field.kind === 'strand' || field.kind === 'lichtung' || field.kind === 'gemeinschaftsplatz') {
-    return { type: 'verboten', reason: 'gemeinsamer_bereich' };
-  }
+  if (shared.has(field.kind)) return { type: 'verboten', reason: 'gemeinsamer_bereich' };
   if (field.ownerPersonId !== person.personId) return { type: 'verboten', reason: 'fremdes_feld' };
   if (field.kind === 'rollenbereich' && object.type === 'bauplan' && object.role !== person.role) {
     return { type: 'verboten', reason: 'falsche_rolle' };

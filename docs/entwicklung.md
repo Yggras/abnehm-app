@@ -157,10 +157,10 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
 | --- | --- |
 | `progress` | `spentOnIsland(buchungen, insel)` ist `S_p(I)`. `islandProgress([S_A, S_B])` liefert Level, `levelNeed` und beide Hälften für `IslandProgress`. `memberHalf(S, level)` gibt die eigene Hälfte zum Level der Projektion; `full` ist dort `waitingForPartner`. |
 | `prices` | `basePrice(bauplan)`, `upgradePrice(bauplan, stufe)` |
-| `fields` | `fieldQuota(gebiete)`; `placement({ field, person, object })` ergibt `erlaubt` oder `verboten` mit Grund `gemeinsamer_bereich`, `fremdes_feld` bzw. `falsche_rolle`; `hatchingSide(rolle)` |
+| `fields` | `fieldQuota(gebiete)`; `placement({ field, person, object })` ergibt `erlaubt` oder `verboten` mit Grund `gemeinsamer_bereich`, `fremdes_feld` bzw. `falsche_rolle` |
 | `unlocks` | `unlocksAt(katalog, level)`: Baupläne samt Grund (`start`, `level`, `entdeckung`), neue Form und Gebiet (fest oder endlos). Dazu `formAt(level)`. |
 | `projects` | `projectNeed(n)` und `commonStage([a, b])`, die gemeinsame Stufe von Projekt und Challenge |
-| `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `fieldKey`, `endlessAreaKey` |
+| `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `entriesOf`, `fieldPlans`, `fieldKey`, `endlessAreaKey` |
 | `catalog-check` | `checkCatalog`, `catalogDedications`, `catalogChanges` |
 | `content` | `gameCatalog`, der ausgelieferte Katalog |
 | `fixtures` | nur für Tests: `testCatalog()` mit Gebieten und Landschaftsvorlagen, `tracer` |
@@ -168,13 +168,14 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
 - **Energie:** Bestand und Anzeige `max(0, Summe)` bleiben `summarizeEnergy` und `shownEnergy` im Vertragsmodul. Die Levelhälfte je Insel kommt nur aus `spentOnIsland`. `readEnergy(…).levelHalf` zählt dagegen die Ausgaben aller Inseln.
 - **Felder:** Ein Feldschlüssel hat die Form `‹gebiet›:‹x›:‹y›`.
   - Die Grundinsel heißt `grundinsel`. Endlose Gebiete heißen `endlos_‹k›_‹vorlage›`. Die Vorlage steht im Schlüssel, damit Felder gültig bleiben, wenn spätere Kataloge Vorlagen ergänzen.
-  - Feldart und Seite stehen im Katalog, den Besitzer trägt das Inselfeld.
-  - Beim Schlüpfen bekommt die Person mit Rolle Bauen die Seite `a`, die mit Natur die Seite `b` (`hatchingSide`). Neue Gebietsfelder einer Seite gehören derselben Person, auch nach einem Rollentausch.
+  - Feldart und Seite (`a` oder `b`) stehen im Katalog, den Besitzer trägt das Inselfeld. Die Felder einer Seite gehören einer Person und bleiben bei ihr, auch nach einem Rollentausch. Welche Person welche Seite bekommt, legt das Schlüpfen fest (#184).
+  - Ein Gebiet bringt je Seite 10 Felder Ecke und 30 Felder Rollenbereich. Die „eigenen Gebietsfelder“, die laut Abschnitt 3 an die Rolle binden, sind die Rollenbereich-Felder. Die Ecke-Felder eines Gebiets gehören zur Ecke und nehmen alle Baupläne (Auslegung aus #179, `test/fields.test.ts`).
+  - Das Raster der Grundinsel (16 × 12, je Seite 20 Ecke und 40 Rollenbereich, dazu Gemeinschaftsplatz, Lichtung und Strand; `content/base-island.ts`) legt die Spezifikation nicht fest. Es ist ein Designwert aus #179, nicht belegt, ebenso die Motive der Start-Baupläne und von Gemeinschaftsprojekt 1.
 - **Schlüssel:** Alle Arten teilen sich einen Schlüsselraum, weil ein Inselobjekt einen Bauplan- oder einen Dekoschlüssel trägt. Erlaubt sind Kleinbuchstaben, Ziffern und `_`. Grafiken nennt der Katalog nur als Schlüssel (`art`, `landmark`, `animal`), zeichnen tut sie die App.
 - **Katalog ändern:** Inhalte liegen unter `packages/game-rules/content/`.
   - `checkCatalog` muss leer bleiben (`test/catalog-check.test.ts`).
-  - Jede Änderung erhöht `version` in `content/index.ts`. Danach legt `npm run catalog:snapshot --workspace @abnehm/game-rules` den Schnappschuss `catalog-versions/<version>.json` an.
-  - `test/catalog-versions.test.ts` scheitert, wenn der Schnappschuss fehlt oder nicht zum Katalog passt. Er scheitert auch, wenn gegenüber der vorigen Version ein Schlüssel fehlt oder anders gewidmet ist.
+  - Jede Änderung erhöht `version` in `content/index.ts`. Danach legt `npm run catalog:snapshot --workspace @abnehm/game-rules` den Schnappschuss `catalog-versions/<version>.json` an. Er enthält einen Digest des ganzen Katalogs und alle Schlüssel mit ihrer Widmung.
+  - `test/catalog-versions.test.ts` scheitert in vier Fällen: Der Schnappschuss fehlt. Er passt nicht zum Katalog, auch bei geänderten Namen oder Preisen. Gegenüber der vorigen Version fehlt ein Schlüssel oder ist anders gewidmet. Oder ein Schnappschuss, der auf `main` liegt, wurde geändert oder gelöscht. Für den letzten Vergleich holt die CI `origin/main` nach.
   - Legen zwei Branches dieselbe Version an, kollidieren sie beim Merge. Der spätere erhöht die Version erneut und erzeugt seinen Schnappschuss neu.
 - **Backend-Image:** Es kopiert `src/` und `content/`, nicht `fixtures/` und `catalog-versions/`.
 - **Tests:** Die Wahrheitstabellen liegen unter `packages/game-rules/test/`. Der Tracer läuft in der App (`apps/mobile/src/game-rules/tracer.test.ts`) und im Backend (`apps/backend/test/game-rules.test.ts`) mit denselben Buchungsfakten.

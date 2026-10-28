@@ -1,5 +1,7 @@
 import { summarizeEnergy, type EnergyBooking } from '@abnehm/contracts/energy';
 
+import { assertWholeNumber } from './whole-number.ts';
+
 // Verbaute Energie, Levelkurve und Hälften (Spezifikation 4, Abschnitt 3; Werte aus #18, nicht belegt).
 // Eingabe sind die Buchungen je Person, Ausgabe Level und Hälften für `IslandProgress`. Bestand und
 // Anzeige `max(0, Summe)` liefert das Fundament (`summarizeEnergy`, `shownEnergy`).
@@ -93,11 +95,5 @@ function levelReachedBy(spent: number): number {
   return level;
 }
 
-function assertLevel(level: number): void {
-  if (!Number.isInteger(level) || level < 1) throw new RangeError(`Level muss eine ganze Zahl ab 1 sein: ${level}`);
-}
-
-function assertSpent(spent: number): number {
-  if (!Number.isInteger(spent) || spent < 0) throw new RangeError(`Verbaute Energie muss eine ganze Zahl ab 0 sein: ${spent}`);
-  return spent;
-}
+const assertLevel = (level: number) => assertWholeNumber(level, 1, 'Level');
+const assertSpent = (spent: number) => assertWholeNumber(spent, 0, 'Verbaute Energie');

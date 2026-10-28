@@ -1,6 +1,7 @@
 import type { MomoForm } from '@abnehm/contracts/island';
 
 import { endlessAreaKey, type GameCatalog } from './catalog.ts';
+import { assertWholeNumber } from './whole-number.ts';
 
 // Freischaltungen und Entwicklungsformen (Spezifikation 4, Abschnitt 5; Formlevel aus #69). Was ein
 // Level freischaltet, steht im Katalog; fehlt dort ein Eintrag, zählt das Level trotzdem.
@@ -85,6 +86,4 @@ export function unlocksAt(catalog: GameCatalog, level: number): LevelUnlocks {
   return { level, blueprints, form: formLevel ? formAt(level) : null, area: null };
 }
 
-function assertLevel(level: number): void {
-  if (!Number.isInteger(level) || level < 1) throw new RangeError(`Level muss eine ganze Zahl ab 1 sein: ${level}`);
-}
+const assertLevel = (level: number) => assertWholeNumber(level, 1, 'Level');

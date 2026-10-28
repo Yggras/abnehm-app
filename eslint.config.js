@@ -51,6 +51,13 @@ const gameRulesImports = onlyImports(
   'Die Spielregeln sind rein: nur das Vertragsmodul und eigene Dateien, keine Bibliotheks-, Netzwerk- oder Plattform-APIs.',
 );
 
+/** Ausdrücke, die Zeitpunkt oder Zone der Laufzeit lesen. */
+const readsCurrentTime = {
+  now: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+  date: "NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date']",
+  zone: "CallExpression[callee.property.name='resolvedOptions']",
+};
+
 const testOnlySeeds = {
   group: ['@abnehm/contracts/seeds'],
   message: 'Seed-Manifeste gibt es nur in Tests und Testfähigkeiten (apps/backend/dev/, apps/mobile/src/test-capabilities/).',
@@ -127,8 +134,7 @@ export default defineConfig([
       'no-restricted-syntax': [
         ...gameRulesImports['no-restricted-syntax'],
         {
-          selector:
-            "CallExpression[callee.object.name='Date'][callee.property.name='now'], NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date'], CallExpression[callee.property.name='resolvedOptions']",
+          selector: Object.values(readsCurrentTime).join(', '),
           message: 'Die Spielregeln lesen weder Uhr noch Zone; Zeitpunkt und lokaler Tag kommen als Fakten herein.',
         },
       ],
@@ -152,15 +158,15 @@ export default defineConfig([
       'no-restricted-syntax': [
         'error',
         {
-          selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
+          selector: readsCurrentTime.now,
           message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus Date.now().',
         },
         {
-          selector: "NewExpression[callee.name='Date'][arguments.length=0], CallExpression[callee.name='Date']",
+          selector: readsCurrentTime.date,
           message: 'Die aktuelle Zeit kommt aus der Uhr (useClock() bzw. Clock), nicht aus Date().',
         },
         {
-          selector: "CallExpression[callee.property.name='resolvedOptions']",
+          selector: readsCurrentTime.zone,
           message: 'Die Zeitzone kommt aus der Uhr (reading.timeZone), nicht aus Intl.',
         },
       ],

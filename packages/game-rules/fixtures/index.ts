@@ -1,7 +1,7 @@
 import { EnergyBooking } from '@abnehm/contracts/energy';
 
 import { baseIsland } from '../content/base-island.ts';
-import { rect } from '../content/layout.ts';
+import { rect, stageArt as stages } from '../content/define.ts';
 import type { Area, Blueprint, Deko, GameCatalog, LandscapeTemplate } from '../src/catalog.ts';
 
 // Fixtures der Spielregeln; nur in Tests verwenden.
@@ -57,7 +57,6 @@ export const tracer = {
 // Gebiete, Landschaftsvorlagen und Deko. Er ist für sich gültig (`checkCatalog`) und unabhängig von
 // späteren Inhalten.
 
-const stages = (key: string) => [`${key}_1`, `${key}_2`, `${key}_3`] as const;
 const blueprint = (key: string, role: Blueprint['role'], origin: 'level' | 'entdeckung' | 'besucher', priceLevel: number): Blueprint => ({
   key, name: key, role, origin, priceLevel, art: stages(key),
 });

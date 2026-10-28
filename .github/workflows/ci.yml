@@ -56,6 +56,11 @@ jobs:
 
       - run: npm ci
 
+      # Schnappschüsse der Katalogversionen auf main sind unveränderlich; der Test vergleicht mit
+      # origin/main (packages/game-rules/test/catalog-versions.test.ts).
+      - name: main für den Vergleich der Katalogversionen holen
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+
       # Startet über docker compose ein eigenes, flüchtiges Postgres (apps/backend/test/compose.yaml).
       - name: Backend- und Pakettests (Vitest)
         run: npm run test:node -- --project '!release' --shard ${{ matrix.shard }}/2

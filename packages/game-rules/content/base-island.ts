@@ -1,8 +1,9 @@
 import type { BaseIsland } from '../src/catalog.ts';
-import { rect } from './layout.ts';
+import { rect } from './define.ts';
 
 // Grundinsel (Spezifikation 4, Abschnitte 4 und 7). Raster 16 × 12, Feldschlüssel
-// `grundinsel:‹x›:‹y›`. Aufteilung beim Schneiden von #179 festgelegt (Designwert, nicht belegt):
+// `grundinsel:‹x›:‹y›`. Die Spezifikation legt die Aufteilung nicht fest; diese ist ein Designwert
+// aus der Umsetzung von #179, nicht belegt (docs/entwicklung.md, „Spielregeln und Spielkatalog“):
 //
 //   x  0 … 3 | 4 … 5 | 6 … 9               | 10 … 11 | 12 … 15
 //   y 0 … 4  Ecke a  | Rolle a | Gemeinschaftsplatz | Rolle b | Ecke b

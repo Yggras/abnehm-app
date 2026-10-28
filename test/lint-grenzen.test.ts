@@ -88,7 +88,7 @@ describe('Grenze der Spielregeln (#179)', () => {
   });
 
   it('erlaubt das Vertragsmodul und eigene Dateien', async () => {
-    const code = "import { summarizeEnergy } from '@abnehm/contracts/energy';\nimport { rect } from './layout.ts';\nexport const s = [summarizeEnergy, rect];";
+    const code = "import { summarizeEnergy } from '@abnehm/contracts/energy';\nimport { rect } from './define.ts';\nexport const s = [summarizeEnergy, rect];";
     for (const path of paths) expect(await violations(code, path)).toEqual([]);
   });
 });
