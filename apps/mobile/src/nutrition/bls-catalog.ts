@@ -11,9 +11,10 @@ export type BlsFood = Readonly<{ key: string; snapshot: NutritionSnapshot }>;
 
 export type BlsCatalog = {
   /**
-   * Treffer in Rangfolge: Der Name beginnt mit der Anfrage, dann beginnt ein Wort mit jedem Suchwort
-   * (FTS5-Präfixsuche), dann steckt ein Suchwort ab drei Zeichen im Wortinneren (Nutzerentscheidung
-   * vom 28.10.2026 in #154). Innerhalb einer Stufe stehen kürzere Namen vorn.
+   * Treffer in Rangfolge (#154): Der Name beginnt mit der Anfrage, und dort endet ein Wort; dann
+   * beginnt der Name mit ihr, ohne Leerzeichen gezählt; dann beginnt ein Wort mit jedem Suchwort
+   * (FTS5-Präfixsuche); zuletzt steckt ein Suchwort ab drei Zeichen im Wortinneren
+   * (Nutzerentscheidung vom 28.10.2026). Innerhalb einer Stufe stehen kürzere Namen vorn.
    */
   search(query: SearchQuery, limit: number): BlsFood[];
 };
