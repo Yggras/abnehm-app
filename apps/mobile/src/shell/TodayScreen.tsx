@@ -40,10 +40,11 @@ const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason 
 const emptyTextOf = (reasonKey: string) => (emptyTexts as Readonly<Record<string, string>>)[reasonKey] ?? 'Hier gibt es noch nichts zu zeigen.';
 /**
  * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg oder ml als l; umgerechnet
- * nur an der Oberfläche (Spezifikation 3, Abschnitt 1).
+ * nur an der Oberfläche (Spezifikation 3, Abschnitt 1). Gerundet wird hier kaufmännisch: Hermes
+ * zeigte für 250 ml im iOS-Simulator „0,2 l“, Node „0,3 l“ (beobachtet am 28.10.2026, #171).
  */
 function thousandthsWithOneDecimal(value: number): string {
-  return (value / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (Math.round(value / 100) / 10).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 function staleLabel(dataAsOf: Instant): string {
   const [date, time] = dataAsOf.split('T');
