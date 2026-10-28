@@ -70,9 +70,16 @@ async function openAccount(accountId: string) {
 
 afterEach(() => files.remove());
 
+/** Registry, der die App-Sitzung die Kontodatenbank samt Handlern gemeldet hat. */
+function registryOn(database: LocalDatabase, handlers: QuickCommandHandlers) {
+  const registry = createQuickCommandRegistry();
+  registry.opened(database, handlers);
+  return registry;
+}
+
 describe('execute', () => {
   it('führt den Handler in einer lokalen Transaktion aus und liefert `QuickCommandOutcome` mit Undo-Token', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers());
+    const registry = registryOn(db, testHandlers());
 
     const outcome = registry.execute(addWater);
 
@@ -81,7 +88,7 @@ describe('execute', () => {
   });
 
   it('rollt zurück, wenn der Handler wirft, und vergibt keinen Token', () => {
-    const registry = createQuickCommandRegistry(() => db, {
+    const registry = registryOn(db, {
       'water.quick_add': quickCommandHandler<'water.quick_add', string>({
         execute(tx) {
           sqliteOf(tx).insert(schema.waterEntry).values(waterRow(water(1), PERSON)).run();
@@ -95,25 +102,40 @@ describe('execute', () => {
     expect(db.read(waterMl)).toEqual([]);
   });
 
-  it('bucht in der gerade geöffneten Kontodatenbank und scheitert ohne geöffnete', async () => {
-    const registry = createQuickCommandRegistry(() => databases.current(), testHandlers());
-    const konto = await openAccount('konto_b');
+  it('bucht in der gemeldeten Kontodatenbank und scheitert, sobald die Sitzung sie wieder löst', async () => {
+    const registry = createQuickCommandRegistry();
+    expect(() => registry.execute(addWater)).toThrow(LocalDatabaseClosedError);
 
+    const konto = await openAccount('konto_b');
+    const release = registry.opened(konto, testHandlers());
     registry.execute(addWater);
     expect(konto.read(waterMl)).toEqual([250]);
 
+    release();
     databases.lock();
     expect(() => registry.execute(addWater)).toThrow(LocalDatabaseClosedError);
   });
 
+  it('nutzt die Handler des geöffneten Kontos; das Lösen eines früheren Kontos ändert daran nichts', async () => {
+    const registry = createQuickCommandRegistry();
+    const releaseA = registry.opened(db, {});
+    const konto = await openAccount('konto_b');
+    registry.opened(konto, testHandlers());
+
+    releaseA();
+    registry.execute(addWater);
+
+    expect(konto.read(waterMl)).toEqual([250]);
+  });
+
   it('meldet einen fehlenden Handler als `MissingQuickCommandError`', () => {
-    const registry = createQuickCommandRegistry(() => db, {});
+    const registry = registryOn(db, {});
 
     expect(() => registry.execute(addWater)).toThrow(MissingQuickCommandError);
   });
 
   it('vergibt je Ausführung einen eigenen Token', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers());
+    const registry = registryOn(db, testHandlers());
 
     const first = registry.execute(addWater);
     const second = registry.execute(addWater);
@@ -124,7 +146,7 @@ describe('execute', () => {
 
 describe('undo', () => {
   it('ruft das Undo des erzeugenden Handlers mit seinen Daten auf und macht die Buchung rückgängig', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers());
+    const registry = registryOn(db, testHandlers());
     const first = registry.execute(addWater);
     registry.execute(addWater);
 
@@ -135,7 +157,7 @@ describe('undo', () => {
   });
 
   it('löst einen Token höchstens einmal ein, auch bei zweitem Aufruf', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers());
+    const registry = registryOn(db, testHandlers());
     const { undoToken } = registry.execute(addWater);
 
     registry.undo(undoToken);
@@ -145,7 +167,7 @@ describe('undo', () => {
   });
 
   it('liefert für einen abgelaufenen Token einen No-op und ruft kein Undo auf', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers());
+    const registry = registryOn(db, testHandlers());
     const { undoToken } = registry.execute(addWater);
 
     registry.expire(undoToken);
@@ -156,21 +178,21 @@ describe('undo', () => {
   });
 
   it('liefert für einen unbekannten Token einen No-op', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers());
+    const registry = registryOn(db, testHandlers());
 
     expect(registry.undo('undo-unbekannt')).toEqual({ type: 'noop' });
   });
 
   it('kennt keine Tokens einer anderen Registry', () => {
-    const other = createQuickCommandRegistry(() => db, testHandlers());
+    const other = registryOn(db, testHandlers());
     const { undoToken } = other.execute(addWater);
 
-    expect(createQuickCommandRegistry(() => db, testHandlers()).undo(undoToken)).toEqual({ type: 'noop' });
+    expect(registryOn(db, testHandlers()).undo(undoToken)).toEqual({ type: 'noop' });
     expect(undoCalls).toEqual([]);
   });
 
   it('verbraucht den Token auch, wenn das Undo scheitert, und rollt das Undo zurück', () => {
-    const registry = createQuickCommandRegistry(() => db, testHandlers({ failUndo: true }));
+    const registry = registryOn(db, testHandlers({ failUndo: true }));
     const { undoToken } = registry.execute(addWater);
 
     expect(() => registry.undo(undoToken)).toThrow('Fachfehler');
@@ -181,7 +203,7 @@ describe('undo', () => {
   });
 
   it('endet mit der Datenbank: Nach dem Sperren des Kontos ist der Token ein No-op', () => {
-    const registry = createQuickCommandRegistry(() => databases.current(), testHandlers());
+    const registry = registryOn(db, testHandlers());
     const { undoToken } = registry.execute(addWater);
 
     databases.lock();
@@ -191,10 +213,11 @@ describe('undo', () => {
   });
 
   it('nach einem Kontowechsel macht ein Token des vorigen Kontos nichts im neuen rückgängig', async () => {
-    const registry = createQuickCommandRegistry(() => databases.current(), testHandlers());
+    const registry = registryOn(db, testHandlers());
     const { undoToken } = registry.execute(addWater);
 
     const konto = await openAccount('konto_b');
+    registry.opened(konto, testHandlers());
     registry.execute(addWater);
 
     expect(registry.undo(undoToken)).toEqual({ type: 'noop' });
