@@ -1,17 +1,25 @@
 import { z } from 'zod';
 
 import { DisplayName, EntityId, Instant, LocalDate, ServerVersion, TimeZone } from './base.ts';
+import { heightCmLimits } from './units.ts';
 
 // Person (Spezifikation 0, Abschnitt 8; Felder aus Spezifikation 1, Abschnitt 2). Konto-Verweis,
 // Serverfelder und `time_zone` sind nie Teil des allgemeinen Upserts: Die Zeitzone ändert
 // ausschließlich `updatePersonTimeZone`, damit ein veralteter Datensatz sie nie zurücksetzt.
 
+/** Berechnungsgeschlecht für Mifflin-St Jeor; die Formel kennt nur diese zwei Werte. */
+export const CalculationSex = z.enum(['maennlich', 'weiblich']);
+export type CalculationSex = z.infer<typeof CalculationSex>;
+
+/** Aktivitätsstufe; sie rechnet mit PAL 1,4 / 1,6 / 1,8 den Grundumsatz zum Gesamtumsatz hoch. */
+export const ActivityLevel = z.enum(['wenig_aktiv', 'maessig_aktiv', 'aktiv']);
+export type ActivityLevel = z.infer<typeof ActivityLevel>;
+
 const bodyFields = {
-  calculationSex: z.enum(['maennlich', 'weiblich']),
+  calculationSex: CalculationSex,
   birthDate: LocalDate,
-  /** Eingabegrenzen 120–230 cm (Designwert aus Spezifikation 1, Abschnitt 3). */
-  heightCm: z.int().min(120).max(230),
-  activityLevel: z.enum(['wenig_aktiv', 'maessig_aktiv', 'aktiv']),
+  heightCm: z.int().min(heightCmLimits.min).max(heightCmLimits.max),
+  activityLevel: ActivityLevel,
   pregnantOrBreastfeeding: z.boolean(),
   knownEatingDisorder: z.boolean(),
   disclaimerAcceptedAt: Instant,

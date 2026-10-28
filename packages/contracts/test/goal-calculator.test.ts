@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { LocalDate } from '../src/base.ts';
 import {
+  ageOn,
   calculateGoals,
-  calorieNeeds,
   sportSessionThreshold,
   type GoalCalculation,
   type GoalCalculatorInput,
+  type GoalInputError,
 } from '../src/goal-calculator.ts';
 
 // Nachweis für #127: Wahrheitstabellen des Zielrechners (Spezifikation 1, Abschnitt 3). Erwartete
@@ -18,7 +19,7 @@ const day = (value: string) => LocalDate.parse(value);
 const referenz: GoalCalculatorInput = {
   calculationDate: day('2026-10-28'),
   calculationSex: 'weiblich',
-  birthDate: day('1991-05-10'),
+  ageYears: 35,
   heightCm: 168,
   weightG: 80_000,
   weightTrendG: null,
@@ -38,11 +39,16 @@ function berechnet(changes: Partial<GoalCalculatorInput> = {}): GoalCalculation 
   return result;
 }
 
+/** Fehlerschlüssel einer ungültigen Eingabe; bei gültiger Eingabe ein leeres Array. */
+function fehler(changes: Partial<GoalCalculatorInput>): GoalInputError[] {
+  const result = calculateGoals({ ...referenz, ...changes });
+  return result.type === 'ungueltig' ? result.errors : [];
+}
+
 describe('Referenzfall der Recherche', () => {
   it('Frau, 35 Jahre, 168 cm, 80 kg → 1.514 kcal Grundumsatz, ≈ 2.120 kcal Gesamtumsatz, ≈ 1.620 kcal Budget', () => {
     const result = berechnet();
 
-    expect(result.ageYears).toBe(35);
     expect(result.basalMetabolicRate).toEqual({ kcal: 1_514, milliKcal: 1_514_000 });
     expect(result.totalEnergyExpenditure).toEqual({ kcal: 2_120, milliKcal: 2_120_000 });
     expect(result.deficit).toEqual({ kcal: 500, milliKcal: 500_000 });
@@ -81,36 +87,31 @@ describe('Wahrheitstabelle: Berechnungsgeschlecht × Aktivitätsstufe', () => {
 describe('Untergrenze und Rundung des Budgets', () => {
   it('hebt auf 1.200 kcal an, wenn der Grundumsatz darunter liegt, und setzt den Hinweis', () => {
     // Frau, 60 Jahre, 155 cm, 50 kg: Grundumsatz 1.007,75; × 1,4 = 1.410,85; − 500 = 910,85 < 1.200.
-    const result = berechnet({ birthDate: day('1966-01-01'), heightCm: 155, weightG: 50_000, goalWeightG: 47_500 });
+    const result = berechnet({ ageYears: 60, heightCm: 155, weightG: 50_000, goalWeightG: 47_500 });
 
     expect(result.basalMetabolicRate.kcal).toBe(1_008);
     expect(result.lowerBound.kcal).toBe(1_200);
     expect(result.calorieBudget.kcal).toBe(1_200);
     expect(result.budgetRaisedToLowerBound).toBe(true);
-    expect(result.hints).toContain('budget_raised_to_lower_bound');
+    expect(result.hints).toEqual(['budget_raised_to_lower_bound']);
   });
 
   it('hebt auf den Grundumsatz an und rundet dann auf das nächste Vielfache von 10 darüber', () => {
     // Mann, 41 Jahre, 175 cm, 80 kg, zügiger: Grundumsatz 1.693,75; × 1,4 = 2.371,25; − 750 = 1.621,25.
     // Auf den Grundumsatz angehoben ergäbe die Rundung 1.690 und läge unter der Untergrenze.
-    const result = berechnet({
-      calculationSex: 'maennlich',
-      birthDate: day('1985-01-01'),
-      heightCm: 175,
-      pace: 'zuegiger',
-    });
+    const result = berechnet({ calculationSex: 'maennlich', ageYears: 41, heightCm: 175, pace: 'zuegiger' });
 
     expect(result.lowerBound.kcal).toBe(1_694);
     expect(result.calorieBudget).toEqual({ kcal: 1_700, milliKcal: 1_700_000 });
     expect(result.budgetRaisedToLowerBound).toBe(true);
-    expect(result.hints).toContain('budget_raised_to_lower_bound');
+    expect(result.hints).toEqual(['budget_raised_to_lower_bound']);
   });
 
   it('rundet ein knapp über der Untergrenze liegendes Budget nach oben statt darunter, ohne Anhebungshinweis', () => {
     // Mann, 30 Jahre, 173 cm, 94,4 kg, zügiger: Grundumsatz 1.880,25; × 1,4 − 750 = 1.882,35 → 1.880 < 1.880,25.
     const result = berechnet({
       calculationSex: 'maennlich',
-      birthDate: day('1996-01-01'),
+      ageYears: 30,
       heightCm: 173,
       weightG: 94_400,
       goalWeightG: 90_000,
@@ -120,12 +121,23 @@ describe('Untergrenze und Rundung des Budgets', () => {
     expect(result.lowerBound.kcal).toBe(1_880);
     expect(result.calorieBudget.kcal).toBe(1_890);
     expect(result.budgetRaisedToLowerBound).toBe(false);
-    expect(result.hints).not.toContain('budget_raised_to_lower_bound');
+    expect(result.hints).toEqual([]);
+  });
+
+  it('hebt auch im Haltemodus an, wenn schon der Gesamtumsatz unter der Untergrenze liegt', () => {
+    // Frau, 70 Jahre, 140 cm, 36,3 kg: Grundumsatz 727; × 1,4 = 1.017,8 < 1.200.
+    const result = berechnet({ ageYears: 70, heightCm: 140, weightG: 36_300, goalWeightG: null, pace: null });
+
+    expect(result.maintenanceReason).toBe('gewaehlt');
+    expect(result.totalEnergyExpenditure.kcal).toBe(1_018);
+    expect(result.calorieBudget.kcal).toBe(1_200);
+    expect(result.budgetRaisedToLowerBound).toBe(true);
+    expect(result.hints).toContain('budget_raised_to_lower_bound');
+    expect(result.manualBudgetRange).toEqual({ min: 1_200, max: 1_200, step: 10 });
   });
 
   it('setzt im Referenzfall keinen Anhebungshinweis', () => {
     expect(berechnet().budgetRaisedToLowerBound).toBe(false);
-    expect(berechnet().hints).not.toContain('budget_raised_to_lower_bound');
   });
 });
 
@@ -142,7 +154,7 @@ describe('Haltemodus', () => {
     expect(result.pace).toBeNull();
     expect(result.deficit).toBeNull();
     expect(result.calorieBudget.kcal).toBe(2_120);
-    expect(result.hints).toContain('maintenance_forced');
+    expect(result.hints).toEqual(['maintenance_forced']);
   });
 
   describe('BMI aus aktuellem Gewicht und Größe (200 cm: BMI 18,5 bei 74,0 kg)', () => {
@@ -189,10 +201,11 @@ describe('Haltemodus', () => {
   });
 
   it.each([
-    ['gleich dem aktuellen Gewicht', 80_000],
-    ['über dem aktuellen Gewicht', 82_500],
-  ])('setzt ihn mit Grund „gewählt“ und Hinweis, wenn das Zielgewicht %s liegt', (_, goalWeightG) => {
-    const result = berechnet({ goalWeightG, pace: 'zuegiger' });
+    ['gleich dem aktuellen Gewicht mit Tempo', { goalWeightG: 80_000, pace: 'zuegiger' }],
+    ['über dem aktuellen Gewicht mit Tempo', { goalWeightG: 82_500, pace: 'zuegiger' }],
+    ['gleich dem aktuellen Gewicht ohne Tempo', { goalWeightG: 80_000, pace: null }],
+  ] as const)('setzt ihn mit Grund „gewählt“ und Hinweis bei einem Zielgewicht %s', (_, changes) => {
+    const result = berechnet(changes);
 
     expect(result.maintenanceReason).toBe('gewaehlt');
     expect(result.pace).toBeNull();
@@ -209,18 +222,13 @@ describe('Haltemodus', () => {
   });
 });
 
-/** Fehlerschlüssel einer ungültigen Eingabe; bei gültiger Eingabe ein leeres Array. */
-function fehler(changes: Partial<GoalCalculatorInput>): string[] {
-  const result = calculateGoals({ ...referenz, ...changes });
-  return result.type === 'ungueltig' ? result.errors : [];
-}
-
 describe('Eingabegrenzen', () => {
   it.each([
     ['Größe 120 cm', { heightCm: 120, weightG: 30_000, goalWeightG: 28_000 }],
     ['Größe 230 cm', { heightCm: 230, weightG: 300_000, goalWeightG: 290_000 }],
     ['Gewicht 30,0 kg', { heightCm: 125, weightG: 30_000, goalWeightG: 29_000 }],
     ['Gewicht 300,0 kg', { weightG: 300_000, goalWeightG: 280_000 }],
+    ['Alter 18 Jahre', { ageYears: 18 }],
   ])('%s ist erlaubt', (_, changes) => {
     expect(fehler(changes)).toEqual([]);
   });
@@ -232,34 +240,42 @@ describe('Eingabegrenzen', () => {
     ['Gewicht 29,9 kg', { weightG: 29_900 }, ['weight_out_of_range']],
     ['Gewicht 300,1 kg', { weightG: 300_100 }, ['weight_out_of_range']],
     ['Gewicht 80,05 kg', { weightG: 80_050 }, ['weight_not_on_step']],
+    ['Alter 17 Jahre', { ageYears: 17 }, ['underage']],
     ['Größe und Gewicht zugleich', { heightCm: 100, weightG: 400_000 }, ['height_out_of_range', 'weight_out_of_range']],
   ] as const)('%s ergibt einen typisierten Fehlerschlüssel statt einer Ausnahme', (_, changes, errors) => {
     expect(fehler(changes)).toEqual(errors);
   });
 
-  describe('Alter ab 18 Jahren am Berechnungstag', () => {
-    it('ein 18. Geburtstag am Berechnungstag gilt als volljährig', () => {
-      expect(berechnet({ birthDate: day('2008-10-28') }).ageYears).toBe(18);
-    });
+  it('meldet mehrere Verstöße der Ziele zugleich', () => {
+    expect(fehler({ goalWeightG: 40_000, manualBudgetKcal: 1_000, waterTargetMl: 100, weeklySportTargetMinutes: 5 })).toEqual([
+      'goal_weight_below_lower_limit',
+      'manual_budget_out_of_range',
+      'water_target_out_of_range',
+      'sport_target_out_of_range',
+    ]);
+  });
+});
 
-    it('einen Tag vor dem 18. Geburtstag ergibt `underage`', () => {
-      expect(fehler({ birthDate: day('2008-10-29') })).toEqual(['underage']);
-    });
+describe('ageOn: Alter in vollen Jahren am Berechnungstag', () => {
+  it('ein 18. Geburtstag am Berechnungstag gilt als volljährig, der Tag davor nicht', () => {
+    expect(ageOn(day('2008-10-28'), day('2026-10-28'))).toBe(18);
+    expect(ageOn(day('2008-10-29'), day('2026-10-28'))).toBe(17);
+  });
 
-    it('ein Geburtsdatum nach dem Berechnungstag ergibt `underage`', () => {
-      expect(fehler({ birthDate: day('2026-10-29') })).toEqual(['underage']);
-    });
+  it('zählt volle Jahre: 35 am Geburtstag, 34 am Tag davor', () => {
+    expect(ageOn(day('1991-05-10'), day('2026-05-10'))).toBe(35);
+    expect(ageOn(day('1991-05-10'), day('2026-05-09'))).toBe(34);
+  });
 
-    it('wer am 29. Februar geboren ist, wird in Nichtschaltjahren am 1. März ein Jahr älter (Designwert)', () => {
-      const born = { birthDate: day('2008-02-29') };
-      expect(fehler({ ...born, calculationDate: day('2026-02-28') })).toEqual(['underage']);
-      expect(berechnet({ ...born, calculationDate: day('2026-03-01') }).ageYears).toBe(18);
-    });
+  it('wer am 29. Februar geboren ist, wird in Nichtschaltjahren am 1. März ein Jahr älter (Designwert)', () => {
+    expect(ageOn(day('2008-02-29'), day('2026-02-28'))).toBe(17);
+    expect(ageOn(day('2008-02-29'), day('2026-03-01'))).toBe(18);
+    expect(ageOn(day('2008-02-29'), day('2028-02-29'))).toBe(20);
+  });
 
-    it('zählt volle Jahre: 35 am Geburtstag, 34 am Tag davor', () => {
-      expect(berechnet({ calculationDate: day('2026-05-10') }).ageYears).toBe(35);
-      expect(berechnet({ calculationDate: day('2026-05-09') }).ageYears).toBe(34);
-    });
+  it('ist vor der Geburt negativ, der Rechner meldet dann `underage`', () => {
+    expect(ageOn(day('2026-10-29'), day('2026-10-28'))).toBe(-1);
+    expect(fehler({ ageYears: -1 })).toEqual(['underage']);
   });
 });
 
@@ -324,13 +340,13 @@ describe('Zielgewicht', () => {
   it.each([
     ['nicht in 0,1-kg-Schritten', 76_050, 'goal_weight_not_on_step'],
     ['über 300,0 kg', 300_100, 'goal_weight_out_of_range'],
-  ])('ist %s ungültig', (_, goalWeightG, error) => {
+  ] as const)('ist %s ungültig', (_, goalWeightG, error) => {
     expect(fehler({ goalWeightG })).toEqual([error]);
   });
 });
 
 describe('Manuelles Budget', () => {
-  // Referenzfall: Untergrenze 1.514 kcal, Gesamtumsatz 2.119,6 kcal (im Haltemodus 2.120 kcal).
+  // Referenzfall: Untergrenze 1.514 kcal, Gesamtumsatz 2.119,6 → 2.120 kcal.
   it('reicht in 10-kcal-Schritten von der Untergrenze bis zum Gesamtumsatz', () => {
     expect(berechnet().manualBudgetRange).toEqual({ min: 1_520, max: 2_120, step: 10 });
   });
@@ -351,8 +367,17 @@ describe('Manuelles Budget', () => {
     ['unter der Untergrenze', 1_510, 'manual_budget_out_of_range'],
     ['über dem Gesamtumsatz', 2_130, 'manual_budget_out_of_range'],
     ['nicht in 10-kcal-Schritten', 1_625, 'manual_budget_not_on_step'],
-  ])('ist %s ungültig', (_, manualBudgetKcal, error) => {
+  ] as const)('ist %s ungültig', (_, manualBudgetKcal, error) => {
     expect(fehler({ manualBudgetKcal })).toEqual([error]);
+  });
+
+  it('übersteigt den Gesamtumsatz auch dann nicht, wenn dieser auf 5 endet', () => {
+    // 80,4 kg: Grundumsatz 1.518; × 1,4 = 2.125,2 → 2.125 kcal. Größtes Vielfaches von 10 darunter: 2.120.
+    const changes = { weightG: 80_400 };
+
+    expect(berechnet(changes).totalEnergyExpenditure.kcal).toBe(2_125);
+    expect(berechnet(changes).manualBudgetRange).toEqual({ min: 1_520, max: 2_120, step: 10 });
+    expect(fehler({ ...changes, manualBudgetKcal: 2_130 })).toEqual(['manual_budget_out_of_range']);
   });
 
   it('gibt es im erzwungenen Haltemodus nicht', () => {
@@ -360,7 +385,7 @@ describe('Manuelles Budget', () => {
     expect(fehler({ pregnantOrBreastfeeding: true, manualBudgetKcal: 1_800 })).toEqual(['manual_budget_in_forced_maintenance']);
   });
 
-  it('gilt im gewählten Haltemodus, ohne Defizit (Nutzerentscheidung zu #127)', () => {
+  it('gilt im gewählten Haltemodus, ohne Defizit', () => {
     const result = berechnet({ pace: null, manualBudgetKcal: 1_800 });
 
     expect(result.maintenanceReason).toBe('gewaehlt');
@@ -411,14 +436,16 @@ describe('Prognose', () => {
 
 describe('Wasserziel', () => {
   it.each([
-    ['18 Jahren', '2008-10-28', 1_500],
-    ['50 Jahren, am 50. Geburtstag', '1976-10-28', 1_500],
-    ['50 Jahren, am Tag vor dem 51. Geburtstag', '1975-10-29', 1_500],
-    ['51 Jahren', '1975-10-28', 1_250],
-  ])('schlägt mit %s %i ml vor', (_, birthDate, suggestedMl) => {
-    const { water } = berechnet({ birthDate: day(birthDate) });
-
-    expect(water).toMatchObject({ targetMl: suggestedMl, suggestedMl, range: { min: 500, max: 5_000, step: 250 } });
+    [18, 1_500],
+    [50, 1_500],
+    [51, 1_250],
+  ])('schlägt mit %i Jahren %i ml vor', (ageYears, suggestedMl) => {
+    expect(berechnet({ ageYears }).water).toEqual({
+      targetMl: suggestedMl,
+      suggestedMl,
+      range: { min: 500, max: 5_000, step: 250 },
+      hintKey: 'water_need_higher_in_heat_and_sport',
+    });
   });
 
   it('übernimmt eine Wahl in 250-ml-Schritten von 500 bis 5.000 ml', () => {
@@ -429,12 +456,11 @@ describe('Wasserziel', () => {
     [250, 'water_target_out_of_range'],
     [5_250, 'water_target_out_of_range'],
     [1_600, 'water_target_not_on_step'],
-  ])('lehnt %i ml ab', (waterTargetMl, error) => {
+  ] as const)('lehnt %i ml ab', (waterTargetMl, error) => {
     expect(fehler({ waterTargetMl })).toEqual([error]);
   });
 
-  it('nennt immer den Mehrbedarf bei Hitze und Sport', () => {
-    expect(berechnet().water.hintKey).toBe('water_need_higher_in_heat_and_sport');
+  it('nennt den Mehrbedarf bei Hitze und Sport auch im Haltemodus', () => {
     expect(berechnet({ pregnantOrBreastfeeding: true }).water.hintKey).toBe('water_need_higher_in_heat_and_sport');
   });
 });
@@ -454,35 +480,8 @@ describe('Sportwochenziel', () => {
     [20, 'sport_target_out_of_range'],
     [610, 'sport_target_out_of_range'],
     [155, 'sport_target_not_on_step'],
-  ])('lehnt %i Minuten ab', (weeklySportTargetMinutes, error) => {
+  ] as const)('lehnt %i Minuten ab', (weeklySportTargetMinutes, error) => {
     expect(fehler({ weeklySportTargetMinutes })).toEqual([error]);
-  });
-});
-
-describe('calorieNeeds: Prüfung einer Zielversion aus ihren Berechnungswerten', () => {
-  it('ergibt aus Körperdaten samt Alter dieselben Werte wie der Referenzfall', () => {
-    expect(
-      calorieNeeds({ calculationSex: 'weiblich', ageYears: 35, heightCm: 168, weightG: 80_000, activityLevel: 'wenig_aktiv' }),
-    ).toEqual({
-      basalMetabolicRate: { kcal: 1_514, milliKcal: 1_514_000 },
-      totalEnergyExpenditure: { kcal: 2_120, milliKcal: 2_120_000 },
-      lowerBound: { kcal: 1_514, milliKcal: 1_514_000 },
-    });
-  });
-
-  it.each([
-    ['Untergrenze 1.200 kcal', { calculationSex: 'weiblich', birthDate: day('1966-01-01'), heightCm: 155, weightG: 50_000, goalWeightG: 47_500 }],
-    ['Viertel-kcal im Grundumsatz', { calculationSex: 'maennlich', birthDate: day('1996-01-01'), heightCm: 173, weightG: 94_400, goalWeightG: 90_000 }],
-    ['aktiv', { calculationSex: 'maennlich', activityLevel: 'aktiv' }],
-  ] as const)('stimmt mit calculateGoals überein (%s)', (_, changes) => {
-    const result = berechnet(changes);
-    const { calculationSex, heightCm, weightG, activityLevel } = { ...referenz, ...changes };
-
-    expect(calorieNeeds({ calculationSex, ageYears: result.ageYears, heightCm, weightG, activityLevel })).toEqual({
-      basalMetabolicRate: result.basalMetabolicRate,
-      totalEnergyExpenditure: result.totalEnergyExpenditure,
-      lowerBound: result.lowerBound,
-    });
   });
 });
 
@@ -503,13 +502,4 @@ describe('Schwelle der Sporteinheit', () => {
   it('rundet auf ganze Minuten auf: 200 Minuten auf 3 Sporttage = 66,67 → 67', () => {
     expect(sportSessionThreshold(200, 3)).toBe(67);
   });
-});
-
-it('meldet mehrere Verstöße der Ziele zugleich', () => {
-  expect(fehler({ goalWeightG: 40_000, manualBudgetKcal: 1_000, waterTargetMl: 100, weeklySportTargetMinutes: 5 })).toEqual([
-    'goal_weight_below_lower_limit',
-    'manual_budget_out_of_range',
-    'water_target_out_of_range',
-    'sport_target_out_of_range',
-  ]);
 });
