@@ -30,7 +30,7 @@ export const seedIds = {
   goalVersion: { philipp: id('0010', 1) },
   weeklyPlanVersion: { philipp: id('0011', 1) },
   dailyGoal: { philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)] },
-  waterEntry: { philippHeute: [id('0020', 1), id('0020', 2)] },
+  waterEntry: { philippHeute: [id('0020', 1), id('0020', 2), id('0020', 3), id('0020', 4), id('0020', 5)] },
   weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2) },
   sportEntry: { philippGestern: id('0022', 1) },
 } as const;

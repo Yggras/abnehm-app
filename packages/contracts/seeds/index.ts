@@ -1,5 +1,5 @@
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
-import { soloManifest } from './solo.ts';
+import { soloManifest, soloWaterManifests } from './solo.ts';
 
 // Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Nur für Development- und Testartefakte:
 // Lint erlaubt `@abnehm/contracts/seeds` nur in Tests und in den registrierten Testfähigkeiten, das
@@ -27,4 +27,4 @@ export { buildSeedState, type SeedArea, type SeedDevicePlan, type SeedEntity, ty
 export { seedAccounts, seedClock, seedDays, seedIds, seedInstallations, seedPassword } from './ids.ts';
 
 /** Alle Szenarien mit Manifest. */
-export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = { solo: soloManifest };
+export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = { solo: soloManifest, ...soloWaterManifests };

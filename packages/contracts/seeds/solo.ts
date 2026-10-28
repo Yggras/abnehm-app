@@ -1,6 +1,6 @@
 import { buildSeedState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations, seedUtcOffsetMinutes } from './ids.ts';
-import { SeedManifest } from './manifest.ts';
+import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat
@@ -133,17 +133,33 @@ const ziele: SeedPart = {
   ],
 };
 
-/** Tracker (Spezifikation 3): zwei Gläser Wasser heute, eine Radtour gestern, zwei Wiegungen. */
-const tracker: SeedPart = {
+/** Wasser heute, ohne Importe (Spezifikation 3, Abschnitt 9): Menge und Zeitpunkt je Eintrag. */
+type WaterToday = readonly (readonly [amountMl: number, loggedAt: string])[];
+
+/**
+ * Wasser heute je Szenario; das Wasserziel ist 2500 ml. `solo` steht im Status `teil`, die Varianten
+ * zeigen die übrigen Status des Mini-Trackers (`trackerStatus` der Tracker-Regeln).
+ */
+const waterToday: Readonly<Record<SeedScenarioKey, WaterToday>> = {
+  solo: [[500, '2026-10-14T06:30:00.000Z'], [750, '2026-10-14T10:15:00.000Z']],
+  'solo-wasser-leer': [],
+  'solo-wasser-erreicht': [[500, '2026-10-14T06:30:00.000Z'], [750, '2026-10-14T10:15:00.000Z'], [750, '2026-10-14T11:00:00.000Z'], [500, '2026-10-14T11:30:00.000Z']],
+  'solo-wasser-ueber-ziel': [
+    [500, '2026-10-14T06:30:00.000Z'], [750, '2026-10-14T10:15:00.000Z'], [750, '2026-10-14T11:00:00.000Z'],
+    [500, '2026-10-14T11:30:00.000Z'], [250, '2026-10-14T11:45:00.000Z'],
+  ],
+};
+
+/** Tracker (Spezifikation 3): Wasser heute je Szenario, eine Radtour gestern, zwei Wiegungen. */
+const trackerOf = (water: WaterToday): SeedPart => ({
   area: 'tracker',
   entities: [
-    ...[
-      { id: seedIds.waterEntry.philippHeute[0], amount: 500, at: '2026-10-14T06:30:00.000Z' },
-      { id: seedIds.waterEntry.philippHeute[1], amount: 750, at: '2026-10-14T10:15:00.000Z' },
-    ].map(({ id, amount, at }) => ({
+    ...water.map(([amount, at], index) => ({
       table: 'water_entry',
+      // Seit #171 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+      entityType: 'water_entry',
       ownerPersonId: philipp,
-      row: { id, person_id: philipp, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
+      row: { id: seedIds.waterEntry.philippHeute[index] as string, person_id: philipp, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
     })),
     {
       table: 'sport_entry',
@@ -188,28 +204,40 @@ const tracker: SeedPart = {
       },
     })),
   ],
-};
+});
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-export const soloParts: readonly SeedPart[] = [fundament, ziele, tracker];
+export const soloParts: readonly SeedPart[] = [fundament, ziele, trackerOf(waterToday.solo)];
 
-const state = buildSeedState({
-  parts: soloParts,
-  createdAt: seedClock.instant,
-  devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
-});
+/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute. */
+function soloScenario(scenario: SeedScenarioKey, parts: readonly SeedPart[]): SeedManifest {
+  const state = buildSeedState({
+    parts,
+    createdAt: seedClock.instant,
+    devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
+  });
+  return SeedManifest.parse({
+    formatVersion: 1,
+    scenario,
+    // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll.
+    revision: 2,
+    clock: seedClock,
+    localDates: seedDays,
+    catalogVersion: null,
+    accounts: [seedAccounts.philipp],
+    installations: [seedInstallations.philippIphone],
+    initial: state,
+    // Ein Sync ändert nichts: Das iPhone ist schon auf dem Stand des Servers.
+    steps: [{ type: 'sync', installation: seedInstallations.philippIphone.key }],
+    target: state,
+  });
+}
 
-export const soloManifest = SeedManifest.parse({
-  formatVersion: 1,
-  scenario: 'solo',
-  revision: 1,
-  clock: seedClock,
-  localDates: seedDays,
-  catalogVersion: null,
-  accounts: [seedAccounts.philipp],
-  installations: [seedInstallations.philippIphone],
-  initial: state,
-  // Ein Sync ändert nichts: Das iPhone ist schon auf dem Stand des Servers.
-  steps: [{ type: 'sync', installation: seedInstallations.philippIphone.key }],
-  target: state,
-});
+export const soloManifest = soloScenario('solo', soloParts);
+
+/** Varianten von `solo` für jeden Status des Wasser-Mini-Trackers (#171). */
+export const soloWaterManifests = {
+  'solo-wasser-leer': soloScenario('solo-wasser-leer', [fundament, ziele, trackerOf(waterToday['solo-wasser-leer'])]),
+  'solo-wasser-erreicht': soloScenario('solo-wasser-erreicht', [fundament, ziele, trackerOf(waterToday['solo-wasser-erreicht'])]),
+  'solo-wasser-ueber-ziel': soloScenario('solo-wasser-ueber-ziel', [fundament, ziele, trackerOf(waterToday['solo-wasser-ueber-ziel'])]),
+} as const;

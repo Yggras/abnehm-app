@@ -14,6 +14,7 @@ import { createAppTestClock, type AppTestClock } from '../../mobile/src/test-cap
 import { createFaultController, faultyFetch, type FaultController } from '../../mobile/src/test-capabilities/faults.ts';
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { runSeed } from '../../mobile/src/test-capabilities/seed/seed-flow.ts';
+import { waterEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { createDevelopmentApp } from '../dev/app.ts';
 import { dumpServer } from '../dev/seed/server-seed.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
@@ -93,7 +94,9 @@ function sync(device: Phone, manifest: SeedManifest, installation: string) {
   const installationId = InstallationId.parse(manifest.installations.find(({ key }) => key === installation)!.installationId);
   const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });
   const database = device.session.databases.current()!;
-  return createSyncEngine({ database, registry: createSyncRegistry(foundationSyncEntities), transport, clock: device.clock, installationId }).sync();
+  // Wie der Composition Root: Die Bereiche melden ihre Entitäten an, hier der Wassereintrag (#171).
+  const registry = createSyncRegistry([...foundationSyncEntities, waterEntryEntity]);
+  return createSyncEngine({ database, registry, transport, clock: device.clock, installationId }).sync();
 }
 
 describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
@@ -105,7 +108,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
 
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(solo.initial.server));
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(solo.initial.devices['philipp-iphone']!));
-    expect(device.clock.read()).toEqual({ instant: '2026-10-14T12:00:00.000Z', timeZone: 'Europe/Berlin', localDate: '2026-10-14' });
+    expect(device.clock.read()).toEqual({ instant: '2026-10-14T12:00:00.000Z', timeZone: 'Europe/Berlin', localDate: '2026-10-14', utcOffsetMinutes: 120 });
     expect(device.session.auth.state()).toEqual({ type: 'angemeldet', accountId: solo.accounts[0]!.accountId });
     // Die kontobezogenen Beobachter (Kopf von „Heute“) hängen an der geseedeten Datenbank.
     expect(device.opened.map(({ accountId }) => accountId)).toEqual([solo.accounts[0]!.accountId]);
