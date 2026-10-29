@@ -122,9 +122,11 @@ describe('Gewichtseintrag im Sync', () => {
     const { backend, anna, a, b } = await setup();
     const entryId = EntityId.parse(randomUUID());
 
-    await a.trackers.weightRecorder.recordManualWeight({ entryId, personId: anna.personId, weightG: 92_000, measuredAt: morning });
+    const personId = EntityId.parse(anna.personId);
+
+    await a.trackers.weightRecorder.recordManualWeight({ entryId, personId, weightG: 92_000, measuredAt: morning });
     await a.sync();
-    await a.trackers.weightRecorder.recordManualWeight({ entryId, personId: anna.personId, weightG: 91_800, measuredAt: morning });
+    await a.trackers.weightRecorder.recordManualWeight({ entryId, personId, weightG: 91_800, measuredAt: morning });
     await a.sync();
     await b.sync();
 

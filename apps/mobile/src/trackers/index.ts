@@ -3,9 +3,10 @@
 // Fachänderung, Outbox-Operation und `reevaluateDailyGoals`; Ergebnisse tragen `messageKey`, Werte
 // und einen flüchtigen Undo-Token. Kein anderer Bereich liest die Tracker-Tabellen. Die Regeln
 // stehen im geteilten Modul `@abnehm/contracts/tracker-rules`.
+// Bildschirme (TSX) importieren die Routendateien direkt, etwa `WeightCaptureScreen`: Die Node-Tests des
+// Backends laden diesen Index und kennen kein JSX.
 export { appTrackers, useAppTrackers } from './app-trackers';
 export { createTrackers, type TrackerDependencies, type Trackers } from './trackers';
-export { WeightCaptureScreen } from './WeightCaptureScreen';
 export { InvalidTrackerInputError } from './invalid-input';
 export { waterEntryEntity } from './water-entity';
 export { weightEntryEntity } from './weight-entity';
