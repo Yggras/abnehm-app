@@ -158,7 +158,10 @@ test.each([
   await enter(text);
   await save();
 
-  expect(screen.getByText('Bitte ein Gewicht von 20,0 bis 350,0 kg mit höchstens einer Nachkommastelle eingeben.')).toBeOnTheScreen();
+  const invalid = 'Bitte ein Gewicht von 20,0 bis 350,0 kg mit höchstens einer Nachkommastelle eingeben.';
+  // Sichtbar unter dem Feld; Screenreader hören den Satz als Hinweis des Felds (TextField, #138).
+  expect(screen.getByText(invalid, { includeHiddenElements: true })).toBeOnTheScreen();
+  expect(field()).toHaveProp('accessibilityHint', `Fehler: ${invalid}`);
   expect(added()).toEqual([]);
   expect(onSaved).not.toHaveBeenCalled();
 });

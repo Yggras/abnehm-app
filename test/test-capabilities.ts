@@ -53,7 +53,9 @@ export const testCapabilities: readonly TestCapability[] = [
       'apps/mobile/src/test-capabilities/seed/',
     ],
     entries: { backendRoutes: ['POST /dev/seed'], deepLinks: ['seed'], commands: ['apps/backend/dev/seed-command.ts'] },
-    markers: ['/dev/seed', 'momo-insel-testpasswort'],
+    // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138)
+    // prüft der Release-Test zusätzlich über seinen Schlüssel.
+    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto'],
   },
   {
     key: 'testuhr',

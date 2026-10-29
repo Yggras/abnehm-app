@@ -1,17 +1,31 @@
-import { useRef, useState, type ComponentRef, type RefObject } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useImperativeHandle, useRef, useState, type ComponentRef, type Ref } from 'react';
+import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { color, radius, size, space, textScale, type } from './tokens';
 
-/** Das Eingabeelement eines `TextField`, etwa um es nach „Korrigieren“ zu fokussieren (#175). */
-export type TextFieldInput = ComponentRef<typeof TextInput>;
-
 /** Zahl mit Einheit (Dezimaltastatur), freier Text oder Suche mit Lupe. */
 export type TextFieldKind = 'number' | 'text' | 'search';
 
-export type TextFieldProps = {
+/** Tastatur und Autovervollständigung reichen an das native Feld und gehen den Vorgaben von `kind` vor. */
+type KeyboardProps = Pick<
+  TextInputProps,
+  | 'keyboardType'
+  | 'autoComplete'
+  | 'textContentType'
+  | 'autoCapitalize'
+  | 'autoCorrect'
+  | 'returnKeyType'
+  | 'onSubmitEditing'
+  | 'submitBehavior'
+  | 'maxLength'
+>;
+
+/** Was ein Formular am Feld bedient, etwa „Weiter“ auf der Tastatur zum nächsten Feld. */
+export type TextFieldHandle = { focus(): void };
+
+export type TextFieldProps = KeyboardProps & {
   /** Sichtbare Beschriftung über dem Feld; zugleich der zugängliche Name. */
   label: string;
   /** Beschriftung nur für Screenreader, etwa beim Suchfeld mit Platzhalter. */
@@ -22,11 +36,14 @@ export type TextFieldProps = {
   /** Einheit rechts im Feld, etwa „g“. */
   unit?: string;
   placeholder?: string;
-  /** Ungültige Eingabe: Rahmen in `problem` und darunter der Satz mit Lösungsweg. */
+  /** Kurzer Hinweis unter dem Feld, etwa „Mindestens 10 Zeichen“. */
+  hint?: string;
+  /** Ungültige Eingabe: Rahmen in `problem`; der Satz mit Lösungsweg ersetzt den Hinweis. */
   problem?: string;
+  /** Verdeckte Eingabe für Passwörter. */
+  secure?: boolean;
   disabled?: boolean;
-  /** Zugriff auf das Eingabeelement, etwa um es nach einer Rückfrage wieder zu fokussieren. */
-  inputRef?: RefObject<TextFieldInput | null>;
+  ref?: Ref<TextFieldHandle>;
 };
 
 const borderWidth = { resting: 1.5, focused: 2 };
@@ -34,7 +51,7 @@ const borderWidth = { resting: 1.5, focused: 2 };
 /**
  * Eingabefeld nach dem Design-System (gebrandetes `TextInput`): Fläche `surface-card`, Rahmen
  * `line-strong`, fokussiert 2 dp in `primary`. Ein Fehler steht nie nur als Farbe da, sondern als
- * Satz mit Symbol unter dem Feld.
+ * Satz mit Symbol unter dem Feld. Der Satz unter dem Feld ist zugleich der Hinweis für Screenreader.
  */
 export function TextField({
   label,
@@ -44,18 +61,22 @@ export function TextField({
   kind = 'text',
   unit,
   placeholder,
+  hint,
   problem,
+  secure = false,
   disabled = false,
-  inputRef,
+  ref,
+  ...keyboard
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
-  const ownInput = useRef<TextFieldInput>(null);
-  const input = inputRef ?? ownInput;
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }), []);
   // Ein Tipp auf Beschriftung, Lupe oder Einheit setzt den Fokus ins Feld; zugänglich ist nur das Feld selbst.
   return (
     <Pressable accessible={false} disabled={disabled} onPress={() => input.current?.focus()} style={styles.field}>
+      {/* Screenreader kennen die Beschriftung als Namen des Felds, nicht als eigenen Text. */}
       {hideLabel ? null : (
-        <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'}>
+        <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'} accessible={false} importantForAccessibility="no">
           {label}
         </Text>
       )}
@@ -67,24 +88,28 @@ export function TextField({
       >
         {kind === 'search' ? <Icon name="search" tone={disabled ? 'inkDisabled' : 'inkMuted'} /> : null}
         <TextInput
-          ref={input}
-          accessibilityLabel={label}
-          accessibilityState={{ disabled }}
-          accessibilityHint={problem}
-          value={value}
-          onChangeText={onChangeText}
-          editable={!disabled}
-          placeholder={placeholder}
-          placeholderTextColor={color.inkMuted}
           keyboardType={kind === 'number' ? 'decimal-pad' : 'default'}
           returnKeyType={kind === 'search' ? 'search' : 'done'}
           autoCorrect={kind === 'text'}
           autoCapitalize={kind === 'search' ? 'none' : 'sentences'}
+          {...keyboard}
+          ref={input}
+          accessibilityLabel={label}
+          accessibilityState={{ disabled }}
+          accessibilityHint={problem ? `Fehler: ${problem}` : hint}
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secure}
+          editable={!disabled}
+          placeholder={placeholder}
+          placeholderTextColor={color.inkMuted}
           clearButtonMode={kind === 'search' ? 'while-editing' : 'never'}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           allowFontScaling
           maxFontSizeMultiplier={textScale.max}
+          selectionColor={color.primary}
+          cursorColor={color.primary}
           style={[styles.input, { color: color[disabled ? 'inkDisabled' : 'ink'] }]}
         />
         {unit ? (
@@ -93,11 +118,18 @@ export function TextField({
           </Text>
         ) : null}
       </View>
+      {/* Screenreader hören den Satz als Hinweis des Felds, nicht ein zweites Mal als Text. */}
       {problem ? (
-        <View style={styles.message}>
+        <View style={styles.message} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Icon name="alert" size="sm" tone="problem" />
           <Text variant="label" tone="problem" style={styles.messageText}>
             {problem}
+          </Text>
+        </View>
+      ) : hint ? (
+        <View style={styles.message} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Text variant="caption" tone={disabled ? 'inkDisabled' : 'inkMuted'} style={styles.messageText}>
+            {hint}
           </Text>
         </View>
       ) : null}
@@ -106,7 +138,7 @@ export function TextField({
 }
 
 const styles = StyleSheet.create({
-  field: { gap: space[1] },
+  field: { gap: space[1], alignSelf: 'stretch' },
   box: {
     minHeight: size.fieldHeight,
     flexDirection: 'row',

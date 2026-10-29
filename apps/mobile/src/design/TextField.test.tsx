@@ -1,38 +1,65 @@
 import { render, screen, userEvent } from '@testing-library/react-native';
-import { createRef } from 'react';
+import { useState } from 'react';
 
-import { TextField, type TextFieldInput } from './TextField';
+import { TextField, type TextFieldProps } from './TextField';
+import { hitArea } from './testing/hit-area';
+import { textScale } from './tokens';
 
-// Eingabefeld des Design-Systems (Komponente „Eingabefeld“: Zahl mit Einheit, Text, Suche).
+function Controlled(props: Omit<TextFieldProps, 'value' | 'onChangeText'>) {
+  const [value, setValue] = useState('');
+  return <TextField {...props} value={value} onChangeText={setValue} />;
+}
 
-test('Zahl mit Einheit: Dezimaltastatur, Beschriftung als zugänglicher Name und sichtbare Einheit', async () => {
-  await render(<TextField label="Gewicht" kind="number" unit="kg" value="82,4" onChangeText={jest.fn()} />);
+test('ist über seine sichtbare Beschriftung erreichbar und nimmt Text an', async () => {
+  await render(<Controlled label="E-Mail-Adresse" />);
 
-  const field = screen.getByLabelText('Gewicht');
-  expect(field).toHaveDisplayValue('82,4');
-  expect(field.props.keyboardType).toBe('decimal-pad');
-  expect(screen.getByText('kg')).toBeOnTheScreen();
+  await userEvent.type(screen.getByLabelText('E-Mail-Adresse'), 'philipp@example.test');
+
+  // Sichtbar über dem Feld; VoiceOver liest die Beschriftung nur als Namen des Felds, nicht zusätzlich als Text.
+  expect(screen.getByText('E-Mail-Adresse')).toHaveProp('accessible', false);
+  expect(screen.getByLabelText('E-Mail-Adresse')).toHaveDisplayValue('philipp@example.test');
 });
 
-test('meldet jede Eingabe', async () => {
-  const onChangeText = jest.fn();
-  await render(<TextField label="Gewicht" kind="number" unit="kg" value="" onChangeText={onChangeText} />);
+test('verbirgt den Satz unter dem Feld auf iOS und Android vor Screenreadern', async () => {
+  await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" />);
 
-  await userEvent.type(screen.getByLabelText('Gewicht'), '8');
-
-  expect(onChangeText).toHaveBeenLastCalledWith('8');
+  expect(screen.queryByText('Mindestens 10 Zeichen')).toBeNull();
+  // Nächster Vorfahre, der Screenreadern etwas verbirgt; Android liest `importantForAccessibility`, iOS `accessibilityElementsHidden`.
+  let note = screen.getByText('Mindestens 10 Zeichen', { includeHiddenElements: true }).parent;
+  while (note && note.props.importantForAccessibility === undefined) note = note.parent;
+  expect(note).toHaveProp('accessibilityElementsHidden', true);
+  expect(note).toHaveProp('importantForAccessibility', 'no-hide-descendants');
 });
 
-test('zeigt eine ungültige Eingabe als Satz mit Lösungsweg unter dem Feld', async () => {
-  await render(<TextField label="Gewicht" kind="number" unit="kg" value="12" onChangeText={jest.fn()} problem="Bitte 20,0 bis 350,0 kg eingeben." />);
+test('zeigt den Hinweis und ersetzt ihn bei einem Fehler durch den Fehlertext samt Symbol', async () => {
+  const { rerender } = await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" />);
+  // Sichtbar unter dem Feld; Screenreader hören den Satz als Hinweis des Felds, nicht doppelt.
+  expect(screen.getByText('Mindestens 10 Zeichen', { includeHiddenElements: true })).toBeOnTheScreen();
 
-  expect(screen.getByText('Bitte 20,0 bis 350,0 kg eingeben.')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Gewicht').props.accessibilityHint).toBe('Bitte 20,0 bis 350,0 kg eingeben.');
+  await rerender(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" problem="Dein Passwort braucht mindestens 10 Zeichen." />);
+
+  expect(screen.queryByText('Mindestens 10 Zeichen', { includeHiddenElements: true })).toBeNull();
+  expect(screen.getByText('Dein Passwort braucht mindestens 10 Zeichen.', { includeHiddenElements: true })).toBeOnTheScreen();
+  expect(screen.getByLabelText('Passwort')).toHaveProp('accessibilityHint', 'Fehler: Dein Passwort braucht mindestens 10 Zeichen.');
 });
 
-test('gibt über inputRef das Eingabeelement heraus, etwa zum Fokussieren nach einer Rückfrage (#175)', async () => {
-  const inputRef = createRef<TextFieldInput>();
-  await render(<TextField label="Gewicht" kind="number" value="" onChangeText={jest.fn()} inputRef={inputRef} />);
+test('verdeckte Eingabe für Passwörter', async () => {
+  await render(<TextField label="Passwort" value="geheim" onChangeText={jest.fn()} secure />);
 
-  expect(inputRef.current).not.toBeNull();
+  expect(screen.getByLabelText('Passwort')).toHaveProp('secureTextEntry', true);
+});
+
+test('deaktiviert: nimmt keine Eingabe an', async () => {
+  await render(<TextField label="Anzeigename" value="" onChangeText={jest.fn()} disabled />);
+
+  expect(screen.getByLabelText('Anzeigename')).toHaveProp('editable', false);
+});
+
+test('Trefferfläche mindestens 48 dp hoch, Text skaliert bis Faktor 2,0', async () => {
+  await render(<TextField label="Anzeigename" value="" onChangeText={jest.fn()} hint="1–30 Zeichen" />);
+
+  const input = screen.getByLabelText('Anzeigename');
+  expect(hitArea(input).height).toBeGreaterThanOrEqual(48);
+  expect(input).toHaveProp('maxFontSizeMultiplier', textScale.max);
+  expect(screen.getByText('Anzeigename')).toHaveProp('maxFontSizeMultiplier', textScale.max);
 });

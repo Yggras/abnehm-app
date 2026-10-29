@@ -423,3 +423,31 @@ describe('Szenario nach_entkopplung', () => {
     }
   });
 });
+
+const frischesKonto = seedManifests.frisches_konto;
+
+describe('Szenario frisches_konto (#138)', () => {
+  it('Philipp direkt nach dem Bootstrap: Person mit Anzeigename, Onboarding begonnen, ohne Bestätigung und ohne weitere Daten', () => {
+    const { server, devices } = frischesKonto.initial;
+    expect(frischesKonto.clock).toEqual(seedClock);
+    expect(frischesKonto.accounts).toEqual([expect.objectContaining({ key: 'philipp', accountId: seedIds.account.philipp, personId: philipp })]);
+    expect(server.person).toEqual([
+      expect.objectContaining({
+        id: philipp,
+        display_name: 'Philipp',
+        onboarding_status: 'begonnen',
+        onboarding_completed_at: null,
+        disclaimer_accepted_at: null,
+        calculation_sex: null,
+        birth_date: null,
+      }),
+    ]);
+    expect(Object.keys(server).sort()).toEqual(['change_log', 'person', 'sync_clock']);
+    expect(devices['philipp-iphone']).toEqual({ rows: { person: server.person }, cursor: '1', outbox: [] });
+  });
+
+  it('ein Sync ändert nichts: Ausgangs- und Sollzustand sind gleich', () => {
+    expect(frischesKonto.steps).toEqual([{ type: 'sync', installation: 'philipp-iphone' }]);
+    expect(frischesKonto.target).toEqual(frischesKonto.initial);
+  });
+});

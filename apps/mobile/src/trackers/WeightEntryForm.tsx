@@ -5,7 +5,7 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { asksForTypo, isValidManualWeight } from '@abnehm/contracts/tracker-rules';
 
 import { useClock } from '../clock/clock-context';
-import { Button, DateTimePicker, Notice, space, Text, TextField, type TextFieldInput } from '../design';
+import { Button, DateTimePicker, Notice, space, Text, TextField, type TextFieldHandle } from '../design';
 import { useMessageHost } from '../shell/MessageHost';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { InvalidTrackerInputError } from './invalid-input';
@@ -29,7 +29,7 @@ export type WeightEntryFormProps = {
 export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
   const clock = useClock();
   const { showMessage } = useMessageHost();
-  const field = useRef<TextFieldInput>(null);
+  const field = useRef<TextFieldHandle>(null);
   // Vergleichswert und Vorbelegung bleiben, solange das Formular offen ist.
   const [last] = useState(() => trackers.lastDayWeight());
   const [text, setText] = useState(() => (last === null ? '' : kg(last.weightG)));
@@ -75,7 +75,7 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
         value={text}
         onChangeText={changeText}
         problem={invalid ? invalidInput : undefined}
-        inputRef={field}
+        ref={field}
       />
       <View style={styles.group}>
         {/* Sichtbar beschriftet: Der native Picker auf iOS zeigt nur Datum und Uhrzeit. */}
