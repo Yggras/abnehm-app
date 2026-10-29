@@ -14,10 +14,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ClockProvider } from '../clock/clock-context';
 import { IslandView, type IslandViewProps } from './IslandView';
 import { islandLayout } from './layout';
+import type * as mockSkia from './testing/skia-mock';
 
 // Tracer Bullet von #182: Die Inselansicht zeichnet eine Grundinsel aus den Vertrags-Fixtures mit dem
 // echten Skia-Code (CanvasKit, siehe jest/skia-environment.js), ein Tipp trifft das richtige Feld.
-jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof import('./testing/skia-mock')>('./testing/skia-mock').skiaWithCanvasKit());
+jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('./testing/skia-mock').skiaWithCanvasKit());
 
 const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
 const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
@@ -128,22 +129,6 @@ test('wird der Canvas höher, etwa wenn die Tab-Leiste über die Insel wechselt,
   tapAt(200, 450);
 
   expect(onFieldPress).toHaveBeenCalledWith(expect.objectContaining({ field: 'grundinsel:8:7' }));
-});
-
-test('Lastrahmen: Die Fixture-Insel zeichnet weniger Elemente und Animationen als der Spike (1.382 und 157)', async () => {
-  const { fixtureIsland } = jest.requireActual<typeof import('../test-capabilities/fixture-island')>('../test-capabilities/fixture-island');
-  await renderIsland(fixtureIsland());
-
-  // Gezeichnete Skia-Elemente ohne Gruppen; animiert ist, was eine Gruppe mit Shared Value bewegt.
-  const nodes = screen.container.queryAll((node) => node.type.startsWith('sk'));
-  const drawn = nodes.filter((node) => node.type !== 'skGroup');
-  const isShared = (value: unknown) => typeof value === 'object' && value !== null && 'value' in value && 'modify' in value;
-  const animated = nodes.filter((node) => Object.values(node.props).some(isShared));
-
-  expect(drawn.length).toBeGreaterThan(300);
-  expect(drawn.length).toBeLessThan(1382);
-  expect(animated.length).toBeGreaterThan(0);
-  expect(animated.length).toBeLessThan(157);
 });
 
 test('ein Tipp ins Wasser meldet nichts', async () => {

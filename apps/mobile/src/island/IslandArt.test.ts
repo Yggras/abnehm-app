@@ -4,10 +4,11 @@
 import { Skia } from '@shopify/react-native-skia';
 
 import { fogPath } from './IslandArt';
+import type * as mockSkia from './testing/skia-mock';
 
 // Nebel über gesperrten Gebieten (Design-System › Insel): Raute und Wolke einer Zelle bilden eine
 // geschlossene Fläche. Geprüft mit Skia auf CanvasKit, wie der Canvas den Pfad füllt.
-jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof import('./testing/skia-mock')>('./testing/skia-mock').skiaWithCanvasKit());
+jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('./testing/skia-mock').skiaWithCanvasKit());
 
 // Feld (0, −1) bei Zoom 1: obere Ecke (32, −16), Mitte (32, 0); daneben Feld (1, −1).
 const cells = [
