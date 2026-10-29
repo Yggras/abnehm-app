@@ -127,12 +127,12 @@ function SearchHits({ hits, query, onSelect }: { hits: readonly FoodSearchHit[];
     <ListGroup>
       {hits.map((hit) => {
         const per100 = nutritionTexts.per100(hit.kcalPer100, hit.snapshot.baseUnit);
+        // Quellenmarke in derselben Zeile: So passen auf das iPhone SE mit Tastatur mehr Treffer.
         return (
           <ListRow
             key={`${hit.ref.type}:${hit.ref.key}`}
             title={hit.snapshot.name}
-            subtitle={per100}
-            tag={markNames[hit.mark]}
+            subtitle={`${per100} · ${markNames[hit.mark]}`}
             onPress={() => onSelect(hit)}
             accessibilityLabel={`${hit.snapshot.name}, ${per100}, ${markNames[hit.mark]}`}
           />
@@ -183,7 +183,8 @@ function AmountCheck({
   // Ein leeres Feld beim Tippen ist noch kein Fehler; erst „Hinzufügen“ fragt nach der Menge.
   const problem = check.type === 'problem' && (submitted || check.problem !== 'leer') ? amountProblemText(check.problem, snapshot.baseUnit) : undefined;
   const units: DisplayUnit[] = [snapshot.baseUnit, ...snapshot.portions.map((portion) => portion.unit)];
-  const source = snapshot.attribution === null ? sourceNames[snapshot.source] : `${sourceNames[snapshot.source]} · ${snapshot.attribution}`;
+  // Die Quellenangabe nennt die Quelle schon (BLS, Open Food Facts); sonst die Art der Werte.
+  const source = snapshot.attribution ?? sourceNames[snapshot.source];
   const kcal = check.type === 'menge' ? kcalText(roundKcal(check.totals.milliKcal)) : '– kcal';
 
   return (

@@ -153,6 +153,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
 
     await user.type(search(), 'aferflocken');
     expect(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, BLS' })).toBeOnTheScreen();
+    expect(screen.getByText('348 kcal je 100 g · BLS')).toBeOnTheScreen();
     // Während der Suche stehen die Treffer an der Stelle der übrigen Plätze.
     expect(screen.queryByTestId('platz-barcode')).not.toBeOnTheScreen();
 
@@ -169,7 +170,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
 
     const sheet = screen.getByTestId('sheet');
     expect(within(sheet).getByRole('header', { name: 'Hafer Flocken' })).toBeOnTheScreen();
-    expect(within(sheet).getByText('BLS · Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0')).toBeOnTheScreen();
+    expect(within(sheet).getByText('Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0')).toBeOnTheScreen();
     // `solo` hat heute 60 g Hafer Flocken zum Frühstück.
     expect(within(sheet).getByLabelText('Menge')).toHaveDisplayValue('60');
     expect(within(sheet).getByRole('radio', { name: 'g' })).toBeChecked();

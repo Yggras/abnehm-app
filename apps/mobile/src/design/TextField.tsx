@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Icon } from './Icon';
 import { Text } from './Text';
@@ -47,8 +47,10 @@ export function TextField({
   testID,
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  const input = useRef<TextInput>(null);
+  // Ein Tipp auf Beschriftung, Lupe oder Einheit setzt den Fokus ins Feld; zugänglich ist nur das Feld selbst.
   return (
-    <View style={styles.field}>
+    <Pressable accessible={false} disabled={disabled} onPress={() => input.current?.focus()} style={styles.field}>
       {hideLabel ? null : (
         <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'}>
           {label}
@@ -62,6 +64,7 @@ export function TextField({
       >
         {kind === 'search' ? <Icon name="search" tone={disabled ? 'inkDisabled' : 'inkMuted'} /> : null}
         <TextInput
+          ref={input}
           testID={testID}
           accessibilityLabel={label}
           accessibilityState={{ disabled }}
@@ -97,7 +100,7 @@ export function TextField({
           </Text>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
