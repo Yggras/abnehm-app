@@ -9,16 +9,17 @@ import type { ObserveNetwork } from '../sync/triggers';
 import { createAppTestClock, type AppTestClock } from './clock';
 import { runDeviceSuite } from './device-suite/suite';
 import { createFaultController, faultyFetch, faultySessionStore } from './faults';
+import { fixtureIsland, type FixtureIsland } from './fixture-island';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
 import { faultyNetwork } from './network';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
-// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114): Seed-Deep-Link, Testuhr,
-// Fehler-Adapter für Transport, Server, Auth und Storage samt Transport-Fehlermodus und die
-// On-Device-Suite. App-Code erreicht diesen Ordner nur über `src/build-capabilities.ts`; im
-// Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer Testfähigkeit der zentralen
-// Registry (`test/test-capabilities.ts`).
+// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #182): Seed-Deep-Link, Testuhr,
+// Fehler-Adapter für Transport, Server, Auth und Storage samt Transport-Fehlermodus, die
+// On-Device-Suite und die Fixture-Insel. App-Code erreicht diesen Ordner nur über
+// `src/build-capabilities.ts`; im Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer
+// Testfähigkeit der zentralen Registry (`test/test-capabilities.ts`).
 
 export type TestCapabilities = Readonly<{
   clock: AppTestClock;
@@ -36,6 +37,8 @@ export type TestCapabilities = Readonly<{
    * Wurzel-Layouts; Seed-Ziele öffnet der Host erst, wenn sie die Fachoberfläche freigibt.
    */
   Host: ComponentType<{ session: () => AppSession; gate: SessionGate | null }>;
+  /** Insel des Tabs „Momo“, bis das Schlüpfen die echte Insel anschließt (#182, #184). */
+  fixtureIsland: FixtureIsland;
 }>;
 
 const clock = createAppTestClock(deviceClock);
@@ -66,4 +69,5 @@ export const testCapabilities: TestCapabilities = {
     return '/';
   },
   Host,
+  fixtureIsland: fixtureIsland(),
 };

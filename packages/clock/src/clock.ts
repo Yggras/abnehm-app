@@ -11,6 +11,14 @@ export type ClockReading = Readonly<{
   utcOffsetMinutes: number;
 }>;
 
+const minutesPerDay = 24 * 60;
+
+/** Lokale Uhrzeit einer Ablesung als Minute des Tages (0–1439), aus Zeitpunkt und Offset derselben Ablesung. */
+export function minutesOfDay(reading: ClockReading): number {
+  const utcMinutes = Math.floor(Date.parse(reading.instant) / 60_000);
+  return (((utcMinutes + reading.utcOffsetMinutes) % minutesPerDay) + minutesPerDay) % minutesPerDay;
+}
+
 /**
  * Einzige Quelle für „jetzt“ und „heute“ im Bereichscode.
  *

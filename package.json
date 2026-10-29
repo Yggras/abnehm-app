@@ -10,7 +10,8 @@
     "node": ">=26.5.0"
   },
   "overrides": {
-    "react": "19.3.0"
+    "react": "19.3.0",
+    "react-native-gesture-handler": "~3.3.0"
   },
   "scripts": {
     "backend": "scripts/dev-secrets && docker compose up --build --watch",

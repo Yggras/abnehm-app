@@ -1,7 +1,7 @@
 // Design-System „Lagune“ (#95): Bereiche bauen ihre Oberflächen ausschließlich aus diesen Tokens
 // und Primitiven. Der Komponentenkatalog (nur Development Build) zeigt alle in ihren Zuständen.
 
-export { color, fontFamily, motion, radius, size, space, textScale, type, type ColorToken, type TypeToken } from './tokens';
+export { color, fontFamily, motion, opacity, radius, size, space, textScale, type, type ColorToken, type TypeToken } from './tokens';
 export { boxShadow } from './elevation';
 export { useDesignFonts } from './fonts';
 export { motionFor, useMotion, useReducedMotion, type Motion, type MotionIntent } from './motion';
@@ -18,6 +18,7 @@ export { ListGroup, ListRow, type ListRowProps } from './ListRow';
 export { TextField, type TextFieldHandle, type TextFieldKind, type TextFieldProps } from './TextField';
 export { Toast, type ToastLine, type ToastProps } from './Toast';
 export { ProgressBar, type ProgressBarProps } from './ProgressBar';
+export { LevelBar, type LevelBarProps } from './LevelBar';
 export { Skeleton, type SkeletonProps } from './Skeleton';
 
 export { Sheet, type SheetProps } from './native/Sheet';

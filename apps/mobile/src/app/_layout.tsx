@@ -2,6 +2,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { testCapabilities } from '../build-capabilities';
 import { ClockProvider } from '../clock/clock-context';
@@ -43,39 +45,44 @@ export default function RootLayout() {
   // Der Meldungs-Host liegt über allen Routen. Sichtbar wird die Meldung über der Tab-Leiste oder,
   // auf Seiten und in modalen Abläufen, am unteren Rand von `ScreenFrame`.
   // Die Uhr der App gilt für alle Routen; in Test-Artefakten ist es die Testuhr, die ein Seed stellt.
+  // Gesten der Inselansicht brauchen die Wurzel von Gesture Handler über der ganzen App (#182).
   return (
-    <ClockProvider clock={appClock}>
-      <MessageHostProvider>
-        <SyncRefreshProvider refresh={() => refreshDeviceSync() ?? Promise.resolve()}>
-        <OnlineFlowsProvider {...deviceInvitationFlows()}>
-        <OnboardingProvider onboarding={deviceOnboarding()}>
-        <AccountProvider ports={deviceAccount()}>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
-          <Stack.Protected guard={gate === 'today'} redirectTo={home}>
-            {screenAccess.today.map(screen)}
-          </Stack.Protected>
-          <Stack.Protected guard={gate === 'today' || gate === 'onboarding'} redirectTo={home}>
-            {screenAccess.onboardingAndToday.map(screen)}
-          </Stack.Protected>
-          <Stack.Protected guard={gate === 'onboarding'} redirectTo={home}>
-            {screenAccess.onboarding.map(screen)}
-          </Stack.Protected>
-          <Stack.Protected guard={isSessionScreenGate(gate)} redirectTo={home}>
-            {screenAccess.session.map(screen)}
-          </Stack.Protected>
-          {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar, auch vor der Anmeldung. */}
-          <Stack.Protected guard={__DEV__}>
-            <Stack.Screen name="katalog" />
-            <Stack.Screen name="technik" />
-          </Stack.Protected>
-        </Stack>
-        {testCapabilities ? <testCapabilities.Host session={deviceSession} gate={gate} /> : null}
-        </AccountProvider>
-        </OnboardingProvider>
-        </OnlineFlowsProvider>
-        </SyncRefreshProvider>
-      </MessageHostProvider>
-    </ClockProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <ClockProvider clock={appClock}>
+        <MessageHostProvider>
+          <SyncRefreshProvider refresh={() => refreshDeviceSync() ?? Promise.resolve()}>
+          <OnlineFlowsProvider {...deviceInvitationFlows()}>
+          <OnboardingProvider onboarding={deviceOnboarding()}>
+          <AccountProvider ports={deviceAccount()}>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
+            <Stack.Protected guard={gate === 'today'} redirectTo={home}>
+              {screenAccess.today.map(screen)}
+            </Stack.Protected>
+            <Stack.Protected guard={gate === 'today' || gate === 'onboarding'} redirectTo={home}>
+              {screenAccess.onboardingAndToday.map(screen)}
+            </Stack.Protected>
+            <Stack.Protected guard={gate === 'onboarding'} redirectTo={home}>
+              {screenAccess.onboarding.map(screen)}
+            </Stack.Protected>
+            <Stack.Protected guard={isSessionScreenGate(gate)} redirectTo={home}>
+              {screenAccess.session.map(screen)}
+            </Stack.Protected>
+            {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar, auch vor der Anmeldung. */}
+            <Stack.Protected guard={__DEV__}>
+              <Stack.Screen name="katalog" />
+              <Stack.Screen name="technik" />
+            </Stack.Protected>
+          </Stack>
+          {testCapabilities ? <testCapabilities.Host session={deviceSession} gate={gate} /> : null}
+          </AccountProvider>
+          </OnboardingProvider>
+          </OnlineFlowsProvider>
+          </SyncRefreshProvider>
+        </MessageHostProvider>
+      </ClockProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({ root: { flex: 1 } });
