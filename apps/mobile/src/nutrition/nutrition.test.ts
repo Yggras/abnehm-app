@@ -67,6 +67,7 @@ afterEach(() => {
 });
 
 async function setup({ failReevaluation = false }: { failReevaluation?: boolean } = {}) {
+  let failing = failReevaluation;
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   cleanups.push(() => {
@@ -90,7 +91,7 @@ async function setup({ failReevaluation = false }: { failReevaluation?: boolean 
       reevaluateDailyGoals(tx, personId, localDates, cause) {
         reports.push({ personId, localDates: [...localDates], cause });
         persistence.reevaluateDailyGoals(tx, personId, localDates, cause);
-        if (failReevaluation) throw new Error('Auswertung gescheitert');
+        if (failing) throw new Error('Auswertung gescheitert');
       },
     },
   };
@@ -98,7 +99,10 @@ async function setup({ failReevaluation = false }: { failReevaluation?: boolean 
   const rows = () => database.read((tx) => sqliteOf(tx).select().from(nutritionEntry).all());
   const operations = () => database.read((tx) => pendingOperations(tx, 100));
   const markers = () => database.read((tx) => sqliteOf(tx).select().from(dirtyDay).all());
-  return { database, clock, nutrition, reports, rows, operations, markers };
+  const failReevaluationFromNowOn = () => {
+    failing = true;
+  };
+  return { database, clock, nutrition, reports, rows, operations, markers, failReevaluationFromNowOn };
 }
 
 describe('Eintrag hinzufügen', () => {
@@ -347,6 +351,18 @@ describe('Rückgängig', () => {
     expect(row).toMatchObject({ deletedAt: expect.any(String) });
     expect(operations().map(({ type }) => type)).toEqual(['upsert_entity', 'delete_entity']);
     expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-13'], cause: 'rueckgaengig' }]);
+  });
+
+  it('ist eine Transaktion: Scheitert die Auswertung, bleiben Eintrag und Outbox unverändert, und der Token ist verbraucht', async () => {
+    const { nutrition, rows, operations, failReevaluationFromNowOn } = await setup();
+    const { undoToken } = nutrition.addEntry(breakfast);
+    failReevaluationFromNowOn();
+
+    expect(() => nutrition.undo(undoToken)).toThrow('Auswertung gescheitert');
+
+    expect(rows()).toEqual([expect.objectContaining({ deletedAt: null })]);
+    expect(operations().map(({ type }) => type)).toEqual(['upsert_entity']);
+    expect(nutrition.undo(undoToken)).toEqual({ type: 'noop' });
   });
 
   it('ist nach Ablauf der Meldung ein No-op', async () => {

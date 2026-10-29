@@ -207,6 +207,19 @@ describe('Hinzufügen und Mengenprüfung', () => {
     expect(entries()).toHaveLength(2);
   });
 
+  it('kehrt nach dem Speichern auch ohne Rückweg ins Protokoll zurück, etwa nach einem Link', async () => {
+    const { entries } = await openAccount();
+    await renderRouter(appDir, { initialUrl: '/capture/food?meal=abendessen&localDate=2026-10-14' });
+    await user.type(await screen.findByLabelText('Lebensmittel suchen'), 'Apfelsaft');
+    await user.press(screen.getByRole('button', { name: 'Apfelsaft, 44 kcal je 100 g, BLS' }));
+
+    await user.press(within(screen.getByTestId('sheet')).getByRole('button', { name: 'Hinzufügen' }));
+
+    expect(screen).toHavePathname('/log');
+    expect(entries()).toEqual(expect.arrayContaining([expect.objectContaining({ meal: 'abendessen', snapshotName: 'Apfelsaft' })]));
+    expect(await within(meal('abendessen')).findByLabelText('Abendessen: Apfelsaft, 100 g, 44 kcal')).toBeOnTheScreen();
+  });
+
   it('„Hinzufügen“ speichert sofort lokal, kehrt zum Protokoll zurück und „Rückgängig“ entfernt den Eintrag genau einmal', async () => {
     const { entries, operations } = await openCapture('snacks');
     await user.type(await screen.findByLabelText('Lebensmittel suchen'), 'Haferflocken');

@@ -17,7 +17,7 @@ import { createDeviceInvitationFlows } from '../online';
 import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
-import { todayRefresh } from '../shell/today-refresh';
+import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
@@ -44,14 +44,7 @@ const syncRegistry = createSyncRegistry([
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
 /** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
-const refreshToday: Refresh = (update) => {
-  const stopTicks = todayRefresh(update);
-  const stopClock = testCapabilities?.clock.subscribe(update);
-  return () => {
-    stopTicks();
-    stopClock?.();
-  };
-};
+const refreshToday: Refresh = appTodayRefresh;
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 let activeEngine: SyncEngine | null = null;
 let backgroundOpening = false;

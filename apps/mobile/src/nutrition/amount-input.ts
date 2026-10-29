@@ -1,10 +1,27 @@
-import { entryAmount, entryTotals, type DisplayUnit, type EntryAmount, type EntryTotals, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
-
-import type { AmountInputProblem } from './texts';
+import {
+  entryAmount,
+  entryTotals,
+  type AmountProblem,
+  type DisplayUnit,
+  type EntryAmount,
+  type EntryTotals,
+  type NutritionSnapshot,
+} from '@abnehm/contracts/nutrition';
 
 // Mengenfeld der Mengenprüfung (Spezifikation 2, Abschnitte 2 und 6): Die eingetippte Zahl wird zur
 // Anzeigemenge in Tausendsteln, daraus Basismenge und Summen nach den Rechenregeln des Vertragsmoduls.
 // Komma und Punkt trennen gleichermaßen die Nachkommastellen; Tausenderpunkte gibt es im Feld nicht.
+
+/** Warum eine eingegebene Menge nicht gespeichert werden kann: leer, keine Zahl oder eine Regel der Menge. */
+export type AmountInputProblem = AmountProblem | 'leer' | 'format';
+
+/**
+ * Standardmenge einer Einheit in Tausendsteln, wenn nichts Eigenes vorliegt (Spezifikation 2,
+ * Abschnitt 6): 100 g bzw. 100 ml in der Basiseinheit, sonst 1 Stück bzw. 1 Portion.
+ */
+export function defaultAmountMilli(snapshot: NutritionSnapshot, displayUnit: DisplayUnit): number {
+  return displayUnit === snapshot.baseUnit ? 100_000 : 1_000;
+}
 
 export type AmountCheck =
   | { type: 'menge'; amount: EntryAmount; totals: EntryTotals }

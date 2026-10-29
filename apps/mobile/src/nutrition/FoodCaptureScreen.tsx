@@ -4,14 +4,14 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
-import { Button, Chip, IconButton, ListGroup, ListRow, Sheet, Skeleton, space, Text, TextField, type IconName } from '../design';
-import { closeRoute, type RouteScreenProps } from '../navigation';
-import { useMessageHost } from '../shell/MessageHost';
+import { Button, Chip, IconButton, ListGroup, ListRow, Sheet, size, Skeleton, space, Text, TextField, type IconName } from '../design';
+import { closeRoute, openTarget, type RouteScreenProps } from '../navigation';
 import { Placeholder } from '../shell/Placeholder';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { UnknownTarget } from '../shell/UnknownTarget';
+import { useUndoableMessage } from '../shell/use-undoable-message';
 import { isTestArtifact } from '../test-artifact';
-import { checkAmountInput } from './amount-input';
+import { checkAmountInput, defaultAmountMilli } from './amount-input';
 import { useNutrition } from './app-nutrition';
 import { BlsCatalogProvider, useFoodSearch } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
@@ -82,15 +82,22 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<FoodSearchHit | null>(null);
   const result = useMemo(() => search.search(query), [search, query]);
-  const showEntryAdded = useEntryAddedMessage(nutrition);
+  const message = useUndoableMessage();
 
   const add = (hit: FoodSearchHit, displayUnit: DisplayUnit, displayAmountMilli: number) => {
-    const outcome = showEntryAdded(() =>
-      nutrition.addEntry({ localDate, meal, captureMethod: 'suche', foodRef: hit.ref, snapshot: hit.snapshot, displayUnit, displayAmountMilli }),
-    );
-    if (outcome === null) return;
+    let outcome: NutritionEntryAddedOutcome;
+    try {
+      outcome = nutrition.addEntry({ localDate, meal, captureMethod: 'suche', foodRef: hit.ref, snapshot: hit.snapshot, displayUnit, displayAmountMilli });
+    } catch (error) {
+      message.failed(error);
+      return;
+    }
+    message.show(outcome, { run: () => nutrition.undo(outcome.undoToken), expire: () => nutrition.expire(outcome.undoToken) });
     setSelected(null);
+    // Speichern kehrt zum Protokoll zurück (Spezifikation 2, Abschnitt 6), auch ohne Rückweg, etwa nach
+    // einem Link. Kam die Person aus dem Protokoll, bringt sie schon `closeRoute` dorthin.
     closeRoute();
+    openTarget({ type: 'log' });
   };
 
   return (
@@ -218,7 +225,7 @@ function AmountCheck({
             onPress={() => {
               if (option === unit) return;
               setUnit(option);
-              setInput(option === snapshot.baseUnit ? '100' : '1');
+              setInput(milliText(defaultAmountMilli(snapshot, option)));
             }}
           />
         ))}
@@ -243,54 +250,11 @@ function AmountCheck({
   );
 }
 
-/**
- * Speichert über `save` und zeigt die Meldung mit „Rückgängig“ über den Meldungs-Host; `null`, wenn das
- * Speichern technisch scheiterte (dann steht dort „Das hat nicht geklappt …“).
- */
-function useEntryAddedMessage(nutrition: Nutrition) {
-  const { showMessage } = useMessageHost();
-  return (save: () => NutritionEntryAddedOutcome): NutritionEntryAddedOutcome | null => {
-    const failed = (error: unknown) => {
-      console.error(error);
-      showMessage({ messageKey: 'shell.nicht_geklappt', values: {} });
-    };
-    let outcome: NutritionEntryAddedOutcome;
-    try {
-      outcome = save();
-    } catch (error) {
-      failed(error);
-      return null;
-    }
-    const expire = () => nutrition.expire(outcome.undoToken);
-    try {
-      showMessage({
-        messageKey: outcome.messageKey,
-        values: outcome.values,
-        undo: {
-          run: () => {
-            try {
-              nutrition.undo(outcome.undoToken);
-            } catch (error) {
-              failed(error);
-            }
-          },
-          expire,
-        },
-      });
-    } catch (error) {
-      // Ohne Meldung gibt es kein „Rückgängig“; der Token endet hier (fehlender Text im Release).
-      expire();
-      throw error;
-    }
-    return outcome;
-  };
-}
-
 function CaptureSkeleton() {
   return (
     <View style={styles.skeleton} accessible accessibilityLabel={`${nutritionTexts.capture} lädt`}>
-      <Skeleton height={52} radius="md" />
-      <Skeleton height={52 * 3} radius="lg" />
+      <Skeleton height={size.fieldHeight} radius="md" />
+      <Skeleton height={size.rowMin * 3} radius="lg" />
     </View>
   );
 }

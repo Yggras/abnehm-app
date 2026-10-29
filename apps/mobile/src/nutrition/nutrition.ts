@@ -7,6 +7,7 @@ import type { LocalDatabase } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
+import { defaultAmountMilli } from './amount-input';
 import { readDayLog, type DayLog } from './day-log';
 import { addEntry, removeEntry, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
@@ -49,10 +50,6 @@ export type Nutrition = Readonly<{
   prefillAmount(foodRef: FoodRef, snapshot: NutritionSnapshot): AmountPrefill;
 }>;
 
-/** Eine ganze Einheit in Tausendsteln. */
-const one = 1_000;
-const hundred = 100_000;
-
 /**
  * App-Modul „Ernährung“ (Spezifikation 2, Abschnitt 1) über der Datenbank eines Kontos. Bildschirme
  * sprechen nur mit dieser Schnittstelle, nie direkt mit Drizzle, SQLite oder Netzwerk.
@@ -74,8 +71,8 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
       // Die letzte Menge gilt nur, wenn ihre Einheit im aktuellen Snapshot noch bekannt ist.
       if (latest !== undefined && entryAmount(snapshot, latest.displayUnit, latest.displayAmountMilli).type === 'menge') return latest;
       const portion = snapshot.portions.find((conversion) => conversion.unit === 'portion') ?? snapshot.portions[0];
-      if (portion !== undefined) return { displayUnit: portion.unit, displayAmountMilli: one };
-      return { displayUnit: snapshot.baseUnit, displayAmountMilli: hundred };
+      const displayUnit = portion?.unit ?? snapshot.baseUnit;
+      return { displayUnit, displayAmountMilli: defaultAmountMilli(snapshot, displayUnit) };
     },
   };
 }

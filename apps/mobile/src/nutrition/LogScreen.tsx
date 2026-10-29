@@ -2,7 +2,7 @@ import type { LocalDate } from '@abnehm/contracts/base';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
-import { Card, IconButton, ListGroup, ListRow, Skeleton, space, Text } from '../design';
+import { Card, IconButton, ListGroup, ListRow, size, Skeleton, space, Text } from '../design';
 import { openTarget } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useNutrition } from './app-nutrition';
@@ -97,11 +97,16 @@ function MealSection({ meal, localDate }: { meal: DayLogMeal; localDate: LocalDa
 function LogSkeleton() {
   return (
     <View style={styles.skeleton} accessible accessibilityLabel={`${nutritionTexts.log} lädt`}>
-      <Skeleton height={72} radius="lg" />
+      <Card>
+        <View style={styles.head}>
+          <Skeleton width="60%" />
+          <Skeleton width="30%" />
+        </View>
+      </Card>
       {Object.keys(mealNames).map((meal) => (
         <View key={meal} style={styles.meal}>
           <Skeleton width="40%" />
-          <Skeleton height={52} radius="lg" />
+          <Skeleton height={size.rowMin} radius="lg" />
         </View>
       ))}
     </View>

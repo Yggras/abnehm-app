@@ -8,7 +8,7 @@ import { Notice, space } from '../design';
 import { hrefFor } from '../navigation';
 import type { AppSession } from '../session/app-session';
 import type { SessionGate } from '../session/session-gate';
-import { isSessionScreenGate, sessionScreen } from '../shell/session-routes';
+import { isSessionScreenGate, sessionScreenPath } from '../shell/session-routes';
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
@@ -92,7 +92,7 @@ export function TestCapabilityHost({
   // früheres Ziel ginge dabei verloren (#155).
   useEffect(() => {
     if (seeded === null || opened.current === seeded || gate === null || isSessionScreenGate(gate)) return;
-    if (pathname === `/${sessionScreen}`) return;
+    if (pathname === sessionScreenPath) return;
     opened.current = seeded;
     router.replace(hrefFor(seeded.target));
   }, [seeded, gate, pathname]);

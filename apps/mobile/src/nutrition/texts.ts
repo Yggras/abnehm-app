@@ -1,6 +1,7 @@
 import { weekdayOf, type LocalDate, type MealKey } from '@abnehm/contracts/base';
 import { roundMacroGrams, type BaseUnit, type DisplayUnit, type EntryTotals, type NutritionSnapshot, type SnapshotSource } from '@abnehm/contracts/nutrition';
 
+import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
 
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
@@ -66,9 +67,6 @@ export function macrosText(totals: Pick<EntryTotals, 'proteinMg' | 'carbsMg' | '
 export const markNames: Readonly<Record<SearchMark, string>> = { favorit: 'Favorit', zuletzt: 'Zuletzt', eigen: 'Eigen', produkt: 'Produkt', bls: 'BLS' };
 
 export const sourceNames: Readonly<Record<SnapshotSource, string>> = { bls: 'BLS', off: 'Open Food Facts', eigen: 'Eigenes Lebensmittel', ki: 'KI-Schätzung' };
-
-/** Warum eine eingegebene Menge nicht gespeichert werden kann. */
-export type AmountInputProblem = 'leer' | 'format' | 'menge_zu_klein' | 'menge_zu_gross' | 'einheit_unbekannt';
 
 /** Satz mit Lösungsweg zu einer ungültigen Menge (`problem` im Design-System). */
 export function amountProblemText(problem: AmountInputProblem, baseUnit: BaseUnit): string {
