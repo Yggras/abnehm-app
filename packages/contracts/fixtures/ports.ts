@@ -119,10 +119,11 @@ export const portFixtures = {
     },
   }),
   RecordManualWeight: fixtures(RecordManualWeight, {
-    valid: { 'Startgewicht': manualWeight },
+    valid: { 'Startgewicht': manualWeight, '20,0 kg': { ...manualWeight, weightG: 20_000 }, '350,0 kg': { ...manualWeight, weightG: 350_000 } },
     invalid: {
       'nicht in 100-g-Schritten': { ...manualWeight, weightG: 79_450 },
       'unter 20 kg': { ...manualWeight, weightG: 19_900 },
+      'über 350 kg': { ...manualWeight, weightG: 350_100 },
       'mit lokalem Tag statt Zeitpunkt': { ...manualWeight, measuredAt: today },
     },
   }),

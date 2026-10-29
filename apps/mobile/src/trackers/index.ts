@@ -4,6 +4,7 @@
 // und einen flüchtigen Undo-Token. Kein anderer Bereich liest die Tracker-Tabellen. Die Regeln
 // stehen im geteilten Modul `@abnehm/contracts/tracker-rules`.
 export { createTrackers, type TrackerDependencies, type Trackers } from './trackers';
-export { InvalidTrackerInputError } from './water';
+export { InvalidTrackerInputError } from './invalid-input';
 export { waterEntryEntity } from './water-entity';
+export { weightEntryEntity } from './weight-entity';
 export type { Refresh } from './water-today';

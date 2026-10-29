@@ -4,17 +4,13 @@ import { WaterEntryUpsert, type WaterAddedValues } from '@abnehm/contracts/track
 
 import type { TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
+import { InvalidTrackerInputError } from './invalid-input';
 import { waterEntryEntity } from './water-entity';
 import { readWaterEntry, tombstoneWaterEntry, writeWaterEntry } from './water-repository';
 import type { TrackerDependencies } from './trackers';
 
 // Wasser-Befehle des Tracker-Moduls (Spezifikation 3, Abschnitt 4). Sie laufen in der Transaktion
 // des Aufrufers: Fachänderung, Outbox-Operation und `reevaluateDailyGoals` entstehen gemeinsam.
-
-/** Eine Eingabe verletzt die Tracker-Regeln; es wurde nichts geschrieben. */
-export class InvalidTrackerInputError extends Error {
-  override name = 'InvalidTrackerInputError';
-}
 
 /** Was „Rückgängig“ nach einer Wasserbuchung braucht; flüchtig und nie synchronisiert. */
 export type WaterUndo = Readonly<{ type: 'water_added'; entryId: EntityId }>;
