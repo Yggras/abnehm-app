@@ -10,7 +10,7 @@ export const onboardingTexts = {
 
   welcomeHeadline: 'Schön, dass du da bist',
   welcomeIntro:
-    'Momo wartet noch als Laichkugel. Zusammen mit deinem Partner bringst du Momo zum Schlüpfen und lässt es mit euren Tageszielen wachsen.',
+    'Momo wartet noch im Ei. Zusammen mit deinem Partner bringst du Momo zum Schlüpfen und lässt es mit euren Tageszielen wachsen.',
   disclaimer: 'Die App gibt keine medizinische Beratung; alle Werte sind Schätzungen.',
   disclaimerConfirm: 'Verstanden',
   disclaimerRequired: 'Bestätige den Hinweis, um weiterzumachen.',

@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { Password, passwordPolicy } from '@abnehm/contracts/auth';
 import { DisplayName, type Instant } from '@abnehm/contracts/base';
 
 import type { RegisterResult, SignInResult } from '../auth';
-import { Notice, Text, TextField } from '../design';
+import { Notice, Text, TextField, type TextFieldHandle } from '../design';
 import { useOnboarding } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
 import { onboardingTexts, passwordRejectionTexts } from './texts';
@@ -76,6 +76,8 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
   const [errors, setErrors] = useState<Errors>({});
   const [problem, setProblem] = useState<Problem | null>(null);
   const [pending, setPending] = useState(false);
+  const passwordField = useRef<TextFieldHandle>(null);
+  const displayNameField = useRef<TextFieldHandle>(null);
   const registering = mode === 'registrieren';
 
   async function submit() {
@@ -112,7 +114,7 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
     >
       <Text>{registering ? onboardingTexts.registerIntro : onboardingTexts.signInIntro}</Text>
       {problem === 'offline' ? (
-        <Notice tone="neutral" icon="offline" text={onboardingTexts.offline} action={{ label: onboardingTexts.retry, onPress: () => void submit() }} />
+        <Notice tone="neutral" icon="offline" text={onboardingTexts.offline} />
       ) : problem === 'invalid_credentials' ? (
         <Notice tone="problem" cause="ungueltige_eingabe" text={onboardingTexts.invalidCredentials} />
       ) : problem === 'rate_limited' ? (
@@ -129,8 +131,12 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
         autoCorrect={false}
         autoComplete="email"
         textContentType={registering ? 'emailAddress' : 'username'}
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordField.current?.focus()}
       />
       <TextField
+        ref={passwordField}
         label={onboardingTexts.password}
         value={password}
         onChangeText={setPassword}
@@ -142,9 +148,14 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
         autoCorrect={false}
         autoComplete={registering ? 'new-password' : 'current-password'}
         textContentType={registering ? 'newPassword' : 'password'}
+        // Beim Registrieren weiter zum Anzeigenamen, beim Anmelden sendet das letzte Feld ab.
+        returnKeyType={registering ? 'next' : 'go'}
+        submitBehavior={registering ? 'submit' : 'blurAndSubmit'}
+        onSubmitEditing={() => (registering ? displayNameField.current?.focus() : void submit())}
       />
       {registering ? (
         <TextField
+          ref={displayNameField}
           label={onboardingTexts.displayName}
           value={displayName}
           onChangeText={setDisplayName}
@@ -153,6 +164,9 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
           disabled={pending}
           autoComplete="nickname"
           textContentType="nickname"
+          returnKeyType="go"
+          submitBehavior="blurAndSubmit"
+          onSubmitEditing={() => void submit()}
         />
       ) : null}
     </OnboardingFrame>

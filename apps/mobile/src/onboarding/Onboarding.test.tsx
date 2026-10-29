@@ -1,5 +1,5 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
-import { act, screen, userEvent, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import type * as React from 'react';
 
@@ -138,7 +138,21 @@ describe('Schritt 2 „Konto“', () => {
     expect(mockDevice.ownPerson()?.disclaimerAcceptedAt).not.toBeNull();
   });
 
-  it('ohne Netz: zeigt „Für dein Konto brauchst du kurz Internet“ und geht mit „Erneut versuchen“ weiter', async () => {
+  it('Tastatur: „Los“ im letzten Feld sendet ab, ohne nach unten zur Hauptaktion zu müssen', async () => {
+    await openApp();
+    await toAccountStep();
+
+    await fill('E-Mail-Adresse', anna.email);
+    await fill('Passwort', anna.password);
+    await fill('Anzeigename', anna.displayName);
+    expect(screen.getByLabelText('E-Mail-Adresse')).toHaveProp('returnKeyType', 'next');
+    expect(screen.getByLabelText('Anzeigename')).toHaveProp('returnKeyType', 'go');
+    await act(async () => fireEvent(screen.getByLabelText('Anzeigename'), 'submitEditing'));
+
+    await expectStepThree();
+  });
+
+  it('ohne Netz: zeigt „Für dein Konto brauchst du kurz Internet“ und „Konto anlegen“ versucht es erneut', async () => {
     await openApp();
     await toAccountStep();
     mockDevice.faults.set({ transport: 'offline' });
@@ -151,7 +165,7 @@ describe('Schritt 2 „Konto“', () => {
     expect(screen.getByRole('header', { name: 'Konto anlegen' })).toBeOnTheScreen();
 
     mockDevice.faults.set({ transport: 'ok' });
-    await user.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    await user.press(screen.getByRole('button', { name: 'Konto anlegen' }));
 
     await expectStepThree();
   });

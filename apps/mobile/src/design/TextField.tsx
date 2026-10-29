@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useImperativeHandle, useRef, useState, type ComponentRef, type Ref } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { boxShadow } from './elevation';
@@ -9,8 +9,19 @@ import { color, radius, size, space, textScale, type } from './tokens';
 /** Tastatur und Autovervollständigung reichen unverändert an das native Feld. */
 type KeyboardProps = Pick<
   TextInputProps,
-  'keyboardType' | 'autoComplete' | 'textContentType' | 'autoCapitalize' | 'autoCorrect' | 'returnKeyType' | 'onSubmitEditing' | 'maxLength'
+  | 'keyboardType'
+  | 'autoComplete'
+  | 'textContentType'
+  | 'autoCapitalize'
+  | 'autoCorrect'
+  | 'returnKeyType'
+  | 'onSubmitEditing'
+  | 'submitBehavior'
+  | 'maxLength'
 >;
+
+/** Was ein Formular am Feld bedient, etwa „Weiter“ auf der Tastatur zum nächsten Feld. */
+export type TextFieldHandle = { focus(): void };
 
 export type TextFieldProps = KeyboardProps & {
   /** Sichtbare Beschriftung über dem Feld; zugleich der Name für Screenreader. */
@@ -24,6 +35,7 @@ export type TextFieldProps = KeyboardProps & {
   /** Verdeckte Eingabe für Passwörter. */
   secure?: boolean;
   disabled?: boolean;
+  ref?: Ref<TextFieldHandle>;
 };
 
 /**
@@ -32,16 +44,26 @@ export type TextFieldProps = KeyboardProps & {
  * ungültiger Eingabe Rahmen und Satz in `problem` samt Symbol. Der Satz unter dem Feld ist zugleich
  * der Hinweis für Screenreader.
  */
-export function TextField({ label, value, onChangeText, hint, error, secure = false, disabled = false, ...keyboard }: TextFieldProps) {
+export function TextField({ label, value, onChangeText, hint, error, secure = false, disabled = false, ref, ...keyboard }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }), []);
   const note = error ?? hint;
   return (
     <View style={styles.field}>
-      <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'} accessible={false} importantForAccessibility="no">
+      {/* Ein Tipp auf die Beschriftung setzt den Fokus ins Feld; Screenreader kennen sie als dessen Namen. */}
+      <Text
+        variant="label"
+        tone={disabled ? 'inkDisabled' : 'ink'}
+        accessible={false}
+        importantForAccessibility="no"
+        onPress={disabled ? undefined : () => input.current?.focus()}
+      >
         {label}
       </Text>
       <TextInput
         {...keyboard}
+        ref={input}
         accessibilityLabel={label}
         accessibilityHint={error === undefined ? hint : `Fehler: ${error}`}
         accessibilityState={{ disabled }}
@@ -65,7 +87,7 @@ export function TextField({ label, value, onChangeText, hint, error, secure = fa
       {note === undefined ? null : (
         <View style={styles.note} accessible={false} importantForAccessibility="no-hide-descendants">
           {error === undefined ? null : <Icon name="alert" size="sm" tone="problem" />}
-          <Text variant="caption" tone={error === undefined ? 'inkMuted' : 'problem'} style={styles.noteText}>
+          <Text variant="caption" tone={error !== undefined ? 'problem' : disabled ? 'inkDisabled' : 'inkMuted'} style={styles.noteText}>
             {note}
           </Text>
         </View>
