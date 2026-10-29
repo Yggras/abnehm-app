@@ -74,8 +74,9 @@ export function TextField({
   // Ein Tipp auf Beschriftung, Lupe oder Einheit setzt den Fokus ins Feld; zugänglich ist nur das Feld selbst.
   return (
     <Pressable accessible={false} disabled={disabled} onPress={() => input.current?.focus()} style={styles.field}>
+      {/* Screenreader kennen die Beschriftung als Namen des Felds, nicht als eigenen Text. */}
       {hideLabel ? null : (
-        <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'}>
+        <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'} accessible={false} importantForAccessibility="no">
           {label}
         </Text>
       )}
@@ -119,14 +120,14 @@ export function TextField({
       </View>
       {/* Screenreader hören den Satz als Hinweis des Felds, nicht ein zweites Mal als Text. */}
       {problem ? (
-        <View style={styles.message} accessible={false} importantForAccessibility="no-hide-descendants">
+        <View style={styles.message} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Icon name="alert" size="sm" tone="problem" />
           <Text variant="label" tone="problem" style={styles.messageText}>
             {problem}
           </Text>
         </View>
       ) : hint ? (
-        <View style={styles.message} accessible={false} importantForAccessibility="no-hide-descendants">
+        <View style={styles.message} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Text variant="caption" tone={disabled ? 'inkDisabled' : 'inkMuted'} style={styles.messageText}>
             {hint}
           </Text>

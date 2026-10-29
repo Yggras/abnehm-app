@@ -15,8 +15,20 @@ test('ist über seine sichtbare Beschriftung erreichbar und nimmt Text an', asyn
 
   await userEvent.type(screen.getByLabelText('E-Mail-Adresse'), 'philipp@example.test');
 
-  expect(screen.getByText('E-Mail-Adresse')).toBeOnTheScreen();
+  // Sichtbar über dem Feld; VoiceOver liest die Beschriftung nur als Namen des Felds, nicht zusätzlich als Text.
+  expect(screen.getByText('E-Mail-Adresse')).toHaveProp('accessible', false);
   expect(screen.getByLabelText('E-Mail-Adresse')).toHaveDisplayValue('philipp@example.test');
+});
+
+test('verbirgt den Satz unter dem Feld auf iOS und Android vor Screenreadern', async () => {
+  await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" />);
+
+  expect(screen.queryByText('Mindestens 10 Zeichen')).toBeNull();
+  // Nächster Vorfahre, der Screenreadern etwas verbirgt; Android liest `importantForAccessibility`, iOS `accessibilityElementsHidden`.
+  let note = screen.getByText('Mindestens 10 Zeichen', { includeHiddenElements: true }).parent;
+  while (note && note.props.importantForAccessibility === undefined) note = note.parent;
+  expect(note).toHaveProp('accessibilityElementsHidden', true);
+  expect(note).toHaveProp('importantForAccessibility', 'no-hide-descendants');
 });
 
 test('zeigt den Hinweis und ersetzt ihn bei einem Fehler durch den Fehlertext samt Symbol', async () => {
