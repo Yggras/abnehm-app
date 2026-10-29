@@ -3,10 +3,10 @@
 // Bildschirme.
 
 export { createOnboarding, type AccountSetupResult, type Onboarding, type OnboardingAuth, type OnboardingProgress } from './onboarding';
-export { onboardingDraftSchema, type OnboardingDraft, type OnboardingDraftChange } from './draft';
+export type { OnboardingDraft, OnboardingDraftChange } from './draft';
 export { OnboardingProvider, useOnboarding, useOnboardingProgress } from './OnboardingContext';
 export { OnboardingFrame, type OnboardingFrameProps } from './OnboardingFrame';
-export { onboardingFlowSteps, stepNumber, stepTitles, type OnboardingFlowStep } from './steps';
+export type { OnboardingFlowStep } from './steps';
 export { AccountSetup } from './AccountSetup';
 export { FirstStart } from './FirstStart';
 export { OnboardingFlow } from './OnboardingFlow';

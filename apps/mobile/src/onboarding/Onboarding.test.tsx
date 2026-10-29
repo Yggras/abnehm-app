@@ -193,7 +193,7 @@ describe('Schritt 2 „Konto“', () => {
     expect(shownForUnknownEmail).toBe('E-Mail-Adresse oder Passwort stimmen nicht.');
   });
 
-  it('Registrieren: eine vergebene E-Mail verrät nicht, dass es das Konto gibt', async () => {
+  it('Registrieren: eine vergebene E-Mail zeigt den Satz für abgelehnte Adressen und nennt keine Registrierung', async () => {
     await mockDevice.addAccount(anna);
     await openApp();
     await toAccountStep();
@@ -237,7 +237,9 @@ describe('Schritt 2 „Konto“', () => {
 });
 
 describe('Einrichtung des Kontos', () => {
-  it('wiederholt einen ausstehenden Bootstrap ohne Netz mit „Erneut versuchen“', async () => {
+  // Das Auth-Modul (#97) meldet Serverfehler wie fehlendes Netz als `unreachable`; deshalb erscheint auch
+  // hier „Für dein Konto brauchst du kurz Internet“.
+  it('wiederholt einen ausstehenden Bootstrap, wenn der Server nach der Kontoanlage nicht antwortet', async () => {
     mockDevice.server.setBootstrapAvailable(false);
     await openApp();
     await toAccountStep();

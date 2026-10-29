@@ -40,9 +40,7 @@ export function OnboardingFlow() {
       <WelcomeStep
         confirmed={confirmed}
         onConfirmedChange={setConfirmed}
-        onNext={() => {
-          if (confirmed) onboarding.acceptDisclaimer();
-        }}
+        onNext={() => onboarding.acceptDisclaimer()}
       />
     );
   }

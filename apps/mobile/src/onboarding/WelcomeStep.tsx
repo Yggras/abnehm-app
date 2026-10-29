@@ -11,6 +11,7 @@ const momoSize = 160;
 export type WelcomeStepProps = {
   confirmed: boolean;
   onConfirmedChange: (confirmed: boolean) => void;
+  /** Nur mit Bestätigung. */
   onNext: () => void;
 };
 
@@ -24,7 +25,7 @@ export function WelcomeStep({ confirmed, onConfirmedChange, onNext }: WelcomeSte
     <OnboardingFrame
       step="willkommen"
       title={onboardingTexts.welcomeHeadline}
-      primary={{ label: onboardingTexts.next, onPress: onNext, disabled: !confirmed }}
+      primary={{ label: onboardingTexts.next, onPress: () => (confirmed ? onNext() : undefined), disabled: !confirmed }}
     >
       <View style={styles.momo}>
         <MomoFigure mood="neugierig" size={momoSize} />

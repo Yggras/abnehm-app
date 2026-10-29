@@ -12,7 +12,7 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { readOwnPerson } from '../../mobile/src/local-db/person-header.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
 import { createAppSession, type AppSession } from '../../mobile/src/session/app-session.ts';
-import { sessionGate } from '../../mobile/src/session/session-gate.ts';
+import { followSessionGate } from '../../mobile/src/session/session-gate.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
 import { createAppTestClock, type AppTestClock } from '../../mobile/src/test-capabilities/clock.ts';
 import { createFaultController, faultyFetch, type FaultController } from '../../mobile/src/test-capabilities/faults.ts';
@@ -229,9 +229,11 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(local);
 
     // Die Person hat das Onboarding begonnen und den Hinweis noch nicht bestätigt: Onboarding ab Schritt 1.
-    const own = device.session.databases.current()!.read(readOwnPerson)!;
-    expect(sessionGate(device.session.auth.state(), { accountId: own.accountId, onboardingCompleted: own.onboardingStatus === 'abgeschlossen' })).toBe('onboarding');
-    expect(own.disclaimerAcceptedAt).toBeNull();
+    const gate = followSessionGate(device.session.auth);
+    const stopGate = gate.opened(device.session.databases.current()!);
+    expect(gate.get()).toBe('onboarding');
+    stopGate();
+    expect(device.session.databases.current()!.read(readOwnPerson)!.disclaimerAcceptedAt).toBeNull();
 
     expect(await sync(device, manifest, 'philipp-iphone')).toEqual({ push: 'nothing_to_do', pull: 'done' });
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(manifest.target.server));

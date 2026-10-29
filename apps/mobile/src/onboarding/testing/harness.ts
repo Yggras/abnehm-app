@@ -35,7 +35,6 @@ export function createOnboardingDevice(clock: Clock) {
   let ids = 0;
   const newId = () => EntityId.parse(`0b000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
   const writer = createSyncWriter({ registry: createSyncRegistry(foundationSyncEntities), clock, newId });
-  const syncCycles: SyncCycleResult[] = [];
 
   /** Ersatz für den Sync-Zyklus der geöffneten Kontodatenbank: übernimmt die Person vom Server. */
   function sync(): Promise<SyncCycleResult> | undefined {
@@ -61,9 +60,7 @@ export function createOnboardingDevice(clock: Clock) {
           .run(),
       );
     }
-    const cycle: SyncCycleResult = offline ? { push: 'unavailable', pull: 'skipped' } : { push: 'nothing_to_do', pull: 'done' };
-    syncCycles.push(cycle);
-    return Promise.resolve(cycle);
+    return Promise.resolve(offline ? { push: 'unavailable', pull: 'skipped' } : { push: 'nothing_to_do', pull: 'done' });
   }
 
   // Wie im Composition Root: Weiche und Onboarding folgen der jeweils geöffneten Kontodatenbank.
@@ -99,7 +96,6 @@ export function createOnboardingDevice(clock: Clock) {
     gate,
     server,
     faults,
-    syncCycles,
     /** Die eigene Person der geöffneten Kontodatenbank. */
     ownPerson: () => databases.current()?.read(readOwnPerson),
     /** Offene Sync-Operationen der geöffneten Kontodatenbank. */

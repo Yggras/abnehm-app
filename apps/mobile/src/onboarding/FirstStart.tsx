@@ -22,9 +22,7 @@ export function FirstStart() {
       <WelcomeStep
         confirmed={confirmed}
         onConfirmedChange={setConfirmed}
-        onNext={() => {
-          if (confirmed) setAcceptedAt(clock.read().instant);
-        }}
+        onNext={() => setAcceptedAt(clock.read().instant)}
       />
     );
   }

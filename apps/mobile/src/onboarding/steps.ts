@@ -1,28 +1,21 @@
 import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
 
+import { onboardingSteps } from '../shell/onboarding-registry';
 import { onboardingStepTitles } from '../shell/texts';
 
 // Die elf Schritte des Onboardings (Spezifikation 1, Abschnitt 9). Die Schritte 1–8 liefert dieser
 // Bereich, 9–11 sind die Steckplätze der Onboarding-Registry (Spezifikation 0, Abschnitt 6) in
 // derselben Reihenfolge wie dort.
 
-export const onboardingFlowSteps = [
-  'willkommen',
-  'konto',
-  'koerperdaten',
-  'sicherheits_check',
-  'aktivitaetsstufe',
-  'zielgewicht',
-  'ergebnis',
-  'wochenplan',
-  'health',
-  'notifications',
-  'partner',
-] as const satisfies readonly (string | OnboardingStepKey)[];
+/** Die Schritte 1–8 dieses Bereichs. */
+const ownSteps = ['willkommen', 'konto', 'koerperdaten', 'sicherheits_check', 'aktivitaetsstufe', 'zielgewicht', 'ergebnis', 'wochenplan'] as const;
 
-export type OnboardingFlowStep = (typeof onboardingFlowSteps)[number];
+export type OnboardingFlowStep = (typeof ownSteps)[number] | OnboardingStepKey;
 
-const ownTitles: Record<Exclude<OnboardingFlowStep, OnboardingStepKey>, string> = {
+/** Alle elf Schritte; die Reihenfolge der Steckplätze kommt aus der Registry. */
+export const onboardingFlowSteps: readonly OnboardingFlowStep[] = [...ownSteps, ...onboardingSteps.map(({ key }) => key)];
+
+const ownTitles: Record<(typeof ownSteps)[number], string> = {
   willkommen: 'Willkommen',
   konto: 'Konto',
   koerperdaten: 'Körperdaten',

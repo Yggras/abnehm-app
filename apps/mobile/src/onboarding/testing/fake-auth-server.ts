@@ -1,4 +1,4 @@
-import type { BootstrapPersonResult } from '@abnehm/contracts/auth';
+import { passwordPolicy, type BootstrapPersonResult } from '@abnehm/contracts/auth';
 import { EntityId, ServerVersion, TimeZone } from '@abnehm/contracts/base';
 
 // Fake-Server für die Endpunkte, die das Auth-Modul der App (#97) beim Registrieren, Anmelden und
@@ -56,8 +56,8 @@ export function createFakeAuthServer(): FakeAuthServer {
         const email = (body.email ?? '').toLowerCase();
         const password = body.password ?? '';
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(400, { code: 'INVALID_EMAIL' });
-        if (password.length < 10) return json(400, { code: 'PASSWORD_TOO_SHORT' });
-        if (password.length > 128) return json(400, { code: 'PASSWORD_TOO_LONG' });
+        if (password.length < passwordPolicy.minLength) return json(400, { code: 'PASSWORD_TOO_SHORT' });
+        if (password.length > passwordPolicy.maxLength) return json(400, { code: 'PASSWORD_TOO_LONG' });
         if (password === 'passwort123') return json(400, { code: 'PASSWORD_COMPROMISED' });
         if (accounts.has(email)) return json(422, { code: 'USER_ALREADY_EXISTS' });
         addAccount({ email, password });

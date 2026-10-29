@@ -156,8 +156,8 @@ export function createOnboarding({ auth, clock, writer, sync, onError }: Onboard
     updateDraft: (change) => requireDatabase().transaction((tx) => updateOnboardingDraft(tx, change, clock.read().instant)),
 
     opened(database) {
-      const own: { database: LocalDatabase; own: OwnPerson | null } = { database, own: null };
-      current = own;
+      const entry: { database: LocalDatabase; own: OwnPerson | null } = { database, own: null };
+      current = entry;
       publish();
       const stop = database.observe(
         (tx) => {
@@ -168,13 +168,13 @@ export function createOnboarding({ auth, clock, writer, sync, onError }: Onboard
           // Der Upsert löst eine neue Meldung aus; erst sie zeigt die bestätigte Person, so dass die Route
           // `onboarding` Schritt 1 nicht kurz aufblitzen lässt.
           if (person !== null && handOver(database, person)) return;
-          own.own = person;
-          if (current === own) publish();
+          entry.own = person;
+          if (current === entry) publish();
         },
       );
       return () => {
         stop();
-        if (current !== own) return;
+        if (current !== entry) return;
         current = null;
         publish();
       };

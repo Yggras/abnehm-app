@@ -27,7 +27,11 @@ type Problem = 'offline' | 'invalid_credentials' | 'rate_limited';
 
 const Email = z.email();
 
-/** Prüft die Eingaben mit denselben Regeln wie der Server, bevor etwas gesendet wird. */
+/**
+ * Prüft die Eingaben, bevor etwas gesendet wird: Passwort und Anzeigename mit den Schemas des
+ * Vertragsmoduls, die auch der Server nutzt. Die E-Mail prüft nur `z.email()` auf ihre Form; ob Better
+ * Auth dieselben Adressen annimmt, ist nicht belegt, dessen Ablehnung zeigt `outcome`.
+ */
 function check(mode: AccountMode, email: string, password: string, displayName: string): Errors {
   const errors: Errors = {};
   if (!Email.safeParse(email).success) errors.email = onboardingTexts.invalidEmail;
