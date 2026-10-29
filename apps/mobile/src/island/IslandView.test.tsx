@@ -95,6 +95,41 @@ test('ein Tipp in der Bildschirmmitte trifft die Lichtung, einer weiter oben lin
   ]);
 });
 
+test('Ziehen verschiebt: Nach 100 dp nach links trifft die Bildschirmmitte ein Feld weiter rechts', async () => {
+  const onFieldPress = jest.fn();
+  await renderIsland({ onFieldPress });
+
+  const pan = createGestureController('insel-ziehen');
+  pan.begin();
+  pan.activate();
+  pan.update({ translationX: -100, translationY: 0 });
+  pan.end();
+  // Ausschnitt (84, 152): Die Mitte (200, 400) zeigt den Szenenpunkt (116, 248), Feld (9, 5).
+  tapAt(200, 400);
+
+  expect(onFieldPress).toHaveBeenCalledWith({ type: 'feld', field: 'grundinsel:9:5', kind: 'lichtung', owner: null });
+});
+
+test.each([
+  // Zoom 1,5 um die Mitte: Ausschnitt (176, 28); (200, 448) zeigt (16, 280), Feld (9, 8).
+  [1.5, 448, 'grundinsel:9:8'],
+  // Zoom 10 endet bei 2,0: Ausschnitt (168, −96); (200, 600) zeigt (16, 348), Feld (11, 10).
+  // Bei Zoom 3 wäre es Feld (10, 9), bei 10 Feld (8, 8).
+  [10, 600, 'grundinsel:11:10'],
+])('Pinch um %d zoomt um die Finger und höchstens bis 2,0: ein Tipp bei y = %d trifft %s', async (scale, y, field) => {
+  const onFieldPress = jest.fn();
+  await renderIsland({ onFieldPress });
+
+  const pinch = createGestureController('insel-zoomen');
+  pinch.begin();
+  pinch.activate({ scale: 1, focalX: 200, focalY: 400 });
+  pinch.update({ scale, focalX: 200, focalY: 400 });
+  pinch.end();
+  tapAt(200, y);
+
+  expect(onFieldPress).toHaveBeenCalledWith(expect.objectContaining({ field }));
+});
+
 test('ein Tipp ins Wasser meldet nichts', async () => {
   const onFieldPress = jest.fn();
   await renderIsland({ onFieldPress });
