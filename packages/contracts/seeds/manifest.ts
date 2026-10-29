@@ -17,7 +17,8 @@ export const seedFormatVersion = 1;
 
 /**
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
- * Wasser-Mini-Trackers (#171). Die übrigen aus Abschnitt 12 folgen in #113 und #116.
+ * Wasser-Mini-Trackers (#171). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138).
+ * Die übrigen aus Abschnitt 12 folgen in #113 und #116.
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -26,6 +27,7 @@ export const SeedScenarioKey = z.enum([
   'solo-wasser-ueber-ziel',
   'gekoppelt',
   'nach_entkopplung',
+  'frisches_konto',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

@@ -9,8 +9,10 @@ import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
+import { readOwnPerson } from '../../mobile/src/local-db/person-header.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
 import { createAppSession, type AppSession } from '../../mobile/src/session/app-session.ts';
+import { sessionGate } from '../../mobile/src/session/session-gate.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
 import { createAppTestClock, type AppTestClock } from '../../mobile/src/test-capabilities/clock.ts';
 import { createFaultController, faultyFetch, type FaultController } from '../../mobile/src/test-capabilities/faults.ts';
@@ -209,5 +211,30 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(await device.session.auth.bootstrapPerson({ displayName: 'Egal', timeZone: TimeZone.parse('Europe/Berlin') })).toEqual({ type: 'unauthorized' });
     expect(device.session.auth.state()).toEqual({ type: 'gesperrt', accountId: solo.accounts[0]!.accountId });
     expect(device.session.databases.current()).toBeNull();
+  });
+
+  it('Szenario `frisches_konto` (#138): wiederholbar geseedet, die Weiche steht im Onboarding vor Schritt 1, der Sync ändert nichts', async () => {
+    const backend = await createTestBackend();
+    const device = phone(backend);
+    const manifest = seedManifests.frisches_konto;
+    const run = { scenario: 'frisches_konto', installation: null, target: { type: 'today' } } as const;
+
+    expect(await runSeed(run, device)).toEqual({ type: 'geseedet', scenario: 'frisches_konto', installation: 'philipp-iphone', target: { type: 'today' } });
+    const server = await dumpServer(backend.database.db);
+    const local = dumpLocalDatabase(device.session.databases.current()!);
+    expect(server).toEqual(canonicalRows(manifest.initial.server));
+    expect(local).toEqual(canonicalDevice(manifest.initial.devices['philipp-iphone']!));
+    expect((await runSeed(run, device)).type).toBe('geseedet');
+    expect(await dumpServer(backend.database.db)).toEqual(server);
+    expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(local);
+
+    // Die Person hat das Onboarding begonnen und den Hinweis noch nicht bestätigt: Onboarding ab Schritt 1.
+    const own = device.session.databases.current()!.read(readOwnPerson)!;
+    expect(sessionGate(device.session.auth.state(), { accountId: own.accountId, onboardingCompleted: own.onboardingStatus === 'abgeschlossen' })).toBe('onboarding');
+    expect(own.disclaimerAcceptedAt).toBeNull();
+
+    expect(await sync(device, manifest, 'philipp-iphone')).toEqual({ push: 'nothing_to_do', pull: 'done' });
+    expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(manifest.target.server));
+    expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.target.devices['philipp-iphone']!));
   });
 });
