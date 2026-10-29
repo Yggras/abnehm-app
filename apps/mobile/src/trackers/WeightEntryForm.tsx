@@ -1,14 +1,12 @@
 import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Instant, TimeZone } from '@abnehm/contracts/base';
-import { asksForTypo, isValidManualWeight } from '@abnehm/contracts/tracker-rules';
+import { asksForTypo, isInFuture, isValidManualWeight, manualWeightG } from '@abnehm/contracts/tracker-rules';
 
 import { useClock } from '../clock/clock-context';
 import { Button, DateTimePicker, Notice, space, Text, TextField, type TextFieldHandle } from '../design';
 import { useUndoableMessage } from '../shell/use-undoable-message';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
-import { InvalidTrackerInputError } from './invalid-input';
 import { gramsOfKgText } from './kg-text';
 import type { Trackers } from './trackers';
 
@@ -18,7 +16,9 @@ import type { Trackers } from './trackers';
 // Tagesgewicht ab, fragt es vor dem Speichern inline „Tippfehler?“ – kein Systemdialog. Nach dem
 // Speichern zeigt der Meldungs-Host „… kg eingetragen · Rückgängig“.
 
-const invalidInput = 'Bitte ein Gewicht von 20,0 bis 350,0 kg mit höchstens einer Nachkommastelle eingeben.';
+// Die Grenzen kommen aus den Tracker-Regeln, damit der Satz bei einer Änderung stimmt.
+const invalidWeight = `Bitte ein Gewicht von ${kg(manualWeightG.min)} bis ${kg(manualWeightG.max)} kg mit höchstens einer Nachkommastelle eingeben.`;
+const futureMeasurement = 'Der Messzeitpunkt liegt in der Zukunft. Bitte einen Zeitpunkt bis jetzt wählen.';
 
 export type WeightEntryFormProps = {
   trackers: Pick<Trackers, 'recordWeight' | 'lastWeights' | 'undo' | 'expire'>;
@@ -35,6 +35,8 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
   const [text, setText] = useState(() => (last === null ? '' : kg(last.weightG)));
   const [measuredAt, setMeasuredAt] = useState(() => clock.read().instant);
   const [invalid, setInvalid] = useState(false);
+  /** Der Messzeitpunkt liegt nach „jetzt“, etwa weil die Uhr zurückgesprungen ist; der Picker endet bei jetzt. */
+  const [future, setFuture] = useState(false);
   /** Das Gewicht, zu dem gerade „Tippfehler?“ gefragt wird. */
   const [asked, setAsked] = useState<number | null>(null);
   const now = clock.read();
@@ -50,7 +52,7 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
     try {
       outcome = trackers.recordWeight({ weightG, measuredAt });
     } catch (error) {
-      if (error instanceof InvalidTrackerInputError) return setInvalid(true);
+      // Die Eingaben sind vorher geprüft; scheitert der Befehl trotzdem an ihnen, ist das ein Fehler.
       return message.failed(error);
     }
     const { undoToken } = outcome;
@@ -61,7 +63,8 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
   const save = () => {
     const weightG = gramsOfKgText(text);
     if (weightG === null || !isValidManualWeight(weightG)) return setInvalid(true);
-    if (asksForTypo(weightG, last?.dayWeightG ?? null)) return setAsked(weightG);
+    if (isInFuture(measuredAt, clock.read().instant)) return setFuture(true);
+    if (asksForTypo(weightG, last?.dayWeight.weightG ?? null)) return setAsked(weightG);
     record(weightG);
   };
 
@@ -73,7 +76,7 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
         unit="kg"
         value={text}
         onChangeText={changeText}
-        problem={invalid ? invalidInput : undefined}
+        problem={invalid ? invalidWeight : undefined}
         ref={field}
       />
       <View style={styles.group}>
@@ -85,15 +88,17 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
           value={measuredAt}
           onChange={(next) => {
             setMeasuredAt(next);
+            setFuture(false);
             setAsked(null);
           }}
-          timeZone={TimeZone.parse(now.timeZone)}
-          maximum={Instant.parse(now.instant)}
+          timeZone={now.timeZone}
+          maximum={now.instant}
         />
+        {future ? <Text variant="label" tone="problem">{futureMeasurement}</Text> : null}
       </View>
       {asked !== null && last !== null ? (
         <>
-          <Notice tone="hint" text={typoQuestion(asked, last.dayWeightG)} />
+          <Notice tone="hint" text={typoQuestion(asked, last.dayWeight.weightG)} />
           <View style={styles.actions}>
             <Button
               variant="secondary"

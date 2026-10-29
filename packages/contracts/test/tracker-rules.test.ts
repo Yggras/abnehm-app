@@ -7,6 +7,7 @@ import {
   countedWaterMl,
   dayWeights,
   isCountingWeightEntry,
+  isInFuture,
   isValidManualWeight,
   isValidWaterAmount,
   isWeighDay,
@@ -99,6 +100,18 @@ describe('letztes Gewicht', () => {
   it('gibt es ohne zählende Messung nicht', () => {
     expect(lastWeightG([])).toBeNull();
     expect(lastWeightG([weighing(82_000, '2026-10-14T05:30:00.000Z', { hiddenAt: '2026-10-14T06:00:00.000Z' })])).toBeNull();
+  });
+});
+
+describe('Messzeitpunkt', () => {
+  it('liegt in der Zukunft, sobald er nach jetzt liegt; jetzt selbst ist erlaubt', () => {
+    expect(isInFuture('2026-10-14T10:00:01.000Z', '2026-10-14T10:00:00.000Z')).toBe(true);
+    expect(isInFuture('2026-10-14T10:00:00.000Z', '2026-10-14T10:00:00.000Z')).toBe(false);
+    expect(isInFuture('2026-10-13T05:30:00.000Z', '2026-10-14T10:00:00.000Z')).toBe(false);
+  });
+
+  it('vergleicht Zeitpunkte, nicht Zeichenfolgen: mit und ohne Millisekunden', () => {
+    expect(isInFuture('2026-10-14T10:00:00Z', '2026-10-14T10:00:00.000Z')).toBe(false);
   });
 });
 

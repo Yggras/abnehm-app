@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, TimeZone, UtcOffsetMinutes } from './base.ts';
 import { QuickCommandOutcome } from './today.ts';
-import { manualWeightG, waterAmountMl, waterOrigin } from './tracker-rules.ts';
+import { manualOrigin, manualWeightG, waterAmountMl, waterOrigin } from './tracker-rules.ts';
 
 // Wasser, Sport und Gewicht (Spezifikation 3): Transport-Schemas der Einträge und Ergebnisse der
 // Befehle des Tracker-Moduls. Zählregeln, Grenzen und Status stehen in `./tracker-rules`.
@@ -61,7 +61,7 @@ export type ManualWeightG = z.infer<typeof ManualWeightG>;
  */
 export const WeightEntryUpsert = z.strictObject({
   weightG: ManualWeightG,
-  origin: z.literal('manuell'),
+  origin: z.literal(manualOrigin),
   measuredAt: Instant,
   localDate: LocalDate,
   timeZone: TimeZone,

@@ -1,4 +1,4 @@
-import { EntityId, LocalDate, localDateAfter } from '@abnehm/contracts/base';
+import { EntityId, localDateAfter, type LocalDate } from '@abnehm/contracts/base';
 import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
 import { isWeighDay, type DayWeight } from '@abnehm/contracts/tracker-rules';
 import type { TrackerWeightReady } from '@abnehm/contracts/today';
@@ -8,7 +8,7 @@ import { readOwnPerson } from '../local-db/person-header';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import { observedTodaySource, type Refresh } from './today-source';
 import type { TrackerDependencies } from './trackers';
-import { lastDayWeightOf } from './weight';
+import { lastWeightsOf } from './weight';
 
 // Beitrag `trackers.weight` für „Heute“ (Spezifikation 3, Abschnitt 7): das letzte Tagesgewicht und
 // der Stand des Wiegetags. Am Wiegetag ist er `wiegetag_offen` oder `gewogen`, sonst `kein_wiegetag`
@@ -32,7 +32,7 @@ export function weightTodaySource(
   const readDay = (tx: ReadContext): WeightDay | null => {
     const person = readOwnPerson(tx);
     if (person === undefined) return null;
-    return { personId: EntityId.parse(person.id), localDate: LocalDate.parse(clock.read().localDate), lastDayWeight: lastDayWeightOf(tx) };
+    return { personId: EntityId.parse(person.id), localDate: clock.read().localDate, lastDayWeight: lastWeightsOf(tx)?.dayWeight ?? null };
   };
   return observedTodaySource(database, refresh, readDay, async (day) => {
     // Heute und die sieben Tage danach; der Plan kann sich dazwischen mit einer neuen Fassung ändern.

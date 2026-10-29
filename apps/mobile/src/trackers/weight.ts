@@ -1,6 +1,6 @@
 import { readingOf } from '@abnehm/clock';
-import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
-import { dayWeights, isValidManualWeight, lastWeightG, type DayWeight } from '@abnehm/contracts/tracker-rules';
+import { EntityId, type Instant, type LocalDate } from '@abnehm/contracts/base';
+import { dayWeights, isInFuture, isValidManualWeight, lastWeightG, manualOrigin, manualWeightG, type DayWeight } from '@abnehm/contracts/tracker-rules';
 import { WeightEntryUpsert, type WeightRecordedValues } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -39,44 +39,41 @@ type Dependencies = Pick<TrackerDependencies, 'clock' | 'writer' | 'persistence'
  * der Aufrufer nicht; Löschen ist endgültig (Spezifikation 0, Abschnitt 10).
  */
 export function recordWeightEntry(tx: TransactionContext, { clock, writer, persistence }: Dependencies, entryId: EntityId, { weightG, measuredAt }: WeightInput): WeightRecorded {
-  if (!isValidManualWeight(weightG)) throw new InvalidTrackerInputError(`Ungültiges Gewicht: ${weightG} g (erlaubt 20,0–350,0 kg in 100-g-Schritten)`);
+  if (!isValidManualWeight(weightG)) {
+    throw new InvalidTrackerInputError(`Ungültiges Gewicht: ${weightG} g (erlaubt ${manualWeightG.min}–${manualWeightG.max} g in ${manualWeightG.step}-g-Schritten)`);
+  }
   const now = clock.read();
-  if (Date.parse(measuredAt) > Date.parse(now.instant)) throw new InvalidTrackerInputError(`Messzeitpunkt ${measuredAt} liegt in der Zukunft`);
+  if (isInFuture(measuredAt, now.instant)) throw new InvalidTrackerInputError(`Messzeitpunkt ${measuredAt} liegt in der Zukunft`);
   const personId = EntityId.parse(requireOwnPerson(tx).id);
   const existing = readWeightEntry(tx, entryId);
-  const measured = readingOf(measuredAt, existing?.timeZone ?? TimeZone.parse(now.timeZone));
+  const measured = readingOf(measuredAt, existing?.timeZone ?? now.timeZone);
   const payload = WeightEntryUpsert.parse({
     weightG,
-    origin: 'manuell',
+    origin: manualOrigin,
     measuredAt: measured.instant,
     localDate: measured.localDate,
     timeZone: measured.timeZone,
     utcOffsetMinutes: existing?.utcOffsetMinutes ?? measured.utcOffsetMinutes,
   });
-  writeWeightEntry(tx, entryId, personId, payload, Instant.parse(now.instant));
+  writeWeightEntry(tx, entryId, personId, payload, now.instant);
   writer.upsert(tx, { entityType: weightEntryEntity.entityType, entityId: entryId, payload, knownServerVersion: existing?.serverVersion ?? null });
-  const localDate = LocalDate.parse(measured.localDate);
+  const localDate = measured.localDate;
   const days = existing === undefined || existing.localDate === localDate ? [localDate] : [existing.localDate, localDate];
   persistence.reevaluateDailyGoals(tx, personId, days, 'eingabe');
   return { messageKey: 'gewicht.eingetragen', values: { weightG }, localDate, undo: { type: 'weight_recorded', entryId } };
 }
 
-/** Das letzte Tagesgewicht der eigenen Person nach den Tracker-Regeln; ohne Person oder Messung `null`. */
-export function lastDayWeightOf(tx: ReadContext): DayWeight | null {
-  const person = readOwnPerson(tx);
-  return person === undefined ? null : (dayWeights(weightEntriesOf(tx, EntityId.parse(person.id))).at(-1) ?? null);
-}
+/** Letztes Gewicht (zuletzt gemessene zählende Messung) und letztes Tagesgewicht samt seinem Tag. */
+export type LastWeights = Readonly<{ weightG: number; dayWeight: DayWeight }>;
 
-/** Letztes Gewicht und letztes Tagesgewicht der eigenen Person; ohne Person oder Messung `null`. */
-export type LastWeights = Readonly<{ weightG: number; dayWeightG: number }>;
-
+/** Nach den Tracker-Regeln, in einer Lesung; ohne eigene Person (vor dem ersten Pull) oder Messung `null`. */
 export function lastWeightsOf(tx: ReadContext): LastWeights | null {
   const person = readOwnPerson(tx);
   if (person === undefined) return null;
   const entries = weightEntriesOf(tx, EntityId.parse(person.id));
   const weightG = lastWeightG(entries);
   const dayWeight = dayWeights(entries).at(-1);
-  return weightG === null || dayWeight === undefined ? null : { weightG, dayWeightG: dayWeight.weightG };
+  return weightG === null || dayWeight === undefined ? null : { weightG, dayWeight };
 }
 
 /**
@@ -86,7 +83,7 @@ export function lastWeightsOf(tx: ReadContext): LastWeights | null {
 export function undoWeight(tx: TransactionContext, { clock, writer, persistence }: Dependencies, undo: WeightUndo): void {
   const entry = readWeightEntry(tx, undo.entryId);
   if (entry === undefined || entry.deletedAt !== null) return;
-  tombstoneWeightEntry(tx, undo.entryId, Instant.parse(clock.read().instant));
+  tombstoneWeightEntry(tx, undo.entryId, clock.read().instant);
   writer.delete(tx, { entityType: weightEntryEntity.entityType, entityId: undo.entryId, knownServerVersion: entry.serverVersion });
   persistence.reevaluateDailyGoals(tx, entry.personId, [entry.localDate], 'rueckgaengig');
 }

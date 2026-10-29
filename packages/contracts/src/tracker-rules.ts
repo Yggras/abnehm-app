@@ -39,6 +39,17 @@ export function isValidManualWeight(weightG: number): boolean {
   return Number.isInteger(weightG) && weightG % manualWeightG.step === 0 && weightG >= manualWeightG.min && weightG <= manualWeightG.max;
 }
 
+/** Herkunft eines von Hand erfassten Sport- oder Gewichtseintrags; Importe kommen aus Apple Health bzw. Health Connect. */
+export const manualOrigin = 'manuell';
+
+/**
+ * Ob ein Zeitpunkt nach „jetzt“ liegt; Zeitpunkte in der Zukunft sind nicht erlaubt (Spezifikation 3,
+ * Abschnitt 4). Verglichen werden Zeitpunkte, nicht Zeichenfolgen; „jetzt“ gibt der Aufrufer aus seiner Uhr.
+ */
+export function isInFuture(instant: string, now: string): boolean {
+  return Date.parse(instant) > Date.parse(now);
+}
+
 /** Was die Gewichtsregeln von einem Gewichtseintrag brauchen. */
 export type WeightEntryFacts = Readonly<{
   weightG: number;

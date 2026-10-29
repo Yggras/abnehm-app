@@ -105,6 +105,19 @@ test('der Messzeitpunkt ist änderbar, etwa für eine nachgetragene Messung', as
   expect(added()).toEqual([expect.objectContaining({ measuredAt: '2026-10-14T05:10:00.000Z', localDate: '2026-10-14' })]);
 });
 
+test('ein Messzeitpunkt in der Zukunft nennt den Zeitpunkt als Ursache, nicht das Gewicht, und speichert nicht', async () => {
+  const { added, onSaved } = await renderForm();
+
+  // Der Picker endet bei „jetzt“; dahinter landet man etwa, wenn die Uhr zurückspringt.
+  fireEvent.changeText(screen.getByLabelText('Gemessen am'), '2026-10-14T10:05:00.000Z');
+  await save();
+
+  expect(screen.getByText('Der Messzeitpunkt liegt in der Zukunft. Bitte einen Zeitpunkt bis jetzt wählen.')).toBeOnTheScreen();
+  expect(screen.queryByText(/Bitte ein Gewicht von/, { includeHiddenElements: true })).not.toBeOnTheScreen();
+  expect(added()).toEqual([]);
+  expect(onSaved).not.toHaveBeenCalled();
+});
+
 test('„Tippfehler?“ erscheint bei mehr als 2 kg Abweichung inline vor dem Speichern; „Stimmt so“ speichert', async () => {
   const { added, onSaved } = await renderForm();
 
