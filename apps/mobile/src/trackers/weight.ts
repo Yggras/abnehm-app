@@ -1,6 +1,6 @@
 import { readingOf } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
-import { dayWeights, isValidManualWeight, type DayWeight } from '@abnehm/contracts/tracker-rules';
+import { dayWeights, isValidManualWeight, lastWeightG, type DayWeight } from '@abnehm/contracts/tracker-rules';
 import { WeightEntryUpsert, type WeightRecordedValues } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -65,6 +65,18 @@ export function recordWeightEntry(tx: TransactionContext, { clock, writer, persi
 export function lastDayWeightOf(tx: ReadContext): DayWeight | null {
   const person = readOwnPerson(tx);
   return person === undefined ? null : (dayWeights(weightEntriesOf(tx, EntityId.parse(person.id))).at(-1) ?? null);
+}
+
+/** Letztes Gewicht und letztes Tagesgewicht der eigenen Person; ohne Person oder Messung `null`. */
+export type LastWeights = Readonly<{ weightG: number; dayWeightG: number }>;
+
+export function lastWeightsOf(tx: ReadContext): LastWeights | null {
+  const person = readOwnPerson(tx);
+  if (person === undefined) return null;
+  const entries = weightEntriesOf(tx, EntityId.parse(person.id));
+  const weightG = lastWeightG(entries);
+  const dayWeight = dayWeights(entries).at(-1);
+  return weightG === null || dayWeight === undefined ? null : { weightG, dayWeightG: dayWeight.weightG };
 }
 
 /**

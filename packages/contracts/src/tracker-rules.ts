@@ -73,6 +73,18 @@ export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
     .map(({ localDate, weightG }) => ({ localDate, weightG }));
 }
 
+/**
+ * Das letzte Gewicht: die zuletzt gemessene zählende Messung, auch nach dem Tagesgewicht desselben Tags.
+ * Das Formular füllt es vor, damit die Person nur die Änderung tippt (#38); ohne Messung `null`.
+ */
+export function lastWeightG(entries: readonly WeightEntryFacts[]): number | null {
+  let last: WeightEntryFacts | null = null;
+  for (const entry of entries) {
+    if (isCountingWeightEntry(entry) && (last === null || Date.parse(entry.measuredAt) > Date.parse(last.measuredAt))) last = entry;
+  }
+  return last?.weightG ?? null;
+}
+
 /** Wiegetag: ein Wochenplantag mit dem Baustein Gewogen, gleich auf welchem Platz (`CONTEXT.md`). */
 export function isWeighDay(bausteine: readonly string[]): boolean {
   return bausteine.includes('gewogen');

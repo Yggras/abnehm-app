@@ -6,14 +6,14 @@ import { asksForTypo, isValidManualWeight } from '@abnehm/contracts/tracker-rule
 
 import { useClock } from '../clock/clock-context';
 import { Button, DateTimePicker, Notice, space, Text, TextField, type TextFieldHandle } from '../design';
-import { useMessageHost } from '../shell/MessageHost';
+import { useUndoableMessage } from '../shell/use-undoable-message';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { InvalidTrackerInputError } from './invalid-input';
 import { gramsOfKgText } from './kg-text';
 import type { Trackers } from './trackers';
 
 // Formular „Gewicht eintragen“ (Spezifikation 3, Abschnitte 3–5; #38): kg mit einer Nachkommastelle,
-// das letzte Tagesgewicht vorausgefüllt, damit die Person nur die Änderung tippt, und der Messzeitpunkt
+// das letzte Gewicht vorausgefüllt, damit die Person nur die Änderung tippt, und der Messzeitpunkt
 // „jetzt“, änderbar für nachgetragene Messungen. Weicht die Eingabe um mehr als 2 kg vom letzten
 // Tagesgewicht ab, fragt es vor dem Speichern inline „Tippfehler?“ – kein Systemdialog. Nach dem
 // Speichern zeigt der Meldungs-Host „… kg eingetragen · Rückgängig“.
@@ -21,17 +21,17 @@ import type { Trackers } from './trackers';
 const invalidInput = 'Bitte ein Gewicht von 20,0 bis 350,0 kg mit höchstens einer Nachkommastelle eingeben.';
 
 export type WeightEntryFormProps = {
-  trackers: Pick<Trackers, 'recordWeight' | 'lastDayWeight' | 'undo' | 'expire'>;
+  trackers: Pick<Trackers, 'recordWeight' | 'lastWeights' | 'undo' | 'expire'>;
   /** Gespeichert; der Aufrufer schließt das Formular. */
   onSaved: () => void;
 };
 
 export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
   const clock = useClock();
-  const { showMessage } = useMessageHost();
+  const message = useUndoableMessage();
   const field = useRef<TextFieldHandle>(null);
-  // Vergleichswert und Vorbelegung bleiben, solange das Formular offen ist.
-  const [last] = useState(() => trackers.lastDayWeight());
+  // Vorbelegung (letztes Gewicht) und Vergleichswert (letztes Tagesgewicht) bleiben, solange das Formular offen ist.
+  const [last] = useState(() => trackers.lastWeights());
   const [text, setText] = useState(() => (last === null ? '' : kg(last.weightG)));
   const [measuredAt, setMeasuredAt] = useState(() => clock.read().instant);
   const [invalid, setInvalid] = useState(false);
@@ -51,18 +51,17 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
       outcome = trackers.recordWeight({ weightG, measuredAt });
     } catch (error) {
       if (error instanceof InvalidTrackerInputError) return setInvalid(true);
-      console.error(error);
-      return showMessage({ messageKey: 'shell.nicht_geklappt', values: {} });
+      return message.failed(error);
     }
-    const { messageKey, values, undoToken } = outcome;
+    const { undoToken } = outcome;
     onSaved();
-    showMessage({ messageKey, values, undo: { run: () => trackers.undo(undoToken), expire: () => trackers.expire(undoToken) } });
+    message.show(outcome, { run: () => trackers.undo(undoToken), expire: () => trackers.expire(undoToken) });
   };
 
   const save = () => {
     const weightG = gramsOfKgText(text);
     if (weightG === null || !isValidManualWeight(weightG)) return setInvalid(true);
-    if (asksForTypo(weightG, last?.weightG ?? null)) return setAsked(weightG);
+    if (asksForTypo(weightG, last?.dayWeightG ?? null)) return setAsked(weightG);
     record(weightG);
   };
 
@@ -94,7 +93,7 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
       </View>
       {asked !== null && last !== null ? (
         <>
-          <Notice tone="hint" text={typoQuestion(asked, last.weightG)} />
+          <Notice tone="hint" text={typoQuestion(asked, last.dayWeightG)} />
           <View style={styles.actions}>
             <Button
               variant="secondary"
@@ -115,9 +114,9 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
 }
 
 /** Neutral, ohne Wertung: wie weit die Eingabe vom letzten Tagesgewicht abweicht. */
-function typoQuestion(weightG: number, lastWeightG: number): string {
-  const direction = weightG > lastWeightG ? 'mehr' : 'weniger';
-  return `Tippfehler? Das sind ${kg(Math.abs(weightG - lastWeightG))} kg ${direction} als dein letztes Tagesgewicht (${kg(lastWeightG)} kg).`;
+function typoQuestion(weightG: number, dayWeightG: number): string {
+  const direction = weightG > dayWeightG ? 'mehr' : 'weniger';
+  return `Tippfehler? Das sind ${kg(Math.abs(weightG - dayWeightG))} kg ${direction} als dein letztes Tagesgewicht (${kg(dayWeightG)} kg).`;
 }
 
 const styles = StyleSheet.create({

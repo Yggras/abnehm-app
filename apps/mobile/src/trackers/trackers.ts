@@ -1,7 +1,6 @@
 import type { Clock } from '@abnehm/clock';
 import type { EntityId } from '@abnehm/contracts/base';
 import type { PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
-import type { DayWeight } from '@abnehm/contracts/tracker-rules';
 import type { WaterAddedOutcome, WeightRecordedOutcome } from '@abnehm/contracts/trackers';
 
 import type { DailyGoalPersistence } from '../daily-goals';
@@ -13,7 +12,7 @@ import type { SyncWriter } from '../sync';
 import type { Refresh } from './today-source';
 import { addWaterEntry, undoWater, type WaterUndo } from './water';
 import { waterTodaySource } from './water-today';
-import { lastDayWeightOf, recordWeightEntry, undoWeight, type WeightInput } from './weight';
+import { lastWeightsOf, recordWeightEntry, undoWeight, type LastWeights, type WeightInput } from './weight';
 import { createWeightRecorder } from './weight-recorder';
 import { weightTodaySource } from './weight-today';
 
@@ -43,10 +42,10 @@ export type Trackers = Readonly<{
    */
   recordWeight(input: WeightInput): WeightRecordedOutcome;
   /**
-   * Das letzte Tagesgewicht der eigenen Person oder `null`, wenn sie noch nie gewogen hat; Vorbelegung
-   * und Vergleichswert der Frage „Tippfehler?“ im Formular.
+   * Letztes Gewicht (Vorbelegung des Formulars) und letztes Tagesgewicht (Vergleichswert der Frage
+   * „Tippfehler?“) der eigenen Person; `null`, wenn sie noch nie gewogen hat.
    */
-  lastDayWeight(): DayWeight | null;
+  lastWeights(): LastWeights | null;
   /**
    * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
    * Tokens aus `addWater` und `recordWeight`; Buchungen über `water.quick_add` nimmt die
@@ -91,7 +90,7 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
       const { messageKey, values, undo } = database.transaction((tx) => recordWeightEntry(tx, dependencies, dependencies.newId(), input));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)) };
     },
-    lastDayWeight: () => database.read((tx) => lastDayWeightOf(tx)),
+    lastWeights: () => database.read((tx) => lastWeightsOf(tx)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
     quickCommands: {

@@ -45,13 +45,13 @@ export function weightTodaySource(
 
 function stateOf(day: WeightDay, [today, ...ahead]: EffectivePlan[]): TodayState<'trackers.weight'> {
   const weighed = day.lastDayWeight?.localDate === day.localDate;
-  const status: TrackerWeightReady['status'] = weighDay(today)
+  const status: TrackerWeightReady['status'] = isWeighDayPlan(today)
     ? { type: weighed ? 'gewogen' : 'wiegetag_offen' }
-    : { type: 'kein_wiegetag', nextWeighDay: ahead.find(weighDay)?.localDate ?? null };
+    : { type: 'kein_wiegetag', nextWeighDay: ahead.find(isWeighDayPlan)?.localDate ?? null };
   const value = day.lastDayWeight === null ? null : { type: 'tagesgewicht' as const, weightG: day.lastDayWeight.weightG };
   return { type: 'ready', data: { key: 'gewicht', value, status, detailAction, quickAction } };
 }
 
-function weighDay(plan: EffectivePlan | undefined): boolean {
+function isWeighDayPlan(plan: EffectivePlan | undefined): boolean {
   return plan?.type === 'gueltig' && isWeighDay(plan.weeklyPlanDay.bausteine);
 }

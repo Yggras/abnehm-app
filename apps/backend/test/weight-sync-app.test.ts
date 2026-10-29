@@ -3,28 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
 
-import {
-  createDailyGoalPersistence,
-  createDailyGoalRegistry,
-  createDaysChangedDispatcher,
-  dailyGoalCompletionEntity,
-  type DaysChanged,
-} from '../../mobile/src/daily-goals/index.ts';
-import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
-import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { weightEntry as localWeightEntry } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
-import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
-import { createTrackers, waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { changeLog, weightEntry } from '../src/db/schema/index.ts';
-import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
-import { defaultPassword, newDevice, signIn, type Device } from './support/auth-client.ts';
-import { personWithSession } from './support/authorization.ts';
 import { push, upsertOp } from './support/sync.ts';
+import { sameAccountPhones, type TrackerPhone } from './support/tracker-phones.ts';
 
 // Nachweis für #175: Der Gewichtseintrag ist in der Entitäts-Registry beider Seiten angemeldet. Ein
 // Eintrag über das Tracker-Modul der App geht über die echte Hono-App nach Postgres und kommt per Pull
@@ -33,56 +18,19 @@ import { push, upsertOp } from './support/sync.ts';
 
 const start = { instant: Instant.parse('2026-10-14T10:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') };
 const morning = Instant.parse('2026-10-14T05:30:00.000Z');
-const cleanups: (() => void)[] = [];
+const closes: (() => void)[] = [];
 afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
+  for (const close of closes.splice(0)) close();
 });
 
-/** Eine Installation, wie sie der Composition Root zusammensetzt: Sync, Persistenzdienst und Tracker-Modul. */
-async function phone(backend: TestBackend, accountId: string, device: Device) {
-  const files = createBetterSqliteFiles();
-  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
-  cleanups.push(() => {
-    databases.lock();
-    files.remove();
-  });
-  const database = await databases.open(accountId);
-  const clock = createTestClock(start);
-  const newId = () => EntityId.parse(randomUUID());
-  const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity]);
-  const writer = createSyncWriter({ registry, clock, newId });
-  const signals: DaysChanged[] = [];
-  const dispatcher = createDaysChangedDispatcher({ database, observers: [(signal) => void signals.push(signal)], onError: (error) => { throw error; } });
-  const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock, writer, dispatcher });
-  const transport = createHttpSyncTransport({
-    baseUrl: testBaseUrl,
-    fetch: async (input, init) => {
-      const headers = new Headers(init?.headers);
-      headers.set('authorization', `Bearer ${device.token ?? ''}`);
-      headers.set('x-forwarded-for', device.ip);
-      return backend.app.request(String(input), { ...init, headers });
-    },
-  });
-  const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: persistence.onCanonicalChanges });
-  return {
-    trackers: createTrackers({ database, clock, writer, persistence, newId }),
-    sync: () => engine.sync(),
-    signals,
-    rows: () => database.read((tx) => sqliteOf(tx).select().from(localWeightEntry).all()),
-  };
+async function setup() {
+  const phones = await sameAccountPhones(start);
+  closes.push(phones.close);
+  return phones;
 }
 
-async function setup() {
-  const backend = await createTestBackend();
-  const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
-  const second = (await signIn(backend, 'anna@example.test', defaultPassword, newDevice())).device;
-  const a = await phone(backend, anna.accountId, anna.device);
-  const b = await phone(backend, anna.accountId, second);
-  // Erster Pull: Die Person kommt auf beide Geräte.
-  await a.sync();
-  await b.sync();
-  return { backend, anna, a, b };
-}
+/** Gewichtseinträge eines Geräts, auch gelöschte. */
+const rows = (phone: TrackerPhone) => phone.database.read((tx) => sqliteOf(tx).select().from(localWeightEntry).all());
 
 const payload = { weightG: 82_400, origin: 'manuell', measuredAt: morning, localDate: '2026-10-14', timeZone: 'Europe/Berlin', utcOffsetMinutes: 120 };
 
@@ -91,7 +39,7 @@ describe('Gewichtseintrag im Sync', () => {
     const { backend, anna, a, b } = await setup();
 
     const { undoToken } = a.trackers.recordWeight({ weightG: 82_400, measuredAt: morning });
-    const [local] = a.rows();
+    const [local] = rows(a);
     expect(await a.sync()).toEqual({ push: 'done', pull: 'done' });
 
     const [stored] = await backend.database.db.select().from(weightEntry).where(eq(weightEntry.id, local!.id));
@@ -103,7 +51,7 @@ describe('Gewichtseintrag im Sync', () => {
     expect(await backend.database.db.select().from(changeLog).where(eq(changeLog.entityId, local!.id))).toMatchObject([{ entityType: 'weight_entry', operation: 'upsert' }]);
 
     await b.sync();
-    expect(b.rows()).toEqual([
+    expect(rows(b)).toEqual([
       expect.objectContaining({ id: local!.id, weightG: 82_400, measuredAt: morning, localDate: '2026-10-14', deletedAt: null, serverVersion: stored!.serverVersion.toString() }),
     ]);
     // Die Pull-Übernahme meldet den Tag des Eintrags an den Persistenzdienst des zweiten Geräts.
@@ -115,7 +63,7 @@ describe('Gewichtseintrag im Sync', () => {
 
     const [tombstone] = await backend.database.db.select().from(weightEntry).where(eq(weightEntry.id, local!.id));
     expect(tombstone!.deletedAt).not.toBeNull();
-    expect(b.rows()).toEqual([expect.objectContaining({ id: local!.id, deletedAt: tombstone!.deletedAt!.toISOString() })]);
+    expect(rows(b)).toEqual([expect.objectContaining({ id: local!.id, deletedAt: tombstone!.deletedAt!.toISOString() })]);
   });
 
   it('WeightRecorder: zwei Aufrufe mit derselben entryId ergeben auf Server und zweitem Gerät genau einen Eintrag', async () => {
@@ -131,7 +79,7 @@ describe('Gewichtseintrag im Sync', () => {
     await b.sync();
 
     expect(await backend.database.db.select().from(weightEntry)).toEqual([expect.objectContaining({ id: entryId, weightG: 91_800 })]);
-    expect(b.rows()).toEqual([expect.objectContaining({ id: entryId, weightG: 91_800, deletedAt: null })]);
+    expect(rows(b)).toEqual([expect.objectContaining({ id: entryId, weightG: 91_800, deletedAt: null })]);
   });
 
   it.each([

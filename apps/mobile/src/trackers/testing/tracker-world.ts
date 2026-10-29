@@ -9,10 +9,10 @@ import { insertPersonForTest } from '../../daily-goals/testing/persisted';
 import { energyBookingEntity } from '../../energy';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { dirtyDay, weightEntry } from '../../local-db/schema';
+import { dirtyDay, waterEntry, weightEntry } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
-import { createSyncRegistry, createSyncWriter, type SyncRegistry } from '../../sync';
+import { createSyncRegistry, createSyncWriter } from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
 import { createTrackers, waterEntryEntity, weightEntryEntity, type TrackerDependencies, type Trackers } from '..';
 
@@ -31,10 +31,8 @@ export type DayReport = { personId: EntityId; localDates: readonly LocalDate[]; 
 export type TrackerWorld = Readonly<{
   database: LocalDatabase;
   trackers: Trackers;
-  dependencies: TrackerDependencies;
-  /** Sync-Registry mit den Entitäten des Tracker-Moduls, etwa für einen zweiten Sync-Writer. */
-  syncRegistry: SyncRegistry;
   reports: DayReport[];
+  waters(): (typeof waterEntry.$inferSelect)[];
   weights(): (typeof weightEntry.$inferSelect)[];
   operations(): ReturnType<typeof pendingOperations>;
   markers(): (typeof dirtyDay.$inferSelect)[];
@@ -42,21 +40,17 @@ export type TrackerWorld = Readonly<{
   close(): void;
 }>;
 
-let ids = 0;
-
 /**
  * Neue Welt über der Uhr des Tests; `close` sperrt die Datenbank und löscht ihre Datei. Ohne `person`
  * fehlt die eigene Person wie vor dem ersten Pull.
  */
-export async function createTrackerWorld(clock: Clock, { deterministicIds = false, person = true }: { deterministicIds?: boolean; person?: boolean } = {}): Promise<TrackerWorld> {
+export async function createTrackerWorld(clock: Clock, { person = true }: { person?: boolean } = {}): Promise<TrackerWorld> {
   let failing = false;
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   const database = await databases.open('konto_a');
   if (person) database.transaction((tx) => insertPersonForTest(tx, philipp));
-  const newId = deterministicIds
-    ? () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`)
-    : () => EntityId.parse(randomUUID());
+  const newId = () => EntityId.parse(randomUUID());
   const syncRegistry = createSyncRegistry([waterEntryEntity, weightEntryEntity, dailyGoalCompletionEntity, energyBookingEntity]);
   const writer = createSyncWriter({ registry: syncRegistry, clock, newId });
   const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
@@ -78,9 +72,8 @@ export async function createTrackerWorld(clock: Clock, { deterministicIds = fals
   return {
     database,
     trackers: createTrackers(dependencies),
-    dependencies,
-    syncRegistry,
     reports,
+    waters: () => database.read((tx) => sqliteOf(tx).select().from(waterEntry).all()),
     weights: () => database.read((tx) => sqliteOf(tx).select().from(weightEntry).all()),
     operations: () => database.read((tx) => pendingOperations(tx, 100)),
     markers: () => database.read((tx) => sqliteOf(tx).select().from(dirtyDay).all()),

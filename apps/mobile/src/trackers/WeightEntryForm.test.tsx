@@ -50,21 +50,35 @@ async function enter(text: string) {
   await user.type(field(), text);
 }
 
-test('füllt das letzte Tagesgewicht vor und speichert es mit dem Messzeitpunkt „jetzt“', async () => {
+test('füllt das letzte Gewicht vor und speichert es mit dem Messzeitpunkt „jetzt“', async () => {
   const { added, onSaved } = await renderForm({
     lastWeighings: [[92_400, '2026-10-12T05:30:00.000Z'], [91_800, '2026-10-13T05:45:00.000Z'], [92_300, '2026-10-13T19:00:00.000Z']],
   });
 
-  expect(field()).toHaveDisplayValue('91,8');
+  // Die zuletzt gemessene Messung, nicht das Tagesgewicht (früheste Messung des Tags): Die Person tippt
+  // nur die Änderung gegenüber dem letzten Wiegen (#175, #38).
+  expect(field()).toHaveDisplayValue('92,3');
   // Sichtbar beschriftet: Ohne „Gemessen am“ stünden Datum und Uhrzeit ohne Bezug da (Impeccable-Kritik).
   expect(screen.getByText('Gemessen am')).toBeOnTheScreen();
   expect(screen.getByLabelText('Gemessen am')).toHaveDisplayValue(noon);
 
   await save();
 
-  expect(added()).toEqual([expect.objectContaining({ weightG: 91_800, measuredAt: noon, localDate: '2026-10-14' })]);
+  expect(added()).toEqual([expect.objectContaining({ weightG: 92_300, measuredAt: noon, localDate: '2026-10-14' })]);
   expect(onSaved).toHaveBeenCalledTimes(1);
-  expect(within(screen.getByTestId('message-slot')).getByText('91,8 kg eingetragen')).toBeOnTheScreen();
+  expect(within(screen.getByTestId('message-slot')).getByText('92,3 kg eingetragen')).toBeOnTheScreen();
+});
+
+test('„Tippfehler?“ vergleicht mit dem letzten Tagesgewicht, nicht mit der vorausgefüllten letzten Messung', async () => {
+  const { added } = await renderForm({
+    lastWeighings: [[91_800, '2026-10-13T05:45:00.000Z'], [93_900, '2026-10-13T19:00:00.000Z']],
+  });
+
+  // 93,9 kg stehen im Feld; gegenüber dem Tagesgewicht 91,8 kg sind das 2,1 kg.
+  await save();
+
+  expect(screen.getByText('Tippfehler? Das sind 2,1 kg mehr als dein letztes Tagesgewicht (91,8 kg).')).toBeOnTheScreen();
+  expect(added()).toEqual([]);
 });
 
 test('ohne frühere Messung ist das Feld leer', async () => {

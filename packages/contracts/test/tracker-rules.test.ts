@@ -10,6 +10,7 @@ import {
   isValidManualWeight,
   isValidWaterAmount,
   isWeighDay,
+  lastWeightG,
   manualWeightG,
   trackerStatus,
   waterAmountMl,
@@ -80,6 +81,24 @@ describe('Tagesgewicht', () => {
   it('gibt ohne zählende Messung keine Tagesgewichte', () => {
     expect(dayWeights([])).toEqual([]);
     expect(dayWeights([weighing(82_000, '2026-10-14T05:30:00.000Z', { deletedAt: '2026-10-14T06:00:00.000Z' })])).toEqual([]);
+  });
+});
+
+describe('letztes Gewicht', () => {
+  it('ist die zuletzt gemessene zählende Messung, auch nach dem Tagesgewicht desselben Tags', () => {
+    const entries = [
+      weighing(82_800, '2026-10-13T05:30:00.000Z'),
+      weighing(82_400, '2026-10-14T05:30:00.000Z'),
+      weighing(82_900, '2026-10-14T18:00:00.000Z'),
+      weighing(82_100, '2026-10-14T20:00:00.000Z', { deletedAt: '2026-10-14T20:01:00.000Z' }),
+    ];
+
+    expect(lastWeightG(entries)).toBe(82_900);
+  });
+
+  it('gibt es ohne zählende Messung nicht', () => {
+    expect(lastWeightG([])).toBeNull();
+    expect(lastWeightG([weighing(82_000, '2026-10-14T05:30:00.000Z', { hiddenAt: '2026-10-14T06:00:00.000Z' })])).toBeNull();
   });
 });
 
