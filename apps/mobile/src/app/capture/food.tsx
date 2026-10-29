@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { FoodCaptureScreen } from '../../nutrition/FoodCaptureScreen';
 
-export default placeholderRoute('capture.food');
+export default routeScreen('capture.food', FoodCaptureScreen);

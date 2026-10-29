@@ -24,7 +24,7 @@ test('zeigt den Hinweis und ersetzt ihn bei einem Fehler durch den Fehlertext sa
   // Sichtbar unter dem Feld; Screenreader hören den Satz als Hinweis des Felds, nicht doppelt.
   expect(screen.getByText('Mindestens 10 Zeichen', { includeHiddenElements: true })).toBeOnTheScreen();
 
-  await rerender(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" error="Dein Passwort braucht mindestens 10 Zeichen." />);
+  await rerender(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" problem="Dein Passwort braucht mindestens 10 Zeichen." />);
 
   expect(screen.queryByText('Mindestens 10 Zeichen', { includeHiddenElements: true })).toBeNull();
   expect(screen.getByText('Dein Passwort braucht mindestens 10 Zeichen.', { includeHiddenElements: true })).toBeOnTheScreen();

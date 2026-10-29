@@ -128,7 +128,7 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
         label={onboardingTexts.email}
         value={email}
         onChangeText={setEmail}
-        error={errors.email}
+        problem={errors.email}
         disabled={pending}
         keyboardType="email-address"
         autoCapitalize="none"
@@ -145,7 +145,7 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
         value={password}
         onChangeText={setPassword}
         hint={registering ? onboardingTexts.passwordHint : undefined}
-        error={errors.password}
+        problem={errors.password}
         disabled={pending}
         secure
         autoCapitalize="none"
@@ -164,7 +164,7 @@ export function AccountStep({ mode, onModeChange, onBack, disclaimerAcceptedAt }
           value={displayName}
           onChangeText={setDisplayName}
           hint={onboardingTexts.displayNameHint}
-          error={errors.displayName}
+          problem={errors.displayName}
           disabled={pending}
           autoComplete="nickname"
           textContentType="nickname"

@@ -71,7 +71,7 @@ export function AccountSetup() {
             value={displayName}
             onChangeText={setDisplayName}
             hint={onboardingTexts.displayNameHint}
-            error={nameError}
+            problem={nameError}
             autoComplete="nickname"
             textContentType="nickname"
           />

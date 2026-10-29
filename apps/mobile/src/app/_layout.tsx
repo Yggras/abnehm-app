@@ -68,7 +68,7 @@ export default function RootLayout() {
             <Stack.Screen name="technik" />
           </Stack.Protected>
         </Stack>
-        {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
+        {testCapabilities ? <testCapabilities.Host session={deviceSession} gate={gate} /> : null}
         </OnboardingProvider>
         </OnlineFlowsProvider>
         </SyncRefreshProvider>

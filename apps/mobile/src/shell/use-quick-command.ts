@@ -4,6 +4,7 @@ import { isTestArtifact } from '../test-artifact';
 import { appQuickCommands } from './app-quick-commands';
 import { useMessageHost } from './MessageHost';
 import { MissingQuickCommandError, type QuickCommand } from './quick-commands';
+import { useUndoableMessage } from './use-undoable-message';
 
 /**
  * Führt einen Quick-Command ohne Navigation aus und zeigt sein Ergebnis über den Meldungs-Host,
@@ -13,46 +14,22 @@ import { MissingQuickCommandError, type QuickCommand } from './quick-commands';
  */
 export function useQuickCommand(): (command: QuickCommand) => void {
   const { showMessage } = useMessageHost();
+  const message = useUndoableMessage();
 
   return useCallback(
     (command: QuickCommand) => {
-      const failed = (error: unknown) => {
-        console.error(error);
-        showMessage({ messageKey: 'shell.nicht_geklappt', values: {} });
-      };
-
       let outcome;
       try {
         outcome = appQuickCommands.execute(command);
       } catch (error) {
-        if (!(error instanceof MissingQuickCommandError)) return failed(error);
+        if (!(error instanceof MissingQuickCommandError)) return message.failed(error);
         if (!isTestArtifact()) throw error;
         return showMessage({ messageKey: 'shell.quick_command.in_arbeit', values: { commandKey: command.commandKey } });
       }
 
-      const { messageKey, values, undoToken } = outcome;
-      const expire = () => appQuickCommands.expire(undoToken);
-      try {
-        showMessage({
-          messageKey,
-          values,
-          undo: {
-            run: () => {
-              try {
-                appQuickCommands.undo(undoToken);
-              } catch (error) {
-                failed(error);
-              }
-            },
-            expire,
-          },
-        });
-      } catch (error) {
-        // Ohne Meldung gibt es kein „Rückgängig“; der Token endet hier (fehlender Text im Release).
-        expire();
-        throw error;
-      }
+      const { undoToken } = outcome;
+      message.show(outcome, { run: () => appQuickCommands.undo(undoToken), expire: () => appQuickCommands.expire(undoToken) });
     },
-    [showMessage],
+    [showMessage, message],
   );
 }

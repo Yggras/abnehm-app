@@ -1,12 +1,14 @@
 import { useImperativeHandle, useRef, useState, type ComponentRef, type Ref } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
-import { boxShadow } from './elevation';
 import { Icon } from './Icon';
 import { Text } from './Text';
 import { color, radius, size, space, textScale, type } from './tokens';
 
-/** Tastatur und Autovervollständigung reichen unverändert an das native Feld. */
+/** Zahl mit Einheit (Dezimaltastatur), freier Text oder Suche mit Lupe. */
+export type TextFieldKind = 'number' | 'text' | 'search';
+
+/** Tastatur und Autovervollständigung reichen an das native Feld und gehen den Vorgaben von `kind` vor. */
 type KeyboardProps = Pick<
   TextInputProps,
   | 'keyboardType'
@@ -24,94 +26,132 @@ type KeyboardProps = Pick<
 export type TextFieldHandle = { focus(): void };
 
 export type TextFieldProps = KeyboardProps & {
-  /** Sichtbare Beschriftung über dem Feld; zugleich der Name für Screenreader. */
+  /** Sichtbare Beschriftung über dem Feld; zugleich der zugängliche Name. */
   label: string;
+  /** Beschriftung nur für Screenreader, etwa beim Suchfeld mit Platzhalter. */
+  hideLabel?: boolean;
   value: string;
-  onChangeText: (value: string) => void;
+  onChangeText: (text: string) => void;
+  kind?: TextFieldKind;
+  /** Einheit rechts im Feld, etwa „g“. */
+  unit?: string;
+  placeholder?: string;
   /** Kurzer Hinweis unter dem Feld, etwa „Mindestens 10 Zeichen“. */
   hint?: string;
-  /** Ungültige Eingabe: ersetzt den Hinweis, immer mit Lösungsweg im Satz. */
-  error?: string;
+  /** Ungültige Eingabe: Rahmen in `problem`; der Satz mit Lösungsweg ersetzt den Hinweis. */
+  problem?: string;
   /** Verdeckte Eingabe für Passwörter. */
   secure?: boolean;
   disabled?: boolean;
   ref?: Ref<TextFieldHandle>;
 };
 
+const borderWidth = { resting: 1.5, focused: 2 };
+
 /**
- * Eingabefeld nach dem Design-System (Komponente „Eingabefeld“, Variante Text): Beschriftung darüber,
- * 52 dp hohes Feld auf `surface-card` mit Rahmen in `line-strong`, fokussiert mit Fokusring, bei
- * ungültiger Eingabe Rahmen und Satz in `problem` samt Symbol. Der Satz unter dem Feld ist zugleich
- * der Hinweis für Screenreader.
+ * Eingabefeld nach dem Design-System (gebrandetes `TextInput`): Fläche `surface-card`, Rahmen
+ * `line-strong`, fokussiert 2 dp in `primary`. Ein Fehler steht nie nur als Farbe da, sondern als
+ * Satz mit Symbol unter dem Feld. Der Satz unter dem Feld ist zugleich der Hinweis für Screenreader.
  */
-export function TextField({ label, value, onChangeText, hint, error, secure = false, disabled = false, ref, ...keyboard }: TextFieldProps) {
+export function TextField({
+  label,
+  hideLabel = false,
+  value,
+  onChangeText,
+  kind = 'text',
+  unit,
+  placeholder,
+  hint,
+  problem,
+  secure = false,
+  disabled = false,
+  ref,
+  ...keyboard
+}: TextFieldProps) {
   const [focused, setFocused] = useState(false);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }), []);
-  const note = error ?? hint;
+  // Ein Tipp auf Beschriftung, Lupe oder Einheit setzt den Fokus ins Feld; zugänglich ist nur das Feld selbst.
   return (
-    <View style={styles.field}>
-      {/* Ein Tipp auf die Beschriftung setzt den Fokus ins Feld; Screenreader kennen sie als dessen Namen. */}
-      <Text
-        variant="label"
-        tone={disabled ? 'inkDisabled' : 'ink'}
-        accessible={false}
-        importantForAccessibility="no"
-        onPress={disabled ? undefined : () => input.current?.focus()}
-      >
-        {label}
-      </Text>
-      <TextInput
-        {...keyboard}
-        ref={input}
-        accessibilityLabel={label}
-        accessibilityHint={error === undefined ? hint : `Fehler: ${error}`}
-        accessibilityState={{ disabled }}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secure}
-        editable={!disabled}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        allowFontScaling
-        maxFontSizeMultiplier={textScale.max}
-        selectionColor={color.primary}
-        cursorColor={color.primary}
+    <Pressable accessible={false} disabled={disabled} onPress={() => input.current?.focus()} style={styles.field}>
+      {hideLabel ? null : (
+        <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'}>
+          {label}
+        </Text>
+      )}
+      <View
         style={[
-          styles.input,
-          error !== undefined && styles.invalid,
-          focused && styles.focused,
-          disabled && styles.disabled,
+          styles.box,
+          disabled ? styles.disabled : problem ? styles.problem : focused ? styles.focused : styles.resting,
         ]}
-      />
-      {note === undefined ? null : (
-        <View style={styles.note} accessible={false} importantForAccessibility="no-hide-descendants">
-          {error === undefined ? null : <Icon name="alert" size="sm" tone="problem" />}
-          <Text variant="caption" tone={error !== undefined ? 'problem' : disabled ? 'inkDisabled' : 'inkMuted'} style={styles.noteText}>
-            {note}
+      >
+        {kind === 'search' ? <Icon name="search" tone={disabled ? 'inkDisabled' : 'inkMuted'} /> : null}
+        <TextInput
+          keyboardType={kind === 'number' ? 'decimal-pad' : 'default'}
+          returnKeyType={kind === 'search' ? 'search' : 'done'}
+          autoCorrect={kind === 'text'}
+          autoCapitalize={kind === 'search' ? 'none' : 'sentences'}
+          {...keyboard}
+          ref={input}
+          accessibilityLabel={label}
+          accessibilityState={{ disabled }}
+          accessibilityHint={problem ? `Fehler: ${problem}` : hint}
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secure}
+          editable={!disabled}
+          placeholder={placeholder}
+          placeholderTextColor={color.inkMuted}
+          clearButtonMode={kind === 'search' ? 'while-editing' : 'never'}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          allowFontScaling
+          maxFontSizeMultiplier={textScale.max}
+          selectionColor={color.primary}
+          cursorColor={color.primary}
+          style={[styles.input, { color: color[disabled ? 'inkDisabled' : 'ink'] }]}
+        />
+        {unit ? (
+          <Text variant="bodyStrong" tone={disabled ? 'inkDisabled' : 'inkMuted'}>
+            {unit}
+          </Text>
+        ) : null}
+      </View>
+      {/* Screenreader hören den Satz als Hinweis des Felds, nicht ein zweites Mal als Text. */}
+      {problem ? (
+        <View style={styles.message} accessible={false} importantForAccessibility="no-hide-descendants">
+          <Icon name="alert" size="sm" tone="problem" />
+          <Text variant="label" tone="problem" style={styles.messageText}>
+            {problem}
           </Text>
         </View>
-      )}
-    </View>
+      ) : hint ? (
+        <View style={styles.message} accessible={false} importantForAccessibility="no-hide-descendants">
+          <Text variant="caption" tone={disabled ? 'inkDisabled' : 'inkMuted'} style={styles.messageText}>
+            {hint}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   field: { gap: space[1], alignSelf: 'stretch' },
-  input: {
-    ...type.body,
-    color: color.ink,
+  box: {
     minHeight: size.fieldHeight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
     paddingHorizontal: space[4],
-    paddingVertical: space[3],
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.lineStrong,
     backgroundColor: color.surfaceCard,
   },
-  invalid: { borderColor: color.problem, borderWidth: 2 },
-  focused: { borderColor: color.focus, boxShadow: boxShadow.focusRing },
-  disabled: { backgroundColor: color.fillDisabled, borderColor: color.fillDisabled, color: color.inkDisabled },
-  note: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
-  noteText: { flexShrink: 1 },
+  resting: { borderWidth: borderWidth.resting, borderColor: color.lineStrong },
+  focused: { borderWidth: borderWidth.focused, borderColor: color.primary },
+  problem: { borderWidth: borderWidth.focused, borderColor: color.problem },
+  disabled: { backgroundColor: color.fillDisabled },
+  input: { ...type.body, flex: 1, minHeight: size.touchMin, paddingVertical: space[2] },
+  message: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  messageText: { flex: 1 },
 });

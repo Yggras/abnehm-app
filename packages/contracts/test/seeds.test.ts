@@ -53,8 +53,12 @@ describe('Seed-Manifest', () => {
   it('schreibt das Änderungsprotokoll nur für beim Sync angemeldete Entitäten', () => {
     expect(solo.initial.server.change_log).toEqual([
       expect.objectContaining({ entity_type: 'person', entity_id: philipp, owner_person_id: philipp, operation: 'upsert' }),
+      expect.objectContaining({ entity_type: 'goal_version', entity_id: seedIds.goalVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
+      expect.objectContaining({ entity_type: 'weekly_plan_version', entity_id: seedIds.weeklyPlanVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
       ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
         expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
+        expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
   });
 

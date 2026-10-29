@@ -29,7 +29,9 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { couplingMember as localMember } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
+import { nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../mobile/src/partner-cache/index.ts';
+import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
 import {
   createHttpSyncTransport,
   createSyncEngine,
@@ -67,7 +69,9 @@ afterEach(() => {
 });
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
-const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
+const registry = createSyncRegistry([
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, nutritionEntryEntity,
+]);
 
 type Phone = Readonly<{
   device: Device;
@@ -186,10 +190,12 @@ describe('Szenario gekoppelt', () => {
 
   it('ein vollständiger Pull ergibt genau den geseedeten Gerätezustand: Sichtbarkeit und Partnercache passen zum Server', async () => {
     const world = await seeded(gekoppelt);
-    // Was der Sync heute überträgt: Entitäten mit Eintrag im Änderungsprotokoll, seit #171 auch Wassereinträge.
-    // Tagesziele, Sport-, Gewichts- und Ernährungseinträge sowie Fotos melden erst die Spezifikationen 1–3 an;
-    // die behält das Gerät samt eigener Person, an der sie hängen.
+    // Was der Sync heute überträgt: Entitäten mit Eintrag im Änderungsprotokoll, seit #171 auch Wassereinträge,
+    // seit #128 Ziel- und Wochenplanversionen; die Wochenplantage reisen mit ihrer Version. Tagesziele, Sport-,
+    // Gewichts- und Ernährungseinträge sowie Fotos melden erst die Spezifikationen 1–3 an; die behält das Gerät
+    // samt eigener Person, an der sie hängen.
     const synced = new Set(gekoppelt.initial.server.change_log!.map((entry) => String(entry.entity_type)));
+    if (synced.has('weekly_plan_version')) synced.add('weekly_plan_day');
     synced.delete('person');
 
     for (const key of ['philipp-iphone', 'anna-android']) {
@@ -220,7 +226,7 @@ describe('Szenario gekoppelt', () => {
     expect(anna.partner()).toEqual({
       dailyGoalStatus: expect.objectContaining({ ownerPersonId: philipp.personId, stage: 'unterwegs' }),
       summaries: [
-        expect.objectContaining({ type: 'ernaehrung', ownerPersonId: philipp.personId, content: { recordedMealCategories: 1 } }),
+        expect.objectContaining({ type: 'ernaehrung', ownerPersonId: philipp.personId, content: { recordedMealCategories: 2 } }),
         expect.objectContaining({ type: 'wasser', content: { progressPercent: 50 } }),
         expect.objectContaining({ type: 'sport', content: { countedMinutes: 65, weeklyTargetMinutes: 150 } }),
         expect.objectContaining({ type: 'gewicht', content: { changeKg: null, direction: 'noch_nicht_verfuegbar' } }),
