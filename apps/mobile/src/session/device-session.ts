@@ -13,6 +13,7 @@ import { energyBookingEntity } from '../energy';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { createDeviceInvitationFlows } from '../online';
+import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { todayRefresh } from '../shell/today-refresh';
@@ -36,16 +37,11 @@ const onError = (error: unknown) => console.error('[sitzung]', error);
 const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
-const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
-/**
- * Wasserziel für den Mini-Tracker. Bis Spezifikation 1 ihren `PlanReader` anmeldet, gibt es ihn nur in
- * Test-Artefakten als Attrappe aus den Seed-Manifesten (Nutzerentscheidung vom 28.10.2026 in #171); im
- * Release fehlt `trackers.water` dann wie die übrigen Beiträge der Bereiche, und das ist dort ein
- * Integrationsfehler. Der echte `PlanReader` ersetzt die Attrappe hier auch in Test-Artefakten.
- */
-const waterToday = testCapabilities === null
-  ? null
-  : { planReader: testCapabilities.planReader, opened: followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water') };
+const syncRegistry = createSyncRegistry([
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity,
+]);
+/** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
+const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
 /** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
 const refreshToday: Refresh = (update) => {
   const stopTicks = todayRefresh(update);
@@ -97,14 +93,14 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands] }),
       });
       activeEngine = engine;
       void dispatcher.deliver();
       const stops = [
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
         appQuickCommands.opened(database, trackers.quickCommands),
-        waterToday?.opened(trackers.waterToday(waterToday.planReader, refreshToday)),
+        waterTodayOpened(trackers.waterToday(planReaderOf(database), refreshToday)),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

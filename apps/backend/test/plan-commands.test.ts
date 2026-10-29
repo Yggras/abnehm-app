@@ -124,7 +124,7 @@ describe('createWeeklyPlanVersion', () => {
 
   it('lehnt doppelte Bausteine, fehlende Tage und einen fremden valid_from im Schlüssel ab', async () => {
     const { backend, anna, rows } = await setup();
-    const { sonntag: _sonntag, ...sechsTage } = standardDays;
+    const sechsTage = Object.fromEntries(Object.entries(standardDays).filter(([weekday]) => weekday !== 'sonntag'));
 
     const results = await push(backend, anna.device, [
       weeklyPlanOp(anna.personId, { days: { ...standardDays, montag: ['wasserziel', 'gewogen', 'wasserziel'] } }),

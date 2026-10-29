@@ -13,7 +13,7 @@ import {
   weeklyPlanVersionId,
   weeklyPlanVersionKey,
 } from '@abnehm/contracts/plan';
-import type { EffectivePlan, Pace, PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
+import type { Pace, PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { LocalDatabase, TransactionContext } from '../local-db';

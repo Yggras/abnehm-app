@@ -105,7 +105,8 @@ describe('Vollständigkeit der Policies', () => {
 
   it('findet Fachbefehle mit unvollständiger Policy', async () => {
     const backend = await createTestBackend();
-    backend.authorization.registerCommand('createGoalVersion', policies.resource('goal_version', 'befehl'));
+    // Ein erfundener Name: Die echten Fachbefehle meldet `createBackend` schon an.
+    backend.authorization.registerCommand('vollstaendigerTestbefehl', policies.resource('goal_version', 'befehl'));
     backend.authorization.registerCommand('updateDailyGoal', policies.resource('daily_goal', 'upsert'));
     backend.authorization.registerCommand('handgebaut', { kind: 'adminCommand', command: 'passwort_reset', dimensions: [] });
 
@@ -133,7 +134,7 @@ describe('Fachbefehle', () => {
     const world = await coupledWorld();
     const actor = await actorOf(world, world.anna);
 
-    const decision = await world.backend.authorization.authorizeCommand(world.backend.database.db, actor, 'createGoalVersion', anyResource());
+    const decision = await world.backend.authorization.authorizeCommand(world.backend.database.db, actor, 'nichtAngemeldeterTestbefehl', anyResource());
 
     expect(decision).toEqual({ type: 'verweigert' });
   });

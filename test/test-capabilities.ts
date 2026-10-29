@@ -85,15 +85,6 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['geraetetest_neustart'],
   },
   {
-    // #171: Bis Spezifikation 1 ihren PlanReader anmeldet, braucht der Mini-Tracker `trackers.water` in
-    // Test-Artefakten ein Wasserziel (Nutzerentscheidung vom 28.10.2026 im Ticket).
-    key: 'plan-reader-attrappe',
-    description: 'PlanReader-Attrappe der Test-Artefakte: Zielversion und Wochenplan aus den Seed-Manifesten, über die Fake-Ports aus #104',
-    modules: ['apps/mobile/src/test-capabilities/plan-reader.ts', 'apps/mobile/src/area-ports/testing/'],
-    entries: {},
-    markers: ['PlanReader-Attrappe'],
-  },
-  {
     key: 'testgeruest',
     description: 'Gemeinsames Gerüst: Development-Server und -App des Backends, Eingang, Deep Links und Wirt der App-Testfähigkeiten',
     modules: [

@@ -20,6 +20,8 @@ export type SeedWeeklyPlan = Readonly<Record<string, readonly [BausteinKey, Baus
 export function seedWeeklyPlan(options: { id: string; personId: string; validFrom: string; createdAt: string; plan: SeedWeeklyPlan }): SeedEntity {
   return {
     table: 'weekly_plan_version',
+    // Seit #128 beim Sync angemeldet: Die Fassung steht im Änderungsprotokoll.
+    entityType: 'weekly_plan_version',
     ownerPersonId: options.personId,
     row: { id: options.id, person_id: options.personId, valid_from: options.validFrom, ...seedCreated(options.createdAt) },
     children: {

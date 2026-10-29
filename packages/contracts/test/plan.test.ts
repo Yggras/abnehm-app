@@ -179,7 +179,7 @@ describe('Wochenplanversion', () => {
   it('hat sieben Wochentage mit je drei verschiedenen, geordneten Bausteinen', () => {
     expect(CreateWeeklyPlanVersion.safeParse({ validFrom: '2026-10-14', days }).success).toBe(true);
     expect(CreateWeeklyPlanVersion.safeParse({ validFrom: '2026-10-14', days: { ...days, montag: ['wasserziel', 'wasserziel', 'gewogen'] } }).success).toBe(false);
-    const { sonntag: _missing, ...sechs } = days;
+    const sechs = Object.fromEntries(Object.entries(days).filter(([weekday]) => weekday !== 'sonntag'));
     expect(CreateWeeklyPlanVersion.safeParse({ validFrom: '2026-10-14', days: sechs }).success).toBe(false);
     expect(CreateWeeklyPlanVersion.safeParse({ validFrom: '2026-10-14', days: { ...days, feiertag: days.montag } }).success).toBe(false);
   });

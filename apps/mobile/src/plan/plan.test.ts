@@ -16,9 +16,9 @@ import { createLocalDatabases } from '../local-db/local-databases';
 import { goalVersion, person, weeklyPlanDay, weeklyPlanVersion } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
-import { createSyncRegistry, createSyncWriter, personEntity } from '../sync';
+import { createLocalCommandRegistry, createSyncRegistry, createSyncWriter, personEntity } from '../sync';
 import { pendingOperations } from '../sync/outbox';
-import { createPlan, goalVersionEntity, planReaderOf, standardWeeklyPlan, weeklyPlanVersionEntity, type InitialPlanDraft } from '.';
+import { createPlan, goalVersionEntity, planCommands, planReaderOf, standardWeeklyPlan, weeklyPlanVersionEntity, type InitialPlanDraft } from '.';
 
 // Nachweis für #128: Tracer Bullet des Plan-Moduls (Spezifikation 1, Abschnitte 1, 2 und 4) gegen eine
 // echte SQLite-Datei mit denselben Migrationen wie die App, gesteuert über Testuhr und Test-Zeitzone.
@@ -96,10 +96,12 @@ async function setup({ at = noon, recorded }: { at?: Instant; recorded?: RecordM
       },
     },
   });
+  const commands = createLocalCommandRegistry({ database, writer, commands: planCommands });
   return {
     database,
     clock,
     plan,
+    commands,
     weights,
     weightCalls,
     reports,
@@ -306,6 +308,37 @@ describe('Erstplan speichern', () => {
     expect(operations()).toEqual([]);
     expect(ownPerson()).toMatchObject({ calculationSex: null });
     expect(weights.entries()).toHaveLength(1);
+  });
+});
+
+describe('Dauerhafte Ablehnung durch den Server', () => {
+  it('entfernt eine nie bestätigte Fassung samt ihrer Tage; der Plan ist danach wieder leer', async () => {
+    const { plan, database, commands, goals, weeklyPlans, weeklyPlanDays, operations } = await setup();
+    await plan.saveInitialPlan(draft);
+
+    const pending = operations();
+    database.transaction((tx) => {
+      for (const operation of pending) {
+        if (!('businessKey' in operation)) continue;
+        commands.reconcileRejected(tx, operation, {
+          type: 'permanently_rejected',
+          operationId: operation.operationId,
+          error: { code: 'invalid_payload', retryable: false },
+          canonical: { type: 'absent', entityType: 'command_result', entityId: operation.operationId },
+        });
+      }
+    });
+
+    expect(goals()).toEqual([]);
+    expect(weeklyPlans()).toEqual([]);
+    expect(weeklyPlanDays()).toEqual([]);
+    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+  });
+
+  it('erzeugt keinen Fachbefehl über die lokale Befehls-Registry; das darf nur das Plan-Modul', async () => {
+    const { commands } = await setup();
+
+    expect(() => commands.execute('createGoalVersion', 'zielversion:x', {})).toThrow();
   });
 });
 

@@ -1,4 +1,3 @@
-import type { PlanReader } from '@abnehm/contracts/ports';
 import type { ComponentType } from 'react';
 
 import type { SessionStore } from '../auth/app-auth';
@@ -12,12 +11,11 @@ import { createFaultController, faultyFetch, faultySessionStore } from './faults
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
 import { faultyNetwork } from './network';
-import { seedPlanReader } from './plan-reader';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
-// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #171): Seed-Deep-Link, Testuhr,
-// Fehler-Adapter für Transport, Server, Auth und Storage samt Transport-Fehlermodus, die
-// On-Device-Suite und die PlanReader-Attrappe. App-Code erreicht diesen Ordner nur über `src/build-capabilities.ts`; im
+// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114): Seed-Deep-Link, Testuhr,
+// Fehler-Adapter für Transport, Server, Auth und Storage samt Transport-Fehlermodus und die
+// On-Device-Suite. App-Code erreicht diesen Ordner nur über `src/build-capabilities.ts`; im
 // Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer Testfähigkeit der zentralen
 // Registry (`test/test-capabilities.ts`).
 
@@ -34,8 +32,6 @@ export type TestCapabilities = Readonly<{
   redirectSystemPath(path: string): string;
   /** Wirt im Root-Layout; führt Seeds mit der App-Sitzung aus. */
   Host: ComponentType<{ session: () => AppSession }>;
-  /** Wasserziel und Wochenplan aus den Seed-Manifesten, bis Spezifikation 1 ihren `PlanReader` anmeldet (#171). */
-  planReader: PlanReader;
 }>;
 
 const clock = createAppTestClock(deviceClock);
@@ -66,5 +62,4 @@ export const testCapabilities: TestCapabilities = {
     return '/';
   },
   Host,
-  planReader: seedPlanReader(),
 };
