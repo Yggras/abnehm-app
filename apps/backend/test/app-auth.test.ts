@@ -60,9 +60,8 @@ async function revoke(auth: ReturnType<typeof createAppAuth>) {
   return auth.revokeSession(revocation);
 }
 
-/** Ein Gerät mit eigenem Speicher, eigener Datenbank und eigener Quelladresse. */
-function phone(backend: TestBackend): Phone {
-  const store = memoryStore();
+/** Ein Gerät mit eigenem Speicher, eigener Datenbank und eigener Quelladresse; mit `store` ein Neustart. */
+function phone(backend: TestBackend, store = memoryStore()): Phone {
   const data = accountDataModel();
   const { ip } = newDevice();
   const device: Phone = {
@@ -246,5 +245,52 @@ describe('Auth-Modul der App gegen das Backend', () => {
 
     expect(await device.auth.checkSession()).toEqual({ type: 'abgemeldet' });
     expect(device.auth.state()).toEqual({ type: 'abgemeldet' });
+  });
+});
+
+// „Konto“ in den Einstellungen (#119) zeigt die E-Mail über das Auth-Modul; außerhalb der
+// Better-Auth-Tabellen liegt sie nirgends (Spezifikation 0, Abschnitt 9).
+describe('E-Mail des Kontos', () => {
+  it('liest sie beim Server und ohne Netz die zuletzt gesehene, ohne sie zu speichern', async () => {
+    const backend = await createTestBackend();
+    const { device } = await registered(backend);
+
+    expect(await device.auth.accountEmail()).toEqual({ type: 'known', email: 'anna@example.test' });
+    device.online = false;
+    expect(await device.auth.accountEmail()).toEqual({ type: 'known', email: 'anna@example.test' });
+    expect(JSON.stringify(device.store.value)).not.toContain('example.test');
+  });
+
+  it('kennt sie nach einem Start ohne Netz erst, wenn der Server wieder erreichbar ist', async () => {
+    const backend = await createTestBackend();
+    const { device, accountId } = await registered(backend);
+    const restarted = phone(backend, device.store);
+    restarted.online = false;
+
+    expect(await restarted.auth.checkSession()).toEqual({ type: 'offline', accountId });
+    expect(await restarted.auth.accountEmail()).toEqual({ type: 'unreachable' });
+    restarted.online = true;
+    expect(await restarted.auth.accountEmail()).toEqual({ type: 'known', email: 'anna@example.test' });
+  });
+
+  it('meldet eine widerrufene Sitzung und sperrt wie „Sitzung prüfen“', async () => {
+    const backend = await createTestBackend();
+    const { device, accountId } = await registered(backend);
+    await revoke(device.auth);
+
+    expect(await device.auth.accountEmail()).toEqual({ type: 'unauthorized' });
+    expect(device.auth.state()).toEqual({ type: 'gesperrt', accountId });
+  });
+
+  it('zeigt nach einer Anmeldung mit einem anderen Konto nie die E-Mail des vorigen', async () => {
+    const backend = await createTestBackend();
+    const anna = await registered(backend, 'anna@example.test');
+    await registered(backend, 'philipp@example.test');
+    expect(await anna.device.auth.accountEmail()).toEqual({ type: 'known', email: 'anna@example.test' });
+
+    await anna.device.auth.signIn({ email: 'philipp@example.test', password: defaultPassword });
+    anna.device.online = false;
+
+    expect(await anna.device.auth.accountEmail()).toEqual({ type: 'known', email: 'philipp@example.test' });
   });
 });

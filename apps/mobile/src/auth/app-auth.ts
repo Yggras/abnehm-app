@@ -4,7 +4,7 @@ import { authErrorCodes, BootstrapPersonRequest, BootstrapPersonResult, LogoutRe
 
 // Auth-Modul der App (Spezifikation 0, Abschnitt 9). Bildschirme und Bereichscode kennen nur `AppAuth`,
 // nicht Better Auth: Registrieren, Anmelden, Sitzung prüfen und Passwort ändern, dazu den Sperrzustand
-// bei `401`. Das Widerrufen der aktuellen Sitzung erhält nur das Abmeldemodul (#111) als eigene Rolle
+// bei `401` und die E-Mail des Kontos für die Einstellungen. Das Widerrufen der aktuellen Sitzung erhält nur das Abmeldemodul (#111) als eigene Rolle
 // `SessionRevocations`; es orchestriert darauf die vollständige Abmeldung.
 //
 // Das Backend spricht Better Auth über dessen REST-Endpunkte unter `/v1/auth` an
@@ -82,6 +82,8 @@ export type ChangePasswordResult =
   | Unauthorized
   | Offline;
 export type RevokeResult = { type: 'revoked' } | Unauthorized | Offline;
+/** `unreachable`: Der Server antwortet nicht, und seit dem Start war die E-Mail dieses Kontos nie zu sehen. */
+export type AccountEmail = { type: 'known'; email: string } | Unauthorized | Offline;
 
 export type AppAuth = {
   /** Legt das Konto an, meldet das Gerät an und erzeugt die eine Person (Bootstrap). */
@@ -93,6 +95,13 @@ export type AppAuth = {
   bootstrapPerson(input: BootstrapPersonRequest): Promise<BootstrapResult>;
   /** Widerruft alle Sitzungen des Kontos; dieses Gerät erhält eine neue. */
   changePassword(input: { currentPassword: string; newPassword: string }): Promise<ChangePasswordResult>;
+  /**
+   * E-Mail des angemeldeten Kontos, nur lesend, für „Konto“ in den Einstellungen. Sie kommt mit der
+   * Sitzung vom Server; ohne Netz gilt die zuletzt gesehene. Das Modul hält sie nur im Speicher, nie in
+   * SecureStore oder der lokalen Datenbank (Spezifikation 0, Abschnitt 9: „E-Mail nur am Konto“).
+   * Lehnt der Server die Sitzung ab, sperrt es wie `checkSession`.
+   */
+  accountEmail(): Promise<AccountEmail>;
   state(): AuthState;
   subscribe(listener: (state: AuthState) => void): () => void;
   /** Haken für `401`, etwa zum Abbrechen geplanter Tages-Check-ins (Spezifikation 5). */
@@ -146,8 +155,11 @@ function statusOf(session: StoredSession | null, revocation: SessionRevocation):
   return session.accountId === revocation.accountId && (session.token === null || session.token === revocation.token) ? 'aktuell' : 'andere';
 }
 
-const SignedIn = z.object({ token: z.string().min(1), user: z.object({ id: z.string().min(1) }) });
-const CurrentSession = z.object({ user: z.object({ id: z.string().min(1) }) }).nullable();
+// Better Auth liefert den Nutzer samt E-Mail bei Anmeldung und Sitzungsabfrage
+// (https://www.better-auth.com/docs/concepts/session-management). Fehlt sie, bleibt sie nur unbekannt.
+const AccountUser = z.object({ id: z.string().min(1), email: z.string().min(1).optional() });
+const SignedIn = z.object({ token: z.string().min(1), user: AccountUser });
+const CurrentSession = z.object({ user: AccountUser }).nullable();
 const ChangedPassword = z.object({ token: z.string().min(1) });
 const AuthError = z.object({ code: z.string() }).partial();
 
@@ -169,8 +181,14 @@ export function createAppAuth({
 }: AppAuthOptions): AppAuth & SessionRevocations {
   let current: AuthState = { type: 'unbekannt' };
   let stored: StoredSession | null | undefined;
+  /** Zuletzt gesehene E-Mail, nur im Speicher und nur für ihr Konto. */
+  let seenEmail: { accountId: string; email: string } | null = null;
   const listeners = new Set<(state: AuthState) => void>();
   const unauthorizedHooks = new Set<() => void | Promise<void>>();
+
+  function see(user: z.infer<typeof AccountUser>) {
+    if (user.email !== undefined) seenEmail = { accountId: user.id, email: user.email };
+  }
 
   function setState(next: AuthState) {
     current = next;
@@ -199,9 +217,10 @@ export function createAppAuth({
     setState({ type: 'angemeldet', accountId });
   }
 
-  async function signedIn(accountId: string, token: string) {
-    await remember({ accountId, token });
-    await enter(accountId);
+  async function signedIn(user: z.infer<typeof AccountUser>, token: string) {
+    see(user);
+    await remember({ accountId: user.id, token });
+    await enter(user.id);
   }
 
   /** Sperrt nach `401`: Fachoberfläche zu, Datenbank geschlossen, Token verworfen, Haken einmal je Sperre. */
@@ -261,6 +280,23 @@ export function createAppAuth({
 
   const errorCode = (body: unknown) => AuthError.safeParse(body).data?.code ?? '';
 
+  /**
+   * Fragt den Server nach der gespeicherten Sitzung und merkt sich dabei die E-Mail. Better Auth antwortet
+   * auf eine fehlende, widerrufene oder abgelaufene Sitzung mit `200` und `null`; `401` sperrt schon das
+   * `fetch` des Moduls. `ungueltig` hat gesperrt, `unreachable` heißt: keine Entscheidung des Servers.
+   */
+  async function askServer(session: StoredSession): Promise<{ type: 'gueltig' } | { type: 'ungueltig' } | Offline> {
+    const reply = await request('GET', '/v1/auth/get-session', undefined, authorizedFetch);
+    const found = 'type' in reply || reply.status !== 200 ? null : CurrentSession.safeParse(reply.body);
+    if (('status' in reply && reply.status === 401) || (found?.success === true && found.data?.user.id !== session.accountId)) {
+      await lock();
+      return { type: 'ungueltig' };
+    }
+    if (found?.success !== true || found.data === null) return { type: 'unreachable' };
+    see(found.data.user);
+    return { type: 'gueltig' };
+  }
+
   async function bootstrapPerson(input: BootstrapPersonRequest): Promise<BootstrapResult> {
     const reply = await request('POST', '/v1/person/bootstrap', BootstrapPersonRequest.parse(input), authorizedFetch);
     if ('type' in reply) return reply;
@@ -280,7 +316,7 @@ export function createAppAuth({
       if (reply.status === 422) return { type: 'rejected', reason: 'email_taken' };
       const account = SignedIn.safeParse(reply.body);
       if (reply.status !== 200 || !account.success) return { type: 'unreachable' };
-      await signedIn(account.data.user.id, account.data.token);
+      await signedIn(account.data.user, account.data.token);
       const bootstrapped = await bootstrapPerson({ displayName, timeZone });
       return bootstrapped.type === 'bootstrapped'
         ? { type: 'registered', accountId: account.data.user.id, person: bootstrapped.person }
@@ -293,7 +329,7 @@ export function createAppAuth({
       if (reply.status === 429) return { type: 'rate_limited' };
       const account = SignedIn.safeParse(reply.body);
       if (reply.status !== 200 || !account.success) return { type: 'invalid_credentials' };
-      await signedIn(account.data.user.id, account.data.token);
+      await signedIn(account.data.user, account.data.token);
       return { type: 'signed_in', accountId: account.data.user.id };
     },
 
@@ -307,16 +343,10 @@ export function createAppAuth({
         await lock();
         return { type: 'ungueltig' };
       }
-      // Better Auth antwortet auf eine fehlende, widerrufene oder abgelaufene Sitzung mit `200` und
-      // `null`; `401` sperrt schon das `fetch` des Moduls.
-      const reply = await request('GET', '/v1/auth/get-session', undefined, authorizedFetch);
-      const found = 'type' in reply || reply.status !== 200 ? null : CurrentSession.safeParse(reply.body);
-      if (('status' in reply && reply.status === 401) || (found?.success === true && found.data?.user.id !== session.accountId)) {
-        await lock();
-        return { type: 'ungueltig' };
-      }
+      const answer = await askServer(session);
+      if (answer.type === 'ungueltig') return answer;
       await enter(session.accountId);
-      return found?.success === true ? { type: 'gueltig', accountId: session.accountId } : { type: 'offline', accountId: session.accountId };
+      return answer.type === 'gueltig' ? { type: 'gueltig', accountId: session.accountId } : { type: 'offline', accountId: session.accountId };
     },
 
     bootstrapPerson,
@@ -335,6 +365,13 @@ export function createAppAuth({
       if (reply.status !== 200 || !changed.success || session === null) return { type: 'unreachable' };
       await remember({ accountId: session.accountId, token: changed.data.token });
       return { type: 'changed' };
+    },
+
+    async accountEmail() {
+      const session = await storedSession();
+      if (session?.token == null) return { type: 'unauthorized' };
+      if ((await askServer(session)).type === 'ungueltig') return { type: 'unauthorized' };
+      return seenEmail?.accountId === session.accountId ? { type: 'known', email: seenEmail.email } : { type: 'unreachable' };
     },
 
     async prepareRevocation(requestId) {
@@ -365,6 +402,7 @@ export function createAppAuth({
     async forgetSession() {
       // Zuerst zu: Scheitert das Löschen im Speicher, zeigt die App trotzdem keine Fachdaten mehr.
       stored = null;
+      seenEmail = null;
       accountData.lock();
       setState({ type: 'abgemeldet' });
       await sessionStore.clear();
