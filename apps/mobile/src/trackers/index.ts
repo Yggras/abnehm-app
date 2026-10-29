@@ -7,4 +7,4 @@ export { createTrackers, type TrackerDependencies, type Trackers } from './track
 export { InvalidTrackerInputError } from './invalid-input';
 export { waterEntryEntity } from './water-entity';
 export { weightEntryEntity } from './weight-entity';
-export type { Refresh } from './water-today';
+export type { Refresh } from './today-source';

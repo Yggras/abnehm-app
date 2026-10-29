@@ -9,10 +9,12 @@ import { quickCommandHandler, type QuickCommandHandlers } from '../shell/quick-c
 import type { TodaySource } from '../shell/today-registry';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
+import type { Refresh } from './today-source';
 import { addWaterEntry, undoWater, type WaterUndo } from './water';
-import { waterTodaySource, type Refresh } from './water-today';
+import { waterTodaySource } from './water-today';
 import { recordWeightEntry, undoWeight, type WeightInput } from './weight';
 import { createWeightRecorder } from './weight-recorder';
+import { weightTodaySource } from './weight-today';
 
 export type TrackerDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl ist genau eine Transaktion darin. */
@@ -59,6 +61,11 @@ export type Trackers = Readonly<{
    * `refresh` stößt das erneute Lesen ohne Datenbankänderung an, etwa am Tageswechsel.
    */
   waterToday(planReader: PlanReader, refresh: Refresh): TodaySource<'trackers.water'>;
+  /**
+   * Beitrag `trackers.weight` für „Heute“: letztes Tagesgewicht und Stand des Wiegetags samt nächstem
+   * Wiegetag aus dem `PlanReader`. `refresh` stößt das erneute Lesen ohne Datenbankänderung an.
+   */
+  weightToday(planReader: PlanReader, refresh: Refresh): TodaySource<'trackers.weight'>;
 }>;
 
 /**
@@ -91,5 +98,6 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     },
     weightRecorder: createWeightRecorder(dependencies),
     waterToday: (planReader, refresh) => waterTodaySource(dependencies, planReader, refresh),
+    weightToday: (planReader, refresh) => weightTodaySource(dependencies, planReader, refresh),
   };
 }

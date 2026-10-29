@@ -9,6 +9,7 @@ import {
   isCountingWeightEntry,
   isValidManualWeight,
   isValidWaterAmount,
+  isWeighDay,
   manualWeightG,
   trackerStatus,
   waterAmountMl,
@@ -79,6 +80,14 @@ describe('Tagesgewicht', () => {
   it('gibt ohne zählende Messung keine Tagesgewichte', () => {
     expect(dayWeights([])).toEqual([]);
     expect(dayWeights([weighing(82_000, '2026-10-14T05:30:00.000Z', { deletedAt: '2026-10-14T06:00:00.000Z' })])).toEqual([]);
+  });
+});
+
+describe('Wiegetag', () => {
+  it('ist ein Wochenplantag mit dem Baustein Gewogen, auf jedem Platz', () => {
+    expect(isWeighDay(['gewogen', 'wasserziel', 'sporteinheit'])).toBe(true);
+    expect(isWeighDay(['ernaehrung_erfasst', 'wasserziel', 'gewogen'])).toBe(true);
+    expect(isWeighDay(['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'])).toBe(false);
   });
 });
 

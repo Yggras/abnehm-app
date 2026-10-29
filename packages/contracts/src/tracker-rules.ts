@@ -73,6 +73,11 @@ export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
     .map(({ localDate, weightG }) => ({ localDate, weightG }));
 }
 
+/** Wiegetag: ein Wochenplantag mit dem Baustein Gewogen, gleich auf welchem Platz (`CONTEXT.md`). */
+export function isWeighDay(bausteine: readonly string[]): boolean {
+  return bausteine.includes('gewogen');
+}
+
 /** Plausibilitätsgrenze in g (Designwert aus #38): Ab mehr als 2 kg Abweichung fragt das Formular. */
 export const typoLimitG = 2000;
 

@@ -44,13 +44,16 @@ export type TrackerWorld = Readonly<{
 
 let ids = 0;
 
-/** Neue Welt über der Uhr des Tests; `close` sperrt die Datenbank und löscht ihre Datei. */
-export async function createTrackerWorld(clock: Clock, { deterministicIds = false }: { deterministicIds?: boolean } = {}): Promise<TrackerWorld> {
+/**
+ * Neue Welt über der Uhr des Tests; `close` sperrt die Datenbank und löscht ihre Datei. Ohne `person`
+ * fehlt die eigene Person wie vor dem ersten Pull.
+ */
+export async function createTrackerWorld(clock: Clock, { deterministicIds = false, person = true }: { deterministicIds?: boolean; person?: boolean } = {}): Promise<TrackerWorld> {
   let failing = false;
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   const database = await databases.open('konto_a');
-  database.transaction((tx) => insertPersonForTest(tx, philipp));
+  if (person) database.transaction((tx) => insertPersonForTest(tx, philipp));
   const newId = deterministicIds
     ? () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`)
     : () => EntityId.parse(randomUUID());
