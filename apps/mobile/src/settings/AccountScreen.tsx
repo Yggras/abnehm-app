@@ -149,7 +149,7 @@ function LogoutArea() {
   }
 
   return (
-    <View style={styles.group}>
+    <View style={[styles.group, styles.logout]}>
       {view.type === 'pending' ? (
         <Notice tone="hint" text={texts.logoutPending} action={{ label: texts.logoutFinish, onPress: () => void run() }} />
       ) : view.type === 'unreachable' ? (
@@ -176,6 +176,8 @@ function LogoutArea() {
 
 const styles = StyleSheet.create({
   group: { gap: space[3] },
+  // Abmelden steht abgesetzt am Seitenende, nicht als Folgeaktion des Namensfelds (Impeccable-Prüfung, #119).
+  logout: { marginTop: space[6] },
   loadingRow: { minHeight: size.rowMin, justifyContent: 'center', paddingHorizontal: space[4] },
   sheet: { gap: space[4] },
 });

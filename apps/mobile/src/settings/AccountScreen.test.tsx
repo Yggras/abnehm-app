@@ -188,7 +188,9 @@ describe('Passwort ändern', () => {
     await openAccount();
     await user.press(screen.getByRole('button', { name: 'Passwort ändern' }));
 
-    expect(screen.getByText('Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an.')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an. Nach der Änderung musst du dich auf deinen anderen Geräten neu anmelden.'),
+    ).toBeOnTheScreen();
     await user.press(within(screen.getByTestId('passwort-formular')).getByRole('button', { name: 'Abbrechen' }));
     expect(screen.queryByTestId('passwort-formular')).not.toBeOnTheScreen();
   });
