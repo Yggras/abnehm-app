@@ -57,6 +57,8 @@ describe('Seed-Manifest', () => {
       expect.objectContaining({ entity_type: 'weekly_plan_version', entity_id: seedIds.weeklyPlanVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
       ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
         expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
+        expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
   });
 

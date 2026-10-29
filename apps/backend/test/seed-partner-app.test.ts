@@ -29,6 +29,7 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { couplingMember as localMember } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
+import { nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../mobile/src/partner-cache/index.ts';
 import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
 import {
@@ -69,7 +70,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, nutritionEntryEntity,
 ]);
 
 type Phone = Readonly<{
@@ -225,7 +226,7 @@ describe('Szenario gekoppelt', () => {
     expect(anna.partner()).toEqual({
       dailyGoalStatus: expect.objectContaining({ ownerPersonId: philipp.personId, stage: 'unterwegs' }),
       summaries: [
-        expect.objectContaining({ type: 'ernaehrung', ownerPersonId: philipp.personId, content: { recordedMealCategories: 1 } }),
+        expect.objectContaining({ type: 'ernaehrung', ownerPersonId: philipp.personId, content: { recordedMealCategories: 2 } }),
         expect.objectContaining({ type: 'wasser', content: { progressPercent: 50 } }),
         expect.objectContaining({ type: 'sport', content: { countedMinutes: 65, weeklyTargetMinutes: 150 } }),
         expect.objectContaining({ type: 'gewicht', content: { changeKg: null, direction: 'noch_nicht_verfuegbar' } }),

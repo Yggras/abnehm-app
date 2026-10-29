@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { LocalDate } from '../src/base.ts';
+
 import {
   dailyIntakeKcal,
   entryAmount,
   entryTotals,
+  latestAcceptedEntryDate,
   NutritionSnapshot,
   roundKcal,
   roundMacroGrams,
@@ -149,5 +152,14 @@ describe('Rundung für die Anzeige', () => {
     expect(roundMacroGrams(10_499)).toBe(10);
     expect(roundMacroGrams(10_500)).toBe(11);
     expect(roundMacroGrams(53_300)).toBe(53);
+  });
+});
+
+describe('latestAcceptedEntryDate', () => {
+  it('erlaubt einen Tag Toleranz nach dem aktuellen lokalen Tag der Person, auch über Monats- und Jahresgrenzen', () => {
+    expect(latestAcceptedEntryDate(LocalDate.parse('2026-10-14'))).toBe('2026-10-15');
+    expect(latestAcceptedEntryDate(LocalDate.parse('2026-10-31'))).toBe('2026-11-01');
+    expect(latestAcceptedEntryDate(LocalDate.parse('2026-12-31'))).toBe('2027-01-01');
+    expect(latestAcceptedEntryDate(LocalDate.parse('2028-02-28'))).toBe('2028-02-29');
   });
 });

@@ -12,15 +12,16 @@ import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedD
 import { energyBookingEntity } from '../energy';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
+import { appNutrition, createNutrition, nutritionEntryEntity } from '../nutrition';
 import { createDeviceInvitationFlows } from '../online';
 import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
-import { todayRefresh } from '../shell/today-refresh';
+import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { createTrackers, waterEntryEntity, type Refresh } from '../trackers';
+import { createTrackers, waterEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -38,19 +39,10 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, waterEntryEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
-/** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
-const refreshToday: Refresh = (update) => {
-  const stopTicks = todayRefresh(update);
-  const stopClock = testCapabilities?.clock.subscribe(update);
-  return () => {
-    stopTicks();
-    stopClock?.();
-  };
-};
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 let activeEngine: SyncEngine | null = null;
 let backgroundOpening = false;
@@ -88,6 +80,8 @@ function deviceState() {
       const persistence = createDailyGoalPersistence({
         registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock: appClock, writer: syncWriter, dispatcher,
       });
+      // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
+      const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add` und Beitrag `trackers.water`.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
@@ -99,8 +93,9 @@ function deviceState() {
       void dispatcher.deliver();
       const stops = [
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
+        appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
-        waterTodayOpened(trackers.waterToday(planReaderOf(database), refreshToday)),
+        waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

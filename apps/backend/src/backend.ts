@@ -15,6 +15,7 @@ import { energyBookingEntity } from './energy/bookings.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
+import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
 import { createPartnerProjections } from './partner-projections/projections.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
@@ -69,6 +70,8 @@ export function createBackend({
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
+  // Ernährung (Spezifikation 2).
+  sync.registerEntity(nutritionEntryEntity({ clock }));
   // Wasser, Sport und Gewicht (Spezifikation 3).
   sync.registerEntity(waterEntryEntity);
   // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.

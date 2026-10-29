@@ -1,6 +1,7 @@
 import type { SeedEntity } from './build.ts';
 import { seedClock, seedUtcOffsetMinutes } from './ids.ts';
-import type { BausteinKey } from '../src/base.ts';
+import type { BausteinKey, MealKey } from '../src/base.ts';
+import { entryAmount, entryTotals, NutritionSnapshot } from '../src/nutrition.ts';
 
 // Zeilenhelfer der Bereichsbeiträge: wiederkehrende Zeilenformen der Spezifikationen 1–3 in der
 // kanonischen Form des Manifests. Der Baukasten (`build.ts`) kennt sie nicht; er setzt nur zusammen.
@@ -72,4 +73,62 @@ export function seedDailyGoals(options: {
       },
     };
   });
+}
+
+/** Quellenangabe jedes BLS-Snapshots (Spezifikation 2, Abschnitt 3). */
+const blsAttribution = 'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0';
+
+/**
+ * Ernährungseintrag aus der Suche mit BLS-Snapshot je 100 g (Spezifikation 2, Abschnitte 2 und 6). Menge
+ * und Summen folgen aus den Rechenregeln des Vertragsmoduls, so wie die App sie beim Erfassen bildet.
+ */
+export function seedBlsEntry(options: {
+  id: string;
+  personId: string;
+  at: string;
+  localDate: string;
+  meal: MealKey;
+  food: Readonly<{ key: string; name: string; milliKcal: number; proteinMg: number; carbsMg: number; fatMg: number }>;
+  grams: number;
+}): SeedEntity {
+  const { key, ...values } = options.food;
+  const snapshot = NutritionSnapshot.parse({ ...values, baseUnit: 'g', referenceAmount: 100_000, portions: [], source: 'bls', attribution: blsAttribution });
+  const amount = entryAmount(snapshot, 'g', options.grams * 1_000);
+  if (amount.type === 'problem') throw new Error(`Seed-Menge ${options.grams} g: ${amount.problem}`);
+  const totals = entryTotals(snapshot, amount.amount);
+  return {
+    table: 'nutrition_entry',
+    // Seit #155 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+    entityType: 'nutrition_entry',
+    ownerPersonId: options.personId,
+    row: {
+      id: options.id,
+      person_id: options.personId,
+      consumed_at: options.at,
+      ...seedDay(options.localDate),
+      meal: options.meal,
+      capture_method: 'suche',
+      food_ref_type: 'bls',
+      food_ref_key: key,
+      base_amount: amount.amount.baseAmount,
+      display_unit: amount.amount.displayUnit,
+      display_amount_milli: amount.amount.displayAmountMilli,
+      snapshot_name: snapshot.name,
+      snapshot_base_unit: snapshot.baseUnit,
+      snapshot_reference_amount: snapshot.referenceAmount,
+      snapshot_milli_kcal: snapshot.milliKcal,
+      snapshot_protein_mg: snapshot.proteinMg,
+      snapshot_carbs_mg: snapshot.carbsMg,
+      snapshot_fat_mg: snapshot.fatMg,
+      snapshot_portions: [],
+      snapshot_source: 'bls',
+      snapshot_attribution: blsAttribution,
+      total_milli_kcal: totals.milliKcal,
+      total_protein_mg: totals.proteinMg,
+      total_carbs_mg: totals.carbsMg,
+      total_fat_mg: totals.fatMg,
+      meal_photo_id: null,
+      ...seedCreated(options.at),
+    },
+  };
 }

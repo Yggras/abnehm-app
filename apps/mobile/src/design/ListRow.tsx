@@ -22,6 +22,8 @@ export type ListRowProps = Pick<PressableProps, 'testOnly_pressed'> & {
   onPress?: () => void;
   /** Bedienelement rechts statt Wert oder Pfeil, etwa ein `Switch`. */
   accessory?: ReactNode;
+  /** Zugänglicher Name der ganzen Zeile, wenn Titel, Unterzeile und Wert allein nicht reichen. */
+  accessibilityLabel?: string;
 };
 
 /** Listenzeile nach dem Design-System; mehrere Zeilen gruppiert `ListGroup` in einer Karte. */
@@ -35,6 +37,7 @@ export function ListRow({
   disabled = false,
   onPress,
   accessory,
+  accessibilityLabel,
   testOnly_pressed,
 }: ListRowProps) {
   const content = (
@@ -73,10 +76,17 @@ export function ListRow({
     </>
   );
 
-  if (!onPress) return <View style={styles.row}>{content}</View>;
+  if (!onPress) {
+    return (
+      <View style={styles.row} accessible={accessibilityLabel !== undefined} accessibilityLabel={accessibilityLabel}>
+        {content}
+      </View>
+    );
+  }
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}

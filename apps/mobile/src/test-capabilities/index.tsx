@@ -4,6 +4,7 @@ import type { SessionStore } from '../auth/app-auth';
 import { deviceClock } from '../clock/device-clock';
 import { openExpoSqlite, removeExpoSqlite } from '../local-db/expo-connection';
 import type { AppSession } from '../session/app-session';
+import type { SessionGate } from '../session/session-gate';
 import type { ObserveNetwork } from '../sync/triggers';
 import { createAppTestClock, type AppTestClock } from './clock';
 import { runDeviceSuite } from './device-suite/suite';
@@ -30,8 +31,11 @@ export type TestCapabilities = Readonly<{
   }>;
   /** Für `+native-intent`: nimmt Links der Testfähigkeiten an und öffnet dann „Heute“; andere bleiben unverändert. */
   redirectSystemPath(path: string): string;
-  /** Wirt im Root-Layout; führt Seeds mit der App-Sitzung aus. */
-  Host: ComponentType<{ session: () => AppSession }>;
+  /**
+   * Wirt im Root-Layout; führt Seeds mit der App-Sitzung aus. `gate` ist die Sitzungs-Weiche des
+   * Wurzel-Layouts; Seed-Ziele öffnet der Host erst, wenn sie die Fachoberfläche freigibt.
+   */
+  Host: ComponentType<{ session: () => AppSession; gate: SessionGate | null }>;
 }>;
 
 const clock = createAppTestClock(deviceClock);
@@ -44,8 +48,8 @@ const inbox = createTestInbox({
   deviceSuite: (phase) => runDeviceSuite(phase, { openSqlite: openExpoSqlite, remove: removeExpoSqlite }, runtime),
 });
 
-function Host({ session }: { session: () => AppSession }) {
-  return <TestCapabilityHost inbox={inbox} clock={clock} session={session} />;
+function Host({ session, gate }: { session: () => AppSession; gate: SessionGate | null }) {
+  return <TestCapabilityHost inbox={inbox} clock={clock} session={session} gate={gate} />;
 }
 
 export const testCapabilities: TestCapabilities = {
