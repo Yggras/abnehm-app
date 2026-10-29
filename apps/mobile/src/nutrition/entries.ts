@@ -1,4 +1,4 @@
-import { EntityId, Instant, LocalDate, TimeZone, type MealKey } from '@abnehm/contracts/base';
+import { EntityId, Instant, TimeZone, type LocalDate, type MealKey } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import {
   entryAmount,

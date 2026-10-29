@@ -12,6 +12,7 @@ import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedD
 import { energyBookingEntity } from '../energy';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
+import { appNutrition, createNutrition, nutritionEntryEntity } from '../nutrition';
 import { createDeviceInvitationFlows } from '../online';
 import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { appQuickCommands } from '../shell/app-quick-commands';
@@ -38,7 +39,7 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, waterEntryEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
@@ -88,6 +89,8 @@ function deviceState() {
       const persistence = createDailyGoalPersistence({
         registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock: appClock, writer: syncWriter, dispatcher,
       });
+      // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
+      const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add` und Beitrag `trackers.water`.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
@@ -99,6 +102,7 @@ function deviceState() {
       void dispatcher.deliver();
       const stops = [
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
+        appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), refreshToday)),
       ];

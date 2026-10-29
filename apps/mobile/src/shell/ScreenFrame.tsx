@@ -42,7 +42,8 @@ export function ScreenFrame({ title, presentation, children, compactTabTitle = f
   const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges[presentation]} style={styles.screen}>
-      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} refreshControl={pullToRefresh ? (
+      {/* `handled`: Ein Tipp auf einen Treffer unter einem Eingabefeld wirkt sofort, statt nur die Tastatur zu schließen. */}
+      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={pullToRefresh ? (
         <RefreshControl refreshing={refreshing} onRefresh={() => {
           setRefreshing(true);
           void pullToRefresh().finally(() => setRefreshing(false));

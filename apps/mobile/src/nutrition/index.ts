@@ -6,6 +6,7 @@
 // Dieser Einstieg lädt weder React Native noch expo-sqlite, damit Node-Integrationstests das Modul
 // laden. Den mitgelieferten BLS-Katalog öffnet `BlsCatalogProvider` mit eigenem Einstieg
 // (`./BlsCatalogProvider`), wie `CatalogProvider` neben `local-db/index.ts`.
+export { appNutrition, useNutrition } from './app-nutrition';
 export type { DayLog, DayLogEntry, DayLogMeal } from './day-log';
 export { InvalidNutritionInputError, type NewEntry } from './entries';
 export { nutritionEntryEntity } from './entry-entity';

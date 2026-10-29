@@ -21,6 +21,7 @@ import { ProgressBar } from '../ProgressBar';
 import { Skeleton } from '../Skeleton';
 import { Text } from '../Text';
 import { useLargeTextLayout } from '../text-scale';
+import { TextField } from '../TextField';
 import { Toast } from '../Toast';
 import { color, fontFamily, space, type, type TypeToken } from '../tokens';
 
@@ -309,6 +310,20 @@ function Rows() {
   );
 }
 
+function Fields() {
+  const [amount, setAmount] = useState('60');
+  const [query, setQuery] = useState('');
+  return (
+    <Section title="Eingabefelder">
+      <TextField label="Menge" kind="number" unit="g" value={amount} onChangeText={setAmount} />
+      <TextField label="Lebensmittel suchen" hideLabel kind="search" placeholder="Lebensmittel suchen" value={query} onChangeText={setQuery} />
+      <TextField label="Name" placeholder="z. B. Apfel aus dem Garten" value="" onChangeText={noop} />
+      <TextField label="Menge mit Fehler" kind="number" unit="g" value="0" onChangeText={noop} problem="Gib eine Menge über 0 ein, etwa 60." />
+      <TextField label="Deaktiviert" value="Braucht Internet" onChangeText={noop} disabled />
+    </Section>
+  );
+}
+
 function Toasts() {
   return (
     <Section title="Meldungen">
@@ -448,6 +463,7 @@ export default function ComponentCatalog() {
         <Cards />
         <Notices />
         <Rows />
+        <Fields />
         <Toasts />
         <Progress />
         <NativeElements />
