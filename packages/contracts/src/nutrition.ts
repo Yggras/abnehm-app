@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, MealKey, TimeZone, UtcOffsetMinutes } from './base.ts';
+import { addDays } from './calendar.ts';
 import { QuickCommandOutcome } from './today.ts';
 
 // Ernährung (Spezifikation 2, Abschnitte 2–4): Lebensmittelreferenz, Nährwert-Snapshot, Eintragsmenge
@@ -265,6 +266,15 @@ export const NutritionEntryRecord = withEntryRules(
   z.strictObject({ ...entryFields, personId: EntityId, createdAt: Instant, updatedAt: Instant }),
 );
 export type NutritionEntryRecord = z.infer<typeof NutritionEntryRecord>;
+
+/**
+ * Spätester `local_date`, den der Server für einen Ernährungseintrag annimmt: der aktuelle lokale Tag
+ * der Person zuzüglich eines Tages Toleranz für Zeitzonen (Spezifikation 2, Abschnitt 11). Die App
+ * selbst erreicht künftige Tage nicht.
+ */
+export function latestAcceptedEntryDate(personToday: LocalDate): LocalDate {
+  return LocalDate.parse(addDays(personToday, 1));
+}
 
 /** Werte der Meldung nach dem Hinzufügen, etwa „209 kcal zum Frühstück hinzugefügt“; ohne Namen des Lebensmittels. */
 export const NutritionEntryAddedValues = z.strictObject({ meal: MealKey, kcal: z.int().nonnegative() });
