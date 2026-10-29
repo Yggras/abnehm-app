@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { EntityId } from './base.ts';
+import { EntityId, Instant, LocalDate, MealKey, TimeZone, UtcOffsetMinutes } from './base.ts';
+import { QuickCommandOutcome } from './today.ts';
 
 // Ernährung (Spezifikation 2, Abschnitte 2–4): Lebensmittelreferenz, Nährwert-Snapshot, Eintragsmenge
 // und die Rechenregeln, mit denen App, Server und Projektoren dieselben Werte bilden. Messwerte sind
@@ -177,6 +178,104 @@ export function entryTotals(snapshot: NutritionSnapshot, amount: EntryAmount): E
     fatMg: scale(snapshot.fatMg),
   };
 }
+
+/** Erfassungsart eines Ernährungseintrags (Spezifikation 2, Abschnitt 6); beide Datenbankschemas nehmen sie von hier. */
+export const CaptureMethod = z.enum([
+  'suche',
+  'barcode',
+  'foto',
+  'lebensmittelfavorit',
+  'mahlzeitenfavorit',
+  'zuletzt',
+  'eigenes_lebensmittel',
+]);
+export type CaptureMethod = z.infer<typeof CaptureMethod>;
+
+const entryFields = {
+  /** Erfassungszeitpunkt; lokaler Tag, Zone und Offset stammen beim Anlegen aus derselben Ablesung der Uhr. */
+  consumedAt: Instant,
+  /** Der im Protokoll gewählte Tag; er kann vor dem Tag des Erfassungszeitpunkts liegen (Nachtragen). */
+  localDate: LocalDate,
+  timeZone: TimeZone,
+  utcOffsetMinutes: UtcOffsetMinutes,
+  meal: MealKey,
+  captureMethod: CaptureMethod,
+  /** Fehlt nur bei KI-Bestandteilen ohne Ersatz durch ein Suchergebnis. */
+  foodRef: FoodRef.nullable(),
+  snapshot: NutritionSnapshot,
+  amount: EntryAmount,
+  totals: EntryTotals,
+  mealPhotoId: EntityId.nullable(),
+};
+
+type EntryFields = { [K in keyof typeof entryFields]: z.output<(typeof entryFields)[K]> };
+
+/**
+ * Regeln eines Ernährungseintrags wie in den CHECKs beider Datenbankschemas und der Server-Validierung
+ * (Spezifikation 2, Abschnitt 11): Die Referenz passt zur Quelle des Snapshots, KI-Schätzungen kommen
+ * nur aus einem Foto, Menge und Summen folgen aus Snapshot und Anzeige. So rechnen App, Server und
+ * Projektoren mit identischen Werten.
+ */
+function withEntryRules<T extends z.ZodType<EntryFields>>(schema: T) {
+  return schema
+    .refine((entry) => (entry.foodRef === null) === (entry.snapshot.source === 'ki') && (entry.foodRef === null || entry.foodRef.type === entry.snapshot.source), {
+      message: 'Die Lebensmittelreferenz passt nicht zur Quelle des Snapshots',
+      path: ['foodRef'],
+    })
+    .refine((entry) => entry.snapshot.source !== 'ki' || entry.captureMethod === 'foto', {
+      message: 'KI-Schätzungen kommen nur aus einem Foto',
+      path: ['captureMethod'],
+    })
+    .refine(
+      (entry) => withinSafeIntegers(() => {
+        const amount = entryAmount(entry.snapshot, entry.amount.displayUnit, entry.amount.displayAmountMilli);
+        return amount.type === 'menge' && amount.amount.baseAmount === entry.amount.baseAmount;
+      }),
+      { message: 'Die Menge passt nicht zu Snapshot und Anzeige', path: ['amount'] },
+    )
+    .refine(
+      (entry) => withinSafeIntegers(() => {
+        const totals = entryTotals(entry.snapshot, entry.amount);
+        return (Object.keys(totals) as (keyof EntryTotals)[]).every((key) => totals[key] === entry.totals[key]);
+      }),
+      { message: 'Die Summen passen nicht zu Snapshot und Menge', path: ['totals'] },
+    );
+}
+
+/** Eine Prüfung, deren Rechnung den sicheren Ganzzahlbereich verlässt, scheitert, statt zu werfen. */
+function withinSafeIntegers(check: () => boolean): boolean {
+  try {
+    return check();
+  } catch (error) {
+    if (error instanceof RangeError) return false;
+    throw error;
+  }
+}
+
+/**
+ * Vollständige Nutzlast eines Ernährungseintrags im Sync (Spezifikation 2, Abschnitt 11), ohne
+ * Eigentums-, Server- und abgeleitete Felder. Snapshot und Summen werden mitgespeichert, damit spätere
+ * Korrekturen am Lebensmittel vergangene Tage nicht verschieben.
+ */
+export const NutritionEntryUpsert = withEntryRules(z.strictObject(entryFields));
+export type NutritionEntryUpsert = z.infer<typeof NutritionEntryUpsert>;
+
+/** Kanonischer Ernährungseintrag des Servers: Nutzlast samt Eigentümer und Zeitpunkten. */
+export const NutritionEntryRecord = withEntryRules(
+  z.strictObject({ ...entryFields, personId: EntityId, createdAt: Instant, updatedAt: Instant }),
+);
+export type NutritionEntryRecord = z.infer<typeof NutritionEntryRecord>;
+
+/** Werte der Meldung nach dem Hinzufügen, etwa „209 kcal zum Frühstück hinzugefügt“; ohne Namen des Lebensmittels. */
+export const NutritionEntryAddedValues = z.strictObject({ meal: MealKey, kcal: z.int().nonnegative() });
+export type NutritionEntryAddedValues = z.infer<typeof NutritionEntryAddedValues>;
+
+/** Ergebnis von „Eintrag hinzufügen“: Meldung samt typisierten Werten und flüchtigem Undo-Token. */
+export const NutritionEntryAddedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('ernaehrung.eintrag_hinzugefuegt'),
+  values: NutritionEntryAddedValues,
+});
+export type NutritionEntryAddedOutcome = z.infer<typeof NutritionEntryAddedOutcome>;
 
 /** Angezeigte kcal: kaufmännisch auf ganze kcal gerundet (Spezifikation 2, Abschnitt 2). */
 export function roundKcal(milliKcal: number): number {

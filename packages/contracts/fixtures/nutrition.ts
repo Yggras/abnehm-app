@@ -1,18 +1,25 @@
 import {
   BaseUnit,
   BlsKey,
+  CaptureMethod,
   DisplayUnit,
   EntryAmount,
   EntryTotals,
   FoodRef,
   FoodRefType,
+  NutritionEntryAddedOutcome,
+  NutritionEntryAddedValues,
+  NutritionEntryRecord,
+  NutritionEntryUpsert,
   NutritionSnapshot,
   PortionConversion,
   SnapshotSource,
 } from '../src/nutrition.ts';
 import { fixtures, without } from './define.ts';
+import { now, philipp, timeZone, today } from './ids.ts';
 
 const ownFood = '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e01';
+const mealPhoto = '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e02';
 
 /** Hafer Flocken aus dem BLS 4.0 (C133000), Werte je 100 g. */
 const blsSnapshot = {
@@ -39,6 +46,57 @@ const ownSnapshot = {
   portions: [{ unit: 'stueck', label: null, baseAmount: 125_000 }],
   source: 'eigen',
   attribution: null,
+} as const;
+
+const aiSnapshot = {
+  name: 'Bratkartoffeln',
+  baseUnit: 'g',
+  referenceAmount: 180_000,
+  milliKcal: 270_000,
+  proteinMg: 4_000,
+  carbsMg: 32_000,
+  fatMg: 13_000,
+  portions: [],
+  source: 'ki',
+  attribution: null,
+} as const;
+
+/** 60 g Hafer Flocken zum Frühstück aus der Suche: 348 kcal je 100 g × 0,6 = 208,8 kcal. */
+const searchEntry = {
+  consumedAt: now,
+  localDate: today,
+  timeZone,
+  utcOffsetMinutes: 120,
+  meal: 'fruehstueck',
+  captureMethod: 'suche',
+  foodRef: { type: 'bls', key: 'C133000' },
+  snapshot: blsSnapshot,
+  amount: { baseAmount: 60_000, displayUnit: 'g', displayAmountMilli: 60_000 },
+  totals: { milliKcal: 208_800, proteinMg: 7_932, carbsMg: 31_980, fatMg: 3_990 },
+  mealPhotoId: null,
+} as const;
+
+/** Ein halber Apfel aus dem Garten: 62,5 g, Eiweiß 300 mg × 0,625 = 187,5 mg, kaufmännisch 188 mg. */
+const halfApple = {
+  ...searchEntry,
+  meal: 'snacks',
+  captureMethod: 'eigenes_lebensmittel',
+  foodRef: { type: 'eigen', key: ownFood },
+  snapshot: ownSnapshot,
+  amount: { baseAmount: 62_500, displayUnit: 'stueck', displayAmountMilli: 500 },
+  totals: { milliKcal: 32_500, proteinMg: 188, carbsMg: 7_125, fatMg: 125 },
+} as const;
+
+/** Ein KI-Bestandteil ohne Referenz in der geschätzten Menge, verknüpft mit seinem Mahlzeitenfoto. */
+const photoEntry = {
+  ...searchEntry,
+  meal: 'abendessen',
+  captureMethod: 'foto',
+  foodRef: null,
+  snapshot: aiSnapshot,
+  amount: { baseAmount: 180_000, displayUnit: 'g', displayAmountMilli: 180_000 },
+  totals: { milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 },
+  mealPhotoId: mealPhoto,
 } as const;
 
 export const nutritionFixtures = {
@@ -108,18 +166,7 @@ export const nutritionFixtures = {
         source: 'off',
         attribution: 'Daten von Open Food Facts (openfoodfacts.org), ODbL',
       },
-      'KI-Schätzung für die geschätzte Menge': {
-        name: 'Bratkartoffeln',
-        baseUnit: 'g',
-        referenceAmount: 180_000,
-        milliKcal: 270_000,
-        proteinMg: 4_000,
-        carbsMg: 32_000,
-        fatMg: 13_000,
-        portions: [],
-        source: 'ki',
-        attribution: null,
-      },
+      'KI-Schätzung für die geschätzte Menge': aiSnapshot,
       'Makros genau so schwer wie die Bezugsmenge': { ...ownSnapshot, proteinMg: 0, carbsMg: 0, fatMg: 100_000 },
     },
     invalid: {
@@ -164,6 +211,63 @@ export const nutritionFixtures = {
     invalid: {
       'negative Summe': { milliKcal: -1, proteinMg: 0, carbsMg: 0, fatMg: 0 },
       'ohne Fett': { milliKcal: 139_200, proteinMg: 5_288, carbsMg: 21_320 },
+    },
+  }),
+  CaptureMethod: fixtures(CaptureMethod, {
+    valid: { 'Suche': 'suche', 'Foto': 'foto', 'eigenes Lebensmittel': 'eigenes_lebensmittel' },
+    invalid: { 'Großgeschrieben': 'Suche', 'unbekannt': 'sprache' },
+  }),
+  NutritionEntryUpsert: fixtures(NutritionEntryUpsert, {
+    valid: {
+      '60 g Hafer Flocken aus der Suche': searchEntry,
+      '0,5 Stück eigenes Lebensmittel': halfApple,
+      'KI-Bestandteil mit Mahlzeitenfoto': photoEntry,
+    },
+    invalid: {
+      'Snapshot ohne Fett': { ...searchEntry, snapshot: without(blsSnapshot, 'fatMg') },
+      'Summen passen nicht zur Menge': { ...searchEntry, totals: { ...searchEntry.totals, milliKcal: 208_801 } },
+      'Basismenge passt nicht zur Anzeige': { ...searchEntry, amount: { ...searchEntry.amount, baseAmount: 61_000 } },
+      'Stück ohne Umrechnung': { ...searchEntry, amount: { baseAmount: 60_000, displayUnit: 'stueck', displayAmountMilli: 1_000 } },
+      'über 5 kg': {
+        ...searchEntry,
+        amount: { baseAmount: 5_000_001, displayUnit: 'g', displayAmountMilli: 5_000_001 },
+        totals: { milliKcal: 17_400_003, proteinMg: 661_000, carbsMg: 2_665_001, fatMg: 332_500 },
+      },
+      'Summen außerhalb des Ganzzahlbereichs': {
+        ...searchEntry,
+        snapshot: { ...ownSnapshot, referenceAmount: 1, milliKcal: 9_007_199_254_740_991, proteinMg: 0, carbsMg: 0, fatMg: 0, portions: [] },
+        foodRef: { type: 'eigen', key: ownFood },
+      },
+      'Anzeige außerhalb des Ganzzahlbereichs': {
+        ...halfApple,
+        amount: { baseAmount: 62_500, displayUnit: 'stueck', displayAmountMilli: 9_007_199_254_740_991 },
+      },
+      'BLS ohne Referenz': { ...searchEntry, foodRef: null },
+      'Referenz einer anderen Quelle': { ...searchEntry, foodRef: { type: 'eigen', key: ownFood } },
+      'KI-Schätzung mit Referenz': { ...photoEntry, foodRef: { type: 'bls', key: 'C133000' } },
+      'KI-Schätzung aus der Suche': { ...photoEntry, captureMethod: 'suche' },
+      'unbekannte Mahlzeit': { ...searchEntry, meal: 'brunch' },
+      'ohne Offset': without(searchEntry, 'utcOffsetMinutes'),
+      'mit Eigentümer': { ...searchEntry, personId: philipp },
+    },
+  }),
+  NutritionEntryRecord: fixtures(NutritionEntryRecord, {
+    valid: { 'kanonisch': { ...searchEntry, personId: philipp, createdAt: now, updatedAt: now } },
+    invalid: {
+      'ohne Eigentümer': { ...searchEntry, createdAt: now, updatedAt: now },
+      'Summen passen nicht zur Menge': { ...searchEntry, totals: { ...searchEntry.totals, fatMg: 0 }, personId: philipp, createdAt: now, updatedAt: now },
+      'mit Serverversion': { ...searchEntry, personId: philipp, createdAt: now, updatedAt: now, serverVersion: '1842' },
+    },
+  }),
+  NutritionEntryAddedValues: fixtures(NutritionEntryAddedValues, {
+    valid: { 'Frühstück': { meal: 'fruehstueck', kcal: 209 }, 'Wasser ohne kcal': { meal: 'snacks', kcal: 0 } },
+    invalid: { 'ohne Mahlzeit': { kcal: 209 }, 'kcal als Kommazahl': { meal: 'fruehstueck', kcal: 208.8 }, 'mit Name': { meal: 'fruehstueck', kcal: 209, name: 'Hafer Flocken' } },
+  }),
+  NutritionEntryAddedOutcome: fixtures(NutritionEntryAddedOutcome, {
+    valid: { 'zum Frühstück': { messageKey: 'ernaehrung.eintrag_hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 }, undoToken: 'undo-7f3a' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'ernaehrung.eintrag_hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 } },
+      'fremde Meldung': { messageKey: 'wasser.hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 }, undoToken: 'undo-7f3a' },
     },
   }),
 };

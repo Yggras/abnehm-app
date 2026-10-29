@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, pgTable, primaryKey, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { MealKey } from '@abnehm/contracts/base';
-import { BaseUnit, DisplayUnit, FoodRefType, SnapshotSource, type PortionConversion } from '@abnehm/contracts/nutrition';
+import { BaseUnit, CaptureMethod, DisplayUnit, FoodRefType, SnapshotSource, type PortionConversion } from '@abnehm/contracts/nutrition';
 
 import { person } from './accounts.ts';
 import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from './columns.ts';
@@ -11,16 +11,6 @@ import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from '
 // Energie in `milli_kcal`, Nährstoffe und Lebensmittelmasse in mg, Volumen in ml. Die Bezugsmenge
 // und die verzehrte Basismenge stehen in der Basiseinheit des Lebensmittels (g → mg, ml → ml).
 // Einheiten, Quellen und Lebensmittelreferenzen kommen aus dem Vertragsmodul (`@abnehm/contracts/nutrition`).
-
-export const captureMethods = [
-  'suche',
-  'barcode',
-  'foto',
-  'lebensmittelfavorit',
-  'mahlzeitenfavorit',
-  'zuletzt',
-  'eigenes_lebensmittel',
-] as const;
 
 /** Vollständige Lebensmittelfassung einer Favoritenzeile, an der Anwendungsgrenze per Zod geprüft. */
 export type NutritionSnapshotJson = Record<string, unknown>;
@@ -180,7 +170,7 @@ export const nutritionEntry = pgTable(
       foreignColumns: [mealPhoto.id, mealPhoto.personId],
     }),
     check('nutrition_entry_meal_check', oneOf(t.meal, MealKey.options)),
-    check('nutrition_entry_capture_method_check', oneOf(t.captureMethod, captureMethods)),
+    check('nutrition_entry_capture_method_check', oneOf(t.captureMethod, CaptureMethod.options)),
     check('nutrition_entry_display_unit_check', oneOf(t.displayUnit, DisplayUnit.options)),
     check('nutrition_entry_base_unit_check', oneOf(t.snapshotBaseUnit, BaseUnit.options)),
     check('nutrition_entry_source_check', oneOf(t.snapshotSource, SnapshotSource.options)),
