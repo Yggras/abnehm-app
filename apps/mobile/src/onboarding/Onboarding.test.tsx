@@ -44,7 +44,7 @@ afterEach(() => mockDevice.cleanup());
 
 async function openApp() {
   await renderRouter(appDir, { initialUrl: '/' });
-  await screen.findByRole('header', { name: 'Schön, dass du da bist' });
+  await screen.findByRole('header', { name: 'Willkommen bei Gemeinsam leichter' });
 }
 
 async function toAccountStep() {
@@ -84,7 +84,7 @@ describe('Schritt 1 „Willkommen“', () => {
     expect(next).toBeDisabled();
     expect(screen.getByText('Bestätige den Hinweis, um weiterzumachen.')).toBeOnTheScreen();
     await user.press(next);
-    expect(screen.getByRole('header', { name: 'Schön, dass du da bist' })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Willkommen bei Gemeinsam leichter' })).toBeOnTheScreen();
 
     await user.press(screen.getByRole('checkbox', { name: /^Verstanden/ }));
     expect(screen.getByRole('checkbox', { name: /^Verstanden/ })).toBeChecked();
@@ -98,7 +98,7 @@ describe('Schritt 1 „Willkommen“', () => {
 
     await user.press(screen.getByRole('button', { name: 'Zurück' }));
 
-    expect(await screen.findByRole('header', { name: 'Schön, dass du da bist' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Willkommen bei Gemeinsam leichter' })).toBeOnTheScreen();
     expect(screen.getByRole('checkbox', { name: /^Verstanden/ })).toBeChecked();
   });
 });
@@ -266,7 +266,7 @@ describe('Route „onboarding“ mit Konto', () => {
     await mockDevice.onboarding.setUpAccount({ displayName: DisplayName.parse('Anna') });
     await renderRouter(appDir, { initialUrl: '/' });
 
-    expect(await screen.findByRole('header', { name: 'Schön, dass du da bist' })).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Willkommen bei Gemeinsam leichter' })).toBeOnTheScreen();
     expect(screen).toHavePathname('/onboarding');
     await user.press(screen.getByRole('checkbox', { name: /^Verstanden/ }));
     await user.press(screen.getByRole('button', { name: 'Weiter' }));

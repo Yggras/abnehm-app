@@ -35,7 +35,7 @@ async function openApp(gate: SessionGate, initialUrl = '/') {
 
 describe('jeder Zustand führt zu seinem Bildschirm', () => {
   it.each<[SessionGate, string, string]>([
-    ['ohne_sitzung', '/sitzung', 'Schön, dass du da bist'],
+    ['ohne_sitzung', '/sitzung', 'Willkommen bei Gemeinsam leichter'],
     ['bootstrap_ausstehend', '/sitzung', 'Konto wird eingerichtet'],
     ['gesperrt', '/sitzung', 'Bitte melde dich erneut an'],
     ['onboarding', '/onboarding', 'Einrichtung'],

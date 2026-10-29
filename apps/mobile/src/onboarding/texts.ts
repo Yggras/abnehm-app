@@ -12,7 +12,7 @@ export const onboardingTexts = {
   progressLabel: 'Fortschritt der Einrichtung',
   next: 'Weiter',
 
-  welcomeHeadline: 'Schön, dass du da bist',
+  welcomeHeadline: 'Willkommen bei Gemeinsam leichter',
   welcomeIntro:
     'Momo wartet noch im Ei. Zusammen mit deinem Partner bringst du Momo zum Schlüpfen und lässt es mit euren Tageszielen wachsen.',
   disclaimer: 'Die App gibt keine medizinische Beratung; alle Werte sind Schätzungen.',
