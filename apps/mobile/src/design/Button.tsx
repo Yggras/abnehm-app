@@ -134,15 +134,18 @@ export type IconButtonProps = PressState & {
   accessibilityLabel: string;
   onPress: () => void;
   disabled?: boolean;
+  /** Macht den Button zum Schalter wie „Bereiche“: eingeschaltet in `primary-soft` mit Icon in `primary`. */
+  checked?: boolean;
 };
 
 /** Runder 48-dp-Button nur mit Icon, für Zahnrad, Schließen und Bereiche. */
-export function IconButton({ icon, accessibilityLabel, onPress, disabled = false, testOnly_pressed }: IconButtonProps) {
+export function IconButton({ icon, accessibilityLabel, onPress, disabled = false, checked, testOnly_pressed }: IconButtonProps) {
+  const surface = checked ? color.primarySoft : color.surfaceCard;
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={checked === undefined ? 'button' : 'switch'}
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, checked }}
       disabled={disabled}
       onPress={onPress}
       testOnly_pressed={testOnly_pressed}
@@ -151,11 +154,11 @@ export function IconButton({ icon, accessibilityLabel, onPress, disabled = false
         disabled
           ? styles.iconButtonDisabled
           : pressed
-            ? { backgroundColor: color.surfaceSunken, ...pressedEdge('buttonSoft', 'buttonSoftPressed') }
-            : { backgroundColor: color.surfaceCard, boxShadow: boxShadow.buttonSoft },
+            ? { backgroundColor: checked ? color.primarySoftPressed : color.surfaceSunken, ...pressedEdge('buttonSoft', 'buttonSoftPressed') }
+            : { backgroundColor: surface, boxShadow: boxShadow.buttonSoft },
       ]}
     >
-      <Icon name={icon} size="lg" tone={disabled ? 'inkDisabled' : 'ink'} />
+      <Icon name={icon} size="lg" tone={disabled ? 'inkDisabled' : checked ? 'primary' : 'ink'} />
     </Pressable>
   );
 }

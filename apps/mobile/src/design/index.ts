@@ -17,6 +17,7 @@ export { Notice, type NoticeProps } from './Notice';
 export { ListGroup, ListRow, type ListRowProps } from './ListRow';
 export { Toast, type ToastLine, type ToastProps } from './Toast';
 export { ProgressBar, type ProgressBarProps } from './ProgressBar';
+export { LevelBar, type LevelBarProps } from './LevelBar';
 export { Skeleton, type SkeletonProps } from './Skeleton';
 
 export { Sheet, type SheetProps } from './native/Sheet';
