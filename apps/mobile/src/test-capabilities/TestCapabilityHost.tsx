@@ -10,6 +10,7 @@ import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
 import { transportFaultModeName } from './network';
+import type { SeedPlanReader } from './plan-reader';
 import { runSeed } from './seed/seed-flow';
 
 // Wirt der Testfähigkeiten in Test-Artefakten (#112, #114): führt Seeds mit der App-Sitzung aus, öffnet
@@ -55,18 +56,25 @@ function statusNotice(status: TestStatus) {
 
 const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
 
-export function TestCapabilityHost({ inbox, clock, session }: { inbox: TestInbox; clock: AppTestClock; session: () => AppSession }) {
+export function TestCapabilityHost({ inbox, clock, session, planReader }: {
+  inbox: TestInbox;
+  clock: AppTestClock;
+  session: () => AppSession;
+  /** Die PlanReader-Attrappe folgt dem Szenario des Seeds (#175). */
+  planReader: Pick<SeedPlanReader, 'use'>;
+}) {
   const status = useSyncExternalStore(inbox.subscribe, inbox.status);
   const insets = useSafeAreaInsets();
 
   useEffect(
     () =>
       inbox.handleSeeds(async (run) => {
+        planReader.use(run.scenario);
         const outcome = await runSeed(run, { session: session(), clock });
         if (outcome.type === 'geseedet') router.replace(hrefFor(outcome.target));
         return outcome;
       }),
-    [inbox, clock, session],
+    [inbox, clock, session, planReader],
   );
 
   const notice = statusNotice(status);

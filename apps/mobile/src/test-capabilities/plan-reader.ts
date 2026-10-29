@@ -1,18 +1,40 @@
 import { BausteinKey, EntityId, LocalDate, Weekday } from '@abnehm/contracts/base';
 import type { PlanReader } from '@abnehm/contracts/ports';
-import { seedManifests, type SeedManifest, type SeedRow } from '@abnehm/contracts/seeds';
+import { seedManifests, type SeedManifest, type SeedRow, type SeedScenarioKey } from '@abnehm/contracts/seeds';
 
 import { fakeAreaPorts, fakePlanReader, type FakeGoalVersion, type FakeWeeklyPlanVersion } from '../area-ports/testing/fakes';
 
 // PlanReader-Attrappe der Test-Artefakte (#171). Bis Spezifikation 1 ihren `PlanReader` anmeldet,
-// liefert sie Zielversion und Wochenplan aus den Seed-Manifesten, je Person und ohne Zustand: So gilt
-// sie auch nach einem Neustart der App. Sie ist der Fake-Port aus #104 samt Vertragsprüfung und liest
-// keine Tabellen eines anderen Bereichs. Es gibt sie nur im Development- und im E2E-Build.
+// liefert sie Zielversion und Wochenplan aus den Seed-Manifesten, je Person. Sie ist der Fake-Port aus
+// #104 samt Vertragsprüfung und liest keine Tabellen eines anderen Bereichs. Es gibt sie nur im
+// Development- und im E2E-Build.
+//
+// Varianten wie `solo-ohne-wiegetag` (#175) haben für dieselbe Person einen eigenen Wochenplan. Deshalb
+// gilt nach einem Seed nur das Manifest seines Szenarios (`use`). Vor dem ersten Seed, etwa nach einem
+// Neustart der App, gelten alle Manifeste; bei mehreren Plänen derselben Person mit gleichem Beginn
+// gewinnt der aus dem ersten Manifest, also `solo`.
 
 const label = 'PlanReader-Attrappe';
 
-/** PlanReader über die Zielversionen und Wochenpläne aller Manifeste; dieselbe ID muss überall gleich sein. */
-export function seedPlanReader(manifests: readonly SeedManifest[] = Object.values(seedManifests)): PlanReader {
+export type SeedPlanReader = PlanReader & {
+  /** Ab jetzt gilt nur das Manifest dieses Szenarios; der Wirt der Testfähigkeiten ruft es vor jedem Seed auf. */
+  use(scenario: SeedScenarioKey): void;
+};
+
+/** PlanReader über die Zielversionen und Wochenpläne der Manifeste; dieselbe ID muss überall gleich sein. */
+export function seedPlanReader(manifests: readonly SeedManifest[] = Object.values(seedManifests)): SeedPlanReader {
+  const all = readerOf(manifests);
+  let active = all;
+  return {
+    effectivePlan: (personId, localDate) => active.effectivePlan(personId, localDate),
+    use(scenario) {
+      const manifest = manifests.find((candidate) => candidate.scenario === scenario);
+      active = manifest === undefined ? all : readerOf([manifest]);
+    },
+  };
+}
+
+function readerOf(manifests: readonly SeedManifest[]): PlanReader {
   const goals = unique(manifests.flatMap((manifest) => manifest.initial.server.goal_version ?? []));
   const plans = unique(manifests.flatMap((manifest) => manifest.initial.server.weekly_plan_version ?? []));
   const days = manifests.flatMap((manifest) => manifest.initial.server.weekly_plan_day ?? []);

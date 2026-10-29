@@ -28,7 +28,8 @@ export const seedIds = {
   person: { philipp: id('0002', 1), anna: id('0002', 2) },
   installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2) },
   goalVersion: { philipp: id('0010', 1), anna: id('0010', 2) },
-  weeklyPlanVersion: { philipp: id('0011', 1), anna: id('0011', 2) },
+  // 0011/3 nur in der Variante `solo-ohne-wiegetag` (#175).
+  weeklyPlanVersion: { philipp: id('0011', 1), anna: id('0011', 2), philippOhneWiegetag: id('0011', 3) },
   dailyGoal: {
     philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
     annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
@@ -38,7 +39,7 @@ export const seedIds = {
     philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
     annaHeute: [id('0020', 3), id('0020', 4)],
   },
-  weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2), annaGestern: id('0021', 3) },
+  weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
   sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
   nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2) },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },

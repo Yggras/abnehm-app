@@ -15,7 +15,7 @@ import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
 import { PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
-import { countedWaterMl, trackerStatus } from '../src/tracker-rules.ts';
+import { countedWaterMl, dayWeights, isWeighDay, trackerStatus } from '../src/tracker-rules.ts';
 
 // Nachweis für #112 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
 // Partner-Szenarien `gekoppelt` und `nach_entkopplung`; für #171 die Wassereinträge von solo und seine
@@ -55,7 +55,44 @@ describe('Seed-Manifest', () => {
       expect.objectContaining({ entity_type: 'person', entity_id: philipp, owner_person_id: philipp, operation: 'upsert' }),
       ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
         expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...[seedIds.weightEntry.philippVorgestern, seedIds.weightEntry.philippGestern].map((id) =>
+        expect.objectContaining({ entity_type: 'weight_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
+  });
+
+  describe('Gewicht (#175)', () => {
+    const weighings = (scenario: keyof typeof seedManifests, personId: string = philipp) =>
+      (seedManifests[scenario].initial.server.weight_entry ?? [])
+        .filter((row) => row.person_id === personId)
+        .map((row) => ({ weightG: Number(row.weight_g), measuredAt: String(row.measured_at), localDate: String(row.local_date), deletedAt: null, hiddenAt: null }));
+    /** Bausteine des Wochenplantags der Person am Wochentag. */
+    const planDay = (scenario: keyof typeof seedManifests, weekday: string, personId: string = philipp) => {
+      const day = seedManifests[scenario].initial.server.weekly_plan_day?.find((row) => row.person_id === personId && row.weekday === weekday);
+      return [day?.baustein_1, day?.baustein_2, day?.baustein_3].map(String);
+    };
+
+    it.each(['solo', 'gekoppelt'] as const)('%s: Philipp hat Gewichtseinträge ohne Importe, heute (Mittwoch) ist sein Wiegetag noch offen', (scenario) => {
+      const days = dayWeights(weighings(scenario));
+
+      expect(days.length).toBeGreaterThan(0);
+      expect(days.at(-1)!.localDate < seedDays.heute).toBe(true);
+      expect(isWeighDay(planDay(scenario, 'mittwoch'))).toBe(true);
+      expect((seedManifests[scenario].initial.server.weight_entry ?? []).every((row) => row.origin === 'manuell')).toBe(true);
+    });
+
+    it('solo-ohne-wiegetag: Der Wochenplan hat keinen Wiegetag, sonst gleicht das Szenario solo', () => {
+      const variant = seedManifests['solo-ohne-wiegetag'].initial.server;
+      const weekdays = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag', 'sonntag'];
+
+      for (const weekday of weekdays) expect(isWeighDay(planDay('solo-ohne-wiegetag', weekday))).toBe(false);
+      // Eigene Wochenplanversion, damit die PlanReader-Attrappe beide Pläne unterscheidet.
+      expect(variant.weekly_plan_version?.map((row) => row.id)).not.toEqual(solo.initial.server.weekly_plan_version?.map((row) => row.id));
+      // Die Tagesziele von heute folgen dem Mittwoch dieses Plans.
+      expect(variant.daily_goal?.map((goal) => goal.baustein)).toEqual(planDay('solo-ohne-wiegetag', 'mittwoch'));
+      expect(variant.weight_entry).toEqual(solo.initial.server.weight_entry);
+      expect(variant.water_entry).toEqual(solo.initial.server.water_entry);
+      expect(variant.goal_version).toEqual(solo.initial.server.goal_version);
+    });
   });
 
   it.each([

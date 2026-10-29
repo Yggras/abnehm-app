@@ -17,13 +17,15 @@ export const seedFormatVersion = 1;
 
 /**
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
- * Wasser-Mini-Trackers (#171). Die übrigen aus Abschnitt 12 folgen in #113 und #116.
+ * Wasser-Mini-Trackers (#171), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
+ * (#175). Die übrigen aus Abschnitt 12 folgen in #113 und #116.
  */
 export const SeedScenarioKey = z.enum([
   'solo',
   'solo-wasser-leer',
   'solo-wasser-erreicht',
   'solo-wasser-ueber-ziel',
+  'solo-ohne-wiegetag',
   'gekoppelt',
   'nach_entkopplung',
 ]);

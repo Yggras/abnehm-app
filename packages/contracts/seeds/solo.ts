@@ -2,6 +2,7 @@ import { buildSeedState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
 import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
+import type { BausteinKey } from '../src/base.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat
@@ -44,18 +45,45 @@ const fundament: SeedPart = {
   ],
 };
 
+/** Wochenplan mit dem Tag von heute (Mittwoch), aus dem die drei Tagesziele von heute entstehen. */
+type SoloWeeklyPlan = SeedWeeklyPlan & Readonly<{ mittwoch: readonly [BausteinKey, BausteinKey, BausteinKey] }>;
+
+/**
+ * Wochenplan von `solo`: Wiegetage sind Montag, Mittwoch, Donnerstag und Sonntag. Heute (Mittwoch) ist
+ * Wiegetag und noch offen (Spezifikation 3, Abschnitt 9; #175), daneben vier Sporttage.
+ */
 const weeklyPlan = {
   montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
   dienstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
-  mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+  mittwoch: ['gewogen', 'wasserziel', 'sporteinheit'],
   donnerstag: ['im_kalorienbudget', 'wasserziel', 'gewogen'],
   freitag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
   samstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
   sonntag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
-} as const satisfies SeedWeeklyPlan;
+} as const satisfies SoloWeeklyPlan;
+
+/**
+ * Randzustand „Wochenplan ohne Wiegetag“ (Spezifikation 3, Abschnitt 9; #175) als Plan-Daten: dieselben
+ * Sporttage, statt Gewogen Ernährung erfasst bzw. Im Kalorienbudget. Eine eigene Wochenplanversion,
+ * damit die PlanReader-Attrappe beide Pläne Philipps unterscheidet.
+ */
+const weeklyPlanOhneWiegetag = {
+  montag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+  dienstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
+  mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+  donnerstag: ['im_kalorienbudget', 'wasserziel', 'ernaehrung_erfasst'],
+  freitag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+  samstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
+  sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+} as const satisfies SoloWeeklyPlan;
+
+type SoloPlan = Readonly<{ id: string; days: SoloWeeklyPlan }>;
+
+const soloPlan: SoloPlan = { id: seedIds.weeklyPlanVersion.philipp, days: weeklyPlan };
+const planOhneWiegetag: SoloPlan = { id: seedIds.weeklyPlanVersion.philippOhneWiegetag, days: weeklyPlanOhneWiegetag };
 
 /** Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). */
-const ziele: SeedPart = {
+const zieleOf = (plan: SoloPlan): SeedPart => ({
   area: 'ziele',
   entities: [
     {
@@ -85,11 +113,11 @@ const ziele: SeedPart = {
       },
     },
     seedWeeklyPlan({
-      id: seedIds.weeklyPlanVersion.philipp,
+      id: plan.id,
       personId: philipp,
       validFrom: seedDays.zielstart,
       createdAt: '2026-10-01T07:05:00.000Z',
-      plan: weeklyPlan,
+      plan: plan.days,
     }),
     ...seedDailyGoals({
       personId: philipp,
@@ -97,7 +125,8 @@ const ziele: SeedPart = {
       localDate: seedDays.heute,
       dayEndsAt: seedDayEnds.heute,
       createdAt: '2026-10-14T05:00:00.000Z',
-      bausteine: weeklyPlan.mittwoch,
+      bausteine: plan.days.mittwoch,
+      // Gewogen hat keine Schwelle.
       thresholds: {
         ernaehrung_erfasst: { minimumMealCategories: 3 },
         wasserziel: { targetMl: 2_500 },
@@ -105,7 +134,7 @@ const ziele: SeedPart = {
       },
     }),
   ],
-};
+});
 
 /** Wasser heute, ohne Importe (Spezifikation 3, Abschnitt 9): Menge und Zeitpunkt je Eintrag. */
 type WaterToday = readonly (readonly [amountMl: number, loggedAt: string])[];
@@ -124,9 +153,24 @@ const waterToday = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
 
-type SoloScenario = keyof typeof waterToday;
+/** Was `solo` und seine Varianten unterscheidet: Wasser von heute und Wochenplan. */
+type SoloVariant = Readonly<{ water: WaterToday; plan: SoloPlan }>;
 
-/** Tracker (Spezifikation 3): Wasser heute je Szenario, eine Radtour gestern, zwei Wiegungen. */
+/**
+ * `solo` und seine Varianten: `solo-wasser-*` zeigen die übrigen Status des Wasser-Mini-Trackers
+ * (#171), `solo-ohne-wiegetag` den Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175).
+ */
+const soloVariants = {
+  solo: { water: waterToday.solo, plan: soloPlan },
+  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], plan: soloPlan },
+  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], plan: soloPlan },
+  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], plan: soloPlan },
+  'solo-ohne-wiegetag': { water: waterToday.solo, plan: planOhneWiegetag },
+} as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
+
+type SoloScenario = keyof typeof soloVariants;
+
+/** Tracker (Spezifikation 3): Wasser heute je Szenario, eine Radtour gestern, zwei Wiegungen bis gestern. */
 const trackerOf = (water: WaterToday): SeedPart => ({
   area: 'tracker',
   entities: [
@@ -155,11 +199,14 @@ const trackerOf = (water: WaterToday): SeedPart => ({
         ...created('2026-10-13T16:40:00.000Z'),
       },
     },
+    // Heute (Mittwoch, Wiegetag) hat Philipp noch nicht gewogen (#175).
     ...[
       { id: seedIds.weightEntry.philippVorgestern, weight: 92_400, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
-      { id: seedIds.weightEntry.philippHeute, weight: 91_800, at: '2026-10-14T05:45:00.000Z', localDate: seedDays.heute },
+      { id: seedIds.weightEntry.philippGestern, weight: 91_800, at: '2026-10-13T05:45:00.000Z', localDate: seedDays.gestern },
     ].map(({ id, weight, at, localDate }) => ({
       table: 'weight_entry',
+      // Seit #175 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+      entityType: 'weight_entry',
       ownerPersonId: philipp,
       row: {
         id,
@@ -175,23 +222,24 @@ const trackerOf = (water: WaterToday): SeedPart => ({
 });
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = (water: WaterToday): readonly SeedPart[] => [fundament, ziele, trackerOf(water)];
+const soloPartsWith = ({ water, plan }: SoloVariant): readonly SeedPart[] => [fundament, zieleOf(plan), trackerOf(water)];
 
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
-export const soloParts = soloPartsWith(waterToday.solo);
+export const soloParts = soloPartsWith(soloVariants.solo);
 
-/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute. */
+/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute oder im Wochenplan. */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
-    parts: soloPartsWith(waterToday[scenario]),
+    parts: soloPartsWith(soloVariants[scenario]),
     createdAt: seedClock.instant,
     devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
   });
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
-    // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll.
-    revision: 2,
+    // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll. Revision 3: Gewichtseinträge
+    // ebenso, und heute ist Wiegetag (#175).
+    revision: 3,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,
@@ -204,8 +252,8 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   });
 }
 
-/** `solo` und seine Varianten für jeden Status des Wasser-Mini-Trackers (#171). */
+/** `solo` und seine Varianten (#171, #175). */
 export const soloManifests = Object.fromEntries(
-  (Object.keys(waterToday) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
+  (Object.keys(soloVariants) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
 ) as Readonly<Record<SoloScenario, SeedManifest>>;
 

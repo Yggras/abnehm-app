@@ -34,7 +34,10 @@ export type TestCapabilities = Readonly<{
   redirectSystemPath(path: string): string;
   /** Wirt im Root-Layout; führt Seeds mit der App-Sitzung aus. */
   Host: ComponentType<{ session: () => AppSession }>;
-  /** Wasserziel und Wochenplan aus den Seed-Manifesten, bis Spezifikation 1 ihren `PlanReader` anmeldet (#171). */
+  /**
+   * Wasserziel und Wochenplan aus den Seed-Manifesten, bis Spezifikation 1 ihren `PlanReader` anmeldet
+   * (#171); nach einem Seed aus dem Manifest seines Szenarios (#175).
+   */
   planReader: PlanReader;
 }>;
 
@@ -48,8 +51,10 @@ const inbox = createTestInbox({
   deviceSuite: (phase) => runDeviceSuite(phase, { openSqlite: openExpoSqlite, remove: removeExpoSqlite }, runtime),
 });
 
+const planReader = seedPlanReader();
+
 function Host({ session }: { session: () => AppSession }) {
-  return <TestCapabilityHost inbox={inbox} clock={clock} session={session} />;
+  return <TestCapabilityHost inbox={inbox} clock={clock} session={session} planReader={planReader} />;
 }
 
 export const testCapabilities: TestCapabilities = {
@@ -66,5 +71,5 @@ export const testCapabilities: TestCapabilities = {
     return '/';
   },
   Host,
-  planReader: seedPlanReader(),
+  planReader,
 };

@@ -16,8 +16,31 @@ it('liefert für Philipp im Szenario solo das Wasserziel und den Wochenplantag',
     type: 'gueltig',
     localDate: seedDays.heute,
     goal: { id: seedIds.goalVersion.philipp, waterTargetMl: 2500, weeklySportTargetMinutes: 150, pace: 'entspannt', maintenanceReason: null },
-    weeklyPlanDay: { weeklyPlanVersionId: seedIds.weeklyPlanVersion.philipp, bausteine: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'] },
+    weeklyPlanDay: { weeklyPlanVersionId: seedIds.weeklyPlanVersion.philipp, bausteine: ['gewogen', 'wasserziel', 'sporteinheit'] },
   });
+});
+
+it('folgt dem zuletzt geladenen Szenario: In solo-ohne-wiegetag hat Philipps Wochenplan keinen Wiegetag (#175)', async () => {
+  const reader = seedPlanReader();
+  const bausteine = async () => {
+    const plan = await reader.effectivePlan(philipp, LocalDate.parse(seedDays.heute));
+    return plan.type === 'gueltig' ? plan.weeklyPlanDay : null;
+  };
+
+  reader.use('solo-ohne-wiegetag');
+  expect(await bausteine()).toEqual(expect.objectContaining({
+    weeklyPlanVersionId: seedIds.weeklyPlanVersion.philippOhneWiegetag,
+    bausteine: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+  }));
+
+  reader.use('solo');
+  expect(await bausteine()).toEqual(expect.objectContaining({ weeklyPlanVersionId: seedIds.weeklyPlanVersion.philipp }));
+});
+
+it('nimmt vor dem ersten Seed, etwa nach einem Neustart, bei mehreren Plänen einer Person den aus solo', async () => {
+  const plan = await seedPlanReader().effectivePlan(philipp, LocalDate.parse(seedDays.heute));
+
+  expect(plan).toMatchObject({ weeklyPlanDay: { weeklyPlanVersionId: seedIds.weeklyPlanVersion.philipp } });
 });
 
 it('ist vor dem Zielstart und für unbekannte Personen leer', async () => {
