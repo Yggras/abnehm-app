@@ -121,6 +121,11 @@ export const iconShapes = {
     { type: 'path', d: 'M4.5 19.5l1-4L15.5 5.5l3 3-10 10z' },
     { type: 'path', d: 'M13.5 7.5l3 3' },
   ],
+  /** Anzeigen */
+  eye: [
+    { type: 'path', d: 'M3.5 12s3-5.5 8.5-5.5S20.5 12 20.5 12s-3 5.5-8.5 5.5S3.5 12 3.5 12z' },
+    { type: 'circle', cx: 12, cy: 12, r: 2.5 },
+  ],
   /** Ausblenden */
   eyeOff: [
     { type: 'path', d: 'M3.5 12s3-5.5 8.5-5.5S20.5 12 20.5 12s-3 5.5-8.5 5.5S3.5 12 3.5 12z' },
@@ -167,6 +172,16 @@ export const iconShapes = {
   lock: [
     { type: 'rect', x: 5.5, y: 10.5, width: 13, height: 9.5, rx: 2.5 },
     { type: 'path', d: 'M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5' },
+  ],
+  /** Benachrichtigungen */
+  bell: [
+    { type: 'path', d: 'M6.5 16.5v-5a5.5 5.5 0 0 1 11 0v5l1.5 1.5H5z' },
+    { type: 'path', d: 'M10 20.5a2.2 2.2 0 0 0 4 0' },
+  ],
+  /** Konto */
+  person: [
+    { type: 'circle', cx: 12, cy: 8.5, r: 3.5 },
+    { type: 'path', d: 'M5 19.5c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6' },
   ],
   /** Mehr */
   more: [

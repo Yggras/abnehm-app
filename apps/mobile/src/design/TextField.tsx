@@ -40,7 +40,10 @@ export type TextFieldProps = KeyboardProps & {
   hint?: string;
   /** Ungültige Eingabe: Rahmen in `problem`; der Satz mit Lösungsweg ersetzt den Hinweis. */
   problem?: string;
-  /** Verdeckte Eingabe für Passwörter. */
+  /**
+   * Passwort: Zeichen verdeckt, ohne Autokorrektur, mit Schalter zum Anzeigen beim Tippen. Den empfiehlt
+   * NIST SP 800-63B-4, Abschnitt 3.1.1.2 (https://pages.nist.gov/800-63-4/sp800-63b.html).
+   */
   secure?: boolean;
   disabled?: boolean;
   ref?: Ref<TextFieldHandle>;
@@ -69,6 +72,7 @@ export function TextField({
   ...keyboard
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }), []);
   // Ein Tipp auf Beschriftung, Lupe oder Einheit setzt den Fokus ins Feld; zugänglich ist nur das Feld selbst.
@@ -90,8 +94,8 @@ export function TextField({
         <TextInput
           keyboardType={kind === 'number' ? 'decimal-pad' : 'default'}
           returnKeyType={kind === 'search' ? 'search' : 'done'}
-          autoCorrect={kind === 'text'}
-          autoCapitalize={kind === 'search' ? 'none' : 'sentences'}
+          autoCorrect={kind === 'text' && !secure}
+          autoCapitalize={kind === 'search' || secure || keyboard.autoComplete === 'email' ? 'none' : 'sentences'}
           {...keyboard}
           ref={input}
           accessibilityLabel={label}
@@ -99,7 +103,8 @@ export function TextField({
           accessibilityHint={problem ? `Fehler: ${problem}` : hint}
           value={value}
           onChangeText={onChangeText}
-          secureTextEntry={secure}
+          // Deaktiviert fehlt der Schalter; ein aufgedecktes Passwort ist dann wieder verdeckt.
+          secureTextEntry={secure && (!revealed || disabled)}
           editable={!disabled}
           placeholder={placeholder}
           placeholderTextColor={color.inkMuted}
@@ -116,6 +121,16 @@ export function TextField({
           <Text variant="bodyStrong" tone={disabled ? 'inkDisabled' : 'inkMuted'}>
             {unit}
           </Text>
+        ) : null}
+        {secure && !disabled ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={revealed ? 'Passwort verbergen' : 'Passwort anzeigen'}
+            onPress={() => setRevealed((shown) => !shown)}
+            style={styles.toggle}
+          >
+            <Icon name={revealed ? 'eyeOff' : 'eye'} tone="inkMuted" />
+          </Pressable>
         ) : null}
       </View>
       {/* Screenreader hören den Satz als Hinweis des Felds, nicht ein zweites Mal als Text. */}
@@ -153,6 +168,14 @@ const styles = StyleSheet.create({
   problem: { borderWidth: borderWidth.focused, borderColor: color.problem },
   disabled: { backgroundColor: color.fillDisabled },
   input: { ...type.body, flex: 1, minHeight: size.touchMin, paddingVertical: space[2] },
+  // Der Schalter liegt rechts im Feld; seine Trefferfläche reicht bis an den Rahmen.
+  toggle: {
+    width: size.touchMin,
+    height: size.touchMin,
+    marginRight: -space[4],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   message: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   messageText: { flex: 1 },
 });

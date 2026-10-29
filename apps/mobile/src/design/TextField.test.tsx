@@ -1,9 +1,10 @@
-import { render, screen, userEvent } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 import { useState } from 'react';
+import { StyleSheet } from 'react-native';
 
 import { TextField, type TextFieldProps } from './TextField';
 import { hitArea } from './testing/hit-area';
-import { textScale } from './tokens';
+import { color, textScale } from './tokens';
 
 function Controlled(props: Omit<TextFieldProps, 'value' | 'onChangeText'>) {
   const [value, setValue] = useState('');
@@ -62,4 +63,59 @@ test('Trefferfläche mindestens 48 dp hoch, Text skaliert bis Faktor 2,0', async
   expect(hitArea(input).height).toBeGreaterThanOrEqual(48);
   expect(input).toHaveProp('maxFontSizeMultiplier', textScale.max);
   expect(screen.getByText('Anzeigename')).toHaveProp('maxFontSizeMultiplier', textScale.max);
+});
+
+// Rahmen des Felds: der nächste Vorfahre der Eingabe mit Rahmenfarbe.
+function frame(label: string): string | undefined {
+  let node = screen.getByLabelText(label).parent;
+  while (node && (StyleSheet.flatten(node.props.style) as { borderColor?: string } | undefined)?.borderColor === undefined) node = node.parent;
+  return node ? (StyleSheet.flatten(node.props.style) as { borderColor?: string }).borderColor : undefined;
+}
+
+test('rahmt eine ungültige Eingabe in `problem` und zeigt das Symbol', async () => {
+  await render(<Controlled label="Anzeigename" hint="Den Namen sieht auch dein Partner." problem="Dein Name braucht 1 bis 30 Zeichen." />);
+
+  expect(screen.getByTestId('icon-alert', { includeHiddenElements: true })).toBeOnTheScreen();
+  expect(frame('Anzeigename')).toBe(color.problem);
+});
+
+test('hebt das fokussierte Feld hervor', async () => {
+  await render(<Controlled label="Neues Passwort" />);
+  expect(frame('Neues Passwort')).toBe(color.lineStrong);
+
+  await act(() => fireEvent(screen.getByLabelText('Neues Passwort'), 'focus'));
+  expect(frame('Neues Passwort')).toBe(color.primary);
+
+  await act(() => fireEvent(screen.getByLabelText('Neues Passwort'), 'blur'));
+  expect(frame('Neues Passwort')).toBe(color.lineStrong);
+});
+
+test('Passwortfelder ohne Autokorrektur und Großschreibung', async () => {
+  await render(<Controlled label="Aktuelles Passwort" secure />);
+
+  expect(screen.getByLabelText('Aktuelles Passwort')).toHaveProp('autoCorrect', false);
+  expect(screen.getByLabelText('Aktuelles Passwort')).toHaveProp('autoCapitalize', 'none');
+});
+
+test('zeigt ein Passwort auf Wunsch beim Tippen an (NIST SP 800-63B-4, 3.1.1.2)', async () => {
+  await render(<Controlled label="Neues Passwort" secure />);
+
+  const show = screen.getByRole('button', { name: 'Passwort anzeigen' });
+  expect(hitArea(show)).toEqual({ width: 48, height: 48 });
+  await userEvent.press(show);
+
+  expect(screen.getByLabelText('Neues Passwort')).toHaveProp('secureTextEntry', false);
+  await userEvent.press(screen.getByRole('button', { name: 'Passwort verbergen' }));
+  expect(screen.getByLabelText('Neues Passwort')).toHaveProp('secureTextEntry', true);
+});
+
+test('deaktivierte Passwortfelder bieten keinen Schalter und verdecken ein aufgedecktes Passwort', async () => {
+  const { rerender } = await render(<TextField label="Passwort" value="geheim" onChangeText={jest.fn()} secure />);
+  await userEvent.press(screen.getByRole('button', { name: 'Passwort anzeigen' }));
+  expect(screen.getByLabelText('Passwort')).toHaveProp('secureTextEntry', false);
+
+  await rerender(<TextField label="Passwort" value="geheim" onChangeText={jest.fn()} secure disabled />);
+
+  expect(screen.queryByRole('button', { name: 'Passwort verbergen' })).toBeNull();
+  expect(screen.getByLabelText('Passwort')).toHaveProp('secureTextEntry', true);
 });
