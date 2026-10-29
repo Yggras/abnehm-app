@@ -13,6 +13,7 @@ import { nutritionFixtures } from './nutrition.ts';
 import { onboardingFixtures } from './onboarding.ts';
 import { partnerFixtures } from './partner.ts';
 import { personFixtures } from './person.ts';
+import { planFixtures } from './plan.ts';
 import { portFixtures } from './ports.ts';
 import { routeFixtures } from './routes.ts';
 import { statusFixtures } from './status.ts';
@@ -37,6 +38,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   auth: authFixtures,
   coupling: couplingFixtures,
   'daily-goals': dailyGoalFixtures,
+  plan: planFixtures,
   energy: energyFixtures,
   partner: partnerFixtures,
   island: islandFixtures,

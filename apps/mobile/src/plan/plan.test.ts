@@ -1,0 +1,380 @@
+/** @jest-environment node */
+import { randomUUID } from 'node:crypto';
+
+import { createTestClock, type TestClock } from '@abnehm/clock/testing';
+import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
+import { goalVersionId, weeklyPlanVersionId } from '@abnehm/contracts/plan';
+import type { RecordManualWeightResult } from '@abnehm/contracts/ports';
+
+import { fakeWeightRecorder } from '../area-ports/testing/fakes';
+import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCompletionEntity } from '../daily-goals';
+import { insertPersonForTest } from '../daily-goals/testing/persisted';
+import { energyBookingEntity } from '../energy';
+import type { LocalDatabase } from '../local-db';
+import { createLocalDatabases } from '../local-db/local-databases';
+import { goalVersion, person, weeklyPlanDay, weeklyPlanVersion } from '../local-db/schema';
+import { sqliteOf } from '../local-db/sqlite';
+import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
+import { createSyncRegistry, createSyncWriter, personEntity } from '../sync';
+import { pendingOperations } from '../sync/outbox';
+import { createPlan, goalVersionEntity, planReaderOf, standardWeeklyPlan, weeklyPlanVersionEntity, type InitialPlanDraft } from '.';
+
+// Nachweis für #128: Tracer Bullet des Plan-Moduls (Spezifikation 1, Abschnitte 1, 2 und 4) gegen eine
+// echte SQLite-Datei mit denselben Migrationen wie die App, gesteuert über Testuhr und Test-Zeitzone.
+// Das Startgewicht läuft über den Fixture-Adapter des `WeightRecorder` aus #104, bis Spezifikation 3
+// den echten Port liefert.
+
+const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
+const berlin = TimeZone.parse('Europe/Berlin');
+/** Mittwoch, 14.10.2026, 12:00 in Berlin (Sommerzeit, UTC+2). */
+const noon = Instant.parse('2026-10-14T10:00:00.000Z');
+const day = (value: string) => LocalDate.parse(value);
+const startWeightEntry = EntityId.parse('1f3e5d7c-9b8a-4c6e-8f2d-1e3c5a7b9d01');
+
+/** Referenzfall der Recherche: Frau, 35 Jahre, 168 cm, 80 kg, wenig aktiv, entspannt; Sport Di/Do/Sa, Wiegen montags. */
+const draft: InitialPlanDraft = {
+  startWeightEntryId: startWeightEntry,
+  calculationSex: 'weiblich',
+  birthDate: day('1991-03-02'),
+  heightCm: 168,
+  weightG: 80_000,
+  activityLevel: 'wenig_aktiv',
+  pregnantOrBreastfeeding: false,
+  knownEatingDisorder: false,
+  goalWeightG: 76_000,
+  pace: 'entspannt',
+  manualBudgetKcal: null,
+  waterTargetMl: null,
+  weeklySportTargetMinutes: null,
+  sportDays: ['dienstag', 'donnerstag', 'samstag'],
+  weighDay: 'montag',
+};
+
+type Report = { personId: EntityId; localDates: readonly LocalDate[]; cause: DailyGoalCause };
+
+const cleanups: (() => void)[] = [];
+afterEach(() => {
+  for (const cleanup of cleanups.splice(0)) cleanup();
+});
+
+async function setup({ at = noon, recorded }: { at?: Instant; recorded?: RecordManualWeightResult } = {}) {
+  let failReevaluation = false;
+  const files = createBetterSqliteFiles();
+  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
+  cleanups.push(() => {
+    databases.lock();
+    files.remove();
+  });
+  const database: LocalDatabase = await databases.open('konto_a');
+  database.transaction((tx) => insertPersonForTest(tx, philipp));
+  const clock: TestClock = createTestClock({ instant: at, timeZone: berlin });
+  const newId = () => EntityId.parse(randomUUID());
+  const registry = createSyncRegistry([personEntity, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity]);
+  const writer = createSyncWriter({ registry, clock, newId });
+  const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
+  const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock, writer, dispatcher });
+  const weights = fakeWeightRecorder((measuredAt) => createTestClock({ instant: measuredAt, timeZone: berlin }).read().localDate);
+  const weightCalls: unknown[] = [];
+  const reports: Report[] = [];
+  const plan = createPlan({
+    database,
+    clock,
+    writer,
+    newId,
+    weightRecorder: {
+      async recordManualWeight(input) {
+        weightCalls.push(input);
+        return recorded ?? weights.recordManualWeight(input);
+      },
+    },
+    persistence: {
+      reevaluateDailyGoals(tx, personId, localDates, cause) {
+        reports.push({ personId, localDates: [...localDates], cause });
+        persistence.reevaluateDailyGoals(tx, personId, localDates, cause);
+        if (failReevaluation) throw new Error('Auswertung gescheitert');
+      },
+    },
+  });
+  return {
+    database,
+    clock,
+    plan,
+    weights,
+    weightCalls,
+    reports,
+    goals: () => database.read((tx) => sqliteOf(tx).select().from(goalVersion).all()),
+    weeklyPlans: () => database.read((tx) => sqliteOf(tx).select().from(weeklyPlanVersion).all()),
+    weeklyPlanDays: () => database.read((tx) => sqliteOf(tx).select().from(weeklyPlanDay).all()),
+    ownPerson: () => database.read((tx) => sqliteOf(tx).select().from(person).get()),
+    operations: () => database.read((tx) => pendingOperations(tx, 100)),
+    failReevaluation: () => {
+      failReevaluation = true;
+    },
+  };
+}
+
+describe('Standard-Wochenplan aus Sporttagen und Wiegetag', () => {
+  it('belegt Platz 1 mit Ernährung erfasst, Platz 2 mit Wasserziel und Platz 3 je nach Tag', () => {
+    expect(standardWeeklyPlan({ sportDays: ['dienstag', 'donnerstag', 'samstag'], weighDay: 'montag' })).toEqual({
+      type: 'gueltig',
+      days: {
+        montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
+        dienstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+        mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+        donnerstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+        freitag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+        samstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+        sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+      },
+    });
+  });
+
+  it('erlaubt 0 bis 6 Sporttage und genau einen Wiegetag, der kein Sporttag ist', () => {
+    expect(standardWeeklyPlan({ sportDays: [], weighDay: 'sonntag' })).toMatchObject({ type: 'gueltig' });
+    const sechs = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag'] as const;
+    expect(standardWeeklyPlan({ sportDays: sechs, weighDay: 'sonntag' })).toMatchObject({ type: 'gueltig' });
+    expect(standardWeeklyPlan({ sportDays: ['montag'], weighDay: 'montag' })).toEqual({ type: 'ungueltig', errors: ['weigh_day_is_sport_day'] });
+    expect(standardWeeklyPlan({ sportDays: ['dienstag', 'dienstag'], weighDay: 'montag' })).toEqual({ type: 'ungueltig', errors: ['sport_day_repeated'] });
+  });
+});
+
+describe('Vorschau', () => {
+  it('rechnet über den Zielrechner mit dem Alter am heutigen Tag und schreibt nichts', async () => {
+    const { plan, goals, operations } = await setup();
+
+    expect(plan.preview(draft)).toMatchObject({ type: 'berechnet', calorieBudget: { kcal: 1_620 }, basalMetabolicRate: { kcal: 1_514 } });
+    // Am 14.10.2026 ist, wer am 15.10.2008 geboren ist, noch 17.
+    expect(plan.preview({ ...draft, birthDate: day('2008-10-15') })).toEqual({ type: 'ungueltig', errors: ['underage'] });
+    expect(plan.preview({ ...draft, birthDate: day('2008-10-14') })).toMatchObject({ type: 'berechnet' });
+    expect(goals()).toEqual([]);
+    expect(operations()).toEqual([]);
+  });
+});
+
+describe('Erstplan speichern', () => {
+  it('legt zuerst das Startgewicht über den WeightRecorder an, mit Messzeitpunkt jetzt und der entryId des Entwurfs', async () => {
+    const { plan, weights } = await setup();
+
+    await expect(plan.saveInitialPlan(draft)).resolves.toEqual({
+      type: 'gespeichert',
+      validFrom: '2026-10-14',
+      goalVersionId: goalVersionId(philipp, day('2026-10-14')),
+      weeklyPlanVersionId: weeklyPlanVersionId(philipp, day('2026-10-14')),
+    });
+    expect(weights.entries()).toEqual([{ entryId: startWeightEntry, personId: philipp, weightG: 80_000, measuredAt: noon }]);
+  });
+
+  it('schreibt die Personenfelder über den Person-Upsert; der Onboarding-Stand bleibt begonnen', async () => {
+    const { plan, ownPerson } = await setup();
+
+    await plan.saveInitialPlan({ ...draft, knownEatingDisorder: true });
+
+    expect(ownPerson()).toMatchObject({
+      calculationSex: 'weiblich',
+      birthDate: '1991-03-02',
+      heightCm: 168,
+      activityLevel: 'wenig_aktiv',
+      pregnantOrBreastfeeding: false,
+      knownEatingDisorder: true,
+      onboardingStatus: 'begonnen',
+      onboardingCompletedAt: null,
+    });
+  });
+
+  it('legt Zielversion und Wochenplanversion ab heute samt Outbox in einer Transaktion an', async () => {
+    const { plan, goals, weeklyPlans, weeklyPlanDays, operations } = await setup();
+
+    await plan.saveInitialPlan(draft);
+
+    expect(goals()).toEqual([
+      expect.objectContaining({
+        id: goalVersionId(philipp, day('2026-10-14')),
+        personId: philipp,
+        validFrom: '2026-10-14',
+        calorieBudgetMilliKcal: 1_620_000,
+        basalMetabolicRateMilliKcal: 1_514_000,
+        totalEnergyExpenditureMilliKcal: 2_120_000,
+        lowerBoundMilliKcal: 1_514_000,
+        deficitMilliKcal: 500_000,
+        budgetSource: 'berechnet',
+        ageYears: 35,
+        weightG: 80_000,
+        maintenanceReason: null,
+        pace: 'entspannt',
+        goalWeightG: 76_000,
+        waterTargetMl: 1_500,
+        weeklySportTargetMinutes: 150,
+        serverVersion: null,
+      }),
+    ]);
+    expect(weeklyPlans()).toEqual([expect.objectContaining({ id: weeklyPlanVersionId(philipp, day('2026-10-14')), validFrom: '2026-10-14' })]);
+    expect(weeklyPlanDays()).toHaveLength(7);
+    expect(operations().map((operation) => [operation.type, 'businessKey' in operation ? operation.businessKey.split(':').slice(0, 3).join(':') : operation.entityType])).toEqual([
+      ['upsert_entity', 'person'],
+      ['createGoalVersion', `zielversion:${philipp}:2026-10-14`],
+      ['createWeeklyPlanVersion', `wochenplan:${philipp}:2026-10-14`],
+    ]);
+  });
+
+  it('meldet in derselben Transaktion die Tage von heute bis heute + 13 mit planaenderung', async () => {
+    const { plan, reports } = await setup();
+
+    await plan.saveInitialPlan(draft);
+
+    expect(reports).toEqual([
+      {
+        personId: philipp,
+        localDates: Array.from({ length: 14 }, (_, index) => day(`2026-10-${String(14 + index).padStart(2, '0')}`)),
+        cause: 'planaenderung',
+      },
+    ]);
+  });
+
+  it('gilt ab dem lokalen Tag des Speicherns in der Zone des Geräts', async () => {
+    // 00:30 in Berlin am Donnerstag, in UTC noch Mittwoch.
+    const { plan, goals, reports } = await setup({ at: Instant.parse('2026-10-14T22:30:00.000Z') });
+
+    await expect(plan.saveInitialPlan(draft)).resolves.toMatchObject({ validFrom: '2026-10-15' });
+    expect(goals()).toEqual([expect.objectContaining({ validFrom: '2026-10-15' })]);
+    expect(reports[0]?.localDates[0]).toBe('2026-10-15');
+    expect(reports[0]?.localDates.at(-1)).toBe('2026-10-28');
+  });
+
+  it('zweimal speichern ergibt genau ein Startgewicht und keine zweite Fassung', async () => {
+    const { plan, weights, goals, weeklyPlans, operations } = await setup();
+
+    await plan.saveInitialPlan(draft);
+    await plan.saveInitialPlan(draft);
+
+    expect(weights.entries()).toHaveLength(1);
+    expect(goals()).toHaveLength(1);
+    expect(weeklyPlans()).toHaveLength(1);
+    expect(operations().filter((operation) => operation.type !== 'upsert_entity').map((operation) => operation.type)).toEqual([
+      'createGoalVersion',
+      'createWeeklyPlanVersion',
+    ]);
+  });
+
+  it('nach „Zurück“ mit geänderter Eingabe ersetzt es die Fassung desselben Tags; das Startgewicht bleibt eines', async () => {
+    const { plan, weights, goals, weeklyPlanDays, operations } = await setup();
+
+    await plan.saveInitialPlan(draft);
+    await plan.saveInitialPlan({ ...draft, weightG: 80_500, waterTargetMl: 2_000, sportDays: ['mittwoch'] });
+
+    expect(weights.entries()).toEqual([expect.objectContaining({ entryId: startWeightEntry, weightG: 80_500 })]);
+    expect(goals()).toEqual([expect.objectContaining({ weightG: 80_500, waterTargetMl: 2_000 })]);
+    expect(weeklyPlanDays().find((row) => row.weekday === 'mittwoch')).toMatchObject({ baustein3: 'sporteinheit' });
+    expect(operations().filter((operation) => operation.type === 'createGoalVersion')).toHaveLength(2);
+  });
+
+  it('lehnt einen ungültigen Entwurf ab, bevor es etwas schreibt oder wiegt', async () => {
+    const { plan, weightCalls, goals, operations, reports } = await setup();
+
+    await expect(plan.saveInitialPlan({ ...draft, waterTargetMl: 1_600, weighDay: 'dienstag' })).resolves.toEqual({
+      type: 'ungueltig',
+      errors: ['water_target_not_on_step', 'weigh_day_is_sport_day'],
+    });
+    expect(weightCalls).toEqual([]);
+    expect(goals()).toEqual([]);
+    expect(operations()).toEqual([]);
+    expect(reports).toEqual([]);
+  });
+
+  it('schreibt nichts weiter, wenn der WeightRecorder das Startgewicht ablehnt', async () => {
+    const { plan, goals, operations, ownPerson } = await setup({
+      recorded: { type: 'contract_error', error: { code: 'invalid_payload', retryable: false } },
+    });
+
+    await expect(plan.saveInitialPlan(draft)).resolves.toEqual({
+      type: 'startgewicht_abgelehnt',
+      error: { code: 'invalid_payload', retryable: false },
+    });
+    expect(goals()).toEqual([]);
+    expect(operations()).toEqual([]);
+    expect(ownPerson()).toMatchObject({ calculationSex: null });
+  });
+
+  it('rollt Person, Fassungen und Outbox gemeinsam zurück, wenn die Meldung scheitert; erneut speichern trifft dasselbe Startgewicht', async () => {
+    const { plan, weights, goals, weeklyPlans, operations, ownPerson, failReevaluation } = await setup();
+    failReevaluation();
+
+    await expect(plan.saveInitialPlan(draft)).rejects.toThrow('Auswertung gescheitert');
+
+    expect(goals()).toEqual([]);
+    expect(weeklyPlans()).toEqual([]);
+    expect(operations()).toEqual([]);
+    expect(ownPerson()).toMatchObject({ calculationSex: null });
+    expect(weights.entries()).toHaveLength(1);
+  });
+});
+
+describe('PlanReader', () => {
+  async function savedPlan() {
+    const context = await setup();
+    await context.plan.saveInitialPlan(draft);
+    return context;
+  }
+
+  it('liefert vor der ersten Fassung ausdrücklich den Leer-Zustand', async () => {
+    const { plan, database } = await setup();
+
+    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+    await expect(planReaderOf(database).effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+  });
+
+  it('liefert an valid_from die Zielversion und den Wochenplantag, am Tag davor den Leer-Zustand', async () => {
+    const { plan } = await savedPlan();
+
+    await expect(plan.effectivePlan(philipp, day('2026-10-13'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-13' });
+    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({
+      type: 'gueltig',
+      localDate: '2026-10-14',
+      goal: {
+        id: goalVersionId(philipp, day('2026-10-14')),
+        validFrom: '2026-10-14',
+        calorieBudgetMilliKcal: 1_620_000,
+        lowerBoundMilliKcal: 1_514_000,
+        maintenanceReason: null,
+        pace: 'entspannt',
+        goalWeightG: 76_000,
+        waterTargetMl: 1_500,
+        weeklySportTargetMinutes: 150,
+      },
+      weeklyPlanDay: {
+        weeklyPlanVersionId: weeklyPlanVersionId(philipp, day('2026-10-14')),
+        validFrom: '2026-10-14',
+        bausteine: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+      },
+    });
+  });
+
+  it('folgt am Wochentagswechsel dem Wochenplantag des jeweiligen Tags', async () => {
+    const { plan } = await savedPlan();
+
+    const bausteine = async (value: string) => {
+      const effective = await plan.effectivePlan(philipp, day(value));
+      return effective.type === 'gueltig' ? effective.weeklyPlanDay.bausteine : null;
+    };
+    expect(await bausteine('2026-10-18')).toEqual(['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget']);
+    expect(await bausteine('2026-10-19')).toEqual(['ernaehrung_erfasst', 'wasserziel', 'gewogen']);
+    expect(await bausteine('2026-10-20')).toEqual(['ernaehrung_erfasst', 'wasserziel', 'sporteinheit']);
+  });
+
+  it('nimmt je Tag die Fassung mit dem größten valid_from ≤ Tag', async () => {
+    const { plan, clock } = await savedPlan();
+    clock.advanceBy(24 * 60 * 60 * 1_000);
+
+    await plan.saveInitialPlan({ ...draft, waterTargetMl: 2_500 });
+
+    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-14', waterTargetMl: 1_500 } });
+    await expect(plan.effectivePlan(philipp, day('2026-10-15'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-15', waterTargetMl: 2_500 } });
+    await expect(plan.effectivePlan(philipp, day('2026-11-30'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-15' } });
+  });
+
+  it('kennt nur die Fassungen der genannten Person', async () => {
+    const { plan } = await savedPlan();
+
+    await expect(plan.effectivePlan(EntityId.parse(randomUUID()), day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+  });
+});
