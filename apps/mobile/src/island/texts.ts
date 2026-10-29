@@ -10,5 +10,5 @@ export const islandTexts = {
   energyUnit: 'Energie',
   areas: 'Bereiche',
   entries: { lager: 'Lager', projekt: 'Projekt', bauen: 'Bauen', ereignisse: 'Ereignisse' },
-  newEvents: (count: number) => `Ereignisse, ${count} neu`,
+  island: (level: number, ownObjects: number) => `Momos Insel, Level ${level}, ${ownObjects} eigene Objekte`,
 };

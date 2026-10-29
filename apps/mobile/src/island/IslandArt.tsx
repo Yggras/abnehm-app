@@ -17,6 +17,12 @@ import type { Point, Polygon } from './scene-model';
 const tile = size.islandTile;
 const shade = color.ink;
 
+/** Momos rechte Körperhälfte: „10 % Schwarz“ (Design-System › Momo, Zeichenstil). */
+const momoShade = 0.1;
+/** Schein einer Laterne am Abend und Deckkraft der Wellen (Designwerte aus #182, nicht belegt). */
+const lampGlowOpacity = 0.35;
+const waveOpacity = 0.7;
+
 /** SVG-Pfad eines Polygons; Skias `Path` nimmt SVG-Zeichenketten direkt. */
 export function polygonPath(polygon: Polygon): string {
   return `${polygon.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'}${x} ${y}`).join(' ')} Z`;
@@ -159,7 +165,7 @@ function Shape({ shape, foliage }: { shape: ArtShape; foliage: ColorToken }) {
 export function LampGlow({ at }: { at: Point }) {
   return (
     <Group>
-      <Circle cx={at.x} cy={at.y - lampHeight + 1} r={12} color={color.islandLamp} opacity={0.35} />
+      <Circle cx={at.x} cy={at.y - lampHeight + 1} r={12} color={color.islandLamp} opacity={lampGlowOpacity} />
       <Circle cx={at.x} cy={at.y - lampHeight + 1} r={4} color={color.islandLamp} />
     </Group>
   );
@@ -178,7 +184,7 @@ export function Wave({ at, phase, progress }: { at: Point; phase: number; progre
         strokeWidth={2}
         strokeCap="round"
         color={color.surfaceCard}
-        opacity={0.7}
+        opacity={waveOpacity}
       />
     </Group>
   );
@@ -228,7 +234,7 @@ export function MomoOnIsland({ at, appearance, progress }: { at: Point; appearan
         </Group>
       ))}
       <Oval x={-13} y={-28} width={26} height={26} color={color.momoBody} />
-      <Path path={rightHalf(0, -15, 13)} color={shade} opacity={0.1} />
+      <Path path={rightHalf(0, -15, 13)} color={shade} opacity={momoShade} />
       <Oval x={-8} y={-16} width={16} height={11} color={color.momoBelly} />
       {asleep ? (
         <>

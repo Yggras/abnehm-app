@@ -1,4 +1,4 @@
-import { panBy, resizeView, startView, toScene, zoomAt, type View } from './viewport';
+import { panBy, resizeView, startView, toScene, zoomAt, type Viewport } from './viewport';
 
 // Ausschnitt der Inselansicht (Spezifikation 4, Abschnitt 7): Start auf Momos Lichtung, Ziehen
 // verschiebt, Pinch zoomt von 0,5 bis 2,0 um den Mittelpunkt der Finger. Werte von Hand gerechnet.
@@ -11,7 +11,7 @@ test('der Start zeigt den Fokus bei Zoom 1 in der Mitte des Bildschirms', () => 
 });
 
 test('Pinch hält den Punkt unter den Fingern fest', () => {
-  const view: View = { x: 100, y: 150, scale: 1 };
+  const view: Viewport = { x: 100, y: 150, scale: 1 };
 
   // Fokus (200, 400) zeigt Szenenpunkt (100, 250); bei Zoom 1,5 bleibt er dort.
   const zoomed = zoomAt(view, { x: 200, y: 400 }, 1.5, screen, bounds);

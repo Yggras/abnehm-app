@@ -46,35 +46,35 @@ export default function RootLayout() {
   // Gesten der Inselansicht brauchen die Wurzel von Gesture Handler über der ganzen App (#182).
   return (
     <GestureHandlerRootView style={styles.root}>
-    <ClockProvider clock={appClock}>
-      <MessageHostProvider>
-        <SyncRefreshProvider refresh={() => refreshDeviceSync() ?? Promise.resolve()}>
-        <OnlineFlowsProvider {...deviceInvitationFlows()}>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
-          <Stack.Protected guard={gate === 'today'} redirectTo={home}>
-            {screenAccess.today.map(screen)}
-          </Stack.Protected>
-          <Stack.Protected guard={gate === 'today' || gate === 'onboarding'} redirectTo={home}>
-            {screenAccess.onboardingAndToday.map(screen)}
-          </Stack.Protected>
-          <Stack.Protected guard={gate === 'onboarding'} redirectTo={home}>
-            {screenAccess.onboarding.map(screen)}
-          </Stack.Protected>
-          <Stack.Protected guard={isSessionScreenGate(gate)} redirectTo={home}>
-            {screenAccess.session.map(screen)}
-          </Stack.Protected>
-          {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar, auch vor der Anmeldung. */}
-          <Stack.Protected guard={__DEV__}>
-            <Stack.Screen name="katalog" />
-            <Stack.Screen name="technik" />
-          </Stack.Protected>
-        </Stack>
-        {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
-        </OnlineFlowsProvider>
-        </SyncRefreshProvider>
-      </MessageHostProvider>
-    </ClockProvider>
+      <ClockProvider clock={appClock}>
+        <MessageHostProvider>
+          <SyncRefreshProvider refresh={() => refreshDeviceSync() ?? Promise.resolve()}>
+          <OnlineFlowsProvider {...deviceInvitationFlows()}>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
+            <Stack.Protected guard={gate === 'today'} redirectTo={home}>
+              {screenAccess.today.map(screen)}
+            </Stack.Protected>
+            <Stack.Protected guard={gate === 'today' || gate === 'onboarding'} redirectTo={home}>
+              {screenAccess.onboardingAndToday.map(screen)}
+            </Stack.Protected>
+            <Stack.Protected guard={gate === 'onboarding'} redirectTo={home}>
+              {screenAccess.onboarding.map(screen)}
+            </Stack.Protected>
+            <Stack.Protected guard={isSessionScreenGate(gate)} redirectTo={home}>
+              {screenAccess.session.map(screen)}
+            </Stack.Protected>
+            {/* Werkzeuge des Fundaments sind nur im Development Build erreichbar, auch vor der Anmeldung. */}
+            <Stack.Protected guard={__DEV__}>
+              <Stack.Screen name="katalog" />
+              <Stack.Screen name="technik" />
+            </Stack.Protected>
+          </Stack>
+          {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
+          </OnlineFlowsProvider>
+          </SyncRefreshProvider>
+        </MessageHostProvider>
+      </ClockProvider>
     </GestureHandlerRootView>
   );
 }

@@ -1,4 +1,4 @@
-import { baseIslandKey, fieldKey, type FieldPlanEntry, type FieldSide, type GameCatalog } from '@abnehm/game-rules/catalog';
+import { fieldKey, fieldPlans, type FieldSide, type GameCatalog } from '@abnehm/game-rules/catalog';
 
 import type { IslandSceneInput, SceneField } from './scene-model';
 
@@ -15,22 +15,24 @@ export type IslandLayoutRequest = Readonly<{
 }>;
 
 export function islandLayout(catalog: GameCatalog, { sides, unlockedAreas }: IslandLayoutRequest): Pick<IslandSceneInput, 'fields' | 'fog'> {
-  const unlocked = new Set(unlockedAreas);
-  const fieldsOf = (area: string, entries: readonly FieldPlanEntry[]): SceneField[] =>
-    entries.map((entry) => ({
-      key: fieldKey(area, entry),
-      x: entry.x,
-      y: entry.y,
-      kind: entry.kind,
-      ownerPersonId: 'side' in entry ? sides[entry.side] : null,
-    }));
+  const open = (area: string, source: string) => source === 'grundinsel' || unlockedAreas.includes(area);
+  const plans = fieldPlans(catalog).filter((plan) => plan.onIslandGrid);
   return {
-    fields: [
-      ...fieldsOf(baseIslandKey, catalog.baseIsland.fields),
-      ...catalog.areas.filter((area) => unlocked.has(area.key)).flatMap((area) => fieldsOf(area.key, area.fields)),
-    ],
-    fog: catalog.areas
-      .filter((area) => !unlocked.has(area.key))
-      .map((area) => ({ area: area.key, cells: area.fields.map(({ x, y }) => ({ x, y })) })),
+    fields: plans
+      .filter((plan) => open(plan.area, plan.source))
+      .flatMap((plan) =>
+        plan.fields.map(
+          (entry): SceneField => ({
+            key: fieldKey(plan.area, entry),
+            x: entry.x,
+            y: entry.y,
+            kind: entry.kind,
+            ownerPersonId: 'side' in entry ? sides[entry.side] : null,
+          }),
+        ),
+      ),
+    fog: plans
+      .filter((plan) => !open(plan.area, plan.source))
+      .map((plan) => ({ area: plan.area, cells: plan.fields.map(({ x, y }) => ({ x, y })) })),
   };
 }

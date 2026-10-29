@@ -1,7 +1,6 @@
-import type { ClockReading } from '@abnehm/clock';
 import type { LocalDate } from '@abnehm/contracts/base';
 import type { MomoAppearance } from '@abnehm/contracts/island';
-import type { ArtKey, FieldKind, Season } from '@abnehm/game-rules/catalog';
+import { fieldKey, type ArtKey, type FieldKind, type Season } from '@abnehm/game-rules/catalog';
 
 import { opacity, size, type ColorToken } from '../design';
 import { artOf } from './art';
@@ -34,17 +33,14 @@ export type IslandSceneInput = Readonly<{
   momo: MomoAppearance;
 }>;
 
-/** Lokale Uhrzeit der betrachtenden Person. */
+/** Lokale Uhrzeit der betrachtenden Person: Tag und Minute des Tages aus einer Ablesung der Uhr (`minutesOfDay`). */
 export type LocalTime = Readonly<{ localDate: LocalDate; minutesOfDay: number }>;
 
-const minutesPerDay = 24 * 60;
+/** Wem ein Feld gehört, aus Sicht der betrachtenden Person; gemeinsame Bereiche gehören niemandem. */
+export type Owner = 'self' | 'partner' | null;
 
-/** Lokale Uhrzeit einer Ablesung: Tag aus der Uhr, Minute des Tages aus Zeitpunkt und UTC-Offset derselben Ablesung. */
-export function localTimeOf(reading: ClockReading): LocalTime {
-  const utcMinutes = Math.floor(Date.parse(reading.instant) / 60_000);
-  const minutesOfDay = (((utcMinutes + reading.utcOffsetMinutes) % minutesPerDay) + minutesPerDay) % minutesPerDay;
-  return { localDate: reading.localDate, minutesOfDay };
-}
+/** Seite der Erdschicht unter einem Feld. */
+export type EarthSide = 'links' | 'rechts';
 
 /** `bereiche` färbt die eigenen Felder und die des Partners (Schalter „Bereiche“). */
 export type IslandMode = 'ansehen' | 'bereiche';
@@ -60,7 +56,7 @@ export type IslandSceneRequest = Readonly<{
 }>;
 
 /** Färbung eines Felds in der Bereichsansicht. */
-export type AreaTint = Readonly<{ tone: 'self' | 'partner'; opacity: number }>;
+export type AreaTint = Readonly<{ tone: Exclude<Owner, null>; opacity: number }>;
 
 /**
  * Ein Eintrag der Zeichenliste. Die Liste ist nach Ebenen geordnet: Wasser, Inselsockel, Felder,
@@ -72,7 +68,7 @@ export type SceneItem =
   | Readonly<{ layer: 'wasser'; type: 'inselschatten'; polygon: Polygon; tone: ColorToken }>
   /** Bewegt sich mit `phase` (0–1) im Takt; bei reduzierter Bewegung steht sie still. */
   | Readonly<{ layer: 'wasser'; type: 'welle'; at: Point; phase: number }>
-  | Readonly<{ layer: 'sockel'; type: 'seite'; field: string; side: 'links' | 'rechts'; polygon: Polygon; tone: ColorToken; shade: number }>
+  | Readonly<{ layer: 'sockel'; type: 'seite'; field: string; side: EarthSide; polygon: Polygon; tone: ColorToken; shade: number }>
   | Readonly<{ layer: 'felder'; type: 'feld'; field: string; polygon: Polygon; tone: ColorToken; tint: AreaTint | null }>
   /** `at` ist die Mitte des Felds; dort steht das Objekt mittig (Design-System › Insel). */
   | Readonly<{ layer: 'objekte'; type: 'objekt'; id: string; field: string; at: Point; art: ArtKey }>
@@ -88,7 +84,7 @@ export type SceneItem =
 
 /** Was ein Tipp trifft; `owner` aus Sicht der betrachtenden Person. */
 export type SceneHit =
-  | Readonly<{ type: 'feld'; field: string; kind: FieldKind; owner: 'self' | 'partner' | null }>
+  | Readonly<{ type: 'feld'; field: string; kind: FieldKind; owner: Owner }>
   | Readonly<{ type: 'nebel'; area: string }>;
 
 export type IslandScene = Readonly<{
@@ -125,11 +121,11 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   const ground: Ground[] = [
     ...island.fields.map((field) => ({ x: field.x, y: field.y, key: field.key, field, fogArea: null })),
     ...island.fog.flatMap(({ area, cells }) =>
-      cells.map((cell) => ({ x: cell.x, y: cell.y, key: `${area}:${cell.x}:${cell.y}`, field: null, fogArea: area })),
+      cells.map((cell) => ({ x: cell.x, y: cell.y, key: fieldKey(area, cell), field: null, fogArea: area })),
     ),
   ];
   const groundByCell = new Map(ground.map((cell) => [cellKey(cell), cell]));
-  const ownerOf = (field: SceneField) =>
+  const ownerOf = (field: SceneField): Owner =>
     field.ownerPersonId === null ? null : field.ownerPersonId === viewerPersonId ? 'self' : 'partner';
 
   const sides = ground.flatMap((cell) =>
@@ -174,14 +170,16 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   );
 
   const fieldsByKey = new Map(island.fields.map((field) => [field.key, field]));
-  const place = momoPlace(island.fields);
+  const lichtung = island.fields.filter((field) => field.kind === 'lichtung');
+  const place = momoPlace(lichtung);
   const standing: { cell: Cell; item: SceneItem }[] = island.objects.flatMap((object) => {
     const field = fieldsByKey.get(object.fieldKey);
     if (field === undefined) return [];
     return [{ cell: field, item: { layer: 'objekte', type: 'objekt', id: object.id, field: field.key, at: project.center(field), art: object.art } }];
   });
   if (place !== null) {
-    standing.push({ cell: place, item: { layer: 'objekte', type: 'momo', field: place.key, at: project.center(place), appearance: island.momo } });
+    const { field } = place;
+    standing.push({ cell: field, item: { layer: 'objekte', type: 'momo', field: field.key, at: project.center(field), appearance: island.momo } });
   }
   standing.sort((a, b) => depth(a.cell) - depth(b.cell) || a.cell.x - b.cell.x);
 
@@ -198,10 +196,11 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   );
 
   const fields = island.fields;
-  const particles = Array.from({ length: Math.min(particleCount, fields.length) }, (_, index): SceneItem => ({
+  const particleTotal = Math.min(particleCount, fields.length);
+  const particles = Array.from({ length: particleTotal }, (_, index): SceneItem => ({
     layer: 'overlays',
     type: 'partikel',
-    at: project.center(fields[Math.floor((index * fields.length) / Math.min(particleCount, fields.length))]!),
+    at: project.center(fields[Math.floor((index * fields.length) / particleTotal)]!),
     phase: index / particleCount,
     tone: particleColor[season],
   }));
@@ -224,13 +223,11 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
       ? []
       : [{ layer: 'overlays', type: 'auswahl', field: selected.key, polygon: project.diamond(selected), tone: 'surfaceCard', opacity: selectionOpacity }];
 
-  const lichtung = island.fields.filter((field) => field.kind === 'lichtung');
-
   return {
     season,
     daytime,
     foliage: season === 'herbst' ? 'islandFoliageAutumn' : 'islandFoliage',
-    focus: lichtung.length > 0 ? project.point(centroid(lichtung)) : { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+    focus: place === null ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : project.point(place.middle),
     bounds,
     items: [...water, ...sides, ...tiles, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...selection],
     hitAt(point) {
@@ -268,7 +265,7 @@ function projection(zoom: number) {
       return { x, y: y + halfHeight };
     },
     /** Seitenfläche unter der linken bzw. rechten unteren Kante eines Felds, eine Erdschicht tief. */
-    side(cell: Cell, side: 'links' | 'rechts'): Polygon {
+    side(cell: Cell, side: EarthSide): Polygon {
       const { x, y } = top(cell);
       const bottom = { x, y: y + 2 * halfHeight };
       const corner = side === 'links' ? { x: x - halfWidth, y: y + halfHeight } : { x: x + halfWidth, y: y + halfHeight };
@@ -322,23 +319,23 @@ function boundsOf(polygons: readonly Polygon[]): Rect {
 const depth = (cell: Cell) => cell.x + cell.y;
 
 /** Erde zeigt eine Zelle nur, wo vor ihr kein Land liegt: links ohne Nachbarn in y + 1, rechts ohne in x + 1. */
-function exposedSides(cell: Cell, ground: ReadonlyMap<string, Ground>): ('links' | 'rechts')[] {
-  const sides: ('links' | 'rechts')[] = [];
+function exposedSides(cell: Cell, ground: ReadonlyMap<string, Ground>): EarthSide[] {
+  const sides: EarthSide[] = [];
   if (!ground.has(cellKey({ x: cell.x, y: cell.y + 1 }))) sides.push('links');
   if (!ground.has(cellKey({ x: cell.x + 1, y: cell.y }))) sides.push('rechts');
   return sides;
 }
 
 /**
- * Momos Platz: das Feld der Lichtung, das dem Mittelpunkt der Lichtung am nächsten liegt; bei
- * Gleichstand das hintere nach Zeichenreihenfolge.
+ * Momos Platz auf der Lichtung: ihr Mittelpunkt (in Rasterkoordinaten) und das Feld, das ihm am
+ * nächsten liegt; bei Gleichstand das hintere nach Zeichenreihenfolge.
  */
-function momoPlace(fields: readonly SceneField[]): SceneField | null {
-  const lichtung = fields.filter((field) => field.kind === 'lichtung');
+function momoPlace(lichtung: readonly SceneField[]): Readonly<{ field: SceneField; middle: Point }> | null {
   if (lichtung.length === 0) return null;
   const middle = centroid(lichtung);
   const distance = (field: SceneField) => Math.hypot(field.x + 0.5 - middle.x, field.y + 0.5 - middle.y);
-  return [...lichtung].sort((a, b) => distance(a) - distance(b) || depth(a) - depth(b) || a.x - b.x)[0]!;
+  const field = [...lichtung].sort((a, b) => distance(a) - distance(b) || depth(a) - depth(b) || a.x - b.x)[0]!;
+  return { field, middle };
 }
 
 /** Mittelpunkt von Feldern in Rasterkoordinaten. */
@@ -349,7 +346,7 @@ function centroid(cells: readonly Cell[]): Point {
   };
 }
 
-function tintOf(owner: 'self' | 'partner' | null): AreaTint | null {
+function tintOf(owner: Owner): AreaTint | null {
   return owner === null ? null : { tone: owner, opacity: areaTintOpacity };
 }
 

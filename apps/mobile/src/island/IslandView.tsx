@@ -1,4 +1,4 @@
-import type { Clock } from '@abnehm/clock';
+import { minutesOfDay, type Clock } from '@abnehm/clock';
 import type { IslandProgress } from '@abnehm/contracts/island';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -9,7 +9,8 @@ import { color, space } from '../design';
 import { IslandBar, type IslandEntry } from './IslandBar';
 import { IslandCanvas } from './IslandCanvas';
 import { IslandHud } from './IslandHud';
-import { islandScene, localTimeOf, type IslandSceneInput, type LocalTime, type SceneHit } from './scene-model';
+import { islandScene, type IslandSceneInput, type LocalTime, type SceneHit } from './scene-model';
+import { islandTexts } from './texts';
 
 export type IslandViewProps = {
   island: IslandSceneInput;
@@ -18,8 +19,6 @@ export type IslandViewProps = {
   partnerName: string;
   /** Angezeigte eigene Energie, mindestens 0. */
   energy: number;
-  /** Für die Person neue Ereignisse. */
-  newEvents: number;
   onOpen: (view: IslandEntry) => void;
   /** Ein Tipp auf ein Feld oder in den Nebel; das Feld bleibt hervorgehoben, ein Tipp ins Wasser hebt das auf. */
   onFieldPress?: (hit: SceneHit) => void;
@@ -32,7 +31,7 @@ export type IslandViewProps = {
  * HUD, unten die Leiste. Die Szene folgt der lokalen Uhrzeit der betrachtenden Person und dem
  * Schalter „Bereiche“.
  */
-export function IslandView({ island, progress, viewerPersonId, partnerName, energy, newEvents, onOpen, onFieldPress, bottomInset = 0 }: IslandViewProps) {
+export function IslandView({ island, progress, viewerPersonId, partnerName, energy, onOpen, onFieldPress, bottomInset = 0 }: IslandViewProps) {
   const localTime = useLocalTime(useClock());
   const [areas, setAreas] = useState(false);
   const [selectedField, setSelectedField] = useState<string | null>(null);
@@ -48,7 +47,7 @@ export function IslandView({ island, progress, viewerPersonId, partnerName, ener
       <IslandCanvas
         testID="insel"
         scene={scene}
-        accessibilityLabel={`Momos Insel, Level ${progress.level}, ${ownObjects} eigene Objekte`}
+        accessibilityLabel={islandTexts.island(progress.level, ownObjects)}
         onHit={(hit) => {
           setSelectedField(hit?.type === 'feld' ? hit.field : null);
           if (hit !== null) onFieldPress?.(hit);
@@ -67,7 +66,7 @@ export function IslandView({ island, progress, viewerPersonId, partnerName, ener
         />
       </View>
       <View style={[styles.bottom, { paddingBottom: bottomInset + space[3] }]} pointerEvents="box-none">
-        <IslandBar newEvents={newEvents} onOpen={onOpen} />
+        <IslandBar onOpen={onOpen} />
       </View>
     </View>
   );
@@ -75,13 +74,18 @@ export function IslandView({ island, progress, viewerPersonId, partnerName, ener
 
 const minute = 60_000;
 
+function localTimeOf(clock: Clock): LocalTime {
+  const reading = clock.read();
+  return { localDate: reading.localDate, minutesOfDay: minutesOfDay(reading) };
+}
+
 /** Lokale Uhrzeit, jede Minute neu abgelesen, damit Abend und Jahreszeit von selbst wechseln. */
 function useLocalTime(clock: Clock): LocalTime {
-  const [localTime, setLocalTime] = useState(() => localTimeOf(clock.read()));
+  const [localTime, setLocalTime] = useState(() => localTimeOf(clock));
   useEffect(() => {
     const update = () =>
       setLocalTime((current) => {
-        const next = localTimeOf(clock.read());
+        const next = localTimeOf(clock);
         return next.localDate === current.localDate && next.minutesOfDay === current.minutesOfDay ? current : next;
       });
     update();

@@ -1,7 +1,7 @@
-import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, LocalDate } from '@abnehm/contracts/base';
 import type { MomoAppearance } from '@abnehm/contracts/island';
 
-import { islandScene, localTimeOf, type IslandSceneInput, type IslandSceneRequest, type SceneItem } from './scene-model';
+import { islandScene, type IslandSceneInput, type IslandSceneRequest, type SceneItem } from './scene-model';
 
 // Szenenmodell der Inselansicht (Spezifikation 4, Abschnitt 7; #182) als reine Funktion. Erwartete
 // Werte sind von Hand gerechnet: Ein Feld ist bei Zoom 1 64 × 32 dp groß, die obere Ecke von Feld
@@ -387,20 +387,3 @@ describe('Treffer-Umkehrung', () => {
   });
 });
 
-describe('lokale Uhrzeit aus der Uhr', () => {
-  const reading = (instant: string, localDate: string, utcOffsetMinutes: number) => ({
-    instant: Instant.parse(instant),
-    timeZone: TimeZone.parse('Europe/Berlin'),
-    localDate: LocalDate.parse(localDate),
-    utcOffsetMinutes,
-  });
-
-  test.each([
-    ['2026-10-14T18:30:00.000Z', '2026-10-14', 120, 20 * 60 + 30],
-    ['2026-10-14T23:30:00.000Z', '2026-10-15', 120, 90],
-    ['2026-10-14T02:00:00.000Z', '2026-10-13', -300, 21 * 60],
-    ['2026-10-14T00:00:00.000Z', '2026-10-14', 0, 0],
-  ])('%s am lokalen Tag %s mit Offset %i: Minute %i des Tages', (instant, localDate, offset, minutesOfDay) => {
-    expect(localTimeOf(reading(instant, localDate, offset))).toEqual({ localDate, minutesOfDay });
-  });
-});

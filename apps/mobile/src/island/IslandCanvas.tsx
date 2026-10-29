@@ -1,6 +1,6 @@
 import { Canvas, Fill, Group, Path, type Transforms3d } from '@shopify/react-native-skia';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { StyleSheet, View as NativeView, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
@@ -8,7 +8,7 @@ import { color, useReducedMotion } from '../design';
 import { fogPath, LampGlow, MomoOnIsland, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
 import type { IslandScene, Rect, SceneHit, SceneItem } from './scene-model';
 import { useLoop } from './use-loop';
-import { panBy, resizeView, startView, toScene, zoomAt, type Size, type View } from './viewport';
+import { panBy, resizeView, startView, toScene, zoomAt, type Size, type Viewport } from './viewport';
 
 export type IslandCanvasProps = {
   /** Szene in Zoom 1 („Szenenraum“); Verschiebung und Zoom legt der Canvas selbst darüber. */
@@ -26,12 +26,15 @@ export type IslandCanvasProps = {
  * Gesten mit. Ziehen verschiebt, Pinch zoomt von 0,5 bis 2,0, ein Tipp wird mit der Umkehrabbildung
  * der Szene erkannt; der Start zeigt Momos Lichtung in der Mitte (Spezifikation 4, Abschnitt 7).
  *
- * Wie im Spike (spikes/insel-rendering) entsteht die Zeichenliste einmal; Verschiebung und Zoom
- * laufen als Transformation auf dem UI-Thread, ohne React-Render je Frame. Die Szene kommt deshalb
- * in Zoom 1, und ein Tipp wird mit dem aktuellen Ausschnitt in den Szenenraum zurückgerechnet.
+ * Wie im Spike (spikes/insel-rendering) entsteht die Zeichenliste einmal, und Verschiebung und Zoom
+ * laufen auf dem UI-Thread ohne React-Render je Frame. Anders als dort bewegt aber keine
+ * `Animated.View` einen festen Canvas, sondern eine Skia-Gruppe transformiert die Szene in einem
+ * bildschirmfüllenden Canvas: So bleiben die Vektoren beim Zoomen scharf (eigene Einschätzung, nicht
+ * gemessen). Die Leistung dieses Musters auf den Geräten misst #221. Die Szene kommt deshalb in Zoom 1,
+ * und ein Tipp wird mit dem aktuellen Ausschnitt in den Szenenraum zurückgerechnet.
  */
 export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: IslandCanvasProps) {
-  const view = useSharedValue<View>({ x: 0, y: 0, scale: 1 });
+  const view = useSharedValue<Viewport>({ x: 0, y: 0, scale: 1 });
   const screen = useSharedValue<Size>({ width: 0, height: 0 });
   const bounds = useSharedValue<Rect>(scene.bounds);
   useEffect(() => {
@@ -80,7 +83,7 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
 
   return (
     <GestureDetector gesture={gesture}>
-      <NativeView
+      <View
         testID={testID}
         style={StyleSheet.absoluteFill}
         onLayout={onLayout}
@@ -89,7 +92,7 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
         accessibilityLabel={accessibilityLabel}
       >
         <Canvas style={StyleSheet.absoluteFill}>{drawing}</Canvas>
-      </NativeView>
+      </View>
     </GestureDetector>
   );
 }
@@ -122,7 +125,10 @@ function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, pro
   return nodes;
 }
 
-function Item({ item, foliage, progress }: { item: SceneItem; foliage: IslandScene['foliage']; progress: SharedValue<number> }) {
+/** Einträge im Ausschnitt; Lagune und Abend füllen den Canvas und zeichnet `drawScene` selbst. */
+type FramedItem = Exclude<SceneItem, Readonly<{ type: 'wasser' | 'abend' }>>;
+
+function Item({ item, foliage, progress }: { item: FramedItem; foliage: IslandScene['foliage']; progress: SharedValue<number> }) {
   switch (item.type) {
     case 'inselschatten':
       return <Path path={polygonPath(item.polygon)} color={color[item.tone]} />;
@@ -158,8 +164,5 @@ function Item({ item, foliage, progress }: { item: SceneItem; foliage: IslandSce
       return <LampGlow at={item.at} />;
     case 'auswahl':
       return <Path path={polygonPath(item.polygon)} color={color[item.tone]} opacity={item.opacity} />;
-    case 'wasser':
-    case 'abend':
-      return null;
   }
 }

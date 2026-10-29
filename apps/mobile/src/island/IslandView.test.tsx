@@ -39,20 +39,11 @@ function tapAt(x: number, y: number) {
 async function renderIsland(overrides: Partial<IslandViewProps> = {}) {
   await render(
     <GestureHandlerRootView>
-    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 400, height: 800 }, insets: { top: 20, left: 0, right: 0, bottom: 0 } }}>
-      <ClockProvider clock={clock}>
-      <IslandView
-        island={island}
-        progress={progress}
-        viewerPersonId={philipp}
-        partnerName="Anna"
-        energy={23}
-        newEvents={0}
-        onOpen={jest.fn()}
-        {...overrides}
-      />
-      </ClockProvider>
-    </SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 400, height: 800 }, insets: { top: 20, left: 0, right: 0, bottom: 0 } }}>
+        <ClockProvider clock={clock}>
+          <IslandView island={island} progress={progress} viewerPersonId={philipp} partnerName="Anna" energy={23} onOpen={jest.fn()} {...overrides} />
+        </ClockProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>,
   );
   // Bildschirm 400 × 800: Der Start legt die Mitte der Lichtung in die Mitte des Bildschirms.

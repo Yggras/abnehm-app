@@ -14,27 +14,25 @@ const entries: readonly { view: IslandEntry; icon: IconName }[] = [
 ];
 
 export type IslandBarProps = {
-  /** Für die Person neue Ereignisse; die Zahl steht am Einstieg „Ereignisse“. */
-  newEvents: number;
   onOpen: (view: IslandEntry) => void;
 };
 
 /**
  * Leiste unten auf der Insel (Spezifikation 4, Abschnitt 7): Lager · Projekt · **Bauen** · Ereignisse.
  * „Bauen“ ist die einzige Primäraktion. Die Beschriftungen wachsen wie die der Tab-Leiste nur bis
- * Faktor 1,3, das Icon trägt die Bedeutung mit (Impeccable-Prüfung, B12).
+ * Faktor 1,3, das Icon trägt die Bedeutung mit (Impeccable-Prüfung, B12). Hinweise auf neue
+ * Ereignisse liefert #203.
  */
-export function IslandBar({ newEvents, onOpen }: IslandBarProps) {
+export function IslandBar({ onOpen }: IslandBarProps) {
   return (
     <View style={styles.bar}>
       {entries.map(({ view, icon }) => {
         const primary = view === 'bauen';
-        const count = view === 'ereignisse' && newEvents > 0 ? newEvents : 0;
         return (
           <Pressable
             key={view}
             accessibilityRole="button"
-            accessibilityLabel={count > 0 ? islandTexts.newEvents(count) : islandTexts.entries[view]}
+            accessibilityLabel={islandTexts.entries[view]}
             onPress={() => onOpen(view)}
             style={({ pressed }) => [
               styles.entry,
@@ -58,21 +56,12 @@ export function IslandBar({ newEvents, onOpen }: IslandBarProps) {
             >
               {islandTexts.entries[view]}
             </Text>
-            {count > 0 ? (
-              <View style={styles.count}>
-                <Text variant="caption" tone="onPrimary" maxFontSizeMultiplier={textScale.limit.tabLabel}>
-                  {String(count)}
-                </Text>
-              </View>
-            ) : null}
           </Pressable>
         );
       })}
     </View>
   );
 }
-
-const countSize = 20;
 
 const styles = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'flex-end', gap: space[2] },
@@ -88,16 +77,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   primaryEntry: { flex: 1.3, minHeight: size.touchMin + space[6] },
-  count: {
-    position: 'absolute',
-    top: -space[2],
-    right: -space[1],
-    minWidth: countSize,
-    height: countSize,
-    borderRadius: countSize / 2,
-    paddingHorizontal: space[1],
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: color.hint,
-  },
 });

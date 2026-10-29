@@ -23,22 +23,22 @@ export default function TabsLayout() {
   return (
     <View style={styles.root}>
       <TabBarOverlap value={barHeight}>
-      <Tabs
-        tabBar={(props) => (
-          <TabBar
-            {...props}
-            momoBadge={momoBadge}
-            overlay={sceneTabs.has(props.state.routes[props.state.index]?.name ?? '')}
-            onLayout={(event) => setBarHeight(event.nativeEvent.layout.height)}
-          />
-        )}
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.surfaceBase } }}
-      >
-        <Tabs.Screen name="index" />
-        <Tabs.Screen name="log" />
-        <Tabs.Screen name="momo" />
-        <Tabs.Screen name="partner" />
-      </Tabs>
+        <Tabs
+          tabBar={(props) => (
+            <TabBar
+              {...props}
+              momoBadge={momoBadge}
+              overlay={sceneTabs.has(props.state.routes[props.state.index]?.name ?? '')}
+              onLayout={(event) => setBarHeight(event.nativeEvent.layout.height)}
+            />
+          )}
+          screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.surfaceBase } }}
+        >
+          <Tabs.Screen name="index" />
+          <Tabs.Screen name="log" />
+          <Tabs.Screen name="momo" />
+          <Tabs.Screen name="partner" />
+        </Tabs>
       </TabBarOverlap>
       {focused ? (
         <View style={[styles.messages, { bottom: barHeight + space[2] }]} pointerEvents="box-none">

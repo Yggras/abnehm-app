@@ -65,6 +65,5 @@ export function fixtureIsland(): FixtureIsland {
     viewerPersonId: philipp,
     partnerName: 'Anna',
     energy: 23,
-    newEvents: 1,
   };
 }
