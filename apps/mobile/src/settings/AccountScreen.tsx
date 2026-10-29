@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Keyboard, StyleSheet, View } from 'react-native';
 
 import type { LogoutOutcome } from '../logout';
 import { Button, ListGroup, ListRow, Notice, Sheet, size, Skeleton, space, Text, TextField } from '../design';
@@ -66,6 +66,8 @@ function DisplayName() {
     const result = profile.rename(draft ?? '');
     if (result.type === 'invalid') return setInvalid(true);
     setDraft(null);
+    // Sonst verdeckt die Tastatur auf kleinen Geräten die Meldung und „Abmelden“ (Simulator, #119).
+    Keyboard.dismiss();
     if (result.type === 'renamed') showMessage({ messageKey: 'konto.name_gespeichert', values: {} });
     else if (result.type === 'no_person') showMessage({ messageKey: 'shell.nicht_geklappt', values: {} });
   }

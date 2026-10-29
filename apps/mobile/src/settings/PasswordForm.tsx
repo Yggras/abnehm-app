@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Keyboard, StyleSheet, View } from 'react-native';
 
 import { Password, passwordPolicy } from '@abnehm/contracts/auth';
 
@@ -36,8 +36,9 @@ function errorsOf(result: ChangePasswordResult): Errors | null {
  * Auth-Moduls (#97). Die Passwortregeln prüft es vor dem Senden mit denselben Grenzen wie der Server;
  * die Blocklist kennt nur der Server. Bei Erfolg hat das Backend alle anderen Sitzungen widerrufen.
  *
- * Kein Sheet: Im iOS-Simulator bekam ein Eingabefeld im nativen Sheet zwar den Fokus, aber keine
- * Tastatur und keine Eingabe (beobachtet in #119); die Expo-Doku zum BottomSheet sagt dazu nichts.
+ * Auf der Seite statt im Sheet: `ScreenFrame` weicht der Tastatur aus. Für Eingabefelder im nativen
+ * Sheet von `@expo/ui` sagt die Expo-Doku nichts zur Tastatur
+ * (https://docs.expo.dev/versions/v58.0.0/sdk/ui/universal/bottomsheet/).
  */
 export function PasswordForm({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const { auth } = useAccountPorts();
@@ -56,6 +57,7 @@ export function PasswordForm({ onClose, onChanged }: { onClose: () => void; onCh
     setBusy(false);
     const failed = errorsOf(result);
     if (failed !== null) return setErrors(failed);
+    Keyboard.dismiss();
     onClose();
     onChanged();
   }
