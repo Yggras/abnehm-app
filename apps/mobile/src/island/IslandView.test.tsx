@@ -3,25 +3,22 @@
  */
 import { fireEvent, render, screen, userEvent } from '@testing-library/react-native';
 import { createTestClock } from '@abnehm/clock/testing';
-import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
+import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { contractFixtures } from '@abnehm/contracts/fixtures';
 import { IslandProgress, MomoAppearance } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createGestureController } from 'react-native-gesture-handler/jest-utils';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ClockProvider } from '../clock/clock-context';
 import { IslandView, type IslandViewProps } from './IslandView';
 import { islandLayout } from './layout';
+import { IslandHost, testScreen } from './testing/island-host';
+import { anna, philipp } from './testing/persons';
 import type * as mockSkia from './testing/skia-mock';
 
 // Tracer Bullet von #182: Die Inselansicht zeichnet eine Grundinsel aus den Vertrags-Fixtures mit dem
 // echten Skia-Code (CanvasKit, siehe jest/skia-environment.js), ein Tipp trifft das richtige Feld.
 jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('./testing/skia-mock').skiaWithCanvasKit());
 
-const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
-const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
 const progress = IslandProgress.parse(contractFixtures.island!.IslandProgress!.valid['Level 6, eigene Hälfte voll']);
 const momo = MomoAppearance.parse(Object.values(contractFixtures.island!.MomoAppearance!.valid).find((value) => (value as MomoAppearance).stage === 'geschluepft'));
 const island = { ...islandLayout(gameCatalog, { sides: { a: philipp, b: anna }, unlockedAreas: [] }), objects: [], momo };
@@ -38,19 +35,15 @@ function tapAt(x: number, y: number) {
 
 async function renderIsland(overrides: Partial<IslandViewProps> = {}) {
   await render(
-    <GestureHandlerRootView>
-      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 400, height: 800 }, insets: { top: 20, left: 0, right: 0, bottom: 0 } }}>
-        <ClockProvider clock={clock}>
-          <IslandView island={island} progress={progress} viewerPersonId={philipp} partnerName="Anna" energy={23} onOpen={jest.fn()} {...overrides} />
-        </ClockProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>,
+    <IslandHost clock={clock}>
+      <IslandView island={island} progress={progress} viewerPersonId={philipp} partnerName="Anna" energy={23} onOpen={jest.fn()} {...overrides} />
+    </IslandHost>,
   );
   // Bildschirm 400 × 800: Der Start legt die Mitte der Lichtung in die Mitte des Bildschirms.
-  await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } });
+  await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, ...testScreen } } });
 }
 
-test('zeigt die Fixture-Insel mit HUD und Leiste', async () => {
+test('zeigt die Grundinsel aus den Vertrags-Fixtures mit HUD und Leiste', async () => {
   await renderIsland();
 
   expect(screen.getByRole('image', { name: 'Momos Insel, Level 6, 0 eigene Objekte' })).toBeOnTheScreen();

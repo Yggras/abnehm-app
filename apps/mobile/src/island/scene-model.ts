@@ -74,7 +74,7 @@ export type SceneItem =
   | Readonly<{ layer: 'objekte'; type: 'objekt'; id: string; field: string; at: Point; art: ArtKey }>
   | Readonly<{ layer: 'objekte'; type: 'momo'; field: string; at: Point; appearance: MomoAppearance }>
   | Readonly<{ layer: 'nebel'; type: 'nebel'; area: string; cells: readonly Polygon[]; tone: ColorToken; opacity: number }>
-  /** Schwebt mit `phase` (0–1) über der Insel: Blütenstaub, Laub oder Schnee; bei reduzierter Bewegung still. */
+  /** Blatt, das mit `phase` (0–1) über der Insel schwebt, im Laub der Jahreszeit; bei reduzierter Bewegung still. */
   | Readonly<{ layer: 'overlays'; type: 'partikel'; at: Point; phase: number; tone: ColorToken }>
   | Readonly<{ layer: 'overlays'; type: 'abend'; tone: ColorToken; opacity: number }>
   /** Laterne oder Fenster, das abends über der Abend-Überlagerung leuchtet. */
@@ -158,7 +158,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
       .map((at, index, all): SceneItem => ({ layer: 'wasser', type: 'welle', at, phase: index / all.length })),
   ];
 
-  const tiles = ground.map(
+  const fieldItems = ground.map(
     (cell): SceneItem => ({
       layer: 'felder',
       type: 'feld',
@@ -195,6 +195,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     }),
   );
 
+  const foliage: ColorToken = season === 'herbst' ? 'islandFoliageAutumn' : 'islandFoliage';
   const fields = island.fields;
   const particleTotal = Math.min(particleCount, fields.length);
   const particles = Array.from({ length: particleTotal }, (_, index): SceneItem => ({
@@ -202,7 +203,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     type: 'partikel',
     at: project.center(fields[Math.floor((index * fields.length) / particleTotal)]!),
     phase: index / particleCount,
-    tone: particleColor[season],
+    tone: foliage,
   }));
 
   const evening: SceneItem[] =
@@ -226,10 +227,10 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   return {
     season,
     daytime,
-    foliage: season === 'herbst' ? 'islandFoliageAutumn' : 'islandFoliage',
+    foliage,
     focus: place === null ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : project.point(place.middle),
     bounds,
-    items: [...water, ...sides, ...tiles, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...selection],
+    items: [...water, ...sides, ...fieldItems, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...selection],
     hitAt(point) {
       const cell = groundByCell.get(cellKey(project.cellAt(point)));
       if (cell === undefined) return null;
@@ -283,17 +284,10 @@ function projection(zoom: number) {
 
 const cellKey = (cell: Cell) => `${cell.x}:${cell.y}`;
 
-/** Wellen und Partikel sind Designwerte aus #182 (nicht belegt); zusammen bleiben sie weit unter den 157 Animationen des Spikes. */
+/** Zahl der Wellen und Partikel: Designwerte aus #182 (nicht belegt), zusammen weit unter den 157 Animationen des Spikes. */
 const waveCount = 16;
 const particleCount = 8;
 
-/** Blütenstaub und Sonnenfunken, Laub, Schnee (Designwerte aus #182, nicht belegt). */
-const particleColor: Record<Season, ColorToken> = {
-  fruehling: 'islandLamp',
-  sommer: 'islandLamp',
-  herbst: 'islandFoliageAutumn',
-  winter: 'islandGrassWinter',
-};
 
 /** Punkte auf einer Ellipse rund um die Insel, einen Feldabstand außerhalb ihrer Ausdehnung. */
 function wavePoints(bounds: Rect, margin: number): Point[] {

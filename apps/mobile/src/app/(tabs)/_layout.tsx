@@ -6,7 +6,7 @@ import { StyleSheet, View } from 'react-native';
 import { color, space } from '../../design';
 import { MessageSlot } from '../../shell/MessageHost';
 import { TabBar } from '../../shell/TabBar';
-import { sceneTabs, TabBarOverlap } from '../../shell/tab-bar-overlap';
+import { isSceneTab, TabBarOverlap } from '../../shell/tab-bar-overlap';
 import { useMomoTabBadge } from '../../shell/tab-badge';
 
 /**
@@ -28,7 +28,7 @@ export default function TabsLayout() {
             <TabBar
               {...props}
               momoBadge={momoBadge}
-              overlay={sceneTabs.has(props.state.routes[props.state.index]?.name ?? '')}
+              overlay={isSceneTab(props.state.routes[props.state.index]?.name ?? '')}
               onLayout={(event) => setBarHeight(event.nativeEvent.layout.height)}
             />
           )}

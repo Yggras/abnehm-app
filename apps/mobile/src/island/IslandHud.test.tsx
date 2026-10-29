@@ -1,18 +1,16 @@
 import { render, screen, userEvent } from '@testing-library/react-native';
-import { EntityId } from '@abnehm/contracts/base';
 import { contractFixtures } from '@abnehm/contracts/fixtures';
 import { IslandProgress } from '@abnehm/contracts/island';
 
 import { hitArea } from '../design/testing/hit-area';
 import { IslandHud, type IslandHudProps } from './IslandHud';
+import { anna, philipp } from './testing/persons';
 
 // HUD des Tabs „Momo“ (Spezifikation 4, Abschnitt 7): Jahreszeit mit Tageszeit, eigene Energie,
 // Levelbalken und Schalter „Bereiche“. Der Fortschritt ist das Vertrags-Fixture „Level 6, eigene
 // Hälfte voll“: Philipp 100 %, Anna 43 %.
 
 const progress = IslandProgress.parse(contractFixtures.island!.IslandProgress!.valid['Level 6, eigene Hälfte voll']);
-const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
-const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
 
 const hud = (overrides: Partial<IslandHudProps> = {}) => (
   <IslandHud

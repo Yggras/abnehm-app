@@ -1,11 +1,9 @@
-import { EntityId } from '@abnehm/contracts/base';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { testCatalog } from '@abnehm/game-rules/fixtures';
 
 import { islandLayout } from './layout';
+import { anna, philipp } from './testing/persons';
 
-const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
-const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
 const sides = { a: philipp, b: anna };
 
 test('die Grundinsel des ausgelieferten Katalogs: Seite a gehört der einen, Seite b der anderen Person', () => {

@@ -1,14 +1,13 @@
-import { EntityId, LocalDate } from '@abnehm/contracts/base';
+import { LocalDate } from '@abnehm/contracts/base';
 import type { MomoAppearance } from '@abnehm/contracts/island';
 
 import { islandScene, type IslandSceneInput, type IslandSceneRequest, type SceneItem } from './scene-model';
+import { anna, philipp } from './testing/persons';
 
 // Szenenmodell der Inselansicht (Spezifikation 4, Abschnitt 7; #182) als reine Funktion. Erwartete
 // Werte sind von Hand gerechnet: Ein Feld ist bei Zoom 1 64 × 32 dp groß, die obere Ecke von Feld
 // (x, y) liegt bei ((x − y) · 32, (x + y) · 16).
 
-const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
-const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
 const momo: MomoAppearance = { stage: 'geschluepft', formKey: 'kaulquappe', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } };
 
 /** Kleine Insel: Zeile 0 Ecke Philipp · Lichtung · Ecke Anna, Zeile 1 Strand. */
@@ -40,9 +39,9 @@ const ofType = <T extends SceneItem['type']>(items: readonly SceneItem[], type: 
 
 describe('isometrische Positionen', () => {
   test('ein Feld ist bei Zoom 1 eine 64 × 32 dp große Raute, die obere Ecke liegt bei ((x − y) · 32, (x + y) · 16)', () => {
-    const tile = ofType(islandScene(request()).items, 'feld').find((item) => item.field === 'grundinsel:2:1');
+    const fieldItem = ofType(islandScene(request()).items, 'feld').find((item) => item.field === 'grundinsel:2:1');
 
-    expect(tile?.polygon).toEqual([
+    expect(fieldItem?.polygon).toEqual([
       { x: 32, y: 48 },
       { x: 64, y: 64 },
       { x: 32, y: 80 },
@@ -51,9 +50,9 @@ describe('isometrische Positionen', () => {
   });
 
   test('bei Zoom 2 ist dasselbe Feld 128 × 64 dp groß und doppelt so weit vom Ursprung entfernt', () => {
-    const tile = ofType(islandScene(request({ zoom: 2 })).items, 'feld').find((item) => item.field === 'grundinsel:2:1');
+    const fieldItem = ofType(islandScene(request({ zoom: 2 })).items, 'feld').find((item) => item.field === 'grundinsel:2:1');
 
-    expect(tile?.polygon).toEqual([
+    expect(fieldItem?.polygon).toEqual([
       { x: 64, y: 96 },
       { x: 128, y: 128 },
       { x: 64, y: 160 },
@@ -89,10 +88,10 @@ describe('Lagune und Bewegung', () => {
   });
 
   test.each([
-    ['2026-04-15', 'islandLamp'],
+    ['2026-04-15', 'islandFoliage'],
     ['2026-10-15', 'islandFoliageAutumn'],
-    ['2026-01-15', 'islandGrassWinter'],
-  ])('Partikel am %s in %s', (localDate, particle) => {
+    ['2026-01-15', 'islandFoliage'],
+  ])('Partikel am %s sind Blätter in %s: Jahreszeiten tauschen nur Gras und Laub', (localDate, particle) => {
     const scene = islandScene(request({ localTime: { localDate: LocalDate.parse(localDate), minutesOfDay: 12 * 60 } }));
 
     expect(new Set(ofType(scene.items, 'partikel').map((item) => item.tone))).toEqual(new Set([particle]));
@@ -186,7 +185,7 @@ describe('Nebel', () => {
   test('ein gesperrtes Gebiet liegt als Land mit Feldern unter weißem Nebel mit `opacity-fog`', () => {
     const items = islandScene(fogged).items;
 
-    expect(ofType(items, 'feld').filter((tile) => tile.field.startsWith('nordstrand'))).toMatchObject([
+    expect(ofType(items, 'feld').filter((fieldItem) => fieldItem.field.startsWith('nordstrand'))).toMatchObject([
       { field: 'nordstrand:0:-1', tone: 'islandGrassAutumn', tint: null },
       { field: 'nordstrand:1:-1', tone: 'islandGrassAutumn', tint: null },
     ]);
@@ -203,9 +202,9 @@ describe('Nebel', () => {
   });
 
   test('auch mit „Bereiche“ bleibt das gesperrte Gebiet ungefärbt', () => {
-    const tiles = ofType(islandScene({ ...fogged, mode: 'bereiche' }).items, 'feld');
+    const fieldItems = ofType(islandScene({ ...fogged, mode: 'bereiche' }).items, 'feld');
 
-    expect(tiles.filter((tile) => tile.field.startsWith('nordstrand')).map((tile) => tile.tint)).toEqual([null, null]);
+    expect(fieldItems.filter((fieldItem) => fieldItem.field.startsWith('nordstrand')).map((fieldItem) => fieldItem.tint)).toEqual([null, null]);
   });
 
   test('ein Tipp in den Nebel trifft das gesperrte Gebiet, nicht ein Feld', () => {
@@ -262,7 +261,7 @@ describe('Abend', () => {
 describe('Jahreszeit', () => {
   const at = (localDate: string) => request({ localTime: { localDate: LocalDate.parse(localDate), minutesOfDay: 12 * 60 } });
   const colorOf = (localDate: string, field: string) =>
-    ofType(islandScene(at(localDate)).items, 'feld').find((tile) => tile.field === field)?.tone;
+    ofType(islandScene(at(localDate)).items, 'feld').find((fieldItem) => fieldItem.field === field)?.tone;
 
   test.each([
     ['2026-02-28', 'winter', 'islandGrassWinter'],
@@ -296,7 +295,7 @@ describe('Jahreszeit', () => {
           island: { ...island, fields: [...island.fields, { key: 'grundinsel:1:-1', x: 1, y: -1, kind: 'gemeinschaftsplatz', ownerPersonId: null }] },
         }).items,
         'feld',
-      ).find((tile) => tile.field === 'grundinsel:1:-1')?.tone;
+      ).find((fieldItem) => fieldItem.field === 'grundinsel:1:-1')?.tone;
 
     expect(['2026-01-15', '2026-04-15', '2026-07-15', '2026-10-15'].map(plaza)).toEqual(['islandStone', 'islandStone', 'islandStone', 'islandStone']);
   });
@@ -329,7 +328,7 @@ describe('Auswahl', () => {
 
 describe('Bereichsfärbung', () => {
   const tints = (overrides: Partial<IslandSceneRequest>) =>
-    Object.fromEntries(ofType(islandScene(request(overrides)).items, 'feld').map((tile) => [tile.field, tile.tint]));
+    Object.fromEntries(ofType(islandScene(request(overrides)).items, 'feld').map((fieldItem) => [fieldItem.field, fieldItem.tint]));
 
   test('mit „Bereiche“ liegen eigene Felder 28 % in `self`, die des Partners 28 % in `partner`, gemeinsame ungefärbt', () => {
     expect(tints({ mode: 'bereiche' })).toEqual({

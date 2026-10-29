@@ -2,6 +2,7 @@ import { EntityId } from '@abnehm/contracts/base';
 import { IslandProgress, MomoAppearance } from '@abnehm/contracts/island';
 import { seedClock, seedIds } from '@abnehm/contracts/seeds';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { islandProgress } from '@abnehm/game-rules/progress';
 
 import type { IslandViewProps } from '../island/IslandView';
 import { islandLayout } from '../island/layout';
@@ -40,7 +41,14 @@ const lockedPreview = {
   cells: Array.from({ length: 16 * 3 }, (_, index) => ({ x: index % 16, y: -3 + Math.floor(index / 16) })),
 };
 
+/**
+ * Verbaute Energie je Person auf dieser Insel (`S_p`). Die Spielregeln machen daraus Level 6:
+ * Schwelle(6) = 65, Bedarf(6) = 16; Philipp 9 von 16 (56 %), Anna 13 von 16 (81 %).
+ */
+const spent = [74, 78] as const;
+
 export function fixtureIsland(): FixtureIsland {
+  const { level, levelNeed, halves } = islandProgress(spent);
   return {
     island: {
       ...islandLayout(gameCatalog, { sides: { a: philipp, b: anna }, unlockedAreas: [] }),
@@ -48,15 +56,14 @@ export function fixtureIsland(): FixtureIsland {
       objects: placed.map(([fieldKey, art, ownerPersonId], index) => ({ id: fixtureId(index + 1), fieldKey, art, ownerPersonId })),
       momo: MomoAppearance.parse({ stage: 'geschluepft', formKey: 'huepfer', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } }),
     },
-    // Level 6: Bedarf min(10 + 6, 30) = 16; Philipp 9 von 16 (56 %), Anna 13 von 16 (81 %).
     progress: IslandProgress.parse({
       islandId: seedIds.island.philippAnna,
       couplingId: seedIds.coupling.philippAnna,
-      level: 6,
-      levelNeed: 16,
+      level,
+      levelNeed,
       members: [
-        { personId: philipp, halfPercent: 56, halfFull: false },
-        { personId: anna, halfPercent: 81, halfFull: false },
+        { personId: philipp, ...halves[0] },
+        { personId: anna, ...halves[1] },
       ],
       activeProject: { projectId: fixtureId(100), templateKey: gameCatalog.projects[0]!.key, sequenceNumber: 1, stage: 'gut_unterwegs' },
       dataAsOf: seedClock.instant,

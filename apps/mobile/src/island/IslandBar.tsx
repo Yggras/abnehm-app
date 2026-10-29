@@ -1,10 +1,11 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { boxShadow, color, Icon, pressedEdge, radius, size, space, Text, textScale, type IconName } from '../design';
+import type { TargetOf } from '../navigation';
 import { islandTexts } from './texts';
 
-/** Ansichten des Tabs „Momo“, die die Leiste öffnet (Route `momo`, Parameter `view`). */
-export type IslandEntry = 'lager' | 'projekt' | 'bauen' | 'ereignisse';
+/** Ansichten des Tabs „Momo“, die die Leiste öffnet: Werte des Parameters `view` der Route `momo`. */
+export type IslandEntry = Extract<NonNullable<TargetOf<'momo'>['view']>, 'lager' | 'projekt' | 'bauen' | 'ereignisse'>;
 
 const entries: readonly { view: IslandEntry; icon: IconName }[] = [
   { view: 'lager', icon: 'box' },
