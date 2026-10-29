@@ -19,22 +19,22 @@ export type RenameResult =
   /** Keine Kontodatenbank offen oder die eigene Person noch nicht angekommen. */
   | Readonly<{ type: 'no_person' }>;
 
-export type OwnProfile = Readonly<{
+export type OwnDisplayName = Readonly<{
   /** Anzeigename der eigenen Person; `null`, solange keine Kontodatenbank mit Person offen ist. */
-  displayName(): DisplayName | null;
+  current(): DisplayName | null;
   /** Meldet jede Änderung des Namens, auch nach einem Pull oder beim Sperren. */
   subscribe(listener: () => void): () => void;
   /** Ändert den Namen; Leerraum am Rand fällt weg, wie beim Tippen kaum vermeidbar. */
   rename(input: string): RenameResult;
 }>;
 
-export type OwnProfileOptions = Readonly<{ writer: SyncWriter; clock: Clock }>;
+export type OwnDisplayNameOptions = Readonly<{ writer: SyncWriter; clock: Clock }>;
 
 /**
  * Folgt der jeweils geöffneten Kontodatenbank: Die App-Sitzung meldet sie mit `opened` an und löst sie
  * mit dessen Rückgabe beim Sperren wieder.
  */
-export function followOwnProfile({ writer, clock }: OwnProfileOptions): OwnProfile & { opened(database: LocalDatabase): () => void } {
+export function followOwnDisplayName({ writer, clock }: OwnDisplayNameOptions): OwnDisplayName & { opened(database: LocalDatabase): () => void } {
   let database: LocalDatabase | null = null;
   let current: DisplayName | null = null;
   const listeners = new Set<() => void>();
@@ -46,7 +46,7 @@ export function followOwnProfile({ writer, clock }: OwnProfileOptions): OwnProfi
   }
 
   return {
-    displayName: () => current,
+    current: () => current,
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

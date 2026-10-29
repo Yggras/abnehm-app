@@ -1,6 +1,5 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
 import { act, screen, userEvent, within } from '@testing-library/react-native';
-import { Stack } from 'expo-router';
 import { renderRouter, testRouter } from 'expo-router/testing-library';
 import { Platform } from 'react-native';
 
@@ -14,9 +13,6 @@ import SettingsOverview from '../app/settings/index';
 import SettingsNotifications from '../app/settings/notifications';
 import SettingsPartnerSharing from '../app/settings/partner_sharing';
 import SettingsWeeklyPlan from '../app/settings/weekly_plan';
-import { ClockProvider } from '../clock/clock-context';
-import { MessageHostProvider } from '../shell/MessageHost';
-import { AccountProvider } from './AccountProvider';
 import { createAccountWorld, philipp, type AccountWorld } from './testing/account-world';
 
 // Einstellungen-Übersicht (#119, Spezifikation 5, Abschnitt 6) mit den echten Routendateien unter
@@ -46,16 +42,7 @@ const routes = {
 };
 
 async function openOverview() {
-  const Layout = () => (
-    <ClockProvider clock={clock}>
-      <MessageHostProvider>
-        <AccountProvider ports={world.ports}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </AccountProvider>
-      </MessageHostProvider>
-    </ClockProvider>
-  );
-  await renderRouter({ _layout: Layout, ...routes }, { initialUrl: '/settings' });
+  await renderRouter({ _layout: world.Layout, ...routes }, { initialUrl: '/settings' });
   await screen.findByText(philipp.email);
 }
 
@@ -83,7 +70,7 @@ test('der Kopf zeigt Anzeigename und E-Mail und folgt einer Namensänderung', as
 
   expect(screen.getByLabelText(`Philipp, ${philipp.email}`)).toBeOnTheScreen();
 
-  await act(async () => world.ports.profile.rename('Philipp D.'));
+  await act(async () => world.ports.displayName.rename('Philipp D.'));
 
   expect(screen.getByText('Philipp D.')).toBeOnTheScreen();
   expect(screen.getByLabelText(`Philipp D., ${philipp.email}`)).toBeOnTheScreen();

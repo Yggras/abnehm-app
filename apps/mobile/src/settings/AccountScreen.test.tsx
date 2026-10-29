@@ -1,6 +1,5 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
 import { act, screen, userEvent, within } from '@testing-library/react-native';
-import { Stack } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 
 import { createTestClock } from '@abnehm/clock/testing';
@@ -8,9 +7,6 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 
 import SettingsAccount from '../app/settings/account';
 import SettingsOverview from '../app/settings/index';
-import { ClockProvider } from '../clock/clock-context';
-import { MessageHostProvider } from '../shell/MessageHost';
-import { AccountProvider } from './AccountProvider';
 import { createAccountWorld, philipp, type AccountWorld } from './testing/account-world';
 
 // „Konto“ (#119, Spezifikation 5, Abschnitt 6) am gerenderten Bildschirm mit den Test-Adaptern des
@@ -32,16 +28,7 @@ afterEach(() => {
 });
 
 async function openAccount(ready = philipp.email) {
-  const Layout = () => (
-    <ClockProvider clock={clock}>
-      <MessageHostProvider>
-        <AccountProvider ports={world.ports}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </AccountProvider>
-      </MessageHostProvider>
-    </ClockProvider>
-  );
-  await renderRouter({ _layout: Layout, 'settings/index': SettingsOverview, 'settings/account': SettingsAccount }, { initialUrl: '/settings/account' });
+  await renderRouter({ _layout: world.Layout, 'settings/index': SettingsOverview, 'settings/account': SettingsAccount }, { initialUrl: '/settings/account' });
   await screen.findByText(ready);
 }
 
@@ -118,7 +105,7 @@ describe('Anzeigename', () => {
   test('übernimmt einen Namen, der per Pull kommt, solange nichts eingetippt ist', async () => {
     await openAccount();
 
-    await act(async () => world.ports.profile.rename('Philipp D.'));
+    await act(async () => world.ports.displayName.rename('Philipp D.'));
 
     expect(nameField()).toHaveDisplayValue('Philipp D.');
   });
@@ -214,7 +201,7 @@ describe('Abmelden', () => {
 
   test('mit ungesicherten Änderungen fragt es nach; „Angemeldet bleiben“ lässt alles, wie es ist', async () => {
     await openAccount();
-    await act(async () => world.ports.profile.rename('Phil'));
+    await act(async () => world.ports.displayName.rename('Phil'));
 
     await logout();
 
@@ -231,7 +218,7 @@ describe('Abmelden', () => {
 
   test('mit ungesicherten Änderungen meldet „Trotzdem abmelden“ nach dem Verzicht ab', async () => {
     await openAccount();
-    await act(async () => world.ports.profile.rename('Phil'));
+    await act(async () => world.ports.displayName.rename('Phil'));
 
     await logout();
     await user.press(within(await screen.findByTestId('sheet')).getByRole('button', { name: 'Trotzdem abmelden' }));

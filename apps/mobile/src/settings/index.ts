@@ -3,5 +3,5 @@
 // von Auth-Modul, Abmeldemodul und eigenem Anzeigenamen zu `AccountPorts` zusammen.
 export { AccountProvider, type AccountPorts } from './AccountProvider';
 export { AccountScreen } from './AccountScreen';
-export { followOwnProfile, type OwnProfile, type RenameResult } from './own-profile';
+export { followOwnDisplayName, type OwnDisplayName, type RenameResult } from './own-display-name';
 export { SettingsOverview } from './SettingsOverview';

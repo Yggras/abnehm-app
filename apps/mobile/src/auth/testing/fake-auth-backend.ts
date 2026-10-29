@@ -1,12 +1,12 @@
 import { authErrorCodes, passwordPolicy } from '@abnehm/contracts/auth';
 import type { Instant } from '@abnehm/contracts/base';
 
-// Online-Test-Adapter des Auth-Moduls für Komponententests, etwa „Konto“ in den Einstellungen
-// (Spezifikation 5) oder die Anmeldebildschirme (Spezifikation 1): ein kleiner Nachbau genau der
-// Endpunkte, die `AppAuth` und das Abmeldemodul aufrufen, mit den Statuscodes und Fehlercodes von
-// Better Auth und dem Backend. Dass App und echter Server sie gleich verstehen, prüfen
-// `apps/backend/test/app-auth.test.ts` und `logout-app.test.ts`. Netz- und Serverfehler kommen über
-// `faultyFetch` aus den Testfähigkeiten dazu, nicht über diesen Adapter.
+// Online-Test-Adapter des Auth-Moduls für Komponententests, eingeführt mit „Konto“ in den
+// Einstellungen (#119; kein Adapter des Fundaments): ein kleiner Nachbau genau der Endpunkte, die
+// `AppAuth` und das Abmeldemodul aufrufen, mit den Statuscodes und Fehlercodes von Better Auth und dem
+// Backend. Dass er dieselben Ergebnisse liefert wie die echte Hono-App, prüft
+// `apps/backend/test/fake-auth-backend.test.ts`. Netz- und Serverfehler kommen über `faultyFetch` aus
+// den Testfähigkeiten dazu, nicht über diesen Adapter.
 
 export type FakeAuthAccount = Readonly<{ accountId: string; email: string; password: string }>;
 

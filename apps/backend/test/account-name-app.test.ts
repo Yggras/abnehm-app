@@ -15,7 +15,7 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { couplingMember as localMember, outbox as localOutbox, person as localPerson } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { followOwnProfile } from '../../mobile/src/settings/own-profile.ts';
+import { followOwnDisplayName } from '../../mobile/src/settings/own-display-name.ts';
 import {
   createHttpSyncTransport,
   createLocalCommandRegistry,
@@ -34,7 +34,7 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.
 import { signIn } from './support/auth-client.ts';
 
 // Anzeigename unter „Konto“ (#119) mit dem Szenario `gekoppelt` (#117): Philipp ändert seinen Namen über
-// das Modul der Einstellungen (`followOwnProfile`, Person-Upsert mit Outbox), auf echtem SQLite gegen die
+// das Modul der Einstellungen (`followOwnDisplayName`, Person-Upsert mit Outbox), auf echtem SQLite gegen die
 // echte Hono-App mit Postgres. Anna sieht den neuen Namen nach ihrem Pull am Kopplungsmitglied. Die Zone
 // der Person hat zuvor ein zweites Gerät geändert; der Name vom veralteten ersten Gerät setzt sie nicht zurück.
 
@@ -83,11 +83,11 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey,
       },
     }),
   });
-  const profile = followOwnProfile({ writer, clock });
-  cleanups.push(profile.opened(database));
+  const displayName = followOwnDisplayName({ writer, clock });
+  cleanups.push(displayName.opened(database));
   return {
     personId,
-    profile,
+    displayName,
     async sync() {
       expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
     },
@@ -112,7 +112,7 @@ describe('Anzeigename im Szenario gekoppelt', () => {
     await second.sync();
     expect(philipp.person()?.timeZone).toBe('Europe/Berlin');
 
-    expect(philipp.profile.rename('Philipp D.')).toEqual({ type: 'renamed', displayName: 'Philipp D.' });
+    expect(philipp.displayName.rename('Philipp D.')).toEqual({ type: 'renamed', displayName: 'Philipp D.' });
     expect(philipp.outbox()).toMatchObject([{ type: 'upsert_entity', entityType: 'person', payload: { displayName: 'Philipp D.' } }]);
     expect(philipp.outbox()[0]?.payload).not.toHaveProperty('timeZone');
     await philipp.sync();
@@ -122,7 +122,7 @@ describe('Anzeigename im Szenario gekoppelt', () => {
     expect(server).toMatchObject({ displayName: 'Philipp D.', timeZone: newYork });
     expect(member?.displayName).toBe('Philipp D.');
     expect(philipp.person()).toMatchObject({ displayName: 'Philipp D.', timeZone: newYork });
-    expect(philipp.profile.displayName()).toBe('Philipp D.');
+    expect(philipp.displayName.current()).toBe('Philipp D.');
 
     await anna.sync();
     expect(anna.member(philipp.personId)?.displayName).toBe('Philipp D.');

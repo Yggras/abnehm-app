@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { Stack } from 'expo-router';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId } from '@abnehm/contracts/base';
@@ -11,15 +12,17 @@ import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { personRow } from '../../local-db/testing/rows';
 import { createLogout, syncBeforeLogout, type LogoutRecord, type LogoutStore } from '../../logout';
+import { ClockProvider } from '../../clock/clock-context';
+import { MessageHostProvider } from '../../shell/MessageHost';
 import { createAppSession } from '../../session/app-session';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities, unsecuredOperationCount } from '../../sync';
 import { createFaultController, faultyFetch } from '../../test-capabilities/faults';
-import type { AccountPorts } from '../AccountProvider';
-import { followOwnProfile } from '../own-profile';
+import { AccountProvider, type AccountPorts } from '../AccountProvider';
+import { followOwnDisplayName } from '../own-display-name';
 
-// Test-Welt der Einstellungen (Spezifikation 5, Abschnitt 6) mit den Test-Adaptern des Fundaments: das
-// echte Auth-Modul und das echte Abmeldemodul über dem Online-Test-Adapter des Auth-Moduls, davor der
-// Fehler-Adapter der Testfähigkeiten (`faults`), und der Anzeigename über einer echten SQLite-Datei.
+// Test-Welt der Einstellungen (Spezifikation 5, Abschnitt 6): das echte Auth-Modul und das echte
+// Abmeldemodul über `fakeAuthBackend`, davor der Fehler-Adapter der Testfähigkeiten des Fundaments
+// (`faults`), und der Anzeigename über einer echten SQLite-Datei (Test-Adapter der lokalen Datenbank).
 //
 // Der Sync vor dem Abmelden ist eine Attrappe der Engine: Er erreicht den Server, solange der
 // Fehler-Adapter Verbindung und einen Server hat, sichert aber nichts. Was in der Outbox liegt, etwa ein
@@ -59,7 +62,7 @@ export async function createAccountWorld({ clock }: { clock: Clock }) {
   let ids = 0;
   const newId = () => EntityId.parse(`20000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
   const writer = createSyncWriter({ registry: createSyncRegistry(foundationSyncEntities), clock, newId });
-  const profile = followOwnProfile({ writer, clock });
+  const displayName = followOwnDisplayName({ writer, clock });
   const sessionStore: SessionStore & { value: StoredSession | null } = memory<StoredSession>();
   const logoutStore: LogoutStore & { value: LogoutRecord | null } = memory<LogoutRecord>();
   const session = createAppSession({
@@ -67,7 +70,7 @@ export async function createAccountWorld({ clock }: { clock: Clock }) {
     fetch: faultyFetch(backend.fetch, faults),
     sessionStore,
     databases,
-    onAccountOpened: (database) => profile.opened(database),
+    onAccountOpened: (database) => displayName.opened(database),
     onError,
   });
   const reachable = () => faults.plan().transport !== 'offline' && faults.plan().server !== 'unavailable';
@@ -96,9 +99,22 @@ export async function createAccountWorld({ clock }: { clock: Clock }) {
     sqliteOf(tx).insert(person).values({ ...personRow(philipp.personId, philipp.accountId), displayName: 'Philipp' }).run();
   });
 
-  const ports: AccountPorts = { auth: session.auth, logout, profile };
+  const ports: AccountPorts = { auth: session.auth, logout, displayName };
+  /** Wurzel-Layout für `renderRouter`: Uhr, Meldungs-Host und die Ports dieser Welt wie in `src/app/_layout.tsx`. */
+  function Layout() {
+    return (
+      <ClockProvider clock={clock}>
+        <MessageHostProvider>
+          <AccountProvider ports={ports}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </AccountProvider>
+        </MessageHostProvider>
+      </ClockProvider>
+    );
+  }
   return {
     ports,
+    Layout,
     auth: session.auth,
     backend,
     faults,

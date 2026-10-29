@@ -4,7 +4,7 @@ import type { DisplayName } from '@abnehm/contracts/base';
 
 import type { AppAuth } from '../auth';
 import type { Logout } from '../logout';
-import type { OwnProfile } from './own-profile';
+import type { OwnDisplayName } from './own-display-name';
 
 /**
  * Was Übersicht und „Konto“ brauchen, je in der Rolle ihres Moduls: E-Mail und Passwort über das
@@ -14,7 +14,7 @@ import type { OwnProfile } from './own-profile';
 export type AccountPorts = Readonly<{
   auth: Pick<AppAuth, 'accountEmail' | 'changePassword'>;
   logout: Pick<Logout, 'logout' | 'pending'>;
-  profile: OwnProfile;
+  displayName: OwnDisplayName;
 }>;
 
 const Context = createContext<AccountPorts | null>(null);
@@ -31,8 +31,8 @@ export function useAccountPorts(): AccountPorts {
 
 /** Anzeigename der eigenen Person; `null`, bis er aus der Kontodatenbank gelesen ist. */
 export function useDisplayName(): DisplayName | null {
-  const { profile } = useAccountPorts();
-  return useSyncExternalStore(profile.subscribe, profile.displayName);
+  const { displayName } = useAccountPorts();
+  return useSyncExternalStore(displayName.subscribe, displayName.current);
 }
 
 /** E-Mail des Kontos beim Öffnen des Bildschirms: `loading`, die Adresse oder `unknown` ohne Verbindung. */

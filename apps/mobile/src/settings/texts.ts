@@ -1,3 +1,5 @@
+import { passwordPolicy } from '@abnehm/contracts/auth';
+
 import type { PasswordRejection } from '../auth';
 
 // Sichtbare Texte und zugängliche Namen der Einstellungen (Spezifikation 5, Abschnitt 6). Fehlertexte
@@ -13,7 +15,6 @@ export const settingsTexts = {
 
   account: {
     signInTitle: 'Anmeldung',
-    emailRow: (email: string) => `E-Mail: ${email}`,
     emailSubtitle: 'Damit meldest du dich an.',
     nameLabel: 'Anzeigename',
     nameHint: 'Den Namen sieht auch dein Partner.',
@@ -41,14 +42,14 @@ export const settingsTexts = {
     title: 'Passwort ändern',
     current: 'Aktuelles Passwort',
     next: 'Neues Passwort',
-    rules: 'Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an. Nach der Änderung musst du dich auf deinen anderen Geräten neu anmelden.',
+    rules: `Mindestens ${passwordPolicy.minLength} Zeichen. Sehr häufige Passwörter nimmt die App nicht an. Nach der Änderung musst du dich auf deinen anderen Geräten neu anmelden.`,
     submit: 'Neues Passwort speichern',
     cancel: 'Abbrechen',
     currentMissing: 'Gib dein aktuelles Passwort ein.',
     currentWrong: 'Das aktuelle Passwort stimmt nicht. Versuch es noch einmal.',
     rejected: {
-      password_too_short: 'Das neue Passwort braucht mindestens 10 Zeichen.',
-      password_too_long: 'Das neue Passwort darf höchstens 128 Zeichen haben.',
+      password_too_short: `Das neue Passwort braucht mindestens ${passwordPolicy.minLength} Zeichen.`,
+      password_too_long: `Das neue Passwort darf höchstens ${passwordPolicy.maxLength} Zeichen haben.`,
       password_compromised: 'Dieses Passwort ist zu verbreitet. Wähle ein anderes.',
     } satisfies Record<PasswordRejection, string>,
     rateLimited: 'Zu viele Versuche. Warte ein paar Minuten und versuch es dann noch einmal.',
