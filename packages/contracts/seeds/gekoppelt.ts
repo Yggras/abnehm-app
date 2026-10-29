@@ -83,6 +83,8 @@ const annaZiele: SeedPart = {
   entities: [
     {
       table: 'goal_version',
+      // Seit #128 beim Sync angemeldet: Die Fassung steht im Änderungsprotokoll.
+      entityType: 'goal_version',
       ownerPersonId: anna,
       row: {
         id: seedIds.goalVersion.anna,

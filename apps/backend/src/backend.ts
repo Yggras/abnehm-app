@@ -19,6 +19,8 @@ import { partnerProjectionEntities } from './partner-projections/entities.ts';
 import { createPartnerProjections } from './partner-projections/projections.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
+import { createGoalVersionCommand, goalVersionEntity } from './plan/goal-versions.ts';
+import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/weekly-plan-versions.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
@@ -59,6 +61,11 @@ export function createBackend({
   for (const command of sharedActions.commands) sync.registerCommand(command);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
+  // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.
+  sync.registerEntity(goalVersionEntity);
+  sync.registerEntity(weeklyPlanVersionEntity);
+  sync.registerCommand(createGoalVersionCommand);
+  sync.registerCommand(createWeeklyPlanVersionCommand);
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
