@@ -15,7 +15,7 @@ import { checkAmountInput, defaultAmountMilli } from './amount-input';
 import { useNutrition } from './app-nutrition';
 import { BlsCatalogProvider, useFoodSearch } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
-import { useLocalToday } from './hooks';
+import { useLocalToday } from './use-day-log';
 import type { Nutrition } from './nutrition';
 import {
   amountProblemText,
@@ -115,7 +115,7 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
       {result.type === 'treffer' ? <SearchHits hits={result.hits} query={query} onSelect={setSelected} /> : <LaterSlots />}
       <Sheet visible={selected !== null} onClose={() => setSelected(null)} height="full">
         {selected === null ? null : (
-          <AmountCheck
+          <AmountReview
             key={`${selected.ref.type}:${selected.ref.key}`}
             hit={selected}
             nutrition={nutrition}
@@ -170,7 +170,7 @@ function LaterSlots() {
  * Mengenprüfung als Sheet: Name und Quelle, Mengenfeld mit Einheiten-Chips, kcal groß, Makros klein und
  * „Hinzufügen“. Vorbelegt ist die letzte Menge dieses Lebensmittels, sonst eine Portion, sonst 100 g bzw. ml.
  */
-function AmountCheck({
+function AmountReview({
   hit,
   nutrition,
   onClose,
@@ -192,7 +192,7 @@ function AmountCheck({
   const units: DisplayUnit[] = [snapshot.baseUnit, ...snapshot.portions.map((portion) => portion.unit)];
   // Die Quellenangabe nennt die Quelle schon (BLS, Open Food Facts); sonst die Art der Werte.
   const source = snapshot.attribution ?? sourceNames[snapshot.source];
-  const kcal = check.type === 'menge' ? kcalText(roundKcal(check.totals.milliKcal)) : '– kcal';
+  const kcal = check.type === 'menge' ? kcalText(roundKcal(check.totals.milliKcal)) : nutritionTexts.noKcal;
 
   return (
     <View style={styles.sheet}>
@@ -252,7 +252,7 @@ function AmountCheck({
 
 function CaptureSkeleton() {
   return (
-    <View style={styles.skeleton} accessible accessibilityLabel={`${nutritionTexts.capture} lädt`}>
+    <View style={styles.skeleton} accessible accessibilityLabel={nutritionTexts.loading(nutritionTexts.capture)}>
       <Skeleton height={size.fieldHeight} radius="md" />
       <Skeleton height={size.rowMin * 3} radius="lg" />
     </View>

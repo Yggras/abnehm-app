@@ -1,4 +1,4 @@
-import type { LocalDate } from '@abnehm/contracts/base';
+import { MealKey, type LocalDate } from '@abnehm/contracts/base';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
@@ -7,7 +7,7 @@ import { openTarget } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useNutrition } from './app-nutrition';
 import type { DayLog, DayLogMeal } from './day-log';
-import { useDayLog, useLocalToday } from './hooks';
+import { useDayLog, useLocalToday } from './use-day-log';
 import { amountText, dateText, kcalText, mealNames, nutritionTexts } from './texts';
 
 // Tab „Protokoll“ (Spezifikation 2, Abschnitt 6): Kopf mit Datum, Wochentag und Tagessumme, ohne
@@ -96,14 +96,14 @@ function MealSection({ meal, localDate }: { meal: DayLogMeal; localDate: LocalDa
 /** Laden: Skelett in der Form von Kopf und Mahlzeiten, keine Spinner. */
 function LogSkeleton() {
   return (
-    <View style={styles.skeleton} accessible accessibilityLabel={`${nutritionTexts.log} lädt`}>
+    <View style={styles.skeleton} accessible accessibilityLabel={nutritionTexts.loading(nutritionTexts.log)}>
       <Card>
         <View style={styles.head}>
           <Skeleton width="60%" />
           <Skeleton width="30%" />
         </View>
       </Card>
-      {Object.keys(mealNames).map((meal) => (
+      {MealKey.options.map((meal) => (
         <View key={meal} style={styles.meal}>
           <Skeleton width="40%" />
           <Skeleton height={size.rowMin} radius="lg" />

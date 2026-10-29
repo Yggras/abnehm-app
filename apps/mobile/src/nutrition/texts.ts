@@ -1,5 +1,5 @@
 import { weekdayOf, type LocalDate, type MealKey } from '@abnehm/contracts/base';
-import { roundMacroGrams, type BaseUnit, type DisplayUnit, type EntryTotals, type NutritionSnapshot, type SnapshotSource } from '@abnehm/contracts/nutrition';
+import { maxBaseAmount, roundMacroGrams, type BaseUnit, type DisplayUnit, type EntryTotals, type NutritionSnapshot, type SnapshotSource } from '@abnehm/contracts/nutrition';
 
 import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
@@ -68,6 +68,10 @@ export const markNames: Readonly<Record<SearchMark, string>> = { favorit: 'Favor
 
 export const sourceNames: Readonly<Record<SnapshotSource, string>> = { bls: 'BLS', off: 'Open Food Facts', eigen: 'Eigenes Lebensmittel', ki: 'KI-Schätzung' };
 
+/** Basismenge (mg bzw. ml) eines Gramms bzw. Milliliters. */
+const baseAmountPerUnit: Readonly<Record<BaseUnit, number>> = { g: 1_000, ml: 1 };
+const kilo = (value: number) => value.toLocaleString('de-DE');
+
 /** Satz mit Lösungsweg zu einer ungültigen Menge (`problem` im Design-System). */
 export function amountProblemText(problem: AmountInputProblem, baseUnit: BaseUnit): string {
   switch (problem) {
@@ -77,8 +81,10 @@ export function amountProblemText(problem: AmountInputProblem, baseUnit: BaseUni
       return 'Gib die Menge als Zahl ein, etwa 60 oder 0,5.';
     case 'menge_zu_klein':
       return 'Gib eine Menge über 0 ein, etwa 60.';
+    case 'tausenderpunkt':
+      return 'Gib die Menge ohne Tausenderpunkt ein, etwa 1500 oder 1,5.';
     case 'menge_zu_gross':
-      return `Höchstens 5.000 ${baseUnit} je Eintrag. Teile größere Mengen auf mehrere Einträge auf.`;
+      return `Höchstens ${kilo(maxBaseAmount[baseUnit] / baseAmountPerUnit[baseUnit])} ${baseUnit} je Eintrag. Teile größere Mengen auf mehrere Einträge auf.`;
     case 'einheit_unbekannt':
       return `Diese Einheit kennt das Lebensmittel nicht. Wähle ${baseUnit}.`;
   }
@@ -97,6 +103,9 @@ export const nutritionTexts = {
   noHits: (query: string) => `Keine Treffer für „${query.trim()}“.`,
   per100: (kcal: number, baseUnit: BaseUnit) => `${kcalText(kcal)} je 100 ${baseUnit}`,
   amount: 'Menge',
+  /** Ohne gültige Menge gibt es keine kcal. */
+  noKcal: '– kcal',
+  loading: (screen: string) => `${screen} lädt`,
   add: 'Hinzufügen',
   close: 'Schließen',
   slots: {

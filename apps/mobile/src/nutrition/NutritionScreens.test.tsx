@@ -191,6 +191,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
     ['5000,001', 'Höchstens 5.000 g je Eintrag. Teile größere Mengen auf mehrere Einträge auf.'],
     ['zwei', 'Gib die Menge als Zahl ein, etwa 60 oder 0,5.'],
     ['0,0001', 'Gib die Menge als Zahl ein, etwa 60 oder 0,5.'],
+    ['1.500', 'Gib die Menge ohne Tausenderpunkt ein, etwa 1500 oder 1,5.'],
     ['', 'Gib eine Menge ein, etwa 60.'],
   ])('zeigt bei „%s“ den Lösungsweg und speichert nichts', async (input, problem) => {
     const { entries } = await openCapture();

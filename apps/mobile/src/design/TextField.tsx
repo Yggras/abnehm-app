@@ -22,8 +22,6 @@ export type TextFieldProps = {
   /** Ungültige Eingabe: Rahmen in `problem` und darunter der Satz mit Lösungsweg. */
   problem?: string;
   disabled?: boolean;
-  autoFocus?: boolean;
-  testID?: string;
 };
 
 const borderWidth = { resting: 1.5, focused: 2 };
@@ -43,8 +41,6 @@ export function TextField({
   placeholder,
   problem,
   disabled = false,
-  autoFocus = false,
-  testID,
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
@@ -65,14 +61,12 @@ export function TextField({
         {kind === 'search' ? <Icon name="search" tone={disabled ? 'inkDisabled' : 'inkMuted'} /> : null}
         <TextInput
           ref={input}
-          testID={testID}
           accessibilityLabel={label}
           accessibilityState={{ disabled }}
           accessibilityHint={problem}
           value={value}
           onChangeText={onChangeText}
           editable={!disabled}
-          autoFocus={autoFocus}
           placeholder={placeholder}
           placeholderTextColor={color.inkMuted}
           keyboardType={kind === 'number' ? 'decimal-pad' : 'default'}

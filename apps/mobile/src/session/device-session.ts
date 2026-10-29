@@ -21,7 +21,7 @@ import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { createTrackers, waterEntryEntity, type Refresh } from '../trackers';
+import { createTrackers, waterEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -43,8 +43,6 @@ const syncRegistry = createSyncRegistry([
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
-/** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
-const refreshToday: Refresh = appTodayRefresh;
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 let activeEngine: SyncEngine | null = null;
 let backgroundOpening = false;
@@ -97,7 +95,7 @@ function deviceState() {
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
         appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
-        waterTodayOpened(trackers.waterToday(planReaderOf(database), refreshToday)),
+        waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

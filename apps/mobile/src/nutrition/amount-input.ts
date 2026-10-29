@@ -10,10 +10,14 @@ import {
 
 // Mengenfeld der Mengenprüfung (Spezifikation 2, Abschnitte 2 und 6): Die eingetippte Zahl wird zur
 // Anzeigemenge in Tausendsteln, daraus Basismenge und Summen nach den Rechenregeln des Vertragsmoduls.
-// Komma und Punkt trennen gleichermaßen die Nachkommastellen; Tausenderpunkte gibt es im Feld nicht.
+// Komma und Punkt trennen gleichermaßen die Nachkommastellen. „1.500“ ist im Deutschen 1500, als
+// Dezimalzahl aber 1,5; statt zu raten, fragt das Feld nach der Schreibweise ohne Tausenderpunkt.
 
-/** Warum eine eingegebene Menge nicht gespeichert werden kann: leer, keine Zahl oder eine Regel der Menge. */
-export type AmountInputProblem = AmountProblem | 'leer' | 'format';
+/**
+ * Warum eine eingegebene Menge nicht gespeichert werden kann: leer, keine Zahl, ein Punkt vor genau drei
+ * Ziffern (im Deutschen ein Tausenderpunkt, „1.500“) oder eine Regel der Menge.
+ */
+export type AmountInputProblem = AmountProblem | 'leer' | 'format' | 'tausenderpunkt';
 
 /**
  * Standardmenge einer Einheit in Tausendsteln, wenn nichts Eigenes vorliegt (Spezifikation 2,
@@ -35,6 +39,7 @@ export function checkAmountInput(snapshot: NutritionSnapshot, displayUnit: Displ
   if (text === '') return { type: 'problem', problem: 'leer' };
   const match = amountPattern.exec(text);
   if (match === null || (match[1] === '' && match[2] === undefined)) return { type: 'problem', problem: 'format' };
+  if (text.includes('.') && match[1] !== '' && match[2]?.length === 3) return { type: 'problem', problem: 'tausenderpunkt' };
   const displayAmountMilli = Number(match[1] || '0') * 1_000 + Number((match[2] ?? '').padEnd(3, '0'));
   const amount = entryAmount(snapshot, displayUnit, displayAmountMilli);
   if (amount.type === 'problem') return { type: 'problem', problem: amount.problem };
