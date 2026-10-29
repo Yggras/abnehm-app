@@ -60,7 +60,7 @@ Bereichscode liest Zeitpunkt, Zeitzone und lokalen Tag ausschließlich über die
 Oberflächen entstehen nur aus den Tokens und Primitiven in `apps/mobile/src/design/` ([#95](https://github.com/Yggras/abnehm-app/issues/95)), Import über `../design`.
 
 - **Tokens:** `tokens.ts` übernimmt `research/design-system.md` vollständig; `tokens.test.ts` prüft das gegen die Tabellen dort. Ändert sich das Design-System, schlägt der Test fehl, bis die Tokens nachgezogen sind.
-- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `TextField`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`. Das Eingabefeld `TextField` (#119) hat Beschriftung, Hinweis und Fehlersatz; Fehler stehen mit Symbol und Lösungsweg darunter, nie nur als Rahmenfarbe.
+- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `TextField`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`. Das Eingabefeld `TextField` (#119) hat Beschriftung, Hinweis und Fehlersatz; Fehler stehen mit Symbol und Lösungsweg darunter, nie nur als Rahmenfarbe. Passwortfelder (`secure`) bieten „Passwort anzeigen“, wie es NIST SP 800-63B-4, Abschnitt 3.1.1.2 empfiehlt ([NIST](https://pages.nist.gov/800-63-4/sp800-63b.html)).
 - **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf „Heute“ oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
 
 ### App-Shell und Navigation

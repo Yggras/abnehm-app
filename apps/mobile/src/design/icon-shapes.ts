@@ -121,6 +121,11 @@ export const iconShapes = {
     { type: 'path', d: 'M4.5 19.5l1-4L15.5 5.5l3 3-10 10z' },
     { type: 'path', d: 'M13.5 7.5l3 3' },
   ],
+  /** Anzeigen */
+  eye: [
+    { type: 'path', d: 'M3.5 12s3-5.5 8.5-5.5S20.5 12 20.5 12s-3 5.5-8.5 5.5S3.5 12 3.5 12z' },
+    { type: 'circle', cx: 12, cy: 12, r: 2.5 },
+  ],
   /** Ausblenden */
   eyeOff: [
     { type: 'path', d: 'M3.5 12s3-5.5 8.5-5.5S20.5 12 20.5 12s-3 5.5-8.5 5.5S3.5 12 3.5 12z' },

@@ -58,6 +58,18 @@ test('verbirgt Passwörter und ist deaktiviert nicht bearbeitbar', async () => {
   expect(screen.getByLabelText('E-Mail')).toBeDisabled();
 });
 
+test('zeigt ein Passwort auf Wunsch beim Tippen an (NIST SP 800-63B-4, 3.1.1.2)', async () => {
+  await render(<Field label="Neues Passwort" secure />);
+
+  const show = screen.getByRole('button', { name: 'Passwort anzeigen' });
+  expect(hitArea(show)).toEqual({ width: 48, height: 48 });
+  await userEvent.press(show);
+
+  expect(screen.getByLabelText('Neues Passwort').props.secureTextEntry).toBe(false);
+  await userEvent.press(screen.getByRole('button', { name: 'Passwort verbergen' }));
+  expect(screen.getByLabelText('Neues Passwort').props.secureTextEntry).toBe(true);
+});
+
 test('hat 52 dp Höhe und skaliert bis Schriftfaktor 2,0', async () => {
   await render(<Field label="Anzeigename" hint="Hinweis" />);
 
