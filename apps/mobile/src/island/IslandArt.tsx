@@ -22,8 +22,12 @@ export function polygonPath(polygon: Polygon): string {
   return `${polygon.map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'}${x} ${y}`).join(' ')} Z`;
 }
 
+/**
+ * Kreis im Uhrzeigersinn wie die Rauten: Skia füllt nach der Nonzero-Regel, gegenläufige Teilpfade
+ * höben sich dort auf, wo sie sich überlagern.
+ */
 function circlePath(x: number, y: number, r: number): string {
-  return `M${x - r} ${y} a${r} ${r} 0 1 0 ${2 * r} 0 a${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+  return `M${x - r} ${y} a${r} ${r} 0 1 1 ${2 * r} 0 a${r} ${r} 0 1 1 ${-2 * r} 0 Z`;
 }
 
 /** Rechte Hälfte eines Kreises: die Schattenseite bei Licht von links oben. */
@@ -122,15 +126,9 @@ function Shape({ shape, foliage }: { shape: ArtShape; foliage: ColorToken }) {
           ))}
         </Group>
       );
-    case 'weg': {
-      const path = polygonPath([{ x: 0, y: -10 }, { x: 20, y: 0 }, { x: 0, y: 10 }, { x: -20, y: 0 }]);
-      return (
-        <Group>
-          <Path path={path} color={color.islandWood} />
-          <Path path={polygonPath([{ x: 0, y: -10 }, { x: 20, y: 0 }, { x: 0, y: 10 }])} color={shade} opacity={opacity.shadeLeft} />
-        </Group>
-      );
-    }
+    case 'weg':
+      // Flach auf dem Feld: eine Holzfläche ohne Seiten, damit sie nicht wie ein Körper wirkt.
+      return <Path path={polygonPath([{ x: 0, y: -11 }, { x: 22, y: 0 }, { x: 0, y: 11 }, { x: -22, y: 0 }])} color={color.islandWood} />;
     case 'bank':
       return (
         <Group>

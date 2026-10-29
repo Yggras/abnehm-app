@@ -40,6 +40,7 @@ export function IslandHud({ season, daytime, energy, progress, viewerPersonId, p
         <View accessible accessibilityLabel={islandTexts.energy(energy)} style={styles.label}>
           <EnergySymbol size="sm" />
           <Text variant="bodyStrong">{String(energy)}</Text>
+          <Text variant="label">{islandTexts.energyUnit}</Text>
         </View>
         <IconButton icon="layers" accessibilityLabel={islandTexts.areas} checked={areas} onPress={onToggleAreas} />
       </View>

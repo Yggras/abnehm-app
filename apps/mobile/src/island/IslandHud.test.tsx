@@ -45,11 +45,12 @@ test.each([
   expect(screen.getByText(label)).toBeOnTheScreen();
 });
 
-test('zeigt die eigene Energie mit Energie-Symbol', async () => {
+test('zeigt die eigene Energie mit Symbol und Wort, wie auf „Heute“', async () => {
   await render(hud());
 
   expect(screen.getByLabelText('23 Energie')).toBeOnTheScreen();
   expect(screen.getByText('23')).toBeOnTheScreen();
+  expect(screen.getByText('Energie')).toBeOnTheScreen();
   expect(screen.getByTestId('icon-energy', { includeHiddenElements: true })).toBeOnTheScreen();
 });
 

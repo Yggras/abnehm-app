@@ -17,19 +17,7 @@ import { islandLayout } from './layout';
 
 // Tracer Bullet von #182: Die Inselansicht zeichnet eine Grundinsel aus den Vertrags-Fixtures mit dem
 // echten Skia-Code (CanvasKit, siehe jest/skia-environment.js), ein Tipp trifft das richtige Feld.
-jest.mock('@shopify/react-native-skia', () => {
-  jest.mock('@shopify/react-native-skia/lib/commonjs/Platform', () => {
-    const Noop = () => undefined;
-    return { OS: 'web', PixelRatio: 1, requireNativeComponent: Noop, resolveAsset: Noop, findNodeHandle: Noop, NativeModules: Noop, View: Noop };
-  });
-  jest.mock('@shopify/react-native-skia/lib/commonjs/skia/core/Font', () => ({
-    useFont: () => null,
-    matchFont: () => null,
-    listFontFamilies: () => [],
-    useFonts: () => null,
-  }));
-  return jest.requireActual<{ Mock: (canvasKit: unknown) => unknown }>('@shopify/react-native-skia/lib/commonjs/mock').Mock((globalThis as unknown as { CanvasKit: unknown }).CanvasKit);
-});
+jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof import('./testing/skia-mock')>('./testing/skia-mock').skiaWithCanvasKit());
 
 const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
 const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
