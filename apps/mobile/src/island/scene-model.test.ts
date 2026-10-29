@@ -288,6 +288,19 @@ describe('Jahreszeit', () => {
     expect(islandScene(at(localDate)).foliage).toBe(foliage);
   });
 
+  test('der Gemeinschaftsplatz ist in jeder Jahreszeit ein Platz aus Stein', () => {
+    const plaza = (localDate: string) =>
+      ofType(
+        islandScene({
+          ...at(localDate),
+          island: { ...island, fields: [...island.fields, { key: 'grundinsel:1:-1', x: 1, y: -1, kind: 'gemeinschaftsplatz', ownerPersonId: null }] },
+        }).items,
+        'feld',
+      ).find((tile) => tile.field === 'grundinsel:1:-1')?.tone;
+
+    expect(['2026-01-15', '2026-04-15', '2026-07-15', '2026-10-15'].map(plaza)).toEqual(['islandStone', 'islandStone', 'islandStone', 'islandStone']);
+  });
+
   test('der Strand bleibt in jeder Jahreszeit Sand', () => {
     expect(['2026-01-15', '2026-04-15', '2026-07-15', '2026-10-15'].map((date) => colorOf(date, 'grundinsel:0:1'))).toEqual([
       'islandSand',

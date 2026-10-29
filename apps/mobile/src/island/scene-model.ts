@@ -378,8 +378,12 @@ const grass: Record<Season, ColorToken> = {
   winter: 'islandGrassWinter',
 };
 
-/** Boden einer Zelle; ein gesperrtes Gebiet (`null`) ist Wiese. */
+/**
+ * Boden einer Zelle: Strand aus Sand, der Gemeinschaftsplatz aus Stein (`island-stone`: Wege, Steine;
+ * Referenzentwurf „Momo“), sonst Wiese, auch in gesperrten Gebieten (`null`).
+ */
 function groundColor(kind: FieldKind | null, season: Season): ColorToken {
   if (kind === 'strand') return 'islandSand';
+  if (kind === 'gemeinschaftsplatz') return 'islandStone';
   return grass[season];
 }

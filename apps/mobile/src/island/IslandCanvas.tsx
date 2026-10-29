@@ -40,10 +40,13 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
   const started = useRef(false);
 
   const onLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent) => {
-    screen.value = { width: layout.width, height: layout.height };
+    // Die gemessene Größe direkt verwenden: Ein eben geschriebener Shared Value liefert auf dem
+    // JS-Thread noch den alten Wert (im Simulator beobachtet, #182).
+    const size = { width: layout.width, height: layout.height };
+    screen.value = size;
     if (started.current) return;
     started.current = true;
-    view.value = startView(screen.value, scene.focus);
+    view.value = startView(size, scene.focus);
   };
 
   const pan = usePanGesture({
