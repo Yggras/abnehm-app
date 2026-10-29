@@ -19,7 +19,7 @@ import { todayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { createTrackers, waterEntryEntity, type Refresh } from '../trackers';
+import { appTrackers, createTrackers, waterEntryEntity, weightEntryEntity, type Refresh } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -36,16 +36,21 @@ const onError = (error: unknown) => console.error('[sitzung]', error);
 const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
-const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
+const syncRegistry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity]);
 /**
- * Wasserziel für den Mini-Tracker. Bis Spezifikation 1 ihren `PlanReader` anmeldet, gibt es ihn nur in
- * Test-Artefakten als Attrappe aus den Seed-Manifesten (Nutzerentscheidung vom 28.10.2026 in #171); im
- * Release fehlt `trackers.water` dann wie die übrigen Beiträge der Bereiche, und das ist dort ein
- * Integrationsfehler. Der echte `PlanReader` ersetzt die Attrappe hier auch in Test-Artefakten.
+ * Wasserziel und Wiegetage für die Mini-Tracker. Bis Spezifikation 1 ihren `PlanReader` anmeldet, gibt
+ * es ihn nur in Test-Artefakten als Attrappe aus den Seed-Manifesten (Nutzerentscheidung vom
+ * 28.10.2026 in #171); im Release fehlen `trackers.water` und `trackers.weight` dann wie die übrigen
+ * Beiträge der Bereiche, und das ist dort ein Integrationsfehler. Der echte `PlanReader` ersetzt die
+ * Attrappe hier auch in Test-Artefakten.
  */
-const waterToday = testCapabilities === null
+const trackersToday = testCapabilities === null
   ? null
-  : { planReader: testCapabilities.planReader, opened: followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water') };
+  : {
+    planReader: testCapabilities.planReader,
+    water: followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water'),
+    weight: followTodayContribution(appTodayRegistry, 'tracker', 'trackers.weight'),
+  };
 /** Tageswechsel und Vordergrund wie beim Kopf; in Test-Artefakten zusätzlich jeder Sprung der Testuhr (#114). */
 const refreshToday: Refresh = (update) => {
   const stopTicks = todayRefresh(update);
@@ -92,7 +97,9 @@ function deviceState() {
       const persistence = createDailyGoalPersistence({
         registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock: appClock, writer: syncWriter, dispatcher,
       });
-      // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add` und Beitrag `trackers.water`.
+      // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water` und
+      // `trackers.weight` und die Bildschirme des Bereichs (`appTrackers`). Den Schreib-Port
+      // `weightRecorder` gibt Spezifikation 1 an `composeAreaPorts` weiter (`weightRecorder: () => trackers.weightRecorder`).
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
@@ -104,7 +111,9 @@ function deviceState() {
       const stops = [
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
         appQuickCommands.opened(database, trackers.quickCommands),
-        waterToday?.opened(trackers.waterToday(waterToday.planReader, refreshToday)),
+        appTrackers.opened(trackers),
+        trackersToday?.water(trackers.waterToday(trackersToday.planReader, refreshToday)),
+        trackersToday?.weight(trackers.weightToday(trackersToday.planReader, refreshToday)),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

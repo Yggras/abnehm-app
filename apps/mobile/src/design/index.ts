@@ -18,6 +18,7 @@ export { ListGroup, ListRow, type ListRowProps } from './ListRow';
 export { Toast, type ToastLine, type ToastProps } from './Toast';
 export { ProgressBar, type ProgressBarProps } from './ProgressBar';
 export { Skeleton, type SkeletonProps } from './Skeleton';
+export { TextField, type TextFieldInput, type TextFieldProps } from './TextField';
 
 export { Sheet, type SheetProps } from './native/Sheet';
 export { Switch, type SwitchProps } from './native/Switch';

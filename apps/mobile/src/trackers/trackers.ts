@@ -1,6 +1,7 @@
 import type { Clock } from '@abnehm/clock';
 import type { EntityId } from '@abnehm/contracts/base';
 import type { PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
+import type { DayWeight } from '@abnehm/contracts/tracker-rules';
 import type { WaterAddedOutcome, WeightRecordedOutcome } from '@abnehm/contracts/trackers';
 
 import type { DailyGoalPersistence } from '../daily-goals';
@@ -12,7 +13,7 @@ import type { SyncWriter } from '../sync';
 import type { Refresh } from './today-source';
 import { addWaterEntry, undoWater, type WaterUndo } from './water';
 import { waterTodaySource } from './water-today';
-import { recordWeightEntry, undoWeight, type WeightInput } from './weight';
+import { lastDayWeightOf, recordWeightEntry, undoWeight, type WeightInput } from './weight';
 import { createWeightRecorder } from './weight-recorder';
 import { weightTodaySource } from './weight-today';
 
@@ -41,6 +42,11 @@ export type Trackers = Readonly<{
    * von 20,0–350,0 kg in 100-g-Schritten und für Zeitpunkte in der Zukunft, ohne etwas zu schreiben.
    */
   recordWeight(input: WeightInput): WeightRecordedOutcome;
+  /**
+   * Das letzte Tagesgewicht der eigenen Person oder `null`, wenn sie noch nie gewogen hat; Vorbelegung
+   * und Vergleichswert der Frage „Tippfehler?“ im Formular.
+   */
+  lastDayWeight(): DayWeight | null;
   /**
    * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
    * Tokens aus `addWater` und `recordWeight`; Buchungen über `water.quick_add` nimmt die
@@ -85,6 +91,7 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
       const { messageKey, values, undo } = database.transaction((tx) => recordWeightEntry(tx, dependencies, dependencies.newId(), input));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)) };
     },
+    lastDayWeight: () => database.read((tx) => lastDayWeightOf(tx)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
     quickCommands: {

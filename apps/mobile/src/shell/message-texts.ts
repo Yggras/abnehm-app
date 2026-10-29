@@ -1,9 +1,9 @@
 import { QuickCommandKey } from '@abnehm/contracts/today';
-import { WaterAddedValues } from '@abnehm/contracts/trackers';
+import { WaterAddedValues, WeightRecordedValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
-import { quickCommandOwnerName, shellTexts } from './texts';
+import { quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
 
 // Texte des Meldungs-Hosts: Die sichtbare Zeile entsteht in der App aus `messageKey` und
 // typisierten Werten (Spezifikation 0, Abschnitt 2). Bereiche tragen ihre Meldungen hier ein,
@@ -29,6 +29,8 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'shell.nicht_geklappt': messageText(z.strictObject({}), () => ({ text: 'Das hat nicht geklappt. Versuch es bitte noch einmal.' })),
   /** Spezifikation 3: Wasser gebucht; „Rückgängig“ ergänzt der Meldungs-Host („+250 ml Wasser · Rückgängig“). */
   'wasser.hinzugefuegt': messageText(WaterAddedValues, ({ ml }) => ({ text: shellTexts.quickAddWater(ml) })),
+  /** Spezifikation 3: Gewicht eingetragen („91,8 kg eingetragen · Rückgängig“); nur die Person selbst sieht es. */
+  'gewicht.eingetragen': messageText(WeightRecordedValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
   /** Ein unbekanntes oder ungültiges Ziel, etwa ein veralteter Link, hat „Heute“ geöffnet. */
   'shell.ziel_unbekannt': messageText(z.strictObject({}), () => ({ text: 'Das gibt es nicht mehr.' })),
 };

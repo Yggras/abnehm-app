@@ -1,14 +1,14 @@
 import { readingOf } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
-import { isValidManualWeight } from '@abnehm/contracts/tracker-rules';
+import { dayWeights, isValidManualWeight, type DayWeight } from '@abnehm/contracts/tracker-rules';
 import { WeightEntryUpsert, type WeightRecordedValues } from '@abnehm/contracts/trackers';
 
-import type { TransactionContext } from '../local-db';
-import { requireOwnPerson } from '../local-db/person-header';
+import type { ReadContext, TransactionContext } from '../local-db';
+import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import { InvalidTrackerInputError } from './invalid-input';
 import type { TrackerDependencies } from './trackers';
 import { weightEntryEntity } from './weight-entity';
-import { readWeightEntry, tombstoneWeightEntry, writeWeightEntry } from './weight-repository';
+import { readWeightEntry, tombstoneWeightEntry, weightEntriesOf, writeWeightEntry } from './weight-repository';
 
 // Gewichts-Befehle des Tracker-Moduls (Spezifikation 3, Abschnitte 3 und 4). Sie laufen in der
 // Transaktion des Aufrufers: Gewichtseintrag, Outbox-Operation und `reevaluateDailyGoals` entstehen
@@ -59,6 +59,12 @@ export function recordWeightEntry(tx: TransactionContext, { clock, writer, persi
   const days = existing === undefined || existing.localDate === localDate ? [localDate] : [existing.localDate, localDate];
   persistence.reevaluateDailyGoals(tx, personId, days, 'eingabe');
   return { messageKey: 'gewicht.eingetragen', values: { weightG }, localDate, undo: { type: 'weight_recorded', entryId } };
+}
+
+/** Das letzte Tagesgewicht der eigenen Person nach den Tracker-Regeln; ohne Person oder Messung `null`. */
+export function lastDayWeightOf(tx: ReadContext): DayWeight | null {
+  const person = readOwnPerson(tx);
+  return person === undefined ? null : (dayWeights(weightEntriesOf(tx, EntityId.parse(person.id))).at(-1) ?? null);
 }
 
 /**
