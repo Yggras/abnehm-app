@@ -31,8 +31,10 @@ export type TestCapabilities = Readonly<{
   }>;
   /** Für `+native-intent`: nimmt Links der Testfähigkeiten an und öffnet dann „Heute“; andere bleiben unverändert. */
   redirectSystemPath(path: string): string;
-  /** Wirt im Root-Layout; führt Seeds mit der App-Sitzung aus. */
-  /** `gate` ist die Sitzungs-Weiche des Wurzel-Layouts; der Host öffnet Seed-Ziele erst, wenn sie die Fachoberfläche freigibt. */
+  /**
+   * Wirt im Root-Layout; führt Seeds mit der App-Sitzung aus. `gate` ist die Sitzungs-Weiche des
+   * Wurzel-Layouts; Seed-Ziele öffnet der Host erst, wenn sie die Fachoberfläche freigibt.
+   */
   Host: ComponentType<{ session: () => AppSession; gate: SessionGate | null }>;
 }>;
 
