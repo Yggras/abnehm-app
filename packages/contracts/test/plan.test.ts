@@ -5,10 +5,12 @@ import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from '
 import {
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
+  effectivePlanOf,
   goalVersionId,
   goalVersionKey,
   goalVersionOf,
   planVersionOfKey,
+  weeklyPlanDaysOf,
   weeklyPlanVersionId,
   weeklyPlanVersionKey,
 } from '../src/plan.ts';
@@ -203,5 +205,40 @@ describe('IDs und fachliche Schlüssel', () => {
     });
     expect(planVersionOfKey('zielversion', 'zielversion:kein-uuid:2026-10-14:x')).toBeNull();
     expect(planVersionOfKey('zielversion', `zielversion:${philipp}:2026-13-40:${change}`)).toBeNull();
+  });
+});
+
+describe('Abbildung gelesener Zeilen (PlanReader in SQLite und Postgres)', () => {
+  const goal = { ...version(), id: goalVersionId(philipp, day('2026-10-14')) };
+  const weeklyPlan = { id: weeklyPlanVersionId(philipp, day('2026-10-14')), validFrom: '2026-10-14' };
+  const row = (weekday: string, third: string) => ({ weekday, baustein1: 'ernaehrung_erfasst', baustein2: 'wasserziel', baustein3: third });
+
+  it('ist leer, solange Zielversion oder Wochenplanversion fehlt', () => {
+    expect(effectivePlanOf(day('2026-10-14'), { goal: undefined, weeklyPlan, day: undefined })).toEqual({ type: 'leer', localDate: '2026-10-14' });
+    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan: undefined, day: undefined })).toEqual({ type: 'leer', localDate: '2026-10-14' });
+  });
+
+  it('liefert die Felder des Vertrags und die Bausteine des Wochentags', () => {
+    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan, day: row('mittwoch', 'im_kalorienbudget') })).toEqual({
+      type: 'gueltig',
+      localDate: '2026-10-14',
+      goal: {
+        id: goal.id, validFrom: '2026-10-14', calorieBudgetMilliKcal: 1_620_000, lowerBoundMilliKcal: 1_514_000, maintenanceReason: null,
+        pace: 'entspannt', goalWeightG: 76_000, waterTargetMl: 1_500, weeklySportTargetMinutes: 150,
+      },
+      weeklyPlanDay: { weeklyPlanVersionId: weeklyPlan.id, validFrom: '2026-10-14', bausteine: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'] },
+    });
+  });
+
+  it('wirft bei einem vertragswidrigen Stand statt ihn weiterzugeben', () => {
+    expect(() => effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan, day: undefined })).toThrow();
+    expect(() => effectivePlanOf(day('2026-10-13'), { goal, weeklyPlan, day: row('dienstag', 'sporteinheit') })).toThrow();
+  });
+
+  it('prüft die Tageszeilen einer Wochenplanversion', () => {
+    const weekdays = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag', 'sonntag'];
+    expect(weeklyPlanDaysOf(weekdays.map((weekday) => row(weekday, 'gewogen')))).toMatchObject({ sonntag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'] });
+    expect(() => weeklyPlanDaysOf(weekdays.slice(0, 6).map((weekday) => row(weekday, 'gewogen')))).toThrow();
+    expect(() => weeklyPlanDaysOf(weekdays.map((weekday) => row(weekday, 'wasserziel')))).toThrow();
   });
 });

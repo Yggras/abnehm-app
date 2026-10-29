@@ -1,5 +1,3 @@
-import { eq } from 'drizzle-orm';
-
 import type { EntityId } from '@abnehm/contracts/base';
 import {
   CreateGoalVersion,
@@ -7,20 +5,21 @@ import {
   goalVersionId,
   GoalVersionRecord,
   planVersionOfKey,
+  type PlanVersionKind,
   weeklyPlanVersionId,
   WeeklyPlanVersionRecord,
 } from '@abnehm/contracts/plan';
 import type { EntityData } from '@abnehm/contracts/sync';
 
-import type { ReadContext, TransactionContext } from '../local-db';
-import { goalVersion, weeklyPlanVersion } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
-import { sqliteEntity, type AffectedDay, type CanonicalEntity, type EntityTombstone, type LocalCommand, type SyncEntityAdapter } from '../sync';
+import type { ReadContext } from '../local-db';
+import { goalVersion } from '../local-db/schema';
+import { sqliteEntity, type AffectedDay, type LocalCommand, type SyncEntityAdapter } from '../sync';
 import {
+  applyWeeklyPlanRecord,
   planVersionValidity,
   removeUnconfirmedGoalVersion,
   removeUnconfirmedWeeklyPlan,
-  writeWeeklyPlanRecord,
+  tombstoneWeeklyPlan,
 } from './plan-repository';
 
 // Ziel- und Wochenplanversion im App-Sync (Spezifikation 0, Abschnitt 10; Spezifikation 1, Abschnitt
@@ -28,8 +27,8 @@ import {
 // generisches Upsert oder Löschen. Nach jeder Übernahme meldet die Engine ihre Gültigkeit an den
 // Persistenzdienst; der meldet die Tage bis heute + 13 mit `planaenderung`.
 
-const validityOf = (table: 'zielversion' | 'wochenplan') => (tx: ReadContext, entityId: EntityId): readonly AffectedDay[] => {
-  const validity = planVersionValidity(tx, table, entityId);
+const validityOf = (kind: PlanVersionKind) => (tx: ReadContext, entityId: EntityId): readonly AffectedDay[] => {
+  const validity = planVersionValidity(tx, kind, entityId);
   return validity === undefined ? [] : [{ type: 'plan', ...validity }];
 };
 
@@ -48,38 +47,25 @@ export const goalVersionEntity: SyncEntityAdapter = {
   affectedDays: validityOf('zielversion'),
 };
 
-/** Eine Wochenplanversion ist eine Zeile samt ihren sieben Tagen; übernommen wird beides gemeinsam. */
+/**
+ * Eine Wochenplanversion ist eine Zeile samt ihren sieben Tagen; übernommen wird beides gemeinsam im
+ * Repository. Deshalb passt `sqliteEntity` hier nicht, das genau eine Zeile kennt.
+ */
 export const weeklyPlanVersionEntity: SyncEntityAdapter<EntityData, WeeklyPlanVersionRecord> = {
   entityType: 'weekly_plan_version',
   ownerField: 'personId',
   upsert: null,
   deletable: false,
   record: WeeklyPlanVersionRecord,
-  applyCanonical: applyWeeklyPlan,
-  applyTombstone: tombstoneWeeklyPlan,
+  applyCanonical: (tx, record) => applyWeeklyPlanRecord(tx, record.entityId, record.data, record.serverVersion),
+  applyTombstone: (tx, tombstone) => tombstoneWeeklyPlan(tx, tombstone.entityId, tombstone.deletedAt, tombstone.serverVersion),
   affectedDays: validityOf('wochenplan'),
   reconcileRejected(tx, { entityId, canonical }) {
     if (canonical === null) removeUnconfirmedWeeklyPlan(tx, entityId);
-    else if (canonical.type === 'record') applyWeeklyPlan(tx, canonical);
-    else tombstoneWeeklyPlan(tx, canonical);
+    else if (canonical.type === 'record') applyWeeklyPlanRecord(tx, entityId, canonical.data, canonical.serverVersion);
+    else tombstoneWeeklyPlan(tx, entityId, canonical.deletedAt, canonical.serverVersion);
   },
 };
-
-/** Wie `sqliteEntity`: Ist die lokale Serverversion schon neuer, bleibt alles unverändert. */
-function applyWeeklyPlan(tx: TransactionContext, record: CanonicalEntity<WeeklyPlanVersionRecord>) {
-  const local = sqliteOf(tx).select({ serverVersion: weeklyPlanVersion.serverVersion }).from(weeklyPlanVersion)
-    .where(eq(weeklyPlanVersion.id, record.entityId)).get();
-  if (local?.serverVersion != null && BigInt(local.serverVersion) > BigInt(record.serverVersion)) return;
-  writeWeeklyPlanRecord(tx, record.entityId, record.data, record.serverVersion);
-}
-
-function tombstoneWeeklyPlan(tx: TransactionContext, tombstone: EntityTombstone) {
-  sqliteOf(tx)
-    .update(weeklyPlanVersion)
-    .set({ deletedAt: tombstone.deletedAt, serverVersion: tombstone.serverVersion })
-    .where(eq(weeklyPlanVersion.id, tombstone.entityId))
-    .run();
-}
 
 /**
  * Die Fachbefehle für die lokale Befehls-Registry. Erzeugen darf sie nur das Plan-Modul, zusammen mit

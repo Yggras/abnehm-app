@@ -4,7 +4,7 @@ import { BausteinKey, EntityId, Instant, LocalDate, Weekday } from './base.ts';
 import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from './goal-calculator.ts';
 import { uuidV5 } from './ids.ts';
 import { ActivityLevel, CalculationSex } from './person.ts';
-import { MaintenanceReason, Pace } from './ports.ts';
+import { EffectivePlan, MaintenanceReason, Pace } from './ports.ts';
 
 // Ziel- und Wochenplanversionen (Spezifikation 1, Abschnitte 4 und 11; Spezifikation 0, Abschnitte 8
 // und 10). Beide sind immer vollständig, nie ein Teil-Patch, und reisen über die Fachbefehle
@@ -167,6 +167,14 @@ const DayBausteine = z
 export const WeeklyPlanDays = z.record(Weekday, DayBausteine);
 export type WeeklyPlanDays = z.infer<typeof WeeklyPlanDays>;
 
+/** Ein Wochentag einer Wochenplanversion, wie ihn beide Datenbanken speichern. */
+export type WeeklyPlanDayRow = Readonly<{ weekday: string; baustein1: string; baustein2: string; baustein3: string }>;
+
+/** Die sieben Tageszeilen einer Wochenplanversion als geprüfte `WeeklyPlanDays`. */
+export function weeklyPlanDaysOf(rows: readonly WeeklyPlanDayRow[]): WeeklyPlanDays {
+  return WeeklyPlanDays.parse(Object.fromEntries(rows.map((row) => [row.weekday, [row.baustein1, row.baustein2, row.baustein3]])));
+}
+
 /** Nutzlast von `createWeeklyPlanVersion`: die vollständige Wochenplanversion ohne Person und Serverfelder. */
 export const CreateWeeklyPlanVersion = z.strictObject({ validFrom: LocalDate, days: WeeklyPlanDays });
 export type CreateWeeklyPlanVersion = z.infer<typeof CreateWeeklyPlanVersion>;
@@ -180,6 +188,54 @@ export const WeeklyPlanVersionRecord = z.strictObject({
   updatedAt: Instant,
 });
 export type WeeklyPlanVersionRecord = z.infer<typeof WeeklyPlanVersionRecord>;
+
+/**
+ * Was ein `PlanReader` für einen Tag gelesen hat: die Zielversion und die Wochenplanversion mit dem
+ * größten `valid_from` ≤ Tag, von dieser die Zeile zum Wochentag des Tags. SQLite und Postgres lesen
+ * je in ihrem Dialekt; die Abbildung auf `EffectivePlan` ist dieselbe.
+ */
+export type EffectivePlanRows = Readonly<{
+  goal:
+    | Readonly<{
+        id: string;
+        validFrom: string;
+        calorieBudgetMilliKcal: number;
+        lowerBoundMilliKcal: number;
+        maintenanceReason: string | null;
+        pace: string | null;
+        goalWeightG: number;
+        waterTargetMl: number;
+        weeklySportTargetMinutes: number;
+      }>
+    | undefined;
+  weeklyPlan: Readonly<{ id: string; validFrom: string }> | undefined;
+  day: WeeklyPlanDayRow | undefined;
+}>;
+
+/** Gültiger Plan eines Tags, gegen `EffectivePlan` geprüft; fehlt eine der beiden Fassungen, ist er leer. */
+export function effectivePlanOf(localDate: LocalDate, { goal, weeklyPlan, day }: EffectivePlanRows): EffectivePlan {
+  if (goal === undefined || weeklyPlan === undefined) return EffectivePlan.parse({ type: 'leer', localDate });
+  return EffectivePlan.parse({
+    type: 'gueltig',
+    localDate,
+    goal: {
+      id: goal.id,
+      validFrom: goal.validFrom,
+      calorieBudgetMilliKcal: goal.calorieBudgetMilliKcal,
+      lowerBoundMilliKcal: goal.lowerBoundMilliKcal,
+      maintenanceReason: goal.maintenanceReason,
+      pace: goal.pace,
+      goalWeightG: goal.goalWeightG,
+      waterTargetMl: goal.waterTargetMl,
+      weeklySportTargetMinutes: goal.weeklySportTargetMinutes,
+    },
+    weeklyPlanDay: {
+      weeklyPlanVersionId: weeklyPlan.id,
+      validFrom: weeklyPlan.validFrom,
+      bausteine: day === undefined ? undefined : [day.baustein1, day.baustein2, day.baustein3],
+    },
+  });
+}
 
 /** Art einer Fassung im fachlichen Schlüssel. */
 export type PlanVersionKind = 'zielversion' | 'wochenplan';

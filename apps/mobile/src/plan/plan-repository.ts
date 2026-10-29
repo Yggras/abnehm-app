@@ -1,18 +1,30 @@
 import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 
-import { BausteinKey, EntityId, LocalDate, weekdayOf, Weekday, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import type { CreateGoalVersion, WeeklyPlanDays, WeeklyPlanVersionRecord } from '@abnehm/contracts/plan';
-import { EffectivePlan } from '@abnehm/contracts/ports';
+import { EntityId, LocalDate, weekdayOf, Weekday, type Instant, type ServerVersion } from '@abnehm/contracts/base';
+import {
+  effectivePlanOf,
+  GoalVersionRecord,
+  weeklyPlanDaysOf,
+  type CreateGoalVersion,
+  type PlanVersionKind,
+  type WeeklyPlanDays,
+  type WeeklyPlanVersionRecord,
+} from '@abnehm/contracts/plan';
+import type { EffectivePlan } from '@abnehm/contracts/ports';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { goalVersion, weeklyPlanDay, weeklyPlanVersion } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 
 // Repository des Plan-Moduls: die einzige Stelle der App, die Drizzle und die Tabellen der Ziel- und
-// Wochenplanversionen sieht. Andere Bereiche lesen sie nie, sondern fragen den `PlanReader`.
+// Wochenplanversionen sieht; der Sync-Adapter der Zielversion bekommt nur die Tabelle für `sqliteEntity`.
+// Andere Bereiche lesen die Fassungen nie, sondern fragen den `PlanReader`.
 
 /** Fachliche Werte einer gespeicherten Zielversion samt Serverversion. */
-export type StoredGoalVersion = Readonly<{ values: CreateGoalVersion; serverVersion: ServerVersion | null }>;
+export type StoredGoalVersion = Readonly<{
+  values: Omit<GoalVersionRecord, 'personId' | 'createdAt' | 'updatedAt'>;
+  serverVersion: ServerVersion | null;
+}>;
 
 /** Tage einer gespeicherten Wochenplanversion samt Serverversion. */
 export type StoredWeeklyPlan = Readonly<{ days: WeeklyPlanDays; serverVersion: ServerVersion | null }>;
@@ -27,11 +39,37 @@ export function writeGoalVersion(tx: TransactionContext, id: EntityId, personId:
     .run();
 }
 
+/** Die gespeicherte Zielversion, geprüft wie ein kanonischer Datensatz. */
 export function readGoalVersion(tx: ReadContext, id: EntityId): StoredGoalVersion | undefined {
   const row = sqliteOf(tx).select().from(goalVersion).where(eq(goalVersion.id, id)).get();
   if (row === undefined) return undefined;
-  const { id: _id, personId: _personId, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, serverVersion, ...values } = row;
-  return { values: values as CreateGoalVersion, serverVersion: serverVersion as ServerVersion | null };
+  const { id: _id, deletedAt: _deletedAt, serverVersion, ...record } = row;
+  const { personId: _personId, createdAt: _createdAt, updatedAt: _updatedAt, ...values } = GoalVersionRecord.parse(record);
+  return { values, serverVersion: serverVersion as ServerVersion | null };
+}
+
+type Stamps = Readonly<{ createdAt: Instant; updatedAt: Instant; serverVersion: ServerVersion | null }>;
+
+/**
+ * Schreibt Version und sieben Tage. Eine lokale Änderung (ohne Serverversion) lässt Anlagezeit und
+ * Serverversion stehen; der kanonische Datensatz ersetzt alles, wie bei `sqliteEntity`.
+ */
+function writeWeeklyPlanRows(tx: TransactionContext, id: EntityId, personId: EntityId, validFrom: LocalDate, days: WeeklyPlanDays, stamps: Stamps): void {
+  const db = sqliteOf(tx);
+  const changed = stamps.serverVersion === null
+    ? { validFrom, updatedAt: stamps.updatedAt }
+    : { validFrom, createdAt: stamps.createdAt, updatedAt: stamps.updatedAt, serverVersion: stamps.serverVersion, deletedAt: null };
+  db.insert(weeklyPlanVersion)
+    .values({ id, personId, createdAt: stamps.createdAt, ...changed })
+    .onConflictDoUpdate({ target: weeklyPlanVersion.id, set: changed })
+    .run();
+  for (const weekday of Weekday.options) {
+    const [baustein1, baustein2, baustein3] = days[weekday];
+    db.insert(weeklyPlanDay)
+      .values({ weeklyPlanVersionId: id, personId, weekday, baustein1, baustein2, baustein3 })
+      .onConflictDoUpdate({ target: [weeklyPlanDay.weeklyPlanVersionId, weeklyPlanDay.weekday], set: { baustein1, baustein2, baustein3 } })
+      .run();
+  }
 }
 
 /** Legt die Wochenplanversion samt ihrer sieben Tage an oder überschreibt sie (Last-Write-Wins). */
@@ -41,37 +79,35 @@ export function writeWeeklyPlan(
   personId: EntityId,
   version: Readonly<{ validFrom: LocalDate; days: WeeklyPlanDays }>,
   at: Instant,
-  canonical?: Readonly<{ serverVersion: ServerVersion; createdAt: Instant; updatedAt: Instant }>,
 ): void {
-  const db = sqliteOf(tx);
-  const stamps = canonical === undefined ? { updatedAt: at } : { updatedAt: canonical.updatedAt, serverVersion: canonical.serverVersion, deletedAt: null };
-  db.insert(weeklyPlanVersion)
-    .values({ id, personId, validFrom: version.validFrom, createdAt: canonical?.createdAt ?? at, ...stamps })
-    .onConflictDoUpdate({ target: weeklyPlanVersion.id, set: { validFrom: version.validFrom, ...stamps } })
-    .run();
-  for (const weekday of Weekday.options) {
-    const [baustein1, baustein2, baustein3] = version.days[weekday];
-    db.insert(weeklyPlanDay)
-      .values({ weeklyPlanVersionId: id, personId, weekday, baustein1, baustein2, baustein3 })
-      .onConflictDoUpdate({ target: [weeklyPlanDay.weeklyPlanVersionId, weeklyPlanDay.weekday], set: { baustein1, baustein2, baustein3 } })
-      .run();
-  }
+  writeWeeklyPlanRows(tx, id, personId, version.validFrom, version.days, { createdAt: at, updatedAt: at, serverVersion: null });
 }
 
-/** Übernimmt die kanonische Wochenplanversion des Servers. */
-export function writeWeeklyPlanRecord(tx: TransactionContext, id: EntityId, record: WeeklyPlanVersionRecord, serverVersion: ServerVersion): void {
-  writeWeeklyPlan(tx, id, record.personId, record, record.updatedAt, { serverVersion, createdAt: record.createdAt, updatedAt: record.updatedAt });
+/**
+ * Übernimmt die kanonische Wochenplanversion samt Tagen. Wie bei `sqliteEntity` bleibt alles, wie es ist,
+ * wenn die lokale Serverversion schon neuer ist; eine gleiche Version wird erneut übernommen.
+ */
+export function applyWeeklyPlanRecord(tx: TransactionContext, id: EntityId, record: WeeklyPlanVersionRecord, serverVersion: ServerVersion): void {
+  const local = sqliteOf(tx).select({ serverVersion: weeklyPlanVersion.serverVersion }).from(weeklyPlanVersion).where(eq(weeklyPlanVersion.id, id)).get();
+  if (local?.serverVersion != null && BigInt(local.serverVersion) > BigInt(serverVersion)) return;
+  writeWeeklyPlanRows(tx, id, record.personId, record.validFrom, record.days, { createdAt: record.createdAt, updatedAt: record.updatedAt, serverVersion });
+}
+
+/** Setzt die Löschmarkierung des Servers; eine lokal unbekannte Fassung bleibt unbekannt. */
+export function tombstoneWeeklyPlan(tx: TransactionContext, id: EntityId, deletedAt: Instant, serverVersion: ServerVersion): void {
+  sqliteOf(tx).update(weeklyPlanVersion).set({ deletedAt, serverVersion }).where(eq(weeklyPlanVersion.id, id)).run();
 }
 
 export function readWeeklyPlan(tx: ReadContext, id: EntityId): StoredWeeklyPlan | undefined {
   const version = sqliteOf(tx).select({ serverVersion: weeklyPlanVersion.serverVersion }).from(weeklyPlanVersion).where(eq(weeklyPlanVersion.id, id)).get();
   if (version === undefined) return undefined;
-  return { days: daysOf(tx, id), serverVersion: version.serverVersion as ServerVersion | null };
+  const days = sqliteOf(tx).select().from(weeklyPlanDay).where(eq(weeklyPlanDay.weeklyPlanVersionId, id)).all();
+  return { days: weeklyPlanDaysOf(days), serverVersion: version.serverVersion as ServerVersion | null };
 }
 
 /** Person und `valid_from` einer Fassung; für die Tagesmeldung nach einer Pull-Übernahme. */
-export function planVersionValidity(tx: ReadContext, table: 'zielversion' | 'wochenplan', id: EntityId) {
-  const source = table === 'zielversion' ? goalVersion : weeklyPlanVersion;
+export function planVersionValidity(tx: ReadContext, kind: PlanVersionKind, id: EntityId) {
+  const source = kind === 'zielversion' ? goalVersion : weeklyPlanVersion;
   const row = sqliteOf(tx).select({ personId: source.personId, validFrom: source.validFrom }).from(source).where(eq(source.id, id)).get();
   return row === undefined ? undefined : { personId: EntityId.parse(row.personId), validFrom: LocalDate.parse(row.validFrom) };
 }
@@ -91,10 +127,7 @@ export function removeUnconfirmedWeeklyPlan(tx: TransactionContext, id: EntityId
   db.delete(weeklyPlanVersion).where(eq(weeklyPlanVersion.id, id)).run();
 }
 
-/**
- * Gültiger Plan eines Tags: die Zielversion und die Wochenplanversion mit dem größten `valid_from` ≤
- * Tag, vom Wochenplan der Wochentag des Tags. Fehlt eine der beiden, gilt noch kein Plan.
- */
+/** Gültiger Plan eines Tags aus SQLite; die Abbildung teilt die App mit dem `PlanReader` des Servers. */
 export function readEffectivePlan(tx: ReadContext, personId: EntityId, localDate: LocalDate): EffectivePlan {
   const db = sqliteOf(tx);
   const goal = db
@@ -104,44 +137,17 @@ export function readEffectivePlan(tx: ReadContext, personId: EntityId, localDate
     .orderBy(desc(goalVersion.validFrom))
     .limit(1)
     .get();
-  const plan = db
+  const weeklyPlan = db
     .select({ id: weeklyPlanVersion.id, validFrom: weeklyPlanVersion.validFrom })
     .from(weeklyPlanVersion)
     .where(and(eq(weeklyPlanVersion.personId, personId), lte(weeklyPlanVersion.validFrom, localDate), isNull(weeklyPlanVersion.deletedAt)))
     .orderBy(desc(weeklyPlanVersion.validFrom))
     .limit(1)
     .get();
-  if (goal === undefined || plan === undefined) return EffectivePlan.parse({ type: 'leer', localDate });
-  const day = db
-    .select()
-    .from(weeklyPlanDay)
-    .where(and(eq(weeklyPlanDay.weeklyPlanVersionId, plan.id), eq(weeklyPlanDay.weekday, weekdayOf(localDate))))
-    .get();
-  return EffectivePlan.parse({
-    type: 'gueltig',
-    localDate,
-    goal: {
-      id: goal.id,
-      validFrom: goal.validFrom,
-      calorieBudgetMilliKcal: goal.calorieBudgetMilliKcal,
-      lowerBoundMilliKcal: goal.lowerBoundMilliKcal,
-      maintenanceReason: goal.maintenanceReason,
-      pace: goal.pace,
-      goalWeightG: goal.goalWeightG,
-      waterTargetMl: goal.waterTargetMl,
-      weeklySportTargetMinutes: goal.weeklySportTargetMinutes,
-    },
-    weeklyPlanDay: {
-      weeklyPlanVersionId: plan.id,
-      validFrom: plan.validFrom,
-      bausteine: day === undefined ? undefined : [day.baustein1, day.baustein2, day.baustein3],
-    },
-  });
-}
-
-function daysOf(tx: ReadContext, id: EntityId): WeeklyPlanDays {
-  const rows = sqliteOf(tx).select().from(weeklyPlanDay).where(eq(weeklyPlanDay.weeklyPlanVersionId, id)).all();
-  return Object.fromEntries(
-    rows.map((row) => [row.weekday, [BausteinKey.parse(row.baustein1), BausteinKey.parse(row.baustein2), BausteinKey.parse(row.baustein3)]]),
-  ) as WeeklyPlanDays;
+  const day = weeklyPlan === undefined
+    ? undefined
+    : db.select().from(weeklyPlanDay)
+      .where(and(eq(weeklyPlanDay.weeklyPlanVersionId, weeklyPlan.id), eq(weeklyPlanDay.weekday, weekdayOf(localDate))))
+      .get();
+  return effectivePlanOf(localDate, { goal, weeklyPlan, day });
 }

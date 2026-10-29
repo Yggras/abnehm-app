@@ -1,16 +1,13 @@
 import { inArray } from 'drizzle-orm';
 
 import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
-import { CreateGoalVersion, goalVersionId, GoalVersionRecord, planVersionOfKey } from '@abnehm/contracts/plan';
+import { CreateGoalVersion, goalVersionId, GoalVersionRecord } from '@abnehm/contracts/plan';
 
 import { policies } from '../authorization/authorization.ts';
 import { goalVersion } from '../db/schema/index.ts';
-import { invalidatePartnerSummaries } from '../partner-projections/invalidations.ts';
-import { nextServerVersion, recordChange } from '../sync/change-log.ts';
-import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
+import type { ServerCommand } from '../sync/commands.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
-import { canonicalAfterWrite } from '../sync/sync.ts';
-import { planCommandTarget } from './plan-keys.ts';
+import { planCommandTarget, savePlanVersion } from './plan-versions.ts';
 
 // Zielversion auf dem Server (Spezifikation 1, Abschnitte 4 und 11). Sie entsteht nur über den
 // Fachbefehl `createGoalVersion`; der Sync liest sie, kennt aber kein generisches Upsert oder Löschen.
@@ -46,20 +43,11 @@ export const createGoalVersionCommand: ServerCommand<CreateGoalVersion> = {
   // Jede Änderung trägt einen eigenen Schlüssel; ein Duplikat ist nur der Retry derselben Änderung.
   duplicate: () => [],
   async execute(tx, { actor, payload, businessKey, at }) {
-    const key = planVersionOfKey('zielversion', businessKey);
-    if (key === null || key.validFrom !== payload.validFrom) throw new CommandRejection('invalid_payload');
-    const id = goalVersionId(actor.personId, payload.validFrom);
-    const serverVersion = await nextServerVersion(tx);
-    const fields = { ...payload, updatedAt: at, serverVersion };
-    await tx
-      .insert(goalVersion)
-      .values({ ...fields, id, personId: actor.personId, createdAt: at })
-      .onConflictDoUpdate({ target: goalVersion.id, set: fields });
-    await recordChange(tx, { position: serverVersion, entityType: goalVersionEntity.entityType, entityId: id, operation: 'upsert',
-      ownerPersonId: actor.personId, createdAt: at });
-    // Wasser- und Sportziel wirken in die Partner-Zusammenfassungen; das Fundament verteilt auf alle Bereiche.
-    await invalidatePartnerSummaries(tx, { type: 'plan', ownerPersonId: actor.personId, validFrom: payload.validFrom }, at);
-    return { changes: [await canonicalAfterWrite(tx, goalVersionEntity, id)], idMappings: [] };
+    return savePlanVersion(tx, { kind: 'zielversion', entity: goalVersionEntity, idOf: goalVersionId, personId: actor.personId,
+      validFrom: payload.validFrom, businessKey, at, async write(id, serverVersion) {
+        const fields = { ...payload, updatedAt: at, serverVersion };
+        await tx.insert(goalVersion).values({ ...fields, id, personId: actor.personId, createdAt: at }).onConflictDoUpdate({ target: goalVersion.id, set: fields });
+      } });
   },
 };
 
