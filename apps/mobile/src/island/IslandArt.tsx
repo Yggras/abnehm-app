@@ -67,6 +67,15 @@ function CastShadow({ at, width }: { at: Point; width: number }) {
 /** Wie hoch über der Feldmitte eine Laterne leuchtet. */
 export const lampHeight = tile * 0.5;
 
+/** Blüten der Blumenwiese, flach auf dem Feld. */
+const flowers: readonly Readonly<{ x: number; y: number; tone: ColorToken }>[] = [
+  { x: -10, y: 0, tone: 'islandLamp' },
+  { x: -3, y: -4, tone: 'islandRoof' },
+  { x: 5, y: -1, tone: 'surfaceCard' },
+  { x: 11, y: 2, tone: 'islandLamp' },
+  { x: 0, y: 4, tone: 'islandRoof' },
+];
+
 /** Ein Inselobjekt; jede Stufe ist etwas größer (Design-System › Insel). */
 export function ObjectArt({ at, art, foliage }: { at: Point; art: ArtKey; foliage: ColorToken }) {
   const { shape, stage } = artOf(art);
@@ -108,14 +117,8 @@ function Shape({ shape, foliage }: { shape: ArtShape; foliage: ColorToken }) {
     case 'blumen':
       return (
         <Group>
-          {[
-            [-10, 0, color.islandLamp],
-            [-3, -4, color.islandRoof],
-            [5, -1, color.surfaceCard],
-            [11, 2, color.islandLamp],
-            [0, 4, color.islandRoof],
-          ].map(([x, y, fill]) => (
-            <Circle key={`${x}:${y}`} cx={x as number} cy={y as number} r={2.5} color={fill as string} />
+          {flowers.map(({ x, y, tone }) => (
+            <Circle key={`${x}:${y}`} cx={x} cy={y} r={2.5} color={color[tone]} />
           ))}
         </Group>
       );
