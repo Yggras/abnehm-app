@@ -60,7 +60,7 @@ Bereichscode liest Zeitpunkt, Zeitzone und lokalen Tag ausschließlich über die
 Oberflächen entstehen nur aus den Tokens und Primitiven in `apps/mobile/src/design/` ([#95](https://github.com/Yggras/abnehm-app/issues/95)), Import über `../design`.
 
 - **Tokens:** `tokens.ts` übernimmt `research/design-system.md` vollständig; `tokens.test.ts` prüft das gegen die Tabellen dort. Ändert sich das Design-System, schlägt der Test fehl, bis die Tokens nachgezogen sind.
-- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`.
+- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `TextField`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`. Das Eingabefeld `TextField` (#119) hat Beschriftung, Hinweis und Fehlersatz; Fehler stehen mit Symbol und Lösungsweg darunter, nie nur als Rahmenfarbe.
 - **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf „Heute“ oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
 
 ### App-Shell und Navigation
@@ -237,7 +237,7 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 
 | Rolle | Interface | Ort |
 | --- | --- | --- |
-| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, dazu `bootstrapPerson`, Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch` | `apps/mobile/src/auth/` |
+| App | `AppAuth`: `register`, `signIn`, `checkSession`, `changePassword`, dazu `bootstrapPerson`, `accountEmail` (#119), Sperrzustand (`state`, `subscribe`), `onUnauthorized` und `fetch` | `apps/mobile/src/auth/` |
 | Abmeldemodul der App | `SessionRevocations` (`AppSession.revocations`): `revokeSession` mit dem Ausweis aus `prepareRevocation`, dazu `revocationStatus` und `forgetSession` | `apps/mobile/src/auth/` |
 | Backend-Endpunkte | `SessionAuthenticator.authenticate(headers)`; Endpunkte erhalten die Sitzung über den Guard der Autorisierung (unten) | `apps/backend/src/auth/` |
 | Betrieb | `AdminPasswordReset`, aufgerufen über das Kommando unten | `apps/backend/src/auth/admin-reset-command.ts` |
@@ -254,7 +254,9 @@ Konto und Sitzung verwaltet [Better Auth](https://www.better-auth.com/docs) hint
 
 - **Sicherheitslog:** Geschrieben wird nur über `createSecurityLog` aus `apps/backend/src/security-log/`. Es nimmt ausschließlich die geschlossene Union `SecurityEvent` mit den Ereignistypen aus [#22](https://github.com/Yggras/abnehm-app/issues/22) an. Ihre Felder sind UUIDs, Katalogwerte, Wahrheitswerte oder IP-Adressen; unbekannte Felder werden abgewiesen. Mit `record(event, tx)` schreibt ein Modul in seiner eigenen Transaktion.
 - **Serverjobs:** Ein Job meldet Namen, Intervall und eine idempotente Funktion bei der Registry an (`apps/backend/src/jobs/job-registry.ts`). Angemeldet wird in `createBackend` (`apps/backend/src/backend.ts`), ohne die Registry zu ändern. Der Backend-Prozess prüft jede Minute, welche Jobs fällig sind; Tests lösen sie mit der Testuhr über `runDue()` aus. Erster Job ist `sicherheitslog_aufraeumen`, der Einträge nach 90 Tagen löscht.
+- **E-Mail des Kontos:** `accountEmail()` liest sie für die Einstellungen aus der Sitzungsabfrage von Better Auth (`get-session`). Ohne Netz gilt die zuletzt gesehene des angemeldeten Kontos, auch aus der Anmeldung. Das Modul hält sie nur im Speicher; SecureStore und die Kontodatenbank sehen sie nie. Lehnt der Server die Sitzung ab, sperrt es wie `checkSession`.
 - **Tests:** `apps/backend/test/auth.test.ts` prüft die Abläufe über HTTP. `apps/backend/test/app-auth.test.ts` prüft das App-Modul `AppAuth` gegen die echte Hono-App. Dieser Test importiert App-Code und hat deshalb eine eigene tsconfig (`tsconfig.app-auth.json`, Bundler-Auflösung wie in der App).
+- **Online-Test-Adapter:** `fakeAuthBackend` aus `apps/mobile/src/auth/testing/fake-auth-backend.ts` bildet für Komponententests genau die Endpunkte nach, die `AppAuth` und das Abmeldemodul aufrufen: Anmeldung, Sitzungsabfrage, Passwortänderung mit Widerruf aller Sitzungen und Serverabmeldung samt gespeichertem Ergebnis. Statuscodes, Fehlercodes und die Reihenfolge der Prüfungen folgen Backend und Better Auth. Netz- und Serverfehler kommen über `faultyFetch` aus den Testfähigkeiten dazu.
 
 ### Vollständiges Abmelden
 
@@ -493,6 +495,17 @@ Den mitgelieferten Lebensmittelkatalog, die lokale Suche und die Rechenregeln de
   - `src/nutrition/food-search.test.ts` läuft mit better-sqlite3 (`local-db/testing/better-sqlite-catalog.ts`) gegen einen kleinen Testkatalog (`src/nutrition/testing/test-catalog.ts`). Ihn baut `writeCatalogFile` wie das Asset, mit Werten aus dem Asset.
   - `src/local-db/catalog.test.ts` belegt: Bei gleicher Version bleibt die installierte Datei, eine neue Version ersetzt sie.
   - Die Tests des Build-Skripts liegen unter `scripts/bls-catalog/`, einem eigenen Jest-Root. `node-loading.test.ts` lädt die Skriptmodule wie `npm run bls-katalog` unter Node; so fällt auf, wenn `search-text.ts` oder `bls-catalog-version.ts` einen Import bekommen, den Node ohne Bundler nicht laden kann.
+
+### Einstellungen: Übersicht und Konto
+
+Die Einstellungen-Übersicht und die Seite „Konto“ aus Abschnitt 6 der [Spezifikation 5](https://github.com/Yggras/abnehm-app/issues/87) liefert [#119](https://github.com/Yggras/abnehm-app/issues/119). Der Code liegt in `apps/mobile/src/settings/`; die Routendateien `src/app/settings/index.tsx` und `account.tsx` übergeben die Bildschirme an `routeScreen`.
+
+- **Übersicht** (`settings` ohne `section`): Kopf mit Anzeigename und E-Mail, darunter „Dein Plan“ (Ziele, Wochenplan), „Gemeinsam“ (Partner & Freigaben, Benachrichtigungen) und „Daten & Konto“ (Apple Health bzw. Health Connect, Konto). Jede Zeile öffnet ihre `section` mit `openTarget`. Ziele, Wochenplan, Gesundheitsdaten, Partner & Freigaben und Benachrichtigungen bleiben bis zu ihren Tickets Platzhalter der Shell. Die Untertitel „Mit Anna gekoppelt“ bzw. „Nicht gekoppelt“ und „Aus“ ergänzen #129 und #125 an den Zeilen in `SettingsOverview.tsx`.
+- **Konto:** E-Mail nur lesend über `AppAuth.accountEmail`. Der Anzeigename ändert sich über `followOwnProfile` (`own-profile.ts`), also über den Person-Upsert `updateOwnPerson` samt Outbox; `time_zone` gehört nicht dazu. „Passwort ändern“ ist ein Formular-Sheet über `AppAuth.changePassword`. Es prüft die Länge vor dem Senden; die Blocklist kennt nur der Server. „Abmelden“ ruft das Abmeldemodul, fragt bei ungesicherten Änderungen nach und bietet eine begonnene Abmeldung (`logout.pending()`) zum Abschließen an. Konto löschen, E-Mail ändern und „alle Sitzungen abmelden“ gibt es in V1 nicht.
+- **Zusammensetzen:** Die Bildschirme kennen nur `AccountPorts` aus `AccountProvider.tsx`: `auth` (`accountEmail`, `changePassword`), `logout` (`logout`, `pending`) und `profile`. Auf dem Gerät setzt `deviceAccount()` in `src/session/device-session.ts` sie zusammen. Das Wurzel-Layout stellt sie bereit, und `ownProfile.opened(database)` folgt der geöffneten Kontodatenbank.
+- **Tests:**
+  - `src/settings/SettingsOverview.test.tsx` und `AccountScreen.test.tsx` rendern die echten Routendateien mit `renderRouter`. Sie laufen über die Test-Welt `src/settings/testing/account-world.ts`: echtes Auth- und Abmeldemodul über `fakeAuthBackend`, davor `faultyFetch`, und der Anzeigename über einer echten SQLite-Datei. Der Sync vor dem Abmelden ist dort eine Attrappe; sie erreicht den Server je nach Fehler-Adapter, sichert aber nichts.
+  - `apps/backend/test/account-name-app.test.ts` prüft mit dem Szenario `gekoppelt` gegen die echte Hono-App: Anna sieht Philipps neuen Namen nach ihrem Pull am Kopplungsmitglied. Die zuvor von einem zweiten Gerät gesetzte Zone bleibt erhalten.
 
 ## Befehle
 
