@@ -58,7 +58,8 @@ export type ButtonProps = PressState & {
   block?: boolean;
   /**
    * Schmaler Seitenabstand für die schmalen Spalten der Mini-Tracker: So passt „+250 ml“ auf dem
-   * iPhone SE einzeilig, wenn drei nebeneinander stehen (#171). Nur zusammen mit `block` sinnvoll.
+   * iPhone SE einzeilig, wenn drei nebeneinander stehen (#171). Längere Beschriftungen wie
+   * „Eintragen“ verkleinern sich, statt umzubrechen (#175). Nur zusammen mit `block` sinnvoll.
    */
   dense?: boolean;
   /** Ausführlicher Name für Screenreader, wenn die Beschriftung allein nicht reicht. */
@@ -106,7 +107,16 @@ export function Button({
           <>
             <View style={[styles.content, loading && styles.hidden]}>
               {icon ? <Icon name={icon} tone={look.label} /> : null}
-              <Text variant="button" tone={look.label} style={styles.label}>
+              {/* In den schmalen Spalten der Mini-Tracker bleibt die Beschriftung einzeilig und
+                  verkleinert sich bei Bedarf, statt im Wort umzubrechen („Eintrage/n“ auf dem
+                  iPhone SE, #175; https://reactnative.dev/docs/text#adjustsfontsizetofit). */}
+              <Text
+                variant="button"
+                tone={look.label}
+                style={styles.label}
+                numberOfLines={dense ? 1 : undefined}
+                adjustsFontSizeToFit={dense}
+              >
                 {label}
               </Text>
             </View>

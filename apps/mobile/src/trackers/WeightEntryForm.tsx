@@ -5,7 +5,7 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { asksForTypo, isValidManualWeight } from '@abnehm/contracts/tracker-rules';
 
 import { useClock } from '../clock/clock-context';
-import { Button, DateTimePicker, Notice, space, TextField, type TextFieldInput } from '../design';
+import { Button, DateTimePicker, Notice, space, Text, TextField, type TextFieldInput } from '../design';
 import { useMessageHost } from '../shell/MessageHost';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { InvalidTrackerInputError } from './invalid-input';
@@ -78,17 +78,21 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
         selectTextOnFocus
         inputRef={field}
       />
-      <DateTimePicker
-        label="Gemessen am"
-        mode="datetime"
-        value={measuredAt}
-        onChange={(next) => {
-          setMeasuredAt(next);
-          setAsked(null);
-        }}
-        timeZone={TimeZone.parse(now.timeZone)}
-        maximum={Instant.parse(now.instant)}
-      />
+      <View style={styles.group}>
+        {/* Sichtbar beschriftet: Der native Picker auf iOS zeigt nur Datum und Uhrzeit. */}
+        <Text variant="label" importantForAccessibility="no">Gemessen am</Text>
+        <DateTimePicker
+          label="Gemessen am"
+          mode="datetime"
+          value={measuredAt}
+          onChange={(next) => {
+            setMeasuredAt(next);
+            setAsked(null);
+          }}
+          timeZone={TimeZone.parse(now.timeZone)}
+          maximum={Instant.parse(now.instant)}
+        />
+      </View>
       {asked !== null && last !== null ? (
         <>
           <Notice tone="hint" text={typoQuestion(asked, last.weightG)} />
@@ -119,5 +123,6 @@ function typoQuestion(weightG: number, lastWeightG: number): string {
 
 const styles = StyleSheet.create({
   form: { gap: space[4] },
+  group: { gap: space[1] },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], justifyContent: 'flex-end' },
 });

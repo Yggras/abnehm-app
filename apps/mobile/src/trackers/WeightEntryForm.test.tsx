@@ -56,6 +56,8 @@ test('füllt das letzte Tagesgewicht vor und speichert es mit dem Messzeitpunkt 
   });
 
   expect(field()).toHaveDisplayValue('91,8');
+  // Sichtbar beschriftet: Ohne „Gemessen am“ stünden Datum und Uhrzeit ohne Bezug da (Impeccable-Kritik).
+  expect(screen.getByText('Gemessen am')).toBeOnTheScreen();
   expect(screen.getByLabelText('Gemessen am')).toHaveDisplayValue(noon);
 
   await save();

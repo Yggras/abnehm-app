@@ -42,7 +42,9 @@ export function ScreenFrame({ title, presentation, children, compactTabTitle = f
   const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges[presentation]} style={styles.screen}>
-      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} refreshControl={pullToRefresh ? (
+      {/* `handled`: Ein Tipp auf einen Knopf wirkt auch bei offener Tastatur; sonst schlösse der erste
+          Tipp auf „Speichern“ nur die Tastatur (#175, https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps). */}
+      <ScrollView testID="sync-scroll" keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content} refreshControl={pullToRefresh ? (
         <RefreshControl refreshing={refreshing} onRefresh={() => {
           setRefreshing(true);
           void pullToRefresh().finally(() => setRefreshing(false));

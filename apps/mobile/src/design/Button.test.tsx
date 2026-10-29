@@ -12,6 +12,14 @@ test('löst seine Aktion aus und ist als Button mit Beschriftung erreichbar', as
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
+test('dicht: Die Beschriftung bleibt einzeilig und verkleinert sich, statt im Wort umzubrechen (#175)', async () => {
+  await render(<Button label="Eintragen" onPress={jest.fn()} variant="secondary" compact block dense />);
+
+  const label = screen.getByText('Eintragen');
+  expect(label.props.numberOfLines).toBe(1);
+  expect(label.props.adjustsFontSizeToFit).toBe(true);
+});
+
 test('deaktiviert: meldet den Zustand und löst nichts aus', async () => {
   const onPress = jest.fn();
   await render(<Button label="Bauen" onPress={onPress} disabled />);

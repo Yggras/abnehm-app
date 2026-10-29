@@ -57,6 +57,14 @@ test('newEntry öffnet das Formular; Speichern trägt ein, schließt und zeigt d
   expect(screen.getByRole('button', { name: 'Rückgängig' })).toBeOnTheScreen();
 });
 
+test('Tipps erreichen „Speichern“ auch bei offener Tastatur, statt sie nur zu schließen (Impeccable-Kritik)', async () => {
+  await open();
+  await act(() => router.push({ pathname: '/capture/weight', params: { newEntry: 'true' } }));
+
+  // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
+  expect(screen.getByTestId('sync-scroll').props.keyboardShouldPersistTaps).toBe('handled');
+});
+
 test('ohne newEntry zeigt die Route bis zum Detailbildschirm (#176) den Platzhalter des Bereichs', async () => {
   await open();
   await act(() => router.push('/capture/weight'));
