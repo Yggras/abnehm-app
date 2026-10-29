@@ -41,7 +41,7 @@ import {
   setPartnerSharing,
 } from '../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
-import { waterEntryEntity } from '../../mobile/src/trackers/index.ts';
+import { waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { dumpServer, seedServer } from '../dev/seed/server-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
 import { partnerSummary, revocationNotice } from '../src/db/schema/index.ts';
@@ -70,7 +70,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
 ]);
 
 type Phone = Readonly<{

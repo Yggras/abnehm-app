@@ -263,10 +263,21 @@ export const todayFixtures = {
       'Trend ohne Wiegetag': weight,
       'noch nie gewogen, Plan ohne Wiegetag': { ...weight, value: null, status: { type: 'kein_wiegetag', nextWeighDay: null } },
       'Wiegetag offen': { ...weight, status: { type: 'wiegetag_offen' } },
+      'gewogen, unter drei Tagesgewichten': { ...weight, value: { type: 'tagesgewicht', weightG: 79_400 }, status: { type: 'gewogen' } },
     },
     invalid: {
       'Gewicht in kg': { ...weight, value: { type: 'trend', weightG: 79.6 } },
       'Wiegetag als Text': { ...weight, status: 'wiegetag_offen' },
+      'Status im Ton problem': { ...weight, status: { type: 'problem' } },
+      'Knopf öffnet die Details statt des Formulars': {
+        ...weight,
+        quickAction: { type: 'navigate', intent: action('tracker.weight.add', { type: 'capture.weight' }) },
+      },
+      'Knopf navigiert zu einem anderen Tracker': {
+        ...weight,
+        quickAction: { type: 'navigate', intent: action('tracker.weight.add', { type: 'capture.sport', newEntry: true }) },
+      },
+      'Knopf bucht statt zu navigieren': { ...weight, quickAction: { type: 'command', commandKey: 'water.quick_add', params: { ml: 250 } } },
     },
   }),
   PartnerCardReady: fixtures(PartnerCardReady, {

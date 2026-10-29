@@ -53,7 +53,7 @@ export const seedIds = {
     philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
     annaHeute: [id('0020', 3), id('0020', 4)],
   },
-  weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2), annaGestern: id('0021', 3) },
+  weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
   sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2), philippFruehstueck: [id('0031', 3), id('0031', 4)] },

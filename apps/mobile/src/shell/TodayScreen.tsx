@@ -1,4 +1,4 @@
-import { weekdayOf, type Instant, type LocalDate } from '@abnehm/contracts/base';
+import { localDateAfter, weekdayOf, type Instant, type LocalDate } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { UiActionIntent } from '@abnehm/contracts/routes';
 import type { EncouragementKey } from '@abnehm/contracts/partner';
@@ -10,11 +10,13 @@ import type {
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useClock } from '../clock/clock-context';
 import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
+import { thousandthsWithOneDecimal } from './texts';
 import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContributionError } from './today-registry';
 
 type Data<S> = S extends ContributionState<infer D, string> ? D : never;
@@ -38,14 +40,6 @@ const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason 
   ohne_zielversion: 'Noch kein Ziel festgelegt.',
 };
 const emptyTextOf = (reasonKey: string) => (emptyTexts as Readonly<Record<string, string>>)[reasonKey] ?? 'Hier gibt es noch nichts zu zeigen.';
-/**
- * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg oder ml als l; umgerechnet
- * nur an der Oberfläche (Spezifikation 3, Abschnitt 1). Gerundet wird hier kaufmännisch: Hermes
- * zeigte für 250 ml im iOS-Simulator „0,2 l“, Node „0,3 l“ (beobachtet am 28.10.2026, #171).
- */
-function thousandthsWithOneDecimal(value: number): string {
-  return (Math.round(value / 100) / 10).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
 function staleLabel(dataAsOf: Instant): string {
   const [date, time] = dataAsOf.split('T');
   return `Stand: ${date!.split('-').reverse().join('.')} · ${time!.slice(0, 5)} UTC`;
@@ -157,7 +151,9 @@ function Nutrition({ budget, log, stale }: { budget: NutritionBudgetReady; log: 
  * Fortschrittsanzeige erreichen, und der Status sagt „erreicht“ in Worten.
  */
 function Tracker({ label, value, of, status, detail, quick, quickLabel, progress }: {
-  label: string; value: string; status: string; detail: UiActionIntent; quick: TrackerQuickAction; quickLabel: string;
+  label: string; value: string; detail: UiActionIntent; quick: TrackerQuickAction; quickLabel: string;
+  /** Stand in Worten; ohne ihn steht nur der Wert da, etwa beim Gewicht ohne Wiegetag im Wochenplan. */
+  status?: string;
   /** Bezug des Werts, etwa „von 2,5 l“. */
   of?: string;
   progress?: { value: number; target: number };
@@ -165,14 +161,14 @@ function Tracker({ label, value, of, status, detail, quick, quickLabel, progress
   const runCommand = useQuickCommand();
   const valueText = of ? `${value} ${of}` : value;
   return <View style={styles.tracker}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${valueText}, ${status}. Details öffnen`}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${valueText}${status ? `, ${status}` : ''}. Details öffnen`}
       style={styles.trackerDetail} onPress={() => action(detail)}>
       <Text variant="headline">{label}</Text>
       <Text variant="numberM">{value}</Text>
       {of ? <Text variant="caption" tone="inkMuted">{of}</Text> : null}
     </Pressable>
     {progress ? <ProgressBar label={`${label} heute`} value={progress.value} target={progress.target} valueText={valueText} legend={false} /> : null}
-    <Text variant="label" tone="inkMuted">{status}</Text>
+    {status ? <Text variant="label" tone="inkMuted">{status}</Text> : null}
     <Button compact block dense variant="secondary" label={quickLabel} accessibilityLabel={`${label}: ${quickLabel}`}
       onPress={() => quick.type === 'navigate' ? action(quick.intent) : runCommand(quick)} />
   </View>;
@@ -191,9 +187,25 @@ function Partner({ data }: { data: PartnerCardReady }) {
   </Card>;
 }
 
+/**
+ * Stand des Wiegetags auf dem Gewichts-Mini-Tracker (Spezifikation 3, Abschnitt 7): am Wiegetag
+ * offen oder gewogen, sonst der nächste Wiegetag; der liegt höchstens sieben Tage voraus, sein
+ * Wochentag ist deshalb eindeutig. Ohne Wiegetag im Wochenplan steht kein Satz da, nur „Eintragen“.
+ */
+function weighDayText(status: TrackerWeightReady['status'], today: LocalDate): string | undefined {
+  switch (status.type) {
+    case 'wiegetag_offen': return 'Heute ist Wiegetag';
+    case 'gewogen': return 'Heute gewogen';
+    case 'kein_wiegetag':
+      if (status.nextWeighDay === null) return undefined;
+      return `Nächster Wiegetag: ${status.nextWeighDay === localDateAfter(today, 1) ? 'morgen' : weekdays[weekdayOf(status.nextWeighDay)]}`;
+  }
+}
+
 /** Feste Slots in visueller Reihenfolge; zusammengesetzte Karten benötigen beide Fachbeiträge. */
 export function TodayContent({ registry }: { registry: TodayRegistry }) {
   const large = useLargeTextLayout();
+  const clock = useClock();
   return <View style={styles.content}>
     <View testID="today-slot-header"><State registry={registry} slot="header">{(data) => <Header data={data as HeaderReady} />}</State></View>
     <View testID="today-slot-top_notice"><State registry={registry} slot="top_notice">{(value) => {
@@ -211,7 +223,7 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} l`} of={`von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} status={d.status.type === 'wiegetag_offen' ? 'Wiegetag offen' : d.status.type === 'gewogen' ? 'Gewogen' : 'Nächster Wiegetag'} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} status={weighDayText(d.status, clock.read().localDate)} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>
   </View>;

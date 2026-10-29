@@ -37,8 +37,10 @@ name: Sync ohne Netz und kanonischer Sync
     id: tab-capture
 - assertVisible: "Was möchtest du erfassen?"
 - assertVisible: "+250 ml Wasser"
+# „Gewicht“ öffnet seit #175 das Formular für einen neuen Eintrag; „Fertig“ schließt es ohne Speichern.
 - tapOn: "Gewicht"
-- assertVisible: "Kommt mit: Wasser, Sport, Gewicht & Health"
+- assertVisible: "Gemessen am"
+- assertVisible: "Speichern"
 - tapOn: "Fertig"
 - assertVisible: "Hallo, Philipp"
 

@@ -1,80 +1,33 @@
 /** @jest-environment node */
-import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { EntityId, Instant, type LocalDate, TimeZone } from '@abnehm/contracts/base';
-import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
+import { createTestClock } from '@abnehm/clock/testing';
+import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { WaterAddedOutcome, WaterEntryUpsert } from '@abnehm/contracts/trackers';
 
-import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCompletionEntity } from '../daily-goals';
-import { insertPersonForTest } from '../daily-goals/testing/persisted';
-import { energyBookingEntity } from '../energy';
-import type { LocalDatabase, ReadContext } from '../local-db';
-import { createLocalDatabases } from '../local-db/local-databases';
-import { dirtyDay, waterEntry } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
-import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createQuickCommandRegistry } from '../shell/quick-commands';
-import { createSyncRegistry, createSyncWriter } from '../sync';
-import { pendingOperations } from '../sync/outbox';
-import { createTrackers, InvalidTrackerInputError, waterEntryEntity, type TrackerDependencies } from '.';
+import { InvalidTrackerInputError } from '.';
+import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld } from './testing/tracker-world';
 
 // Nachweis für #171: das Tracker-Modul (Spezifikation 3, Abschnitte 2 und 4) mit `addWater`, `undo`
 // und dem Quick-Command `water.quick_add` gegen eine echte SQLite-Datei mit denselben Migrationen
 // wie die App, gesteuert über die Testuhr. Jeder Befehl ist genau eine lokale Transaktion aus
 // Fachänderung, Outbox-Operation und `reevaluateDailyGoals`.
 
-const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
-const berlin = TimeZone.parse('Europe/Berlin');
-/** 12:00 in Berlin am Mittwoch, 14.10.2026 (Sommerzeit, UTC+2). */
-const noon = Instant.parse('2026-10-14T10:00:00.000Z');
-
-type Report = { personId: EntityId; localDates: readonly LocalDate[]; cause: DailyGoalCause };
-
+const worlds: TrackerWorld[] = [];
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
+  for (const world of worlds.splice(0)) world.close();
 });
 
 async function setup({ failReevaluation = false, at = noon }: { failReevaluation?: boolean; at?: Instant } = {}) {
-  let failing = failReevaluation;
-  const files = createBetterSqliteFiles();
-  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
-  cleanups.push(() => {
-    databases.lock();
-    files.remove();
-  });
-  const database: LocalDatabase = await databases.open('konto_a');
-  database.transaction((tx) => insertPersonForTest(tx, philipp));
-  const clock: TestClock = createTestClock({ instant: at, timeZone: berlin });
-  const newId = () => EntityId.parse(randomUUID());
-  const writer = createSyncWriter({ registry: createSyncRegistry([waterEntryEntity, dailyGoalCompletionEntity, energyBookingEntity]), clock, newId });
-  const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
-  const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock, writer, dispatcher });
-  const reports: Report[] = [];
-  const dependencies: TrackerDependencies = {
-    database,
-    clock,
-    writer,
-    newId,
-    persistence: {
-      reevaluateDailyGoals(tx, personId, localDates, cause) {
-        reports.push({ personId, localDates: [...localDates], cause });
-        persistence.reevaluateDailyGoals(tx, personId, localDates, cause);
-        if (failing) throw new Error('Auswertung gescheitert');
-      },
-    },
-  };
-  const trackers = createTrackers(dependencies);
-  const rows = () => database.read((tx: ReadContext) => sqliteOf(tx).select().from(waterEntry).all());
-  const operations = () => database.read((tx) => pendingOperations(tx, 100));
-  const markers = () => database.read((tx) => sqliteOf(tx).select().from(dirtyDay).all());
-  const fail = (value: boolean) => {
-    failing = value;
-  };
-  return { database, clock, trackers, reports, rows, operations, markers, failReevaluation: fail };
+  const clock = createTestClock({ instant: at, timeZone: berlin });
+  const world = await createTrackerWorld(clock);
+  worlds.push(world);
+  world.failReevaluation(failReevaluation);
+  return { ...world, clock, rows: world.waters };
 }
 
 describe('addWater', () => {

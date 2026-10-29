@@ -1,11 +1,11 @@
 import type { MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
-import { WaterAddedValues } from '@abnehm/contracts/trackers';
+import { WaterAddedValues, WeightRecordedValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
-import { quickCommandOwnerName, shellTexts } from './texts';
+import { quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
 
 // Texte des Meldungs-Hosts: Die sichtbare Zeile entsteht in der App aus `messageKey` und
 // typisierten Werten (Spezifikation 0, Abschnitt 2). Bereiche tragen ihre Meldungen hier ein,
@@ -43,6 +43,8 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'ernaehrung.eintrag_hinzugefuegt': messageText(NutritionEntryAddedValues, ({ meal, kcal }) => ({
     text: `${kcal.toLocaleString('de-DE')} kcal ${toMeal[meal]} hinzugefügt`,
   })),
+  /** Spezifikation 3: Gewicht eingetragen („91,8 kg eingetragen · Rückgängig“); nur die Person selbst sieht es. */
+  'gewicht.eingetragen': messageText(WeightRecordedValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */

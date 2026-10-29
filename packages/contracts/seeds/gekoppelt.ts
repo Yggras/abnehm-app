@@ -166,6 +166,8 @@ const tracker: SeedPart = {
     })),
     {
       table: 'weight_entry',
+      // Seit #175 beim Sync angemeldet: Der Eintrag steht im Änderungsprotokoll.
+      entityType: 'weight_entry',
       ownerPersonId: anna,
       row: {
         id: seedIds.weightEntry.annaGestern,
@@ -504,9 +506,10 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 3,
+  revision: 4,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

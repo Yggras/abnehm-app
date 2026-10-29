@@ -28,6 +28,90 @@ export function countedWaterMl(entries: readonly WaterEntryFacts[], localDate: s
   return sum;
 }
 
+/**
+ * Gültige manuelle Gewichtseingabe in g: 20,0–350,0 kg mit einer Nachkommastelle, gespeichert in
+ * 100-g-Schritten (Designwert aus Spezifikation 3, Abschnitt 3). Importe behalten ihre genauen Gramm.
+ */
+export const manualWeightG = { min: 20_000, max: 350_000, step: 100 } as const;
+
+/** Ob ein Gewicht als manuelle Eingabe gültig ist: ganze 100 g im Bereich 20,0–350,0 kg. */
+export function isValidManualWeight(weightG: number): boolean {
+  return Number.isInteger(weightG) && weightG % manualWeightG.step === 0 && weightG >= manualWeightG.min && weightG <= manualWeightG.max;
+}
+
+/** Herkunft eines von Hand erfassten Sport- oder Gewichtseintrags; Importe kommen aus Apple Health bzw. Health Connect. */
+export const manualOrigin = 'manuell';
+
+/**
+ * Ob ein Zeitpunkt nach „jetzt“ liegt; Zeitpunkte in der Zukunft sind nicht erlaubt (Spezifikation 3,
+ * Abschnitt 4). Verglichen werden Zeitpunkte, nicht Zeichenfolgen; „jetzt“ gibt der Aufrufer aus seiner Uhr.
+ */
+export function isInFuture(instant: string, now: string): boolean {
+  return Date.parse(instant) > Date.parse(now);
+}
+
+/** Was die Gewichtsregeln von einem Gewichtseintrag brauchen. */
+export type WeightEntryFacts = Readonly<{
+  weightG: number;
+  measuredAt: string;
+  localDate: string;
+  deletedAt: string | null;
+  hiddenAt: string | null;
+}>;
+
+/** Zählender Gewichtseintrag: nicht gelöscht und nicht ausgeblendet (Spezifikation 3, Abschnitt 3). */
+export function isCountingWeightEntry(entry: WeightEntryFacts): boolean {
+  return entry.deletedAt === null && entry.hiddenAt === null;
+}
+
+/** Tagesgewicht eines lokalen Tags. */
+export type DayWeight = Readonly<{ localDate: string; weightG: number }>;
+
+/**
+ * Tagesgewichte aufsteigend nach lokalem Tag: je Tag die früheste zählende Messung. Weitere Messungen
+ * desselben Tags bleiben gespeichert, zählen aber nicht als Tagesgewicht (#38). Maßgeblich ist der
+ * gespeicherte lokale Tag des Eintrags, nicht das UTC-Datum seines Zeitpunkts.
+ */
+export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
+  const earliest = new Map<string, WeightEntryFacts>();
+  for (const entry of entries) {
+    if (!isCountingWeightEntry(entry)) continue;
+    const known = earliest.get(entry.localDate);
+    if (known === undefined || Date.parse(entry.measuredAt) < Date.parse(known.measuredAt)) earliest.set(entry.localDate, entry);
+  }
+  return [...earliest.values()]
+    .sort((a, b) => (a.localDate < b.localDate ? -1 : 1))
+    .map(({ localDate, weightG }) => ({ localDate, weightG }));
+}
+
+/**
+ * Das letzte Gewicht: die zuletzt gemessene zählende Messung, auch nach dem Tagesgewicht desselben Tags.
+ * Das Formular füllt es vor, damit die Person nur die Änderung tippt (#38); ohne Messung `null`.
+ */
+export function lastWeightG(entries: readonly WeightEntryFacts[]): number | null {
+  let last: WeightEntryFacts | null = null;
+  for (const entry of entries) {
+    if (isCountingWeightEntry(entry) && (last === null || Date.parse(entry.measuredAt) > Date.parse(last.measuredAt))) last = entry;
+  }
+  return last?.weightG ?? null;
+}
+
+/** Wiegetag: ein Wochenplantag mit dem Baustein Gewogen, gleich auf welchem Platz (`CONTEXT.md`). */
+export function isWeighDay(bausteine: readonly string[]): boolean {
+  return bausteine.includes('gewogen');
+}
+
+/** Plausibilitätsgrenze in g (Designwert aus #38): Ab mehr als 2 kg Abweichung fragt das Formular. */
+export const typoLimitG = 2000;
+
+/**
+ * Ob das Formular vor dem Speichern „Tippfehler?“ fragt: Die Eingabe weicht um mehr als 2 kg vom
+ * letzten Tagesgewicht ab. Genau 2,0 kg fragt nicht; ohne Tagesgewicht gibt es keinen Vergleich.
+ */
+export function asksForTypo(weightG: number, lastDayWeightG: number | null): boolean {
+  return lastDayWeightG !== null && Math.abs(weightG - lastDayWeightG) > typoLimitG;
+}
+
 /** Neutrale Status eines Mini-Trackers auf „Heute“; nie `problem` (Spezifikation 3, Abschnitt 7). */
 export const trackerStatuses = ['leer', 'teil', 'erreicht', 'ueber_ziel'] as const;
 export type TrackerStatus = (typeof trackerStatuses)[number];

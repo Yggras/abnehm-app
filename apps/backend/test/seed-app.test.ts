@@ -20,7 +20,7 @@ import { createAppTestClock, type AppTestClock } from '../../mobile/src/test-cap
 import { createFaultController, faultyFetch, type FaultController } from '../../mobile/src/test-capabilities/faults.ts';
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { runSeed } from '../../mobile/src/test-capabilities/seed/seed-flow.ts';
-import { waterEntryEntity } from '../../mobile/src/trackers/index.ts';
+import { waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { createDevelopmentApp } from '../dev/app.ts';
 import { dumpServer } from '../dev/seed/server-seed.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
@@ -100,8 +100,8 @@ function sync(device: Phone, manifest: SeedManifest, installation: string) {
   const installationId = InstallationId.parse(manifest.installations.find(({ key }) => key === installation)!.installationId);
   const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });
   const database = device.session.databases.current()!;
-  // Wie der Composition Root: Die Bereiche melden ihre Entitäten an, hier Ziel- und Wochenplanversion (#128), der Wassereintrag (#171) und der Ernährungseintrag (#155).
-  const registry = createSyncRegistry([...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, waterEntryEntity, nutritionEntryEntity]);
+  // Wie der Composition Root: Die Bereiche melden ihre Entitäten an, hier Ziel- und Wochenplanversion (#128), Wasser- und Gewichtseintrag (#171, #175) und der Ernährungseintrag (#155).
+  const registry = createSyncRegistry([...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity]);
   return createSyncEngine({ database, registry, transport, clock: device.clock, installationId }).sync();
 }
 
@@ -195,7 +195,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.initial.devices['philipp-iphone']!));
 
     const registry = createSyncRegistry([
-      ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, nutritionEntryEntity,
+      ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
     ]);
     const installationId = InstallationId.parse(manifest.installations[0]!.installationId);
     const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });
