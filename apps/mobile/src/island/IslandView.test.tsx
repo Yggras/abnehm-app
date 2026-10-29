@@ -130,6 +130,22 @@ test('wird der Canvas höher, etwa wenn die Tab-Leiste über die Insel wechselt,
   expect(onFieldPress).toHaveBeenCalledWith(expect.objectContaining({ field: 'grundinsel:8:7' }));
 });
 
+test('Lastrahmen: Die Fixture-Insel zeichnet weniger Elemente und Animationen als der Spike (1.382 und 157)', async () => {
+  const { fixtureIsland } = jest.requireActual<typeof import('../test-capabilities/fixture-island')>('../test-capabilities/fixture-island');
+  await renderIsland(fixtureIsland());
+
+  // Gezeichnete Skia-Elemente ohne Gruppen; animiert ist, was eine Gruppe mit Shared Value bewegt.
+  const nodes = screen.container.queryAll((node) => node.type.startsWith('sk'));
+  const drawn = nodes.filter((node) => node.type !== 'skGroup');
+  const isShared = (value: unknown) => typeof value === 'object' && value !== null && 'value' in value && 'modify' in value;
+  const animated = nodes.filter((node) => Object.values(node.props).some(isShared));
+
+  expect(drawn.length).toBeGreaterThan(300);
+  expect(drawn.length).toBeLessThan(1382);
+  expect(animated.length).toBeGreaterThan(0);
+  expect(animated.length).toBeLessThan(157);
+});
+
 test('ein Tipp ins Wasser meldet nichts', async () => {
   const onFieldPress = jest.fn();
   await renderIsland({ onFieldPress });
