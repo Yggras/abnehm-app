@@ -60,7 +60,7 @@ Bereichscode liest Zeitpunkt, Zeitzone und lokalen Tag ausschließlich über die
 Oberflächen entstehen nur aus den Tokens und Primitiven in `apps/mobile/src/design/` ([#95](https://github.com/Yggras/abnehm-app/issues/95)), Import über `../design`.
 
 - **Tokens:** `tokens.ts` übernimmt `research/design-system.md` vollständig; `tokens.test.ts` prüft das gegen die Tabellen dort. Ändert sich das Design-System, schlägt der Test fehl, bis die Tokens nachgezogen sind.
-- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `Toast`, `ProgressBar`, `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`.
+- **Primitiven:** `Text`, `Icon`, `Button`, `Chip`, `Card`, `Notice`, `ListRow`, `Toast`, `ProgressBar`, `LevelBar` (Levelbalken 50/50, #182), `Skeleton`; native Elemente nur über die Hüllen `Sheet`, `Switch`, `DateTimePicker` und `ContextMenu`.
 - **Komponentenkatalog:** nur im Development Build, erreichbar über „Komponentenkatalog“ auf „Heute“ oder `abnehmapp-dev://katalog`. Er zeigt alle Primitiven in ihren Zuständen und ist die Grundlage für Gerätesmoke und Impeccable-Prüfung.
 
 ### App-Shell und Navigation
@@ -192,6 +192,25 @@ Den Persistenzdienst aus Abschnitt 3 und die Energiebuchungen aus Abschnitt 4 de
   - Legen zwei Branches dieselbe Version an, kollidieren sie beim Merge. Der spätere erhöht die Version erneut und erzeugt seinen Schnappschuss neu.
 - **Backend-Image:** Es kopiert `src/` und `content/`, nicht `fixtures/` und `catalog-versions/`.
 - **Tests:** Die Wahrheitstabellen liegen unter `packages/game-rules/test/`. Der Tracer läuft in der App (`apps/mobile/src/game-rules/tracer.test.ts`) und im Backend (`apps/backend/test/game-rules.test.ts`) mit denselben Buchungsfakten.
+
+### Inselansicht
+
+Der Tab „Momo“ zeigt die Insel nach Abschnitt 7 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83) ([#182](https://github.com/Yggras/abnehm-app/issues/182)). Der Code liegt in `apps/mobile/src/island/`.
+
+- **Szenenmodell** (`scene-model.ts`): `islandScene({ island, viewerPersonId, mode, localTime, zoom, selectedField })` ist eine reine Funktion. Sie liefert eine geordnete Zeichenliste mit den Ebenen Wasser, Inselsockel, Felder, Objekte samt Momo, Nebel und Overlays. Dazu kommen Jahreszeit, Tageszeit, Laub, Startpunkt (Mitte der Lichtung) und Ausdehnung. `scene.hitAt(punkt)` ist die Umkehrabbildung derselben Projektion: Feld samt Besitzer aus Sicht der betrachtenden Person, gesperrtes Gebiet oder `null` im Wasser.
+  - Ein Feld ist bei Zoom 1 64 × 32 dp groß, die obere Ecke von Feld (x, y) liegt bei ((x − y) · 32, (x + y) · 16).
+  - Abend gilt von 20 bis 6 Uhr, dieselbe Zeit, in der Momo auf der Insel schläft (Spezifikation 4, Abschnitt 6). Die Jahreszeit ist meteorologisch nach dem lokalen Datum, `localTimeOf(ablesung)` rechnet die Minute des Tages aus Zeitpunkt und UTC-Offset der Uhr.
+  - Farben sind Token-Namen im Feld `tone`. Die Lint-Regel `abnehm/token-farben` liest jedes Feld `color` mit Zeichenkette als rohe Farbe.
+  - Designwerte aus #182 ohne Beleg: Tiefe der Erdschicht (halbe Feldhöhe), Zahl der Wellen (16) und Partikel (8), Partikelfarben, Momos Platz (Feld der Lichtung nächst ihrer Mitte), Deckkraft der Auswahl (50 %).
+- **Aufbau aus dem Katalog** (`layout.ts`): `islandLayout(katalog, { sides, unlockedAreas })` macht aus Grundinsel und freigeschalteten festen Gebieten Felder mit Besitzer (Seite a bzw. b), die übrigen festen Gebiete liegen unter Nebel. Endlose Gebiete fehlen, bis #204 ihre Lage auf dem Raster festlegt.
+- **Canvas** (`IslandCanvas.tsx`, Zeichnungen in `IslandArt.tsx`): Skia zeichnet die Liste einmal in Zoom 1. Wie im Spike laufen Verschiebung und Zoom als Transformation auf dem UI-Thread (`viewport.ts`, Worklets); ein Tipp wird mit dem aktuellen Ausschnitt in den Szenenraum zurückgerechnet. Gesten kommen aus Gesture Handler 3 (`usePanGesture`, `usePinchGesture`, `useTapGesture`). Das Worklets-Plugin macht aus Worklet-Funktionen Zuweisungen ohne Hoisting, deshalb steht in `viewport.ts` jede Funktion vor ihren Aufrufern. Wellen, Ruheatmung und Partikel hängen an `useLoop`, der bei „Bewegung reduzieren“ stillsteht. Objekte und Momo sind Vorzeichnungen, bis #192 die Grafiken der Start-Baupläne und #187 das Momo-Rig liefert.
+- **HUD und Leiste** (`IslandHud.tsx`, `IslandBar.tsx`): Jahreszeit mit Tageszeit und Energie sind Anzeigen ohne Sockelkante, „Bereiche“ ist ein `IconButton` mit `checked`. Den Levelbalken liefert das Design-System (`LevelBar`). Die Leiste öffnet ihre Ansichten über die Route `momo` mit `view`.
+- **Tab-Leiste über der Szene:** Auf Tabs in `sceneTabs` (`src/shell/tab-bar-overlap.ts`, bisher nur „Momo“) liegt die eigene Tab-Leiste über dem Inhalt. Der Streifen neben dem ＋ ist dann durchsichtig und lässt Gesten durch. Ihre Höhe bekommt die Szene über `useTabBarOverlap()`.
+- **Fixture-Insel:** Bis „Schlüpfen“ (#184) die echte Insel anschließt, zeigt der Tab in Development- und E2E-Build die Testfähigkeit `fixture-insel` (`src/test-capabilities/fixture-island.ts`). Sie enthält die Grundinsel des Spielkatalogs mit Philipp und Anna aus den Seed-Manifesten, Objekte der Start-Baupläne, Level 6 mit 23 Energie und eine Nebelvorschau. Im Produktionsbuild bleibt der Platzhalter.
+- **Tests:** `scene-model.test.ts`, `layout.test.ts` und `viewport.test.ts` prüfen die reinen Teile, `IslandHud.test.tsx` und `IslandBar.test.tsx` HUD und Leiste mit RNTL.
+  - `IslandView.test.tsx` zeichnet die Fixture-Insel mit dem echten Skia-Code. Diese Testdatei wählt per Docblock die Umgebung `apps/mobile/jest/skia-environment.js`, die CanvasKit in die Umgebung von jest-expo lädt, und mockt Skia wie dessen `jestSetup.js`. Tipps simuliert sie mit `createGestureController` aus `react-native-gesture-handler/jest-utils`; `fireGestureHandler` setzt Koordinaten nur auf das erste Event.
+  - Alle übrigen Tests bekommen aus `apps/mobile/jest/setup.js` eine Skia-Attrappe ohne Zeichnung. Neue Skia-Bausteine gehören dort dazu. Dieselbe Datei richtet Worklets (Jest-Attrappe des Pakets), Reanimated (`setUpTests`) und Gesture Handler (`jestSetup`) ein, `jest.config.js` den Resolver von Reanimated.
+- **Native Bibliotheken:** Skia, Reanimated, Worklets und Gesture Handler stehen in den Versionen von SDK 58 in `apps/mobile/package.json`. Gesture Handler ist zusätzlich im Root-`package.json` per `overrides` festgelegt: Expo Router zieht sonst eine zweite, neuere Kopie nach. `GestureHandlerRootView` umschließt die App im Root-Layout. Ein Development Build von vor #182 braucht einen Neubau (`npm run ios` bzw. `npm run android`).
 
 ### Ports zwischen Bereichen
 

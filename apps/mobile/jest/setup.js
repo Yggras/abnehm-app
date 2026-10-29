@@ -1,3 +1,4 @@
+/* global jest */
 // Worklets, Reanimated und Gesture Handler im Test (#182), jeweils nach der Doku des Pakets:
 // - Worklets mit ihrer Jest-Attrappe (https://docs.swmansion.com/react-native-worklets/docs/guides/testing);
 //   sie liefert auch die UI-Laufzeit, die Gesture Handler beim Laden anbindet;

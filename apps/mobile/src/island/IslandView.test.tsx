@@ -28,7 +28,7 @@ jest.mock('@shopify/react-native-skia', () => {
     listFontFamilies: () => [],
     useFonts: () => null,
   }));
-  return require('@shopify/react-native-skia/lib/commonjs/mock').Mock((globalThis as unknown as { CanvasKit: unknown }).CanvasKit);
+  return jest.requireActual<{ Mock: (canvasKit: unknown) => unknown }>('@shopify/react-native-skia/lib/commonjs/mock').Mock((globalThis as unknown as { CanvasKit: unknown }).CanvasKit);
 });
 
 const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
