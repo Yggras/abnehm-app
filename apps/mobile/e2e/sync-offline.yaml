@@ -13,7 +13,7 @@
 # Freitag, 16.10., in Berlin erst Donnerstag.
 # Zweite lokale Änderung (#171): „+250 ml Wasser“ im ＋-Sheet bucht über `water.quick_add` auf den
 # Freitag in Kiritimati. Nach der Netzrückkehr zählt der Mini-Tracker den kanonischen Eintrag weiter
-# auf diesen Tag; das Wasserziel (2,5 l) liefert im E2E-Build die PlanReader-Attrappe.
+# auf diesen Tag; das Wasserziel (2,5 l) liest er über den `PlanReader` aus der Zielversion des Seeds (#128).
 appId: ${APP_ID}
 name: Sync ohne Netz und kanonischer Sync
 ---
@@ -37,8 +37,10 @@ name: Sync ohne Netz und kanonischer Sync
     id: tab-capture
 - assertVisible: "Was möchtest du erfassen?"
 - assertVisible: "+250 ml Wasser"
+# „Gewicht“ öffnet seit #175 das Formular für einen neuen Eintrag; „Fertig“ schließt es ohne Speichern.
 - tapOn: "Gewicht"
-- assertVisible: "Kommt mit: Wasser, Sport, Gewicht & Health"
+- assertVisible: "Gemessen am"
+- assertVisible: "Speichern"
 - tapOn: "Fertig"
 - assertVisible: "Hallo, Philipp"
 

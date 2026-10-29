@@ -1,6 +1,10 @@
+import { EntityId, LocalDate } from '../src/base.ts';
+import { goalVersionId, weeklyPlanVersionId } from '../src/plan.ts';
+
 // Gemeinsame IDs, Konten und Installationen aller Seed-Szenarien (Spezifikation 0, Abschnitt 12).
 // Bereiche ergänzen Szenarien unter Wiederverwendung dieser Werte; eigene IDs eines Bereichs folgen
-// demselben Muster `5eed<art>-0000-4000-8000-<laufende nummer>`. Alles ist synthetisch.
+// demselben Muster `5eed<art>-0000-4000-8000-<laufende nummer>`, außer wo eine Regel die ID aus dem
+// fachlichen Schlüssel ableitet. Alles ist synthetisch.
 
 /** Feste Uhr aller Szenarien: Mittwoch, 14.10.2026, 14:00 Uhr in Berlin. */
 export const seedClock = { instant: '2026-10-14T12:00:00.000Z', timeZone: 'Europe/Berlin' } as const;
@@ -23,12 +27,23 @@ export const seedUtcOffsetMinutes = 120;
 
 const id = (kind: string, n: number) => `5eed${kind}-0000-4000-8000-${n.toString().padStart(12, '0')}`;
 
+const person = { philipp: id('0002', 1), anna: id('0002', 2) };
+
+/**
+ * Ziel- und Wochenplanversionen tragen die ID aus Person und `valid_from` (#128); nur so ersetzt eine
+ * spätere Fassung desselben Tags die Zeile, statt am natürlichen Schlüssel zu scheitern.
+ */
+const planVersionIds = (idOf: (personId: EntityId, validFrom: LocalDate) => EntityId) => ({
+  philipp: idOf(EntityId.parse(person.philipp), LocalDate.parse(seedDays.zielstart)) as string,
+  anna: idOf(EntityId.parse(person.anna), LocalDate.parse(seedDays.zielstart)) as string,
+});
+
 export const seedIds = {
   account: { philipp: id('0001', 1), anna: id('0001', 2) },
-  person: { philipp: id('0002', 1), anna: id('0002', 2) },
+  person,
   installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2) },
-  goalVersion: { philipp: id('0010', 1), anna: id('0010', 2) },
-  weeklyPlanVersion: { philipp: id('0011', 1), anna: id('0011', 2) },
+  goalVersion: planVersionIds(goalVersionId),
+  weeklyPlanVersion: planVersionIds(weeklyPlanVersionId),
   dailyGoal: {
     philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
     annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
@@ -38,9 +53,10 @@ export const seedIds = {
     philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
     annaHeute: [id('0020', 3), id('0020', 4)],
   },
-  weightEntry: { philippVorgestern: id('0021', 1), philippHeute: id('0021', 2), annaGestern: id('0021', 3) },
+  weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
   sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
-  nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2) },
+  // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
+  nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2), philippFruehstueck: [id('0031', 3), id('0031', 4)] },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   coupling: { philippAnna: id('0040', 1) },
   couplingMember: { philipp: id('0041', 1), anna: id('0041', 2) },

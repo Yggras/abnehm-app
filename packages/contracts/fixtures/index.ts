@@ -13,6 +13,7 @@ import { nutritionFixtures } from './nutrition.ts';
 import { onboardingFixtures } from './onboarding.ts';
 import { partnerFixtures } from './partner.ts';
 import { personFixtures } from './person.ts';
+import { planFixtures } from './plan.ts';
 import { portFixtures } from './ports.ts';
 import { routeFixtures } from './routes.ts';
 import { statusFixtures } from './status.ts';
@@ -23,6 +24,9 @@ import { wirFixtures } from './wir.ts';
 
 /** Test-Entität der Sync-Tests in App und Backend; kein Teil des Transportkatalogs. */
 export { TestWaterRecord, TestWaterUpsert } from './sync.ts';
+
+/** Referenzfall der Zielversion und Standard-Wochenplan für Tests der Fachbefehle (#128). */
+export { referenceGoalVersion, standardWeekDays } from './plan.ts';
 
 /**
  * Fixture-Register aller exportierten Schemas, je Teilpfad des Pakets. Ein neues Schema bekommt
@@ -37,6 +41,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   auth: authFixtures,
   coupling: couplingFixtures,
   'daily-goals': dailyGoalFixtures,
+  plan: planFixtures,
   energy: energyFixtures,
   partner: partnerFixtures,
   island: islandFixtures,

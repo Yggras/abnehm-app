@@ -1,4 +1,4 @@
-import { TimeZone, type Instant, type LocalDate } from '@abnehm/contracts/base';
+import { Instant, TimeZone, type LocalDate } from '@abnehm/contracts/base';
 
 import { readingAt } from './reading.ts';
 
@@ -29,6 +29,15 @@ export function minutesOfDay(reading: ClockReading): number {
  */
 export interface Clock {
   read(timeZone?: TimeZone): ClockReading;
+}
+
+/**
+ * Liest einen gegebenen Zeitpunkt in einer Zone ab, etwa einen nachgetragenen Messzeitpunkt (#175):
+ * lokaler Tag und Offset gehören zu genau diesem Zeitpunkt. Liest keine Uhr; „jetzt“ kommt nur aus
+ * `Clock.read`, die Zone in der Regel aus derselben Ablesung.
+ */
+export function readingOf(instant: Instant, timeZone: TimeZone): ClockReading {
+  return readingAt(Date.parse(Instant.parse(instant)), timeZone);
 }
 
 /**

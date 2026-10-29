@@ -1,11 +1,14 @@
-import { router } from 'expo-router';
-import { useEffect, useSyncExternalStore } from 'react';
+import type { RouteTarget } from '@abnehm/contracts/routes';
+import { router, usePathname } from 'expo-router';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Notice, space } from '../design';
 import { hrefFor } from '../navigation';
 import type { AppSession } from '../session/app-session';
+import type { SessionGate } from '../session/session-gate';
+import { isSessionScreenGate, sessionScreenPath } from '../shell/session-routes';
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
@@ -55,19 +58,44 @@ function statusNotice(status: TestStatus) {
 
 const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
 
-export function TestCapabilityHost({ inbox, clock, session }: { inbox: TestInbox; clock: AppTestClock; session: () => AppSession }) {
+export function TestCapabilityHost({
+  inbox,
+  clock,
+  session,
+  gate,
+}: {
+  inbox: TestInbox;
+  clock: AppTestClock;
+  session: () => AppSession;
+  /** Die Sitzungs-Weiche aus dem Wurzel-Layout; ein eigener Import ergäbe einen Zyklus über `device-session`. */
+  gate: SessionGate | null;
+}) {
   const status = useSyncExternalStore(inbox.subscribe, inbox.status);
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
+  // Je Seed ein eigenes Objekt; `opened` hält fest, welches Ziel schon geöffnet ist.
+  const [seeded, setSeeded] = useState<{ target: RouteTarget } | null>(null);
+  const opened = useRef<{ target: RouteTarget } | null>(null);
 
   useEffect(
     () =>
       inbox.handleSeeds(async (run) => {
         const outcome = await runSeed(run, { session: session(), clock });
-        if (outcome.type === 'geseedet') router.replace(hrefFor(outcome.target));
+        if (outcome.type === 'geseedet') setSeeded({ target: outcome.target });
         return outcome;
       }),
     [inbox, clock, session],
   );
+
+  // Das Ziel erst öffnen, wenn die Weiche die Fachoberfläche freigibt und der Router die Sitzungsseite
+  // verlassen hat. Nach der ersten Anmeldung leitet `Stack.Protected` von dort nach „Heute“ um; ein
+  // früheres Ziel ginge dabei verloren (#155).
+  useEffect(() => {
+    if (seeded === null || opened.current === seeded || gate === null || isSessionScreenGate(gate)) return;
+    if (pathname === sessionScreenPath) return;
+    opened.current = seeded;
+    router.replace(hrefFor(seeded.target));
+  }, [seeded, gate, pathname]);
 
   const notice = statusNotice(status);
   if (notice === null) return null;

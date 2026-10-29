@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { AreaKey, EntityId, LocalDate, ServerVersion, weekdayOf } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, localDateAfter, ServerVersion, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
 import { sharedActionDecisionKey, sharedActionRequestKey } from '../src/island.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
@@ -69,6 +69,23 @@ describe('weekdayOf', () => {
     ['2028-02-29', 'dienstag'],
   ] as const)('%s ist ein %s', (date, weekday) => {
     expect(weekdayOf(LocalDate.parse(date))).toBe(weekday);
+  });
+});
+
+describe('localDateAfter', () => {
+  it.each([
+    ['2026-10-14', 1, '2026-10-15'],
+    ['2026-10-14', 7, '2026-10-21'],
+    ['2026-10-31', 1, '2026-11-01'],
+    ['2028-02-28', 1, '2028-02-29'],
+    ['2026-12-31', 1, '2027-01-01'],
+    ['2026-10-14', -14, '2026-09-30'],
+  ] as const)('%s plus %s Tage ist %s, auch über Monats-, Jahres- und Schaltjahresgrenzen', (date, days, expected) => {
+    expect(localDateAfter(LocalDate.parse(date), days)).toBe(expected);
+  });
+
+  it('kennt keine Zeitumstellung: Ein lokaler Tag ist ein Datum, kein Zeitpunkt', () => {
+    expect(localDateAfter(LocalDate.parse('2026-10-24'), 2)).toBe('2026-10-26');
   });
 });
 

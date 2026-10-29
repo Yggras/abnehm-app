@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { LogScreen } from '../../nutrition/LogScreen';
 
-export default placeholderRoute('log');
+export default routeScreen('log', LogScreen);

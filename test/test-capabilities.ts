@@ -53,7 +53,9 @@ export const testCapabilities: readonly TestCapability[] = [
       'apps/mobile/src/test-capabilities/seed/',
     ],
     entries: { backendRoutes: ['POST /dev/seed'], deepLinks: ['seed'], commands: ['apps/backend/dev/seed-command.ts'] },
-    markers: ['/dev/seed', 'momo-insel-testpasswort'],
+    // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138)
+    // prüft der Release-Test zusätzlich über seinen Schlüssel.
+    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto'],
   },
   {
     key: 'testuhr',
@@ -83,15 +85,6 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/mobile/src/test-capabilities/device-suite/'],
     entries: { deepLinks: ['geraetetest'] },
     markers: ['geraetetest_neustart'],
-  },
-  {
-    // #171: Bis Spezifikation 1 ihren PlanReader anmeldet, braucht der Mini-Tracker `trackers.water` in
-    // Test-Artefakten ein Wasserziel (Nutzerentscheidung vom 28.10.2026 im Ticket).
-    key: 'plan-reader-attrappe',
-    description: 'PlanReader-Attrappe der Test-Artefakte: Zielversion und Wochenplan aus den Seed-Manifesten, über die Fake-Ports aus #104',
-    modules: ['apps/mobile/src/test-capabilities/plan-reader.ts', 'apps/mobile/src/area-ports/testing/'],
-    entries: {},
-    markers: ['PlanReader-Attrappe'],
   },
   {
     // #182: Bis „Schlüpfen“ (#184) die echte Insel anschließt, zeigt der Tab „Momo“ in Test-Artefakten

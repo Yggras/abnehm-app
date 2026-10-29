@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { WeightCaptureScreen } from '../../trackers/WeightCaptureScreen';
 
-export default placeholderRoute('capture.weight');
+export default routeScreen('capture.weight', WeightCaptureScreen);

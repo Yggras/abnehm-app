@@ -81,6 +81,15 @@ export function quickCommandOwnerName(commandKey: QuickCommandKey): string {
   return ownerNames[quickCommandOwners[commandKey]];
 }
 
+/**
+ * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg („91,8“) oder ml als l;
+ * umgerechnet nur an der Oberfläche (Spezifikation 3, Abschnitt 1). Gerundet wird hier kaufmännisch:
+ * Hermes zeigte für 250 ml im iOS-Simulator „0,2 l“, Node „0,3 l“ (beobachtet am 28.10.2026, #171).
+ */
+export function thousandthsWithOneDecimal(value: number): string {
+  return (Math.round(value / 100) / 10).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 export const shellTexts = {
   placeholder: 'Dieser Bereich ist noch in Arbeit.',
   placeholderOwner: (owner: string) => `Kommt mit: ${owner}`,

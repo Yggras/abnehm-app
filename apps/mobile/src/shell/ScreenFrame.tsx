@@ -42,7 +42,10 @@ export function ScreenFrame({ title, presentation, children, compactTabTitle = f
   const insets = useSafeAreaInsets();
   return (
     <SafeAreaView edges={edges[presentation]} style={styles.screen}>
-      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} refreshControl={pullToRefresh ? (
+      {/* Auf iOS weicht der Inhalt der Tastatur aus (`automaticallyAdjustKeyboardInsets` gibt es nur dort; #119).
+          `handled`: Ein Tipp auf einen Button oder Treffer wirkt auch bei offener Tastatur, statt sie nur zu
+          schließen (https://reactnative.dev/docs/scrollview; #119, #155). */}
+      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" refreshControl={pullToRefresh ? (
         <RefreshControl refreshing={refreshing} onRefresh={() => {
           setRefreshing(true);
           void pullToRefresh().finally(() => setRefreshing(false));

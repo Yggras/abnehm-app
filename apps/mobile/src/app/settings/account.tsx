@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { AccountScreen } from '../../settings';
 
-export default placeholderRoute('settings', { section: 'account' });
+export default routeScreen('settings', AccountScreen, { section: 'account' });

@@ -177,6 +177,19 @@ export const TrackerSportReady = z.strictObject({
 });
 export type TrackerSportReady = z.infer<typeof TrackerSportReady>;
 
+/** Knopf des Gewichts-Mini-Trackers: öffnet immer das Formular für einen neuen Eintrag (Spezifikation 3, Abschnitt 4). */
+const weightNewEntry = z.strictObject({
+  type: z.literal('navigate'),
+  intent: actionTo('capture.weight').refine((intent) => intent.target.newEntry === true, {
+    message: 'Öffnet das Formular für einen neuen Eintrag',
+    path: ['target', 'newEntry'],
+  }),
+});
+
+/**
+ * Gewichts-Mini-Tracker: letztes Tagesgewicht bzw. ab drei Tagesgewichten der Trendwert und der Stand
+ * des Wiegetags. Der Status ist immer neutral; der Knopf öffnet das Formular „Eintragen“.
+ */
 export const TrackerWeightReady = z.strictObject({
   key: z.literal('gewicht'),
   /** Trendwert ab drei Tagesgewichten, sonst das letzte Tagesgewicht; `null` ohne Gewichtseintrag. */
@@ -190,7 +203,7 @@ export const TrackerWeightReady = z.strictObject({
     z.strictObject({ type: z.literal('kein_wiegetag'), nextWeighDay: LocalDate.nullable() }),
   ]),
   detailAction: actionTo('capture.weight'),
-  quickAction: TrackerQuickAction,
+  quickAction: weightNewEntry,
 });
 export type TrackerWeightReady = z.infer<typeof TrackerWeightReady>;
 
