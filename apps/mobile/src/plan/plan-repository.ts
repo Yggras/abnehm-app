@@ -10,7 +10,6 @@ import {
   type WeeklyPlanDays,
   type WeeklyPlanVersionRecord,
 } from '@abnehm/contracts/plan';
-import type { EffectivePlan } from '@abnehm/contracts/ports';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { goalVersion, weeklyPlanDay, weeklyPlanVersion } from '../local-db/schema';
@@ -127,8 +126,8 @@ export function removeUnconfirmedWeeklyPlan(tx: TransactionContext, id: EntityId
   db.delete(weeklyPlanVersion).where(eq(weeklyPlanVersion.id, id)).run();
 }
 
-/** Gültiger Plan eines Tags aus SQLite; die Abbildung teilt die App mit dem `PlanReader` des Servers. */
-export function readEffectivePlan(tx: ReadContext, personId: EntityId, localDate: LocalDate): EffectivePlan {
+/** Gültiger Plan eines Tags aus SQLite samt Vertragsprüfung; die Abbildung teilt die App mit dem `PlanReader` des Servers. */
+export function readEffectivePlan(tx: ReadContext, personId: EntityId, localDate: LocalDate): ReturnType<typeof effectivePlanOf> {
   const db = sqliteOf(tx);
   const goal = db
     .select()

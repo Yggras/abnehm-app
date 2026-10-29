@@ -8,19 +8,17 @@ import {
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   goalVersionId,
-  goalVersionKey,
   goalVersionOf,
+  planVersionKey,
   weeklyPlanVersionId,
-  weeklyPlanVersionKey,
 } from '@abnehm/contracts/plan';
-import type { Pace, PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
+import type { Pace, WeightRecorder } from '@abnehm/contracts/ports';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { LocalDatabase, TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { updateOwnPerson, type SyncWriter } from '../sync';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
-import { planReaderOf } from './plan-reader';
 import { readGoalVersion, readWeeklyPlan, writeGoalVersion, writeWeeklyPlan } from './plan-repository';
 import { standardWeeklyPlan, type WeekChoice, type WeekChoiceError } from './weekly-plan';
 
@@ -81,14 +79,12 @@ export type Plan = Readonly<{
    * `begonnen`. Erneutes Speichern ersetzt die Fassungen desselben Tags und schreibt nur, was sich geändert hat.
    */
   saveInitialPlan(draft: InitialPlanDraft): Promise<InitialPlanResult>;
-  /** Gültiger Plan eines Tags, derselbe Lesepfad wie der `PlanReader`. */
-  effectivePlan: PlanReader['effectivePlan'];
 }>;
 
 /**
- * Plan-Modul (Spezifikation 1, Abschnitt 1) über der Datenbank eines Kontos. Uhr, Zeitzone, lokale
- * Transaktion und Outbox kommen über die Ports des Fundaments; Tabellen anderer Bereiche liest und
- * schreibt es nicht.
+ * Befehle des Plan-Moduls (Spezifikation 1, Abschnitt 1) über der Datenbank eines Kontos; die Abfrage des
+ * gültigen Plans ist `planReaderOf`. Uhr, Zeitzone, lokale Transaktion und Outbox kommen über die Ports
+ * des Fundaments; Tabellen anderer Bereiche liest und schreibt es nicht.
  */
 export function createPlan(dependencies: PlanDependencies): Plan {
   const { database, clock, writer, persistence, weightRecorder, newId } = dependencies;
@@ -152,8 +148,6 @@ export function createPlan(dependencies: PlanDependencies): Plan {
         weeklyPlanVersionId: weeklyPlanVersionId(personId, today),
       };
     },
-
-    effectivePlan: planReaderOf(database).effectivePlan,
   };
 
   /** Legt die Zielversion an oder ersetzt die desselben Tags; eine unveränderte bleibt ohne neuen Befehl. */
@@ -164,7 +158,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     writeGoalVersion(tx, id, personId, goal, at);
     writer.command(tx, {
       type: 'createGoalVersion',
-      businessKey: goalVersionKey(personId, goal.validFrom, newId()),
+      businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),
       payload: goal,
       knownServerVersion: stored?.serverVersion ?? null,
       affectedRefs: [{ entityType: goalVersionEntity.entityType, entityId: id }],
@@ -180,7 +174,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     writeWeeklyPlan(tx, id, personId, weeklyPlan, at);
     writer.command(tx, {
       type: 'createWeeklyPlanVersion',
-      businessKey: weeklyPlanVersionKey(personId, weeklyPlan.validFrom, newId()),
+      businessKey: planVersionKey('wochenplan', personId, weeklyPlan.validFrom, newId()),
       payload: weeklyPlan,
       knownServerVersion: stored?.serverVersion ?? null,
       affectedRefs: [{ entityType: weeklyPlanVersionEntity.entityType, entityId: id }],

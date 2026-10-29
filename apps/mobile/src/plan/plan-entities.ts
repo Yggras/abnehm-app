@@ -2,11 +2,9 @@ import type { EntityId } from '@abnehm/contracts/base';
 import {
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
-  goalVersionId,
   GoalVersionRecord,
   planVersionOfKey,
   type PlanVersionKind,
-  weeklyPlanVersionId,
   WeeklyPlanVersionRecord,
 } from '@abnehm/contracts/plan';
 import type { EntityData } from '@abnehm/contracts/sync';
@@ -80,7 +78,7 @@ export const planCommands: readonly LocalCommand[] = [
     apply: onlyThePlanModule('createGoalVersion'),
     reconcileRejected(tx, operation) {
       const version = planVersionOfKey('zielversion', operation.businessKey);
-      if (version !== null) removeUnconfirmedGoalVersion(tx, goalVersionId(version.personId, version.validFrom));
+      if (version !== null) removeUnconfirmedGoalVersion(tx, version.id);
     },
   },
   {
@@ -90,7 +88,7 @@ export const planCommands: readonly LocalCommand[] = [
     apply: onlyThePlanModule('createWeeklyPlanVersion'),
     reconcileRejected(tx, operation) {
       const version = planVersionOfKey('wochenplan', operation.businessKey);
-      if (version !== null) removeUnconfirmedWeeklyPlan(tx, weeklyPlanVersionId(version.personId, version.validFrom));
+      if (version !== null) removeUnconfirmedWeeklyPlan(tx, version.id);
     },
   },
 ];

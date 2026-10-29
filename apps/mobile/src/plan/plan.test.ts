@@ -1,12 +1,15 @@
 /** @jest-environment node */
 import { randomUUID } from 'node:crypto';
 
+import { eq } from 'drizzle-orm';
+
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import { goalVersionId, weeklyPlanVersionId } from '@abnehm/contracts/plan';
 import type { RecordManualWeightResult } from '@abnehm/contracts/ports';
 
+import { PortContractError } from '../area-ports';
 import { fakeWeightRecorder } from '../area-ports/testing/fakes';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCompletionEntity } from '../daily-goals';
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
@@ -101,6 +104,7 @@ async function setup({ at = noon, recorded }: { at?: Instant; recorded?: RecordM
     database,
     clock,
     plan,
+    planReader: planReaderOf(database),
     commands,
     weights,
     weightCalls,
@@ -313,7 +317,7 @@ describe('Erstplan speichern', () => {
 
 describe('Dauerhafte Ablehnung durch den Server', () => {
   it('entfernt eine nie bestätigte Fassung samt ihrer Tage; der Plan ist danach wieder leer', async () => {
-    const { plan, database, commands, goals, weeklyPlans, weeklyPlanDays, operations } = await setup();
+    const { plan, planReader, database, commands, goals, weeklyPlans, weeklyPlanDays, operations } = await setup();
     await plan.saveInitialPlan(draft);
 
     const pending = operations();
@@ -332,7 +336,7 @@ describe('Dauerhafte Ablehnung durch den Server', () => {
     expect(goals()).toEqual([]);
     expect(weeklyPlans()).toEqual([]);
     expect(weeklyPlanDays()).toEqual([]);
-    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+    await expect(planReader.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
   });
 
   it('erzeugt keinen Fachbefehl über die lokale Befehls-Registry; das darf nur das Plan-Modul', async () => {
@@ -350,17 +354,16 @@ describe('PlanReader', () => {
   }
 
   it('liefert vor der ersten Fassung ausdrücklich den Leer-Zustand', async () => {
-    const { plan, database } = await setup();
+    const { planReader } = await setup();
 
-    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
-    await expect(planReaderOf(database).effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+    await expect(planReader.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
   });
 
   it('liefert an valid_from die Zielversion und den Wochenplantag, am Tag davor den Leer-Zustand', async () => {
-    const { plan } = await savedPlan();
+    const { planReader } = await savedPlan();
 
-    await expect(plan.effectivePlan(philipp, day('2026-10-13'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-13' });
-    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({
+    await expect(planReader.effectivePlan(philipp, day('2026-10-13'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-13' });
+    await expect(planReader.effectivePlan(philipp, day('2026-10-14'))).resolves.toEqual({
       type: 'gueltig',
       localDate: '2026-10-14',
       goal: {
@@ -383,10 +386,10 @@ describe('PlanReader', () => {
   });
 
   it('folgt am Wochentagswechsel dem Wochenplantag des jeweiligen Tags', async () => {
-    const { plan } = await savedPlan();
+    const { planReader } = await savedPlan();
 
     const bausteine = async (value: string) => {
-      const effective = await plan.effectivePlan(philipp, day(value));
+      const effective = await planReader.effectivePlan(philipp, day(value));
       return effective.type === 'gueltig' ? effective.weeklyPlanDay.bausteine : null;
     };
     expect(await bausteine('2026-10-18')).toEqual(['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget']);
@@ -395,19 +398,27 @@ describe('PlanReader', () => {
   });
 
   it('nimmt je Tag die Fassung mit dem größten valid_from ≤ Tag', async () => {
-    const { plan, clock } = await savedPlan();
+    const { plan, planReader, clock } = await savedPlan();
     clock.advanceBy(24 * 60 * 60 * 1_000);
 
     await plan.saveInitialPlan({ ...draft, waterTargetMl: 2_500 });
 
-    await expect(plan.effectivePlan(philipp, day('2026-10-14'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-14', waterTargetMl: 1_500 } });
-    await expect(plan.effectivePlan(philipp, day('2026-10-15'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-15', waterTargetMl: 2_500 } });
-    await expect(plan.effectivePlan(philipp, day('2026-11-30'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-15' } });
+    await expect(planReader.effectivePlan(philipp, day('2026-10-14'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-14', waterTargetMl: 1_500 } });
+    await expect(planReader.effectivePlan(philipp, day('2026-10-15'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-15', waterTargetMl: 2_500 } });
+    await expect(planReader.effectivePlan(philipp, day('2026-11-30'))).resolves.toMatchObject({ goal: { validFrom: '2026-10-15' } });
+  });
+
+  it('meldet einen vertragswidrigen Stand wie die Port-Prüfung als PortContractError', async () => {
+    const { planReader, database } = await savedPlan();
+    database.transaction((tx) => sqliteOf(tx).delete(weeklyPlanDay).where(eq(weeklyPlanDay.weekday, 'mittwoch')).run());
+
+    await expect(planReader.effectivePlan(philipp, day('2026-10-14'))).rejects.toThrow(PortContractError);
+    await expect(planReader.effectivePlan(philipp, day('2026-10-15'))).resolves.toMatchObject({ type: 'gueltig' });
   });
 
   it('kennt nur die Fassungen der genannten Person', async () => {
-    const { plan } = await savedPlan();
+    const { planReader } = await savedPlan();
 
-    await expect(plan.effectivePlan(EntityId.parse(randomUUID()), day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
+    await expect(planReader.effectivePlan(EntityId.parse(randomUUID()), day('2026-10-14'))).resolves.toEqual({ type: 'leer', localDate: '2026-10-14' });
   });
 });

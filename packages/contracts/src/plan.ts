@@ -212,10 +212,14 @@ export type EffectivePlanRows = Readonly<{
   day: WeeklyPlanDayRow | undefined;
 }>;
 
-/** Gültiger Plan eines Tags, gegen `EffectivePlan` geprüft; fehlt eine der beiden Fassungen, ist er leer. */
-export function effectivePlanOf(localDate: LocalDate, { goal, weeklyPlan, day }: EffectivePlanRows): EffectivePlan {
-  if (goal === undefined || weeklyPlan === undefined) return EffectivePlan.parse({ type: 'leer', localDate });
-  return EffectivePlan.parse({
+/**
+ * Gültiger Plan eines Tags, geprüft gegen `EffectivePlan`; fehlt eine der beiden Fassungen, ist er leer.
+ * Das Ergebnis der Prüfung geht an den Aufrufer: Die App meldet einen Verstoß als `PortContractError`
+ * wie jeden Port, der Server wirft ihn.
+ */
+export function effectivePlanOf(localDate: LocalDate, { goal, weeklyPlan, day }: EffectivePlanRows): ReturnType<typeof EffectivePlan.safeParse> {
+  if (goal === undefined || weeklyPlan === undefined) return EffectivePlan.safeParse({ type: 'leer', localDate });
+  return EffectivePlan.safeParse({
     type: 'gueltig',
     localDate,
     goal: {
@@ -245,38 +249,35 @@ const versionNamespaces: Record<PlanVersionKind, string> = {
   wochenplan: 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b64',
 };
 
-/** Deterministische ID der Zielversion aus Person und `valid_from`; zwei Geräte meinen dieselbe Fassung. */
-export function goalVersionId(personId: EntityId, validFrom: LocalDate): EntityId {
-  return EntityId.parse(uuidV5(versionNamespaces.zielversion, `zielversion:${personId}:${validFrom}`));
+/** Deterministische ID einer Fassung aus Art, Person und `valid_from`; zwei Geräte meinen dieselbe Fassung. */
+export function planVersionId(kind: PlanVersionKind, personId: EntityId, validFrom: LocalDate): EntityId {
+  return EntityId.parse(uuidV5(versionNamespaces[kind], `${kind}:${personId}:${validFrom}`));
 }
 
-/** Deterministische ID der Wochenplanversion aus Person und `valid_from`. */
-export function weeklyPlanVersionId(personId: EntityId, validFrom: LocalDate): EntityId {
-  return EntityId.parse(uuidV5(versionNamespaces.wochenplan, `wochenplan:${personId}:${validFrom}`));
-}
+/** ID der Zielversion einer Person ab `validFrom`. */
+export const goalVersionId = (personId: EntityId, validFrom: LocalDate) => planVersionId('zielversion', personId, validFrom);
+
+/** ID der Wochenplanversion einer Person ab `validFrom`. */
+export const weeklyPlanVersionId = (personId: EntityId, validFrom: LocalDate) => planVersionId('wochenplan', personId, validFrom);
 
 /**
- * Fachlicher Schlüssel eines `createGoalVersion`: Person, `valid_from` und eine je Änderung neue ID.
- * Ein fester Schlüssel je Fassung ließe eine spätere Änderung mit demselben `valid_from` als
- * `operation_conflict` enden; so ersetzt sie die noch nicht wirksame Fassung.
+ * Fachlicher Schlüssel von `createGoalVersion` (`zielversion`) bzw. `createWeeklyPlanVersion`
+ * (`wochenplan`): Person, `valid_from` und eine je Änderung neue ID. Ein fester Schlüssel je Fassung ließe
+ * eine spätere Änderung mit demselben `valid_from` als `operation_conflict` enden; so ersetzt sie die
+ * noch nicht wirksame Fassung.
  */
-export function goalVersionKey(personId: EntityId, validFrom: LocalDate, changeId: EntityId): string {
-  return `zielversion:${personId}:${validFrom}:${changeId}`;
-}
-
-/** Fachlicher Schlüssel eines `createWeeklyPlanVersion`, gebildet wie `goalVersionKey`. */
-export function weeklyPlanVersionKey(personId: EntityId, validFrom: LocalDate, changeId: EntityId): string {
-  return `wochenplan:${personId}:${validFrom}:${changeId}`;
+export function planVersionKey(kind: PlanVersionKind, personId: EntityId, validFrom: LocalDate, changeId: EntityId): string {
+  return `${kind}:${personId}:${validFrom}:${changeId}`;
 }
 
 const keyPattern = /^(zielversion|wochenplan):([0-9a-f-]{36}):(\d{4}-\d{2}-\d{2}):([0-9a-f-]{36})$/;
 
-/** Person und `valid_from` eines Schlüssels dieser Art; `null` bei jeder anderen Form. */
-export function planVersionOfKey(kind: PlanVersionKind, key: string): { personId: EntityId; validFrom: LocalDate } | null {
+/** Person, `valid_from` und ID der Fassung eines Schlüssels dieser Art; `null` bei jeder anderen Form. */
+export function planVersionOfKey(kind: PlanVersionKind, key: string): { id: EntityId; personId: EntityId; validFrom: LocalDate } | null {
   const match = keyPattern.exec(key);
   if (match === null || match[1] !== kind) return null;
   const personId = EntityId.safeParse(match[2]);
   const validFrom = LocalDate.safeParse(match[3]);
   if (!personId.success || !validFrom.success || !EntityId.safeParse(match[4]).success) return null;
-  return { personId: personId.data, validFrom: validFrom.data };
+  return { id: planVersionId(kind, personId.data, validFrom.data), personId: personId.data, validFrom: validFrom.data };
 }

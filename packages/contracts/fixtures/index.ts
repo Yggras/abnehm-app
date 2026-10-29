@@ -25,6 +25,9 @@ import { wirFixtures } from './wir.ts';
 /** Test-Entität der Sync-Tests in App und Backend; kein Teil des Transportkatalogs. */
 export { TestWaterRecord, TestWaterUpsert } from './sync.ts';
 
+/** Referenzfall der Zielversion und Standard-Wochenplan für Tests der Fachbefehle (#128). */
+export { referenceGoalVersion, standardWeekDays } from './plan.ts';
+
 /**
  * Fixture-Register aller exportierten Schemas, je Teilpfad des Pakets. Ein neues Schema bekommt
  * hier mindestens ein gültiges und ein ungültiges Fixture; die Vertragstests in Paket, App und

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { standardWeekDays } from '../fixtures/plan.ts';
 import { EntityId, LocalDate } from '../src/base.ts';
 import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from '../src/goal-calculator.ts';
 import {
@@ -7,12 +8,11 @@ import {
   CreateWeeklyPlanVersion,
   effectivePlanOf,
   goalVersionId,
-  goalVersionKey,
   goalVersionOf,
+  planVersionKey,
   planVersionOfKey,
   weeklyPlanDaysOf,
   weeklyPlanVersionId,
-  weeklyPlanVersionKey,
 } from '../src/plan.ts';
 
 // Nachweis für #128: Ziel- und Wochenplanversion im Vertragsmodul (Spezifikation 1, Abschnitte 4 und
@@ -168,15 +168,7 @@ describe('Stimmigkeit der Zielversion', () => {
 });
 
 describe('Wochenplanversion', () => {
-  const days = {
-    montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
-    dienstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
-    mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
-    donnerstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
-    freitag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
-    samstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
-    sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
-  } as const;
+  const days = standardWeekDays;
 
   it('hat sieben Wochentage mit je drei verschiedenen, geordneten Bausteinen', () => {
     expect(CreateWeeklyPlanVersion.safeParse({ validFrom: '2026-10-14', days }).success).toBe(true);
@@ -196,10 +188,11 @@ describe('IDs und fachliche Schlüssel', () => {
   });
 
   it('tragen je Änderung einen eigenen Schlüssel, aus dem Person und valid_from hervorgehen', () => {
-    const key = goalVersionKey(philipp, day('2026-10-14'), change);
-    expect(planVersionOfKey('zielversion', key)).toEqual({ personId: philipp, validFrom: '2026-10-14' });
+    const key = planVersionKey('zielversion', philipp, day('2026-10-14'), change);
+    expect(planVersionOfKey('zielversion', key)).toEqual({ id: goalVersionId(philipp, day('2026-10-14')), personId: philipp, validFrom: '2026-10-14' });
     expect(planVersionOfKey('wochenplan', key)).toBeNull();
-    expect(planVersionOfKey('wochenplan', weeklyPlanVersionKey(anna, day('2026-10-15'), change))).toEqual({
+    expect(planVersionOfKey('wochenplan', planVersionKey('wochenplan', anna, day('2026-10-15'), change))).toEqual({
+      id: weeklyPlanVersionId(anna, day('2026-10-15')),
       personId: anna,
       validFrom: '2026-10-15',
     });
@@ -214,12 +207,12 @@ describe('Abbildung gelesener Zeilen (PlanReader in SQLite und Postgres)', () =>
   const row = (weekday: string, third: string) => ({ weekday, baustein1: 'ernaehrung_erfasst', baustein2: 'wasserziel', baustein3: third });
 
   it('ist leer, solange Zielversion oder Wochenplanversion fehlt', () => {
-    expect(effectivePlanOf(day('2026-10-14'), { goal: undefined, weeklyPlan, day: undefined })).toEqual({ type: 'leer', localDate: '2026-10-14' });
-    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan: undefined, day: undefined })).toEqual({ type: 'leer', localDate: '2026-10-14' });
+    expect(effectivePlanOf(day('2026-10-14'), { goal: undefined, weeklyPlan, day: undefined })).toEqual({ success: true, data: { type: 'leer', localDate: '2026-10-14' } });
+    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan: undefined, day: undefined })).toEqual({ success: true, data: { type: 'leer', localDate: '2026-10-14' } });
   });
 
   it('liefert die Felder des Vertrags und die Bausteine des Wochentags', () => {
-    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan, day: row('mittwoch', 'im_kalorienbudget') })).toEqual({
+    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan, day: row('mittwoch', 'im_kalorienbudget') }).data).toEqual({
       type: 'gueltig',
       localDate: '2026-10-14',
       goal: {
@@ -230,9 +223,9 @@ describe('Abbildung gelesener Zeilen (PlanReader in SQLite und Postgres)', () =>
     });
   });
 
-  it('wirft bei einem vertragswidrigen Stand statt ihn weiterzugeben', () => {
-    expect(() => effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan, day: undefined })).toThrow();
-    expect(() => effectivePlanOf(day('2026-10-13'), { goal, weeklyPlan, day: row('dienstag', 'sporteinheit') })).toThrow();
+  it('meldet einen vertragswidrigen Stand als gescheiterte Prüfung statt ihn weiterzugeben', () => {
+    expect(effectivePlanOf(day('2026-10-14'), { goal, weeklyPlan, day: undefined }).success).toBe(false);
+    expect(effectivePlanOf(day('2026-10-13'), { goal, weeklyPlan, day: row('dienstag', 'sporteinheit') }).success).toBe(false);
   });
 
   it('prüft die Tageszeilen einer Wochenplanversion', () => {

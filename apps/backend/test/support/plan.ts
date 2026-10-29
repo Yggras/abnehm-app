@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
-import { goalVersionKey, weeklyPlanVersionKey, type CreateGoalVersion, type WeeklyPlanDays } from '@abnehm/contracts/plan';
+import { referenceGoalVersion, standardWeekDays } from '@abnehm/contracts/fixtures';
+import { CreateGoalVersion, planVersionKey, WeeklyPlanDays } from '@abnehm/contracts/plan';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
 
 import { policies } from '../../src/authorization/authorization.ts';
@@ -15,37 +16,9 @@ import { pushOutcome, pushRaw } from './sync.ts';
 
 type CommandOperation = Extract<OutboxOperation, { businessKey: string }>;
 
-/** Referenzfall der Recherche (research/calorie-needs.md): Frau, 35 Jahre, 168 cm, 80 kg, wenig aktiv, entspannt. */
-export const referenceGoal: CreateGoalVersion = {
-  validFrom: LocalDate.parse('2026-10-14'),
-  calorieBudgetMilliKcal: 1_620_000,
-  basalMetabolicRateMilliKcal: 1_514_000,
-  totalEnergyExpenditureMilliKcal: 2_120_000,
-  lowerBoundMilliKcal: 1_514_000,
-  deficitMilliKcal: 500_000,
-  budgetSource: 'berechnet',
-  calculationSex: 'weiblich',
-  ageYears: 35,
-  heightCm: 168,
-  weightG: 80_000,
-  activityLevel: 'wenig_aktiv',
-  maintenanceReason: null,
-  pace: 'entspannt',
-  goalWeightG: 76_000,
-  waterTargetMl: 1_500,
-  weeklySportTargetMinutes: 150,
-};
-
-/** Standard-Wochenplan: Sport Di/Do/Sa, Wiegen montags. */
-export const standardDays: WeeklyPlanDays = {
-  montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
-  dienstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
-  mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
-  donnerstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
-  freitag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
-  samstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
-  sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
-};
+/** Referenzfall der Recherche und Standard-Wochenplan aus den Vertrags-Fixtures, mit den Typen der Nutzlast. */
+export const referenceGoal: CreateGoalVersion = CreateGoalVersion.parse(referenceGoalVersion);
+export const standardDays: WeeklyPlanDays = WeeklyPlanDays.parse(standardWeekDays);
 
 const commandFields = { knownServerVersion: null, schemaVersion: currentSyncSchemaVersion, createdAt: Instant.parse('2026-10-14T12:00:00.000Z') };
 
@@ -55,7 +28,7 @@ export function goalVersionOp(personId: string, overrides: { payload?: object; b
   return {
     type: 'createGoalVersion',
     operationId: EntityId.parse(overrides.operationId ?? randomUUID()),
-    businessKey: overrides.businessKey ?? goalVersionKey(EntityId.parse(personId), payload.validFrom, EntityId.parse(randomUUID())),
+    businessKey: overrides.businessKey ?? planVersionKey('zielversion', EntityId.parse(personId), payload.validFrom, EntityId.parse(randomUUID())),
     payload,
     ...commandFields,
   };
@@ -67,7 +40,7 @@ export function weeklyPlanOp(personId: string, overrides: { validFrom?: string; 
   return {
     type: 'createWeeklyPlanVersion',
     operationId: EntityId.parse(randomUUID()),
-    businessKey: overrides.businessKey ?? weeklyPlanVersionKey(EntityId.parse(personId), validFrom, EntityId.parse(randomUUID())),
+    businessKey: overrides.businessKey ?? planVersionKey('wochenplan', EntityId.parse(personId), validFrom, EntityId.parse(randomUUID())),
     payload: { validFrom, days: overrides.days ?? standardDays },
     ...commandFields,
   };

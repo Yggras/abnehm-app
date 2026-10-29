@@ -31,7 +31,9 @@ export const postgresPlanReader: ReaderPort<PlanReader> = (tx) => ({
       ? []
       : await tx.select().from(weeklyPlanDay)
         .where(and(eq(weeklyPlanDay.weeklyPlanVersionId, weeklyPlan.id), eq(weeklyPlanDay.weekday, weekdayOf(localDate))));
-    // Dieselbe Abbildung wie der `PlanReader` der App über SQLite.
-    return effectivePlanOf(localDate, { goal, weeklyPlan, day });
+    // Dieselbe Abbildung wie der `PlanReader` der App über SQLite; ein Vertragsbruch wirft.
+    const plan = effectivePlanOf(localDate, { goal, weeklyPlan, day });
+    if (!plan.success) throw plan.error;
+    return plan.data;
   },
 });

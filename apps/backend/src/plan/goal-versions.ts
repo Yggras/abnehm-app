@@ -1,11 +1,11 @@
 import { inArray } from 'drizzle-orm';
 
 import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
-import { CreateGoalVersion, goalVersionId, GoalVersionRecord } from '@abnehm/contracts/plan';
+import { CreateGoalVersion, GoalVersionRecord } from '@abnehm/contracts/plan';
 
 import { policies } from '../authorization/authorization.ts';
 import { goalVersion } from '../db/schema/index.ts';
-import type { ServerCommand } from '../sync/commands.ts';
+import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
 import { planCommandTarget, savePlanVersion } from './plan-versions.ts';
 
@@ -38,12 +38,16 @@ export const createGoalVersionCommand: ServerCommand<CreateGoalVersion> = {
   identity: 'none',
   policy: policies.resource('goal_version', 'befehl'),
   payload: CreateGoalVersion,
-  target: (operation) => planCommandTarget('zielversion', operation.businessKey, goalVersionId),
+  target: (operation) => planCommandTarget('zielversion', operation.businessKey),
   canonicalRequest: (operation) => CreateGoalVersion.parse(operation.payload),
   // Jede Änderung trägt einen eigenen Schlüssel; ein Duplikat ist nur der Retry derselben Änderung.
   duplicate: () => [],
   async execute(tx, { actor, payload, businessKey, at }) {
-    return savePlanVersion(tx, { kind: 'zielversion', entity: goalVersionEntity, idOf: goalVersionId, personId: actor.personId,
+    // Ein Budget aus einem Budgetvorschlag entsteht nur mit `acceptBudgetSuggestion` (Spezifikation 1,
+    // Abschnitt 7). Bis #134 und #151 diese Herkunft an den angenommenen Vorschlag bzw. die vorige Fassung
+    // binden, nimmt dieser Befehl sie nicht an; sonst umginge eine umbenannte Herkunft das 10-kcal-Raster.
+    if (payload.budgetSource === 'budgetvorschlag') throw new CommandRejection('invalid_payload');
+    return savePlanVersion(tx, { kind: 'zielversion', entity: goalVersionEntity, personId: actor.personId,
       validFrom: payload.validFrom, businessKey, at, async write(id, serverVersion) {
         const fields = { ...payload, updatedAt: at, serverVersion };
         await tx.insert(goalVersion).values({ ...fields, id, personId: actor.personId, createdAt: at }).onConflictDoUpdate({ target: goalVersion.id, set: fields });

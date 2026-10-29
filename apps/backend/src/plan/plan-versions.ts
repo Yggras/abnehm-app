@@ -1,5 +1,5 @@
 import type { EntityId, LocalDate } from '@abnehm/contracts/base';
-import { planVersionOfKey, type PlanVersionKind } from '@abnehm/contracts/plan';
+import { planVersionId, planVersionOfKey, type PlanVersionKind } from '@abnehm/contracts/plan';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 
 import type { ResourceTarget } from '../authorization/authorization.ts';
@@ -13,16 +13,14 @@ import { canonicalAfterWrite } from '../sync/sync.ts';
 // Gemeinsamer Ablauf der Fachbefehle `createGoalVersion` und `createWeeklyPlanVersion` (Spezifikation 1,
 // Abschnitte 4 und 11). Beide unterscheiden sich nur in Tabelle und Nutzlast.
 
-type IdOf = (personId: EntityId, validFrom: LocalDate) => EntityId;
-
 /**
  * Ziel eines Fachbefehls für eine Fassung: ihre ID aus Person und `valid_from` des Schlüssels. Die Person
  * im Schlüssel ist nur ein Anspruch; weicht sie von der Sitzung ab, verweigert die Autorisierung. Einen
  * Schlüssel ohne diese Form verweigert sie ebenso, weil er keine Ressource nennt.
  */
-export function planCommandTarget(kind: PlanVersionKind, businessKey: string, idOf: IdOf): ResourceTarget {
+export function planCommandTarget(kind: PlanVersionKind, businessKey: string): ResourceTarget {
   const version = planVersionOfKey(kind, businessKey);
-  return version === null ? {} : { id: idOf(version.personId, version.validFrom), claimedOwnerPersonId: version.personId };
+  return version === null ? {} : { id: version.id, claimedOwnerPersonId: version.personId };
 }
 
 /**
@@ -36,7 +34,6 @@ export async function savePlanVersion(
   options: Readonly<{
     kind: PlanVersionKind;
     entity: ServerSyncEntity;
-    idOf: IdOf;
     personId: EntityId;
     validFrom: LocalDate;
     businessKey: string;
@@ -44,10 +41,10 @@ export async function savePlanVersion(
     write: (id: EntityId, serverVersion: bigint) => Promise<void>;
   }>,
 ): Promise<{ changes: CanonicalChange[]; idMappings: [] }> {
-  const { kind, entity, idOf, personId, validFrom, businessKey, at } = options;
+  const { kind, entity, personId, validFrom, businessKey, at } = options;
   const key = planVersionOfKey(kind, businessKey);
   if (key === null || key.validFrom !== validFrom) throw new CommandRejection('invalid_payload');
-  const id = idOf(personId, validFrom);
+  const id = planVersionId(kind, personId, validFrom);
   const serverVersion = await nextServerVersion(tx);
   await options.write(id, serverVersion);
   await recordChange(tx, { position: serverVersion, entityType: entity.entityType, entityId: id, operation: 'upsert', ownerPersonId: personId, createdAt: at });

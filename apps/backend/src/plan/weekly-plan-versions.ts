@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 
 import { EntityId, Instant, LocalDate, Weekday } from '@abnehm/contracts/base';
-import { CreateWeeklyPlanVersion, weeklyPlanDaysOf, weeklyPlanVersionId, WeeklyPlanVersionRecord } from '@abnehm/contracts/plan';
+import { CreateWeeklyPlanVersion, weeklyPlanDaysOf, WeeklyPlanVersionRecord } from '@abnehm/contracts/plan';
 
 import { policies } from '../authorization/authorization.ts';
 import { weeklyPlanDay, weeklyPlanVersion } from '../db/schema/index.ts';
@@ -52,11 +52,11 @@ export const createWeeklyPlanVersionCommand: ServerCommand<CreateWeeklyPlanVersi
   identity: 'none',
   policy: policies.resource('weekly_plan_version', 'befehl'),
   payload: CreateWeeklyPlanVersion,
-  target: (operation) => planCommandTarget('wochenplan', operation.businessKey, weeklyPlanVersionId),
+  target: (operation) => planCommandTarget('wochenplan', operation.businessKey),
   canonicalRequest: (operation) => CreateWeeklyPlanVersion.parse(operation.payload),
   duplicate: () => [],
   async execute(tx, { actor, payload, businessKey, at }) {
-    return savePlanVersion(tx, { kind: 'wochenplan', entity: weeklyPlanVersionEntity, idOf: weeklyPlanVersionId, personId: actor.personId,
+    return savePlanVersion(tx, { kind: 'wochenplan', entity: weeklyPlanVersionEntity, personId: actor.personId,
       validFrom: payload.validFrom, businessKey, at, async write(id, serverVersion) {
         await tx
           .insert(weeklyPlanVersion)

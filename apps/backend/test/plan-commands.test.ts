@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { EntityId, LocalDate } from '@abnehm/contracts/base';
-import { goalVersionId, goalVersionKey, weeklyPlanVersionId } from '@abnehm/contracts/plan';
+import { goalVersionId, planVersionKey, weeklyPlanVersionId } from '@abnehm/contracts/plan';
 
 import { goalVersion, person, projectionInvalidation, weeklyPlanDay, weeklyPlanVersion } from '../src/db/schema/index.ts';
 import { postgresPlanReader } from '../src/plan/plan-reader.ts';
@@ -61,11 +61,22 @@ describe('createGoalVersion', () => {
     expect((await rows()).goals).toEqual([]);
   });
 
+  it('nimmt die Herkunft Budgetvorschlag nicht an; die entsteht nur mit acceptBudgetSuggestion', async () => {
+    const { backend, anna, rows } = await setup();
+
+    const [result] = await push(backend, anna.device, [
+      goalVersionOp(anna.personId, { payload: { calorieBudgetMilliKcal: 1_765_000, budgetSource: 'budgetvorschlag' } }),
+    ]);
+
+    expect(result).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' } });
+    expect((await rows()).goals).toEqual([]);
+  });
+
   it('lehnt einen Schlüssel ab, dessen valid_from nicht zur Nutzlast passt', async () => {
     const { backend, anna, personId, rows } = await setup();
 
     const [result] = await push(backend, anna.device, [
-      goalVersionOp(anna.personId, { businessKey: goalVersionKey(personId, day('2026-10-15'), EntityId.parse('4f6a8b0c-3d5e-4f7a-9b2c-4d6e8f0a2b01')) }),
+      goalVersionOp(anna.personId, { businessKey: planVersionKey('zielversion', personId, day('2026-10-15'), EntityId.parse('4f6a8b0c-3d5e-4f7a-9b2c-4d6e8f0a2b01')) }),
     ]);
 
     expect(result).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' } });
