@@ -6,8 +6,9 @@ import { useEffect } from 'react';
 import { testCapabilities } from '../build-capabilities';
 import { ClockProvider } from '../clock/clock-context';
 import { color, useDesignFonts } from '../design';
-import { appClock, deviceInvitationFlows, deviceSession, refreshDeviceSync } from '../session/device-session';
+import { appClock, deviceAccount, deviceInvitationFlows, deviceSession, refreshDeviceSync } from '../session/device-session';
 import { OnlineFlowsProvider } from '../online/OnlineFlowsProvider';
+import { AccountProvider } from '../settings';
 import { useSessionGate } from '../session/use-session-gate';
 import { MessageHostProvider } from '../shell/MessageHost';
 import { SyncRefreshProvider } from '../shell/SyncRefresh';
@@ -46,6 +47,7 @@ export default function RootLayout() {
       <MessageHostProvider>
         <SyncRefreshProvider refresh={() => refreshDeviceSync() ?? Promise.resolve()}>
         <OnlineFlowsProvider {...deviceInvitationFlows()}>
+        <AccountProvider ports={deviceAccount()}>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
           <Stack.Protected guard={gate === 'today'} redirectTo={home}>
@@ -67,6 +69,7 @@ export default function RootLayout() {
           </Stack.Protected>
         </Stack>
         {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
+        </AccountProvider>
         </OnlineFlowsProvider>
         </SyncRefreshProvider>
       </MessageHostProvider>

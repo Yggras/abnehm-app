@@ -13,6 +13,7 @@ import { energyBookingEntity } from '../energy';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { createDeviceInvitationFlows } from '../online';
+import { followOwnProfile, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { todayRefresh } from '../shell/today-refresh';
@@ -56,6 +57,8 @@ const refreshToday: Refresh = (update) => {
   };
 };
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
+/** Der eigene Anzeigename für die Einstellungen (Spezifikation 5); folgt der geöffneten Kontodatenbank. */
+const ownProfile = followOwnProfile({ writer: syncWriter, clock: appClock });
 let activeEngine: SyncEngine | null = null;
 let backgroundOpening = false;
 /** Setzt die Zone der Person beim Start und bei jedem Wechsel (#110). */
@@ -65,7 +68,7 @@ const timeZone = followPersonTimeZone({
   onError,
   commandsFor: (database) => createLocalCommandRegistry({ database, writer: syncWriter, commands: foundationLocalCommands }),
 });
-let device: { session: AppSession; gate: SessionGateSource; logout: Logout } | null = null;
+let device: { session: AppSession; gate: SessionGateSource; logout: Logout; account: AccountPorts } | null = null;
 let sessionChecked = false;
 
 /** Ob das Gerät Internet hat, laut Expo Network; meldet nur Änderungen. */
@@ -102,7 +105,7 @@ function deviceState() {
       activeEngine = engine;
       void dispatcher.deliver();
       const stops = [
-        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database),
+        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database), ownProfile.opened(database),
         appQuickCommands.opened(database, trackers.quickCommands),
         waterToday?.opened(trackers.waterToday(waterToday.planReader, refreshToday)),
       ];
@@ -150,7 +153,7 @@ function deviceState() {
   setInterval(() => timeZone.check(), 60_000);
   // Eine neue Zone der Testuhr ist ein Zeitzonenwechsel wie eine Reise (#114).
   testCapabilities?.clock.subscribe(() => timeZone.check());
-  device = { session, gate, logout };
+  device = { session, gate, logout, account: { auth: session.auth, logout, profile: ownProfile } };
   return device;
 }
 
@@ -202,4 +205,9 @@ export function deviceGate(): SessionGateSource {
 /** Das Abmeldemodul des Geräts für die Oberfläche unter „Konto“ (Spezifikation 5). */
 export function deviceLogout(): Logout {
   return deviceState().logout;
+}
+
+/** Was Übersicht und „Konto“ der Einstellungen brauchen (Spezifikation 5, Abschnitt 6). */
+export function deviceAccount(): AccountPorts {
+  return deviceState().account;
 }
