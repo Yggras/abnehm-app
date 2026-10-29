@@ -203,7 +203,9 @@ describe('Hinzufügen und Mengenprüfung', () => {
     if (input !== '') await user.type(within(sheet).getByLabelText('Menge'), input);
     await user.press(within(sheet).getByRole('button', { name: 'Hinzufügen' }));
 
-    expect(within(sheet).getByText(problem)).toBeOnTheScreen();
+    // Sichtbar unter dem Feld; Screenreader hören den Satz als Hinweis des Felds.
+    expect(within(sheet).getByText(problem, { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(within(sheet).getByLabelText('Menge')).toHaveProp('accessibilityHint', `Fehler: ${problem}`);
     expect(screen).toHavePathname('/capture/food');
     expect(entries()).toHaveLength(2);
   });
