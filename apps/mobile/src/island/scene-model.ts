@@ -55,6 +55,8 @@ export type IslandSceneRequest = Readonly<{
   mode: IslandMode;
   localTime: LocalTime;
   zoom: number;
+  /** Angetipptes Feld, hervorgehoben bis zur nächsten Auswahl. */
+  selectedField?: string | null;
 }>;
 
 /** Färbung eines Felds in der Bereichsansicht. */
@@ -80,7 +82,9 @@ export type SceneItem =
   | Readonly<{ layer: 'overlays'; type: 'partikel'; at: Point; phase: number; tone: ColorToken }>
   | Readonly<{ layer: 'overlays'; type: 'abend'; tone: ColorToken; opacity: number }>
   /** Laterne oder Fenster, das abends über der Abend-Überlagerung leuchtet. */
-  | Readonly<{ layer: 'overlays'; type: 'licht'; field: string; at: Point; tone: ColorToken }>;
+  | Readonly<{ layer: 'overlays'; type: 'licht'; field: string; at: Point; tone: ColorToken }>
+  /** Angetipptes Feld; liegt über allem, damit man es auch abends erkennt. */
+  | Readonly<{ layer: 'overlays'; type: 'auswahl'; field: string; polygon: Polygon; tone: ColorToken; opacity: number }>;
 
 /** Was ein Tipp trifft; `owner` aus Sicht der betrachtenden Person. */
 export type SceneHit =
@@ -108,10 +112,13 @@ export type Daytime = 'tag' | 'abend';
 /** Deckkraft der Bereichsfärbung (Spezifikation 4, Abschnitt 7; Design-System › Insel: „je 28 % Deckkraft“). */
 const areaTintOpacity = 0.28;
 
+/** Deckkraft der Hervorhebung eines angetippten Felds (Designwert aus #182, nicht belegt). */
+const selectionOpacity = 0.5;
+
 /** Eine Zelle mit Land: ein Feld der Insel oder ein Stück eines gesperrten Gebiets. */
 type Ground = Cell & Readonly<{ key: string; field: SceneField | null; fogArea: string | null }>;
 
-export function islandScene({ island, viewerPersonId, mode, localTime, zoom }: IslandSceneRequest): IslandScene {
+export function islandScene({ island, viewerPersonId, mode, localTime, zoom, selectedField = null }: IslandSceneRequest): IslandScene {
   const project = projection(zoom);
   const season = seasonOf(localTime.localDate);
   const daytime = daytimeOf(localTime.minutesOfDay);
@@ -211,6 +218,12 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom }: I
           }),
         ];
 
+  const selected = selectedField === null ? undefined : fieldsByKey.get(selectedField);
+  const selection: SceneItem[] =
+    selected === undefined
+      ? []
+      : [{ layer: 'overlays', type: 'auswahl', field: selected.key, polygon: project.diamond(selected), tone: 'surfaceCard', opacity: selectionOpacity }];
+
   const lichtung = island.fields.filter((field) => field.kind === 'lichtung');
 
   return {
@@ -219,7 +232,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom }: I
     foliage: season === 'herbst' ? 'islandFoliageAutumn' : 'islandFoliage',
     focus: lichtung.length > 0 ? project.point(centroid(lichtung)) : { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
     bounds,
-    items: [...water, ...sides, ...tiles, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening],
+    items: [...water, ...sides, ...tiles, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...selection],
     hitAt(point) {
       const cell = groundByCell.get(cellKey(project.cellAt(point)));
       if (cell === undefined) return null;

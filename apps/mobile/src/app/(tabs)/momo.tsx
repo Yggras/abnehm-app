@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { MomoTab } from '../../island/MomoTab';
+import { routeScreen } from '../../navigation';
 
-export default placeholderRoute('momo');
+export default routeScreen('momo', MomoTab);

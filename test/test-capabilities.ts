@@ -94,6 +94,15 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['PlanReader-Attrappe'],
   },
   {
+    // #182: Bis „Schlüpfen“ (#184) die echte Insel anschließt, zeigt der Tab „Momo“ in Test-Artefakten
+    // eine Insel aus Spielkatalog und Seed-Personen; im Produktionsbuild bleibt dort der Platzhalter.
+    key: 'fixture-insel',
+    description: 'Fixture-Insel der Test-Artefakte: Grundinsel des Spielkatalogs mit Objekten, Inselfortschritt Level 6 und einem Gebiet unter Nebel für den Tab „Momo“',
+    modules: ['apps/mobile/src/test-capabilities/fixture-island.ts'],
+    entries: {},
+    markers: ['fixture_insel_nebel'],
+  },
+  {
     key: 'testgeruest',
     description: 'Gemeinsames Gerüst: Development-Server und -App des Backends, Eingang, Deep Links und Wirt der App-Testfähigkeiten',
     modules: [

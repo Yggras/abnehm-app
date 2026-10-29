@@ -99,6 +99,13 @@ const user = userEvent.setup();
 
 const heading = (title: string) => screen.findByRole('header', { name: title });
 
+/**
+ * Woran man einen Bildschirm erkennt: seine Titelzeile. Der Tab „Momo“ ist die bildschirmfüllende
+ * Insel ohne Titelzeile (#182); in Test-Artefakten zeigt er die Fixture-Insel.
+ */
+const landmark = (title: string) =>
+  title === 'Momo' ? screen.findByRole('image', { name: /^Momos Insel/ }) : heading(title);
+
 async function open(target: RouteTarget) {
   await act(async () => openTarget(target));
 }
@@ -316,7 +323,7 @@ describe('Routenkatalog', () => {
     const href = hrefFor(target);
     expect(screen).toHavePathname(href.pathname);
     expect(screen).toHaveSearchParams(href.params);
-    expect(await heading(titleOf(target))).toBeOnTheScreen();
+    expect(await landmark(titleOf(target))).toBeOnTheScreen();
 
     // Tabs gehen mit System-Zurück zu „Heute“, der ersten Route; von „Heute“ aus verlässt man die App.
     if (target.type === 'today') return;
@@ -347,7 +354,7 @@ describe('Deep Links', () => {
     await renderRouter(appDir, { initialUrl: url });
 
     expect(screen).toHavePathname(pathname);
-    expect(await heading(title)).toBeOnTheScreen();
+    expect(await landmark(title)).toBeOnTheScreen();
   });
 
   test.each([
@@ -488,7 +495,7 @@ describe('Schriftfaktor 2,0', () => {
     await renderRouter(appDir, { initialUrl: '/' });
 
     await user.press(screen.getByRole('tab', { name: 'Momo' }));
-    expect(await heading('Momo')).toBeOnTheScreen();
+    expect(await landmark('Momo')).toBeOnTheScreen();
 
     await user.press(screen.getByRole('button', { name: 'Erfassen' }));
     await user.press(await screen.findByRole('button', { name: 'Gewicht' }));

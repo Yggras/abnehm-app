@@ -10,6 +10,7 @@ import { Card } from '../Card';
 import { Chip } from '../Chip';
 import { EnergySymbol, Icon } from '../Icon';
 import { iconShapes, type IconName } from '../icon-shapes';
+import { LevelBar } from '../LevelBar';
 import { ListGroup, ListRow } from '../ListRow';
 import { useReducedMotion } from '../motion';
 import { ContextMenu } from '../native/ContextMenu';
@@ -141,6 +142,12 @@ function Buttons() {
           <IconButton icon="close" accessibilityLabel="Schließen" onPress={noop} />
           <IconButton icon="close" accessibilityLabel="Schließen" onPress={noop} testOnly_pressed />
           <IconButton icon="close" accessibilityLabel="Schließen" onPress={noop} disabled />
+        </View>
+      </Specimen>
+      <Specimen label="Icon-Button als Schalter: aus · an">
+        <View style={styles.row}>
+          <IconButton icon="layers" accessibilityLabel="Bereiche" checked={false} onPress={noop} />
+          <IconButton icon="layers" accessibilityLabel="Bereiche" checked onPress={noop} />
         </View>
       </Specimen>
     </Section>
@@ -329,6 +336,11 @@ function Progress() {
         <ProgressBar label="Sport diese Woche" value={150} target={150} valueText="150 von 150 min" />
         <ProgressBar label="Wasser heute" value={1750} target={1500} valueText="1,75 von 1,5 l" />
         <Skeleton height={6} radius="pill" />
+      </Card>
+      <Card>
+        <LevelBar level={7} ownPercent={0} partnerPercent={0} partnerName="Anna" />
+        <LevelBar level={6} ownPercent={56} partnerPercent={81} partnerName="Anna" />
+        <LevelBar level={6} ownPercent={100} partnerPercent={43} partnerName="Anna" />
       </Card>
     </Section>
   );

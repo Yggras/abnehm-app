@@ -298,6 +298,22 @@ describe('Jahreszeit', () => {
   });
 });
 
+describe('Auswahl', () => {
+  test('ein angetipptes Feld liegt hell hervorgehoben über allem anderen, auch über dem Abend', () => {
+    const items = islandScene(request({ selectedField: 'grundinsel:2:1', localTime: { localDate: LocalDate.parse('2026-10-14'), minutesOfDay: 21 * 60 } })).items;
+
+    expect(items.at(-1)).toEqual({
+      layer: 'overlays', type: 'auswahl', field: 'grundinsel:2:1', tone: 'surfaceCard', opacity: 0.5,
+      polygon: [{ x: 32, y: 48 }, { x: 64, y: 64 }, { x: 32, y: 80 }, { x: 0, y: 64 }],
+    });
+  });
+
+  test('ohne Auswahl oder mit unbekanntem Feld gibt es keine Hervorhebung', () => {
+    expect(ofType(islandScene(request()).items, 'auswahl')).toEqual([]);
+    expect(ofType(islandScene(request({ selectedField: 'grundinsel:9:9' })).items, 'auswahl')).toEqual([]);
+  });
+});
+
 describe('Bereichsfärbung', () => {
   const tints = (overrides: Partial<IslandSceneRequest>) =>
     Object.fromEntries(ofType(islandScene(request(overrides)).items, 'feld').map((tile) => [tile.field, tile.tint]));

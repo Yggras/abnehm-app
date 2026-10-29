@@ -28,6 +28,11 @@ export type TabBarProps = Pick<BottomTabBarProps, 'state' | 'emitter' | 'navigat
   momoBadge?: boolean;
   /** Höhe der Leiste samt Überstand; darüber steht der Meldungs-Host. */
   onLayout?: (event: LayoutChangeEvent) => void;
+  /**
+   * Leiste über einer bildschirmfüllenden Szene (Tab „Momo“): Sie liegt über dem Inhalt, der Streifen
+   * neben dem ＋ ist durchsichtig und lässt Gesten zur Szene durch.
+   */
+  overlay?: boolean;
 };
 
 /**
@@ -35,7 +40,7 @@ export type TabBarProps = Pick<BottomTabBarProps, 'state' | 'emitter' | 'navigat
  * ＋-Sheet. Die Leiste ist oben um den Überstand höher als ihre Fläche, sodass das ＋ ganz in ihr
  * liegt: Android nimmt Berührungen außerhalb des Elternelements nicht an.
  */
-export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = false, onLayout }: TabBarProps) {
+export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = false, onLayout, overlay = false }: TabBarProps) {
   const [captureOpen, setCaptureOpen] = useState(false);
   const runQuickCommand = useQuickCommand();
   const items = state.routes.map((route, index) => {
@@ -73,7 +78,8 @@ export function TabBar({ state, emitter, navigateToTab, insets, momoBadge = fals
       testID="tab-bar"
       accessibilityRole="tablist"
       onLayout={onLayout}
-      style={[styles.bar, { paddingBottom: Math.max(insets.bottom, space[2]) }]}
+      pointerEvents={overlay ? 'box-none' : 'auto'}
+      style={[styles.bar, overlay && styles.overlay, { paddingBottom: Math.max(insets.bottom, space[2]) }]}
     >
       <View style={styles.surface} pointerEvents="none" />
       {items.slice(0, middle)}
@@ -138,6 +144,7 @@ const badgeInset = 3;
 const styles = StyleSheet.create({
   // Die Leiste reicht bis an die Oberkante des ＋; ihre Fläche beginnt erst unter dem Überstand.
   bar: { flexDirection: 'row', paddingHorizontal: space[1], backgroundColor: color.surfaceBase },
+  overlay: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' },
   surface: {
     ...StyleSheet.absoluteFill,
     top: plusOverhang,
