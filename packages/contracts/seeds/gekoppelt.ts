@@ -83,6 +83,8 @@ const annaZiele: SeedPart = {
   entities: [
     {
       table: 'goal_version',
+      // Seit #128 beim Sync angemeldet: Die Fassung steht im Änderungsprotokoll.
+      entityType: 'goal_version',
       ownerPersonId: anna,
       row: {
         id: seedIds.goalVersion.anna,
@@ -237,6 +239,8 @@ const ernaehrung: SeedPart = {
     })),
     {
       table: 'nutrition_entry',
+      // Seit #155 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+      entityType: 'nutrition_entry',
       ownerPersonId: philipp,
       row: photoLunch({
         id: seedIds.nutritionEntry.philippMittag,
@@ -250,6 +254,7 @@ const ernaehrung: SeedPart = {
     },
     {
       table: 'nutrition_entry',
+      entityType: 'nutrition_entry',
       ownerPersonId: anna,
       row: photoLunch({
         id: seedIds.nutritionEntry.annaMittag,
@@ -451,14 +456,15 @@ function dailyGoalStatus(owner: Partner, stage: PartnerDailyGoalStage): SeedEnti
 
 /**
  * Fundament (#106): Projektionen, wie sie der Vor-Pull-Schritt zur festen Uhr berechnet hat. Philipp:
- * ein Mahlzeitentyp, 1250 von 2500 ml, 30 + 35 von 150 Sportminuten der Woche, zwei Tagesgewichte
- * (zu wenige für einen Trend), ein erfülltes Tagesziel. Anna: 2000 von 2000 ml, 45 von 120 Minuten,
- * ein Tagesgewicht, zwei erfüllte Tagesziele; Ernährung ist privat.
+ * zwei Mahlzeitentypen (Frühstück aus `solo`, Mittagessen aus dem Foto), 1250 von 2500 ml, 30 + 35
+ * von 150 Sportminuten der Woche, zwei Tagesgewichte (zu wenige für einen Trend), ein erfülltes
+ * Tagesziel. Anna: 2000 von 2000 ml, 45 von 120 Minuten, ein Tagesgewicht, zwei erfüllte Tagesziele;
+ * Ernährung ist privat.
  */
 const projektionen: SeedPart = {
   area: 'fundament',
   entities: [
-    summary('philipp', 'ernaehrung', seedIds.partnerSummary.philipp.ernaehrung, { recordedMealCategories: 1 }),
+    summary('philipp', 'ernaehrung', seedIds.partnerSummary.philipp.ernaehrung, { recordedMealCategories: 2 }),
     summary('philipp', 'wasser', seedIds.partnerSummary.philipp.wasser, { progressPercent: 50 }),
     summary('philipp', 'sport', seedIds.partnerSummary.philipp.sport, { countedMinutes: 65, weeklyTargetMinutes: 150 }),
     summary('philipp', 'gewicht', seedIds.partnerSummary.philipp.gewicht, { changeKg: null, direction: 'noch_nicht_verfuegbar' }),
@@ -498,8 +504,9 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
-  // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll.
-  revision: 2,
+  // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
+  // Revision 2: Wassereinträge seit #171.
+  revision: 3,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

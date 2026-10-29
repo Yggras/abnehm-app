@@ -2,79 +2,115 @@ import { act, fireEvent, render, screen, userEvent } from '@testing-library/reac
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 
-import { hitArea } from './testing/hit-area';
 import { TextField, type TextFieldProps } from './TextField';
+import { hitArea } from './testing/hit-area';
 import { color, textScale } from './tokens';
 
-// Eingabefeld des Design-Systems (research/design-system.md, Komponente „Eingabefeld“): Beschriftung,
-// Hinweis und Fehler als Text, nie nur über Farbe; 52 dp hoch und bis Schriftfaktor 2,0 lesbar.
-
-function Field(props: Omit<TextFieldProps, 'value' | 'onChangeText'> & { initial?: string }) {
-  const [value, setValue] = useState(props.initial ?? '');
+function Controlled(props: Omit<TextFieldProps, 'value' | 'onChangeText'>) {
+  const [value, setValue] = useState('');
   return <TextField {...props} value={value} onChangeText={setValue} />;
 }
 
-const border = (label: string) => (StyleSheet.flatten(screen.getByLabelText(label).props.style) ?? {}) as { borderColor?: string };
+test('ist über seine sichtbare Beschriftung erreichbar und nimmt Text an', async () => {
+  await render(<Controlled label="E-Mail-Adresse" />);
 
-test('ist über seine Beschriftung erreichbar und nimmt Text an', async () => {
-  await render(<Field label="Anzeigename" hint="Den Namen sieht auch dein Partner." />);
+  await userEvent.type(screen.getByLabelText('E-Mail-Adresse'), 'philipp@example.test');
 
-  await userEvent.type(screen.getByLabelText('Anzeigename'), 'Philipp');
-
-  expect(screen.getByLabelText('Anzeigename')).toHaveDisplayValue('Philipp');
-  expect(screen.getByText('Den Namen sieht auch dein Partner.')).toBeOnTheScreen();
+  // Sichtbar über dem Feld; VoiceOver liest die Beschriftung nur als Namen des Felds, nicht zusätzlich als Text.
+  expect(screen.getByText('E-Mail-Adresse')).toHaveProp('accessible', false);
+  expect(screen.getByLabelText('E-Mail-Adresse')).toHaveDisplayValue('philipp@example.test');
 });
 
-test('zeigt einen Fehler mit Symbol und Satz statt des Hinweises und rahmt in `problem`', async () => {
-  await render(<Field label="Anzeigename" hint="Den Namen sieht auch dein Partner." error="Dein Name braucht 1 bis 30 Zeichen." />);
+test('verbirgt den Satz unter dem Feld auf iOS und Android vor Screenreadern', async () => {
+  await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" />);
 
-  expect(screen.getByText('Dein Name braucht 1 bis 30 Zeichen.')).toBeOnTheScreen();
+  expect(screen.queryByText('Mindestens 10 Zeichen')).toBeNull();
+  // Nächster Vorfahre, der Screenreadern etwas verbirgt; Android liest `importantForAccessibility`, iOS `accessibilityElementsHidden`.
+  let note = screen.getByText('Mindestens 10 Zeichen', { includeHiddenElements: true }).parent;
+  while (note && note.props.importantForAccessibility === undefined) note = note.parent;
+  expect(note).toHaveProp('accessibilityElementsHidden', true);
+  expect(note).toHaveProp('importantForAccessibility', 'no-hide-descendants');
+});
+
+test('zeigt den Hinweis und ersetzt ihn bei einem Fehler durch den Fehlertext samt Symbol', async () => {
+  const { rerender } = await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" />);
+  // Sichtbar unter dem Feld; Screenreader hören den Satz als Hinweis des Felds, nicht doppelt.
+  expect(screen.getByText('Mindestens 10 Zeichen', { includeHiddenElements: true })).toBeOnTheScreen();
+
+  await rerender(<TextField label="Passwort" value="" onChangeText={jest.fn()} hint="Mindestens 10 Zeichen" problem="Dein Passwort braucht mindestens 10 Zeichen." />);
+
+  expect(screen.queryByText('Mindestens 10 Zeichen', { includeHiddenElements: true })).toBeNull();
+  expect(screen.getByText('Dein Passwort braucht mindestens 10 Zeichen.', { includeHiddenElements: true })).toBeOnTheScreen();
+  expect(screen.getByLabelText('Passwort')).toHaveProp('accessibilityHint', 'Fehler: Dein Passwort braucht mindestens 10 Zeichen.');
+});
+
+test('verdeckte Eingabe für Passwörter', async () => {
+  await render(<TextField label="Passwort" value="geheim" onChangeText={jest.fn()} secure />);
+
+  expect(screen.getByLabelText('Passwort')).toHaveProp('secureTextEntry', true);
+});
+
+test('deaktiviert: nimmt keine Eingabe an', async () => {
+  await render(<TextField label="Anzeigename" value="" onChangeText={jest.fn()} disabled />);
+
+  expect(screen.getByLabelText('Anzeigename')).toHaveProp('editable', false);
+});
+
+test('Trefferfläche mindestens 48 dp hoch, Text skaliert bis Faktor 2,0', async () => {
+  await render(<TextField label="Anzeigename" value="" onChangeText={jest.fn()} hint="1–30 Zeichen" />);
+
+  const input = screen.getByLabelText('Anzeigename');
+  expect(hitArea(input).height).toBeGreaterThanOrEqual(48);
+  expect(input).toHaveProp('maxFontSizeMultiplier', textScale.max);
+  expect(screen.getByText('Anzeigename')).toHaveProp('maxFontSizeMultiplier', textScale.max);
+});
+
+// Rahmen des Felds: der nächste Vorfahre der Eingabe mit Rahmenfarbe.
+function frame(label: string): string | undefined {
+  let node = screen.getByLabelText(label).parent;
+  while (node && (StyleSheet.flatten(node.props.style) as { borderColor?: string } | undefined)?.borderColor === undefined) node = node.parent;
+  return node ? (StyleSheet.flatten(node.props.style) as { borderColor?: string }).borderColor : undefined;
+}
+
+test('rahmt eine ungültige Eingabe in `problem` und zeigt das Symbol', async () => {
+  await render(<Controlled label="Anzeigename" hint="Den Namen sieht auch dein Partner." problem="Dein Name braucht 1 bis 30 Zeichen." />);
+
   expect(screen.getByTestId('icon-alert', { includeHiddenElements: true })).toBeOnTheScreen();
-  expect(screen.queryByText('Den Namen sieht auch dein Partner.')).not.toBeOnTheScreen();
-  expect(border('Anzeigename').borderColor).toBe(color.problem);
+  expect(frame('Anzeigename')).toBe(color.problem);
 });
 
 test('hebt das fokussierte Feld hervor', async () => {
-  await render(<Field label="Neues Passwort" />);
-  expect(border('Neues Passwort').borderColor).toBe(color.lineStrong);
+  await render(<Controlled label="Neues Passwort" />);
+  expect(frame('Neues Passwort')).toBe(color.lineStrong);
 
   await act(() => fireEvent(screen.getByLabelText('Neues Passwort'), 'focus'));
-  expect(border('Neues Passwort').borderColor).toBe(color.focus);
+  expect(frame('Neues Passwort')).toBe(color.primary);
 
   await act(() => fireEvent(screen.getByLabelText('Neues Passwort'), 'blur'));
-  expect(border('Neues Passwort').borderColor).toBe(color.lineStrong);
+  expect(frame('Neues Passwort')).toBe(color.lineStrong);
 });
 
-test('verbirgt Passwörter und ist deaktiviert nicht bearbeitbar', async () => {
-  await render(
-    <>
-      <Field label="Aktuelles Passwort" secure />
-      <Field label="E-Mail" initial="philipp@example.test" disabled />
-    </>,
-  );
+test('Passwortfelder ohne Autokorrektur und Großschreibung', async () => {
+  await render(<Controlled label="Aktuelles Passwort" secure />);
 
-  expect(screen.getByLabelText('Aktuelles Passwort').props.secureTextEntry).toBe(true);
-  expect(screen.getByLabelText('E-Mail').props.editable).toBe(false);
-  expect(screen.getByLabelText('E-Mail')).toBeDisabled();
+  expect(screen.getByLabelText('Aktuelles Passwort')).toHaveProp('autoCorrect', false);
+  expect(screen.getByLabelText('Aktuelles Passwort')).toHaveProp('autoCapitalize', 'none');
 });
 
 test('zeigt ein Passwort auf Wunsch beim Tippen an (NIST SP 800-63B-4, 3.1.1.2)', async () => {
-  await render(<Field label="Neues Passwort" secure />);
+  await render(<Controlled label="Neues Passwort" secure />);
 
   const show = screen.getByRole('button', { name: 'Passwort anzeigen' });
   expect(hitArea(show)).toEqual({ width: 48, height: 48 });
   await userEvent.press(show);
 
-  expect(screen.getByLabelText('Neues Passwort').props.secureTextEntry).toBe(false);
+  expect(screen.getByLabelText('Neues Passwort')).toHaveProp('secureTextEntry', false);
   await userEvent.press(screen.getByRole('button', { name: 'Passwort verbergen' }));
-  expect(screen.getByLabelText('Neues Passwort').props.secureTextEntry).toBe(true);
+  expect(screen.getByLabelText('Neues Passwort')).toHaveProp('secureTextEntry', true);
 });
 
-test('hat 52 dp Höhe und skaliert bis Schriftfaktor 2,0', async () => {
-  await render(<Field label="Anzeigename" hint="Hinweis" />);
+test('deaktivierte Passwortfelder bieten keinen Schalter', async () => {
+  await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} secure disabled />);
 
-  const input = screen.getByLabelText('Anzeigename');
-  expect(hitArea(input).height).toBeGreaterThanOrEqual(52);
-  expect(input.props.maxFontSizeMultiplier).toBe(textScale.max);
-  expect(screen.getByText('Anzeigename').props.maxFontSizeMultiplier).toBe(textScale.max);
+  expect(screen.queryByRole('button', { name: 'Passwort anzeigen' })).toBeNull();
 });

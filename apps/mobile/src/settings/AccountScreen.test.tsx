@@ -97,7 +97,8 @@ describe('Anzeigename', () => {
     await user.type(nameField(), name);
     await user.press(screen.getByRole('button', { name: 'Namen speichern' }));
 
-    expect(screen.getByText('Dein Name braucht 1 bis 30 Zeichen.')).toBeOnTheScreen();
+    // Fehlersätze und Hinweise des Eingabefelds hören Screenreader als Hinweis des Felds; sichtbar stehen sie darunter.
+    expect(screen.getByText('Dein Name braucht 1 bis 30 Zeichen.', { includeHiddenElements: true })).toBeOnTheScreen();
     expect(world.person()?.displayName).toBe('Philipp');
     expect(world.outbox()).toEqual([]);
   });
@@ -148,7 +149,7 @@ describe('Passwort ändern', () => {
 
     const form = await changePassword(current, _case === 'verbreitetes Passwort' ? 'iloveyou12' : 'ganz-neue-passphrase');
 
-    expect(await within(form).findByText(message)).toBeOnTheScreen();
+    expect(await within(form).findByText(message, { includeHiddenElements: true })).toBeOnTheScreen();
     expect(world.backend.password()).toBe(philipp.password);
     expect(world.auth.state()).toEqual({ type: 'angemeldet', accountId: philipp.accountId });
   });
@@ -158,7 +159,7 @@ describe('Passwort ändern', () => {
 
     const form = await changePassword(philipp.password, 'kurz-9-zz');
 
-    expect(within(form).getByText('Das neue Passwort braucht mindestens 10 Zeichen.')).toBeOnTheScreen();
+    expect(within(form).getByText('Das neue Passwort braucht mindestens 10 Zeichen.', { includeHiddenElements: true })).toBeOnTheScreen();
     expect(world.backend.calls.filter(({ path }) => path === '/v1/auth/change-password')).toEqual([]);
   });
 
@@ -167,7 +168,7 @@ describe('Passwort ändern', () => {
 
     const form = await changePassword('', 'ganz-neue-passphrase');
 
-    expect(within(form).getByText('Gib dein aktuelles Passwort ein.')).toBeOnTheScreen();
+    expect(within(form).getByText('Gib dein aktuelles Passwort ein.', { includeHiddenElements: true })).toBeOnTheScreen();
     expect(world.backend.calls.filter(({ path }) => path === '/v1/auth/change-password')).toEqual([]);
   });
 
@@ -176,7 +177,7 @@ describe('Passwort ändern', () => {
     await user.press(screen.getByRole('button', { name: 'Passwort ändern' }));
 
     expect(
-      screen.getByText('Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an. Nach der Änderung musst du dich auf deinen anderen Geräten neu anmelden.'),
+      screen.getByText('Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an. Nach der Änderung musst du dich auf deinen anderen Geräten neu anmelden.', { includeHiddenElements: true }),
     ).toBeOnTheScreen();
     await user.press(within(screen.getByTestId('passwort-formular')).getByRole('button', { name: 'Abbrechen' }));
     expect(screen.queryByTestId('passwort-formular')).not.toBeOnTheScreen();

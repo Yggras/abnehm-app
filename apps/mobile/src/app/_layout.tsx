@@ -6,7 +6,8 @@ import { useEffect } from 'react';
 import { testCapabilities } from '../build-capabilities';
 import { ClockProvider } from '../clock/clock-context';
 import { color, useDesignFonts } from '../design';
-import { appClock, deviceAccount, deviceInvitationFlows, deviceSession, refreshDeviceSync } from '../session/device-session';
+import { appClock, deviceAccount, deviceInvitationFlows, deviceOnboarding, deviceSession, refreshDeviceSync } from '../session/device-session';
+import { OnboardingProvider } from '../onboarding/OnboardingContext';
 import { OnlineFlowsProvider } from '../online/OnlineFlowsProvider';
 import { AccountProvider } from '../settings';
 import { useSessionGate } from '../session/use-session-gate';
@@ -47,6 +48,7 @@ export default function RootLayout() {
       <MessageHostProvider>
         <SyncRefreshProvider refresh={() => refreshDeviceSync() ?? Promise.resolve()}>
         <OnlineFlowsProvider {...deviceInvitationFlows()}>
+        <OnboardingProvider onboarding={deviceOnboarding()}>
         <AccountProvider ports={deviceAccount()}>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
@@ -68,8 +70,9 @@ export default function RootLayout() {
             <Stack.Screen name="technik" />
           </Stack.Protected>
         </Stack>
-        {testCapabilities ? <testCapabilities.Host session={deviceSession} /> : null}
+        {testCapabilities ? <testCapabilities.Host session={deviceSession} gate={gate} /> : null}
         </AccountProvider>
+        </OnboardingProvider>
         </OnlineFlowsProvider>
         </SyncRefreshProvider>
       </MessageHostProvider>

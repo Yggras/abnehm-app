@@ -1,14 +1,15 @@
 import { buildSeedState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
-import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
+import { seedBlsEntry, seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat
 // vollständige Ziele samt Wochenplan und den drei Tageszielen von heute sowie eigene Wasser-, Sport-
-// und Gewichtseinträge. Das iPhone ist auf dem Stand des Servers, ohne offene Operationen; der
-// Seed-Deep-Link führt direkt auf „Heute“. Alle Werte sind erfunden; die Zielwerte sind
-// plausibel, aber nicht mit dem Zielrechner aus Spezifikation 1 berechnet.
+// und Gewichtseinträge und ein Frühstück aus der Suche ohne Fotos. Das iPhone ist auf dem Stand des
+// Servers, ohne offene Operationen; der Seed-Deep-Link führt direkt auf „Heute“, mit
+// `ziel=/log` ins Protokoll. Alle Werte sind erfunden; die Zielwerte sind plausibel, aber nicht mit dem
+// Zielrechner aus Spezifikation 1 berechnet. Nährwerte stammen aus dem BLS 4.0.
 
 const philipp = seedIds.person.philipp;
 
@@ -60,6 +61,8 @@ const ziele: SeedPart = {
   entities: [
     {
       table: 'goal_version',
+      // Seit #128 beim Sync angemeldet: Die Fassung steht im Änderungsprotokoll.
+      entityType: 'goal_version',
       ownerPersonId: philipp,
       row: {
         id: seedIds.goalVersion.philipp,
@@ -174,8 +177,29 @@ const trackerOf = (water: WaterToday): SeedPart => ({
   ],
 });
 
+/**
+ * Ernährung (Spezifikation 2): heute ein Frühstück aus der Suche, ohne Mahlzeitenfoto und damit ohne
+ * Fotofreigabe (#155). Mittagessen, Abendessen und Snacks bleiben leer, damit das Protokoll seine
+ * Leerzustände zeigt. Mit nur einer Mahlzeit bleibt „Ernährung erfasst“ (mindestens 3) offen.
+ */
+const ernaehrung: SeedPart = {
+  area: 'ernaehrung',
+  entities: [
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippFruehstueck[0], personId: philipp, at: '2026-10-14T06:40:00.000Z', localDate: seedDays.heute, meal: 'fruehstueck',
+      food: { key: 'C133000', name: 'Hafer Flocken', milliKcal: 348_000, proteinMg: 13_220, carbsMg: 53_300, fatMg: 6_650 },
+      grams: 60,
+    }),
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippFruehstueck[1], personId: philipp, at: '2026-10-14T06:41:00.000Z', localDate: seedDays.heute, meal: 'fruehstueck',
+      food: { key: 'F110100', name: 'Apfel roh', milliKcal: 58_000, proteinMg: 424, carbsMg: 11_700, fatMg: 500 },
+      grams: 150,
+    }),
+  ],
+};
+
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = (water: WaterToday): readonly SeedPart[] => [fundament, ziele, trackerOf(water)];
+const soloPartsWith = (water: WaterToday): readonly SeedPart[] => [fundament, ziele, trackerOf(water), ernaehrung];
 
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(waterToday.solo);
@@ -190,8 +214,8 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
-    // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll.
-    revision: 2,
+    // Revision 3: Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
+    revision: 3,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,

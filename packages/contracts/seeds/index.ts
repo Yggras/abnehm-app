@@ -1,3 +1,4 @@
+import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
@@ -36,4 +37,5 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   ...soloManifests,
   gekoppelt: gekoppeltManifest,
   nach_entkopplung: nachEntkopplungManifest,
+  frisches_konto: frischesKontoManifest,
 };

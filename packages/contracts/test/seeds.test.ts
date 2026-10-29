@@ -53,8 +53,12 @@ describe('Seed-Manifest', () => {
   it('schreibt das Änderungsprotokoll nur für beim Sync angemeldete Entitäten', () => {
     expect(solo.initial.server.change_log).toEqual([
       expect.objectContaining({ entity_type: 'person', entity_id: philipp, owner_person_id: philipp, operation: 'upsert' }),
+      expect.objectContaining({ entity_type: 'goal_version', entity_id: seedIds.goalVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
+      expect.objectContaining({ entity_type: 'weekly_plan_version', entity_id: seedIds.weeklyPlanVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
       ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
         expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
+        expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
   });
 
@@ -380,5 +384,33 @@ describe('Szenario nach_entkopplung', () => {
       // Insel und Freigaben kommen nach dem Entkoppeln nicht mehr an; das Gerät behält seinen Stand.
       for (const table of ['person', 'island', 'partner_sharing', 'daily_goal_completion', 'energy_booking']) expect(device.rows[table]).toEqual(initial.rows[table]);
     }
+  });
+});
+
+const frischesKonto = seedManifests.frisches_konto;
+
+describe('Szenario frisches_konto (#138)', () => {
+  it('Philipp direkt nach dem Bootstrap: Person mit Anzeigename, Onboarding begonnen, ohne Bestätigung und ohne weitere Daten', () => {
+    const { server, devices } = frischesKonto.initial;
+    expect(frischesKonto.clock).toEqual(seedClock);
+    expect(frischesKonto.accounts).toEqual([expect.objectContaining({ key: 'philipp', accountId: seedIds.account.philipp, personId: philipp })]);
+    expect(server.person).toEqual([
+      expect.objectContaining({
+        id: philipp,
+        display_name: 'Philipp',
+        onboarding_status: 'begonnen',
+        onboarding_completed_at: null,
+        disclaimer_accepted_at: null,
+        calculation_sex: null,
+        birth_date: null,
+      }),
+    ]);
+    expect(Object.keys(server).sort()).toEqual(['change_log', 'person', 'sync_clock']);
+    expect(devices['philipp-iphone']).toEqual({ rows: { person: server.person }, cursor: '1', outbox: [] });
+  });
+
+  it('ein Sync ändert nichts: Ausgangs- und Sollzustand sind gleich', () => {
+    expect(frischesKonto.steps).toEqual([{ type: 'sync', installation: 'philipp-iphone' }]);
+    expect(frischesKonto.target).toEqual(frischesKonto.initial);
   });
 });

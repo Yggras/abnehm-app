@@ -3,6 +3,7 @@ import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { z } from 'zod';
 
 import type { EntityId } from '@abnehm/contracts/base';
+import type { ContractErrorCode } from '@abnehm/contracts/errors';
 import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
 
 import type { ResourceEntity } from '../authorization/authorization.ts';
@@ -43,6 +44,12 @@ export type ServerSyncEntity = Readonly<{
    * Mitgliedern (Spezifikation 0, Abschnitt 10). Lesen muss die Ressource es ebenso erlauben.
    */
   archiveStatus?: boolean;
+  /**
+   * Fachliche Prüfung eines Upserts, die Serverzustand braucht, etwa den aktuellen lokalen Tag der
+   * Person (Spezifikation 2, Abschnitt 11). Sie läuft nach Schema und Autorisierung vor dem Schreiben;
+   * ein Fehlercode beendet die Operation mit `permanently_rejected`.
+   */
+  validate?(tx: DbExecutor, change: EntityWrite): Promise<ContractErrorCode | null>;
   /** Liest Entitäten in der Transaktion des Aufrufers; fehlende IDs fehlen in der Antwort. */
   read(tx: DbExecutor, ids: readonly EntityId[]): Promise<ReadonlyMap<string, StoredEntity>>;
   /** Schreibt die vollständige Nutzlast (Last-Write-Wins) samt Serverversion. */
@@ -74,13 +81,16 @@ export function ownedEntity<T extends PgTable & OwnedColumns, U extends EntityDa
   deletable: boolean;
   columns(payload: U): Partial<T['$inferInsert']>;
   record(row: T['$inferSelect']): EntityData;
+  /** Fachliche Prüfung mit Serverzustand, siehe `ServerSyncEntity.validate`. */
+  validate?(tx: DbExecutor, change: EntityWrite & { payload: U }): Promise<ContractErrorCode | null>;
 }): ServerSyncEntity {
-  const { table } = options;
+  const { table, validate } = options;
   return {
     entityType: options.entityType,
     resource: options.resource,
     upsert: options.upsert as unknown as z.ZodType<EntityData>,
     deletable: options.deletable,
+    ...(validate && { validate: (tx: DbExecutor, change: EntityWrite) => validate(tx, change as EntityWrite & { payload: U }) }),
     async read(tx, ids) {
       if (ids.length === 0) return new Map();
       const rows = (await tx

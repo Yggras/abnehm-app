@@ -75,7 +75,7 @@ export function PasswordForm({ onClose, onChanged }: { onClose: () => void; onCh
             setCurrent(value);
             setErrors({});
           }}
-          error={errors.current}
+          problem={errors.current}
           secure
           autoComplete="current-password"
           textContentType="password"
@@ -88,7 +88,7 @@ export function PasswordForm({ onClose, onChanged }: { onClose: () => void; onCh
             setErrors({});
           }}
           hint={texts.rules}
-          error={errors.next}
+          problem={errors.next}
           secure
           autoComplete="new-password"
           textContentType="newPassword"

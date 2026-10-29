@@ -1,3 +1,5 @@
+import type { MealKey } from '@abnehm/contracts/base';
+import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
 import { WaterAddedValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
@@ -20,6 +22,14 @@ export function messageText<S extends z.ZodType>(values: S, render: (values: z.o
   return { values, render } as MessageTextEntry;
 }
 
+/** Ziel einer Mahlzeit im Dativ, etwa „zum Frühstück“. */
+const toMeal: Readonly<Record<MealKey, string>> = {
+  fruehstueck: 'zum Frühstück',
+  mittagessen: 'zum Mittagessen',
+  abendessen: 'zum Abendessen',
+  snacks: 'zu den Snacks',
+};
+
 export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Development Build: Für einen Quick-Command fehlt noch der Handler seines Bereichs. */
   'shell.quick_command.in_arbeit': messageText(z.strictObject({ commandKey: QuickCommandKey }), ({ commandKey }) => ({
@@ -29,6 +39,10 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'shell.nicht_geklappt': messageText(z.strictObject({}), () => ({ text: 'Das hat nicht geklappt. Versuch es bitte noch einmal.' })),
   /** Spezifikation 3: Wasser gebucht; „Rückgängig“ ergänzt der Meldungs-Host („+250 ml Wasser · Rückgängig“). */
   'wasser.hinzugefuegt': messageText(WaterAddedValues, ({ ml }) => ({ text: shellTexts.quickAddWater(ml) })),
+  /** Spezifikation 2: Eintrag gespeichert; „Rückgängig“ ergänzt der Meldungs-Host („209 kcal zum Frühstück hinzugefügt · Rückgängig“). */
+  'ernaehrung.eintrag_hinzugefuegt': messageText(NutritionEntryAddedValues, ({ meal, kcal }) => ({
+    text: `${kcal.toLocaleString('de-DE')} kcal ${toMeal[meal]} hinzugefügt`,
+  })),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */

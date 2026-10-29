@@ -82,7 +82,7 @@ function DisplayNameField() {
           setInvalid(false);
         }}
         hint={texts.nameHint}
-        error={invalid ? texts.nameInvalid : undefined}
+        problem={invalid ? texts.nameInvalid : undefined}
         disabled={saved === null}
         autoComplete="name"
         textContentType="nickname"

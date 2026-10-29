@@ -10,6 +10,8 @@ import { sessionScreenGates, type SessionGate, type SessionScreenGate } from '..
 
 /** Shell-Route der Zustände ohne Fachoberfläche; nicht im Routenkatalog, weil sie kein Ziel ist. */
 export const sessionScreen = 'sitzung';
+/** Pfad der Shell-Route `sessionScreen`. */
+export const sessionScreenPath = `/${sessionScreen}`;
 
 /**
  * Modale Abläufe, die Onboarding-Schritte öffnen und die dorthin zurückkehren: Schritt 11 öffnet
@@ -44,5 +46,5 @@ export function isSessionScreenGate(gate: SessionGate): gate is SessionScreenGat
 export function gateHome(gate: SessionGate): string {
   if (gate === 'today') return pathOf('today');
   if (gate === 'onboarding') return pathOf('onboarding');
-  return `/${sessionScreen}`;
+  return sessionScreenPath;
 }

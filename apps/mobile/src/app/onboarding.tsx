@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../shell/Placeholder';
+import { routeScreen } from '../navigation';
+import { OnboardingFlow } from '../onboarding';
 
-export default placeholderRoute('onboarding');
+export default routeScreen('onboarding', OnboardingFlow);

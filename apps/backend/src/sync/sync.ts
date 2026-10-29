@@ -239,8 +239,10 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
         if (operation.type === 'upsert_entity') {
           const parsed = entity.upsert!.safeParse(operation.payload);
           if (!parsed.success || ('id' in parsed.data && parsed.data.id !== operation.entityId)) throw new Rejection('invalid_payload');
-          const write = { entityId: operation.entityId, payload: parsed.data, ownerPersonId: actor.personId, serverVersion, at };
-          await entity.write(savepoint, { ...write, exists: current !== undefined });
+          const write = { entityId: operation.entityId, payload: parsed.data, ownerPersonId: actor.personId, serverVersion, at, exists: current !== undefined };
+          const problem = (await entity.validate?.(savepoint, write)) ?? null;
+          if (problem !== null) throw new Rejection(problem);
+          await entity.write(savepoint, write);
         } else {
           await entity.remove(savepoint, { entityId: operation.entityId, ownerPersonId: actor.personId, serverVersion, at });
         }
