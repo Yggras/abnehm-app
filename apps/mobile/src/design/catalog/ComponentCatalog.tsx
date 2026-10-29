@@ -20,6 +20,7 @@ import { Notice } from '../Notice';
 import { ProgressBar } from '../ProgressBar';
 import { Skeleton } from '../Skeleton';
 import { Text } from '../Text';
+import { TextField } from '../TextField';
 import { useLargeTextLayout } from '../text-scale';
 import { Toast } from '../Toast';
 import { color, fontFamily, space, type, type TypeToken } from '../tokens';
@@ -334,6 +335,27 @@ function Progress() {
   );
 }
 
+function Fields() {
+  const [weight, setWeight] = useState('82,4');
+  const [name, setName] = useState('');
+  return (
+    <Section title="Eingabefelder">
+      <Card>
+        <TextField label="Gewicht" unit="kg" keyboardType="decimal-pad" value={weight} onChangeText={setWeight} />
+        <TextField label="Anzeigename" value={name} onChangeText={setName} />
+        <TextField
+          label="Gewicht ungültig"
+          unit="kg"
+          keyboardType="decimal-pad"
+          value="12"
+          onChangeText={noop}
+          error="Bitte ein Gewicht von 20,0 bis 350,0 kg mit höchstens einer Nachkommastelle eingeben."
+        />
+      </Card>
+    </Section>
+  );
+}
+
 function NativeElements() {
   const clock = useClock();
   const reading = clock.read();
@@ -450,6 +472,7 @@ export default function ComponentCatalog() {
         <Rows />
         <Toasts />
         <Progress />
+        <Fields />
         <NativeElements />
         <Haptics />
         <LargeText />
