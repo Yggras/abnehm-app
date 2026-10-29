@@ -4,6 +4,7 @@ import { secureSessionStore } from './secure-session-store';
 
 // Auth-Modul der App (Spezifikation 0, Abschnitt 9). Bildschirme und Bereiche kennen nur `AppAuth`.
 export type {
+  AccountEmail,
   AppAuth,
   AuthState,
   BootstrapResult,

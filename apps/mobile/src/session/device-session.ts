@@ -16,6 +16,7 @@ import { appNutrition, createNutrition, nutritionEntryEntity } from '../nutritio
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createDeviceInvitationFlows } from '../online';
 import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { appTodayRefresh } from '../shell/today-refresh';
@@ -47,6 +48,8 @@ const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 't
 /** Mini-Tracker `trackers.weight`; seine Wiegetage liest er ebenfalls über den `PlanReader` (#175). */
 const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.weight');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
+/** Der eigene Anzeigename für die Einstellungen (Spezifikation 5); folgt der geöffneten Kontodatenbank. */
+const ownDisplayName = followOwnDisplayName({ writer: syncWriter, clock: appClock });
 let activeEngine: SyncEngine | null = null;
 let backgroundOpening = false;
 /** Setzt die Zone der Person beim Start und bei jedem Wechsel (#110). */
@@ -56,7 +59,7 @@ const timeZone = followPersonTimeZone({
   onError,
   commandsFor: (database) => createLocalCommandRegistry({ database, writer: syncWriter, commands: foundationLocalCommands }),
 });
-let device: { session: AppSession; gate: SessionGateSource; logout: Logout; onboarding: Onboarding } | null = null;
+let device: { session: AppSession; gate: SessionGateSource; logout: Logout; account: AccountPorts; onboarding: Onboarding } | null = null;
 let sessionChecked = false;
 
 /** Ob das Gerät Internet hat, laut Expo Network; meldet nur Änderungen. */
@@ -98,7 +101,7 @@ function deviceState() {
       activeEngine = engine;
       void dispatcher.deliver();
       const stops = [
-        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database), onboarding?.opened(database),
+        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database), onboarding?.opened(database), ownDisplayName.opened(database),
         appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
         appTrackers.opened(trackers),
@@ -151,7 +154,7 @@ function deviceState() {
   setInterval(() => timeZone.check(), 60_000);
   // Eine neue Zone der Testuhr ist ein Zeitzonenwechsel wie eine Reise (#114).
   testCapabilities?.clock.subscribe(() => timeZone.check());
-  device = { session, gate, logout, onboarding };
+  device = { session, gate, logout, account: { auth: session.auth, logout, displayName: ownDisplayName }, onboarding };
   return device;
 }
 
@@ -208,4 +211,9 @@ export function deviceGate(): SessionGateSource {
 /** Das Abmeldemodul des Geräts für die Oberfläche unter „Konto“ (Spezifikation 5). */
 export function deviceLogout(): Logout {
   return deviceState().logout;
+}
+
+/** Was Übersicht und „Konto“ der Einstellungen brauchen (Spezifikation 5, Abschnitt 6). */
+export function deviceAccount(): AccountPorts {
+  return deviceState().account;
 }
