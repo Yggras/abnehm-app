@@ -8,7 +8,7 @@ import { color, useReducedMotion } from '../design';
 import { fogPath, LampGlow, MomoOnIsland, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
 import type { IslandScene, Rect, SceneHit, SceneItem } from './scene-model';
 import { useLoop } from './use-loop';
-import { panBy, startView, toScene, zoomAt, type Size, type View } from './viewport';
+import { panBy, resizeView, startView, toScene, zoomAt, type Size, type View } from './viewport';
 
 export type IslandCanvasProps = {
   /** Szene in Zoom 1 („Szenenraum“); Verschiebung und Zoom legt der Canvas selbst darüber. */
@@ -37,16 +37,19 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
   useEffect(() => {
     bounds.value = scene.bounds;
   }, [bounds, scene.bounds]);
-  const started = useRef(false);
+  const laidOut = useRef<Size | null>(null);
 
+  // Größen kommen aus dem Layout, nicht aus `screen.value`: Ein eben geschriebener Shared Value
+  // liefert auf dem JS-Thread noch den alten Wert (im Simulator beobachtet, #182). Die erste Größe
+  // legt den Start fest; wird der Canvas danach größer, etwa wenn die Tab-Leiste über die Insel
+  // wechselt, bleibt die Mitte stehen.
   const onLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent) => {
-    // Die gemessene Größe direkt verwenden: Ein eben geschriebener Shared Value liefert auf dem
-    // JS-Thread noch den alten Wert (im Simulator beobachtet, #182).
     const size = { width: layout.width, height: layout.height };
+    const previous = laidOut.current;
+    laidOut.current = size;
     screen.value = size;
-    if (started.current) return;
-    started.current = true;
-    view.value = startView(size, scene.focus);
+    if (previous === null) view.value = startView(size, scene.focus);
+    else view.modify((current) => resizeView(current, previous, size));
   };
 
   const pan = usePanGesture({

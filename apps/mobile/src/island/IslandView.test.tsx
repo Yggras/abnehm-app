@@ -55,7 +55,7 @@ async function renderIsland(overrides: Partial<IslandViewProps> = {}) {
     </GestureHandlerRootView>,
   );
   // Bildschirm 400 × 800: Der Start legt die Mitte der Lichtung in die Mitte des Bildschirms.
-  fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } });
+  await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } } });
 }
 
 test('zeigt die Fixture-Insel mit HUD und Leiste', async () => {
@@ -116,6 +116,18 @@ test.each([
   tapAt(200, y);
 
   expect(onFieldPress).toHaveBeenCalledWith(expect.objectContaining({ field }));
+});
+
+test('wird der Canvas höher, etwa wenn die Tab-Leiste über die Insel wechselt, bleibt die Lichtung in der Mitte', async () => {
+  const onFieldPress = jest.fn();
+  await renderIsland({ onFieldPress });
+  // `renderIsland` legt 400 × 800 an; vorher war der Canvas 100 dp niedriger.
+  await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 900 } } });
+
+  // Mitte (200, 450) zeigt weiter (16, 248), Feld (8, 7).
+  tapAt(200, 450);
+
+  expect(onFieldPress).toHaveBeenCalledWith(expect.objectContaining({ field: 'grundinsel:8:7' }));
 });
 
 test('ein Tipp ins Wasser meldet nichts', async () => {

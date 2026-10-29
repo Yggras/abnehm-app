@@ -1,4 +1,4 @@
-import { panBy, startView, toScene, zoomAt, type View } from './viewport';
+import { panBy, resizeView, startView, toScene, zoomAt, type View } from './viewport';
 
 // Ausschnitt der Inselansicht (Spezifikation 4, Abschnitt 7): Start auf Momos Lichtung, Ziehen
 // verschiebt, Pinch zoomt von 0,5 bis 2,0 um den Mittelpunkt der Finger. Werte von Hand gerechnet.
@@ -37,6 +37,14 @@ test('die Insel bleibt erreichbar: Die Bildschirmmitte verlässt ihre Ausdehnung
   // Bildschirmmitte (200, 400) bei Zoom 1 zeigt den Szenenpunkt (200 − x, 400 − y); er bleibt in x ∈ [−400, 400], y ∈ [0, 600].
   expect(panBy({ x: 100, y: 150, scale: 1 }, { x: 5000, y: 5000 }, screen, bounds)).toEqual({ x: 600, y: 400, scale: 1 });
   expect(panBy({ x: 100, y: 150, scale: 1 }, { x: -5000, y: -5000 }, screen, bounds)).toEqual({ x: -200, y: -200, scale: 1 });
+});
+
+test('ändert sich die Größe, bleibt der Punkt in der Bildschirmmitte stehen', () => {
+  // Mitte (200, 350) zeigt bei Zoom 2 den Szenenpunkt (75, 162,5); bei 400 × 800 liegt er bei (200, 400).
+  const resized = resizeView({ x: 50, y: 25, scale: 2 }, { width: 400, height: 700 }, screen);
+
+  expect(resized).toEqual({ x: 50, y: 75, scale: 2 });
+  expect(toScene(resized, { x: 200, y: 400 })).toEqual(toScene({ x: 50, y: 25, scale: 2 }, { x: 200, y: 350 }));
 });
 
 test('ein Punkt des Bildschirms wird mit Verschiebung und Zoom in die Szene zurückgerechnet', () => {

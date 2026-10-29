@@ -23,6 +23,15 @@ export function toScene(view: View, point: Point): Point {
   return { x: (point.x - view.x) / view.scale, y: (point.y - view.y) / view.scale };
 }
 
+/**
+ * Neue Größe des Canvas, etwa wenn die Tab-Leiste über die Insel wechselt: Der Punkt in der Mitte
+ * bleibt in der Mitte.
+ */
+export function resizeView(view: View, from: Size, to: Size): View {
+  'worklet';
+  return { x: view.x + (to.width - from.width) / 2, y: view.y + (to.height - from.height) / 2, scale: view.scale };
+}
+
 /** Die Bildschirmmitte bleibt über der Ausdehnung der Insel, damit man sie nie aus den Augen verliert. */
 function keepReachable(view: View, screen: Size, bounds: Rect): View {
   'worklet';
