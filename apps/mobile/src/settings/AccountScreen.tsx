@@ -8,7 +8,7 @@ import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 import { useAccountEmail, useAccountPorts, useDisplayName } from './AccountProvider';
-import { PasswordSheet } from './PasswordSheet';
+import { PasswordForm } from './PasswordForm';
 import { SectionTitle } from './SectionTitle';
 import { settingsTexts } from './texts';
 
@@ -27,16 +27,17 @@ export function AccountScreen({ target }: RouteScreenProps<'settings'>) {
         <SectionTitle>{texts.signInTitle}</SectionTitle>
         <ListGroup>
           <EmailRow />
-          <ListRow icon="lock" title={texts.changePassword} onPress={() => setChangingPassword(true)} />
+          {changingPassword ? null : <ListRow icon="lock" title={texts.changePassword} onPress={() => setChangingPassword(true)} />}
         </ListGroup>
+        {changingPassword ? (
+          <PasswordForm
+            onClose={() => setChangingPassword(false)}
+            onChanged={() => showMessage({ messageKey: 'konto.passwort_geaendert', values: {} })}
+          />
+        ) : null}
       </View>
       <DisplayName />
       <LogoutArea />
-      <PasswordSheet
-        visible={changingPassword}
-        onClose={() => setChangingPassword(false)}
-        onChanged={() => showMessage({ messageKey: 'konto.passwort_geaendert', values: {} })}
-      />
     </ScreenFrame>
   );
 }
@@ -112,9 +113,12 @@ function LogoutArea() {
 
   useEffect(() => {
     mounted.current = true;
-    void logout.pending().then((open) => {
-      if (open && mounted.current) setView({ type: 'pending' });
-    });
+    void logout
+      .pending()
+      .catch(() => false)
+      .then((open) => {
+        if (open && mounted.current) setView({ type: 'pending' });
+      });
     return () => {
       mounted.current = false;
     };
@@ -125,7 +129,7 @@ function LogoutArea() {
       case 'confirmation_required':
         return { type: 'confirm', operations: outcome.unsecuredOperations };
       case 'unreachable':
-        return (await logout.pending()) ? { type: 'pending' } : { type: 'unreachable' };
+        return (await logout.pending().catch(() => false)) ? { type: 'pending' } : { type: 'unreachable' };
       case 'cleanup_pending':
         return { type: 'cleanup_pending' };
       case 'logged_out':

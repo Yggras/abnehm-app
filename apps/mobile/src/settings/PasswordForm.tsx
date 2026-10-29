@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { Password, passwordPolicy } from '@abnehm/contracts/auth';
 
 import type { ChangePasswordResult } from '../auth';
-import { Button, Notice, Sheet, space, Text, TextField } from '../design';
+import { Button, Card, Notice, space, Text, TextField } from '../design';
 import { useAccountPorts } from './AccountProvider';
 import { settingsTexts } from './texts';
 
@@ -32,41 +32,38 @@ function errorsOf(result: ChangePasswordResult): Errors | null {
 }
 
 /**
- * „Passwort ändern“ als Formular-Sheet: nur online, über das Primitiv des Auth-Moduls (#97). Die
- * Passwortregeln prüft das Formular vor dem Senden mit denselben Grenzen wie der Server; die Blocklist
- * kennt nur der Server. Bei Erfolg hat das Backend alle anderen Sitzungen widerrufen.
+ * „Passwort ändern“ als aufgeklapptes Formular auf „Konto“: nur online, über das Primitiv des
+ * Auth-Moduls (#97). Die Passwortregeln prüft es vor dem Senden mit denselben Grenzen wie der Server;
+ * die Blocklist kennt nur der Server. Bei Erfolg hat das Backend alle anderen Sitzungen widerrufen.
+ *
+ * Kein Sheet: Im iOS-Simulator bekam ein Eingabefeld im nativen Sheet zwar den Fokus, aber keine
+ * Tastatur und keine Eingabe (beobachtet in #119); die Expo-Doku zum BottomSheet sagt dazu nichts.
  */
-export function PasswordSheet({ visible, onClose, onChanged }: { visible: boolean; onClose: () => void; onChanged: () => void }) {
+export function PasswordForm({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const { auth } = useAccountPorts();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
-  function close() {
-    setCurrent('');
-    setNext('');
-    setErrors({});
-    onClose();
-  }
-
   async function submit() {
     if (current === '') return setErrors({ current: texts.currentMissing });
-    const rule = Password.safeParse(next);
-    if (!rule.success) return setErrors({ next: texts.rejected[next.length < passwordPolicy.minLength ? 'password_too_short' : 'password_too_long'] });
+    if (!Password.safeParse(next).success) {
+      return setErrors({ next: texts.rejected[next.length < passwordPolicy.minLength ? 'password_too_short' : 'password_too_long'] });
+    }
     setBusy(true);
     const result = await auth.changePassword({ currentPassword: current, newPassword: next }).catch((): ChangePasswordResult => ({ type: 'unreachable' }));
     setBusy(false);
     const failed = errorsOf(result);
     if (failed !== null) return setErrors(failed);
-    close();
+    onClose();
     onChanged();
   }
 
   return (
-    <Sheet visible={visible} onClose={close} height="full">
-      <View style={styles.form}>
-        <Text variant="title" accessibilityRole="header">
+    <Card>
+      <View testID="passwort-formular" style={styles.form}>
+        <Text variant="headline" accessibilityRole="header">
           {texts.title}
         </Text>
         <TextField
@@ -98,9 +95,9 @@ export function PasswordSheet({ visible, onClose, onChanged }: { visible: boolea
         />
         {errors.general !== undefined ? <Notice tone="problem" cause="technik" text={errors.general} /> : null}
         <Button label={texts.submit} onPress={() => void submit()} loading={busy} block />
-        <Button label={texts.cancel} variant="text" onPress={close} block />
+        <Button label={texts.cancel} variant="text" onPress={onClose} block />
       </View>
-    </Sheet>
+    </Card>
   );
 }
 

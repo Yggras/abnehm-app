@@ -4,8 +4,9 @@ import { authErrorCodes, BootstrapPersonRequest, BootstrapPersonResult, LogoutRe
 
 // Auth-Modul der App (Spezifikation 0, Abschnitt 9). Bildschirme und Bereichscode kennen nur `AppAuth`,
 // nicht Better Auth: Registrieren, Anmelden, Sitzung prüfen und Passwort ändern, dazu den Sperrzustand
-// bei `401` und die E-Mail des Kontos für die Einstellungen. Das Widerrufen der aktuellen Sitzung erhält nur das Abmeldemodul (#111) als eigene Rolle
-// `SessionRevocations`; es orchestriert darauf die vollständige Abmeldung.
+// bei `401` und die E-Mail des Kontos für die Einstellungen. Das Widerrufen der aktuellen Sitzung
+// erhält nur das Abmeldemodul (#111) als eigene Rolle `SessionRevocations`; es orchestriert darauf die
+// vollständige Abmeldung.
 //
 // Das Backend spricht Better Auth über dessen REST-Endpunkte unter `/v1/auth` an
 // (https://www.better-auth.com/docs/concepts/api) und weist sich mit dem Sitzungstoken als

@@ -42,7 +42,7 @@ export const settingsTexts = {
     current: 'Aktuelles Passwort',
     next: 'Neues Passwort',
     rules: 'Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an.',
-    submit: 'Passwort ändern',
+    submit: 'Neues Passwort speichern',
     cancel: 'Abbrechen',
     currentMissing: 'Gib dein aktuelles Passwort ein.',
     currentWrong: 'Das aktuelle Passwort stimmt nicht. Versuch es noch einmal.',

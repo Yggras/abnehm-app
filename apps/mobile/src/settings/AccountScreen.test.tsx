@@ -127,11 +127,11 @@ describe('Anzeigename', () => {
 describe('Passwort ändern', () => {
   async function changePassword(current: string, next: string) {
     await user.press(screen.getByRole('button', { name: 'Passwort ändern' }));
-    const sheet = screen.getByTestId('sheet');
-    await user.type(within(sheet).getByLabelText('Aktuelles Passwort'), current);
-    await user.type(within(sheet).getByLabelText('Neues Passwort'), next);
-    await user.press(within(sheet).getByRole('button', { name: 'Passwort ändern' }));
-    return sheet;
+    const form = screen.getByTestId('passwort-formular');
+    await user.type(within(form).getByLabelText('Aktuelles Passwort'), current);
+    await user.type(within(form).getByLabelText('Neues Passwort'), next);
+    await user.press(within(form).getByRole('button', { name: 'Neues Passwort speichern' }));
+    return form;
   }
 
   test('ändert es online; danach sind die anderen Sitzungen widerrufen, dieses Gerät bleibt angemeldet', async () => {
@@ -141,7 +141,8 @@ describe('Passwort ändern', () => {
     await changePassword(philipp.password, 'ganz-neue-passphrase');
 
     expect(await screen.findByText('Passwort geändert. Deine anderen Geräte sind abgemeldet.')).toBeOnTheScreen();
-    expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
+    expect(screen.queryByTestId('passwort-formular')).not.toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Passwort ändern' })).toBeOnTheScreen();
     expect(world.backend.password()).toBe('ganz-neue-passphrase');
     expect(world.backend.isValid(otherDevice)).toBe(false);
     expect(world.backend.isValid(world.sessionStore.value!.token!)).toBe(true);
@@ -154,13 +155,13 @@ describe('Passwort ändern', () => {
     ['zu viele Versuche', () => world.backend.answerOnce('/v1/auth/change-password', 429), philipp.password, 'Zu viele Versuche. Warte ein paar Minuten und versuch es dann noch einmal.'],
     ['ohne Netz', () => world.faults.set({ transport: 'offline' }), philipp.password, 'Passwort ändern braucht Internet. Versuch es mit Verbindung noch einmal.'],
     ['Serverfehler', () => world.faults.set({ server: 'unavailable' }), philipp.password, 'Passwort ändern braucht Internet. Versuch es mit Verbindung noch einmal.'],
-  ])('%s: Fehler im Sheet, das Passwort bleibt', async (_case, arrange, current, message) => {
+  ])('%s: Fehler im Formular, das Passwort bleibt', async (_case, arrange, current, message) => {
     await openAccount();
     arrange();
 
-    const sheet = await changePassword(current, _case === 'verbreitetes Passwort' ? 'iloveyou12' : 'ganz-neue-passphrase');
+    const form = await changePassword(current, _case === 'verbreitetes Passwort' ? 'iloveyou12' : 'ganz-neue-passphrase');
 
-    expect(await within(sheet).findByText(message)).toBeOnTheScreen();
+    expect(await within(form).findByText(message)).toBeOnTheScreen();
     expect(world.backend.password()).toBe(philipp.password);
     expect(world.auth.state()).toEqual({ type: 'angemeldet', accountId: philipp.accountId });
   });
@@ -168,9 +169,18 @@ describe('Passwort ändern', () => {
   test('prüft die Mindestlänge vor dem Senden', async () => {
     await openAccount();
 
-    const sheet = await changePassword(philipp.password, 'kurz-9-zz');
+    const form = await changePassword(philipp.password, 'kurz-9-zz');
 
-    expect(within(sheet).getByText('Das neue Passwort braucht mindestens 10 Zeichen.')).toBeOnTheScreen();
+    expect(within(form).getByText('Das neue Passwort braucht mindestens 10 Zeichen.')).toBeOnTheScreen();
+    expect(world.backend.calls.filter(({ path }) => path === '/v1/auth/change-password')).toEqual([]);
+  });
+
+  test('verlangt das aktuelle Passwort', async () => {
+    await openAccount();
+
+    const form = await changePassword('', 'ganz-neue-passphrase');
+
+    expect(within(form).getByText('Gib dein aktuelles Passwort ein.')).toBeOnTheScreen();
     expect(world.backend.calls.filter(({ path }) => path === '/v1/auth/change-password')).toEqual([]);
   });
 
@@ -179,8 +189,8 @@ describe('Passwort ändern', () => {
     await user.press(screen.getByRole('button', { name: 'Passwort ändern' }));
 
     expect(screen.getByText('Mindestens 10 Zeichen. Sehr häufige Passwörter nimmt die App nicht an.')).toBeOnTheScreen();
-    await user.press(within(screen.getByTestId('sheet')).getByRole('button', { name: 'Abbrechen' }));
-    expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
+    await user.press(within(screen.getByTestId('passwort-formular')).getByRole('button', { name: 'Abbrechen' }));
+    expect(screen.queryByTestId('passwort-formular')).not.toBeOnTheScreen();
   });
 });
 

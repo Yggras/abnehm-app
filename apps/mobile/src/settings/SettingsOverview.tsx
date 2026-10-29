@@ -73,7 +73,7 @@ function AccountHeader() {
     <View style={styles.header} accessible accessibilityLabel={name === null ? undefined : settingsTexts.header(name, emailText(email))}>
       <View style={styles.avatar}>
         <Text variant="headline" tone="onPrimary">
-          {name === null ? '' : [...name][0]!.toLocaleUpperCase('de-DE')}
+          {name === null ? '' : [...name][0]!.toUpperCase()}
         </Text>
       </View>
       <View style={styles.identity}>
