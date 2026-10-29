@@ -1,78 +1,126 @@
-import { useState, type ComponentRef, type Ref } from 'react';
-import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { useRef, useState, type ComponentRef, type RefObject } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { Icon } from './Icon';
 import { Text } from './Text';
 import { color, radius, size, space, textScale, type } from './tokens';
 
-/** Das Eingabeelement eines `TextField`, etwa um es nach „Korrigieren“ zu fokussieren. */
+/** Das Eingabeelement eines `TextField`, etwa um es nach „Korrigieren“ zu fokussieren (#175). */
 export type TextFieldInput = ComponentRef<typeof TextInput>;
 
+/** Zahl mit Einheit (Dezimaltastatur), freier Text oder Suche mit Lupe. */
+export type TextFieldKind = 'number' | 'text' | 'search';
+
 export type TextFieldProps = {
-  /** Beschriftung über dem Feld; zusammen mit der Einheit der zugängliche Name. */
+  /** Sichtbare Beschriftung über dem Feld; zugleich der zugängliche Name. */
   label: string;
+  /** Beschriftung nur für Screenreader, etwa beim Suchfeld mit Platzhalter. */
+  hideLabel?: boolean;
   value: string;
   onChangeText: (text: string) => void;
-  /** Einheit rechts im Feld, etwa „kg“. */
+  kind?: TextFieldKind;
+  /** Einheit rechts im Feld, etwa „g“. */
   unit?: string;
-  keyboardType?: TextInputProps['keyboardType'];
-  /** Ungültige Eingabe: Satz mit Lösungsweg unter dem Feld, Rahmen in `problem`. */
-  error?: string;
-  autoFocus?: boolean;
-  selectTextOnFocus?: boolean;
-  inputRef?: Ref<TextFieldInput>;
+  placeholder?: string;
+  /** Ungültige Eingabe: Rahmen in `problem` und darunter der Satz mit Lösungsweg. */
+  problem?: string;
+  disabled?: boolean;
+  /** Zugriff auf das Eingabeelement, etwa um es nach einer Rückfrage wieder zu fokussieren. */
+  inputRef?: RefObject<TextFieldInput | null>;
 };
 
+const borderWidth = { resting: 1.5, focused: 2 };
+
 /**
- * Eingabefeld des Design-Systems (Komponente „Eingabefeld“, research/design-system.md): gebrandetes
- * `TextInput` auf `surface-card` mit Rahmen in `line-strong`, fokussiert in `focus`, bei ungültiger
- * Eingabe in `problem` samt Satz darunter. `problem` gilt nur für die Eingabe, nie für den Wert selbst.
+ * Eingabefeld nach dem Design-System (gebrandetes `TextInput`): Fläche `surface-card`, Rahmen
+ * `line-strong`, fokussiert 2 dp in `primary`. Ein Fehler steht nie nur als Farbe da, sondern als
+ * Satz mit Symbol unter dem Feld.
  */
-export function TextField({ label, value, onChangeText, unit, keyboardType, error, autoFocus, selectTextOnFocus, inputRef }: TextFieldProps) {
+export function TextField({
+  label,
+  hideLabel = false,
+  value,
+  onChangeText,
+  kind = 'text',
+  unit,
+  placeholder,
+  problem,
+  disabled = false,
+  inputRef,
+}: TextFieldProps) {
   const [focused, setFocused] = useState(false);
-  const borderColor = error ? color.problem : focused ? color.focus : color.lineStrong;
+  const ownInput = useRef<TextFieldInput>(null);
+  const input = inputRef ?? ownInput;
+  // Ein Tipp auf Beschriftung, Lupe oder Einheit setzt den Fokus ins Feld; zugänglich ist nur das Feld selbst.
   return (
-    <View style={styles.group}>
-      <Text variant="label">{label}</Text>
-      <View testID="text-field-frame" style={[styles.frame, { borderColor }, focused && styles.focused]}>
+    <Pressable accessible={false} disabled={disabled} onPress={() => input.current?.focus()} style={styles.field}>
+      {hideLabel ? null : (
+        <Text variant="label" tone={disabled ? 'inkDisabled' : 'ink'}>
+          {label}
+        </Text>
+      )}
+      <View
+        style={[
+          styles.box,
+          disabled ? styles.disabled : problem ? styles.problem : focused ? styles.focused : styles.resting,
+        ]}
+      >
+        {kind === 'search' ? <Icon name="search" tone={disabled ? 'inkDisabled' : 'inkMuted'} /> : null}
         <TextInput
-          ref={inputRef}
+          ref={input}
+          accessibilityLabel={label}
+          accessibilityState={{ disabled }}
+          accessibilityHint={problem}
           value={value}
           onChangeText={onChangeText}
-          keyboardType={keyboardType}
-          autoFocus={autoFocus}
-          selectTextOnFocus={selectTextOnFocus}
-          accessibilityLabel={unit ? `${label} in ${unit}` : label}
-          accessibilityHint={error}
+          editable={!disabled}
+          placeholder={placeholder}
+          placeholderTextColor={color.inkMuted}
+          keyboardType={kind === 'number' ? 'decimal-pad' : 'default'}
+          returnKeyType={kind === 'search' ? 'search' : 'done'}
+          autoCorrect={kind === 'text'}
+          autoCapitalize={kind === 'search' ? 'none' : 'sentences'}
+          clearButtonMode={kind === 'search' ? 'while-editing' : 'never'}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
+          allowFontScaling
           maxFontSizeMultiplier={textScale.max}
-          cursorColor={color.primary}
-          selectionColor={color.primarySoftPressed}
-          style={[styles.input, numeric.has(keyboardType) ? type.numberM : type.body]}
+          style={[styles.input, { color: color[disabled ? 'inkDisabled' : 'ink'] }]}
         />
-        {unit ? <Text tone="inkMuted" importantForAccessibility="no">{unit}</Text> : null}
+        {unit ? (
+          <Text variant="bodyStrong" tone={disabled ? 'inkDisabled' : 'inkMuted'}>
+            {unit}
+          </Text>
+        ) : null}
       </View>
-      {error ? <Text variant="label" tone="problem">{error}</Text> : null}
-    </View>
+      {problem ? (
+        <View style={styles.message}>
+          <Icon name="alert" size="sm" tone="problem" />
+          <Text variant="label" tone="problem" style={styles.messageText}>
+            {problem}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  group: { gap: space[1] },
-  frame: {
+  field: { gap: space[1] },
+  box: {
     minHeight: size.fieldHeight,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space[2],
-    paddingHorizontal: space[3],
-    borderWidth: 1,
+    paddingHorizontal: space[4],
     borderRadius: radius.md,
     backgroundColor: color.surfaceCard,
   },
-  // Fokus mit kräftigerem Rahmen statt Ring; der Rahmen bleibt innerhalb der Feldhöhe.
-  focused: { borderWidth: 2 },
-  input: { flex: 1, color: color.ink, paddingVertical: space[2] },
+  resting: { borderWidth: borderWidth.resting, borderColor: color.lineStrong },
+  focused: { borderWidth: borderWidth.focused, borderColor: color.primary },
+  problem: { borderWidth: borderWidth.focused, borderColor: color.problem },
+  disabled: { backgroundColor: color.fillDisabled },
+  input: { ...type.body, flex: 1, minHeight: size.touchMin, paddingVertical: space[2] },
+  message: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  messageText: { flex: 1 },
 });
-
-/** Zahlenfelder zeigen ihren Wert im Zahlenstil mit gleich breiten Ziffern. */
-const numeric = new Set<TextInputProps['keyboardType']>(['decimal-pad', 'number-pad', 'numeric']);

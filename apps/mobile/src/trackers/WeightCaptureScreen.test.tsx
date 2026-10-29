@@ -48,7 +48,7 @@ test('newEntry öffnet das Formular; Speichern trägt ein, schließt und zeigt d
   await act(() => router.push({ pathname: '/capture/weight', params: { newEntry: 'true' } }));
 
   expect(screen.getByRole('header', { name: 'Gewicht' })).toBeOnTheScreen();
-  await user.type(screen.getByLabelText('Gewicht in kg'), '91,8');
+  await user.type(screen.getByLabelText('Gewicht'), '91,8');
   await user.press(screen.getByRole('button', { name: 'Speichern' }));
 
   expect(world.weights()).toEqual([expect.objectContaining({ weightG: 91_800 })]);
@@ -76,6 +76,6 @@ test('lädt, solange kein Konto geöffnet ist', async () => {
   await open({ opened: false });
   await act(() => router.push({ pathname: '/capture/weight', params: { newEntry: 'true' } }));
 
-  expect(screen.queryByLabelText('Gewicht in kg')).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Gewicht')).not.toBeOnTheScreen();
   expect(screen.getByText('Gewicht lädt …')).toBeOnTheScreen();
 });

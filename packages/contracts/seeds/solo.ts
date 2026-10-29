@@ -1,15 +1,16 @@
 import { buildSeedState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
-import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
+import { seedBlsEntry, seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
 import type { BausteinKey } from '../src/base.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat
 // vollständige Ziele samt Wochenplan und den drei Tageszielen von heute sowie eigene Wasser-, Sport-
-// und Gewichtseinträge. Das iPhone ist auf dem Stand des Servers, ohne offene Operationen; der
-// Seed-Deep-Link führt direkt auf „Heute“. Alle Werte sind erfunden; die Zielwerte sind
-// plausibel, aber nicht mit dem Zielrechner aus Spezifikation 1 berechnet.
+// und Gewichtseinträge und ein Frühstück aus der Suche ohne Fotos. Das iPhone ist auf dem Stand des
+// Servers, ohne offene Operationen; der Seed-Deep-Link führt direkt auf „Heute“, mit
+// `ziel=/log` ins Protokoll. Alle Werte sind erfunden; die Zielwerte sind plausibel, aber nicht mit dem
+// Zielrechner aus Spezifikation 1 berechnet. Nährwerte stammen aus dem BLS 4.0.
 
 const philipp = seedIds.person.philipp;
 
@@ -64,8 +65,9 @@ const weeklyPlan = {
 
 /**
  * Randzustand „Wochenplan ohne Wiegetag“ (Spezifikation 3, Abschnitt 9; #175) als Plan-Daten: dieselben
- * Sporttage, statt Gewogen Ernährung erfasst bzw. Im Kalorienbudget. Eine eigene Wochenplanversion,
- * damit die PlanReader-Attrappe beide Pläne Philipps unterscheidet.
+ * Sporttage, statt Gewogen Ernährung erfasst bzw. Im Kalorienbudget. Dieselbe Wochenplanversion wie in
+ * `solo` (ID aus Person und `valid_from`, #128), nur mit anderen Tagen; der `PlanReader` liest sie aus
+ * der Gerätedatenbank des Szenarios.
  */
 const weeklyPlanOhneWiegetag = {
   montag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
@@ -77,17 +79,14 @@ const weeklyPlanOhneWiegetag = {
   sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
 } as const satisfies SoloWeeklyPlan;
 
-type SoloPlan = Readonly<{ id: string; days: SoloWeeklyPlan }>;
-
-const soloPlan: SoloPlan = { id: seedIds.weeklyPlanVersion.philipp, days: weeklyPlan };
-const planOhneWiegetag: SoloPlan = { id: seedIds.weeklyPlanVersion.philippOhneWiegetag, days: weeklyPlanOhneWiegetag };
-
 /** Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). */
-const zieleOf = (plan: SoloPlan): SeedPart => ({
+const zieleOf = (plan: SoloWeeklyPlan): SeedPart => ({
   area: 'ziele',
   entities: [
     {
       table: 'goal_version',
+      // Seit #128 beim Sync angemeldet: Die Fassung steht im Änderungsprotokoll.
+      entityType: 'goal_version',
       ownerPersonId: philipp,
       row: {
         id: seedIds.goalVersion.philipp,
@@ -113,11 +112,11 @@ const zieleOf = (plan: SoloPlan): SeedPart => ({
       },
     },
     seedWeeklyPlan({
-      id: plan.id,
+      id: seedIds.weeklyPlanVersion.philipp,
       personId: philipp,
       validFrom: seedDays.zielstart,
       createdAt: '2026-10-01T07:05:00.000Z',
-      plan: plan.days,
+      plan,
     }),
     ...seedDailyGoals({
       personId: philipp,
@@ -125,7 +124,7 @@ const zieleOf = (plan: SoloPlan): SeedPart => ({
       localDate: seedDays.heute,
       dayEndsAt: seedDayEnds.heute,
       createdAt: '2026-10-14T05:00:00.000Z',
-      bausteine: plan.days.mittwoch,
+      bausteine: plan.mittwoch,
       // Gewogen hat keine Schwelle.
       thresholds: {
         ernaehrung_erfasst: { minimumMealCategories: 3 },
@@ -154,18 +153,18 @@ const waterToday = {
 } as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
 
 /** Was `solo` und seine Varianten unterscheidet: Wasser von heute und Wochenplan. */
-type SoloVariant = Readonly<{ water: WaterToday; plan: SoloPlan }>;
+type SoloVariant = Readonly<{ water: WaterToday; plan: SoloWeeklyPlan }>;
 
 /**
  * `solo` und seine Varianten: `solo-wasser-*` zeigen die übrigen Status des Wasser-Mini-Trackers
  * (#171), `solo-ohne-wiegetag` den Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175).
  */
 const soloVariants = {
-  solo: { water: waterToday.solo, plan: soloPlan },
-  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], plan: soloPlan },
-  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], plan: soloPlan },
-  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], plan: soloPlan },
-  'solo-ohne-wiegetag': { water: waterToday.solo, plan: planOhneWiegetag },
+  solo: { water: waterToday.solo, plan: weeklyPlan },
+  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], plan: weeklyPlan },
+  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], plan: weeklyPlan },
+  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], plan: weeklyPlan },
+  'solo-ohne-wiegetag': { water: waterToday.solo, plan: weeklyPlanOhneWiegetag },
 } as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
 
 type SoloScenario = keyof typeof soloVariants;
@@ -221,8 +220,29 @@ const trackerOf = (water: WaterToday): SeedPart => ({
   ],
 });
 
+/**
+ * Ernährung (Spezifikation 2): heute ein Frühstück aus der Suche, ohne Mahlzeitenfoto und damit ohne
+ * Fotofreigabe (#155). Mittagessen, Abendessen und Snacks bleiben leer, damit das Protokoll seine
+ * Leerzustände zeigt. Mit nur einer Mahlzeit bleibt „Ernährung erfasst“ (mindestens 3) offen.
+ */
+const ernaehrung: SeedPart = {
+  area: 'ernaehrung',
+  entities: [
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippFruehstueck[0], personId: philipp, at: '2026-10-14T06:40:00.000Z', localDate: seedDays.heute, meal: 'fruehstueck',
+      food: { key: 'C133000', name: 'Hafer Flocken', milliKcal: 348_000, proteinMg: 13_220, carbsMg: 53_300, fatMg: 6_650 },
+      grams: 60,
+    }),
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippFruehstueck[1], personId: philipp, at: '2026-10-14T06:41:00.000Z', localDate: seedDays.heute, meal: 'fruehstueck',
+      food: { key: 'F110100', name: 'Apfel roh', milliKcal: 58_000, proteinMg: 424, carbsMg: 11_700, fatMg: 500 },
+      grams: 150,
+    }),
+  ],
+};
+
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = ({ water, plan }: SoloVariant): readonly SeedPart[] => [fundament, zieleOf(plan), trackerOf(water)];
+const soloPartsWith = ({ water, plan }: SoloVariant): readonly SeedPart[] => [fundament, zieleOf(plan), trackerOf(water), ernaehrung];
 
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(soloVariants.solo);
@@ -237,9 +257,9 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
-    // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll. Revision 3: Gewichtseinträge
-    // ebenso, und heute ist Wiegetag (#175).
-    revision: 3,
+    // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
+    // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
+    revision: 4,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,

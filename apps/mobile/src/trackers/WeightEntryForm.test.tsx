@@ -42,7 +42,7 @@ async function renderForm({ lastWeighings = [[91_800, '2026-10-13T05:45:00.000Z'
   return { ...world, onSaved, added };
 }
 
-const field = () => screen.getByLabelText('Gewicht in kg');
+const field = () => screen.getByLabelText('Gewicht');
 const save = () => user.press(screen.getByRole('button', { name: 'Speichern' }));
 
 async function enter(text: string) {

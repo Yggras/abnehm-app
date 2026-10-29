@@ -20,8 +20,8 @@ import { Notice } from '../Notice';
 import { ProgressBar } from '../ProgressBar';
 import { Skeleton } from '../Skeleton';
 import { Text } from '../Text';
-import { TextField } from '../TextField';
 import { useLargeTextLayout } from '../text-scale';
+import { TextField } from '../TextField';
 import { Toast } from '../Toast';
 import { color, fontFamily, space, type, type TypeToken } from '../tokens';
 
@@ -310,6 +310,20 @@ function Rows() {
   );
 }
 
+function Fields() {
+  const [amount, setAmount] = useState('60');
+  const [query, setQuery] = useState('');
+  return (
+    <Section title="Eingabefelder">
+      <TextField label="Menge" kind="number" unit="g" value={amount} onChangeText={setAmount} />
+      <TextField label="Lebensmittel suchen" hideLabel kind="search" placeholder="Lebensmittel suchen" value={query} onChangeText={setQuery} />
+      <TextField label="Name" placeholder="z. B. Apfel aus dem Garten" value="" onChangeText={noop} />
+      <TextField label="Menge mit Fehler" kind="number" unit="g" value="0" onChangeText={noop} problem="Gib eine Menge über 0 ein, etwa 60." />
+      <TextField label="Deaktiviert" value="Braucht Internet" onChangeText={noop} disabled />
+    </Section>
+  );
+}
+
 function Toasts() {
   return (
     <Section title="Meldungen">
@@ -330,27 +344,6 @@ function Progress() {
         <ProgressBar label="Sport diese Woche" value={150} target={150} valueText="150 von 150 min" />
         <ProgressBar label="Wasser heute" value={1750} target={1500} valueText="1,75 von 1,5 l" />
         <Skeleton height={6} radius="pill" />
-      </Card>
-    </Section>
-  );
-}
-
-function Fields() {
-  const [weight, setWeight] = useState('82,4');
-  const [name, setName] = useState('');
-  return (
-    <Section title="Eingabefelder">
-      <Card>
-        <TextField label="Gewicht" unit="kg" keyboardType="decimal-pad" value={weight} onChangeText={setWeight} />
-        <TextField label="Anzeigename" value={name} onChangeText={setName} />
-        <TextField
-          label="Gewicht ungültig"
-          unit="kg"
-          keyboardType="decimal-pad"
-          value="12"
-          onChangeText={noop}
-          error="Bitte ein Gewicht von 20,0 bis 350,0 kg mit höchstens einer Nachkommastelle eingeben."
-        />
       </Card>
     </Section>
   );
@@ -470,9 +463,9 @@ export default function ComponentCatalog() {
         <Cards />
         <Notices />
         <Rows />
+        <Fields />
         <Toasts />
         <Progress />
-        <Fields />
         <NativeElements />
         <Haptics />
         <LargeText />

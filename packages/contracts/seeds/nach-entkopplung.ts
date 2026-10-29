@@ -160,9 +160,10 @@ const uncoupling = {
 export const nachEntkopplungManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'nach_entkopplung',
-  // Revision 2: Wassereinträge stehen seit #171 im Änderungsprotokoll. Revision 3: Gewichtseinträge
-  // ebenso, und heute ist Philipps Wiegetag (#175).
-  revision: 3,
+  // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
+  // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
+  // Revision 2: Wassereinträge seit #171.
+  revision: 4,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

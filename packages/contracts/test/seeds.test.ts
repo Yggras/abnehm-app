@@ -53,10 +53,14 @@ describe('Seed-Manifest', () => {
   it('schreibt das Änderungsprotokoll nur für beim Sync angemeldete Entitäten', () => {
     expect(solo.initial.server.change_log).toEqual([
       expect.objectContaining({ entity_type: 'person', entity_id: philipp, owner_person_id: philipp, operation: 'upsert' }),
+      expect.objectContaining({ entity_type: 'goal_version', entity_id: seedIds.goalVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
+      expect.objectContaining({ entity_type: 'weekly_plan_version', entity_id: seedIds.weeklyPlanVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
       ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
         expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.weightEntry.philippVorgestern, seedIds.weightEntry.philippGestern].map((id) =>
         expect.objectContaining({ entity_type: 'weight_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
+        expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
   });
 
@@ -85,8 +89,8 @@ describe('Seed-Manifest', () => {
       const weekdays = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag', 'sonntag'];
 
       for (const weekday of weekdays) expect(isWeighDay(planDay('solo-ohne-wiegetag', weekday))).toBe(false);
-      // Eigene Wochenplanversion, damit die PlanReader-Attrappe beide Pläne unterscheidet.
-      expect(variant.weekly_plan_version?.map((row) => row.id)).not.toEqual(solo.initial.server.weekly_plan_version?.map((row) => row.id));
+      // Dieselbe Wochenplanversion wie in solo (ID aus Person und valid_from, #128), nur andere Tage.
+      expect(variant.weekly_plan_version?.map((row) => row.id)).toEqual(solo.initial.server.weekly_plan_version?.map((row) => row.id));
       // Die Tagesziele von heute folgen dem Mittwoch dieses Plans.
       expect(variant.daily_goal?.map((goal) => goal.baustein)).toEqual(planDay('solo-ohne-wiegetag', 'mittwoch'));
       expect(variant.weight_entry).toEqual(solo.initial.server.weight_entry);

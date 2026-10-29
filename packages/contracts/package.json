@@ -14,6 +14,7 @@
     "./daily-goals": "./src/daily-goals.ts",
     "./energy": "./src/energy.ts",
     "./goal-calculator": "./src/goal-calculator.ts",
+    "./plan": "./src/plan.ts",
     "./ids": "./src/ids.ts",
     "./partner": "./src/partner.ts",
     "./island": "./src/island.ts",

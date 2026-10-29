@@ -70,12 +70,11 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
     <View style={styles.form}>
       <TextField
         label="Gewicht"
+        kind="number"
         unit="kg"
-        keyboardType="decimal-pad"
         value={text}
         onChangeText={changeText}
-        error={invalid ? invalidInput : undefined}
-        selectTextOnFocus
+        problem={invalid ? invalidInput : undefined}
         inputRef={field}
       />
       <View style={styles.group}>
