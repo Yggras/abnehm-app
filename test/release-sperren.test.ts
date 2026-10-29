@@ -273,7 +273,7 @@ describe('Produktions-Bundle der App', () => {
 
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
-    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'geraetetest', 'plan-reader-attrappe', 'seed', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
+    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'fixture-insel', 'geraetetest', 'plan-reader-attrappe', 'seed', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {
         expect(bundle.sources.some((source) => belongsTo(source, capability.modules)), `${bundle.platform}: ${capability.key}`).toBe(true);
