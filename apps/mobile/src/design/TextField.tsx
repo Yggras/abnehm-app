@@ -103,7 +103,8 @@ export function TextField({
           accessibilityHint={problem ? `Fehler: ${problem}` : hint}
           value={value}
           onChangeText={onChangeText}
-          secureTextEntry={secure && !revealed}
+          // Deaktiviert fehlt der Schalter; ein aufgedecktes Passwort ist dann wieder verdeckt.
+          secureTextEntry={secure && (!revealed || disabled)}
           editable={!disabled}
           placeholder={placeholder}
           placeholderTextColor={color.inkMuted}

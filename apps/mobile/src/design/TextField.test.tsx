@@ -109,8 +109,13 @@ test('zeigt ein Passwort auf Wunsch beim Tippen an (NIST SP 800-63B-4, 3.1.1.2)'
   expect(screen.getByLabelText('Neues Passwort')).toHaveProp('secureTextEntry', true);
 });
 
-test('deaktivierte Passwortfelder bieten keinen Schalter', async () => {
-  await render(<TextField label="Passwort" value="" onChangeText={jest.fn()} secure disabled />);
+test('deaktivierte Passwortfelder bieten keinen Schalter und verdecken ein aufgedecktes Passwort', async () => {
+  const { rerender } = await render(<TextField label="Passwort" value="geheim" onChangeText={jest.fn()} secure />);
+  await userEvent.press(screen.getByRole('button', { name: 'Passwort anzeigen' }));
+  expect(screen.getByLabelText('Passwort')).toHaveProp('secureTextEntry', false);
 
-  expect(screen.queryByRole('button', { name: 'Passwort anzeigen' })).toBeNull();
+  await rerender(<TextField label="Passwort" value="geheim" onChangeText={jest.fn()} secure disabled />);
+
+  expect(screen.queryByRole('button', { name: 'Passwort verbergen' })).toBeNull();
+  expect(screen.getByLabelText('Passwort')).toHaveProp('secureTextEntry', true);
 });

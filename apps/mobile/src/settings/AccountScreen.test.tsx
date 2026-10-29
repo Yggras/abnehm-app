@@ -137,19 +137,25 @@ describe('Passwort ändern', () => {
     expect(world.auth.state()).toEqual({ type: 'angemeldet', accountId: philipp.accountId });
   });
 
-  test.each<[string, () => void, string, string]>([
-    ['falsches aktuelles Passwort', () => {}, 'falsches-passwort', 'Das aktuelle Passwort stimmt nicht. Versuch es noch einmal.'],
-    ['verbreitetes Passwort', () => {}, philipp.password, 'Dieses Passwort ist zu verbreitet. Wähle ein anderes.'],
-    ['zu viele Versuche', () => world.backend.answerOnce('/v1/auth/change-password', 429), philipp.password, 'Zu viele Versuche. Warte ein paar Minuten und versuch es dann noch einmal.'],
-    ['ohne Netz', () => world.faults.set({ transport: 'offline' }), philipp.password, 'Passwort ändern braucht Internet. Versuch es mit Verbindung noch einmal.'],
-    ['Serverfehler', () => world.faults.set({ server: 'unavailable' }), philipp.password, 'Passwort ändern braucht Internet. Versuch es mit Verbindung noch einmal.'],
-  ])('%s: Fehler im Formular, das Passwort bleibt', async (_case, arrange, current, message) => {
+  // Feld: der Fehler steht am Eingabefeld (für Screenreader dessen Hinweis); `null`: als Hinweis über dem Formular.
+  test.each<[string, () => void, string, string, string | null]>([
+    ['falsches aktuelles Passwort', () => {}, 'falsches-passwort', 'Das aktuelle Passwort stimmt nicht. Versuch es noch einmal.', 'Aktuelles Passwort'],
+    ['verbreitetes Passwort', () => {}, philipp.password, 'Dieses Passwort ist zu verbreitet. Wähle ein anderes.', 'Neues Passwort'],
+    ['zu viele Versuche', () => world.backend.answerOnce('/v1/auth/change-password', 429), philipp.password, 'Zu viele Versuche. Warte ein paar Minuten und versuch es dann noch einmal.', null],
+    ['ohne Netz', () => world.faults.set({ transport: 'offline' }), philipp.password, 'Passwort ändern braucht Internet. Versuch es mit Verbindung noch einmal.', null],
+    ['Serverfehler', () => world.faults.set({ server: 'unavailable' }), philipp.password, 'Passwort ändern braucht Internet. Versuch es mit Verbindung noch einmal.', null],
+  ])('%s: Fehler im Formular, das Passwort bleibt', async (_case, arrange, current, message, field) => {
     await openAccount();
     arrange();
 
     const form = await changePassword(current, _case === 'verbreitetes Passwort' ? 'iloveyou12' : 'ganz-neue-passphrase');
 
-    expect(await within(form).findByText(message, { includeHiddenElements: true })).toBeOnTheScreen();
+    if (field === null) {
+      expect(await within(form).findByText(message)).toBeOnTheScreen();
+    } else {
+      expect(await within(form).findByText(message, { includeHiddenElements: true })).toBeOnTheScreen();
+      expect(within(form).getByLabelText(field)).toHaveProp('accessibilityHint', `Fehler: ${message}`);
+    }
     expect(world.backend.password()).toBe(philipp.password);
     expect(world.auth.state()).toEqual({ type: 'angemeldet', accountId: philipp.accountId });
   });

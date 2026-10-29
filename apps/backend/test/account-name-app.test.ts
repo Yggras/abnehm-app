@@ -10,6 +10,8 @@ import { InstallationId } from '@abnehm/contracts/sync';
 
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
+import { nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
+import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { couplingMember as localMember, outbox as localOutbox, person as localPerson } from '../../mobile/src/local-db/schema/index.ts';
@@ -47,7 +49,9 @@ afterEach(() => {
 });
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
-const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity]);
+const registry = createSyncRegistry([
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, nutritionEntryEntity,
+]);
 
 /**
  * Ein angemeldetes Gerät im Ausgangszustand der Installation `key`. Mit `otherInstallation` ist es ein
