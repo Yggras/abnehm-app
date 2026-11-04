@@ -15,6 +15,7 @@ import { hrefFor, openTarget, routeCatalog } from '../navigation';
 import type * as MessageTextsModule from './message-texts';
 import { useMessageHost, type MessageHost } from './MessageHost';
 import * as quickCommands from './quick-commands';
+import { screenScrollId } from './ScreenFrame';
 import { useMomoTabBadge } from './tab-badge';
 import { titleOf } from './texts';
 
@@ -120,7 +121,7 @@ async function open(target: RouteTarget) {
 describe('Tab-Leiste', () => {
   test('Heute, andere Tabs und Bereichsseiten besitzen Pull-to-Refresh', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
-    const canRefresh = () => screen.getAllByTestId('screen-scroll').some((node) => node.props.refreshControl != null);
+    const canRefresh = () => screen.getAllByTestId(screenScrollId).some((node) => node.props.refreshControl != null);
     expect(canRefresh()).toBe(true);
     await user.press(screen.getByRole('tab', { name: 'Protokoll' }));
     expect(canRefresh()).toBe(true);

@@ -9,7 +9,7 @@
 # Das E2E-Backend ist ein eigener Compose-Stack `abnehm-e2e` (Development-Image mit Seed-Route) auf
 # 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Ein Worktree mit
 # eigenen Secrets (scripts/dev-secrets) braucht ein eigenes Postgres-Volume und wählt dafür einen
-# anderen Stack: E2E_COMPOSE_PROJECT=abnehm-e2e-<ticket> scripts/e2e-run … Jeder Lauf
+# anderen Stack (gleicher Port, also nie zwei zugleich): E2E_COMPOSE_PROJECT=abnehm-e2e-<ticket> … Jeder Lauf
 # schreibt Protokoll, Bildschirmfotos, JUnit-Bericht und die Artefakt-IDs der getesteten Binaries nach
 # ~/Library/Logs/abnehm-app/e2e/<Zeitpunkt>/; die Zusammenfassung steht in zusammenfassung.txt.
 set -euo pipefail
