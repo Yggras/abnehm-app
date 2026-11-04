@@ -11,7 +11,8 @@ import { InstallationId, OutboxOperation } from '../src/sync.ts';
 // UUIDs, lokale Tage (`YYYY-MM-DD`) und Zeitpunkte (UTC-ISO-8601 mit Millisekunden) als Text,
 // Messwerte als Ganzzahl, `server_version` und Positionen als Dezimalzeichenfolge, JSON-Spalten als
 // JSON. Konten und Sitzungen (Better-Auth-Tabellen) stehen nicht als Zeilen im Manifest: Der Seeder
-// legt sie aus `accounts` an; nur dort steht die E-Mail.
+// legt sie aus `accounts` an; nur dort steht die E-Mail. Verarbeitete Operationen nennt ein Sollzustand
+// ohne Hashes und gespeicherte Antwort (`derivedColumns` in `canonical.ts`).
 
 /** Version des Formats; ein inkompatibles Format zählt sie hoch. */
 export const seedFormatVersion = 1;
@@ -21,9 +22,9 @@ export const seedFormatVersion = 1;
  * Wasser-Mini-Trackers (#171), `solo-sport-*` die Status „Wochenziel erreicht“ und „über dem
  * Wochenziel“ des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
  * (#175). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). `leer` bis
- * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113). `solo-energie` (Laichkugel
- * solo mit gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
- * Zwei Installationen und Offline/Sync folgen in #116.
+ * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113), `zwei_installationen` und
+ * `offline_sync` die Mehrgeräte- und Sync-Szenarien (#116). `solo-energie` (Laichkugel solo mit
+ * gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -43,6 +44,8 @@ export const SeedScenarioKey = z.enum([
   'tagesende_offen',
   'tagesende_abgeschlossen',
   'veralteter_partnerstand',
+  'zwei_installationen',
+  'offline_sync',
   'solo-energie',
   'rollenwahl-offen',
 ]);
@@ -112,7 +115,7 @@ export const SeedState = z.strictObject({
 });
 export type SeedState = z.infer<typeof SeedState>;
 
-/** Benannte Operation zwischen Ausgangs- und Sollzustand; weitere Arten ergänzt #116. */
+/** Benannte Operation zwischen Ausgangs- und Sollzustand. */
 export const SeedStep = z.discriminatedUnion('type', [
   /**
    * Push und Pull einer Installation. Übernimmt der Pull tagesbezogene Entitäten, wertet der
@@ -124,7 +127,8 @@ export const SeedStep = z.discriminatedUnion('type', [
    * Manifests aus, etwa bei App-Öffnung (`app_oeffnung`) oder Tagesabschluss (`tagesabschluss`). Er legt
    * Erfüllungen, Gutschriften und Tagesbonus an und schreibt ihre Fachbefehle in die Outbox; deren
    * Operations-IDs vergibt der Sync-Writer der Reihe nach aus `operationIds`. `pull` entsteht nur im
-   * Schritt `sync`.
+   * Schritt `sync`. `at` ist die Uhrzeit des Geräts bei dieser Auswertung, etwa wenn zwei Geräte offline
+   * nacheinander erfüllen (#116); ohne `at` gilt die Uhr des Manifests, und danach steht das Gerät wieder dort.
    */
   z.strictObject({
     type: z.literal('tagesziele_auswerten'),
@@ -132,6 +136,7 @@ export const SeedStep = z.discriminatedUnion('type', [
     localDates: z.array(LocalDate).min(1),
     cause: DailyGoalCause.exclude(['pull']),
     operationIds: z.array(EntityId),
+    at: Instant.optional(),
   }),
   /**
    * Ein Mitglied entkoppelt über den Entkopplungs-Kern (#107) in eigener Transaktion, wie es der Befehl
@@ -229,7 +234,11 @@ export const SeedManifest = z
       if (step.type !== 'entkoppeln' && !installationKeys.has(step.installation)) problem(`Schritt ${step.type}: unbekannte Installation ${step.installation}`);
       if (step.type === 'entkoppeln' && !accountKeys.has(step.account)) problem(`Schritt ${step.type}: unbekanntes Konto ${step.account}`);
     }
-    const operationIds = manifest.steps.flatMap((step) => (step.type === 'tagesziele_auswerten' ? step.operationIds : []));
+    // Eine Operations-ID gibt es nur einmal: in den Outboxen des Ausgangszustands und in den Schritten.
+    const operationIds = [
+      ...Object.values(manifest.initial.devices).flatMap((device) => device.outbox.map((operation) => operation.operationId)),
+      ...manifest.steps.flatMap((step) => (step.type === 'tagesziele_auswerten' ? step.operationIds : [])),
+    ];
     for (const value of duplicates(operationIds)) problem(`Operations-ID doppelt: ${value}`);
 
     const { mealPhotos, decoGift } = manifest.extensions ?? {};

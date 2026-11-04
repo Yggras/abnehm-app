@@ -17,7 +17,7 @@ import { EnergyBooking } from '../src/energy.ts';
 import { PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
 import { countedWaterMl, dayWeights, isWeighDay, trackerStatus, weekMinutes } from '../src/tracker-rules.ts';
 
-// Nachweis für #112 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
+// Nachweis für #112, #116 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
 // Partner-Szenarien `gekoppelt` und `nach_entkopplung`; für #171 die Wassereinträge von solo und seine
 // Varianten je Status des Wasser-Mini-Trackers; für #173 die Sportwoche von solo und seine Varianten. Dass Server und Geräte die Manifeste tatsächlich so
 // herstellen und erreichen, prüft `apps/backend/test/seed-partner-app.test.ts`.
@@ -191,6 +191,15 @@ describe('Seed-Manifest', () => {
       'Schritt sync: unbekannte Installation anna-android',
     ]);
     expect(issues({ ...solo, accounts: [solo.accounts[0], solo.accounts[0]] })).toContain(`Konto doppelt: key philipp`);
+  });
+
+  it('lehnt eine Operations-ID ab, die schon in einer Outbox des Ausgangszustands steht', () => {
+    const zwei = seedManifests.zwei_installationen;
+    const [first] = zwei.initial.devices['philipp-iphone']!.outbox;
+    const step = { type: 'tagesziele_auswerten', installation: 'philipp-ipad', localDates: [seedDays.heute], cause: 'app_oeffnung', operationIds: [first!.operationId] };
+    expect(SeedManifest.safeParse({ ...zwei, steps: [step] }).error?.issues.map(({ message }) => message)).toEqual([
+      `Operations-ID doppelt: ${first!.operationId}`,
+    ]);
   });
 });
 
