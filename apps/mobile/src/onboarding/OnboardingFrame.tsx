@@ -3,6 +3,7 @@ import { BackHandler, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Styl
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, color, IconButton, ProgressBar, space, Text } from '../design';
+import { screenScrollId } from '../shell/ScreenFrame';
 import { shellTexts } from '../shell/texts';
 import { stepCount, stepNumber, type OnboardingFlowStep } from './steps';
 import { onboardingTexts } from './texts';
@@ -73,7 +74,7 @@ export function OnboardingFrame({ step, title, onBack, primary, secondary, child
             />
           </View>
         </View>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView testID={screenScrollId} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text variant="display" accessibilityRole="header">
             {title}
           </Text>

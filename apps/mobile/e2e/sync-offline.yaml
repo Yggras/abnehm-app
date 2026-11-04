@@ -20,13 +20,15 @@ name: Sync ohne Netz und kanonischer Sync
 - runFlow: teilablaeufe/anmelden.yaml
 
 # Tabs und ＋ ---------------------------------------------------------------------------------------
-# Bis die Bereiche liefern, zeigen Protokoll, Momo und Wir im E2E-Build ihre Platzhalter.
+# Protokoll zeigt die Mahlzeiten des Tages (#155), Momo ohne Kopplung die Laichkugel (#180); bis
+# Partner & Benachrichtigungen liefert, zeigt Wir im E2E-Build seinen Platzhalter.
 - tapOn:
     id: tab-log
-- assertVisible: "Kommt mit: Ernährung"
+- assertVisible:
+    id: mahlzeit-fruehstueck
 - tapOn:
     id: tab-momo
-- assertVisible: "Kommt mit: Momo, Insel & Challenges"
+- assertVisible: "Momo schlüpft, wenn du dich mit deinem Partner koppelst.*"
 - tapOn:
     id: tab-partner
 - assertVisible: "Kommt mit: Partner & Benachrichtigungen"

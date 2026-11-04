@@ -7,6 +7,7 @@ import { createTestClock } from '@abnehm/clock/testing';
 import { ClockProvider } from '../clock/clock-context';
 import { routeScreen } from '../navigation';
 import { MessageHostProvider, MessageSlot } from '../shell/MessageHost';
+import { screenScrollId } from '../shell/ScreenFrame';
 import { appTrackers } from './app-trackers';
 import { berlin, createTrackerWorld, noon, type TrackerWorld } from './testing/tracker-world';
 import { WeightCaptureScreen } from './WeightCaptureScreen';
@@ -62,7 +63,7 @@ test('Tipps erreichen „Speichern“ auch bei offener Tastatur, statt sie nur z
   await act(() => router.push({ pathname: '/capture/weight', params: { newEntry: 'true' } }));
 
   // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
-  expect(screen.getByTestId('sync-scroll').props.keyboardShouldPersistTaps).toBe('handled');
+  expect(screen.getByTestId(screenScrollId).props.keyboardShouldPersistTaps).toBe('handled');
 });
 
 test('ohne newEntry zeigt die Route bis zum Detailbildschirm (#176) den Platzhalter des Bereichs', async () => {

@@ -7,7 +7,9 @@
 #
 # Abläufe (apps/mobile/e2e/): sync-offline (E2E), geraetesmoke (Shell), geraetetest (On-Device-Suite).
 # Das E2E-Backend ist ein eigener Compose-Stack `abnehm-e2e` (Development-Image mit Seed-Route) auf
-# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Jeder Lauf
+# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Ein Worktree mit
+# eigenen Secrets (scripts/dev-secrets) braucht ein eigenes Postgres-Volume und wählt dafür einen
+# anderen Stack (gleicher Port, also nie zwei zugleich): E2E_COMPOSE_PROJECT=abnehm-e2e-<ticket> … Jeder Lauf
 # schreibt Protokoll, Bildschirmfotos, JUnit-Bericht und die Artefakt-IDs der getesteten Binaries nach
 # ~/Library/Logs/abnehm-app/e2e/<Zeitpunkt>/; die Zusammenfassung steht in zusammenfassung.txt.
 set -euo pipefail
@@ -16,7 +18,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mobile="$repo_root/apps/mobile"
 
 usage() {
-  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
@@ -47,7 +49,7 @@ echo "E2E-Lauf $(date -u +%Y-%m-%dT%H:%M:%SZ), Commit $(cd "$repo_root" && git r
 # E2E-Backend ---------------------------------------------------------------------------------------
 echo "Starte das E2E-Backend auf 127.0.0.1:$port …" >&2
 "$repo_root/scripts/dev-secrets" >/dev/null
-(cd "$repo_root" && BACKEND_PORT="$port" docker compose --project-name abnehm-e2e up --detach --build --wait >&2)
+(cd "$repo_root" && BACKEND_PORT="$port" docker compose --project-name "${E2E_COMPOSE_PROJECT:-abnehm-e2e}" up --detach --build --wait >&2)
 
 # Geräte --------------------------------------------------------------------------------------------
 booted_simulator() {
