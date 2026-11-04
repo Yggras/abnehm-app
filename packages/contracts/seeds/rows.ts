@@ -1,6 +1,8 @@
 import type { SeedEntity } from './build.ts';
 import { seedClock, seedUtcOffsetMinutes } from './ids.ts';
-import type { BausteinKey, MealKey } from '../src/base.ts';
+import { EntityId, LocalDate, type BausteinKey, type MealKey } from '../src/base.ts';
+import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
+import { dailyBonusKey, energyBookingId } from '../src/energy.ts';
 import { entryAmount, entryTotals, NutritionSnapshot } from '../src/nutrition.ts';
 
 // Zeilenhelfer der Bereichsbeiträge: wiederkehrende Zeilenformen der Spezifikationen 1–3 in der
@@ -129,6 +131,198 @@ export function seedBlsEntry(options: {
       total_fat_mg: totals.fatMg,
       meal_photo_id: null,
       ...seedCreated(options.at),
+    },
+  };
+}
+
+/** Manuell erfasster Wassereintrag (Spezifikation 3), seit #171 beim Sync angemeldet. */
+export function seedWaterEntry(options: { id: string; personId: string; amountMl: number; loggedAt: string; localDate: string }): SeedEntity {
+  return {
+    table: 'water_entry',
+    entityType: 'water_entry',
+    ownerPersonId: options.personId,
+    row: {
+      id: options.id,
+      person_id: options.personId,
+      amount_ml: options.amountMl,
+      origin: 'manuell',
+      logged_at: options.loggedAt,
+      ...seedDay(options.localDate),
+      ...seedCreated(options.loggedAt),
+    },
+  };
+}
+
+/** Manuell erfasste Sporteinheit (Spezifikation 3), weder ersetzt noch reaktiviert. */
+export function seedSportEntry(options: {
+  id: string;
+  personId: string;
+  activity: string;
+  startedAt: string;
+  minutes: number;
+  createdAt: string;
+  localDate: string;
+}): SeedEntity {
+  return {
+    table: 'sport_entry',
+    ownerPersonId: options.personId,
+    row: {
+      id: options.id,
+      person_id: options.personId,
+      activity_type: options.activity,
+      override_activity_type: null,
+      started_at: options.startedAt,
+      duration_minutes: options.minutes,
+      active_milli_kcal: null,
+      ...seedManualOrigin,
+      replaced_by_entry_id: null,
+      reactivated_at: null,
+      ...seedDay(options.localDate),
+      ...seedCreated(options.createdAt),
+    },
+  };
+}
+
+/**
+ * KI-Schätzung aus einem Foto, dessen Foto nicht behalten wurde (Spezifikation 2, Abschnitt 6): Snapshot
+ * je 100 g, Menge und Summen nach den Rechenregeln des Vertragsmoduls. Name und Werte sind erfunden, wie
+ * eine Schätzung; sie stammen aus keiner Nährwertdatenbank.
+ */
+export function seedKiEntry(options: {
+  id: string;
+  personId: string;
+  at: string;
+  localDate: string;
+  meal: MealKey;
+  name: string;
+  per100g: Readonly<{ milliKcal: number; proteinMg: number; carbsMg: number; fatMg: number }>;
+  grams: number;
+}): SeedEntity {
+  const snapshot = NutritionSnapshot.parse({
+    name: options.name,
+    ...options.per100g,
+    baseUnit: 'g',
+    referenceAmount: 100_000,
+    portions: [],
+    source: 'ki',
+    attribution: null,
+  });
+  const amount = entryAmount(snapshot, 'g', options.grams * 1_000);
+  if (amount.type === 'problem') throw new Error(`Seed-Menge ${options.grams} g: ${amount.problem}`);
+  const totals = entryTotals(snapshot, amount.amount);
+  return {
+    table: 'nutrition_entry',
+    entityType: 'nutrition_entry',
+    ownerPersonId: options.personId,
+    row: {
+      id: options.id,
+      person_id: options.personId,
+      consumed_at: options.at,
+      ...seedDay(options.localDate),
+      meal: options.meal,
+      capture_method: 'foto',
+      food_ref_type: null,
+      food_ref_key: null,
+      base_amount: amount.amount.baseAmount,
+      display_unit: amount.amount.displayUnit,
+      display_amount_milli: amount.amount.displayAmountMilli,
+      snapshot_name: snapshot.name,
+      snapshot_base_unit: snapshot.baseUnit,
+      snapshot_reference_amount: snapshot.referenceAmount,
+      snapshot_milli_kcal: snapshot.milliKcal,
+      snapshot_protein_mg: snapshot.proteinMg,
+      snapshot_carbs_mg: snapshot.carbsMg,
+      snapshot_fat_mg: snapshot.fatMg,
+      snapshot_portions: [],
+      snapshot_source: 'ki',
+      snapshot_attribution: null,
+      total_milli_kcal: totals.milliKcal,
+      total_protein_mg: totals.proteinMg,
+      total_carbs_mg: totals.carbsMg,
+      total_fat_mg: totals.fatMg,
+      meal_photo_id: null,
+      ...seedCreated(options.at),
+    },
+  };
+}
+
+/**
+ * Tageszielerfüllung samt `+1`-Gutschrift, wie sie der Fachbefehl `completeDailyGoal` anlegt (#105): IDs
+ * und Schlüssel aus Person, Tag und Platz, Erfüllung und Buchung zum selben Zeitpunkt.
+ */
+export function seedCompletion(options: {
+  personId: string;
+  dailyGoalId: string;
+  localDate: string;
+  slot: DailyGoalSlot;
+  baustein: BausteinKey;
+  at: string;
+}): SeedEntity[] {
+  const { personId, localDate, slot, at } = options;
+  const key = dailyGoalKey(EntityId.parse(personId), LocalDate.parse(localDate), slot);
+  const id = dailyGoalCompletionId(key);
+  return [
+    {
+      table: 'daily_goal_completion',
+      entityType: 'daily_goal_completion',
+      ownerPersonId: personId,
+      row: {
+        id,
+        daily_goal_id: options.dailyGoalId,
+        person_id: personId,
+        local_date: localDate,
+        slot,
+        baustein: options.baustein,
+        first_completed_at: at,
+        completion_key: key,
+        created_at: at,
+      },
+    },
+    {
+      table: 'energy_booking',
+      entityType: 'energy_booking',
+      ownerPersonId: personId,
+      row: {
+        id: energyBookingId(key),
+        person_id: personId,
+        type: 'daily_goal_credit',
+        amount: 1,
+        local_date: localDate,
+        booking_key: key,
+        trigger: { dailyGoalCompletionId: id, slot },
+        daily_goal_completion_id: id,
+        island_object_id: null,
+        community_project_id: null,
+        original_booking_id: null,
+        created_at: at,
+      },
+    },
+  ];
+}
+
+/** `+1`-Tagesbonus für die drei Erfüllungen eines Tags, wie ihn der Fachbefehl `grantDailyBonus` anlegt (#105). */
+export function seedDailyBonus(options: { personId: string; localDate: string; at: string }): SeedEntity {
+  const personId = EntityId.parse(options.personId);
+  const localDate = LocalDate.parse(options.localDate);
+  const key = dailyBonusKey(personId, localDate);
+  const slots: readonly DailyGoalSlot[] = [1, 2, 3];
+  return {
+    table: 'energy_booking',
+    entityType: 'energy_booking',
+    ownerPersonId: personId,
+    row: {
+      id: energyBookingId(key),
+      person_id: personId,
+      type: 'daily_bonus_credit',
+      amount: 1,
+      local_date: localDate,
+      booking_key: key,
+      trigger: { dailyGoalCompletionIds: slots.map((slot) => dailyGoalCompletionId(dailyGoalKey(personId, localDate, slot))) },
+      daily_goal_completion_id: null,
+      island_object_id: null,
+      community_project_id: null,
+      original_booking_id: null,
+      created_at: options.at,
     },
   };
 }

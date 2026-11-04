@@ -1,6 +1,7 @@
 import * as ExpoHaptics from 'expo-haptics';
 import { AccessibilityInfo, Platform } from 'react-native';
 
+import { withDeviceConfig } from '../design/testing/device-config';
 import { deviceHaptics } from './device-haptics';
 import type { HapticKind } from './haptics';
 
@@ -61,14 +62,18 @@ test('nutzt auf Android die Haptik-Engine des Systems statt des Vibrationsmotors
   expect(impact).not.toHaveBeenCalled();
 });
 
-test('reduzierte Bewegung verstärkt oder wiederholt die Haptik nicht', () => {
-  jest.replaceProperty(Platform, 'OS', 'ios');
-  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+describe('reduzierte Bewegung', () => {
+  withDeviceConfig('reduzierte-bewegung');
 
-  deviceHaptics.feedback('levelaufstieg');
+  test('verstärkt oder wiederholt die Haptik nicht', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    expect(await AccessibilityInfo.isReduceMotionEnabled()).toBe(true);
 
-  expect(impact.mock.calls).toEqual([[ExpoHaptics.ImpactFeedbackStyle.Light]]);
-  expect(nativeCalls()).toBe(1);
+    deviceHaptics.feedback('levelaufstieg');
+
+    expect(impact.mock.calls).toEqual([[ExpoHaptics.ImpactFeedbackStyle.Light]]);
+    expect(nativeCalls()).toBe(1);
+  });
 });
 
 test('ein Fehler der nativen Haptik bleibt folgenlos', async () => {

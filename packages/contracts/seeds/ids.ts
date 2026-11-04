@@ -20,6 +20,7 @@ export const seedDays = {
 /** Beginn des Folgetags in Berlin (Sommerzeit, UTC+2), etwa für `day_ends_at` von heute. */
 export const seedDayEnds = {
   heute: '2026-10-14T22:00:00.000Z',
+  gestern: '2026-10-13T22:00:00.000Z',
 } as const;
 
 /** UTC-Offset in Berlin am 14.10.2026 (Sommerzeit). */
@@ -47,16 +48,37 @@ export const seedIds = {
   dailyGoal: {
     philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
     annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
+    /** Nur in den Randzuständen zum Tagesende (#113). */
+    philippGestern: [id('0012', 7), id('0012', 8), id('0012', 9)],
   },
-  // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171); 0020/3–4 gehören Anna (#117).
+  // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171) und den Randzuständen (#113);
+  // 0020/3–4 gehören Anna (#117).
   waterEntry: {
     philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
     annaHeute: [id('0020', 3), id('0020', 4)],
+    /** Nur in den Randzuständen zum Tagesende (#113). */
+    philippGestern: [id('0020', 8), id('0020', 9)],
   },
   weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
-  sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
+  // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
+  sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3), philippHeuteKurz: id('0022', 4) },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
-  nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2), philippFruehstueck: [id('0031', 3), id('0031', 4)] },
+  // 0031/5–7: Philipps Mahlzeiten von gestern, nur in den Randzuständen zum Tagesende (#113).
+  nutritionEntry: {
+    philippMittag: id('0031', 1),
+    annaMittag: id('0031', 2),
+    philippFruehstueck: [id('0031', 3), id('0031', 4)],
+    philippGestern: [id('0031', 5), id('0031', 6), id('0031', 7)],
+  },
+  /**
+   * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten`
+   * nacheinander vergibt (#113); so steht auch die Outbox des Sollzustands fest.
+   */
+  operation: {
+    erfuellt: [id('0090', 1)],
+    tagesendeOffen: [id('0090', 2), id('0090', 3)],
+    tagesendeAbgeschlossen: [id('0090', 4), id('0090', 5)],
+  },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   coupling: { philippAnna: id('0040', 1) },
   couplingMember: { philipp: id('0041', 1), anna: id('0041', 2) },
