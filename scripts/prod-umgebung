@@ -40,3 +40,29 @@ prod_postgres_image() {
 }
 
 image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }
+
+# Tag des Backend-Images, wie Compose es für den Stack `abnehm-prod` baut.
+prod_backend_image=abnehm-prod-backend
+
+# HTTPS-Adresse aus `tailscale serve`: https://<maschine>.<tailnet>.ts.net ohne Pfad.
+valid_prod_url() { [[ "$1" =~ ^https://[a-z0-9-]+\.[a-z0-9-]+\.ts\.net$ ]]; }
+
+# Liest ABNEHM_PROD_URL aus produktion.env (geschrieben von `scripts/prod adresse`) und prüft sie.
+load_prod_url() {
+  [[ -f "$prod_env_file" ]] || { echo "Keine Produktivadresse: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  source "$prod_env_file"
+  valid_prod_url "${ABNEHM_PROD_URL:-}" || { echo "Ungültige Adresse in $prod_env_file: ${ABNEHM_PROD_URL:-leer}" >&2; exit 1; }
+  export ABNEHM_PROD_URL
+}
+
+# Freigabe eines Commits durch scripts/release-check (einziger Schreiber) und scripts/prod (Leser):
+#   freigaben/<commit>.md                Protokoll des grünen Laufs
+#   freigaben/<commit>-images.txt        backend=<Image-ID>, postgres=<Image-ID>
+#   freigaben/<commit>-<plattform>.json  artefakt.json des Produktions-Binarys
+approval_path() { echo "$release_root/freigaben/$1"; }
+approved() { [[ -f "$(approval_path "$1").md" ]]; }
+# approved_image <commit> <backend|postgres>
+approved_image() { sed -n "s/^$2=//p" "$(approval_path "$1")-images.txt"; }
+# approved_artifact_id <commit> <ios|android>
+approved_artifact_id() { node -p "require('$(approval_path "$1")-$2.json').artefaktId"; }

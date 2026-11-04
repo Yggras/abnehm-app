@@ -31,7 +31,7 @@ Docker-Stack `abnehm-prod` (compose.prod.yaml)
 | Sicherheitsupdates | automatische macOS-Updates; Container-Images per Release-Checkliste | `scripts/gate-nachweis`, Bildschirmfoto, Abschnitt „Updates“ |
 | SSH | „Entfernte Anmeldung“ aus | `scripts/gate-nachweis --sudo` |
 | Release-Checkliste | `scripts/release-check`; `scripts/prod` verteilt nur freigegebene Stände | Protokoll unter `~/Library/Logs/abnehm-app/release/` |
-| Backup und Restore | **nicht Teil des Gates** (Nutzerentscheidung vom 04.11.2026, siehe „Backup“) | – |
+| Backup und Restore | **nicht Teil des Gates** (Nutzerentscheidung vom 04.11.2026 in [#115](https://github.com/Yggras/abnehm-app/issues/115), siehe „Backup“) | – |
 
 ## Einrichtung (einmalig)
 
@@ -80,7 +80,7 @@ scripts/prod status
 ```
 
 - Die Geräte-IDs liefern `xcrun devicectl list devices` und `adb devices`.
-- Die App kommt vorerst per Kabel auf die Geräte (Nutzerentscheidung vom 04.11.2026). TestFlight und Play Internal Testing ([#8](https://github.com/Yggras/abnehm-app/issues/8)) folgen später. Die iOS-App ist mit dem Zertifikat „Apple Development“ signiert. Mit einem kostenlosen Apple-Konto läuft sie nach 7 Tagen ab ([Recherche zur Verteilung](https://github.com/Yggras/abnehm-app/blob/main/research/private-distribution.md)). Die Android-APK signiert der Release-Build der Expo-Vorlage mit dem Debug-Schlüssel (`signingConfig signingConfigs.debug`, [Vorlage SDK 58](https://unpkg.com/expo-template-bare-minimum@58.0.23/android/app/build.gradle)); für die Installation per `adb` genügt das.
+- Die App kommt vorerst per Kabel auf die Geräte ([Nutzerentscheidung vom 04.11.2026 in #115](https://github.com/Yggras/abnehm-app/issues/115#issuecomment-6642572329)). TestFlight und Play Internal Testing ([#8](https://github.com/Yggras/abnehm-app/issues/8)) folgen später. Die iOS-App ist mit dem Zertifikat „Apple Development“ signiert. Mit einem kostenlosen Apple-Konto läuft sie nach 7 Tagen ab ([Recherche zur Verteilung](https://github.com/Yggras/abnehm-app/blob/main/research/private-distribution.md)). Die Android-APK signiert der Release-Build der Expo-Vorlage mit dem Debug-Schlüssel (`signingConfig signingConfigs.debug`, [Vorlage SDK 58](https://unpkg.com/expo-template-bare-minimum@58.0.23/android/app/build.gradle)); für die Installation per `adb` genügt das.
 - Die Container haben `restart: unless-stopped`: Sie starten wieder, wenn der Docker-Daemon neu startet, außer man hat sie angehalten ([Docker](https://docs.docker.com/engine/containers/start-containers-automatically/)). Damit sie nach einem Neustart des Laptops laufen, muss in Docker Desktop „Start Docker Desktop when you sign in to your computer“ an sein ([Docker Desktop Settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/)).
 
 ### Quelladresse und Anmeldebegrenzung
@@ -119,12 +119,14 @@ Voraussetzungen: Docker Desktop läuft, das Samsung Galaxy A34 und das iPhone SE
 - Protokoll, Logs, E2E-Läufe und Bildschirmfotos liegen unter `~/Library/Logs/abnehm-app/release/<Zeitpunkt>/`. Nur ein vollständiger grüner Lauf auf `origin/main` legt `freigaben/<commit>.md` an, dazu die freigegebenen Image- und Artefakt-IDs.
 - Ohne Terminal (etwa in einer Agenten-Session) bleiben die Bestätigungen offen; der Lauf ist dann nicht grün.
 - Die Release-Sperren gelten damit doppelt: als Tests am Export (`release-sperren`) und an den freigegebenen Artefakten selbst (`backend-image`, `produktion-binaries`). Die Gegenprobe am E2E-Bundle und am Development-Image findet die Marker (geprüft am 04.11.2026).
+- Vor der Freigabe prüft der Schritt `commit-bindung`, dass der Checkout noch derselbe saubere Commit ist und jedes geprüfte Artefakt (Produktions- und E2E-Binaries) aus genau diesem Commit stammt.
 - `--nur <schritt>,…` wiederholt einzelne Schritte zur Fehlersuche und gibt nie frei. `ABNEHM_RELEASE_BELIEBIGER_STAND=1` erlaubt Probeläufe auf anderen Ständen, ebenfalls ohne Freigabe.
+- `ABNEHM_PROD_BELIEBIGER_STAND=1 scripts/prod start` startet einen Probe-Stack `abnehm-prod-probe` mit eigenen Volumes auf `127.0.0.1:8791`. `tailscale serve` leitet nicht dorthin, echte Geräte erreichen ihn also nicht. `scripts/prod app` verlangt auch dann eine Freigabe.
 
 ## Updates
 
 - **macOS:** Unter Systemeinstellungen › Allgemein › Softwareupdate › Automatische Updates sind alle Schalter an, auch „Sicherheitsmaßnahmen und Systemdateien installieren“. Nachweis: `scripts/gate-nachweis` und ein Bildschirmfoto. Für die Konfigurationsprofil-Schlüssel dieser Einstellungen nennt Apple „Removed: macOS 27+“ ([Apple](https://developer.apple.com/documentation/devicemanagement/softwareupdate)). Die ausgelesenen Werte sind deshalb nur ein Hinweis, maßgeblich ist das Bildschirmfoto. Neustarts für Updates bestätigt man zeitnah. Nach dem Neustart startet Docker Desktop bei der Anmeldung, und die Container laufen wieder (siehe oben).
-- **Container-Images:** Die Tags sind festgelegt (`postgres:18.6-alpine` in `compose.prod.yaml`, `node:26.12.0-alpine` im `Dockerfile`). Ein Update ist ein neuer Lauf der Release-Checkliste. Der Schritt `backend-image` holt den aktuellen Stand dieser Tags und baut das Backend neu. Danach erzeugt `scripts/prod start` die Container mit den neuen Images neu; das ist der Neustart. Projektentscheidung: mindestens monatlich und zusätzlich bei Sicherheitsmeldungen zu Node, Postgres oder Alpine.
+- **Container-Images:** Die Tags sind festgelegt (`postgres:18.6-alpine` in `compose.prod.yaml`, `node:26.12.0-alpine` im `Dockerfile`). Ein Update ist ein neuer Lauf der Release-Checkliste. Der Schritt `backend-image` holt den aktuellen Stand dieser Tags und baut das Backend neu. Danach erzeugt `scripts/prod start` die Container mit den neuen Images neu; das ist der Neustart. Rhythmus: mindestens monatlich und zusätzlich bei Sicherheitsmeldungen zu Node, Postgres oder Alpine. Das ist ein Designwert dieser Umsetzung, nicht belegt und nicht aus einer Quelle abgeleitet.
 - **Neue Versionen** (anderer Tag) kommen per Pull Request: Tag in `compose.yaml`, `compose.prod.yaml` bzw. `Dockerfile` ändern, CI, Merge, Release-Checkliste, `scripts/prod start`. Ein Wechsel der Postgres-Hauptversion braucht `pg_upgrade` oder Dump und Restore ([PostgreSQL: Upgrading](https://www.postgresql.org/docs/current/upgrading.html)). Er ist ein eigenes Ticket.
 
 ## Gate-Nachweise
@@ -157,8 +159,8 @@ nmap -Pn -sU --top-ports 200 <LAN-IP-des-Laptops>
 
 Weder Postgres (`5432`) noch das Backend (`8787`–`8790`) noch ein HTTPS-Port dürfen erscheinen; HTTPS gibt es nur im Tailnet. Das Ergebnis kommt als Kommentar in #115.
 
-Geduldet sind Dienste von macOS selbst, die nichts mit der App zu tun haben (Nutzerentscheidung vom 04.11.2026). Am 04.11.2026 lauschten auf allen Adressen: `ControlCenter` auf TCP 5000 und 7000 (laut Apple „AirPlay“, [Apple: TCP- und UDP-Ports](https://support.apple.com/en-us/103229)) und `rapportd` auf TCP 60752 (laut `lsof`). Der Nachweis nennt solche Funde und bewertet sie. Ein neuer, unbekannter Fund wird geklärt, bevor das Gate gilt.
+Geduldet sind Dienste von macOS selbst, die nichts mit der App zu tun haben ([Nutzerentscheidung vom 04.11.2026 in #115](https://github.com/Yggras/abnehm-app/issues/115#issuecomment-6642478303)). Am 04.11.2026 lauschten auf allen Adressen: `ControlCenter` auf TCP 5000 und 7000 (laut Apple „AirPlay“, [Apple: TCP- und UDP-Ports](https://support.apple.com/en-us/103229)) und `rapportd` auf TCP 60752 (laut `lsof`). Der Nachweis nennt solche Funde und bewertet sie. Ein neuer, unbekannter Fund wird geklärt, bevor das Gate gilt.
 
 ## Backup
 
-Backup und Restore sind **nicht Teil des Gates** (Nutzerentscheidung vom 04.11.2026). Damit weicht das Gate von #22 und Abschnitt 11 der Spezifikation 0 ab. Die Kriterien in #115 sind angepasst; #22 und der Text von Abschnitt 11 nennen das Backup noch (Stand 04.11.2026). Folge: Gehen Laptop oder SSD verloren, sind alle Daten und Mahlzeitenfotos verloren. Kommt ein Backup später dazu, gehören das Volume `photo-data` und Postgres aus **demselben** Sicherungslauf hinein ([`entwicklung.md`](entwicklung.md) › „Ernährung: Fotoentwurf bestätigen und Fotoablage“).
+Backup und Restore sind **nicht Teil des Gates** (Nutzerentscheidung vom 04.11.2026, in den Akzeptanzkriterien von [#115](https://github.com/Yggras/abnehm-app/issues/115) gestrichen). Damit weicht das Gate von #22 und Abschnitt 11 der Spezifikation 0 ab. Die Kriterien in #115 sind angepasst; #22 und der Text von Abschnitt 11 nennen das Backup noch (Stand 04.11.2026). Folge: Gehen Laptop oder SSD verloren, sind alle Daten und Mahlzeitenfotos verloren. Kommt ein Backup später dazu, gehören das Volume `photo-data` und Postgres aus **demselben** Sicherungslauf hinein ([`entwicklung.md`](entwicklung.md) › „Ernährung: Fotoentwurf bestätigen und Fotoablage“).

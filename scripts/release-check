@@ -43,9 +43,7 @@ if [[ -n "$only" ]]; then
   for step in "${steps[@]}"; do [[ " ${all_steps[*]} " == *" $step "* ]] || { echo "Unbekannter Schritt: $step" >&2; exit 2; }; done
 fi
 
-[[ -f "$prod_env_file" ]] || { echo "Keine Produktivadresse: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
-# shellcheck disable=SC1091
-source "$prod_env_file"
+load_prod_url
 prod_url="$ABNEHM_PROD_URL"
 
 cd "$repo_root"
@@ -136,11 +134,11 @@ for step in "${steps[@]}"; do
           'docker compose --file compose.prod.yaml pull postgres && docker compose --file compose.prod.yaml build --pull backend' \
           >"$run_dir/backend-image.log" 2>&1; then
         {
-          echo "backend=$(docker image inspect --format '{{.Id}}' abnehm-prod-backend)"
+          echo "backend=$(image_id "$prod_backend_image")"
           echo "postgres=$(image_id "$(ABNEHM_PROD_URL="$prod_url" prod_postgres_image)")"
         } >"$run_dir/images.txt"
         # Release-Sperren an genau diesem Image, nicht nur an der COPY-Liste des Dockerfiles.
-        if node test/release-sperren-artefakt.ts image abnehm-prod-backend >>"$run_dir/backend-image.log" 2>&1; then
+        if node test/release-sperren-artefakt.ts image "$prod_backend_image" >>"$run_dir/backend-image.log" 2>&1; then
           record backend-image bestanden "$(tr '\n' ' ' <"$run_dir/images.txt")· ohne Testfähigkeiten"
         else
           record backend-image FEHLGESCHLAGEN "Testfähigkeit im Image: backend-image.log"
@@ -182,7 +180,7 @@ for step in "${steps[@]}"; do
         || ! e2e_backend lan >>"$run_dir/iphone-geraet.log" 2>&1 \
         || ! xcrun devicectl device install app --device "$iphone_id" "$(dirname "$(scripts/e2e-build ios --geraet --pfad)")"/*.app >>"$run_dir/iphone-geraet.log" 2>&1; then
         record iphone-geraet FEHLGESCHLAGEN "Bauen, LAN-Backend oder Installation: iphone-geraet.log"
-        e2e_backend >/dev/null 2>&1
+        e2e_backend >>"$run_dir/iphone-geraet.log" 2>&1 || echo "WARNUNG: E2E-Backend lauscht womöglich weiter auf $lan_ip:8788" >&2
         continue
       fi
       artifact="$(scripts/e2e-build ios --geraet --pfad)"
@@ -200,7 +198,11 @@ HINWEIS
       echo "  3. Gerätesmoke von Hand: Seed-Link, Tabs, ＋, Randgeste zurück, Neustart mit erhaltener Sitzung, sichere Bereiche." >&2
       ask "Gerätesmoke auf dem iPhone ohne Befund?"; smoke=$?
       xcrun devicectl device capture screenshot --device "$iphone_id" --destination "$run_dir/iphone-smoke.png" >>"$run_dir/iphone-geraet.log" 2>&1 || true
-      e2e_backend >>"$run_dir/iphone-geraet.log" 2>&1
+      # Das Development-Backend darf nach dem Schritt nicht im WLAN bleiben (Portscan, docs/betrieb.md).
+      if ! e2e_backend >>"$run_dir/iphone-geraet.log" 2>&1; then
+        record iphone-geraet FEHLGESCHLAGEN "E2E-Backend lauscht womöglich weiter auf $lan_ip:8788; von Hand stoppen (iphone-geraet.log)"
+        continue
+      fi
       if [[ "$before" == 2 || "$after" == 2 || "$smoke" == 2 ]]; then record iphone-geraet OFFEN "ohne Terminal keine Bestätigung · $(artifact_line "$artifact")"
       elif [[ "$before" == 0 && "$after" == 0 && "$smoke" == 0 ]]; then record iphone-geraet bestanden "On-Device-Suite vor/nach Neustart und Gerätesmoke (Mensch bestätigt) · $(artifact_line "$artifact")"
       else record iphone-geraet FEHLGESCHLAGEN "Mensch meldet Befund · $(artifact_line "$artifact")"; fi
@@ -235,6 +237,29 @@ HINWEIS
   esac
 done
 
+complete=true
+[[ " ${steps[*]} " == " ${all_steps[*]} " ]] || complete=false
+
+# Bindung an den Commit: Der Lauf dauert lange, und der Checkout kann sich währenddessen ändern. Freigegeben
+# wird nur, wenn der Stand noch derselbe ist und jedes geprüfte Artefakt aus genau diesem sauberen Commit stammt.
+if [[ "$complete" == true ]]; then
+  binding=()
+  [[ "$(git rev-parse HEAD)" == "$commit" && -z "$(git status --porcelain)" ]] || binding+=("Checkout hat sich während des Laufs geändert")
+  artifacts=("$run_dir"/produktion-ios.json "$run_dir"/produktion-android.json \
+    "$(scripts/e2e-build android --geraet --pfad)" "$(scripts/e2e-build ios --geraet --pfad)")
+  while IFS= read -r copied; do artifacts+=("$copied"); done < <(find "$run_dir/e2e" -name artefakt.json 2>/dev/null)
+  for artifact in "${artifacts[@]}"; do
+    if [[ ! -f "$artifact" ]]; then binding+=("fehlt: $artifact"); continue; fi
+    node -e "const a=require('$artifact'); process.exit(a.commit === '$commit' && a.ungespeicherteAenderungen === false ? 0 : 1)" \
+      || binding+=("$(artifact_line "$artifact") stammt nicht aus dem sauberen Commit")
+  done
+  if [[ ${#binding[@]} -eq 0 ]]; then
+    record commit-bindung bestanden "${#artifacts[@]} Artefakte aus \`${commit:0:12}\` ohne ungespeicherte Änderungen"
+  else
+    record commit-bindung FEHLGESCHLAGEN "$(printf '%s; ' "${binding[@]}")"
+  fi
+fi
+
 # Artefakt-IDs aller E2E-Läufe dieses Durchgangs.
 {
   echo
@@ -243,14 +268,13 @@ done
   for summary in $(e2e_summaries); do echo '```'; cat "$summary"; echo '```'; done
 } >>"$protocol"
 
-complete=true
-[[ " ${steps[*]} " == " ${all_steps[*]} " ]] || complete=false
 if [[ "$failed" == 0 && "$complete" == true && "${ABNEHM_RELEASE_BELIEBIGER_STAND:-}" != 1 ]]; then
-  mkdir -p "$release_root/freigaben"
+  approval="$(approval_path "$commit")"
+  mkdir -p "$(dirname "$approval")"
   { echo "**Ergebnis: GRÜN.** Freigegeben ist Commit \`$commit\`."; } >>"$protocol"
-  cp "$protocol" "$release_root/freigaben/$commit.md"
-  for platform in ios android; do cp "$run_dir/produktion-$platform.json" "$release_root/freigaben/$commit-$platform.json"; done
-  cp "$run_dir/images.txt" "$release_root/freigaben/$commit-images.txt"
+  cp "$protocol" "$approval.md"
+  for platform in ios android; do cp "$run_dir/produktion-$platform.json" "$approval-$platform.json"; done
+  cp "$run_dir/images.txt" "$approval-images.txt"
   echo "GRÜN: $protocol" >&2
   exit 0
 fi

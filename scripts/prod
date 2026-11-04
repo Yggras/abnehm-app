@@ -9,46 +9,46 @@
 #   scripts/prod logs                     # Protokoll des Backends verfolgen
 #
 # Verteilt wird nur, was `scripts/release-check` für den aktuellen Commit freigegeben hat (gleiche Image- bzw.
-# Artefakt-IDs). Nur für Probeläufe mit synthetischen Daten überspringt ABNEHM_PROD_BELIEBIGER_STAND=1 die
-# Freigabe; `start` baut das Image dann selbst.
+# Artefakt-IDs). Probeläufe ohne Freigabe: ABNEHM_PROD_BELIEBIGER_STAND=1 nutzt einen eigenen Stack
+# `abnehm-prod-probe` mit eigenen Volumes auf 127.0.0.1:8791, den `tailscale serve` nicht erreicht, und baut
+# selbst. `app` installiert auch dann nur freigegebene Binaries.
 set -euo pipefail
 
 # shellcheck source=prod-umgebung
 source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
 repo_root="$prod_repo_root"
 base_dir="$prod_base_dir"
-env_file="$prod_env_file"
 export ABNEHM_PROD_SECRETS_DIR="$prod_secrets_dir"
 local_port=8790
+project=abnehm-prod
 any_state=false
-[[ "${ABNEHM_PROD_BELIEBIGER_STAND:-}" == 1 ]] && any_state=true
+if [[ "${ABNEHM_PROD_BELIEBIGER_STAND:-}" == 1 ]]; then
+  any_state=true
+  project=abnehm-prod-probe
+  export ABNEHM_PROD_PORT=8791
+fi
 
 usage() {
   sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
-compose() { docker compose --file "$prod_compose_file" "$@"; }
+compose() { docker compose --file "$prod_compose_file" --project-name "$project" "$@"; }
 # Image-ID, mit der der Container des Dienstes läuft.
 running_image() { image_id "$(compose ps --format '{{.Image}}' "$1")"; }
 
-load_url() {
-  [[ -f "$env_file" ]] || { echo "Keine Adresse festgehalten: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
-  # shellcheck disable=SC1090
-  source "$env_file"
-  export ABNEHM_PROD_URL
-}
-
 commit="$(git -C "$repo_root" rev-parse HEAD)"
-approval="$release_root/freigaben/$commit"
+state_file="$base_dir/laufender-stand.txt"
+[[ "$any_state" == true ]] && state_file="$base_dir/laufender-stand-probe.txt"
 
+# require_approval [immer]: ohne „immer“ genügt im Probelauf der eigene Probe-Stack.
 require_approval() {
-  if [[ "$any_state" == true ]]; then
-    echo "Achtung: ABNEHM_PROD_BELIEBIGER_STAND=1 – ohne Freigabe, nur für synthetische Daten." >&2
+  if [[ "$any_state" == true && "${1:-}" != immer ]]; then
+    echo "Probelauf (ABNEHM_PROD_BELIEBIGER_STAND=1): Stack $project auf 127.0.0.1:8791, ohne Freigabe." >&2
     return
   fi
   [[ -z "$(git -C "$repo_root" status --porcelain)" ]] || { echo "Der Checkout hat ungesicherte Änderungen." >&2; exit 1; }
-  [[ -f "$approval.md" ]] || {
+  approved "$commit" || {
     echo "Commit $commit ist nicht freigegeben: zuerst scripts/release-check (docs/betrieb.md › „Release-Checkliste“)." >&2
     exit 1
   }
@@ -59,10 +59,10 @@ require_approval() {
 check_images() {
   [[ "$any_state" == true ]] && return
   local expected_backend expected_postgres backend postgres
-  expected_backend="$(sed -n 's/^backend=//p' "$approval-images.txt")"
-  expected_postgres="$(sed -n 's/^postgres=//p' "$approval-images.txt")"
+  expected_backend="$(approved_image "$commit" backend)"
+  expected_postgres="$(approved_image "$commit" postgres)"
   if [[ "$1" == vorher ]]; then
-    backend="$(image_id abnehm-prod-backend)"
+    backend="$(image_id "$prod_backend_image")"
     postgres="$(image_id "$(prod_postgres_image)")"
   else
     backend="$(running_image backend)"
@@ -90,12 +90,13 @@ record_state() {
   {
     echo "gestartet=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "commit=$commit"
-    echo "freigabe=$([[ "$any_state" == true ]] && echo 'keine (Probelauf)' || echo "$approval.md")"
+    echo "stack=$project"
+    echo "freigabe=$([[ "$any_state" == true ]] && echo 'keine (Probelauf)' || echo "$(approval_path "$commit").md")"
     echo "backendImage=$(running_image backend)"
     echo "postgresImage=$(running_image postgres)"
     echo "adresse=$ABNEHM_PROD_URL"
-  } >"$base_dir/laufender-stand.txt"
-  cat "$base_dir/laufender-stand.txt"
+  } >"$state_file"
+  cat "$state_file"
 }
 
 install_app() {
@@ -104,11 +105,9 @@ install_app() {
   [[ -f "$artifact" ]] || { echo "Kein Produktions-Binary: scripts/release-check baut es." >&2; exit 1; }
   binary="$(dirname "$artifact")/$(node -p "require('$artifact').binary")"
   actual="sha256:$(artifact_id_of "$binary")"
-  if [[ "$any_state" != true ]]; then
-    expected="$(node -p "require('$approval-$platform.json').artefaktId")"
-    [[ "$actual" == "$expected" ]] || { echo "Das Binary ($actual) ist nicht das freigegebene ($expected)." >&2; exit 1; }
-    echo "Binary entspricht der Freigabe von $commit: $actual"
-  fi
+  expected="$(approved_artifact_id "$commit" "$platform")"
+  [[ "$actual" == "$expected" ]] || { echo "Das Binary ($actual) ist nicht das freigegebene ($expected)." >&2; exit 1; }
+  echo "Binary entspricht der Freigabe von $commit: $actual"
   if [[ "$platform" == ios ]]; then
     xcrun devicectl device install app --device "$device" "$binary"
   else
@@ -119,15 +118,15 @@ install_app() {
 case "${1:-}" in
   adresse)
     url="${2:-}"
-    [[ "$url" =~ ^https://[a-z0-9-]+\.[a-z0-9-]+\.ts\.net$ ]] || { echo "Erwartet: https://<maschine>.<tailnet>.ts.net ohne Pfad" >&2; exit 2; }
+    valid_prod_url "$url" || { echo "Erwartet: https://<maschine>.<tailnet>.ts.net ohne Pfad" >&2; exit 2; }
     mkdir -p "$base_dir"
     chmod 700 "$base_dir"
-    echo "ABNEHM_PROD_URL=$url" >"$env_file"
+    echo "ABNEHM_PROD_URL=$url" >"$prod_env_file"
     echo "Festgehalten: $url"
     ;;
   start)
     require_approval
-    load_url
+    load_prod_url
     "$repo_root/scripts/prod-secrets" pruefen
     check_images vorher
     # Compose erzeugt einen Container nicht neu, wenn sich nur das Image hinter dem Tag geändert hat
@@ -136,21 +135,25 @@ case "${1:-}" in
     else compose up --detach --no-build --pull never --force-recreate --wait; fi
     check_images laufend
     record_state
+    if [[ "$any_state" == true ]]; then
+      curl --fail --silent --show-error "http://127.0.0.1:8791/v1/status" >/dev/null && echo "Probe-Stack erreichbar: http://127.0.0.1:8791/v1/status"
+      exit 0
+    fi
     check_serve
     curl --fail --silent --show-error "$ABNEHM_PROD_URL/v1/status" >/dev/null && echo "Status über HTTPS erreichbar: $ABNEHM_PROD_URL/v1/status"
     ;;
   app)
     [[ "${2:-}" == ios || "${2:-}" == android ]] && [[ -n "${3:-}" ]] || usage
-    require_approval
+    require_approval immer
     install_app "$2" "$3"
     ;;
   status)
-    load_url
+    load_prod_url
     compose ps
-    [[ -f "$base_dir/laufender-stand.txt" ]] && cat "$base_dir/laufender-stand.txt"
+    [[ -f "$state_file" ]] && cat "$state_file"
     check_serve
     ;;
-  stop) load_url; compose stop ;;
-  logs) load_url; compose logs --follow backend ;;
+  stop) load_prod_url; compose stop ;;
+  logs) load_prod_url; compose logs --follow backend ;;
   *) usage ;;
 esac

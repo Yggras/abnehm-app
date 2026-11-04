@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { fakeMealVisionMarker } from '../apps/backend/dev/meal-vision/fake-analyzer.ts';
-import { deepLinkHandler, testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
+import { belongsTo, deepLinkHandler, testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
 
 // Release-Sperren (Spezifikation 0, Abschnitt 12 und Testing Decisions; #112): Für jede registrierte
 // Testfähigkeit enthalten weder das Produktions-Image des Backends noch das Produktions-Bundle der App
@@ -32,7 +32,6 @@ function filesBelow(path: string): string[] {
     .map((entry) => relative(root, join(entry.parentPath, entry.name)));
 }
 
-const belongsTo = (file: string, modules: readonly string[]) => modules.some((module) => (module.endsWith('/') ? file.startsWith(module) : file === module));
 const isTestFile = (file: string) => /\.test\.tsx?$/.test(file);
 
 // Backend-Image ------------------------------------------------------------------------------------

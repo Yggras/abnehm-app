@@ -39,6 +39,10 @@ export type TestCapability = Readonly<{
  */
 export const deepLinkHandler = 'apps/mobile/src/test-capabilities/links.ts';
 
+/** Gehört die repo-relative Datei zu einem der Module (Ordner mit `/` am Ende, sonst genau die Datei)? */
+export const belongsTo = (file: string, modules: readonly string[]) =>
+  modules.some((module) => (module.endsWith('/') ? file.startsWith(module) : file === module));
+
 /** Ordner, deren Dateien vollständig Testfähigkeiten gehören (ohne Testdateien). */
 export const testCapabilityRoots = ['apps/backend/dev/', 'apps/mobile/src/test-capabilities/', 'packages/contracts/seeds/'] as const;
 

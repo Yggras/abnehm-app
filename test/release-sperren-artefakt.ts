@@ -11,7 +11,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-import { testCapabilities, testCapabilityRoots } from './test-capabilities.ts';
+import { belongsTo, testCapabilities, testCapabilityRoots } from './test-capabilities.ts';
 
 const [kind, target] = process.argv.slice(2);
 const findings: string[] = [];
@@ -27,8 +27,7 @@ if (kind === 'bundle' && target !== undefined) {
   const files = inImage("cd /app && find . -path ./node_modules -prune -o -type f -print | sed 's|^\\./||'").split('\n').filter(Boolean);
   const modules = [...testCapabilityRoots, ...testCapabilities.flatMap(({ modules: paths }) => paths)];
   for (const file of files) {
-    const module = modules.find((path) => (path.endsWith('/') ? file.startsWith(path) : file === path));
-    if (module !== undefined) findings.push(`Datei ${file} gehört zur Testfähigkeit (${module})`);
+    if (belongsTo(file, modules)) findings.push(`Datei ${file} gehört zu einer Testfähigkeit`);
   }
   const sources = inImage('cd /app && find . -path ./node_modules -prune -o -type f -print0 | xargs -0 cat');
   for (const { key, markers } of testCapabilities) {

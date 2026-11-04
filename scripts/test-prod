@@ -83,6 +83,14 @@ printf '%s\n' 'backend=sha256:backend1' 'postgres=sha256:postgres1' > "$ABNEHM_R
 grep -q 'up --detach --no-build --pull never --force-recreate --wait' "$MOCK_CALLS" || fail "start baut selbst oder erzeugt nicht neu"
 grep -q "^commit=$commit" "$ABNEHM_PROD_DIR/laufender-stand.txt" || fail "laufender Stand fehlt"
 
+# Probelauf: eigener Stack auf 8791, baut selbst; `app` verlangt trotzdem eine Freigabe.
+: > "$MOCK_CALLS"
+ABNEHM_PROD_BELIEBIGER_STAND=1 "$prod" start >/dev/null 2>&1 || fail "Probelauf startet nicht"
+grep -q -- '--project-name abnehm-prod-probe up --detach --build --force-recreate --wait' "$MOCK_CALLS" || fail "Probelauf nutzt nicht den Probe-Stack"
+rm "$ABNEHM_RELEASE_DIR/freigaben/$commit.md"
+ABNEHM_PROD_BELIEBIGER_STAND=1 "$prod" app android emulator-5554 >/dev/null 2>&1 && fail "app im Probelauf ohne Freigabe meldet Erfolg"
+echo freigegeben > "$ABNEHM_RELEASE_DIR/freigaben/$commit.md"
+
 echo dirty > "$tmp/repo/neu.txt"
 : > "$MOCK_CALLS"
 "$prod" start >/dev/null 2>&1 && fail "start mit ungesicherten Änderungen meldet Erfolg"

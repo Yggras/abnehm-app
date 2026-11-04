@@ -68,8 +68,9 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      # Nur auf 127.0.0.1; nie auf einer LAN-Adresse (Portscan in docs/betrieb.md).
-      - "127.0.0.1:8790:8787"
+      # Nur auf 127.0.0.1; nie auf einer LAN-Adresse (Portscan in docs/betrieb.md). Den Port ändert nur der
+      # Probe-Stack von `scripts/prod` (8791), damit `tailscale serve` ihn nicht erreicht.
+      - "127.0.0.1:${ABNEHM_PROD_PORT:-8790}:8787"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8787/v1/status"]
       interval: 10s
