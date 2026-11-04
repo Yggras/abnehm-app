@@ -53,9 +53,11 @@ export const testCapabilities: readonly TestCapability[] = [
       'apps/mobile/src/test-capabilities/seed/',
     ],
     entries: { backendRoutes: ['POST /dev/seed'], deepLinks: ['seed'], commands: ['apps/backend/dev/seed-command.ts'] },
-    // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138)
-    // prüft der Release-Test zusätzlich über seinen Schlüssel.
-    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto'],
+    // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138),
+    // `solo-energie` und `rollenwahl-offen` (#180) prüft der Release-Test zusätzlich über ihre Schlüssel.
+    // `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund von
+    // `momo.character` zu Recht im Produktions-Bundle steht.
+    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen'],
   },
   {
     key: 'testuhr',

@@ -20,6 +20,8 @@ export const seedDays = {
 /** Beginn des Folgetags in Berlin (Sommerzeit, UTC+2), etwa für `day_ends_at` von heute. */
 export const seedDayEnds = {
   heute: '2026-10-14T22:00:00.000Z',
+  gestern: '2026-10-13T22:00:00.000Z',
+  vorgestern: '2026-10-12T22:00:00.000Z',
 } as const;
 
 /** UTC-Offset in Berlin am 14.10.2026 (Sommerzeit). */
@@ -47,6 +49,9 @@ export const seedIds = {
   dailyGoal: {
     philippHeute: [id('0012', 1), id('0012', 2), id('0012', 3)],
     annaHeute: [id('0012', 4), id('0012', 5), id('0012', 6)],
+    // 0012/7–12: Philipps Tagesziele von vorgestern und gestern, nur in `solo-energie` (#180).
+    philippVorgestern: [id('0012', 7), id('0012', 8), id('0012', 9)],
+    philippGestern: [id('0012', 10), id('0012', 11), id('0012', 12)],
   },
   // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171); 0020/3–4 gehören Anna (#117).
   waterEntry: {
@@ -66,7 +71,8 @@ export const seedIds = {
     anna: { ernaehrung: id('0043', 5), wasser: id('0043', 6), sport: id('0043', 7), gewicht: id('0043', 8) },
   },
   photoSharing: { philipp: id('0044', 1), anna: id('0044', 2) },
-  sharedAction: { dekoGeschenk: id('0045', 1), annasEntkopplung: id('0045', 2) },
+  // 0045/3: Annas offene Rollenwahl in `rollenwahl-offen` (#180).
+  sharedAction: { dekoGeschenk: id('0045', 1), annasEntkopplung: id('0045', 2), annasRollenwahl: id('0045', 3) },
   /** Zusammenfassungen je Eigentümer, also an den jeweils anderen Partner. */
   partnerSummary: {
     philipp: { ernaehrung: id('0050', 1), wasser: id('0050', 2), sport: id('0050', 3), gewicht: id('0050', 4) },

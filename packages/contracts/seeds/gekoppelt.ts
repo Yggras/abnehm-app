@@ -1,12 +1,11 @@
-import { AreaKey, EntityId, LocalDate, type BausteinKey } from '../src/base.ts';
+import { AreaKey, LocalDate, type BausteinKey } from '../src/base.ts';
 import type { PartnerSharingLevel } from '../src/coupling.ts';
-import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
-import { energyBookingId } from '../src/energy.ts';
+import type { DailyGoalSlot } from '../src/daily-goals.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
 import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow } from './manifest.ts';
-import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
+import { seedCompletion, seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
 import { soloParts } from './solo.ts';
 
 // Szenario `gekoppelt` (Spezifikation 0, Abschnitt 12; #117): Philipp (iPhone, Rolle Bauen) und Anna
@@ -271,38 +270,9 @@ const ernaehrung: SeedPart = {
   ],
 };
 
-/** Tageszielerfüllung samt `+1`-Gutschrift, wie sie der Fachbefehl `completeDailyGoal` anlegt (#105). */
-function completion(person: string, dailyGoalId: string, slot: DailyGoalSlot, baustein: BausteinKey, at: string): SeedEntity[] {
-  const key = dailyGoalKey(EntityId.parse(person), heute, slot);
-  const id = dailyGoalCompletionId(key);
-  return [
-    {
-      table: 'daily_goal_completion',
-      entityType: 'daily_goal_completion',
-      ownerPersonId: person,
-      row: { id, daily_goal_id: dailyGoalId, person_id: person, local_date: heute, slot, baustein, first_completed_at: at, completion_key: key, created_at: at },
-    },
-    {
-      table: 'energy_booking',
-      entityType: 'energy_booking',
-      ownerPersonId: person,
-      row: {
-        id: energyBookingId(key),
-        person_id: person,
-        type: 'daily_goal_credit',
-        amount: 1,
-        local_date: heute,
-        booking_key: key,
-        trigger: { dailyGoalCompletionId: id, slot },
-        daily_goal_completion_id: id,
-        island_object_id: null,
-        community_project_id: null,
-        original_booking_id: null,
-        created_at: at,
-      },
-    },
-  ];
-}
+/** Tageszielerfüllung von heute samt `+1`-Gutschrift (#105). */
+const completion = (personId: string, dailyGoalId: string, slot: DailyGoalSlot, baustein: BausteinKey, at: string) =>
+  seedCompletion({ personId, dailyGoalId, localDate: heute, slot, baustein, at });
 
 /** Fundament (#105): Philipps Sporteinheit (Platz 3), Annas Sporteinheit (Platz 2) und Wasserziel (Platz 1). */
 const energie: SeedPart = {
@@ -327,8 +297,9 @@ const sharingLevels: Readonly<Record<Partner, Readonly<Record<AreaKey, PartnerSh
 /**
  * Fundament (#103, #106): Kopplung samt Mitgliedern und geschlüpfter Insel, Partnerfreigaben und
  * Fotofreigaben. Die Annahme setzte alle Bereiche auf `zusammengefasst` und die Fotos auf `geteilt`.
+ * Vor dem Schlüpfen (`hatched: false`, #180) haben die Mitglieder keine Rolle, und die Insel wartet.
  */
-const kopplung: SeedPart = {
+const kopplungPart = ({ hatched }: Readonly<{ hatched: boolean }>): SeedPart => ({
   area: 'fundament',
   entities: [
     {
@@ -358,10 +329,10 @@ const kopplung: SeedPart = {
         coupling_id: couplingId,
         coupling_status: 'aktiv',
         person_id: person,
-        role,
+        role: hatched ? role : null,
         display_name: name,
         created_at: coupledAt,
-        updated_at: hatchedAt,
+        updated_at: hatched ? hatchedAt : coupledAt,
         deleted_at: null,
       },
     })),
@@ -372,11 +343,11 @@ const kopplung: SeedPart = {
       row: {
         id: seedIds.island.philippAnna,
         coupling_id: couplingId,
-        state: 'aktiv',
-        hatched_at: hatchedAt,
-        time_zone: seedClock.timeZone,
+        state: hatched ? 'aktiv' : 'wartet_auf_rollen',
+        hatched_at: hatched ? hatchedAt : null,
+        time_zone: hatched ? seedClock.timeZone : null,
         created_at: coupledAt,
-        updated_at: hatchedAt,
+        updated_at: hatched ? hatchedAt : coupledAt,
         deleted_at: null,
       },
     },
@@ -408,7 +379,7 @@ const kopplung: SeedPart = {
       row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
     })),
   ],
-};
+});
 
 /** Zusammenfassung eines Bereichs für den Partner, im Zeitraum von heute (#106). */
 function summary(owner: Partner, area: AreaKey, id: string, content: Readonly<Record<string, number | string | null>>): SeedEntity {
@@ -479,7 +450,15 @@ const projektionen: SeedPart = {
 };
 
 /** Beiträge des Szenarios in Reihenfolge; Philipps Daten sind die aus `solo`. */
-export const gekoppeltParts: readonly SeedPart[] = [...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplung, projektionen];
+export const gekoppeltParts: readonly SeedPart[] = [...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched: true }), projektionen];
+
+/**
+ * Dieselben Beiträge vor dem Schlüpfen (#180): Die Insel wartet auf die Rollen, kein Mitglied hat eine.
+ * Spezifikation 4 ergänzt darauf etwa die offene Rollenwahl (`rollenwahl-offen`).
+ */
+export const vorDemSchluepfenParts: readonly SeedPart[] = [
+  ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched: false }), projektionen,
+];
 
 /** Erweiterungspunkte beider Partner-Szenarien; die Fotos gelten im Ausgangszustand. */
 export const gekoppeltExtensions = SeedExtensions.parse({

@@ -1,6 +1,8 @@
 import type { SeedEntity } from './build.ts';
 import { seedClock, seedUtcOffsetMinutes } from './ids.ts';
-import type { BausteinKey, MealKey } from '../src/base.ts';
+import { EntityId, LocalDate, type BausteinKey, type MealKey } from '../src/base.ts';
+import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
+import { energyBookingId } from '../src/energy.ts';
 import { entryAmount, entryTotals, NutritionSnapshot } from '../src/nutrition.ts';
 
 // Zeilenhelfer der Bereichsbeiträge: wiederkehrende Zeilenformen der Spezifikationen 1–3 in der
@@ -131,4 +133,45 @@ export function seedBlsEntry(options: {
       ...seedCreated(options.at),
     },
   };
+}
+
+/** Tageszielerfüllung samt `+1`-Gutschrift, wie sie der Fachbefehl `completeDailyGoal` anlegt (#105). */
+export function seedCompletion(options: {
+  personId: string;
+  dailyGoalId: string;
+  localDate: string;
+  slot: DailyGoalSlot;
+  baustein: BausteinKey;
+  at: string;
+}): SeedEntity[] {
+  const { personId, dailyGoalId, localDate, slot, baustein, at } = options;
+  const key = dailyGoalKey(EntityId.parse(personId), LocalDate.parse(localDate), slot);
+  const id = dailyGoalCompletionId(key);
+  return [
+    {
+      table: 'daily_goal_completion',
+      entityType: 'daily_goal_completion',
+      ownerPersonId: personId,
+      row: { id, daily_goal_id: dailyGoalId, person_id: personId, local_date: localDate, slot, baustein, first_completed_at: at, completion_key: key, created_at: at },
+    },
+    {
+      table: 'energy_booking',
+      entityType: 'energy_booking',
+      ownerPersonId: personId,
+      row: {
+        id: energyBookingId(key),
+        person_id: personId,
+        type: 'daily_goal_credit',
+        amount: 1,
+        local_date: localDate,
+        booking_key: key,
+        trigger: { dailyGoalCompletionId: id, slot },
+        daily_goal_completion_id: id,
+        island_object_id: null,
+        community_project_id: null,
+        original_booking_id: null,
+        created_at: at,
+      },
+    },
+  ];
 }

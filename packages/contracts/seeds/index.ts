@@ -3,6 +3,7 @@ import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
 import { soloManifests } from './solo.ts';
+import { rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
 
 // Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Nur für Development- und Testartefakte:
 // Lint erlaubt `@abnehm/contracts/seeds` nur in Tests und in den registrierten Testfähigkeiten, das
@@ -28,7 +29,7 @@ export {
 } from './manifest.ts';
 export { canonicalJson, canonicalRows, dependencyOrder } from './canonical.ts';
 export { buildSeedState, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
-export { gekoppeltParts } from './gekoppelt.ts';
+export { gekoppeltParts, vorDemSchluepfenParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedInstallations, seedPassword } from './ids.ts';
 export { uncoupledState, uncouplingRequestOf, type SeedUncouplingRequest } from './nach-entkopplung.ts';
 
@@ -38,4 +39,6 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   gekoppelt: gekoppeltManifest,
   nach_entkopplung: nachEntkopplungManifest,
   frisches_konto: frischesKontoManifest,
+  'solo-energie': soloEnergieManifest,
+  'rollenwahl-offen': rollenwahlOffenManifest,
 };
