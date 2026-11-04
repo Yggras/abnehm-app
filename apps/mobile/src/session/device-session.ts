@@ -87,7 +87,7 @@ function deviceState() {
   let onboarding: Onboarding | null = null;
   const session = createAppSession({
     baseUrl,
-    fetch: adapters?.fetch(globalThis.fetch) ?? globalThis.fetch,
+    fetch: adapters?.fetch(globalThis.fetch, baseUrl) ?? globalThis.fetch,
     sessionStore: adapters?.sessionStore(secureSessionStore) ?? secureSessionStore,
     databases: createDeviceLocalDatabases({ onError }),
     // Kontobezogene Beobachter an der geöffneten Datenbank; beim Sperren lösen sie sich wieder.

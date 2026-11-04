@@ -13,11 +13,12 @@ import { fixtureIsland, type FixtureIsland } from './fixture-island';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
 import { faultyNetwork } from './network';
+import { followingServerClock } from './server-clock';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
-// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #182): Seed-Deep-Link, Testuhr,
-// Fehler-Adapter für Transport, Server, Auth und Storage samt Transport-Fehlermodus, die
-// On-Device-Suite und die Fixture-Insel. App-Code erreicht diesen Ordner nur über
+// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #182, #271): Seed-Deep-Link,
+// Testuhr samt Serveruhr des Development-Backends, Fehler-Adapter für Transport, Server, Auth und
+// Storage samt Transport-Fehlermodus, die On-Device-Suite und die Fixture-Insel. App-Code erreicht diesen Ordner nur über
 // `src/build-capabilities.ts`; im Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer
 // Testfähigkeit der zentralen Registry (`test/test-capabilities.ts`).
 
@@ -25,7 +26,8 @@ export type TestCapabilities = Readonly<{
   clock: AppTestClock;
   /** Umhüllt die echten Abhängigkeiten der App-Sitzung mit den Fehler-Adaptern. */
   adapters: Readonly<{
-    fetch(inner: typeof fetch): typeof fetch;
+    /** Fehler-Adapter um `fetch`; darunter folgt die Serveruhr unter `baseUrl` der Testuhr (#271). Einmal je Sitzung. */
+    fetch(inner: typeof fetch, baseUrl: string): typeof fetch;
     sessionStore(inner: SessionStore): SessionStore;
     /** Netzstatus für die Sync-Auslöser, überlagert vom Transport-Fehlermodus. */
     network(inner: ObserveNetwork): ObserveNetwork;
@@ -58,7 +60,7 @@ function Host({ session, gate }: { session: () => AppSession; gate: SessionGate 
 export const testCapabilities: TestCapabilities = {
   clock,
   adapters: {
-    fetch: (inner) => faultyFetch(inner, faults),
+    fetch: (inner, baseUrl) => faultyFetch(followingServerClock(inner, { clock, baseUrl }), faults),
     sessionStore: (inner) => faultySessionStore(inner, faults),
     network: (inner) => faultyNetwork(inner, faults),
   },

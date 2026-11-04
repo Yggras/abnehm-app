@@ -243,7 +243,9 @@ describe('Produktions-Image des Backends', () => {
       'apps/backend/dev/seed/server-seed.ts',
       'apps/backend/dev/seed-command.ts',
       'apps/backend/dev/meal-vision/fake-analyzer.ts',
+      'apps/backend/dev/server-clock.ts',
       'packages/contracts/seeds/index.ts',
+      'packages/contracts/seeds/server-clock.ts',
     ]) {
       expect(development).toContain(module);
     }
@@ -318,6 +320,40 @@ describe('Fake der Fotoanalyse (#161)', () => {
   });
 });
 
+// Steuerbare Serveruhr (#271) ------------------------------------------------------------------------
+//
+// Die allgemeinen Prüfungen laufen für `serveruhr` über die Registry. Dieser Block belegt zusätzlich,
+// dass das produktive Backend nur die Systemuhr kennt: Weder das Uhr-Paket noch ein anderer
+// Produktionscode bringt eine steuerbare Uhr oder einen Weg dorthin mit.
+
+describe('Steuerbare Serveruhr (#271)', () => {
+  const capability = testCapabilities.find(({ key }) => key === 'serveruhr')!;
+  const production = imageFiles('production');
+
+  it('ist zentral registriert, mit Modulen, Steuerroute und Marker', () => {
+    expect(capability).toMatchObject({
+      modules: ['apps/backend/dev/server-clock.ts', 'apps/mobile/src/test-capabilities/server-clock.ts'],
+      entries: { backendRoutes: ['POST /dev/uhr'] },
+      markers: ['/dev/uhr'],
+    });
+  });
+
+  it('das Produktions-Image enthält keine steuerbare Uhr: nur die Systemuhr aus dem Uhr-Paket', () => {
+    expect(production.filter((file) => file.startsWith('packages/clock/'))).toEqual(['packages/clock/package.json', 'packages/clock/src/clock.ts', 'packages/clock/src/reading.ts']);
+    for (const file of production.filter((path) => /\.[cm]?[jt]s$/.test(path))) {
+      const content = read(file);
+      for (const reference of ['server-clock', 'createServerClock', 'createTestClock', '/dev/uhr']) expect(content.includes(reference), `${file}: ${reference}`).toBe(false);
+    }
+    // Der produktive Prozess startet ohne Uhr; `createBackend` nimmt dann die Systemuhr.
+    expect(read('apps/backend/src/main.ts')).toMatch(/runBackend\(\)/);
+  });
+
+  it('Gegenprobe: das Development-Image enthält die Serveruhr, und sein Prozess liest sie', () => {
+    expect(imageFiles('development')).toContain('apps/backend/dev/server-clock.ts');
+    expect(read('apps/backend/dev/main.ts')).toContain('clock: serverClock');
+  });
+});
+
 describe('Produktions-Bundle der App', () => {
   describe.each(testCapabilities.map((capability) => [capability.key, capability] as const))('%s', (_, capability: TestCapability) => {
     it('enthält kein Modul der Fähigkeit', () => {
@@ -347,7 +383,7 @@ describe('Produktions-Bundle der App', () => {
 
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
-    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'fixture-insel', 'geraetetest', 'laufzeitprofile', 'seed', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
+    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'fixture-insel', 'geraetetest', 'laufzeitprofile', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {
         expect(bundle.sources.some((source) => belongsTo(source, capability.modules)), `${bundle.platform}: ${capability.key}`).toBe(true);

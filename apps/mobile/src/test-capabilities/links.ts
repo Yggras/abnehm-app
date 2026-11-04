@@ -19,7 +19,8 @@ import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 //     stellt die Fehler-Adapter; ohne Parameter stehen alle wieder auf `ok`. `transport=offline` ist
 //     zugleich der Transport-Fehlermodus, der auf iOS den Flugmodus ersetzt;
 //   abnehmapp-dev://uhr?stunden=25&zone=Pacific/Kiritimati
-//     stellt die Testuhr ganze Stunden vor und/oder auf eine neue eigene Zone (Reise);
+//     stellt die Testuhr ganze Stunden vor und/oder auf eine neue eigene Zone (Reise); die Serveruhr
+//     des Development-Backends folgt ihr (#271, `server-clock.ts`);
 //   abnehmapp-dev://profil?name=transport-offline
 //     stellt ein benanntes Laufzeitprofil (#113) über Fehler-Adapter und Testuhr;
 //   abnehmapp-dev://geraetetest?phase=vor_neustart|nach_neustart

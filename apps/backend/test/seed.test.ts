@@ -4,10 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 import { canonicalRows, seedManifests, seedPassword, seedRoutePath, type SeedManifest } from '@abnehm/contracts/seeds';
 
-import { createDevelopmentApp } from '../dev/app.ts';
 import { dumpServer, seedServer, tablesWithEmail } from '../dev/seed/server-seed.ts';
 import { account, person, session, user } from '../src/db/schema/index.ts';
-import { createTestBackend, type TestBackend } from './support/app.ts';
+import { createDevelopmentTestBackend, createTestBackend, type TestBackend } from './support/app.ts';
 import { call, newDevice, signIn } from './support/auth-client.ts';
 
 // Nachweis für #112: Seed-Mechanismus für Postgres, Seed-Route des Development-Backends und die
@@ -96,8 +95,7 @@ describe('Seed für Postgres', () => {
 
 describe('Seed-Route des Development-Backends', () => {
   it('seedet über POST /dev/seed; unbekannte Szenarien sind ungültig', async () => {
-    const backend = await createTestBackend();
-    const development = { app: createDevelopmentApp({ backend, database: backend.database, fakeMealVision: backend.fakeMealVision }) };
+    const { development, ...backend } = await createDevelopmentTestBackend();
     expect((await call(development, 'POST', seedRoutePath, newDevice(), { scenario: 'solo' })).status).toBe(204);
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(solo.initial.server));
     expect(await call(development, 'POST', seedRoutePath, newDevice(), { scenario: 'unbekannt' })).toEqual(
@@ -106,8 +104,7 @@ describe('Seed-Route des Development-Backends', () => {
   });
 
   it('führt nach dem Seeden die Serverschritte aus: `nach_entkopplung` endet mit echtem Widerruf im Sollzustand (#117)', async () => {
-    const backend = await createTestBackend();
-    const development = { app: createDevelopmentApp({ backend, database: backend.database, fakeMealVision: backend.fakeMealVision }) };
+    const { development, ...backend } = await createDevelopmentTestBackend();
     const manifest = seedManifests.nach_entkopplung;
 
     expect((await call(development, 'POST', seedRoutePath, newDevice(), { scenario: 'nach_entkopplung' })).status).toBe(204);
@@ -117,8 +114,7 @@ describe('Seed-Route des Development-Backends', () => {
   });
 
   it('reicht alle übrigen Anfragen samt Autorisierung an die App des Backends durch', async () => {
-    const backend = await createTestBackend();
-    const development = { app: createDevelopmentApp({ backend, database: backend.database, fakeMealVision: backend.fakeMealVision }) };
+    const { development } = await createDevelopmentTestBackend();
     expect((await call(development, 'GET', '/v1/status', newDevice())).status).toBe(200);
     expect((await call(development, 'POST', '/v1/person/bootstrap', newDevice(), {})).status).toBe(401);
   });

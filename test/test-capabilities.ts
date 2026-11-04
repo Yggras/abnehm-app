@@ -1,6 +1,6 @@
 // Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112, #114). Sie führt jede
-// Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Fehler-Adapter,
-// Transport-Fehlermodus, On-Device-Suite und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
+// Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Serveruhr,
+// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
 // Development Build und der E2E-Build (`APP_VARIANT=e2e`, ein Release-Binary für Maestro).
 // `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit, dass weder das
 // Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält (Gegenprobe: die
@@ -65,6 +65,16 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['packages/clock/src/testing.ts', 'packages/clock/src/conformance.ts', 'apps/mobile/src/test-capabilities/clock.ts'],
     entries: { deepLinks: ['uhr'] },
     markers: ['@abnehm/clock/testing'],
+  },
+  {
+    // #271: Das Development-Backend liest sie statt der Systemuhr; ihr Vertrag `ServerClockRequest`
+    // liegt bei den Manifesten in `packages/contracts/seeds/` (Fähigkeit `seed`).
+    key: 'serveruhr',
+    description:
+      'Steuerbare Serveruhr des Development-Backends: Seed-Route und Seed-Kommando stellen sie auf die Uhr des Manifests, `POST /dev/uhr` auf einen Zeitpunkt; die App stellt sie mit jeder Stellung ihrer Testuhr mit',
+    modules: ['apps/backend/dev/server-clock.ts', 'apps/mobile/src/test-capabilities/server-clock.ts'],
+    entries: { backendRoutes: ['POST /dev/uhr'] },
+    markers: ['/dev/uhr'],
   },
   {
     key: 'fehler-adapter',

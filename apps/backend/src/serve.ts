@@ -1,5 +1,7 @@
 import { serve } from '@hono/node-server';
 
+import type { Clock } from '@abnehm/clock';
+
 import { createBackend, type Backend } from './backend.ts';
 import { readConfig, type BackendConfig } from './config.ts';
 import { openDatabase, type Database } from './database.ts';
@@ -16,17 +18,20 @@ export type BackendProcess = {
   served?: (backend: Backend, database: Database) => ServedApp;
   /** KI-Bildanalyse; ohne Angabe der Claude-Adapter, der einen Schlüssel verlangt. */
   mealVisionAnalyzer?: (config: BackendConfig) => MealVisionAnalyzer;
+  /** Uhr des Backends; ohne Angabe die Systemuhr in UTC (`createBackend`). */
+  clock?: Clock;
 };
 
 /**
  * Startet den Backend-Prozess: Konfiguration lesen, migrieren, Module zusammensetzen, Jobs und HTTP
  * starten, bei SIGTERM/SIGINT geordnet herunterfahren. `src/main.ts` startet ohne Angaben: nur die App
- * des Backends, Analyse über Claude. Das Development-Backend (`apps/backend/dev/main.ts`) bettet die App
- * in seine Testfähigkeiten ein und bringt seinen Analyzer mit.
+ * des Backends, Analyse über Claude, Systemuhr. Das Development-Backend (`apps/backend/dev/main.ts`)
+ * bettet die App in seine Testfähigkeiten ein und bringt Analyzer und steuerbare Serveruhr mit.
  */
 export async function runBackend({
   served = (backend) => backend.app,
   mealVisionAnalyzer = (config) => productionMealVisionAnalyzer(config.mealVision),
+  clock,
 }: BackendProcess = {}) {
   const config = readConfig(process.env);
   const analyzer = mealVisionAnalyzer(config);
@@ -45,6 +50,7 @@ export async function runBackend({
     invitationSettings: config.invitations,
     photoStorageDirectory: config.photoStorageDirectory,
     mealVisionAnalyzer: analyzer,
+    clock,
   });
   // Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts).
   const stopJobs = backend.jobs.start();

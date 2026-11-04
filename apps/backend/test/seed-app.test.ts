@@ -21,9 +21,8 @@ import { createFaultController, faultyFetch, type FaultController } from '../../
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { runSeed } from '../../mobile/src/test-capabilities/seed/seed-flow.ts';
 import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
-import { createDevelopmentApp } from '../dev/app.ts';
 import { dumpServer } from '../dev/seed/server-seed.ts';
-import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
+import { createDevelopmentTestBackend, testBaseUrl, type DevelopmentTestBackend } from './support/app.ts';
 import { newDevice } from './support/auth-client.ts';
 
 // Tracer Bullet für #112: Der Seed-Deep-Link der App seedet über die Seed-Route des echten
@@ -56,8 +55,8 @@ function memoryStore(): SessionStore {
 type Phone = { session: AppSession; clock: AppTestClock; faults: FaultController; opened: LocalDatabase[] };
 
 /** Ein Gerät im Development Build: App-Sitzung mit Testuhr und Fehler-Adaptern, Backend über `app.request`. */
-function phone(backend: TestBackend): Phone {
-  const development = createDevelopmentApp({ backend, database: backend.database, fakeMealVision: backend.fakeMealVision });
+function phone(backend: DevelopmentTestBackend): Phone {
+  const development = backend.development.app;
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({
     openSqlite: files.openSqlite,
@@ -107,7 +106,7 @@ function sync(device: Phone, manifest: SeedManifest, installation: string) {
 
 describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   it('seedet beide Seiten, stellt die Testuhr, meldet das Testkonto an und führt direkt auf „Heute“', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
 
     expect(await runSeed(today, device)).toEqual({ type: 'geseedet', scenario: 'solo', installation: 'philipp-iphone', target: { type: 'today' } });
@@ -124,7 +123,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('erreicht nach dem benannten Schritt (Sync) den Sollzustand des Manifests auf beiden Seiten', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     await runSeed(today, device);
     expect(solo.steps).toEqual([{ type: 'sync', installation: 'philipp-iphone' }]);
@@ -136,7 +135,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('ist wiederholbar: erneutes Seeden ergibt kanonisch denselben Stand, auch nach Änderungen', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     await runSeed(today, device);
     const server = await dumpServer(backend.database.db);
@@ -149,7 +148,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('der geseedete Serverstand trägt einen vollständigen Pull einer neuen Installation', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     await runSeed(today, phone(backend));
     const fresh = phone(backend);
     await fresh.session.auth.signIn({ email: solo.accounts[0]!.email, password: solo.accounts[0]!.password });
@@ -161,7 +160,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('scheitert über den Fehler-Adapter deterministisch am Backend und lässt Gerät und Uhr unverändert', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     device.faults.set({ transport: 'offline' });
     expect(await runSeed(today, device)).toEqual({ type: 'fehlgeschlagen', step: 'backend' });
@@ -173,7 +172,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('Partner-Szenario (#117): `gekoppelt` mit Annas Android-Installation meldet Anna an und seedet ihr Gerät', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     const gekoppelt = seedManifests.gekoppelt;
     const run = { scenario: 'gekoppelt', installation: 'anna-android', target: { type: 'today' } } as const;
@@ -186,7 +185,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('Partner-Szenario (#117): `nach_entkopplung` startet das Gerät gekoppelt, sein erster Sync widerruft den Partnercache', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     const manifest = seedManifests.nach_entkopplung;
     const run = { scenario: 'nach_entkopplung', installation: 'philipp-iphone', target: { type: 'today' } } as const;
@@ -207,7 +206,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('Auth-Adapter: lehnt der Server die Sitzung ab, sperrt die App und schließt die Kontodatenbank', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     await runSeed(today, device);
     device.faults.set({ auth: 'session_rejected' });
@@ -218,7 +217,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
   });
 
   it('Szenario `frisches_konto` (#138): wiederholbar geseedet, die Weiche steht im Onboarding vor Schritt 1, der Sync ändert nichts', async () => {
-    const backend = await createTestBackend();
+    const backend = await createDevelopmentTestBackend();
     const device = phone(backend);
     const manifest = seedManifests.frisches_konto;
     const run = { scenario: 'frisches_konto', installation: null, target: { type: 'today' } } as const;

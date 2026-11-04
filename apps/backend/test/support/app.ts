@@ -5,9 +5,11 @@ import { join } from 'node:path';
 
 import { onTestFinished } from 'vitest';
 
-import type { Clock } from '@abnehm/clock';
+import { createSystemClock, type Clock } from '@abnehm/clock';
 
+import { createDevelopmentApp } from '../../dev/app.ts';
 import { createFakeMealVision, type FakeMealVision } from '../../dev/meal-vision/fake-analyzer.ts';
+import { createServerClock, type ServerClock } from '../../dev/server-clock.ts';
 import { createBackend, type Backend } from '../../src/backend.ts';
 import type { Database } from '../../src/database.ts';
 import type { MealVisionAnalyzer } from '../../src/nutrition/meal-vision.ts';
@@ -56,4 +58,22 @@ export async function createTestBackend(options: TestAppOptions = {}): Promise<T
   const backend = createTestApp(database.handle, options);
   onTestFinished(() => rm(backend.photoStorageDirectory, { recursive: true, force: true }));
   return backend;
+}
+
+export type DevelopmentTestBackend = TestBackend & {
+  /** Steuerbare Serveruhr (#271); das Backend liest sie als seine Uhr. */
+  serverClock: ServerClock;
+  /** Die App des Development-Backends: Testfähigkeiten vor der App des Backends. */
+  development: { app: ReturnType<typeof createDevelopmentApp> };
+};
+
+/**
+ * Wie `createTestBackend`, zusammengesetzt wie `apps/backend/dev/main.ts`: Das Backend liest die
+ * steuerbare Serveruhr über `system` (ohne Angabe die Systemuhr), davor liegen die Testfähigkeiten.
+ */
+export async function createDevelopmentTestBackend({ system = createSystemClock({ timeZone: () => 'UTC' }) }: { system?: Clock } = {}): Promise<DevelopmentTestBackend> {
+  const serverClock = createServerClock(system);
+  const backend = await createTestBackend({ clock: serverClock });
+  const app = createDevelopmentApp({ backend, database: backend.database, fakeMealVision: backend.fakeMealVision, serverClock });
+  return { ...backend, serverClock, development: { app } };
 }
