@@ -12,13 +12,13 @@ import { hitArea } from '../design/testing/hit-area';
 import { routeScreen } from '../navigation';
 import { MessageHostProvider } from '../shell/MessageHost';
 import { placeholderRoute } from '../shell/Placeholder';
-import { appIsland } from './app-island';
-import { momoCharacterOf, wirContributionsOf } from './island';
+import { appGameService } from './app-game-service';
+import { momoCharacterOf, wirContributionsOf } from './game-service';
 import { MomoTab } from './MomoTab';
-import { createEggWorld, type EggWorld } from './testing/egg-world';
+import { createLaichkugelWorld, type LaichkugelWorld } from './testing/laichkugel-world';
 
 // Nachweis für #180: Tab „Momo“ mit Laichkugel und Ansicht `rollenwahl` über den Spieldienst des
-// geöffneten Kontos (`appIsland`) auf echter SQLite, dazu `momo.character` und die Beiträge an „Wir“
+// geöffneten Kontos (`appGameService`) auf echter SQLite, dazu `momo.character` und die Beiträge an „Wir“
 // gegen die Vertrags-Fixtures.
 
 const user = userEvent.setup();
@@ -28,11 +28,11 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-async function open(arrange: (world: EggWorld) => void = () => {}) {
-  const world = await createEggWorld(clock);
+async function open(arrange: (world: LaichkugelWorld) => void = () => {}) {
+  const world = await createLaichkugelWorld(clock);
   cleanups.push(() => world.close());
   arrange(world);
-  cleanups.push(appIsland.opened(world.island));
+  cleanups.push(appGameService.opened(world.game));
   const Layout = () => (
     <ClockProvider clock={clock}>
       <MessageHostProvider>
@@ -53,7 +53,7 @@ async function open(arrange: (world: EggWorld) => void = () => {}) {
   return world;
 }
 
-const requests = (world: EggWorld) => world.operations().map((operation) => ('payload' in operation ? operation.payload : null));
+const requests = (world: LaichkugelWorld) => world.operations().map((operation) => ('payload' in operation ? operation.payload : null));
 const tooSmall = () => screen.getAllByRole('button').map(hitArea).filter((area) => area.width < 48 || area.height < 48);
 
 describe('Laichkugel', () => {
@@ -132,26 +132,26 @@ describe('Beiträge gegen die Vertrags-Fixtures', () => {
   const wirFixtures = contractFixtures.wir!.WirContributionsState!.valid;
 
   test('momo.character: Laichkugel, Rollenwahl offen und „Vorschlag gesendet“', async () => {
-    const world = await createEggWorld(clock);
+    const world = await createLaichkugelWorld(clock);
     cleanups.push(() => world.close());
     const states: unknown[] = [];
-    cleanups.push(world.island.momoCharacter.subscribe((state) => states.push(state)));
+    cleanups.push(world.game.momoCharacter.subscribe((state) => states.push(state)));
 
     world.couple();
-    world.island.proposeRoles('bauen');
+    world.game.proposeRoles('bauen');
 
     expect(states).toEqual([characterFixtures['wartet im Ei'], characterFixtures['Rollenwahl offen'], characterFixtures['eigener Vorschlag gesendet']]);
   });
 
   test('Wir: die offene Rollenwahl nur an die Person, die antworten muss', async () => {
-    const world = await createEggWorld(clock);
+    const world = await createLaichkugelWorld(clock);
     cleanups.push(() => world.close());
     world.couple();
     const states: unknown[] = [];
-    cleanups.push(world.island.wirContributions.subscribe((state) => states.push(state)));
+    cleanups.push(world.game.wirContributions.subscribe((state) => states.push(state)));
 
     const annas = world.proposeOnServer('anna', 'natur');
-    world.island.declineRoles(annas);
+    world.game.declineRoles(annas);
 
     const [, offen, beantwortet] = states;
     expect(offen).toEqual({

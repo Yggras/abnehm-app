@@ -7,7 +7,7 @@ import { openTarget } from '../navigation';
 import { MomoAppearanceProvider, MomoFigure } from '../shell/MomoFigure';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
-import { eggTexts, islandTexts } from './texts';
+import { laichkugelTexts, islandTexts } from './texts';
 
 // Laichkugel im Tab „Momo“ (Spezifikation 4, Abschnitte 6 und 7; #180): Ohne Kopplung und bis zum
 // Schlüpfen wartet Momo im Ei. Die Tab-Leiste liegt auf dem Tab „Momo“ über dem Inhalt, deshalb hält
@@ -18,7 +18,7 @@ const laichkugel: MomoAppearance = { stage: 'laichkugel', formKey: null, moodKey
 const eggSize = 96;
 
 /** Rahmen von Laichkugel und Rollenwahl: Momo im Ei, eine Überschrift und der Inhalt darunter. */
-export function EggFrame({ headline, children }: { headline: string; children: ReactNode }) {
+export function LaichkugelFrame({ headline, children }: { headline: string; children: ReactNode }) {
   const bottomInset = useTabBarOverlap();
   return (
     <ScreenFrame title={islandTexts.momo} presentation="tab">
@@ -41,19 +41,19 @@ export function EggFrame({ headline, children }: { headline: string; children: R
 /** Ohne aktive Kopplung: Momo wartet im Ei, die gesammelte Energie bleibt, Partner einladen oder Code eingeben. */
 export function LaichkugelScreen({ energy }: { energy: number }) {
   return (
-    <EggFrame headline={eggTexts.waiting}>
-      <Text style={styles.centered}>{eggTexts.solo}</Text>
+    <LaichkugelFrame headline={laichkugelTexts.waiting}>
+      <Text style={styles.centered}>{laichkugelTexts.solo}</Text>
       {energy > 0 ? (
-        <View style={styles.energy} accessible accessibilityLabel={eggTexts.energy(energy)}>
+        <View style={styles.energy} accessible accessibilityLabel={laichkugelTexts.energy(energy)}>
           <EnergySymbol />
-          <Text variant="label">{eggTexts.energy(energy)}</Text>
+          <Text variant="label">{laichkugelTexts.energy(energy)}</Text>
         </View>
       ) : null}
       <View style={styles.actions}>
-        <Button block icon="invite" label={eggTexts.invite} onPress={() => openTarget({ type: 'partner.invite' })} />
-        <Button block variant="text" label={eggTexts.redeem} onPress={() => openTarget({ type: 'partner.redeem' })} />
+        <Button block icon="invite" label={laichkugelTexts.invite} onPress={() => openTarget({ type: 'partner.invite' })} />
+        <Button block variant="text" label={laichkugelTexts.redeem} onPress={() => openTarget({ type: 'partner.redeem' })} />
       </View>
-    </EggFrame>
+    </LaichkugelFrame>
   );
 }
 

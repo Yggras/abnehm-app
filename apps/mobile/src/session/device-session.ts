@@ -10,8 +10,8 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
-import { appIsland } from '../island/app-island';
-import { createIsland } from '../island/island';
+import { appGameService } from '../island/app-game-service';
+import { createGameService } from '../island/game-service';
 import { sharedActionCommands } from '../island/role-choice';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
@@ -100,7 +100,7 @@ function deviceState() {
       // gibt der Composition Root an `composeAreaPorts` weiter, sobald alle Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
-      const island = createIsland({ database, writer: syncWriter, clock: appClock, newId });
+      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
@@ -115,7 +115,7 @@ function deviceState() {
         appTrackers.opened(trackers),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
-        appIsland.opened(island), momoTodayOpened(island.momoCharacter), appWirContributions.opened(island.wirContributions),
+        appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

@@ -449,16 +449,19 @@ const projektionen: SeedPart = {
   ],
 };
 
-/** Beiträge des Szenarios in Reihenfolge; Philipps Daten sind die aus `solo`. */
-export const gekoppeltParts: readonly SeedPart[] = [...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched: true }), projektionen];
-
 /**
- * Dieselben Beiträge vor dem Schlüpfen (#180): Die Insel wartet auf die Rollen, kein Mitglied hat eine.
- * Spezifikation 4 ergänzt darauf etwa die offene Rollenwahl (`rollenwahl-offen`).
+ * Beiträge beider Partner in Reihenfolge; Philipps Daten sind die aus `solo`. Vor dem Schlüpfen
+ * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine.
  */
-export const vorDemSchluepfenParts: readonly SeedPart[] = [
-  ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched: false }), projektionen,
+const partnerParts = ({ hatched }: Readonly<{ hatched: boolean }>): readonly SeedPart[] => [
+  ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched }), projektionen,
 ];
+
+/** Beiträge des Szenarios `gekoppelt`. */
+export const gekoppeltParts = partnerParts({ hatched: true });
+
+/** Dieselben Beiträge vor dem Schlüpfen; Spezifikation 4 ergänzt darauf die offene Rollenwahl (`rollenwahl-offen`). */
+export const vorDemSchluepfenParts = partnerParts({ hatched: false });
 
 /** Erweiterungspunkte beider Partner-Szenarien; die Fotos gelten im Ausgangszustand. */
 export const gekoppeltExtensions = SeedExtensions.parse({

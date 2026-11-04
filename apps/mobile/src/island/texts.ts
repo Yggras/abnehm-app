@@ -22,7 +22,7 @@ export const islandTexts = {
  * „Vorschlag gesendet“ stehen in Spezifikation 4, Abschnitt 7; die Beschreibung der Rollen folgt dem
  * Glossar (`CONTEXT.md`, „Rolle“). Die übrigen Sätze sind Designwerte dieses Tickets (nicht belegt).
  */
-export const eggTexts = {
+export const laichkugelTexts = {
   waiting: 'Momo wartet im Ei',
   solo: 'Momo schlüpft, wenn du dich mit deinem Partner koppelst. Energie aus deinen Tageszielen sammelst du schon jetzt.',
   energy: (energy: number) => `${energy} Energie gesammelt`,
@@ -33,8 +33,8 @@ export const eggTexts = {
   roleMeaning: { bauen: 'Häuser, Wege und Brücken', natur: 'Pflanzen, Bäume und Tiere' } satisfies Record<IslandRole, string>,
   chooseRole: 'Welche Rolle übernimmst du?',
   chooseHint: 'Wähle deine Rolle, dein Partner bekommt die andere.',
-  split: (own: IslandRole, partner: string, partnerRole: IslandRole) => `Du: ${eggTexts.role[own]} · ${partner}: ${eggTexts.role[partnerRole]}`,
-  meaning: (role: IslandRole) => `${eggTexts.role[role]}: ${eggTexts.roleMeaning[role]}`,
+  split: (own: IslandRole, partner: string, partnerRole: IslandRole) => `Du: ${laichkugelTexts.role[own]} · ${partner}: ${laichkugelTexts.role[partnerRole]}`,
+  meaning: (role: IslandRole) => `${laichkugelTexts.role[role]}: ${laichkugelTexts.roleMeaning[role]}`,
   send: (partner: string) => `Vorschlag an ${partner} senden`,
   answerHint: (partner: string) => `${partner} kann annehmen oder ablehnen.`,
   sent: 'Vorschlag gesendet',

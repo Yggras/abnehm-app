@@ -6,7 +6,6 @@ import {
   DecideSharedAction,
   type IslandRole,
   RequestSharedAction,
-  SharedAction,
   sharedActionDecisionKey,
   sharedActionRequestKey,
   type SharedActionDecision,
@@ -18,6 +17,7 @@ import { readOwnPerson } from '../local-db/person-header';
 import { couplingMember, island, sharedAction } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { LocalCommand, SyncWriter } from '../sync';
+import { sharedActionOf } from '../sync/coupling-entities';
 import { pendingCommandPayloads } from '../sync/outbox';
 
 // Laichkugel und Rollenwahl (Spezifikation 4, Abschnitte 2.4 und 7; #180). Ohne aktive Kopplung wartet
@@ -92,10 +92,7 @@ export function readIslandStage(tx: ReadContext): IslandStage {
     .all()
     .filter((row) => !decided.has(EntityId.parse(row.id)))
     .map((row) => {
-      const action = SharedAction.parse({
-        id: row.id, couplingId: row.couplingId, requesterPersonId: row.requesterPersonId, type: row.kind,
-        payload: row.payload, status: row.status, createdAt: row.createdAt, decidedAt: row.decidedAt,
-      });
+      const action = sharedActionOf(row);
       if (action.type !== 'rollenwahl') throw new Error('Rollenwahl erwartet');
       return { action, by: action.requesterPersonId === personId ? ('self' as const) : ('partner' as const) };
     })

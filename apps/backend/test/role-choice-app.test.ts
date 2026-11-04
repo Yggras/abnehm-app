@@ -8,7 +8,7 @@ import type { ContributionState } from '@abnehm/contracts/contribution';
 import { MomoCharacterState } from '@abnehm/contracts/today';
 import { WirContributionsState, type WirContribution } from '@abnehm/contracts/wir';
 
-import { createIsland, type Island } from '../../mobile/src/island/island.ts';
+import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../mobile/src/island/role-choice.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
@@ -73,17 +73,17 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     installationId: newId(),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands] }),
   });
-  const island: Island = createIsland({ database, writer, clock, newId });
+  const game: GameService = createGameService({ database, writer, clock, newId });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
     let value: T | undefined;
     cleanups.push(subscribe((next) => (value = next)));
     return () => value as T;
   };
   return {
-    island,
-    stage: latest<IslandStage>((listener) => island.observeStage(listener)),
-    character: latest<TodayState<'momo.character'>>((listener) => island.momoCharacter.subscribe((state) => listener(MomoCharacterState.parse(state)))),
-    wir: latest<ContributionState<WirContribution[]>>((listener) => island.wirContributions.subscribe((state) => listener(WirContributionsState.parse(state)))),
+    game,
+    stage: latest<IslandStage>((listener) => game.observeStage(listener)),
+    character: latest<TodayState<'momo.character'>>((listener) => game.momoCharacter.subscribe((state) => listener(MomoCharacterState.parse(state)))),
+    wir: latest<ContributionState<WirContribution[]>>((listener) => game.wirContributions.subscribe((state) => listener(WirContributionsState.parse(state)))),
     offline: () => (online = false),
     online: () => (online = true),
     async sync() {
@@ -145,10 +145,10 @@ describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
 
     // Offline nur vorgemerkt: Philipp sieht „Vorschlag gesendet“, der Server noch nichts.
     philippsPhone.offline();
-    expect(philippsPhone.island.proposeRoles('bauen')).toBe('vorgemerkt');
+    expect(philippsPhone.game.proposeRoles('bauen')).toBe('vorgemerkt');
     expect(proposal(philippsPhone)).toMatchObject({ by: 'self', proposerRole: 'bauen', createdAt: null });
     expect(philippsPhone.character()).toEqual({ type: 'empty', reasonKey: 'rollenwahl_gesendet', action: roleChoice });
-    expect(philippsPhone.island.proposeRoles('natur')).toBe('nicht_moeglich');
+    expect(philippsPhone.game.proposeRoles('natur')).toBe('nicht_moeglich');
     expect(philippsPhone.outbox()).toHaveLength(1);
     await annasPhone.sync();
     expect(annasPhone.stage()).toMatchObject({ proposal: null });
@@ -164,11 +164,11 @@ describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
     expect(philippsPhone.wir()).toEqual({ type: 'ready', data: [] });
     expect(proposal(philippsPhone)).toMatchObject({ by: 'self', createdAt: worldStart.instant });
 
-    expect(annasPhone.island.withdrawRoles(philippsVorschlag.actionId)).toBe('nicht_moeglich');
-    expect(annasPhone.island.declineRoles(philippsVorschlag.actionId)).toBe('vorgemerkt');
+    expect(annasPhone.game.withdrawRoles(philippsVorschlag.actionId)).toBe('nicht_moeglich');
+    expect(annasPhone.game.declineRoles(philippsVorschlag.actionId)).toBe('vorgemerkt');
     expect(annasPhone.stage()).toMatchObject({ proposal: null });
     expect(annasPhone.wir()).toEqual({ type: 'ready', data: [] });
-    expect(annasPhone.island.proposeRoles('natur')).toBe('vorgemerkt');
+    expect(annasPhone.game.proposeRoles('natur')).toBe('vorgemerkt');
     await annasPhone.sync();
     await philippsPhone.sync();
 
@@ -183,16 +183,16 @@ describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
     const { backend, philipp, anna, philippsPhone, annasPhone } = await couple();
     await coupleByInvitation(backend, philipp.device, anna.device);
     await philippsPhone.sync();
-    philippsPhone.island.proposeRoles('bauen');
+    philippsPhone.game.proposeRoles('bauen');
     await philippsPhone.sync();
 
-    expect(philippsPhone.island.withdrawRoles(proposal(philippsPhone).actionId)).toBe('vorgemerkt');
+    expect(philippsPhone.game.withdrawRoles(proposal(philippsPhone).actionId)).toBe('vorgemerkt');
     expect(philippsPhone.stage()).toMatchObject({ proposal: null });
     await philippsPhone.sync();
     await annasPhone.sync();
 
     expect(annasPhone.stage()).toMatchObject({ proposal: null });
-    expect(annasPhone.island.proposeRoles('bauen')).toBe('vorgemerkt');
+    expect(annasPhone.game.proposeRoles('bauen')).toBe('vorgemerkt');
   });
 
   it('gleichzeitige Vorschläge offline: der später eingehende wird abgelehnt und verschwindet samt Vormerkung', async () => {
@@ -202,8 +202,8 @@ describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
     await annasPhone.sync();
     philippsPhone.offline();
     annasPhone.offline();
-    philippsPhone.island.proposeRoles('bauen');
-    annasPhone.island.proposeRoles('bauen');
+    philippsPhone.game.proposeRoles('bauen');
+    annasPhone.game.proposeRoles('bauen');
 
     annasPhone.online();
     await annasPhone.sync();
@@ -222,15 +222,15 @@ describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
     const { backend, philipp, anna, philippsPhone, annasPhone } = await couple();
     await coupleByInvitation(backend, philipp.device, anna.device);
     await annasPhone.sync();
-    annasPhone.island.proposeRoles('natur');
+    annasPhone.game.proposeRoles('natur');
     await annasPhone.sync();
     await philippsPhone.sync();
     const annasVorschlag = proposal(philippsPhone).actionId;
     // Anna zieht zurück; Philipp weiß das noch nicht, lehnt ab und schlägt selbst vor.
-    annasPhone.island.withdrawRoles(annasVorschlag);
+    annasPhone.game.withdrawRoles(annasVorschlag);
     await annasPhone.sync();
-    philippsPhone.island.declineRoles(annasVorschlag);
-    philippsPhone.island.proposeRoles('bauen');
+    philippsPhone.game.declineRoles(annasVorschlag);
+    philippsPhone.game.proposeRoles('bauen');
 
     await philippsPhone.sync();
     await annasPhone.sync();
@@ -244,7 +244,7 @@ describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
     const { backend, philipp, anna, philippsPhone, annasPhone } = await couple();
     const { couplingId } = await coupleByInvitation(backend, philipp.device, anna.device);
     await annasPhone.sync();
-    annasPhone.island.proposeRoles('natur');
+    annasPhone.game.proposeRoles('natur');
     await annasPhone.sync();
     await philippsPhone.sync();
     expect(philippsPhone.wir()).toMatchObject({ data: [{ type: 'pending_shared_action' }] });

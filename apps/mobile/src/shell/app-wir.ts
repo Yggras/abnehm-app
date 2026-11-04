@@ -1,6 +1,8 @@
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import { WirContributionsState, type WirContribution, type WirContributionSource } from '@abnehm/contracts/wir';
 
+import { followSource } from './followed-source';
+
 // Steckplatz der Beiträge von Spezifikation 4 für den Tab „Wir“ (Spezifikation 0, Abschnitt 2).
 // Spezifikation 4 registriert ihre beobachtbare `WirContributionSource` je geöffneter Kontodatenbank,
 // Spezifikation 5 komponiert „Wir“ über `appWirContributions.source`, ohne Tabellen von Spezifikation 4
@@ -14,39 +16,10 @@ export type FollowedWirContributions = Readonly<{
 }>;
 
 export function followWirContributions(): FollowedWirContributions {
-  let current: WirContributionSource | null = null;
-  const followers = new Set<() => void>();
-  const changed = () => {
-    for (const follow of followers) follow();
-  };
+  const followed = followSource<ContributionState<WirContribution[]>>({ type: 'loading' });
   return {
-    source: {
-      subscribe(listener) {
-        let stop: (() => void) | null = null;
-        const checked = (state: ContributionState<WirContribution[]>) => listener(WirContributionsState.parse(state));
-        const follow = () => {
-          stop?.();
-          stop = null;
-          if (current === null) listener({ type: 'loading' });
-          else stop = current.subscribe(checked);
-        };
-        followers.add(follow);
-        follow();
-        return () => {
-          followers.delete(follow);
-          stop?.();
-        };
-      },
-    },
-    opened(source) {
-      current = source;
-      changed();
-      return () => {
-        if (current !== source) return;
-        current = null;
-        changed();
-      };
-    },
+    source: { subscribe: (listener) => followed.source.subscribe((state) => listener(WirContributionsState.parse(state))) },
+    opened: followed.opened,
   };
 }
 

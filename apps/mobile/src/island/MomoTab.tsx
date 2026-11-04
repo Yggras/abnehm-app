@@ -4,7 +4,7 @@ import { openTarget, type RouteScreenProps } from '../navigation';
 import { Placeholder } from '../shell/Placeholder';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
-import { useAppIsland, useIslandStage } from './app-island';
+import { useGameService, useIslandStage } from './app-game-service';
 import { IslandView } from './IslandView';
 import { LaichkugelScreen } from './LaichkugelScreen';
 import { RoleChoiceScreen } from './RoleChoiceScreen';
@@ -18,10 +18,10 @@ import { islandTexts } from './texts';
  * Aktionen auf „Wir“; die Ansichten selbst liefern spätere Tickets.
  */
 export function MomoTab({ target }: RouteScreenProps<'momo'>) {
-  const island = useAppIsland();
-  const stage = useIslandStage(island);
+  const game = useGameService();
+  const stage = useIslandStage(game);
   const bottomInset = useTabBarOverlap();
-  if (island === null || stage === null || stage.type === 'ohne_person') {
+  if (game === null || stage === null || stage.type === 'ohne_person') {
     return (
       <ScreenFrame title={islandTexts.momo} presentation="tab">
         <Text tone="inkMuted">{islandTexts.loading}</Text>
@@ -35,9 +35,9 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
       <RoleChoiceScreen
         partnerDisplayName={stage.partnerDisplayName}
         proposal={stage.proposal}
-        onPropose={(role) => island.proposeRoles(role)}
-        onDecline={(proposal) => island.declineRoles(proposal.actionId)}
-        onWithdraw={(proposal) => island.withdrawRoles(proposal.actionId)}
+        onPropose={(role) => game.proposeRoles(role)}
+        onDecline={(proposal) => game.declineRoles(proposal.actionId)}
+        onWithdraw={(proposal) => game.withdrawRoles(proposal.actionId)}
       />
     );
   }

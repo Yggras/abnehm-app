@@ -15,7 +15,7 @@ import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
-import { createIsland, type Island } from '../island';
+import { createGameService, type GameService } from '../game-service';
 import { anna, philipp } from './persons';
 
 // Testaufbau für Laichkugel und Rollenwahl (#180): echte SQLite-Datei mit denselben Migrationen wie die
@@ -26,9 +26,9 @@ const at = '2026-10-14T12:00:00.000Z';
 const synced = { createdAt: at, updatedAt: at, serverVersion: '1' };
 export const couplingId = EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c01');
 
-export type EggWorld = Readonly<{
+export type LaichkugelWorld = Readonly<{
   database: LocalDatabase;
-  island: Island;
+  game: GameService;
   /** Philipp und Anna gekoppelt; die Insel wartet auf die Rollen. */
   couple(): void;
   /** Ein vom Server bestätigter offener Vorschlag. */
@@ -39,7 +39,7 @@ export type EggWorld = Readonly<{
   close(): void;
 }>;
 
-export async function createEggWorld(clock: Clock): Promise<EggWorld> {
+export async function createLaichkugelWorld(clock: Clock): Promise<LaichkugelWorld> {
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   const database = await databases.open('konto_philipp');
@@ -48,7 +48,7 @@ export async function createEggWorld(clock: Clock): Promise<EggWorld> {
   const writer = createSyncWriter({ registry: createSyncRegistry(foundationSyncEntities), clock, newId });
   return {
     database,
-    island: createIsland({ database, writer, clock, newId }),
+    game: createGameService({ database, writer, clock, newId }),
     couple() {
       database.transaction((tx) => {
         const db = sqliteOf(tx);

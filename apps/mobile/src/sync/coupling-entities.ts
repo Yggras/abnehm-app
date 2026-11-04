@@ -42,6 +42,17 @@ function serverManaged<T extends SyncedTable & SQLiteTable, R extends EntityData
   });
 }
 
+/**
+ * Die gemeinsame Aktion einer lokalen Zeile, geprüft am Vertrag; die Umkehrung von `row` im Adapter unten.
+ * Bereiche lesen gemeinsame Aktionen nur hierüber, nie über das Spaltenmapping selbst.
+ */
+export function sharedActionOf(row: typeof sharedAction.$inferSelect): SharedAction {
+  return SharedAction.parse({
+    id: row.id, couplingId: row.couplingId, requesterPersonId: row.requesterPersonId, type: row.kind,
+    payload: row.payload, status: row.status, createdAt: row.createdAt, decidedAt: row.decidedAt,
+  });
+}
+
 // Gemeinsame Aktion: Die Art steht im Vertrag als `type`, lokal als `kind`. Eine Aktion ändert sich nur
 // einmal, mit ihrer Entscheidung; das ist ihr letzter Änderungszeitpunkt.
 const sharedActionRows = sqliteEntity({

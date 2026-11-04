@@ -8,8 +8,8 @@ import { EntityId } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 
 import { hitArea } from '../design/testing/hit-area';
-import { appIsland } from '../island/app-island';
-import { fakeIsland } from '../island/testing/fake-island';
+import { appGameService } from '../island/app-game-service';
+import { fakeGameService } from '../island/testing/fake-game-service';
 import { textScale } from '../design/tokens';
 import { hrefFor, openTarget, routeCatalog } from '../navigation';
 import type * as MessageTextsModule from './message-texts';
@@ -63,7 +63,7 @@ let closeIsland: () => void = () => {};
 
 // Der Tab „Momo“ zeigt die geschlüpfte Insel; Laichkugel und Rollenwahl prüft `island/MomoTab.test.tsx`.
 beforeEach(() => {
-  closeIsland = appIsland.opened(fakeIsland({ type: 'geschluepft' }));
+  closeIsland = appGameService.opened(fakeGameService({ type: 'geschluepft' }));
   jest.mocked(useMomoTabBadge).mockReturnValue(false);
   execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undoData: 'eintrag-1' }));
   undo = jest.fn();

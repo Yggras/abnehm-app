@@ -14,14 +14,14 @@ import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceO
 // (`momo.character`) und „Wir“ (`pending_shared_action`). Die App-Sitzung erzeugt ihn je geöffneter
 // Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
-export type IslandDependencies = Readonly<{
+export type GameServiceDependencies = Readonly<{
   database: LocalDatabase;
   writer: SyncWriter;
   clock: Clock;
   newId: () => EntityId;
 }>;
 
-export type Island = Readonly<{
+export type GameService = Readonly<{
   /** Meldet die aktuelle Stufe und jede Änderung nach einem Commit; liefert die Abmeldung. */
   observeStage(listener: (stage: IslandStage) => void): () => void;
   /** Schlägt die Rollen vor, indem die eigene Person ihre Rolle wählt. */
@@ -40,7 +40,7 @@ const inviteAction = { actionId: 'momo.invite_partner', target: { type: 'partner
 const roleChoiceAction = { actionId: 'momo.open_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 const answerRoleChoiceAction = { actionId: 'wir.answer_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 
-export function createIsland({ database, writer, clock, newId }: IslandDependencies): Island {
+export function createGameService({ database, writer, clock, newId }: GameServiceDependencies): GameService {
   const commands = roleChoiceCommands({ writer, newId, timeZone: () => TimeZone.parse(clock.read().timeZone) });
   const observeStage = (listener: (stage: IslandStage) => void) => observeDistinct(database, listener);
   return {

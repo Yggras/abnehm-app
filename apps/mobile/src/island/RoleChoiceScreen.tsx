@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Chip, space, Text } from '../design';
-import { EggFrame } from './LaichkugelScreen';
+import { LaichkugelFrame } from './LaichkugelScreen';
 import { otherRole, type RoleProposal } from './role-choice';
-import { eggTexts } from './texts';
+import { laichkugelTexts } from './texts';
 
 // Ansicht `rollenwahl` des Tabs „Momo“ (Spezifikation 4, Abschnitt 7; #180): eigene Rolle wählen und
 // vorschlagen, den Vorschlag des Partners sehen und ablehnen, den eigenen zurückziehen. Annehmen und
@@ -21,24 +21,24 @@ export type RoleChoiceScreenProps = Readonly<{
 
 export function RoleChoiceScreen({ partnerDisplayName, proposal, onPropose, onDecline, onWithdraw }: RoleChoiceScreenProps) {
   return (
-    <EggFrame headline={eggTexts.hatchesAfterRoles}>
+    <LaichkugelFrame headline={laichkugelTexts.hatchesAfterRoles}>
       {proposal === null ? (
         <ChooseRole partner={partnerDisplayName} onPropose={onPropose} />
       ) : proposal.by === 'self' ? (
         <View style={styles.block}>
-          <Text variant="headline" accessibilityRole="header">{eggTexts.sent}</Text>
+          <Text variant="headline" accessibilityRole="header">{laichkugelTexts.sent}</Text>
           <Split own={proposal.proposerRole} partner={partnerDisplayName} />
-          <Text tone="inkMuted">{eggTexts.answerHint(partnerDisplayName)}</Text>
-          <Button block variant="secondary" label={eggTexts.withdraw} onPress={() => onWithdraw(proposal)} />
+          <Text tone="inkMuted">{laichkugelTexts.answerHint(partnerDisplayName)}</Text>
+          <Button block variant="secondary" label={laichkugelTexts.withdraw} onPress={() => onWithdraw(proposal)} />
         </View>
       ) : (
         <View style={styles.block}>
-          <Text variant="headline" accessibilityRole="header">{eggTexts.proposedBy(partnerDisplayName)}</Text>
+          <Text variant="headline" accessibilityRole="header">{laichkugelTexts.proposedBy(partnerDisplayName)}</Text>
           <Split own={otherRole(proposal.proposerRole)} partner={partnerDisplayName} />
-          <Button block variant="secondary" label={eggTexts.decline} onPress={() => onDecline(proposal)} />
+          <Button block variant="secondary" label={laichkugelTexts.decline} onPress={() => onDecline(proposal)} />
         </View>
       )}
-    </EggFrame>
+    </LaichkugelFrame>
   );
 }
 
@@ -46,9 +46,9 @@ export function RoleChoiceScreen({ partnerDisplayName, proposal, onPropose, onDe
 function Split({ own, partner }: { own: IslandRole; partner: string }) {
   return (
     <View style={styles.split}>
-      <Text variant="label">{eggTexts.split(own, partner, otherRole(own))}</Text>
-      <Text variant="caption" tone="inkMuted">{eggTexts.meaning(own)}</Text>
-      <Text variant="caption" tone="inkMuted">{eggTexts.meaning(otherRole(own))}</Text>
+      <Text variant="label">{laichkugelTexts.split(own, partner, otherRole(own))}</Text>
+      <Text variant="caption" tone="inkMuted">{laichkugelTexts.meaning(own)}</Text>
+      <Text variant="caption" tone="inkMuted">{laichkugelTexts.meaning(otherRole(own))}</Text>
     </View>
   );
 }
@@ -57,21 +57,21 @@ function ChooseRole({ partner, onPropose }: { partner: string; onPropose(role: I
   const [role, setRole] = useState<IslandRole | null>(null);
   return (
     <View style={styles.block}>
-      <Text variant="headline" accessibilityRole="header">{eggTexts.chooseRole}</Text>
-      <View style={styles.roles} accessibilityRole="radiogroup" accessibilityLabel={eggTexts.chooseRole}>
+      <Text variant="headline" accessibilityRole="header">{laichkugelTexts.chooseRole}</Text>
+      <View style={styles.roles} accessibilityRole="radiogroup" accessibilityLabel={laichkugelTexts.chooseRole}>
         {(['bauen', 'natur'] as const).map((option) => (
           <Chip
             key={option}
             selection="single"
             selected={role === option}
-            label={eggTexts.role[option]}
-            accessibilityLabel={eggTexts.meaning(option)}
+            label={laichkugelTexts.role[option]}
+            accessibilityLabel={laichkugelTexts.meaning(option)}
             onPress={() => setRole(option)}
           />
         ))}
       </View>
-      {role === null ? <Text tone="inkMuted">{eggTexts.chooseHint}</Text> : <Split own={role} partner={partner} />}
-      <Button block label={eggTexts.send(partner)} disabled={role === null} onPress={() => role !== null && onPropose(role)} />
+      {role === null ? <Text tone="inkMuted">{laichkugelTexts.chooseHint}</Text> : <Split own={role} partner={partner} />}
+      <Button block label={laichkugelTexts.send(partner)} disabled={role === null} onPress={() => role !== null && onPropose(role)} />
     </View>
   );
 }

@@ -9,7 +9,7 @@ import { InstallationId } from '@abnehm/contracts/sync';
 
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
-import { createIsland, type Island } from '../../mobile/src/island/island.ts';
+import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import { sharedActionCommands, type IslandStage } from '../../mobile/src/island/role-choice.ts';
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
@@ -47,7 +47,7 @@ const registry = createSyncRegistry([
   ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
 ]);
 
-type Phone = Readonly<{ database: LocalDatabase; island: Island; stage(): IslandStage; sync(): Promise<void> }>;
+type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; sync(): Promise<void> }>;
 
 async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey): Promise<Phone> {
   const installation = manifest.installations.find((candidate) => candidate.key === key)!;
@@ -81,12 +81,12 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     installationId: InstallationId.parse(installation.installationId),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands] }),
   });
-  const island = createIsland({ database, writer, clock, newId });
+  const game = createGameService({ database, writer, clock, newId });
   let stage: IslandStage | null = null;
-  cleanups.push(island.observeStage((next) => (stage = next)));
+  cleanups.push(game.observeStage((next) => (stage = next)));
   return {
     database,
-    island,
+    game,
     stage: () => stage!,
     async sync() {
       expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
@@ -152,7 +152,7 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     expect(philipp.stage()).toMatchObject({ type: 'rollenwahl', partnerDisplayName: 'Anna', proposal: { actionId, by: 'partner', proposerRole: 'natur' } });
     expect(anna.stage()).toMatchObject({ type: 'rollenwahl', partnerDisplayName: 'Philipp', proposal: { actionId, by: 'self' } });
 
-    expect(philipp.island.declineRoles(EntityId.parse(actionId))).toBe('vorgemerkt');
+    expect(philipp.game.declineRoles(EntityId.parse(actionId))).toBe('vorgemerkt');
     await philipp.sync();
     await anna.sync();
 
