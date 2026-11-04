@@ -138,6 +138,8 @@ const tracker: SeedPart = {
       { id: seedIds.sportEntry.annaHeute, person: anna, activity: 'laufen', at: '2026-10-14T05:30:00.000Z', minutes: 45 },
     ].map(({ id, person, activity, at, minutes }) => ({
       table: 'sport_entry',
+      // Seit #173 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+      entityType: 'sport_entry',
       ownerPersonId: person,
       row: {
         id,
@@ -506,10 +508,11 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, dazu Philipps Sportwoche aus `solo`.
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 4,
+  revision: 5,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

@@ -54,7 +54,11 @@ export const seedIds = {
     annaHeute: [id('0020', 3), id('0020', 4)],
   },
   weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
-  sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3) },
+  // 0022/4–7: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).
+  sportEntry: {
+    philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3),
+    philippVorgestern: id('0022', 4), philippWoche: [id('0022', 5), id('0022', 6), id('0022', 7)],
+  },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   nutritionEntry: { philippMittag: id('0031', 1), annaMittag: id('0031', 2), philippFruehstueck: [id('0031', 3), id('0031', 4)] },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },

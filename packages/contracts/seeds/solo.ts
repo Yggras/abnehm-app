@@ -152,25 +152,59 @@ const waterToday = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
 
-/** Was `solo` und seine Varianten unterscheidet: Wasser von heute und Wochenplan. */
-type SoloVariant = Readonly<{ water: WaterToday; plan: SoloWeeklyPlan }>;
+/** Eine manuelle Sporteinheit dieser Woche (Montag bis Sonntag), ohne Importe. */
+type SportUnit = Readonly<{ id: string; activity: string; startedAt: string; minutes: number; localDate: string; createdAt: string }>;
+
+/** Montag: Spaziergang am Abend; Dienstag: Radtour am Abend. */
+const sportWeekSolo: readonly SportUnit[] = [
+  { id: seedIds.sportEntry.philippVorgestern, activity: 'gehen', startedAt: '2026-10-12T16:00:00.000Z', minutes: 40, localDate: seedDays.vorgestern, createdAt: '2026-10-12T16:45:00.000Z' },
+  { id: seedIds.sportEntry.philippGestern, activity: 'radfahren', startedAt: '2026-10-13T16:00:00.000Z', minutes: 35, localDate: seedDays.gestern, createdAt: '2026-10-13T16:40:00.000Z' },
+];
+
+/** Dazu ein Lauf am Montagmorgen und Krafttraining am Dienstagmorgen. */
+const sportWeekErreicht: readonly SportUnit[] = [
+  ...sportWeekSolo,
+  { id: seedIds.sportEntry.philippWoche[0], activity: 'laufen', startedAt: '2026-10-12T05:00:00.000Z', minutes: 45, localDate: seedDays.vorgestern, createdAt: '2026-10-12T05:50:00.000Z' },
+  { id: seedIds.sportEntry.philippWoche[1], activity: 'krafttraining', startedAt: '2026-10-13T05:00:00.000Z', minutes: 30, localDate: seedDays.gestern, createdAt: '2026-10-13T05:35:00.000Z' },
+];
+
+/**
+ * Sportwoche in `solo` und seinen Varianten; das Sportwochenziel ist 150 min. `solo` steht mit 75 min im
+ * Status `teil`, `solo-sport-erreicht` genau auf dem Ziel, `solo-sport-ueber-ziel` mit Yoga am Dienstagabend
+ * darüber (`trackerStatus` der Tracker-Regeln). Heute (Mittwoch) gibt es noch keine Einheit, damit die
+ * Sporteinheit von heute offen bleibt.
+ */
+const sportWeek = {
+  solo: sportWeekSolo,
+  'solo-sport-erreicht': sportWeekErreicht,
+  'solo-sport-ueber-ziel': [
+    ...sportWeekErreicht,
+    { id: seedIds.sportEntry.philippWoche[2], activity: 'yoga_dehnen', startedAt: '2026-10-13T18:30:00.000Z', minutes: 20, localDate: seedDays.gestern, createdAt: '2026-10-13T18:55:00.000Z' },
+  ],
+} as const satisfies Partial<Record<SeedScenarioKey, readonly SportUnit[]>>;
+
+/** Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche und Wochenplan. */
+type SoloVariant = Readonly<{ water: WaterToday; sport: readonly SportUnit[]; plan: SoloWeeklyPlan }>;
 
 /**
  * `solo` und seine Varianten: `solo-wasser-*` zeigen die übrigen Status des Wasser-Mini-Trackers
- * (#171), `solo-ohne-wiegetag` den Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175).
+ * (#171), `solo-sport-*` die des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` den
+ * Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175).
  */
 const soloVariants = {
-  solo: { water: waterToday.solo, plan: weeklyPlan },
-  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], plan: weeklyPlan },
-  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], plan: weeklyPlan },
-  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], plan: weeklyPlan },
-  'solo-ohne-wiegetag': { water: waterToday.solo, plan: weeklyPlanOhneWiegetag },
+  solo: { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan },
+  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], sport: sportWeek.solo, plan: weeklyPlan },
+  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], sport: sportWeek.solo, plan: weeklyPlan },
+  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], sport: sportWeek.solo, plan: weeklyPlan },
+  'solo-sport-erreicht': { water: waterToday.solo, sport: sportWeek['solo-sport-erreicht'], plan: weeklyPlan },
+  'solo-sport-ueber-ziel': { water: waterToday.solo, sport: sportWeek['solo-sport-ueber-ziel'], plan: weeklyPlan },
+  'solo-ohne-wiegetag': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlanOhneWiegetag },
 } as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
 
 type SoloScenario = keyof typeof soloVariants;
 
-/** Tracker (Spezifikation 3): Wasser heute je Szenario, eine Radtour gestern, zwei Wiegungen bis gestern. */
-const trackerOf = (water: WaterToday): SeedPart => ({
+/** Tracker (Spezifikation 3): Wasser heute und Sportwoche je Szenario, zwei Wiegungen bis gestern. */
+const trackerOf = (water: WaterToday, sport: readonly SportUnit[]): SeedPart => ({
   area: 'tracker',
   entities: [
     ...water.map(([amount, at], index) => ({
@@ -180,24 +214,26 @@ const trackerOf = (water: WaterToday): SeedPart => ({
       ownerPersonId: philipp,
       row: { id: seedIds.waterEntry.philippHeute[index] as string, person_id: philipp, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
     })),
-    {
+    ...sport.map((unit) => ({
       table: 'sport_entry',
+      // Seit #173 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
+      entityType: 'sport_entry',
       ownerPersonId: philipp,
       row: {
-        id: seedIds.sportEntry.philippGestern,
+        id: unit.id,
         person_id: philipp,
-        activity_type: 'radfahren',
+        activity_type: unit.activity,
         override_activity_type: null,
-        started_at: '2026-10-13T16:00:00.000Z',
-        duration_minutes: 35,
+        started_at: unit.startedAt,
+        duration_minutes: unit.minutes,
         active_milli_kcal: null,
         ...seedManualOrigin,
         replaced_by_entry_id: null,
         reactivated_at: null,
-        ...day(seedDays.gestern),
-        ...created('2026-10-13T16:40:00.000Z'),
+        ...day(unit.localDate),
+        ...created(unit.createdAt),
       },
-    },
+    })),
     // Heute (Mittwoch, Wiegetag) hat Philipp noch nicht gewogen (#175).
     ...[
       { id: seedIds.weightEntry.philippVorgestern, weight: 92_400, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
@@ -242,12 +278,12 @@ const ernaehrung: SeedPart = {
 };
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = ({ water, plan }: SoloVariant): readonly SeedPart[] => [fundament, zieleOf(plan), trackerOf(water), ernaehrung];
+const soloPartsWith = ({ water, sport, plan }: SoloVariant): readonly SeedPart[] => [fundament, zieleOf(plan), trackerOf(water, sport), ernaehrung];
 
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(soloVariants.solo);
 
-/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute oder im Wochenplan. */
+/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute, in der Sportwoche oder im Wochenplan. */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
     parts: soloPartsWith(soloVariants[scenario]),
@@ -257,9 +293,10 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 4,
+    revision: 5,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,
@@ -272,7 +309,7 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   });
 }
 
-/** `solo` und seine Varianten (#171, #175). */
+/** `solo` und seine Varianten (#171, #173, #175). */
 export const soloManifests = Object.fromEntries(
   (Object.keys(soloVariants) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
 ) as Readonly<Record<SoloScenario, SeedManifest>>;
