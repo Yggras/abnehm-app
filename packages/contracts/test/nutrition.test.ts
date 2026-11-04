@@ -7,7 +7,9 @@ import {
   entryAmount,
   entryTotals,
   latestAcceptedEntryDate,
+  MealPhotoAnalysis,
   NutritionSnapshot,
+  photoDraftComponentOf,
   roundKcal,
   roundMacroGrams,
   type EntryAmount,
@@ -161,5 +163,46 @@ describe('latestAcceptedEntryDate', () => {
     expect(latestAcceptedEntryDate(LocalDate.parse('2026-10-31'))).toBe('2026-11-01');
     expect(latestAcceptedEntryDate(LocalDate.parse('2026-12-31'))).toBe('2027-01-01');
     expect(latestAcceptedEntryDate(LocalDate.parse('2028-02-28'))).toBe('2028-02-29');
+  });
+});
+
+describe('Fotoanalyse: Bestandteile in Vertragseinheiten', () => {
+  it('rechnet Gramm in mg und kcal in milli_kcal um, kaufmännisch gerundet', () => {
+    expect(
+      photoDraftComponentOf({ name: 'Bratkartoffeln', amount: 180, unit: 'g', kcal: 270.4, proteinG: 4.0006, carbsG: 32, fatG: 13.25 }),
+    ).toEqual({ name: 'Bratkartoffeln', baseUnit: 'g', baseAmount: 180_000, milliKcal: 270_400, proteinMg: 4_001, carbsMg: 32_000, fatMg: 13_250 });
+  });
+
+  it('nimmt Milliliter als ganze ml', () => {
+    expect(photoDraftComponentOf({ name: 'Apfelschorle', amount: 330.4, unit: 'ml', kcal: 82.5, proteinG: 0, carbsG: 19.8, fatG: 0 })).toEqual({
+      name: 'Apfelschorle',
+      baseUnit: 'ml',
+      baseAmount: 330,
+      milliKcal: 82_500,
+      proteinMg: 0,
+      carbsMg: 19_800,
+      fatMg: 0,
+    });
+  });
+
+  it('lehnt Mengen unter einer Basiseinheit, über 5 kg bzw. 5 l und Makros über der Menge ab', () => {
+    const base = { name: 'Reis', unit: 'g', kcal: 1, proteinG: 0, carbsG: 0, fatG: 0 } as const;
+    expect(photoDraftComponentOf({ ...base, amount: 0.0004 })).toBeNull();
+    expect(photoDraftComponentOf({ ...base, amount: 5_000.0004 })).toEqual(expect.objectContaining({ baseAmount: 5_000_000 }));
+    expect(photoDraftComponentOf({ ...base, amount: 5_001 })).toBeNull();
+    expect(photoDraftComponentOf({ ...base, amount: 0.4, unit: 'ml' })).toBeNull();
+    expect(photoDraftComponentOf({ ...base, amount: 100, proteinG: 40, carbsG: 40, fatG: 20.001 })).toBeNull();
+    // Bei Millilitern hinge der Vergleich von der Dichte ab; er entfällt wie beim Snapshot.
+    expect(photoDraftComponentOf({ ...base, amount: 100, unit: 'ml', proteinG: 40, carbsG: 40, fatG: 30 })).not.toBeNull();
+  });
+
+  it('MealPhotoAnalysis prüft beim Parsen, was sich nicht in Vertragseinheiten umrechnen lässt', () => {
+    const component = { name: 'Spiegelei', amount: 60, unit: 'g', kcal: 110, proteinG: 7.5, carbsG: 0.4, fatG: 8.8 } as const;
+    expect(MealPhotoAnalysis.safeParse({ components: [component] }).success).toBe(true);
+    expect(MealPhotoAnalysis.safeParse({ components: [] }).success).toBe(true);
+    expect(MealPhotoAnalysis.safeParse({ components: [{ ...component, amount: 6_000 }] }).success).toBe(false);
+    expect(MealPhotoAnalysis.safeParse({ components: [{ ...component, kcal: -1 }] }).success).toBe(false);
+    expect(MealPhotoAnalysis.safeParse({ components: [{ ...component, fatG: 60 }] }).success).toBe(false);
+    expect(MealPhotoAnalysis.safeParse({ components: Array.from({ length: 16 }, () => component) }).success).toBe(false);
   });
 });
