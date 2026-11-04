@@ -170,17 +170,6 @@ describe('confirmPhotoDraft: ohne gültigen Entwurf legt der Server die Einträg
     expect((await rows(backend)).photos).toEqual([]);
   });
 
-  it('ein Entwurf ist nur einmal bestätigbar; eine zweite Bestätigung bleibt ohne Foto', async () => {
-    const { backend, anna } = await photoWorld();
-    const draft = await analyzedDraft(backend, anna.device);
-    applied((await push(backend, anna.device, [confirmOp(confirmation(draft.result))]))[0]);
-
-    const second = confirmation(draft.result);
-    const { changes } = applied((await push(backend, anna.device, [confirmOp(second)]))[0]);
-
-    expect(changes?.map((change) => change.entityType)).toEqual(second.entries.map(() => 'nutrition_entry'));
-    expect((await rows(backend)).photos).toHaveLength(1);
-  });
 });
 
 describe('confirmPhotoDraft: Idempotenz und Ablehnung', () => {
@@ -217,7 +206,21 @@ describe('confirmPhotoDraft: Idempotenz und Ablehnung', () => {
     expect(await storageOf(backend).readPhoto(draft.imageKey, 'gross')).not.toBeNull();
   });
 
-  it('dieselbe Foto-ID mit anderem Inhalt ist ein operation_conflict', async () => {
+  it('ein Entwurf wird höchstens einmal zur Mahlzeit: eine zweite Bestätigung, etwa ein Doppeltipp, ist ein operation_conflict', async () => {
+    const { backend, anna } = await photoWorld();
+    const draft = await analyzedDraft(backend, anna.device);
+    const first = confirmation(draft.result);
+    applied((await push(backend, anna.device, [confirmOp(first)]))[0]);
+
+    const [second] = await push(backend, anna.device, [confirmOp(confirmation(draft.result))]);
+
+    expect(second).toMatchObject({ type: 'permanently_rejected', error: { code: 'operation_conflict' }, canonical: { type: 'absent' } });
+    const { photos, entries } = await rows(backend);
+    expect(photos.map((photo) => photo.id)).toEqual([first.photoId]);
+    expect(entries.map((entry) => entry.id).sort()).toEqual(first.entries.map((item) => item.id).sort());
+  });
+
+  it('derselbe Entwurf mit anderem Inhalt ist ein operation_conflict', async () => {
     const { backend, anna } = await photoWorld();
     const draft = await analyzedDraft(backend, anna.device);
     const payload = confirmation(draft.result);
@@ -249,16 +252,16 @@ describe('confirmPhotoDraft: Idempotenz und Ablehnung', () => {
     expect(changes?.[0]).toMatchObject({ entityType: 'meal_photo', entityId: retry.photoId });
   });
 
-  it('lehnt einen fachlichen Schlüssel ab, der nicht zur Foto-ID passt, und vergebene Eintrags-IDs', async () => {
+  it('lehnt einen fachlichen Schlüssel ab, der nicht zum Entwurf passt, und vergebene Eintrags-IDs', async () => {
     const { backend, anna } = await photoWorld();
     const draft = await analyzedDraft(backend, anna.device);
     const payload = confirmation(draft.result);
 
-    const [wrongKey] = await push(backend, anna.device, [confirmOp(payload, { businessKey: `mahlzeitenfoto:${randomUUID()}` })]);
+    const [wrongKey] = await push(backend, anna.device, [confirmOp(payload, { businessKey: `fotoentwurf:${randomUUID()}` })]);
     expect(wrongKey).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' } });
 
     applied((await push(backend, anna.device, [confirmOp(payload)]))[0]);
-    const second = confirmation(draft.result);
+    const second = confirmation((await analyzedDraft(backend, anna.device)).result);
     const reusedIds = ConfirmPhotoDraft.parse({ ...second, entries: second.entries.map((item, index) => ({ ...item, id: payload.entries[index]!.id })) });
     const [taken] = await push(backend, anna.device, [confirmOp(reusedIds)]);
     expect(taken).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' } });

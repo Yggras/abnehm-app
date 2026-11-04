@@ -80,7 +80,7 @@ function MealSection({ meal, localDate }: { meal: DayLogMeal; localDate: LocalDa
                 title={entry.name}
                 subtitle={amount}
                 value={kcalText(entry.kcal)}
-                accessibilityLabel={nutritionTexts.entry(meal.meal, entry.name, amount, entry.kcal, entry.fromPhoto)}
+                accessibilityLabel={nutritionTexts.entry(meal.meal, entry.name, amount, entry.kcal, entry.aiEstimate)}
               />
             );
           })}

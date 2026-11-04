@@ -1,3 +1,4 @@
+import type { ClockReading } from '@abnehm/clock';
 import { EntityId, Instant, TimeZone, type LocalDate, type MealKey } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import {
@@ -44,15 +45,15 @@ export type EntryUndo = Readonly<{ type: 'entry_added'; entryId: EntityId }>;
 
 export type EntryAdded = Readonly<{ messageKey: 'ernaehrung.eintrag_hinzugefuegt'; values: NutritionEntryAddedValues; undo: EntryUndo }>;
 
-type Dependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
+export type Dependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
 
 /**
- * Legt einen Eintrag an: Basismenge und Summen folgen deterministisch aus Snapshot und Eingabe.
- * Erfassungszeitpunkt, Zone und Offset stammen aus derselben Ablesung der Uhr.
+ * Die geprüfte Nutzlast eines neuen Eintrags: Basismenge und Summen folgen deterministisch aus Snapshot
+ * und Eingabe; Erfassungszeitpunkt, Zone und Offset stammen aus der übergebenen Ablesung der Uhr. Wirft
+ * `InvalidNutritionInputError` bei einem künftigen Tag, einer ungültigen Menge oder einem inkonsistenten
+ * Eintrag. Alle Erfassungswege bilden ihre Einträge hiermit.
  */
-export function addEntry(tx: TransactionContext, { clock, writer, persistence, newId }: Dependencies, input: NewEntry): EntryAdded {
-  // Vor dem ersten Schreibzugriff: Eine ungültige Eingabe hinterlässt nichts.
-  const reading = clock.read();
+export function newEntryPayload(reading: ClockReading, input: NewEntry, mealPhotoId: EntityId | null): NutritionEntryUpsert {
   if (input.localDate > reading.localDate) throw new InvalidNutritionInputError(`Künftiger Tag ${input.localDate} (heute ${reading.localDate})`);
   const amount = entryAmount(input.snapshot, input.displayUnit, input.displayAmountMilli);
   if (amount.type === 'problem') throw new InvalidNutritionInputError(`Ungültige Menge: ${amount.problem}`);
@@ -67,11 +68,17 @@ export function addEntry(tx: TransactionContext, { clock, writer, persistence, n
     snapshot: input.snapshot,
     amount: amount.amount,
     totals: entryTotals(input.snapshot, amount.amount),
-    mealPhotoId: null,
+    mealPhotoId,
   });
   if (!parsed.success) throw new InvalidNutritionInputError(`Ungültiger Eintrag: ${parsed.error.message}`);
+  return parsed.data;
+}
 
-  const payload = parsed.data;
+/** Legt einen Eintrag an, mit Outbox-Operation und Tagesmeldung in der Transaktion des Aufrufers. */
+export function addEntry(tx: TransactionContext, { clock, writer, persistence, newId }: Dependencies, input: NewEntry): EntryAdded {
+  // Vor dem ersten Schreibzugriff: Eine ungültige Eingabe hinterlässt nichts.
+  const reading = clock.read();
+  const payload = newEntryPayload(reading, input, null);
   const personId = EntityId.parse(requireOwnPerson(tx).id);
   const entryId = newId();
   writeEntry(tx, entryId, personId, payload, Instant.parse(reading.instant));

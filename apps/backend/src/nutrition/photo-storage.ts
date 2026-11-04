@@ -2,8 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-/** Die beiden Fassungen eines Mahlzeitenfotos in der Fotoablage. */
-export type MealPhotoVariant = 'vorschau' | 'gross';
+import { MealPhotoImageKey } from '@abnehm/contracts/nutrition';
+
+/** Die beiden Fassungen eines Mahlzeitenfotos in der Fotoablage; ihre Größen stehen in `photo-image.ts`. */
+export const mealPhotoVariants = ['vorschau', 'gross'] as const;
+export type MealPhotoVariant = (typeof mealPhotoVariants)[number];
 
 /**
  * Bilddateien auf dem Server (Spezifikation 2, Abschnitte 8 und 9; Spezifikation 0, Abschnitt 8): die
@@ -39,14 +42,11 @@ export type PhotoStorage = Readonly<{
   storedKeys(): Promise<Readonly<{ drafts: readonly string[]; photos: readonly string[] }>>;
 }>;
 
-/** 32 Zufallsbytes in base64url: 43 Zeichen, keine Pfadtrenner (wie `MealPhotoImageKey`). */
-const imageKeyPattern = /^[A-Za-z0-9_-]{43}$/;
 const partialSuffix = '.teil';
-const variants: readonly MealPhotoVariant[] = ['vorschau', 'gross'];
 
 function checked(imageKey: string): string {
   // Bildschlüssel stammen aus Postgres; trotzdem wird nie ein fremder Pfad zusammengesetzt.
-  if (!imageKeyPattern.test(imageKey)) throw new Error('Ungültiger Bildschlüssel');
+  if (!MealPhotoImageKey.safeParse(imageKey).success) throw new Error('Ungültiger Bildschlüssel');
   return imageKey;
 }
 
@@ -85,7 +85,7 @@ async function keysIn(directory: string, extension: string): Promise<string[]> {
     const complete = name.endsWith(partialSuffix) ? name.slice(0, -partialSuffix.length) : name;
     if (!complete.endsWith(extension)) continue;
     const key = complete.slice(0, complete.length - extension.length);
-    if (imageKeyPattern.test(key)) keys.add(key);
+    if (MealPhotoImageKey.safeParse(key).success) keys.add(key);
   }
   return [...keys].sort();
 }
@@ -119,7 +119,7 @@ export function createPhotoStorage({ directory }: { directory: string }): PhotoS
       const partial = `${path}${partialSuffix}`;
       await rm(partial, { recursive: true, force: true });
       await mkdir(partial, { recursive: true, mode: 0o700 });
-      for (const variant of variants) await writeFile(join(partial, `${variant}.jpg`), images[variant], { mode: 0o600, flag: 'wx' });
+      for (const variant of mealPhotoVariants) await writeFile(join(partial, `${variant}.jpg`), images[variant], { mode: 0o600, flag: 'wx' });
       await rename(partial, path);
     },
     readPhoto: (imageKey, variant) => readOrNull(join(photoPath(imageKey), `${variant}.jpg`)),

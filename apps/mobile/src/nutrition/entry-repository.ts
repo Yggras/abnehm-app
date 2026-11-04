@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { CaptureMethod, DisplayUnit, type FoodRef, type NutritionEntryRecord, type NutritionEntryUpsert } from '@abnehm/contracts/nutrition';
+import { CaptureMethod, DisplayUnit, SnapshotSource, type FoodRef, type NutritionEntryRecord, type NutritionEntryUpsert } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { nutritionEntry } from '../local-db/schema';
@@ -24,6 +24,7 @@ export type LoggedEntry = Readonly<{
   id: EntityId;
   meal: MealKey;
   captureMethod: CaptureMethod;
+  source: SnapshotSource;
   name: string;
   displayUnit: DisplayUnit;
   displayAmountMilli: number;
@@ -119,6 +120,7 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
       id: nutritionEntry.id,
       meal: nutritionEntry.meal,
       captureMethod: nutritionEntry.captureMethod,
+      source: nutritionEntry.snapshotSource,
       name: nutritionEntry.snapshotName,
       displayUnit: nutritionEntry.displayUnit,
       displayAmountMilli: nutritionEntry.displayAmountMilli,
@@ -133,6 +135,7 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
       id: EntityId.parse(row.id),
       meal: MealKey.parse(row.meal),
       captureMethod: CaptureMethod.parse(row.captureMethod),
+      source: SnapshotSource.parse(row.source),
       displayUnit: DisplayUnit.parse(row.displayUnit),
     }));
 }

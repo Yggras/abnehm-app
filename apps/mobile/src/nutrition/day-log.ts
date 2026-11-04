@@ -18,6 +18,8 @@ export type DayLogEntry = Readonly<{
   kcal: number;
   /** Aus einem Foto erfasst: Das Protokoll zeigt das Foto-/KI-Symbol (Spezifikation 2, Abschnitt 6). */
   fromPhoto: boolean;
+  /** Werte der KI-Schätzung (Quelle `ki`), nicht durch ein Suchergebnis ersetzt (Spezifikation 2, Abschnitt 12). */
+  aiEstimate: boolean;
 }>;
 
 export type DayLogMeal = Readonly<{
@@ -48,13 +50,14 @@ export function readDayLog(tx: ReadContext, localDate: LocalDate): DayLog | null
       return {
         meal,
         kcal: dailyIntakeKcal(ofMeal.map((entry) => entry.totalMilliKcal)),
-        entries: ofMeal.map(({ id, name, captureMethod, displayUnit, displayAmountMilli, totalMilliKcal }) => ({
+        entries: ofMeal.map(({ id, name, captureMethod, source, displayUnit, displayAmountMilli, totalMilliKcal }) => ({
           id,
           name,
           displayUnit,
           displayAmountMilli,
           kcal: roundKcal(totalMilliKcal),
           fromPhoto: captureMethod === 'foto',
+          aiEstimate: source === 'ki',
         })),
       };
     }),

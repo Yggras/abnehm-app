@@ -88,7 +88,7 @@ export function confirmOp(payload: ConfirmPhotoDraft, options: { operationId?: s
   return {
     type: 'confirmPhotoDraft',
     operationId: EntityId.parse(options.operationId ?? randomUUID()),
-    businessKey: options.businessKey ?? confirmPhotoDraftKey(payload.photoId),
+    businessKey: options.businessKey ?? confirmPhotoDraftKey(payload.draftId),
     payload,
     knownServerVersion: null,
     schemaVersion: currentSyncSchemaVersion,

@@ -1,12 +1,10 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
-import { EntityId, Instant, TimeZone, type LocalDate, type MealKey } from '@abnehm/contracts/base';
+import { EntityId, Instant, type LocalDate, type MealKey } from '@abnehm/contracts/base';
 import {
   ConfirmPhotoDraft,
   confirmPhotoDraftKey,
   dailyIntakeKcal,
-  entryAmount,
-  entryTotals,
   MealPhotoRecord,
   MealPhotoUpsert,
   type DisplayUnit,
@@ -20,10 +18,9 @@ import { requireOwnPerson } from '../local-db/person-header';
 import { mealPhoto } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { sqliteEntity, type LocalCommand, type SyncEntityAdapter } from '../sync';
-import { InvalidNutritionInputError } from './entries';
+import { InvalidNutritionInputError, newEntryPayload, type Dependencies } from './entries';
 import { nutritionEntryEntity } from './entry-entity';
 import { removeUnconfirmedEntry, unlinkPhoto, writeEntry } from './entry-repository';
-import type { NutritionDependencies } from './nutrition';
 
 // Fotoentwurf bestätigen und Mahlzeitenfoto in der App (Spezifikation 2, Abschnitte 8, 9 und 11; #162).
 // Bestätigen legt in einer Transaktion die Einträge, das Mahlzeitenfoto, die Outbox-Operation des
@@ -56,8 +53,6 @@ export type PhotoDraftConfirmation = Readonly<{
 /** Bildschlüssel des Fotos, solange der Server es nicht bestätigt hat; das Bild liegt noch im Entwurf. */
 const pendingImageKey = (draftId: EntityId) => `entwurf:${draftId}`;
 
-type Dependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
-
 /**
  * Bestätigt einen Fotoentwurf als Mahlzeit: Einträge mit Erfassungsart `foto`, das Mahlzeitenfoto und
  * genau eine Outbox-Operation `confirmPhotoDraft`. Erfassungszeitpunkt, Zone und Offset stammen aus
@@ -69,28 +64,11 @@ export function confirmPhotoDraft(
   input: PhotoDraftConfirmation,
 ): NutritionEntryAddedValues {
   const reading = clock.read();
-  if (input.localDate > reading.localDate) throw new InvalidNutritionInputError(`Künftiger Tag ${input.localDate} (heute ${reading.localDate})`);
   const photoId = newId();
-  const entries = input.components.map((component) => {
-    const amount = entryAmount(component.snapshot, component.displayUnit, component.displayAmountMilli);
-    if (amount.type === 'problem') throw new InvalidNutritionInputError(`Ungültige Menge: ${amount.problem}`);
-    return {
-      id: newId(),
-      entry: {
-        consumedAt: reading.instant,
-        localDate: input.localDate,
-        timeZone: TimeZone.parse(reading.timeZone),
-        utcOffsetMinutes: reading.utcOffsetMinutes,
-        meal: input.meal,
-        captureMethod: 'foto',
-        foodRef: component.foodRef,
-        snapshot: component.snapshot,
-        amount: amount.amount,
-        totals: entryTotals(component.snapshot, amount.amount),
-        mealPhotoId: photoId,
-      },
-    };
-  });
+  const entries = input.components.map((component) => ({
+    id: newId(),
+    entry: newEntryPayload(reading, { localDate: input.localDate, meal: input.meal, captureMethod: 'foto', ...component }, photoId),
+  }));
   const parsed = ConfirmPhotoDraft.safeParse({ draftId: input.draftId, photoId, sharedWithPartner: input.sharedWithPartner ?? true, entries });
   if (!parsed.success) throw new InvalidNutritionInputError(`Ungültige Fotomahlzeit: ${parsed.error.message}`);
 
@@ -105,7 +83,7 @@ export function confirmPhotoDraft(
   for (const { id, entry } of payload.entries) writeEntry(tx, id, personId, entry, at);
   writer.command(tx, {
     type: 'confirmPhotoDraft',
-    businessKey: confirmPhotoDraftKey(photoId),
+    businessKey: confirmPhotoDraftKey(payload.draftId),
     payload,
     knownServerVersion: null,
     affectedRefs: [
@@ -124,7 +102,7 @@ function removeUnconfirmedPhoto(tx: TransactionContext, photoId: EntityId): void
   const photo = db.select({ serverVersion: mealPhoto.serverVersion }).from(mealPhoto).where(eq(mealPhoto.id, photoId)).get();
   if (photo === undefined || photo.serverVersion !== null) return;
   unlinkPhoto(tx, photoId);
-  db.delete(mealPhoto).where(and(eq(mealPhoto.id, photoId), isNull(mealPhoto.serverVersion))).run();
+  db.delete(mealPhoto).where(eq(mealPhoto.id, photoId)).run();
 }
 
 /**

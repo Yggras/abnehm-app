@@ -11,8 +11,8 @@ import type { Job } from '../jobs/job-registry.ts';
 import { nextServerVersion, recordChange } from '../sync/change-log.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { ownedEntity, type ServerSyncEntity } from '../sync/registry.ts';
-import { canonicalAfterWrite } from '../sync/sync.ts';
-import { mealPhotoVariants } from './photo-image.ts';
+import { canonicalAfterWrite, upsertEntity } from '../sync/sync.ts';
+import { mealPhotoImages } from './photo-image.ts';
 import type { PhotoStorage } from './photo-storage.ts';
 
 // Mahlzeitenfotos auf dem Server (Spezifikation 2, Abschnitte 8, 9 und 11; #162). Ein Mahlzeitenfoto
@@ -72,9 +72,9 @@ export function createMealPhotos({
   async function storePhoto(tx: DbExecutor, draft: NonNullable<Awaited<ReturnType<typeof validDraft>>>, input: {
     photoId: EntityId; personId: EntityId; sharedWithPartner: boolean; at: Date;
   }): Promise<boolean> {
-    let images: Awaited<ReturnType<typeof mealPhotoVariants>>;
+    let images: Awaited<ReturnType<typeof mealPhotoImages>>;
     try {
-      images = await mealPhotoVariants(draft.image);
+      images = await mealPhotoImages(draft.image);
     } catch {
       // Ein Bild, das sich nicht mehr verkleinern lässt, kostet nur das Foto, nie die Mahlzeit.
       return false;
@@ -105,10 +105,11 @@ export function createMealPhotos({
     payload: ConfirmPhotoDraft,
     target: (operation) => ({ id: ConfirmPhotoDraft.parse(operation.payload).photoId }),
     canonicalRequest: (operation) => ConfirmPhotoDraft.parse(operation.payload),
-    // Jede Bestätigung trägt ihre eigene Foto-ID; ein Duplikat ist nur der Retry derselben Bestätigung.
+    // Schlüssel ist der Entwurf: Ein Duplikat mit gleichem Inhalt ist der Retry derselben Bestätigung, eines
+    // mit anderen IDs ein `operation_conflict`. Zuzuordnen gibt es deshalb nichts.
     duplicate: () => [],
     async execute(tx, { actor, payload, businessKey, at }) {
-      if (businessKey !== confirmPhotoDraftKey(payload.photoId)) throw new CommandRejection('invalid_payload');
+      if (businessKey !== confirmPhotoDraftKey(payload.draftId)) throw new CommandRejection('invalid_payload');
       const ids = payload.entries.map((item) => item.id);
       if ((await entries.read(tx, ids)).size > 0) throw new CommandRejection('conflict');
 
@@ -119,14 +120,10 @@ export function createMealPhotos({
       const changes: CanonicalChange[] = withPhoto ? [await canonicalAfterWrite(tx, entity, payload.photoId)] : [];
       for (const { id, entry } of payload.entries) {
         // Derselbe Schreibweg wie beim generischen Upsert: Prüfung des Tags, Schreiben, Änderungsprotokoll.
-        const serverVersion = await nextServerVersion(tx);
-        const write = { entityId: id, payload: { ...entry, mealPhotoId: withPhoto ? payload.photoId : null }, ownerPersonId: actor.personId,
-          serverVersion, at, exists: false };
-        const problem = (await entries.validate?.(tx, write)) ?? null;
+        const problem = await upsertEntity(tx, entries, {
+          entityId: id, payload: { ...entry, mealPhotoId: withPhoto ? payload.photoId : null }, ownerPersonId: actor.personId, at, exists: false,
+        });
         if (problem !== null) throw new CommandRejection(problem === 'forbidden' || problem === 'operation_conflict' ? 'invalid_payload' : problem);
-        await entries.write(tx, write);
-        await recordChange(tx, { position: serverVersion, entityType: entries.entityType, entityId: id, operation: 'upsert',
-          ownerPersonId: actor.personId, createdAt: at });
         changes.push(await canonicalAfterWrite(tx, entries, id));
       }
       return { changes, idMappings: [] };

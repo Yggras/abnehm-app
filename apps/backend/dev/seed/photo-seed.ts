@@ -2,7 +2,7 @@ import sharp from 'sharp';
 
 import type { SeedManifest } from '@abnehm/contracts/seeds';
 
-import { mealPhotoVariants } from '../../src/nutrition/photo-image.ts';
+import { mealPhotoImages } from '../../src/nutrition/photo-image.ts';
 import type { PhotoStorage } from '../../src/nutrition/photo-storage.ts';
 
 // Bilddaten der Seeds (#162): Seeden setzt wie Postgres auch die Fotoablage auf den Ausgangszustand. Sie
@@ -24,6 +24,6 @@ export async function seedPhotoFiles(storage: PhotoStorage, manifest: SeedManife
 
   const photos = manifest.extensions?.mealPhotos;
   if (photos?.version !== 2) return;
-  for (const photo of photos.photos) await storage.savePhoto(photo.imageKey, await mealPhotoVariants(await jpegOf(photo.image)));
+  for (const photo of photos.photos) await storage.savePhoto(photo.imageKey, await mealPhotoImages(await jpegOf(photo.image)));
   for (const draft of photos.expiredDrafts) await storage.saveDraft(draft.imageKey, await jpegOf(draft.image));
 }

@@ -119,7 +119,7 @@ describe('Fotoentwurf bestätigen', () => {
       expect.objectContaining({ captureMethod: 'foto', snapshotSource: 'bls', foodRefKey: 'E111200', totalMilliKcal: 117_600, mealPhotoId: photoId }),
     ]);
     const operation = onlyCommand(operations);
-    expect(operation).toMatchObject({ type: 'confirmPhotoDraft', businessKey: `mahlzeitenfoto:${photoId}`, knownServerVersion: null });
+    expect(operation).toMatchObject({ type: 'confirmPhotoDraft', businessKey: `fotoentwurf:${draftId}`, knownServerVersion: null });
     const payload = ConfirmPhotoDraft.parse(operation.payload);
     expect(payload).toMatchObject({ draftId, photoId, sharedWithPartner: true });
     expect(payload.entries.map(({ id }) => id)).toEqual(entries.map(({ id }) => id));
@@ -147,9 +147,10 @@ describe('Fotoentwurf bestätigen', () => {
 
     const meal = dayLog()!.meals.find((entry) => entry.meal === 'mittagessen')!;
     // Erst der Eintrag aus der Suche, dann die beiden aus dem Foto (gleicher Zeitpunkt, Reihenfolge nach ID).
-    const [fromSearch, ...fromPhoto] = meal.entries.map(({ name, fromPhoto: photo }) => [name, photo] as const);
-    expect(fromSearch).toEqual(['Hühnerei gebraten', false]);
-    expect([...fromPhoto].sort()).toEqual([['Bratkartoffeln', true], ['Hühnerei gebraten', true]]);
+    // Das Symbol gilt jedem Eintrag aus dem Foto, „KI-Schätzung“ nur dem nicht ersetzten Bestandteil.
+    const [fromSearch, ...fromPhoto] = meal.entries.map(({ name, fromPhoto: photo, aiEstimate }) => [name, photo, aiEstimate] as const);
+    expect(fromSearch).toEqual(['Hühnerei gebraten', false, false]);
+    expect([...fromPhoto].sort()).toEqual([['Bratkartoffeln', true, true], ['Hühnerei gebraten', true, false]]);
   });
 
   it.each([

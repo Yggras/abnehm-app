@@ -501,11 +501,12 @@ export const ConfirmPhotoDraft = z
 export type ConfirmPhotoDraft = z.infer<typeof ConfirmPhotoDraft>;
 
 /**
- * Fachlicher Idempotenzschlüssel von `confirmPhotoDraft`: das Mahlzeitenfoto, das die Bestätigung
- * anlegt. Jede Bestätigung vergibt eine neue Foto-ID; derselbe Schlüssel ist also nur ihr Retry.
+ * Fachlicher Idempotenzschlüssel von `confirmPhotoDraft`: der Fotoentwurf. Ein Entwurf wird höchstens
+ * einmal zur Mahlzeit; eine zweite, abweichende Bestätigung desselben Entwurfs (etwa ein Doppeltipp)
+ * ist ein `operation_conflict` statt einer doppelten Mahlzeit, ein identischer Retry `already_applied`.
  */
-export function confirmPhotoDraftKey(photoId: EntityId): string {
-  return `mahlzeitenfoto:${photoId}`;
+export function confirmPhotoDraftKey(draftId: EntityId): string {
+  return `fotoentwurf:${draftId}`;
 }
 
 /** Bildschlüssel eines Fotos in der Fotoablage: 32 Zufallsbytes in base64url, nicht erratbar. */

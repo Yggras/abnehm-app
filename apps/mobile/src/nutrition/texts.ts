@@ -98,9 +98,9 @@ export const nutritionTexts = {
   intake: (today: boolean, kcal: number) => `${today ? 'Erfasst heute' : 'Erfasst'}: ${kcalText(kcal)}`,
   emptyMeal: 'Noch nichts eingetragen.',
   addTo: (meal: MealKey) => `${mealNames[meal]} hinzufügen`,
-  /** Zugänglicher Name eines Eintrags; Einträge aus einem Foto tragen zusätzlich „KI-Schätzung“ (Spezifikation 2, Abschnitt 12). */
-  entry: (meal: MealKey, name: string, amount: string, kcal: number, fromPhoto = false) =>
-    `${mealNames[meal]}: ${name}, ${amount}, ${kcalText(kcal)}${fromPhoto ? ', KI-Schätzung' : ''}`,
+  /** Zugänglicher Name eines Eintrags; KI-Einträge tragen zusätzlich „KI-Schätzung“ (Spezifikation 2, Abschnitt 12). */
+  entry: (meal: MealKey, name: string, amount: string, kcal: number, aiEstimate = false) =>
+    `${mealNames[meal]}: ${name}, ${amount}, ${kcalText(kcal)}${aiEstimate ? ', KI-Schätzung' : ''}`,
   search: 'Lebensmittel suchen',
   noHits: (query: string) => `Keine Treffer für „${query.trim()}“.`,
   per100: (kcal: number, baseUnit: BaseUnit) => `${kcalText(kcal)} je 100 ${baseUnit}`,

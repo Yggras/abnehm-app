@@ -234,7 +234,7 @@ describe('Fotoentwurf bestätigen', () => {
     expect(entryTotals(snapshot, half.amount)).toEqual({ milliKcal: 135_000, proteinMg: 2_000, carbsMg: 16_000, fatMg: 6_500 });
   });
 
-  it('der fachliche Schlüssel nennt das Mahlzeitenfoto', () => {
-    expect(confirmPhotoDraftKey(EntityId.parse('5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e02'))).toBe('mahlzeitenfoto:5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e02');
+  it('der fachliche Schlüssel nennt den Fotoentwurf', () => {
+    expect(confirmPhotoDraftKey(EntityId.parse('5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03'))).toBe('fotoentwurf:5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03');
   });
 });
