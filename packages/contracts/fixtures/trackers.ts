@@ -1,5 +1,10 @@
 import {
+  ManualSportMinutes,
   ManualWeightG,
+  SportEntryRecord,
+  SportEntryUpsert,
+  SportRecordedOutcome,
+  SportRecordedValues,
   WaterAddedOutcome,
   WaterAddedValues,
   WaterEntryRecord,
@@ -14,6 +19,37 @@ import { fixtures, without } from './define.ts';
 import { now, philipp, timeZone, today } from './ids.ts';
 
 const water = { amountMl: 250, origin: 'manuell', loggedAt: now, localDate: today, timeZone, utcOffsetMinutes: 120 } as const;
+/** Manuelle Einheit: 30 Minuten Laufen am Mittwochabend in Berlin, ohne Kalorien. */
+const sport = {
+  activityType: 'laufen',
+  startedAt: '2026-10-14T16:30:00.000Z',
+  durationMinutes: 30,
+  activeMilliKcal: null,
+  origin: 'manuell',
+  replacedByEntryId: null,
+  reactivatedAt: null,
+  localDate: today,
+  timeZone,
+  utcOffsetMinutes: 120,
+} as const;
+/** Import: Fitbit-Training über Apple Health, mit aktiven Kalorien der Quelle. */
+const imported = {
+  activityType: 'radfahren',
+  overrideActivityType: null,
+  startedAt: '2026-10-14T15:00:00.000Z',
+  durationMinutes: 52,
+  activeMilliKcal: 412_000,
+  origin: 'apple_health',
+  externalKey: '5B0E3F6A-2C1D-4E8F-9A7B-3C2D1E0F9A8B',
+  sourceAppId: 'com.fitbit.FitbitMobile',
+  sourceAppName: 'Fitbit',
+  hiddenAt: null,
+  localDate: today,
+  timeZone,
+  utcOffsetMinutes: 120,
+} as const;
+const owned = { personId: philipp, createdAt: now, updatedAt: now } as const;
+
 const weight = { weightG: 82_400, origin: 'manuell', measuredAt: '2026-10-14T05:30:00.000Z', localDate: today, timeZone, utcOffsetMinutes: 120 } as const;
 
 export const trackerFixtures = {
@@ -49,6 +85,54 @@ export const trackerFixtures = {
       'fremde Meldung': { messageKey: 'shell.nicht_geklappt', values: { ml: 250 }, undoToken: 'undo-7f3a' },
       'fertiger Text': { messageKey: 'wasser.hinzugefuegt', values: { ml: 250, text: '+250 ml Wasser' }, undoToken: 'undo-7f3a' },
       'synchronisiertes Feld': { messageKey: 'wasser.hinzugefuegt', values: { ml: 250 }, undoToken: 'undo-7f3a', entryId: philipp },
+    },
+  }),
+  ManualSportMinutes: fixtures(ManualSportMinutes, {
+    valid: { 'eine halbe Stunde': 30, 'kürzeste Einheit': 1, 'längste Einheit': 600 },
+    invalid: { 'nichts': 0, 'über der Grenze': 601, 'Bruchteil': 30.5, 'in Stunden': '0,5 h' },
+  }),
+  SportEntryUpsert: fixtures(SportEntryUpsert, {
+    valid: {
+      'manuell ohne Kalorien': sport,
+      'manuell mit Kalorien': { ...sport, activeMilliKcal: 210_000 },
+      'manuell, ersetzt und reaktiviert': { ...sport, replacedByEntryId: philipp, reactivatedAt: now },
+      'Import über Apple Health': imported,
+      'Import über Health Connect, ausgeblendet und umbenannt': {
+        ...imported, origin: 'health_connect', activeMilliKcal: null, sourceAppName: null, hiddenAt: now, overrideActivityType: 'krafttraining',
+      },
+      'Import über 600 Minuten': { ...imported, durationMinutes: 1440 },
+    },
+    invalid: {
+      'unbekannte Art': { ...sport, activityType: 'tanzen' },
+      'mit Intensität': { ...sport, intensity: 'hoch' },
+      'manuell über 600 Minuten': { ...sport, durationMinutes: 601 },
+      'manuell über 5000 kcal': { ...sport, activeMilliKcal: 5_000_001 },
+      'negative Kalorien': { ...imported, activeMilliKcal: -1 },
+      'Import über 1440 Minuten': { ...imported, durationMinutes: 1441 },
+      'manuell mit externem Schlüssel': { ...sport, externalKey: imported.externalKey },
+      'manuell ausgeblendet': { ...sport, hiddenAt: now },
+      'Import mit „ersetzt durch“': { ...imported, replacedByEntryId: philipp },
+      'Import ohne externen Schlüssel': without(imported, 'externalKey'),
+      'unbekannte Herkunft': { ...imported, origin: 'fitbit' },
+      'mit Eigentümer': { ...sport, personId: philipp },
+    },
+  }),
+  SportEntryRecord: fixtures(SportEntryRecord, {
+    valid: { 'manuell kanonisch': { ...sport, ...owned }, 'Import kanonisch': { ...imported, ...owned } },
+    invalid: {
+      'ohne Eigentümer': { ...sport, createdAt: now, updatedAt: now },
+      'mit Ersetzungswirkung': { ...sport, ...owned, counting: false },
+    },
+  }),
+  SportRecordedValues: fixtures(SportRecordedValues, {
+    valid: { '30 min Laufen': { activityType: 'laufen', durationMinutes: 30 } },
+    invalid: { 'ohne Art': { durationMinutes: 30 }, 'mit Kalorien': { activityType: 'laufen', durationMinutes: 30, activeMilliKcal: 210_000 } },
+  }),
+  SportRecordedOutcome: fixtures(SportRecordedOutcome, {
+    valid: { 'Einheit eingetragen': { messageKey: 'sport.eingetragen', values: { activityType: 'laufen', durationMinutes: 30 }, undoToken: 'undo-7f3c' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'sport.eingetragen', values: { activityType: 'laufen', durationMinutes: 30 } },
+      'fremde Meldung': { messageKey: 'gewicht.eingetragen', values: { activityType: 'laufen', durationMinutes: 30 }, undoToken: 'undo-7f3c' },
     },
   }),
   ManualWeightG: fixtures(ManualWeightG, {

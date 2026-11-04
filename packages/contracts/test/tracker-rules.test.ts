@@ -3,8 +3,17 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  activityTypes,
   asksForTypo,
   countedWaterMl,
+  countingSportEntries,
+  isValidManualSportMilliKcal,
+  isValidManualSportMinutes,
+  manualSportMilliKcal,
+  manualSportMinutes,
+  sportEntryMinutes,
+  weekMinutes,
+  weekOf,
   dayWeights,
   isCountingWeightEntry,
   isInFuture,
@@ -196,6 +205,166 @@ describe('gültige Wassermenge', () => {
   it('nennt die Grenzen 1–3000 ml und die Herkunft manuell', () => {
     expect(waterAmountMl).toEqual({ min: 1, max: 3000 });
     expect(waterOrigin).toBe('manuell');
+  });
+});
+
+type Session = Parameters<typeof countingSportEntries>[0][number];
+
+/** Ein Sporteintrag; ohne Angaben ein manueller, zählender Eintrag von 30 Minuten am Mittwoch, 14.10.2026. */
+const session = (id: string, overrides: Partial<Session> = {}): Session => ({
+  id,
+  origin: 'manuell',
+  durationMinutes: 30,
+  localDate: '2026-10-14',
+  deletedAt: null,
+  hiddenAt: null,
+  replacedByEntryId: null,
+  reactivatedAt: null,
+  ...overrides,
+});
+const at = '2026-10-14T18:00:00.000Z';
+const counted = (entries: readonly Session[]) => countingSportEntries(entries).map((entry) => entry.id);
+
+describe('zählender Sporteintrag', () => {
+  it('importiert: zählt, wenn er weder gelöscht noch ausgeblendet ist', () => {
+    const entries = [
+      session('import', { origin: 'apple_health' }),
+      session('geloescht', { origin: 'health_connect', deletedAt: at }),
+      session('ausgeblendet', { origin: 'apple_health', hiddenAt: at }),
+    ];
+
+    expect(counted(entries)).toEqual(['import']);
+  });
+
+  it('manuell: zählt ohne „ersetzt durch“-Verweis, gelöscht nie', () => {
+    expect(counted([session('manuell'), session('geloescht', { deletedAt: at })])).toEqual(['manuell']);
+  });
+
+  it('manuell und ersetzt: zählt nicht, solange der ersetzende Import zählt; der Import zählt', () => {
+    const entries = [session('import', { origin: 'apple_health' }), session('ersetzt', { replacedByEntryId: 'import' })];
+
+    expect(counted(entries)).toEqual(['import']);
+  });
+
+  it('manuell, ersetzt und reaktiviert: zählt neben dem Import', () => {
+    const entries = [session('import', { origin: 'apple_health' }), session('reaktiviert', { replacedByEntryId: 'import', reactivatedAt: at })];
+
+    expect(counted(entries)).toEqual(['import', 'reaktiviert']);
+  });
+
+  it.each([
+    ['ausgeblendet', { hiddenAt: at }],
+    ['in der Quelle gelöscht', { deletedAt: at }],
+  ])('manuell und ersetzt: zählt wieder, wenn der ersetzende Import %s ist', (_, change) => {
+    const entries = [session('import', { origin: 'health_connect', ...change }), session('ersetzt', { replacedByEntryId: 'import' })];
+
+    expect(counted(entries)).toEqual(['ersetzt']);
+  });
+
+  it('manuell und ersetzt: zählt, wenn der ersetzende Import unbekannt ist, damit kein Training verschwindet', () => {
+    expect(counted([session('ersetzt', { replacedByEntryId: 'fehlt' })])).toEqual(['ersetzt']);
+  });
+
+  it('berechnet die Ersetzungswirkung beim Zählen: Derselbe gespeicherte Eintrag zählt je nach Stand des Imports', () => {
+    const replaced = session('ersetzt', { replacedByEntryId: 'import' });
+
+    expect(counted([session('import', { origin: 'apple_health' }), replaced])).toEqual(['import']);
+    expect(counted([session('import', { origin: 'apple_health', hiddenAt: at }), replaced])).toEqual(['ersetzt']);
+    expect(replaced).toEqual(session('ersetzt', { replacedByEntryId: 'import' }));
+  });
+});
+
+describe('Wochenminuten', () => {
+  it('summieren die zählenden Einträge der Woche Montag bis Sonntag 1:1', () => {
+    const entries = [
+      session('montag', { localDate: '2026-10-12', durationMinutes: 40 }),
+      session('mittwoch', { localDate: '2026-10-14', durationMinutes: 1 }),
+      session('sonntag', { localDate: '2026-10-18', durationMinutes: 35 }),
+      session('geloescht', { localDate: '2026-10-14', durationMinutes: 60, deletedAt: at }),
+    ];
+
+    for (const day of ['2026-10-12', '2026-10-14', '2026-10-18']) expect(weekMinutes(entries, day)).toBe(76);
+  });
+
+  it('enden an der Wochengrenze: Sonntag und der folgende Montag gehören zu verschiedenen Wochen', () => {
+    const entries = [
+      session('sonntag-vorher', { localDate: '2026-10-11', durationMinutes: 20 }),
+      session('montag', { localDate: '2026-10-12', durationMinutes: 30 }),
+      session('sonntag', { localDate: '2026-10-18', durationMinutes: 45 }),
+      session('montag-danach', { localDate: '2026-10-19', durationMinutes: 50 }),
+    ];
+
+    expect(weekMinutes(entries, '2026-10-11')).toBe(20);
+    expect(weekMinutes(entries, '2026-10-14')).toBe(75);
+    expect(weekMinutes(entries, '2026-10-19')).toBe(50);
+  });
+
+  it('folgen über den Sommerzeitwechsel dem gespeicherten lokalen Tag (25.10.2026 endet die Sommerzeit)', () => {
+    // Die Woche vom 19. bis 25.10. hat in Berlin 169 Stunden; maßgeblich ist der Kalendertag, nicht die Stundenzahl.
+    const entries = [
+      session('sonntag-spaet', { localDate: '2026-10-25', durationMinutes: 30 }),
+      session('montag-frueh', { localDate: '2026-10-26', durationMinutes: 15 }),
+    ];
+
+    expect(weekMinutes(entries, '2026-10-19')).toBe(30);
+    expect(weekMinutes(entries, '2026-10-25')).toBe(30);
+    expect(weekMinutes(entries, '2026-10-26')).toBe(15);
+  });
+
+  it('gehen über Monats- und Jahresgrenzen', () => {
+    const entries = [session('silvester', { localDate: '2026-12-31', durationMinutes: 25 }), session('neujahr', { localDate: '2027-01-03', durationMinutes: 35 })];
+
+    expect(weekOf('2027-01-01')).toEqual({ monday: '2026-12-28', sunday: '2027-01-03' });
+    expect(weekMinutes(entries, '2026-12-28')).toBe(60);
+  });
+
+  it('zählen ersetzte Einträge nicht und ausgeblendete Importe nicht, die Ersetzung über den Nachbartag hinweg schon', () => {
+    const entries = [
+      session('import', { origin: 'apple_health', localDate: '2026-10-11', durationMinutes: 45 }),
+      session('ersetzt', { localDate: '2026-10-12', durationMinutes: 40, replacedByEntryId: 'import' }),
+      session('ausgeblendet', { origin: 'apple_health', localDate: '2026-10-13', durationMinutes: 20, hiddenAt: at }),
+      session('manuell', { localDate: '2026-10-13', durationMinutes: 30 }),
+    ];
+
+    expect(weekMinutes(entries, '2026-10-14')).toBe(30);
+  });
+
+  it('sind ohne Einträge 0', () => {
+    expect(weekMinutes([], '2026-10-14')).toBe(0);
+  });
+});
+
+describe('gültige manuelle Sporteinheit', () => {
+  it('kennt genau die acht Aktivitätsarten, ohne Intensität', () => {
+    expect(activityTypes).toEqual(['gehen', 'laufen', 'radfahren', 'schwimmen', 'krafttraining', 'yoga_dehnen', 'mannschaftssport', 'sonstiges']);
+  });
+
+  it.each([
+    [1, true],
+    [600, true],
+    [0, false],
+    [601, false],
+    [30.5, false],
+  ])('Dauer %s min: %s', (minutes, valid) => {
+    expect(isValidManualSportMinutes(minutes)).toBe(valid);
+  });
+
+  it.each([
+    [null, true],
+    [0, true],
+    [5_000_000, true],
+    [210_000, true],
+    [-1, false],
+    [5_000_001, false],
+    [210_000.5, false],
+  ])('Kalorien %s milli_kcal: %s', (milliKcal, valid) => {
+    expect(isValidManualSportMilliKcal(milliKcal)).toBe(valid);
+  });
+
+  it('nennt 1–600 Minuten, 0–5000 kcal in milli_kcal und für Importe die Schema-Grenze 1–1440 Minuten', () => {
+    expect(manualSportMinutes).toEqual({ min: 1, max: 600 });
+    expect(manualSportMilliKcal).toEqual({ min: 0, max: 5_000_000 });
+    expect(sportEntryMinutes).toEqual({ min: 1, max: 1440 });
   });
 });
 
