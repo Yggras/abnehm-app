@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { readingOf } from '@abnehm/clock';
@@ -11,14 +10,12 @@ import {
   manualOrigin,
   manualSportMilliKcal,
   manualSportMinutes,
-  type ActivityType,
 } from '@abnehm/contracts/tracker-rules';
-import { ActivityType as ActivityTypeSchema, ManualSportMinutes, SportEntryUpsert, type SportRecordedValues } from '@abnehm/contracts/trackers';
+import { ActivityType, ManualSportMinutes, SportEntryUpsert, type SportRecordedValues } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
+import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
-import { deviceState } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
 import { InvalidTrackerInputError } from './invalid-input';
 import { sportEntryEntity } from './sport-entity';
 import { readSportEntry, tombstoneSportEntry, writeSportEntry } from './sport-repository';
@@ -75,7 +72,7 @@ export function recordSportEntry(tx: TransactionContext, { clock, writer, persis
   writeSportEntry(tx, entryId, personId, payload, now.instant);
   writer.upsert(tx, { entityType: sportEntryEntity.entityType, entityId: entryId, payload, knownServerVersion: null });
   persistence.reevaluateDailyGoals(tx, personId, [started.localDate], 'eingabe');
-  writeLastSport(tx, { activityType, durationMinutes }, now.instant);
+  writeDeviceState(tx, lastSportKey, { activityType, durationMinutes } satisfies LastSport, now.instant);
   return { messageKey: 'sport.eingetragen', values: { activityType, durationMinutes }, localDate: started.localDate, undo: { type: 'sport_recorded', entryId } };
 }
 
@@ -95,19 +92,10 @@ export function undoSport(tx: TransactionContext, { clock, writer, persistence }
 // Zuletzt genutzte Art und Dauer sind lokaler Gerätezustand (`device_state`, Spezifikation 3, Abschnitt 8):
 // nicht synchronisiert und beim Abmelden mit der Kontodatenbank gelöscht.
 const lastSportKey = 'sport_last_used';
-const LastSportValue = z.strictObject({ activityType: ActivityTypeSchema, durationMinutes: ManualSportMinutes });
+const LastSportValue = z.strictObject({ activityType: ActivityType, durationMinutes: ManualSportMinutes });
 
 /** Die zuletzt genutzte Einheit dieses Geräts; ohne eigene Person, ohne Einheit oder bei unpassendem Wert `null`. */
 export function lastSportOf(tx: ReadContext): LastSport | null {
   if (readOwnPerson(tx) === undefined) return null;
-  const row = sqliteOf(tx).select({ value: deviceState.value }).from(deviceState).where(eq(deviceState.key, lastSportKey)).get();
-  return LastSportValue.safeParse(row?.value).data ?? null;
-}
-
-function writeLastSport(tx: TransactionContext, value: LastSport, at: Instant): void {
-  sqliteOf(tx)
-    .insert(deviceState)
-    .values({ key: lastSportKey, value, updatedAt: at })
-    .onConflictDoUpdate({ target: deviceState.key, set: { value, updatedAt: at } })
-    .run();
+  return LastSportValue.safeParse(readDeviceState(tx, lastSportKey)).data ?? null;
 }

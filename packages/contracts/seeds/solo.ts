@@ -152,7 +152,7 @@ const waterToday = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
 
-/** Eine manuelle Sporteinheit dieser Woche (Montag bis Sonntag), ohne Importe. */
+/** Ein manueller Sporteintrag dieser Woche (Montag bis Sonntag), ohne Importe. */
 type SportUnit = Readonly<{ id: string; activity: string; startedAt: string; minutes: number; localDate: string; createdAt: string }>;
 
 /** Montag: Spaziergang am Abend; Dienstag: Radtour am Abend. */

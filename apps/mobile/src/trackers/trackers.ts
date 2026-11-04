@@ -44,7 +44,7 @@ export type Trackers = Readonly<{
    */
   recordWeight(input: WeightInput): WeightRecordedOutcome;
   /**
-   * Trägt eine manuelle Sporteinheit ein, in einer eigenen lokalen Transaktion. Lokaler Tag, Zone und
+   * Legt einen manuellen Sporteintrag an, in einer eigenen lokalen Transaktion. Lokaler Tag, Zone und
    * Offset gehören zum Beginn in der Zone der Uhr; Art und Dauer merkt sich das Gerät als Vorbelegung.
    * Kalorien werden nur angezeigt, nie auf das Kalorienbudget gutgeschrieben. Wirft
    * `InvalidTrackerInputError` bei unbekannter Art, außerhalb von 1–600 Minuten bzw. 0–5000 kcal und für

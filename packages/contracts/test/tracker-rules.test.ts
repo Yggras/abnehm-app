@@ -334,7 +334,7 @@ describe('Wochenminuten', () => {
   });
 });
 
-describe('gültige manuelle Sporteinheit', () => {
+describe('gültiger manueller Sporteintrag', () => {
   it('kennt genau die acht Aktivitätsarten, ohne Intensität', () => {
     expect(activityTypes).toEqual(['gehen', 'laufen', 'radfahren', 'schwimmen', 'krafttraining', 'yoga_dehnen', 'mannschaftssport', 'sonstiges']);
   });

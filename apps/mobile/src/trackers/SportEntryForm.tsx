@@ -9,8 +9,8 @@ import {
   isValidManualSportMinutes,
   manualSportMilliKcal,
   manualSportMinutes,
-  type ActivityType,
 } from '@abnehm/contracts/tracker-rules';
+import type { ActivityType } from '@abnehm/contracts/trackers';
 
 import { useClock } from '../clock/clock-context';
 import { Button, Chip, DateTimePicker, ListGroup, ListRow, ProblemMessage, space, Text, TextField } from '../design';

@@ -56,7 +56,6 @@ export function isInFuture(instant: string, now: string): boolean {
  * bewusste Vereinfachung gegenüber der WHO-Äquivalenz (Spezifikation 3, Abschnitt 3).
  */
 export const activityTypes = ['gehen', 'laufen', 'radfahren', 'schwimmen', 'krafttraining', 'yoga_dehnen', 'mannschaftssport', 'sonstiges'] as const;
-export type ActivityType = (typeof activityTypes)[number];
 
 /** Herkunft eines importierten Eintrags (Spezifikation 3, Abschnitt 6). */
 export const importOrigins = ['apple_health', 'health_connect'] as const;

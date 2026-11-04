@@ -1,4 +1,4 @@
-import type { ActivityType } from '@abnehm/contracts/tracker-rules';
+import type { ActivityType } from '@abnehm/contracts/trackers';
 
 import type { IconName } from '../design';
 

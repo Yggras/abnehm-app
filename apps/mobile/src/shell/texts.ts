@@ -1,5 +1,5 @@
 import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
-import type { ActivityType } from '@abnehm/contracts/tracker-rules';
+import type { ActivityType } from '@abnehm/contracts/trackers';
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
 import type { QuickCommandKey } from '@abnehm/contracts/today';
 
