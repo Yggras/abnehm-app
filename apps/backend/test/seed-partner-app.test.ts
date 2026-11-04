@@ -1,15 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { createTestClock } from '@abnehm/clock/testing';
-import { EntityId, Instant, LocalDate, ServerVersion, type AreaKey } from '@abnehm/contracts/base';
-import type { PartnerSharingLevel } from '@abnehm/contracts/coupling';
+import { EntityId, LocalDate, ServerVersion } from '@abnehm/contracts/base';
 import { revocationNoticeId } from '@abnehm/contracts/partner';
 import {
   buildSeedState,
-  canonicalRows,
   gekoppeltParts,
   SeedManifest,
   seedIds,
@@ -17,174 +14,38 @@ import {
   uncoupledState,
   type SeedKey,
   type SeedPart,
-  type SeedState,
   uncouplingRequestOf,
 } from '@abnehm/contracts/seeds';
-import { InstallationId } from '@abnehm/contracts/sync';
 
-import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
-import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
-import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
-import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { couplingMember as localMember } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
-import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
-import { readPartnerCache } from '../../mobile/src/partner-cache/index.ts';
-import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
-import {
-  createHttpSyncTransport,
-  createSyncEngine,
-  createSyncRegistry,
-  createSyncWriter,
-  foundationSyncEntities,
-  setPartnerSharing,
-} from '../../mobile/src/sync/index.ts';
-import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
-import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
-import { dumpServer, seedServer } from '../dev/seed/server-seed.ts';
+import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
-import { partnerSummary, revocationNotice } from '../src/db/schema/index.ts';
-import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
-import { signIn, type Device } from './support/auth-client.ts';
+import { revocationNotice } from '../src/db/schema/index.ts';
+import type { TestBackend } from './support/app.ts';
+import type { Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
 import { coupleByInvitation } from './support/coupled-world.ts';
 import { completeOp } from './support/daily-goals.ts';
-import { uncoupleAs } from './support/shared-actions.ts';
+import { canonical, runSteps, seeded, seedPhone as phone, stateOf } from './support/seed-world.ts';
 import { push, upsertOp } from './support/sync.ts';
 
 // Nachweis für #117: die Partner-Szenarien `gekoppelt` und `nach_entkopplung` (Spezifikation 0,
 // Abschnitt 12) auf Postgres und auf beiden Geräten, deren Engine und Adapter auf echtem SQLite
-// (better-sqlite3) gegen die echte Hono-App laufen. Jedes Szenario wird im Ausgangszustand exakt und
-// wiederholbar hergestellt; nach den benannten Schritten des Manifests stimmen Postgres und beide
-// SQLite-Datenbanken mit dem Sollzustand überein. Dazu führen die Tests Kopplungs-, Projektions- und
-// Entkopplungsübergänge aus und prüfen die widerrufbaren Daten auf beiden Geräten.
+// (better-sqlite3) gegen die echte Hono-App laufen. Ausgangszustand, Idempotenz und Sollzustand nach
+// den Schritten prüft für jedes Manifest `seed-manifeste-app.test.ts` (#113). Hier führen die Tests
+// Kopplungs-, Projektions- und Entkopplungsübergänge aus und prüfen die widerrufbaren Daten auf beiden
+// Geräten.
 
 const gekoppelt = seedManifests.gekoppelt;
 const nachEntkopplung = seedManifests.nach_entkopplung;
-
-const cleanups: (() => void)[] = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
-});
-
-/** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
-const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity,
-]);
-
-type Phone = Readonly<{
-  device: Device;
-  personId: string;
-  database: LocalDatabase;
-  sync(): Promise<void>;
-  partner(): ReturnType<typeof readPartnerCache>;
-  setSharing(area: AreaKey, level: PartnerSharingLevel): void;
-}>;
-
-/** Ein angemeldetes Gerät einer Installation, die lokale Datenbank im Ausgangszustand des Manifests. */
-async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey): Promise<Phone> {
-  const installation = manifest.installations.find((candidate) => candidate.key === key)!;
-  const account = manifest.accounts.find((candidate) => candidate.key === installation.account)!;
-  const { reply, device } = await signIn(backend, account.email, account.password);
-  if (reply.status !== 200) throw new Error(`Anmeldung fehlgeschlagen: ${reply.status}`);
-  const files = createBetterSqliteFiles();
-  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
-  cleanups.push(() => {
-    databases.lock();
-    files.remove();
-  });
-  const database = await databases.open(account.accountId);
-  seedLocalDatabase(database, manifest, key);
-  const clock = createTestClock(manifest.clock);
-  const transport = createHttpSyncTransport({
-    baseUrl: testBaseUrl,
-    fetch: async (input, init) => {
-      const headers = new Headers(init?.headers);
-      headers.set('authorization', `Bearer ${device.token ?? ''}`);
-      headers.set('x-forwarded-for', device.ip);
-      return backend.app.request(String(input), { ...init, headers });
-    },
-  });
-  const engine = createSyncEngine({ database, registry, transport, clock, installationId: InstallationId.parse(installation.installationId) });
-  const writer = createSyncWriter({ registry, clock, newId: () => EntityId.parse(randomUUID()) });
-  return {
-    device,
-    personId: account.personId,
-    database,
-    async sync() {
-      expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
-    },
-    partner: () => database.read((tx) => readPartnerCache(tx)),
-    setSharing: (area, level) => database.transaction((tx) => setPartnerSharing(tx, writer, { area, level }, Instant.parse(clock.read().instant))),
-  };
-}
-
-type World = Readonly<{ backend: TestBackend; manifest: SeedManifest; phones: Readonly<Record<SeedKey, Phone>> }>;
-
-/** Seedet Postgres und die Geräte aller Installationen; die Uhr des Backends steht auf der des Manifests. */
-async function seeded(manifest: SeedManifest): Promise<World> {
-  const backend = await createTestBackend({ clock: createTestClock(manifest.clock) });
-  await seedServer(backend.database, manifest);
-  const phones: Record<SeedKey, Phone> = {};
-  for (const { key } of manifest.installations) phones[key] = await phone(backend, manifest, key);
-  return { backend, manifest, phones };
-}
-
-/** Führt die benannten Schritte des Manifests aus; `entkoppeln` über die Test-Harness des Kerns (#107). */
-async function runSteps({ backend, manifest, phones }: World) {
-  for (const step of manifest.steps) {
-    switch (step.type) {
-      case 'sync':
-        await phones[step.installation]!.sync();
-        break;
-      case 'entkoppeln': {
-        const { at, ...request } = uncouplingRequestOf(step, manifest.accounts);
-        expect((await uncoupleAs(backend, { ...request, at: new Date(at) })).status).toBe('angenommen');
-        break;
-      }
-    }
-  }
-}
-
-/** Seedet Postgres und alle Geräte erneut, etwa nach Änderungen oder den Schritten. */
-async function reseed({ backend, manifest, phones }: World) {
-  await seedServer(backend.database, manifest);
-  for (const [key, { database }] of Object.entries(phones)) seedLocalDatabase(database, manifest, key);
-}
-
-/** Kanonischer Gesamtzustand: Postgres ohne Better-Auth-Tabellen und Sicherheitslog, je Installation SQLite. */
-async function stateOf({ backend, phones }: World): Promise<SeedState> {
-  return {
-    server: await dumpServer(backend.database.db),
-    devices: Object.fromEntries(Object.entries(phones).map(([key, { database }]) => [key, dumpLocalDatabase(database)])),
-  };
-}
-
-function canonical(state: SeedState): SeedState {
-  return { server: canonicalRows(state.server), devices: Object.fromEntries(Object.entries(state.devices).map(([key, device]) => [key, canonicalDevice(device)])) };
-}
 
 const probe = (backend: TestBackend, entity: 'meal_photo' | 'partner_photo_list', device: Device, id?: string) =>
   resourceProbe(backend, policies.resource(entity, 'lesen'))(device, id === undefined ? {} : { id }).then(httpOutcome);
 
 describe('Szenario gekoppelt', () => {
-  it('stellt Postgres und beide Geräte exakt her und ist im Ausgangszustand idempotent', async () => {
-    const world = await seeded(gekoppelt);
-    expect(await stateOf(world)).toEqual(canonical(gekoppelt.initial));
-
-    await world.backend.database.db.update(partnerSummary).set({ content: { progressPercent: 1 } });
-    await world.phones['anna-android']!.sync();
-    await reseed(world);
-
-    // Kanonisch gleich, nicht nur dieselbe Zeilenzahl.
-    expect(await stateOf(world)).toEqual(canonical(gekoppelt.initial));
-  });
-
-  it('erreicht nach den benannten Schritten (Sync beider Geräte) den Sollzustand; der Sync ändert nichts', async () => {
-    const world = await seeded(gekoppelt);
-    await runSteps(world);
-    expect(await stateOf(world)).toEqual(canonical(gekoppelt.target));
+  it('der Sync ändert nichts: Der Sollzustand ist der Ausgangszustand', () => {
+    expect(gekoppelt.steps.map(({ type }) => type)).toEqual(['sync', 'sync']);
     expect(gekoppelt.target).toEqual(gekoppelt.initial);
   });
 
@@ -290,28 +151,14 @@ describe('Szenario gekoppelt', () => {
 });
 
 describe('Szenario nach_entkopplung', () => {
-  it('startet im Zustand von gekoppelt, idempotent: Beide Geräte zeigen den Partner', async () => {
+  it('startet im Zustand von gekoppelt: Beide Geräte zeigen den Partner, bis der Entkopplungs-Kern läuft', async () => {
     expect(nachEntkopplung.initial).toEqual(gekoppelt.initial);
+    expect(nachEntkopplung.steps.map(({ type }) => type)).toEqual(['entkoppeln', 'sync', 'sync']);
     const world = await seeded(nachEntkopplung);
-    expect(await stateOf(world)).toEqual(canonical(nachEntkopplung.initial));
     for (const { partner } of Object.values(world.phones)) {
       expect(partner().dailyGoalStatus).not.toBeNull();
       expect(partner().summaries.length).toBeGreaterThan(0);
     }
-
-    // Nach den Schritten setzt erneutes Seeden exakt auf den Ausgangszustand zurück.
-    await runSteps(world);
-    await reseed(world);
-    expect(await stateOf(world)).toEqual(canonical(nachEntkopplung.initial));
-  });
-
-  it('erreicht nach Entkopplungs-Kern und Sync beider Geräte exakt den Sollzustand in Postgres und SQLite', async () => {
-    const world = await seeded(nachEntkopplung);
-    expect(nachEntkopplung.steps.map(({ type }) => type)).toEqual(['entkoppeln', 'sync', 'sync']);
-
-    await runSteps(world);
-
-    expect(await stateOf(world)).toEqual(canonical(nachEntkopplung.target));
   });
 
   it('widerruft tatsächlich: Kopplung und Insel archiviert, Notices an beide, Partnercaches leer, Namen bleiben', async () => {

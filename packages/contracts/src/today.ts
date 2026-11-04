@@ -59,8 +59,14 @@ export const MomoCharacterReady = z
   });
 export type MomoCharacterReady = z.infer<typeof MomoCharacterReady>;
 
-/** Leer-Gründe von `momo.character`; sie ersetzen den Momo-Bereich auf „Heute“. */
-export const MomoCharacterEmptyReason = z.enum(['momo_wartet_im_ei', 'rollenwahl_offen']);
+/**
+ * Leer-Gründe von `momo.character`; sie ersetzen den Momo-Bereich auf „Heute“. Vor dem Schlüpfen
+ * unterscheidet `rollenwahl_gesendet` die Person, deren Vorschlag offen ist, von allen anderen Fällen
+ * (`rollenwahl_offen`), damit dort neutral „Vorschlag gesendet“ steht (Spezifikation 4, Abschnitt 7;
+ * Nutzerentscheidung https://github.com/Yggras/abnehm-app/issues/180#issuecomment-6633701866, Nachtrag
+ * https://github.com/Yggras/abnehm-app/issues/71#issuecomment-6633704762).
+ */
+export const MomoCharacterEmptyReason = z.enum(['momo_wartet_im_ei', 'rollenwahl_offen', 'rollenwahl_gesendet']);
 export type MomoCharacterEmptyReason = z.infer<typeof MomoCharacterEmptyReason>;
 
 /** Ohne Kopplung lädt die Leer-Aktion den Partner ein, vor der Rollenwahl öffnet sie die Rollenwahl. */

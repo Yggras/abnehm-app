@@ -1,13 +1,15 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
 import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native';
-import { Dimensions } from 'react-native';
 import { renderRouter, testRouter } from 'expo-router/testing-library';
 import type * as ZodModule from 'zod';
 
 import { EntityId } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 
+import { withDeviceConfig } from '../design/testing/device-config';
 import { hitArea } from '../design/testing/hit-area';
+import { appGameService } from '../island/app-game-service';
+import { fakeGameService } from '../island/testing/fake-game-service';
 import { textScale } from '../design/tokens';
 import { hrefFor, openTarget, routeCatalog } from '../navigation';
 import type * as MessageTextsModule from './message-texts';
@@ -57,13 +59,18 @@ jest.mock('./message-texts', () => {
 
 let execute: jest.Mock;
 let undo: jest.Mock;
+let closeIsland: () => void = () => {};
 
+// Der Tab „Momo“ zeigt die geschlüpfte Insel; Laichkugel und Rollenwahl prüft `island/MomoTab.test.tsx`.
 beforeEach(() => {
+  closeIsland = appGameService.opened(fakeGameService({ type: 'geschluepft' }));
   jest.mocked(useMomoTabBadge).mockReturnValue(false);
   execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undoData: 'eintrag-1' }));
   undo = jest.fn();
   mockQuickCommands.handler = quickCommands.quickCommandHandler<'water.quick_add', string>({ execute, undo });
 });
+
+afterEach(() => closeIsland());
 
 const id = EntityId.parse('0b9f4a1e-6c1d-4f7b-9a51-2f3d8c7e1a10');
 
@@ -456,15 +463,7 @@ describe('Zugänglichkeit', () => {
 });
 
 describe('Schriftfaktor 2,0', () => {
-  const initial = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
-
-  beforeEach(() => {
-    Dimensions.set({ window: { ...initial.window, fontScale: 2 }, screen: { ...initial.screen, fontScale: 2 } });
-  });
-
-  afterEach(() => {
-    Dimensions.set(initial);
-  });
+  withDeviceConfig('schriftfaktor-2');
 
   test('Heute-Vorschau stapelt Momo und Mini-Tracker, deren getrennte Aktionen bedienbar bleiben', async () => {
     await renderRouter(appDir, { initialUrl: '/' });

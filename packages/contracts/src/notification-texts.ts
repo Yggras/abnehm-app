@@ -1,6 +1,7 @@
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { ContractError } from './errors.ts';
+import { RoleRequestPayload } from './notifications.ts';
 
 // Deutscher Textkatalog für Benachrichtigungen (Spezifikation 0, Abschnitt 2). App (Tages-Check-ins,
 // In-App-Anzeige) und Server-Zusteller nutzen denselben Katalog: Expo Push nimmt Titel und Text nur
@@ -56,5 +57,14 @@ export function defineNotificationTexts<const E extends Entries>(entries: E): No
   };
 }
 
-/** Der gemeinsame Katalog. Einträge kommen mit den Tickets der Spezifikationen 4 und 5 hinzu. */
-export const notificationTexts = defineNotificationTexts({});
+/**
+ * Der gemeinsame Katalog; Schlüssel ist der `messageKey` des Intents, Werte sind seine Payload. Texte
+ * sind Designwerte aus Spezifikation 4, Abschnitt 12 (nicht belegt). Weitere Einträge kommen mit den
+ * Tickets der Spezifikationen 4 und 5 hinzu.
+ */
+export const notificationTexts = defineNotificationTexts({
+  'rollen_anfrage.rollenwahl': notificationText(
+    RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),
+    ({ senderDisplayName }) => ({ title: `${senderDisplayName} schlägt eure Rollen vor`, body: 'Wenn du zustimmst, schlüpft Momo 🐣' }),
+  ),
+});

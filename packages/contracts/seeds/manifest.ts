@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, SyncCursor, TimeZone } from '../src/base.ts';
+import { DailyGoalCause } from '../src/daily-goals.ts';
 import { InstallationId, OutboxOperation } from '../src/sync.ts';
 
 // Format der Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Ein Manifest beschreibt ein
@@ -19,8 +20,10 @@ export const seedFormatVersion = 1;
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
  * Wasser-Mini-Trackers (#171), `solo-sport-*` die Status „Wochenziel erreicht“ und „über dem
  * Wochenziel“ des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
- * (#175). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). Die übrigen aus
- * Abschnitt 12 folgen in #113 und #116.
+ * (#175). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). `leer` bis
+ * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113). `solo-energie` (Laichkugel
+ * solo mit gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
+ * Zwei Installationen und Offline/Sync folgen in #116.
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -33,6 +36,15 @@ export const SeedScenarioKey = z.enum([
   'gekoppelt',
   'nach_entkopplung',
   'frisches_konto',
+  'leer',
+  'teilweise',
+  'erfuellt',
+  'nach_erfuellung_korrigiert',
+  'tagesende_offen',
+  'tagesende_abgeschlossen',
+  'veralteter_partnerstand',
+  'solo-energie',
+  'rollenwahl-offen',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 
@@ -100,10 +112,27 @@ export const SeedState = z.strictObject({
 });
 export type SeedState = z.infer<typeof SeedState>;
 
-/** Benannte Operation zwischen Ausgangs- und Sollzustand; weitere Arten ergänzen #113 und #116. */
+/** Benannte Operation zwischen Ausgangs- und Sollzustand; weitere Arten ergänzt #116. */
 export const SeedStep = z.discriminatedUnion('type', [
-  /** Push und Pull einer Installation. */
+  /**
+   * Push und Pull einer Installation. Übernimmt der Pull tagesbezogene Entitäten, wertet der
+   * Persistenzdienst der Tagesziele (#105) deren Tage in derselben Transaktion neu aus.
+   */
   z.strictObject({ type: z.literal('sync'), installation: SeedKey }),
+  /**
+   * Der Persistenzdienst der Tagesziele (#105) einer Installation wertet Tage ihrer Person zur Uhr des
+   * Manifests aus, etwa bei App-Öffnung (`app_oeffnung`) oder Tagesabschluss (`tagesabschluss`). Er legt
+   * Erfüllungen, Gutschriften und Tagesbonus an und schreibt ihre Fachbefehle in die Outbox; deren
+   * Operations-IDs vergibt der Sync-Writer der Reihe nach aus `operationIds`. `pull` entsteht nur im
+   * Schritt `sync`.
+   */
+  z.strictObject({
+    type: z.literal('tagesziele_auswerten'),
+    installation: SeedKey,
+    localDates: z.array(LocalDate).min(1),
+    cause: DailyGoalCause.exclude(['pull']),
+    operationIds: z.array(EntityId),
+  }),
   /**
    * Ein Mitglied entkoppelt über den Entkopplungs-Kern (#107) in eigener Transaktion, wie es der Befehl
    * `requestUncoupling` (Spezifikation 5) tun wird. Der Server nimmt die Entkopplung sofort an.
@@ -197,9 +226,11 @@ export const SeedManifest = z
       if (emailPattern.test(JSON.stringify(state))) problem(`${name}: E-Mail-Adresse außerhalb der Konten`);
     }
     for (const step of manifest.steps) {
-      if (step.type === 'sync' && !installationKeys.has(step.installation)) problem(`Schritt ${step.type}: unbekannte Installation ${step.installation}`);
+      if (step.type !== 'entkoppeln' && !installationKeys.has(step.installation)) problem(`Schritt ${step.type}: unbekannte Installation ${step.installation}`);
       if (step.type === 'entkoppeln' && !accountKeys.has(step.account)) problem(`Schritt ${step.type}: unbekanntes Konto ${step.account}`);
     }
+    const operationIds = manifest.steps.flatMap((step) => (step.type === 'tagesziele_auswerten' ? step.operationIds : []));
+    for (const value of duplicates(operationIds)) problem(`Operations-ID doppelt: ${value}`);
 
     const { mealPhotos, decoGift } = manifest.extensions ?? {};
     const personOf = new Map(manifest.accounts.map((account) => [account.key, account.personId]));

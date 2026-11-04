@@ -8,6 +8,13 @@ import type { RouteTarget } from './routes.ts';
 // Transaktion des auslösenden Ereignisses, Spezifikation 5 stellt sie höchstens einmal zu.
 // Die Payloads sind strikt: Gesundheitswerte haben darin keinen Platz.
 
+/** Nutzlast von `rollen_anfrage`; der Textkatalog unterscheidet Rollenwahl und Rollentausch über `kind`. */
+export const RoleRequestPayload = z.strictObject({
+  actionId: EntityId,
+  kind: z.enum(['rollenwahl', 'rollentausch']),
+  senderDisplayName: DisplayName,
+});
+
 const payloads = {
   anfeuern: z.strictObject({ senderDisplayName: DisplayName, encouragementKey: EncouragementKey }),
   levelaufstieg: z.strictObject({ level: z.int().min(2) }),
@@ -20,11 +27,7 @@ const payloads = {
     senderDisplayName: DisplayName,
   }),
   challenge_erfolg: z.strictObject({ challengeId: EntityId, templateKey: CatalogKey }),
-  rollen_anfrage: z.strictObject({
-    actionId: EntityId,
-    kind: z.enum(['rollenwahl', 'rollentausch']),
-    senderDisplayName: DisplayName,
-  }),
+  rollen_anfrage: RoleRequestPayload,
   deko_geschenk: z.strictObject({ actionId: EntityId, decoKey: CatalogKey, senderDisplayName: DisplayName }),
   /** Reine Information, keine Anfrage. */
   entkopplung: z.strictObject({ actionId: EntityId, senderDisplayName: DisplayName }),

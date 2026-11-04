@@ -138,7 +138,11 @@ export const todayFixtures = {
     },
   }),
   MomoCharacterEmptyReason: fixtures(MomoCharacterEmptyReason, {
-    valid: { 'ohne Kopplung': 'momo_wartet_im_ei', 'vor der Rollenwahl': 'rollenwahl_offen' },
+    valid: {
+      'ohne Kopplung': 'momo_wartet_im_ei',
+      'vor der Rollenwahl': 'rollenwahl_offen',
+      'eigener Vorschlag gesendet': 'rollenwahl_gesendet',
+    },
     invalid: { 'beliebiger Grund': 'kein_level' },
   }),
   MomoCharacterState: fixtures(MomoCharacterState, {
@@ -154,6 +158,11 @@ export const todayFixtures = {
         reasonKey: 'rollenwahl_offen',
         action: action('momo.open_role_choice', { type: 'momo', view: 'rollenwahl' }),
       },
+      'eigener Vorschlag gesendet': {
+        type: 'empty',
+        reasonKey: 'rollenwahl_gesendet',
+        action: action('momo.open_role_choice', { type: 'momo', view: 'rollenwahl' }),
+      },
     },
     invalid: {
       'unbekannter Leer-Grund': { type: 'empty', reasonKey: 'keine_insel' },
@@ -163,6 +172,7 @@ export const todayFixtures = {
         reasonKey: 'rollenwahl_offen',
         action: action('momo.open', { type: 'momo', view: 'insel' }),
       },
+      'Vorschlag gesendet ohne Aktion': { type: 'empty', reasonKey: 'rollenwahl_gesendet' },
     },
   }),
   MomoDailyGoalsReady: fixtures(MomoDailyGoalsReady, {

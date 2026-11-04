@@ -81,6 +81,20 @@ test('ohne Kopplung ersetzt die Laichkugel den Momo-Bereich', async () => {
   expect(screen.getByRole('image', { name: 'Momo wartet im Ei' })).toBeOnTheScreen();
 });
 
+test.each([
+  ['wartet im Ei', 'Momo wartet im Ei'],
+  ['Rollenwahl offen', 'Momo schlüpft, sobald ihr die Rollen verteilt habt'],
+  ['eigener Vorschlag gesendet', 'Vorschlag gesendet. Momo schlüpft, sobald ihr die Rollen verteilt habt'],
+])('Leer-Grund von momo.character aus den Fixtures: %s', async (fixture, text) => {
+  const registry = createTodayRegistry();
+  const state = contractFixtures.today!.MomoCharacterState!.valid[fixture] as TodayState<'momo.character'>;
+  registry.register('momo', 'momo.character', { subscribe(listener) { listener(state); return () => {}; } });
+  await render(<ClockProvider clock={clock}><MessageHostProvider><TodayContent registry={registry} /></MessageHostProvider></ClockProvider>);
+  expect(screen.getByText(text)).toBeOnTheScreen();
+  expect(screen.getByRole('image', { name: 'Momo wartet im Ei' })).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Jetzt öffnen' })).toBeOnTheScreen();
+});
+
 test('ein leerer Unterbeitrag bleibt sichtbar, auch wenn sein Kartenpartner fehlt', async () => {
   const registry = createTodayRegistry();
   registry.register('ernaehrung', 'nutrition.log', {

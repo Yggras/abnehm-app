@@ -1,7 +1,17 @@
 import { buildSeedState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
-import { seedBlsEntry, seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
+import {
+  seedBlsEntry,
+  seedCreated as created,
+  seedDailyGoals,
+  seedDay as day,
+  seedManualOrigin,
+  seedSportEntry,
+  seedWaterEntry,
+  seedWeeklyPlan,
+  type SeedWeeklyPlan,
+} from './rows.ts';
 import type { BausteinKey } from '../src/base.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
@@ -15,7 +25,7 @@ import type { BausteinKey } from '../src/base.ts';
 const philipp = seedIds.person.philipp;
 
 /** Fundament: die fertige Person ohne Kopplung. */
-const fundament: SeedPart = {
+export const soloFundament: SeedPart = {
   area: 'fundament',
   entities: [
     {
@@ -47,7 +57,19 @@ const fundament: SeedPart = {
 };
 
 /** Wochenplan mit dem Tag von heute (Mittwoch), aus dem die drei Tagesziele von heute entstehen. */
-type SoloWeeklyPlan = SeedWeeklyPlan & Readonly<{ mittwoch: readonly [BausteinKey, BausteinKey, BausteinKey] }>;
+export type SoloWeeklyPlan = SeedWeeklyPlan & Readonly<{ mittwoch: readonly [BausteinKey, BausteinKey, BausteinKey] }>;
+
+/**
+ * Schwellen der Tagesziele aus Philipps Zielversion. Das Kalorienbudget steht in ganzen kcal, abgeschnitten
+ * aus den Milli-kcal der Zielversion; diese Rundung wählt der Seed, festgelegt wird sie mit der
+ * Materialisierung der Tagesziele (#131).
+ */
+export const philippThresholds = {
+  ernaehrung_erfasst: { minimumMealCategories: 3 },
+  im_kalorienbudget: { budgetKcal: 2_417, lowerBoundKcal: 1_882 },
+  wasserziel: { targetMl: 2_500 },
+  sporteinheit: { minimumSingleSessionMinutes: 20 },
+} as const;
 
 /**
  * Wochenplan von `solo`: Wiegetage sind Montag, Mittwoch, Donnerstag und Sonntag. Heute (Mittwoch) ist
@@ -80,7 +102,7 @@ const weeklyPlanOhneWiegetag = {
 } as const satisfies SoloWeeklyPlan;
 
 /** Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). */
-const zieleOf = (plan: SoloWeeklyPlan): SeedPart => ({
+export const soloZieleOf = (plan: SoloWeeklyPlan): SeedPart => ({
   area: 'ziele',
   entities: [
     {
@@ -126,17 +148,13 @@ const zieleOf = (plan: SoloWeeklyPlan): SeedPart => ({
       createdAt: '2026-10-14T05:00:00.000Z',
       bausteine: plan.mittwoch,
       // Gewogen hat keine Schwelle.
-      thresholds: {
-        ernaehrung_erfasst: { minimumMealCategories: 3 },
-        wasserziel: { targetMl: 2_500 },
-        sporteinheit: { minimumSingleSessionMinutes: 20 },
-      },
+      thresholds: philippThresholds,
     }),
   ],
 });
 
 /** Wasser heute, ohne Importe (Spezifikation 3, Abschnitt 9): Menge und Zeitpunkt je Eintrag. */
-type WaterToday = readonly (readonly [amountMl: number, loggedAt: string])[];
+export type WaterToday = readonly (readonly [amountMl: number, loggedAt: string])[];
 
 /**
  * Wasser heute in `solo` und seinen Varianten; das Wasserziel ist 2500 ml. `solo` steht im Status
@@ -204,36 +222,13 @@ const soloVariants = {
 type SoloScenario = keyof typeof soloVariants;
 
 /** Tracker (Spezifikation 3): Wasser heute und Sportwoche je Szenario, zwei Wiegungen bis gestern. */
-const trackerOf = (water: WaterToday, sport: readonly SportUnit[]): SeedPart => ({
+export const soloTrackerOf = (water: WaterToday, sport: readonly SportUnit[] = sportWeek.solo): SeedPart => ({
   area: 'tracker',
   entities: [
-    ...water.map(([amount, at], index) => ({
-      table: 'water_entry',
-      // Seit #171 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
-      entityType: 'water_entry',
-      ownerPersonId: philipp,
-      row: { id: seedIds.waterEntry.philippHeute[index] as string, person_id: philipp, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
-    })),
-    ...sport.map((unit) => ({
-      table: 'sport_entry',
-      // Seit #173 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
-      entityType: 'sport_entry',
-      ownerPersonId: philipp,
-      row: {
-        id: unit.id,
-        person_id: philipp,
-        activity_type: unit.activity,
-        override_activity_type: null,
-        started_at: unit.startedAt,
-        duration_minutes: unit.minutes,
-        active_milli_kcal: null,
-        ...seedManualOrigin,
-        replaced_by_entry_id: null,
-        reactivated_at: null,
-        ...day(unit.localDate),
-        ...created(unit.createdAt),
-      },
-    })),
+    ...water.map(([amountMl, loggedAt], index) =>
+      seedWaterEntry({ id: seedIds.waterEntry.philippHeute[index] as string, personId: philipp, amountMl, loggedAt, localDate: seedDays.heute })),
+    ...sport.map(({ id, activity, startedAt, minutes, localDate, createdAt }) =>
+      seedSportEntry({ id, personId: philipp, activity, startedAt, minutes, createdAt, localDate })),
     // Heute (Mittwoch, Wiegetag) hat Philipp noch nicht gewogen (#175).
     ...[
       { id: seedIds.weightEntry.philippVorgestern, weight: 92_400, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
@@ -261,7 +256,7 @@ const trackerOf = (water: WaterToday, sport: readonly SportUnit[]): SeedPart => 
  * Fotofreigabe (#155). Mittagessen, Abendessen und Snacks bleiben leer, damit das Protokoll seine
  * Leerzustände zeigt. Mit nur einer Mahlzeit bleibt „Ernährung erfasst“ (mindestens 3) offen.
  */
-const ernaehrung: SeedPart = {
+export const soloErnaehrung: SeedPart = {
   area: 'ernaehrung',
   entities: [
     seedBlsEntry({
@@ -278,7 +273,7 @@ const ernaehrung: SeedPart = {
 };
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = ({ water, sport, plan }: SoloVariant): readonly SeedPart[] => [fundament, zieleOf(plan), trackerOf(water, sport), ernaehrung];
+const soloPartsWith = ({ water, sport, plan }: SoloVariant): readonly SeedPart[] => [soloFundament, soloZieleOf(plan), soloTrackerOf(water, sport), soloErnaehrung];
 
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(soloVariants.solo);

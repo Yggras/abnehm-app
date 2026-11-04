@@ -12,10 +12,14 @@ import { createSharedActions } from './coupling/shared-actions.ts';
 import { createUncoupling } from './coupling/uncoupling.ts';
 import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
 import { energyBookingEntity } from './energy/bookings.ts';
+import { roleChoiceKind } from './island/role-choice.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
 import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
+import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
+import { createPhotoDrafts } from './nutrition/photo-drafts.ts';
+import { createPhotoStorage } from './nutrition/photo-storage.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
 import { createPartnerProjections } from './partner-projections/projections.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
@@ -40,10 +44,19 @@ export function createBackend({
   invitationSettings,
   clock = createSystemClock({ timeZone: () => 'UTC' }),
   syncPullPageSize,
+  photoStorageDirectory,
+  mealVisionAnalyzer,
 }: {
   database: Database;
   authSettings: AuthSettings;
   invitationSettings: InvitationSettings;
+  /** Verzeichnis der Fotoentwürfe (`PHOTO_STORAGE_DIR`). */
+  photoStorageDirectory: string;
+  /**
+   * KI-Bildanalyse: produktiv der Claude-Adapter (`productionMealVisionAnalyzer`), in Tests und im
+   * Development-Backend der Fake der Testfähigkeit `fake-fotoanalyse`.
+   */
+  mealVisionAnalyzer: MealVisionAnalyzer;
   /** Der Server rechnet in UTC; lokale Tage einer Person liest er mit `clock.read(person.timeZone)`. */
   clock?: Clock;
   /** Einträge je Pull-Seite; Tests wählen wenige, um mehrere Seiten zu erzwingen. */
@@ -62,6 +75,8 @@ export function createBackend({
   // Gemeinsame Aktionen: Spezifikation 4 meldet ihre Arten an `sharedActions` an.
   const sharedActions = createSharedActions();
   for (const command of sharedActions.commands) sync.registerCommand(command);
+  // Momo, Insel & Challenges (Spezifikation 4): Rollenwahl (#180).
+  sharedActions.registerKind(roleChoiceKind);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.
@@ -74,6 +89,7 @@ export function createBackend({
   for (const command of dailyGoalCommands) sync.registerCommand(command);
   // Ernährung (Spezifikation 2).
   sync.registerEntity(nutritionEntryEntity({ clock }));
+  const photoDrafts = createPhotoDrafts({ database, clock, analyzer: mealVisionAnalyzer, storage: createPhotoStorage({ directory: photoStorageDirectory }) });
   // Wasser, Sport und Gewicht (Spezifikation 3).
   sync.registerEntity(waterEntryEntity);
   sync.registerEntity(weightEntryEntity);
@@ -94,8 +110,9 @@ export function createBackend({
   const logout = createLogout({ database, clock, auth, securityLog });
   const jobs = createJobRegistry({ clock });
   jobs.register(securityLog.cleanupJob);
+  jobs.register(photoDrafts.cleanupJob);
   return {
-    app: createApp({ database, clock, auth, authorization, sync, invitations, logout }),
+    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts }),
     clock,
     securityLog,
     auth,

@@ -1,12 +1,21 @@
-import { AreaKey, EntityId, LocalDate, type BausteinKey } from '../src/base.ts';
+import { AreaKey, LocalDate, type BausteinKey } from '../src/base.ts';
 import type { PartnerSharingLevel } from '../src/coupling.ts';
-import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
-import { energyBookingId } from '../src/energy.ts';
+import type { DailyGoalSlot } from '../src/daily-goals.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
 import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow } from './manifest.ts';
-import { seedCreated as created, seedDailyGoals, seedDay as day, seedManualOrigin, seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
+import {
+  seedCompletion,
+  seedCreated as created,
+  seedDailyGoals,
+  seedDay as day,
+  seedManualOrigin,
+  seedSportEntry,
+  seedWaterEntry,
+  seedWeeklyPlan,
+  type SeedWeeklyPlan,
+} from './rows.ts';
 import { soloParts } from './solo.ts';
 
 // Szenario `gekoppelt` (Spezifikation 0, Abschnitt 12; #117): Philipp (iPhone, Rolle Bauen) und Anna
@@ -136,36 +145,12 @@ const tracker: SeedPart = {
     ...[
       { id: seedIds.sportEntry.philippHeute, person: philipp, activity: 'krafttraining', at: '2026-10-14T05:00:00.000Z', minutes: 30 },
       { id: seedIds.sportEntry.annaHeute, person: anna, activity: 'laufen', at: '2026-10-14T05:30:00.000Z', minutes: 45 },
-    ].map(({ id, person, activity, at, minutes }) => ({
-      table: 'sport_entry',
-      // Seit #173 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
-      entityType: 'sport_entry',
-      ownerPersonId: person,
-      row: {
-        id,
-        person_id: person,
-        activity_type: activity,
-        override_activity_type: null,
-        started_at: at,
-        duration_minutes: minutes,
-        active_milli_kcal: null,
-        ...seedManualOrigin,
-        replaced_by_entry_id: null,
-        reactivated_at: null,
-        ...day(seedDays.heute),
-        ...created(at),
-      },
-    })),
+    ].map(({ id, person, activity, at, minutes }) =>
+      seedSportEntry({ id, personId: person, activity, startedAt: at, minutes, createdAt: at, localDate: seedDays.heute })),
     ...[
       { id: seedIds.waterEntry.annaHeute[0], amount: 1_200, at: '2026-10-14T07:00:00.000Z' },
       { id: seedIds.waterEntry.annaHeute[1], amount: 800, at: '2026-10-14T11:30:00.000Z' },
-    ].map(({ id, amount, at }) => ({
-      table: 'water_entry',
-      // Seit #171 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
-      entityType: 'water_entry',
-      ownerPersonId: anna,
-      row: { id, person_id: anna, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
-    })),
+    ].map(({ id, amount, at }) => seedWaterEntry({ id, personId: anna, amountMl: amount, loggedAt: at, localDate: seedDays.heute })),
     {
       table: 'weight_entry',
       // Seit #175 beim Sync angemeldet: Der Eintrag steht im Änderungsprotokoll.
@@ -273,38 +258,9 @@ const ernaehrung: SeedPart = {
   ],
 };
 
-/** Tageszielerfüllung samt `+1`-Gutschrift, wie sie der Fachbefehl `completeDailyGoal` anlegt (#105). */
-function completion(person: string, dailyGoalId: string, slot: DailyGoalSlot, baustein: BausteinKey, at: string): SeedEntity[] {
-  const key = dailyGoalKey(EntityId.parse(person), heute, slot);
-  const id = dailyGoalCompletionId(key);
-  return [
-    {
-      table: 'daily_goal_completion',
-      entityType: 'daily_goal_completion',
-      ownerPersonId: person,
-      row: { id, daily_goal_id: dailyGoalId, person_id: person, local_date: heute, slot, baustein, first_completed_at: at, completion_key: key, created_at: at },
-    },
-    {
-      table: 'energy_booking',
-      entityType: 'energy_booking',
-      ownerPersonId: person,
-      row: {
-        id: energyBookingId(key),
-        person_id: person,
-        type: 'daily_goal_credit',
-        amount: 1,
-        local_date: heute,
-        booking_key: key,
-        trigger: { dailyGoalCompletionId: id, slot },
-        daily_goal_completion_id: id,
-        island_object_id: null,
-        community_project_id: null,
-        original_booking_id: null,
-        created_at: at,
-      },
-    },
-  ];
-}
+/** Tageszielerfüllung von heute samt `+1`-Gutschrift (#105). */
+const completion = (person: string, dailyGoalId: string, slot: DailyGoalSlot, baustein: BausteinKey, at: string): SeedEntity[] =>
+  seedCompletion({ personId: person, dailyGoalId, localDate: heute, slot, baustein, at });
 
 /** Fundament (#105): Philipps Sporteinheit (Platz 3), Annas Sporteinheit (Platz 2) und Wasserziel (Platz 1). */
 const energie: SeedPart = {
@@ -329,91 +285,95 @@ const sharingLevels: Readonly<Record<Partner, Readonly<Record<AreaKey, PartnerSh
 /**
  * Fundament (#103, #106): Kopplung samt Mitgliedern und geschlüpfter Insel, Partnerfreigaben und
  * Fotofreigaben. Die Annahme setzte alle Bereiche auf `zusammengefasst` und die Fotos auf `geteilt`.
+ * Vor dem Schlüpfen (`hatched: false`, #180) haben die Mitglieder keine Rolle, und die Insel wartet.
  */
-const kopplung: SeedPart = {
-  area: 'fundament',
-  entities: [
-    {
-      table: 'coupling',
-      entityType: 'coupling',
-      couplingId,
-      row: {
-        id: couplingId,
-        person_low_id: philipp < anna ? philipp : anna,
-        person_high_id: philipp < anna ? anna : philipp,
-        status: 'aktiv',
-        started_at: coupledAt,
-        ended_at: null,
-        reactivated_at: null,
-        ...created(coupledAt),
+const kopplungPart = ({ hatched }: Readonly<{ hatched: boolean }>): SeedPart => {
+  // Was sich mit dem Schlüpfen ändert, an einer Stelle.
+  const islandState = hatched
+    ? { state: 'aktiv', hatched_at: hatchedAt, time_zone: seedClock.timeZone, updated_at: hatchedAt }
+    : { state: 'wartet_auf_rollen', hatched_at: null, time_zone: null, updated_at: coupledAt };
+  return {
+    area: 'fundament',
+    entities: [
+      {
+        table: 'coupling',
+        entityType: 'coupling',
+        couplingId,
+        row: {
+          id: couplingId,
+          person_low_id: philipp < anna ? philipp : anna,
+          person_high_id: philipp < anna ? anna : philipp,
+          status: 'aktiv',
+          started_at: coupledAt,
+          ended_at: null,
+          reactivated_at: null,
+          ...created(coupledAt),
+        },
       },
-    },
-    ...[
-      { id: seedIds.couplingMember.philipp, person: philipp, role: 'bauen', name: 'Philipp' },
-      { id: seedIds.couplingMember.anna, person: anna, role: 'natur', name: 'Anna' },
-    ].map(({ id, person, role, name }) => ({
-      table: 'coupling_member',
-      entityType: 'coupling_member',
-      couplingId,
-      row: {
-        id,
-        coupling_id: couplingId,
-        coupling_status: 'aktiv',
-        person_id: person,
-        role,
-        display_name: name,
-        created_at: coupledAt,
-        updated_at: hatchedAt,
-        deleted_at: null,
+      ...[
+        { id: seedIds.couplingMember.philipp, person: philipp, role: 'bauen', name: 'Philipp' },
+        { id: seedIds.couplingMember.anna, person: anna, role: 'natur', name: 'Anna' },
+      ].map(({ id, person, role, name }) => ({
+        table: 'coupling_member',
+        entityType: 'coupling_member',
+        couplingId,
+        row: {
+          id,
+          coupling_id: couplingId,
+          coupling_status: 'aktiv',
+          person_id: person,
+          role: hatched ? role : null,
+          display_name: name,
+          created_at: coupledAt,
+          updated_at: islandState.updated_at,
+          deleted_at: null,
+        },
+      })),
+      {
+        table: 'island',
+        entityType: 'island',
+        couplingId,
+        row: {
+          id: seedIds.island.philippAnna,
+          coupling_id: couplingId,
+          ...islandState,
+          created_at: coupledAt,
+          deleted_at: null,
+        },
       },
-    })),
-    {
-      table: 'island',
-      entityType: 'island',
-      couplingId,
-      row: {
-        id: seedIds.island.philippAnna,
-        coupling_id: couplingId,
-        state: 'aktiv',
-        hatched_at: hatchedAt,
-        time_zone: seedClock.timeZone,
-        created_at: coupledAt,
-        updated_at: hatchedAt,
-        deleted_at: null,
-      },
-    },
-    ...(['philipp', 'anna'] as const).flatMap((owner) =>
-      AreaKey.options.map((area) => {
-        const level = sharingLevels[owner][area];
-        const changedAt = level === 'privat' ? annaPrivateAt : coupledAt;
-        return {
-          table: 'partner_sharing',
-          entityType: 'partner_sharing',
-          ownerPersonId: seedIds.person[owner],
-          row: {
-            id: seedIds.partnerSharing[owner][area],
-            owner_person_id: seedIds.person[owner],
-            coupling_id: couplingId,
-            area,
-            level,
-            created_at: coupledAt,
-            updated_at: changedAt,
-            deleted_at: null,
-          },
-        };
-      }),
-    ),
-    ...(['philipp', 'anna'] as const).map((owner) => ({
-      table: 'photo_sharing',
-      entityType: 'photo_sharing',
-      ownerPersonId: seedIds.person[owner],
-      row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
-    })),
-  ],
+      ...(['philipp', 'anna'] as const).flatMap((owner) =>
+        AreaKey.options.map((area) => {
+          const level = sharingLevels[owner][area];
+          const changedAt = level === 'privat' ? annaPrivateAt : coupledAt;
+          return {
+            table: 'partner_sharing',
+            entityType: 'partner_sharing',
+            ownerPersonId: seedIds.person[owner],
+            row: {
+              id: seedIds.partnerSharing[owner][area],
+              owner_person_id: seedIds.person[owner],
+              coupling_id: couplingId,
+              area,
+              level,
+              created_at: coupledAt,
+              updated_at: changedAt,
+              deleted_at: null,
+            },
+          };
+        }),
+      ),
+      ...(['philipp', 'anna'] as const).map((owner) => ({
+        table: 'photo_sharing',
+        entityType: 'photo_sharing',
+        ownerPersonId: seedIds.person[owner],
+        row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
+      })),
+    ],
+  };
 };
 
-/** Zusammenfassung eines Bereichs für den Partner, im Zeitraum von heute (#106). */
-function summary(owner: Partner, area: AreaKey, id: string, content: Readonly<Record<string, number | string | null>>): SeedEntity {
+/** Zusammenfassung eines Bereichs für den Partner, im Zeitraum von heute (#106), berechnet zu `dataAsOf`. */
+function summary(owner: Partner, area: AreaKey, id: string, content: Readonly<Record<string, number | string | null>>, dataAsOf: string = projectedAt): SeedEntity {
   const recipient = seedIds.person[partnerOf(owner)];
   const { from, to } = partnerSummaryBounds(partnerSummaryPeriod(area, heute));
   return {
@@ -430,15 +390,15 @@ function summary(owner: Partner, area: AreaKey, id: string, content: Readonly<Re
       period_to: to,
       generation: 1,
       content,
-      data_as_of: projectedAt,
+      data_as_of: dataAsOf,
       // Wie im Partnercache des Geräts: angelegt und geändert zum Datenstand.
-      ...created(projectedAt),
+      ...created(dataAsOf),
     },
   };
 }
 
-/** Grober Tageszielstand von heute für den Partner, aus den Tageszielerfüllungen des Eigentümers. */
-function dailyGoalStatus(owner: Partner, stage: PartnerDailyGoalStage): SeedEntity {
+/** Grober Tageszielstand von heute für den Partner, aus den Tageszielerfüllungen des Eigentümers zu `dataAsOf`. */
+export function partnerDailyGoalStatusEntity(owner: Partner, stage: PartnerDailyGoalStage, dataAsOf: string = projectedAt): SeedEntity {
   const recipient = seedIds.person[partnerOf(owner)];
   return {
     table: 'partner_daily_goal_status',
@@ -452,36 +412,58 @@ function dailyGoalStatus(owner: Partner, stage: PartnerDailyGoalStage): SeedEnti
       local_date: heute,
       generation: 1,
       stage,
-      data_as_of: projectedAt,
-      ...created(projectedAt),
+      data_as_of: dataAsOf,
+      ...created(dataAsOf),
     },
   };
 }
 
+/** Was Philipp von Anna sieht: Datenstand, Wasserfortschritt und grober Tageszielstand zu diesem Stand. */
+export type AnnasProjections = Readonly<{ dataAsOf: string; waterPercent: number; stage: PartnerDailyGoalStage }>;
+
+/** Annas Projektionen zur festen Uhr: 2000 von 2000 ml, zwei erfüllte Tagesziele. */
+const annasProjectionsNow: AnnasProjections = { dataAsOf: projectedAt, waterPercent: 100, stage: 'fast_geschafft' };
+
 /**
- * Fundament (#106): Projektionen, wie sie der Vor-Pull-Schritt zur festen Uhr berechnet hat. Philipp:
- * zwei Mahlzeitentypen (Frühstück aus `solo`, Mittagessen aus dem Foto), 1250 von 2500 ml, 30 + 35
- * von 150 Sportminuten der Woche, zwei Tagesgewichte (zu wenige für einen Trend), ein erfülltes
- * Tagesziel. Anna: 2000 von 2000 ml, 45 von 120 Minuten, ein Tagesgewicht, zwei erfüllte Tagesziele;
- * Ernährung ist privat.
+ * Fundament (#106): Projektionen, wie sie der Vor-Pull-Schritt berechnet hat, Philipps zur festen Uhr.
+ * Philipp: zwei Mahlzeitentypen (Frühstück aus `solo`, Mittagessen aus dem Foto), 1250 von 2500 ml,
+ * 30 + 35 von 150 Sportminuten der Woche, zwei Tagesgewichte (zu wenige für einen Trend), ein erfülltes
+ * Tagesziel. Anna: Wasser und Tageszielstand nach `annas`, 45 von 120 Minuten, ein Tagesgewicht;
+ * Ernährung ist privat. Annas Tageszielstand ist die letzte Entität, damit ein späterer Vor-Pull-Schritt
+ * ihn als nächste Serverversion schreiben kann (`veralteter_partnerstand`, #113).
  */
-const projektionen: SeedPart = {
+const projektionenOf = (annas: AnnasProjections): SeedPart => ({
   area: 'fundament',
   entities: [
     summary('philipp', 'ernaehrung', seedIds.partnerSummary.philipp.ernaehrung, { recordedMealCategories: 2 }),
     summary('philipp', 'wasser', seedIds.partnerSummary.philipp.wasser, { progressPercent: 50 }),
     summary('philipp', 'sport', seedIds.partnerSummary.philipp.sport, { countedMinutes: 65, weeklyTargetMinutes: 150 }),
     summary('philipp', 'gewicht', seedIds.partnerSummary.philipp.gewicht, { changeKg: null, direction: 'noch_nicht_verfuegbar' }),
-    summary('anna', 'wasser', seedIds.partnerSummary.anna.wasser, { progressPercent: 100 }),
-    summary('anna', 'sport', seedIds.partnerSummary.anna.sport, { countedMinutes: 45, weeklyTargetMinutes: 120 }),
-    summary('anna', 'gewicht', seedIds.partnerSummary.anna.gewicht, { changeKg: null, direction: 'noch_nicht_verfuegbar' }),
-    dailyGoalStatus('philipp', 'unterwegs'),
-    dailyGoalStatus('anna', 'fast_geschafft'),
+    summary('anna', 'wasser', seedIds.partnerSummary.anna.wasser, { progressPercent: annas.waterPercent }, annas.dataAsOf),
+    summary('anna', 'sport', seedIds.partnerSummary.anna.sport, { countedMinutes: 45, weeklyTargetMinutes: 120 }, annas.dataAsOf),
+    summary('anna', 'gewicht', seedIds.partnerSummary.anna.gewicht, { changeKg: null, direction: 'noch_nicht_verfuegbar' }, annas.dataAsOf),
+    partnerDailyGoalStatusEntity('philipp', 'unterwegs'),
+    partnerDailyGoalStatusEntity('anna', annas.stage, annas.dataAsOf),
   ],
-};
+});
 
-/** Beiträge des Szenarios in Reihenfolge; Philipps Daten sind die aus `solo`. */
-export const gekoppeltParts: readonly SeedPart[] = [...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplung, projektionen];
+/**
+ * Beiträge beider Partner in Reihenfolge; Philipps Daten sind die aus `solo`. Vor dem Schlüpfen
+ * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine. `annas` legt den
+ * Stand von Annas Projektionen fest (#113).
+ */
+const partnerParts = ({ hatched, annas }: Readonly<{ hatched: boolean; annas: AnnasProjections }>): readonly SeedPart[] => [
+  ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched }), projektionenOf(annas),
+];
+
+/** Beiträge des Szenarios, Annas Projektionen zu einem früheren Stand (#113). */
+export const gekoppeltPartsWith = (annas: AnnasProjections): readonly SeedPart[] => partnerParts({ hatched: true, annas });
+
+/** Beiträge des Szenarios `gekoppelt`. */
+export const gekoppeltParts: readonly SeedPart[] = gekoppeltPartsWith(annasProjectionsNow);
+
+/** Dieselben Beiträge vor dem Schlüpfen; Spezifikation 4 ergänzt darauf die offene Rollenwahl (`rollenwahl-offen`). */
+export const vorDemSchluepfenParts = partnerParts({ hatched: false, annas: annasProjectionsNow });
 
 /** Erweiterungspunkte beider Partner-Szenarien; die Fotos gelten im Ausgangszustand. */
 export const gekoppeltExtensions = SeedExtensions.parse({

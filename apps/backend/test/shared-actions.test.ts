@@ -16,6 +16,7 @@ import {
   roleSwapRequest,
   sharedActionCommandScenarios,
   sharedActionWorld,
+  testRoleKind,
   uncoupleWorld,
   unverschenkbar,
 } from './support/shared-actions.ts';
@@ -157,12 +158,13 @@ describe('Atomarität', () => {
   });
 
   it('lehnt nicht angemeldete Arten, Entkoppeln, eine falsche Nutzlast der Art und einen fremden Schlüssel als ungültig ab', async () => {
-    const { backend, anna } = await setup();
+    // Nur der Rollentausch ist angemeldet; Deko schenken steht für eine nicht angemeldete Art.
+    const { backend, anna } = await setup({ kinds: [testRoleKind] });
     const id = () => EntityId.parse(randomUUID());
     const raw = (payload: object) => ({ ...roleSwapRequest(), payload: { actionId: id(), ...payload } }) as never;
 
     const results = await push(backend, anna.device, [
-      requestOp({ actionId: id(), type: 'rollenwahl', payload: { proposerRole: 'bauen' } }),
+      requestOp({ actionId: id(), type: 'deko_schenken', payload: { islandObjectId: id(), decoKey: 'muschelkranz' } }),
       raw({ type: 'entkoppeln', payload: {} }),
       raw({ type: 'rollentausch', payload: { proposerRole: 'bauen' } }),
       requestOp({ actionId: id(), type: 'rollentausch', payload: {} }, { businessKey: sharedActionRequestKey(id()) }),

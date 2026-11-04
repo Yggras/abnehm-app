@@ -7,16 +7,32 @@ import {
   EntryTotals,
   FoodRef,
   FoodRefType,
+  MealPhotoAnalysis,
+  MealPhotoAnalysisComponent,
   NutritionEntryAddedOutcome,
   NutritionEntryAddedValues,
   NutritionEntryRecord,
   NutritionEntryUpsert,
   NutritionSnapshot,
+  PhotoAnalysisError,
+  PhotoAnalysisErrorCode,
+  PhotoAnalysisResult,
+  PhotoAnalysisUpload,
+  PhotoDraftComponent,
+  PhotoMediaType,
   PortionConversion,
   SnapshotSource,
 } from '../src/nutrition.ts';
 import { fixtures, without } from './define.ts';
 import { now, philipp, timeZone, today } from './ids.ts';
+
+const photoDraft = '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03';
+
+/** Bratkartoffeln, wie das Modell sie schätzt: 180 g mit den Nährwerten genau dieser Menge. */
+const estimatedPotatoes = { name: 'Bratkartoffeln', amount: 180, unit: 'g', kcal: 270, proteinG: 4, carbsG: 32, fatG: 13 } as const;
+/** Dieselben Bratkartoffeln in Vertragseinheiten. */
+const draftPotatoes = { name: 'Bratkartoffeln', baseUnit: 'g', baseAmount: 180_000, milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 } as const;
+const draftJuice = { name: 'Apfelschorle', baseUnit: 'ml', baseAmount: 330, milliKcal: 82_500, proteinMg: 0, carbsMg: 19_800, fatMg: 0 } as const;
 
 const ownFood = '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e01';
 const mealPhoto = '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e02';
@@ -268,6 +284,69 @@ export const nutritionFixtures = {
     invalid: {
       'ohne Rückgängig': { messageKey: 'ernaehrung.eintrag_hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 } },
       'fremde Meldung': { messageKey: 'wasser.hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 }, undoToken: 'undo-7f3a' },
+    },
+  }),
+  PhotoMediaType: fixtures(PhotoMediaType, {
+    valid: { 'JPEG': 'image/jpeg', 'PNG': 'image/png', 'WebP': 'image/webp' },
+    invalid: { 'GIF nimmt der Server nicht an': 'image/gif', 'HEIC': 'image/heic' },
+  }),
+  PhotoAnalysisUpload: fixtures(PhotoAnalysisUpload, {
+    valid: { 'JPEG der App': { mediaType: 'image/jpeg', byteSize: 412_345 }, 'genau 8 MB': { mediaType: 'image/webp', byteSize: 8_000_000 } },
+    invalid: {
+      'über 8 MB': { mediaType: 'image/jpeg', byteSize: 8_000_001 },
+      'leere Datei': { mediaType: 'image/png', byteSize: 0 },
+      'unbekanntes Format': { mediaType: 'application/pdf', byteSize: 1_000 },
+    },
+  }),
+  MealPhotoAnalysisComponent: fixtures(MealPhotoAnalysisComponent, {
+    valid: { 'Bratkartoffeln in g': estimatedPotatoes, 'Getränk in ml': { ...estimatedPotatoes, name: 'Apfelschorle', amount: 330, unit: 'ml', kcal: 82.5, proteinG: 0, carbsG: 19.8, fatG: 0 } },
+    invalid: {
+      'Menge 0': { ...estimatedPotatoes, amount: 0 },
+      'über 5 kg': { ...estimatedPotatoes, amount: 5_001 },
+      'Makros über der Menge': { ...estimatedPotatoes, carbsG: 170 },
+      'negative kcal': { ...estimatedPotatoes, kcal: -5 },
+      'Stück als Einheit': { ...estimatedPotatoes, unit: 'stueck' },
+      'mit Konfidenz': { ...estimatedPotatoes, confidence: 0.8 },
+    },
+  }),
+  MealPhotoAnalysis: fixtures(MealPhotoAnalysis, {
+    valid: { 'ein Bestandteil': { components: [estimatedPotatoes] }, 'kein Essen erkannt': { components: [] } },
+    invalid: {
+      '16 Bestandteile': { components: Array.from({ length: 16 }, () => estimatedPotatoes) },
+      'ohne Liste': {},
+      'Bestandteil ohne Menge': { components: [without(estimatedPotatoes, 'amount')] },
+    },
+  }),
+  PhotoDraftComponent: fixtures(PhotoDraftComponent, {
+    valid: { 'Bratkartoffeln': draftPotatoes, 'Apfelschorle': draftJuice },
+    invalid: {
+      'Menge in Gramm statt mg': { ...draftPotatoes, baseAmount: 180.5 },
+      'Makros über der Menge': { ...draftPotatoes, carbsMg: 170_000 },
+      'über 5 l': { ...draftJuice, baseAmount: 5_001 },
+      'Leerraum im Namen': { ...draftPotatoes, name: ' Bratkartoffeln' },
+    },
+  }),
+  PhotoAnalysisResult: fixtures(PhotoAnalysisResult, {
+    valid: { 'zwei Bestandteile': { draftId: photoDraft, expiresAt: '2026-10-15T12:00:00.000Z', components: [draftPotatoes, draftJuice] } },
+    invalid: {
+      'ohne Bestandteile': { draftId: photoDraft, expiresAt: '2026-10-15T12:00:00.000Z', components: [] },
+      'ohne Ablauf': { draftId: photoDraft, components: [draftPotatoes] },
+      'mit Bildschlüssel': { draftId: photoDraft, expiresAt: '2026-10-15T12:00:00.000Z', components: [draftPotatoes], imageKey: 'abc' },
+    },
+  }),
+  PhotoAnalysisErrorCode: fixtures(PhotoAnalysisErrorCode, {
+    valid: { 'kein Bild': 'photo_invalid_image', 'kein Essen': 'photo_no_food_detected', 'Limit': 'photo_analysis_limit_reached' },
+    invalid: { 'Ablauf gehört zum Bestätigen': 'photo_draft_expired', 'allgemeiner Fehler': 'forbidden' },
+  }),
+  PhotoAnalysisError: fixtures(PhotoAnalysisError, {
+    valid: {
+      'Anbieter nicht erreichbar': { code: 'photo_analysis_unavailable', retryable: true },
+      'Modellfehler': { code: 'photo_analysis_failed', retryable: false },
+    },
+    invalid: {
+      'Limit als wiederholbar': { code: 'photo_analysis_limit_reached', retryable: true },
+      'nicht erreichbar, aber nicht wiederholbar': { code: 'photo_analysis_unavailable', retryable: false },
+      'mit Kontext': { code: 'photo_analysis_failed', retryable: false, context: { stopReason: 'refusal' } },
     },
   }),
 };

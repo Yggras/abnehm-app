@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { fakeMealVisionMarker } from '../apps/backend/dev/meal-vision/fake-analyzer.ts';
 import { deepLinkHandler, testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
 
 // Release-Sperren (Spezifikation 0, Abschnitt 12 und Testing Decisions; #112): Für jede registrierte
@@ -172,7 +173,7 @@ describe('Registry der Testfähigkeiten', () => {
   it('jeder registrierte Deep Link wird ausschließlich im Deep-Link-Modul der Testfähigkeiten angenommen', () => {
     const handler = read(deepLinkHandler);
     const paths = testCapabilities.flatMap(({ entries }) => entries.deepLinks ?? []);
-    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'seed', 'uhr']);
+    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'profil', 'seed', 'uhr']);
     for (const path of paths) expect(handler, path).toContain(`'${path}'`);
     expect(testCapabilities.some(({ modules }) => belongsTo(deepLinkHandler, modules))).toBe(true);
   });
@@ -237,10 +238,83 @@ describe('Produktions-Image des Backends', () => {
 
   it('Gegenprobe: das Development-Image enthält die Fähigkeiten des Backends', () => {
     const development = imageFiles('development');
-    for (const module of ['apps/backend/dev/main.ts', 'apps/backend/dev/seed/server-seed.ts', 'apps/backend/dev/seed-command.ts', 'packages/contracts/seeds/index.ts']) {
+    for (const module of [
+      'apps/backend/dev/main.ts',
+      'apps/backend/dev/seed/server-seed.ts',
+      'apps/backend/dev/seed-command.ts',
+      'apps/backend/dev/meal-vision/fake-analyzer.ts',
+      'packages/contracts/seeds/index.ts',
+    ]) {
       expect(development).toContain(module);
     }
     expect(read('apps/backend/Dockerfile')).toMatch(/AS development[^]*CMD \["node", "apps\/backend\/dev\/main\.ts"\]/);
+  });
+});
+
+// Fake der Fotoanalyse (#161) ------------------------------------------------------------------------
+//
+// #112: „Spätere Tickets müssen neue Testfähigkeiten zentral registrieren und ihren eigenen negativen
+// Produktionsartefakt-Test ergänzen.“ Die allgemeinen Prüfungen oben laufen für `fake-fotoanalyse` schon
+// über die Registry; dieser Block belegt zusätzlich, dass das produktive Backend den Fake auch nicht über
+// seine Konfiguration erreicht.
+
+describe('Fake der Fotoanalyse (#161)', () => {
+  const capability = testCapabilities.find(({ key }) => key === 'fake-fotoanalyse')!;
+  const production = imageFiles('production');
+
+  it('ist zentral registriert, mit Modul, Steuerroute und Marker', () => {
+    expect(capability).toMatchObject({ modules: ['apps/backend/dev/meal-vision/'], entries: { backendRoutes: ['POST /dev/fotoanalyse'] } });
+    expect(capability.markers).toEqual([fakeMealVisionMarker]);
+  });
+
+  it('das Produktions-Image enthält weder den Fake noch einen Verweis auf ihn, wohl aber den Claude-Adapter', () => {
+    expect(production).toContain('apps/backend/src/nutrition/claude-meal-vision.ts');
+    expect(production.filter((file) => belongsTo(file, capability.modules))).toEqual([]);
+    for (const file of production.filter((path) => /\.[cm]?[jt]s$/.test(path))) {
+      const content = read(file);
+      for (const reference of ['fake-analyzer', 'createFakeMealVision', '/dev/fotoanalyse', ...capability.markers]) {
+        expect(content.includes(reference), `${file}: ${reference}`).toBe(false);
+      }
+    }
+  });
+
+  it('der produktive Prozess startet ohne API-Schlüssel nicht, auch wenn die Umgebung einen Fake verlangt', async () => {
+    // Vollständige Konfiguration bis auf den Schlüssel; die Prüfung scheitert vor jedem Datenbankzugriff.
+    const secrets = mkdtempSync(join(tmpdir(), 'abnehm-release-secrets-'));
+    try {
+      for (const name of ['postgres_password', 'better_auth_secret', 'invite_code_secret']) writeFileSync(join(secrets, name), 'x'.repeat(64));
+      const environment = {
+        PATH: process.env.PATH,
+        PORT: '8787',
+        DATABASE_HOST: '127.0.0.1',
+        DATABASE_PORT: '1',
+        DATABASE_NAME: 'abnehm',
+        DATABASE_USER: 'abnehm',
+        DATABASE_PASSWORD_FILE: join(secrets, 'postgres_password'),
+        BETTER_AUTH_SECRET_FILE: join(secrets, 'better_auth_secret'),
+        INVITE_CODE_SECRET_FILE: join(secrets, 'invite_code_secret'),
+        AUTH_BASE_URL: 'http://localhost:8787',
+        PHOTO_STORAGE_DIR: join(secrets, 'fotos'),
+        MEAL_VISION_ANALYZER: 'fake',
+        MEAL_VISION_MODEL: 'fake',
+      };
+      const run = execFileAsync('node', ['apps/backend/src/main.ts'], { cwd: root, env: environment, timeout: 30_000 });
+      const failure = (await run.then(() => null, (error: unknown) => error)) as { code?: number; stderr?: string } | null;
+      expect(failure?.code).toBe(1);
+      expect(failure?.stderr).toContain('Ungültige Backend-Konfiguration: ANTHROPIC_API_KEY_FILE fehlt');
+    } finally {
+      rmSync(secrets, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('Gegenprobe: das Development-Image enthält den Fake', () => {
+    expect(imageFiles('development')).toContain('apps/backend/dev/meal-vision/fake-analyzer.ts');
+  });
+
+  it('kein Modul der App erreicht den Fake', () => {
+    for (const bundle of [...bundles.production, ...bundles.development, ...bundles.e2e]) {
+      expect(bundle.sources.filter((source) => belongsTo(source, capability.modules)), bundle.platform).toEqual([]);
+    }
   });
 });
 
@@ -273,7 +347,7 @@ describe('Produktions-Bundle der App', () => {
 
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
-    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'fixture-insel', 'geraetetest', 'seed', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
+    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'fixture-insel', 'geraetetest', 'laufzeitprofile', 'seed', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {
         expect(bundle.sources.some((source) => belongsTo(source, capability.modules)), `${bundle.platform}: ${capability.key}`).toBe(true);

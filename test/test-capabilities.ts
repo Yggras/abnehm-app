@@ -53,9 +53,11 @@ export const testCapabilities: readonly TestCapability[] = [
       'apps/mobile/src/test-capabilities/seed/',
     ],
     entries: { backendRoutes: ['POST /dev/seed'], deepLinks: ['seed'], commands: ['apps/backend/dev/seed-command.ts'] },
-    // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138)
-    // prüft der Release-Test zusätzlich über seinen Schlüssel.
-    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto'],
+    // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138),
+    // `solo-energie` und `rollenwahl-offen` (#180) prüft der Release-Test zusätzlich über ihre Schlüssel.
+    // `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund von
+    // `momo.character` zu Recht im Produktions-Bundle steht.
+    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen'],
   },
   {
     key: 'testuhr',
@@ -70,6 +72,14 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/mobile/src/test-capabilities/faults.ts'],
     entries: { deepLinks: ['fehler'] },
     markers: ['Fehler-Adapter'],
+  },
+  {
+    // #113: benannte Profile über Fehler-Adapter und Testuhr; Registry samt Tests in `test/seed-varianten.ts`.
+    key: 'laufzeitprofile',
+    description: 'Benannte, deterministische Zeit-, Transport-, Auth-, Storage- und Serverfehler über Fehler-Adapter und Testuhr, gestellt per Link `profil`',
+    modules: ['apps/mobile/src/test-capabilities/profiles.ts'],
+    entries: { deepLinks: ['profil'] },
+    markers: ['transport-antwort-verloren'],
   },
   {
     // #114: Maestros `setAirplaneMode` gibt es nur auf Android (https://docs.maestro.dev/api-reference/commands/setairplanemode).
@@ -94,6 +104,15 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/mobile/src/test-capabilities/fixture-island.ts'],
     entries: {},
     markers: ['fixture_insel_nebel'],
+  },
+  {
+    // #161: Fake des `MealVisionAnalyzer` mit Erfolg, leerer Liste, Refusal, Schemaverstoß und
+    // Zeitüberschreitung. Das produktive Backend baut seinen Analyzer nur aus dem Claude-Adapter.
+    key: 'fake-fotoanalyse',
+    description: 'Fake der KI-Fotoanalyse (`MealVisionAnalyzer`) für Tests und das Development-Backend, umstellbar über `POST /dev/fotoanalyse`',
+    modules: ['apps/backend/dev/meal-vision/'],
+    entries: { backendRoutes: ['POST /dev/fotoanalyse'] },
+    markers: ['fake_fotoanalyse'],
   },
   {
     key: 'testgeruest',

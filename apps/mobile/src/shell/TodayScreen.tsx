@@ -34,7 +34,9 @@ function action(intent: UiActionIntent) { openTarget(intent.target); }
 /** Texte der festgelegten Leer-Gründe; ein anderer Grund zeigt den allgemeinen Satz. */
 const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason | 'noch_keine_eintraege', string>> = {
   momo_wartet_im_ei: 'Momo wartet im Ei',
-  rollenwahl_offen: 'Momo wartet auf eure Rollenwahl',
+  // Texte nach Spezifikation 4, Abschnitt 7; für die vorschlagende Person steht neutral „Vorschlag gesendet“ davor.
+  rollenwahl_offen: 'Momo schlüpft, sobald ihr die Rollen verteilt habt',
+  rollenwahl_gesendet: 'Vorschlag gesendet. Momo schlüpft, sobald ihr die Rollen verteilt habt',
   noch_keine_eintraege: 'Noch keine Einträge',
   // Mini-Tracker Wasser und Sport ohne gültige Zielversion (Spezifikation 3, Abschnitt 7).
   ohne_zielversion: 'Noch kein Ziel festgelegt.',
