@@ -1,7 +1,7 @@
 import { dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { EntityId, Instant, LocalDate } from '../src/base.ts';
 import { CompleteDailyGoalPayload } from '../src/energy.ts';
-import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
+import { currentSyncSchemaVersion, OutboxOperation, type PushResult } from '../src/sync.ts';
 import { WaterEntryUpsert, WeightEntryUpsert } from '../src/trackers.ts';
 import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
@@ -20,7 +20,9 @@ import { soloParts } from './solo.ts';
 //   das iPad ersetzt sein Duplikat. Beim Gewicht gilt, was der Server zuletzt annimmt (Last-Write-Wins in
 //   Server-Eingangsreihenfolge), nicht die Gerätezeit.
 // - `offline_sync`: Das iPhone hat eine ungesicherte Buchung, ein Offline-Update gegen eine Löschung, eine
-//   dauerhaft abgelehnte Operation mit neuerer Operation derselben Entität und einen Feldkonflikt. Ein
+//   dauerhaft abgelehnte Operation mit neuerer Operation derselben Entität und einen Feldkonflikt. Gemeint
+//   ist ein Konflikt um die Datenfelder einer Zeile (Last-Write-Wins, Abschnitt 10), nicht um ein Feld der
+//   Insel; den Feldkonflikt mit Verdrängung ins Lager liefert Spezifikation 4 (#194). Ein
 //   Fachbefehl zwischen beiden teilt den Push in zwei Batches; so ist die neuere Operation noch offen,
 //   wenn das Gerät die Ablehnung übernimmt. Die widerrufene Partnerprojektion aus Abschnitt 12 deckt
 //   `nach_entkopplung` ab (#117).
@@ -59,7 +61,15 @@ const weightPayload = (row: SeedRow): WeightEntryUpsert => WeightEntryUpsert.par
   utcOffsetMinutes: row.utc_offset_minutes,
 });
 
-const payloadOf: Readonly<Record<string, (row: SeedRow) => WaterEntryUpsert | WeightEntryUpsert>> = { water_entry: waterPayload, weight_entry: weightPayload };
+const payloadOf = { water_entry: waterPayload, weight_entry: weightPayload } as const;
+type OfflineTable = keyof typeof payloadOf;
+
+/** Fachlicher Schlüssel eines Tagesziels von Philipp heute. */
+const keyToday = (slot: DailyGoalSlot) => dailyGoalKey(EntityId.parse(philipp), LocalDate.parse(seedDays.heute), slot);
+
+/** Erfüllung von Philipps Wasserziel heute samt `+1`; `createdAt` setzt der Server, wenn er sie annimmt. */
+const wasserziel = ({ slot, at, createdAt }: { slot: DailyGoalSlot; at: string; createdAt?: string }): SeedEntity[] =>
+  seedCompletion({ personId: philipp, dailyGoalId: seedIds.dailyGoal.philippHeute[slot - 1]!, localDate: seedDays.heute, slot, baustein: 'wasserziel', at, ...(createdAt && { createdAt }) });
 
 /** Was ein Gerät offline in einer Transaktion geschrieben hat: lokale Zeilen und ihre eine Operation. */
 type OfflineChange = Readonly<{ rows: readonly Readonly<{ table: string; row: SeedRow }>[]; operation: OutboxOperation }>;
@@ -69,7 +79,7 @@ type OfflineChange = Readonly<{ rows: readonly Readonly<{ table: string; row: Se
  * die zuletzt bekannte (`null` bei neuen Einträgen), dazu ihre Upsert-Operation. `payload` ersetzt die
  * Nutzlast aus der Zeile, etwa für eine Operation, die der Server ablehnen muss.
  */
-function offlineUpsert(table: string, row: SeedRow, { operationId, at, payload }: { operationId: string; at: string; payload?: Record<string, unknown> }): OfflineChange {
+function offlineUpsert(table: OfflineTable, row: SeedRow, { operationId, at, payload }: { operationId: string; at: string; payload?: Record<string, unknown> }): OfflineChange {
   return {
     rows: [{ table, row }],
     operation: OutboxOperation.parse({
@@ -77,7 +87,7 @@ function offlineUpsert(table: string, row: SeedRow, { operationId, at, payload }
       operationId,
       entityType: table,
       entityId: row.id,
-      payload: payload ?? payloadOf[table]!(row),
+      payload: payload ?? payloadOf[table](row),
       knownServerVersion: row.server_version ?? null,
       schemaVersion: currentSyncSchemaVersion,
       createdAt: at,
@@ -91,14 +101,14 @@ function offlineUpsert(table: string, row: SeedRow, { operationId, at, payload }
  */
 function offlineCompletion({ slot, at, operationId }: { slot: DailyGoalSlot; at: string; operationId: string }): OfflineChange {
   const dailyGoalId = seedIds.dailyGoal.philippHeute[slot - 1]!;
-  const [completion, credit] = seedCompletion({ personId: philipp, dailyGoalId, localDate: seedDays.heute, slot, baustein: 'wasserziel', at });
+  const [completion, credit] = wasserziel({ slot, at });
   const localDate = LocalDate.parse(seedDays.heute);
   return {
     rows: [completion!, credit!].map(({ table, row }) => ({ table, row: { ...row, server_version: null } })),
     operation: OutboxOperation.parse({
       type: 'completeDailyGoal',
       operationId,
-      businessKey: dailyGoalKey(EntityId.parse(philipp), localDate, slot),
+      businessKey: keyToday(slot),
       payload: CompleteDailyGoalPayload.parse({ dailyGoalId, localDate, slot, baustein: 'wasserziel', completedAt: at }),
       knownServerVersion: null,
       schemaVersion: currentSyncSchemaVersion,
@@ -123,7 +133,7 @@ function changedOffline(state: SeedState, installation: SeedKey, changes: readon
 }
 
 /** Ergebnis einer verarbeiteten Operation von Philipp, ohne die abgeleiteten Spalten (`derivedColumns`). */
-function processed(operationId: string, outcome: 'applied' | 'already_applied' | 'permanently_rejected', target:
+function processed(operationId: string, outcome: PushResult['type'], target:
   | Readonly<{ entityType: string; entityId: string }>
   | Readonly<{ command: string; businessKey: string | null }>): SeedRow {
   return {
@@ -222,14 +232,14 @@ function zweiInstallationen(): Szenario {
   ];
 
   const slot: DailyGoalSlot = 2;
-  const completionKey = dailyGoalKey(EntityId.parse(philipp), LocalDate.parse(seedDays.heute), slot);
+  const completionKey = keyToday(slot);
   // In Server-Eingangsreihenfolge: erst der Batch des iPhones, dann der des iPads (ohne Duplikat).
   const server = changedOnServer(initial, {
     createdAt: now,
     changes: [
       serverRevision('weight_entry', { ...weight, weight_g: 91_600 }),
       createdWater(seedIds.waterEntry.philippIphoneOffline, 500, '2026-10-14T11:40:00.000Z'),
-      ...seedCompletion({ personId: philipp, dailyGoalId: seedIds.dailyGoal.philippHeute[1], localDate: seedDays.heute, slot, baustein: 'wasserziel', at: '2026-10-14T11:40:00.000Z', createdAt: now }),
+      ...wasserziel({ slot, at: '2026-10-14T11:40:00.000Z', createdAt: now }),
       serverRevision('weight_entry', { ...weight, weight_g: 91_700 }),
       createdWater(seedIds.waterEntry.philippIpadOffline, 500, '2026-10-14T11:50:00.000Z'),
     ],
@@ -253,7 +263,8 @@ function zweiInstallationen(): Szenario {
  * korrigiert und um 11:30 den Wassereintrag von 10:15 (750 ml) gelöscht. Offline hat das iPhone in dieser
  * Reihenfolge:
  *
- * 1. 11:00 den Gewichtseintrag von gestern auf 91,6 kg korrigiert (Feldkonflikt). Gewinner: das iPhone,
+ * 1. 11:00 den Gewichtseintrag von gestern auf 91,6 kg korrigiert (Feldkonflikt um die Datenfelder der
+ *    Zeile). Gewinner: das iPhone,
  *    weil es zuletzt eingeht, obwohl es auf dem Gerät früher entstand.
  * 2. 11:05 den Wassereintrag von 06:30 auf 5500 ml geändert. Damit war das Wasserziel (Platz 2) erfüllt,
  *    und der Persistenzdienst hat die Erfüllung samt `+1` angelegt. 11:06 hat Philipp auf 550 ml
@@ -292,7 +303,7 @@ function offlineSync(): Szenario {
     createdAt: now,
     changes: [
       serverRevision('weight_entry', { ...weight, weight_g: 91_600 }),
-      ...seedCompletion({ personId: philipp, dailyGoalId: seedIds.dailyGoal.philippHeute[1], localDate: seedDays.heute, slot: 2, baustein: 'wasserziel', at: '2026-10-14T11:05:00.000Z', createdAt: now }),
+      ...wasserziel({ slot: 2, at: '2026-10-14T11:05:00.000Z', createdAt: now }),
       serverRevision('water_entry', { ...morgens, amount_ml: 550 }),
       createdWater(seedIds.waterEntry.philippUngesichert, 250, '2026-10-14T11:45:00.000Z'),
     ],
@@ -301,7 +312,7 @@ function offlineSync(): Szenario {
   const target = afterSync(server, [
     processed(ops.gewicht, 'applied', { entityType: 'weight_entry', entityId: weight.id as string }),
     processed(ops.tippfehler, 'permanently_rejected', water(seedIds.waterEntry.philippHeute[0])),
-    processed(ops.erfuellung, 'applied', { command: 'completeDailyGoal', businessKey: dailyGoalKey(EntityId.parse(philipp), LocalDate.parse(seedDays.heute), 2) }),
+    processed(ops.erfuellung, 'applied', { command: 'completeDailyGoal', businessKey: keyToday(2) }),
     processed(ops.korrektur, 'applied', water(seedIds.waterEntry.philippHeute[0])),
     processed(ops.gegenLoeschung, 'permanently_rejected', water(seedIds.waterEntry.philippHeute[1])),
     processed(ops.ungesichert, 'applied', water(seedIds.waterEntry.philippUngesichert)),

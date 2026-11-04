@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { seedIds, seedManifests, type SeedRow } from '@abnehm/contracts/seeds';
+import { seedDays, seedIds, seedManifests, type SeedRow } from '@abnehm/contracts/seeds';
 
 import { dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { dumpServer } from '../dev/seed/server-seed.ts';
@@ -17,6 +17,10 @@ const ops = seedIds.operation;
 
 const rowsOf = (phone: SeedPhone, table: string): SeedRow[] => dumpLocalDatabase(phone.database).rows[table] ?? [];
 const rowOf = (rows: readonly SeedRow[] = [], id: string) => rows.find((row) => row.id === id);
+/** Wasser von heute, das auf dem Gerät zählt. */
+const waterTodayMl = (phone: SeedPhone) => rowsOf(phone, 'water_entry')
+  .filter((row) => row.local_date === seedDays.heute && row.deleted_at === null)
+  .reduce((sum, row) => sum + Number(row.amount_ml), 0);
 const resultOf = (phone: SeedPhone, operationId: string) => phone.pushResults().find((result) => result.operationId === operationId);
 
 describe('Szenario zwei_installationen', () => {
@@ -50,8 +54,7 @@ describe('Szenario zwei_installationen', () => {
     expect(rowOf(rowsOf(phones[iphone]!, 'weight_entry'), id)).toEqual(server);
     expect(rowOf(rowsOf(phones[ipad]!, 'weight_entry'), id)).toEqual(server);
     // Beide Offline-Wassereinträge zählen: 2000 ml vom Server und je 500 ml von beiden Geräten.
-    const water = rowsOf(phones[iphone]!, 'water_entry').filter((row) => row.local_date === '2026-10-14' && row.deleted_at === null);
-    expect(water.reduce((sum, row) => sum + Number(row.amount_ml), 0)).toBe(3_000);
+    expect(waterTodayMl(phones[iphone]!)).toBe(3_000);
   });
 });
 
@@ -85,8 +88,7 @@ describe('Szenario offline_sync', () => {
     expect(server.daily_goal_completion).toEqual([expect.objectContaining({ baustein: 'wasserziel', first_completed_at: '2026-10-14T11:05:00.000Z' })]);
     expect(server.energy_booking?.map((row) => row.amount)).toEqual([1]);
     // Heute zählen danach nur 550 ml und 250 ml.
-    const water = rowsOf(world.phones[iphone]!, 'water_entry').filter((row) => row.local_date === '2026-10-14' && row.deleted_at === null);
-    expect(water.reduce((sum, row) => sum + Number(row.amount_ml), 0)).toBe(800);
+    expect(waterTodayMl(world.phones[iphone]!)).toBe(800);
   });
 
   it('jede Operation endet mit ihrem erwarteten Gewinner', async () => {
@@ -95,7 +97,7 @@ describe('Szenario offline_sync', () => {
     await runSteps(world);
 
     const sync = ops.offlineSync;
-    // Feldkonflikt: Das iPhone hat um 11:00 offline geändert, ein anderes Gerät um 11:10 online; es gilt, was zuletzt eingeht.
+    // Feldkonflikt um die Datenfelder einer Zeile: Das iPhone hat um 11:00 offline geändert, ein anderes Gerät um 11:10 online; es gilt, was zuletzt eingeht.
     expect(resultOf(phone, sync.gewicht)).toMatchObject({ type: 'applied' });
     // Dauerhafte Ablehnung mit neuerer Operation derselben Entität: Die Korrektur wirkt weiter.
     expect(resultOf(phone, sync.tippfehler)).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' }, canonical: { type: 'record' } });
