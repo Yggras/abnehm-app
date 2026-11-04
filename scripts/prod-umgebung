@@ -1,0 +1,42 @@
+# shellcheck shell=bash
+# Gemeinsame Pfade und Helfer des Produktivbetriebs (#115); nur zum Einbinden per `source`, nicht ausführbar.
+# Genutzt von scripts/prod, prod-secrets, release-check, gate-nachweis und app-build. Ablauf: docs/betrieb.md.
+
+prod_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Außerhalb jedes Checkouts, damit Secrets und Freigaben weder in Git noch im Build-Kontext landen.
+prod_base_dir="${ABNEHM_PROD_DIR:-$HOME/Library/Application Support/abnehm-app/produktion}"
+prod_secrets_dir="${ABNEHM_PROD_SECRETS_DIR:-$prod_base_dir/secrets}"
+prod_env_file="$prod_base_dir/produktion.env"
+release_root="${ABNEHM_RELEASE_DIR:-$HOME/Library/Logs/abnehm-app/release}"
+prod_compose_file="$prod_repo_root/compose.prod.yaml"
+
+# Tailscale-CLI: Standalone-Variante unter /usr/local/bin, App-Store-Variante im App-Bundle
+# (https://tailscale.com/kb/1080/cli).
+tailscale_cli() {
+  if command -v tailscale >/dev/null 2>&1; then
+    tailscale "$@"
+  elif [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]]; then
+    /Applications/Tailscale.app/Contents/MacOS/Tailscale "$@"
+  else
+    echo "Tailscale ist nicht installiert (docs/betrieb.md › „HTTPS über Tailscale Serve“)." >&2
+    return 1
+  fi
+}
+
+# Artefakt-ID eines App-Binarys: SHA-256 der APK bzw. über die sortierten Prüfsummen aller Dateien der .app.
+artifact_id_of() {
+  if [[ -d "$1" ]]; then
+    (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d ' ' -f 1)
+  else
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  fi
+}
+
+# Image des Dienstes postgres, wie Compose compose.prod.yaml auflöst.
+prod_postgres_image() {
+  ABNEHM_PROD_URL="${ABNEHM_PROD_URL:-https://platzhalter.tailnet.ts.net}" ABNEHM_PROD_SECRETS_DIR="$prod_secrets_dir" \
+    docker compose --file "$prod_compose_file" config --format json \
+    | node -e 'console.log(JSON.parse(require("fs").readFileSync(0, "utf8")).services.postgres.image)'
+}
+
+image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }

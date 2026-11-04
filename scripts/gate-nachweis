@@ -8,9 +8,10 @@
 # Hintergrund und Bewertung der einzelnen Punkte: docs/betrieb.md › „Gate-Nachweise“.
 set -uo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-base_dir="${ABNEHM_PROD_DIR:-$HOME/Library/Application Support/abnehm-app/produktion}"
-secrets_dir="${ABNEHM_PROD_SECRETS_DIR:-$base_dir/secrets}"
+# shellcheck source=prod-umgebung
+source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
+repo_root="$prod_repo_root"
+secrets_dir="$prod_secrets_dir"
 with_sudo=false
 [[ "${1:-}" == "--sudo" ]] && with_sudo=true
 [[ $# -gt 0 && "$1" != "--sudo" ]] && { sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
@@ -87,9 +88,8 @@ storage_of() {
 
   echo "## HTTPS über Tailscale Serve"
   echo
-  ts_cli="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
-  block "$ts_cli" serve status
-  block "$ts_cli" version
+  block tailscale_cli serve status
+  block tailscale_cli version
   echo
 
   echo "## Entfernte Anmeldung (SSH)"

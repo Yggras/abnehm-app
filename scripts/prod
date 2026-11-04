@@ -13,11 +13,12 @@
 # Freigabe; `start` baut das Image dann selbst.
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-base_dir="${ABNEHM_PROD_DIR:-$HOME/Library/Application Support/abnehm-app/produktion}"
-release_root="${ABNEHM_RELEASE_DIR:-$HOME/Library/Logs/abnehm-app/release}"
-env_file="$base_dir/produktion.env"
-export ABNEHM_PROD_SECRETS_DIR="${ABNEHM_PROD_SECRETS_DIR:-$base_dir/secrets}"
+# shellcheck source=prod-umgebung
+source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
+repo_root="$prod_repo_root"
+base_dir="$prod_base_dir"
+env_file="$prod_env_file"
+export ABNEHM_PROD_SECRETS_DIR="$prod_secrets_dir"
 local_port=8790
 any_state=false
 [[ "${ABNEHM_PROD_BELIEBIGER_STAND:-}" == 1 ]] && any_state=true
@@ -27,19 +28,9 @@ usage() {
   exit 2
 }
 
-compose() { docker compose --file "$repo_root/compose.prod.yaml" "$@"; }
-
-tailscale_cli() {
-  if command -v tailscale >/dev/null 2>&1; then
-    tailscale "$@"
-  elif [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]]; then
-    # App-Store-Variante: die CLI liegt im App-Bundle (https://tailscale.com/kb/1080/cli).
-    /Applications/Tailscale.app/Contents/MacOS/Tailscale "$@"
-  else
-    echo "Tailscale ist nicht installiert (docs/betrieb.md › „HTTPS über Tailscale Serve“)." >&2
-    return 1
-  fi
-}
+compose() { docker compose --file "$prod_compose_file" "$@"; }
+# Image-ID, mit der der Container des Dienstes läuft.
+running_image() { image_id "$(compose ps --format '{{.Image}}' "$1")"; }
 
 load_url() {
   [[ -f "$env_file" ]] || { echo "Keine Adresse festgehalten: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
@@ -63,8 +54,6 @@ require_approval() {
   }
 }
 
-image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }
-
 # check_images <vorher|laufend>: Images gegen die Freigabe prüfen, vor dem Start die lokalen Tags,
 # danach die Images der laufenden Container.
 check_images() {
@@ -74,10 +63,10 @@ check_images() {
   expected_postgres="$(sed -n 's/^postgres=//p' "$approval-images.txt")"
   if [[ "$1" == vorher ]]; then
     backend="$(image_id abnehm-prod-backend)"
-    postgres="$(image_id "$(sed -n 's/^ *image: *//p' "$repo_root/compose.prod.yaml" | head -n 1)")"
+    postgres="$(image_id "$(prod_postgres_image)")"
   else
-    backend="$(image_id "$(compose ps --format '{{.Image}}' backend)")"
-    postgres="$(image_id "$(compose ps --format '{{.Image}}' postgres)")"
+    backend="$(running_image backend)"
+    postgres="$(running_image postgres)"
   fi
   [[ "$backend" == "$expected_backend" ]] || { echo "Backend-Image ($1) ist nicht das freigegebene: ${backend:-fehlt} statt $expected_backend." >&2; exit 1; }
   [[ "$postgres" == "$expected_postgres" ]] || { echo "Postgres-Image ($1) ist nicht das freigegebene: ${postgres:-fehlt} statt $expected_postgres." >&2; exit 1; }
@@ -102,20 +91,11 @@ record_state() {
     echo "gestartet=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "commit=$commit"
     echo "freigabe=$([[ "$any_state" == true ]] && echo 'keine (Probelauf)' || echo "$approval.md")"
-    echo "backendImage=$(image_id "$(compose ps --format '{{.Image}}' backend)")"
-    echo "postgresImage=$(image_id "$(compose ps --format '{{.Image}}' postgres)")"
+    echo "backendImage=$(running_image backend)"
+    echo "postgresImage=$(running_image postgres)"
     echo "adresse=$ABNEHM_PROD_URL"
   } >"$base_dir/laufender-stand.txt"
   cat "$base_dir/laufender-stand.txt"
-}
-
-# Artefakt-ID wie scripts/app-build: SHA-256 der APK bzw. über die sortierten Prüfsummen aller Dateien der .app.
-artifact_id_of() {
-  if [[ -d "$1" ]]; then
-    (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d ' ' -f 1)
-  else
-    shasum -a 256 "$1" | cut -d ' ' -f 1
-  fi
 }
 
 install_app() {

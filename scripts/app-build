@@ -15,7 +15,9 @@
 # fertige Binary eine Ausnahme für unverschlüsselten Verkehr enthält (ATS bzw. Android-Manifest).
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=prod-umgebung
+source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
+repo_root="$prod_repo_root"
 mobile="$repo_root/apps/mobile"
 
 usage() {
@@ -108,8 +110,7 @@ if [[ "$platform" == "ios" ]]; then
   mv "$app" "$out/"
   rm -rf "$out/derived"
   binary="$out/$(basename "$app")"
-  # Die ID eines App-Ordners: SHA-256 über die sortierten Prüfsummen aller Dateien.
-  artifact_id="$(cd "$binary" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d ' ' -f 1)"
+  artifact_id="$(artifact_id_of "$binary")"
   app_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$binary/Info.plist")"
 else
   echo "Baue die Release-APK …" >&2
@@ -117,7 +118,7 @@ else
   (cd android && ./gradlew --no-daemon --quiet :app:assembleRelease >&2)
   mv android/app/build/outputs/apk/release/app-release.apk "$out/$apk_name"
   binary="$out/$apk_name"
-  artifact_id="$(shasum -a 256 "$binary" | cut -d ' ' -f 1)"
+  artifact_id="$(artifact_id_of "$binary")"
   app_id="$([[ "$variant" == e2e ]] && echo de.yggras.abnehmapp.e2e || echo de.yggras.abnehmapp)"
 fi
 

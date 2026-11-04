@@ -8,10 +8,12 @@
 # - Android: Das Manifest der APK erlaubt keinen Klartext (`usesCleartextTraffic`) und bringt keine
 #   eigene Network Security Config mit; ab API 28 ist Klartext dann verboten
 #   (https://developer.android.com/privacy-and-security/security-config).
-# - Beide: Das JS-Bundle enthält die erwartete https-Adresse des Backends.
-# Gegenprobe: Ein E2E-Binary (mit Ausnahme) lässt die Prüfung scheitern.
+# - Beide: Das JS-Bundle enthält die erwartete https-Adresse des Backends und keinen Marker einer
+#   Testfähigkeit (Release-Sperren am freizugebenden Binary, test/release-sperren-artefakt.ts).
+# Gegenprobe: Ein E2E-Binary (Klartext-Ausnahme, Testfähigkeiten) lässt die Prüfung scheitern.
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 binary="${1:?Pfad zum Binary fehlt}"
 api_url="${2:?https-Adresse fehlt}"
 failures=0
@@ -24,6 +26,7 @@ if [[ -d "$binary" && "$binary" == *.app ]]; then
   bundle="$binary/main.jsbundle"
   [[ -f "$bundle" ]] || fail "main.jsbundle fehlt in $binary"
   [[ -f "$bundle" ]] && grep -a -q -F "$api_url" "$bundle" && ok "Bundle nutzt $api_url" || fail "Bundle enthält $api_url nicht"
+  [[ -f "$bundle" ]] && node "$repo_root/test/release-sperren-artefakt.ts" bundle "$bundle" || fail "Release-Sperren im Bundle verletzt"
 elif [[ -f "$binary" && "$binary" == *.apk ]]; then
   aapt2="$(ls -d "${ANDROID_HOME:-$HOME/Library/Android/sdk}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1)"
   [[ -x "$aapt2" ]] || { echo "aapt2 aus den Android build-tools nicht gefunden (ANDROID_HOME)." >&2; exit 1; }
@@ -38,13 +41,17 @@ elif [[ -f "$binary" && "$binary" == *.apk ]]; then
   if [[ -n "$target_sdk" && "$target_sdk" -ge 28 ]]; then ok "targetSdkVersion $target_sdk (Klartext ab 28 standardmäßig aus)"; else fail "targetSdkVersion ${target_sdk:-unbekannt} < 28"; fi
   # Ohne -q: grep liest bis zum Ende, sonst bricht unzip mit SIGPIPE ab und pipefail meldet einen Fehler.
   unzip -p "$binary" assets/index.android.bundle | grep -a -c -F "$api_url" >/dev/null && ok "Bundle nutzt $api_url" || fail "Bundle enthält $api_url nicht"
+  bundle_dir="$(mktemp -d)"
+  unzip -q "$binary" assets/index.android.bundle -d "$bundle_dir"
+  node "$repo_root/test/release-sperren-artefakt.ts" bundle "$bundle_dir/assets/index.android.bundle" || fail "Release-Sperren im Bundle verletzt"
+  rm -rf "$bundle_dir"
 else
   echo "Erwartet eine .app (Ordner) oder .apk: $binary" >&2
   exit 2
 fi
 
 if [[ "$failures" != 0 ]]; then
-  echo "Das Binary erfüllt das TLS-Kriterium nicht und darf nicht verteilt werden." >&2
+  echo "Das Binary erfüllt TLS-Kriterium oder Release-Sperren nicht und darf nicht verteilt werden." >&2
   exit 1
 fi
-echo "TLS-Kriterium erfüllt: $(basename "$binary")"
+echo "TLS-Kriterium und Release-Sperren erfüllt: $(basename "$binary")"

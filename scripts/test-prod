@@ -11,7 +11,7 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 fail() { echo "FEHLER: $*" >&2; exit 1; }
 
 mkdir -p "$tmp/repo/scripts" "$tmp/bin"
-cp "$root/scripts/prod" "$root/scripts/prod-secrets" "$tmp/repo/scripts/"
+cp "$root/scripts/prod" "$root/scripts/prod-secrets" "$root/scripts/prod-umgebung" "$tmp/repo/scripts/"
 cp "$root/compose.prod.yaml" "$tmp/repo/"
 git -C "$tmp/repo" init -q
 git -C "$tmp/repo" -c user.name=t -c user.email=t@example.test add -A
@@ -26,6 +26,7 @@ case "$*" in
   "image inspect --format {{.Id}} "*) name=$(echo "$*" | awk '{print $NF}'); sed -n "s|^$name=||p" "$MOCK_IMAGES" | grep . ;;
   *" ps --format {{.Image}} backend") echo abnehm-prod-backend ;;
   *" ps --format {{.Image}} postgres") echo postgres:18.6-alpine ;;
+  *" config --format json") echo '{"services":{"postgres":{"image":"postgres:18.6-alpine"}}}' ;;
   *) exit 0 ;;
 esac
 MOCK

@@ -6,6 +6,8 @@ Wie das Backend mit echten Gesundheitsdaten auf diesem Laptop läuft, wie jeder 
 
 Lokale Entwicklung, E2E-Läufe und Gerätetests stehen in [`entwicklung.md`](entwicklung.md).
 
+Die Skripte teilen Pfade und Helfer über `scripts/prod-umgebung`. `scripts/test-prod` ist ein hermetischer Smoke-Test für `scripts/prod` und `scripts/prod-secrets` (Docker, Tailscale und curl gemockt); er läuft nach Änderungen an diesen Skripten von Hand.
+
 ## Überblick
 
 ```
@@ -22,7 +24,7 @@ Docker-Stack `abnehm-prod` (compose.prod.yaml)
 
 | Kriterium aus #115 | Umsetzung | Nachweis |
 | --- | --- | --- |
-| TLS | `tailscale serve` beendet HTTPS auf dem Laptop. Der Produktionsbuild der App kennt nur `https://` und hat keine Ausnahme für Klartext. | `scripts/app-artefakt-pruefen` in jedem Produktions-Build; Test in `apps/mobile/src/app-config.test.ts` |
+| TLS | `tailscale serve` beendet HTTPS auf dem Laptop. Der Produktionsbuild der App kennt nur `https://` und hat keine Ausnahme für Klartext. | `scripts/app-artefakt-pruefen` in jedem Produktions-Build (Gegenprobe: das E2E-Binary fällt durch); Test in `apps/mobile/src/app-config.test.ts` |
 | Keine offenen Ports | Postgres ohne `ports`. Das Backend nur auf `127.0.0.1:8790`, von außen nur über Tailscale. | `test/produktivbetrieb.test.ts`, `scripts/gate-nachweis --sudo`, Portscan |
 | Datenträgerverschlüsselung | FileVault. Docker-Disk-Image und Secrets liegen auf dem Data-Volume. | `scripts/gate-nachweis` |
 | Secrets | Compose-Secrets aus Dateien außerhalb des Repos, `0700`/`0600`. Wiederherstellung aus dem Passwortmanager. | `scripts/prod-secrets pruefen`, `test/produktivbetrieb.test.ts` |
@@ -104,18 +106,19 @@ Voraussetzungen: Docker Desktop läuft, das Samsung Galaxy A34 und das iPhone SE
 | `stand` | sauberer Checkout, `HEAD` = `origin/main` | genau der freizugebende Commit |
 | `statisch` | `npm run typecheck`, `npm run lint` | Typen, Uhr- und Importgrenzen |
 | `autorisierung` | `apps/backend/test/authorization-*` und `sync-authorization` | Matrix aus Abschnitt 11 der Spezifikation 0 |
-| `release-sperren` | Vitest-Projekt `release` und `apps/backend/test/release-sperren.test.ts` | Seed, Testuhr und Fehlermodi fehlen in Produktions-Image und -Bundle |
+| `release-sperren` | Vitest-Projekt `release` und `apps/backend/test/release-sperren.test.ts` | Seed, Testuhr und Fehlermodi fehlen im Export, in der COPY-Liste und im laufenden Produktions-Backend |
 | `tests` | Jest der App und übrige Vitest-Suite | alles Übrige |
-| `backend-image` | holt die Basis-Images neu und baut die Stage `production` | Image-IDs von Backend und Postgres |
+| `backend-image` | holt die Basis-Images neu, baut die Stage `production` und prüft das Image mit `test/release-sperren-artefakt.ts` | Image-IDs von Backend und Postgres; keine Testfähigkeit in genau diesem Image |
 | `maestro` | `scripts/e2e-run --build`: `sync-offline`, `geraetesmoke`, `geraetetest` auf iOS-Simulator und Android-Emulator | E2E-Artefakt-IDs dieses Commits |
 | `android-geraet` | On-Device-Suite und Gerätesmoke auf dem Galaxy A34 per Maestro | E2E-Artefakt-ID `android-geraet` |
 | `iphone-geraet` | On-Device-Suite vor und nach Neustart sowie Gerätesmoke auf dem iPhone SE; Maestro steuert echte iPhones nicht ([#101](https://github.com/Yggras/abnehm-app/issues/101)). Das Skript baut, installiert und öffnet die Links; ein Mensch bestätigt die Ergebnisse. | E2E-Artefakt-ID `ios-geraet` |
-| `produktion-binaries` | `scripts/app-build produktion ios\|android` mit der https-Adresse, danach `scripts/app-artefakt-pruefen` | Artefakt-IDs der Produktions-Binaries, TLS ohne Ausnahme |
+| `produktion-binaries` | `scripts/app-build produktion ios\|android` mit der https-Adresse, danach `scripts/app-artefakt-pruefen` | Artefakt-IDs der Produktions-Binaries; TLS ohne Ausnahme und keine Testfähigkeit in genau diesen Bundles |
 | `sichtpruefung` | Ein Mensch sieht die Bildschirmfotos `smoke-*.png` an (sichere Bereiche) | Sichtprüfung |
 
 - Testfähigkeiten fehlen im Produktionsbinary. Maestro, On-Device-Suite und Gerätesmoke prüfen deshalb die **E2E-Binaries desselben Commits** (Nutzerentscheidung vom 24.10.2026 in [#114](https://github.com/Yggras/abnehm-app/issues/114)). Das Protokoll hält beide Artefaktarten fest.
 - Protokoll, Logs, E2E-Läufe und Bildschirmfotos liegen unter `~/Library/Logs/abnehm-app/release/<Zeitpunkt>/`. Nur ein vollständiger grüner Lauf auf `origin/main` legt `freigaben/<commit>.md` an, dazu die freigegebenen Image- und Artefakt-IDs.
 - Ohne Terminal (etwa in einer Agenten-Session) bleiben die Bestätigungen offen; der Lauf ist dann nicht grün.
+- Die Release-Sperren gelten damit doppelt: als Tests am Export (`release-sperren`) und an den freigegebenen Artefakten selbst (`backend-image`, `produktion-binaries`). Die Gegenprobe am E2E-Bundle und am Development-Image findet die Marker (geprüft am 04.11.2026).
 - `--nur <schritt>,…` wiederholt einzelne Schritte zur Fehlersuche und gibt nie frei. `ABNEHM_RELEASE_BELIEBIGER_STAND=1` erlaubt Probeläufe auf anderen Ständen, ebenfalls ohne Freigabe.
 
 ## Updates
@@ -158,4 +161,4 @@ Geduldet sind Dienste von macOS selbst, die nichts mit der App zu tun haben (Nut
 
 ## Backup
 
-Backup und Restore sind **nicht Teil des Gates** (Nutzerentscheidung vom 04.11.2026). Damit weicht das Gate von #22 und Abschnitt 11 der Spezifikation 0 ab; beide sind entsprechend angepasst. Folge: Gehen Laptop oder SSD verloren, sind alle Daten und Mahlzeitenfotos verloren. Kommt ein Backup später dazu, gehören das Volume `photo-data` und Postgres aus **demselben** Sicherungslauf hinein ([`entwicklung.md`](entwicklung.md) › „Ernährung: Fotoentwurf bestätigen und Fotoablage“).
+Backup und Restore sind **nicht Teil des Gates** (Nutzerentscheidung vom 04.11.2026). Damit weicht das Gate von #22 und Abschnitt 11 der Spezifikation 0 ab. Die Kriterien in #115 sind angepasst; #22 und der Text von Abschnitt 11 nennen das Backup noch (Stand 04.11.2026). Folge: Gehen Laptop oder SSD verloren, sind alle Daten und Mahlzeitenfotos verloren. Kommt ein Backup später dazu, gehören das Volume `photo-data` und Postgres aus **demselben** Sicherungslauf hinein ([`entwicklung.md`](entwicklung.md) › „Ernährung: Fotoentwurf bestätigen und Fotoablage“).

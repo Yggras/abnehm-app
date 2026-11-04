@@ -9,17 +9,17 @@
 #
 # Protokoll samt Artefakt-IDs unter ~/Library/Logs/abnehm-app/release/<Zeitpunkt>/protokoll.md. Nur ein
 # vollständiger grüner Lauf auf einem sauberen Stand, der origin/main entspricht, legt die Freigabe
-# ~/Library/Logs/abnehm-app/release/freigaben/<commit>.md an. `scripts/prod start|update|app` verteilen nur
+# ~/Library/Logs/abnehm-app/release/freigaben/<commit>.md an. `scripts/prod start` und `scripts/prod app` verteilen nur
 # freigegebene Stände. Für Probeläufe auf anderen Ständen: ABNEHM_RELEASE_BELIEBIGER_STAND=1 (gibt nie frei).
 set -uo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-release_root="${ABNEHM_RELEASE_DIR:-$HOME/Library/Logs/abnehm-app/release}"
-base_dir="${ABNEHM_PROD_DIR:-$HOME/Library/Application Support/abnehm-app/produktion}"
+# shellcheck source=prod-umgebung
+source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
+repo_root="$prod_repo_root"
 all_steps=(stand statisch autorisierung release-sperren tests backend-image maestro android-geraet iphone-geraet produktion-binaries sichtpruefung)
 
 usage() {
-  sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
@@ -43,9 +43,9 @@ if [[ -n "$only" ]]; then
   for step in "${steps[@]}"; do [[ " ${all_steps[*]} " == *" $step "* ]] || { echo "Unbekannter Schritt: $step" >&2; exit 2; }; done
 fi
 
-[[ -f "$base_dir/produktion.env" ]] || { echo "Keine Produktivadresse: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
+[[ -f "$prod_env_file" ]] || { echo "Keine Produktivadresse: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
 # shellcheck disable=SC1091
-source "$base_dir/produktion.env"
+source "$prod_env_file"
 prod_url="$ABNEHM_PROD_URL"
 
 cd "$repo_root"
@@ -137,9 +137,14 @@ for step in "${steps[@]}"; do
           >"$run_dir/backend-image.log" 2>&1; then
         {
           echo "backend=$(docker image inspect --format '{{.Id}}' abnehm-prod-backend)"
-          echo "postgres=$(docker image inspect --format '{{.Id}}' "$(sed -n 's/^ *image: *//p' compose.prod.yaml | head -n 1)")"
+          echo "postgres=$(image_id "$(ABNEHM_PROD_URL="$prod_url" prod_postgres_image)")"
         } >"$run_dir/images.txt"
-        record backend-image bestanden "$(tr '\n' ' ' <"$run_dir/images.txt")"
+        # Release-Sperren an genau diesem Image, nicht nur an der COPY-Liste des Dockerfiles.
+        if node test/release-sperren-artefakt.ts image abnehm-prod-backend >>"$run_dir/backend-image.log" 2>&1; then
+          record backend-image bestanden "$(tr '\n' ' ' <"$run_dir/images.txt")· ohne Testfähigkeiten"
+        else
+          record backend-image FEHLGESCHLAGEN "Testfähigkeit im Image: backend-image.log"
+        fi
       else
         record backend-image FEHLGESCHLAGEN "backend-image.log"
       fi
@@ -156,9 +161,12 @@ for step in "${steps[@]}"; do
       if [[ -z "$android_serial" ]]; then
         record android-geraet OFFEN "--android-geraet <adb-serial> fehlt (Samsung Galaxy A34)"
       else
+        # Einmal bauen, dann beide Abläufe gegen dasselbe Binary.
         ok=true
+        scripts/e2e-build android --geraet >>"$run_dir/android-geraet.log" 2>&1 || ok=false
         for flow in geraetetest geraetesmoke; do
-          E2E_LOG_DIR="$run_dir/e2e" scripts/e2e-run android --geraet "$android_serial" --build --ablauf "$flow" >>"$run_dir/android-geraet.log" 2>&1 || ok=false
+          [[ "$ok" == true ]] || break
+          E2E_LOG_DIR="$run_dir/e2e" scripts/e2e-run android --geraet "$android_serial" --ablauf "$flow" >>"$run_dir/android-geraet.log" 2>&1 || ok=false
         done
         artifact="$(scripts/e2e-build android --geraet --pfad)"
         if [[ "$ok" == true ]]; then record android-geraet bestanden "On-Device-Suite und Gerätesmoke · $(artifact_line "$artifact")"
