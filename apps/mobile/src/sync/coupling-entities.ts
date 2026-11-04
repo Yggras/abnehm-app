@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { z } from 'zod';
 
@@ -42,6 +42,63 @@ function serverManaged<T extends SyncedTable & SQLiteTable, R extends EntityData
   });
 }
 
+/**
+ * Die gemeinsame Aktion einer lokalen Zeile, geprüft am Vertrag; die Umkehrung von `row` im Adapter unten.
+ * Bereiche lesen gemeinsame Aktionen nur hierüber, nie über das Spaltenmapping selbst.
+ */
+export function sharedActionOf(row: typeof sharedAction.$inferSelect): SharedAction {
+  return SharedAction.parse({
+    id: row.id, couplingId: row.couplingId, requesterPersonId: row.requesterPersonId, type: row.kind,
+    payload: row.payload, status: row.status, createdAt: row.createdAt, decidedAt: row.decidedAt,
+  });
+}
+
+// Gemeinsame Aktion: Die Art steht im Vertrag als `type`, lokal als `kind`. Eine Aktion ändert sich nur
+// einmal, mit ihrer Entscheidung; das ist ihr letzter Änderungszeitpunkt.
+const sharedActionRows = sqliteEntity({
+  entityType: 'shared_action',
+  ownerField: 'couplingId',
+  upsert: null,
+  deletable: false,
+  record: SharedAction,
+  table: sharedAction,
+  row: (id: EntityId, { type, decidedAt, createdAt, ...data }: SharedAction) => ({
+    ...data,
+    id,
+    kind: type,
+    decidedAt,
+    createdAt,
+    updatedAt: decidedAt ?? createdAt,
+  }),
+  replay: () => undefined,
+});
+
+/**
+ * Höchstens eine offene Rollenwahl je Kopplung, lokal wie in Postgres (`shared_action_open_role_choice_uq`).
+ * Das Ergebnis eines eigenen Antrags kann vor dem Pull ankommen, der eine ältere Rollenwahl als beendet
+ * meldet; deren lokale Zeile ist dann veraltet. Sie weicht der neueren und kommt mit ihrem Endzustand im
+ * nächsten Pull wieder, denn ihre spätere Änderung liegt hinter dem Cursor. Ist umgekehrt die lokal offene
+ * Zeile neuer, ist der eingehende Datensatz veraltet und wartet ebenso auf den Pull (#180).
+ */
+const sharedActionEntity: SyncEntityAdapter<EntityData, SharedAction> = {
+  ...sharedActionRows,
+  applyCanonical(tx, record) {
+    const action = record.data;
+    if (action.type === 'rollenwahl' && action.status === 'offen') {
+      const db = sqliteOf(tx);
+      const others = db
+        .select({ id: sharedAction.id, serverVersion: sharedAction.serverVersion })
+        .from(sharedAction)
+        .where(and(eq(sharedAction.couplingId, action.couplingId), eq(sharedAction.kind, 'rollenwahl'), eq(sharedAction.status, 'offen'), ne(sharedAction.id, record.entityId)))
+        .all();
+      const incoming = BigInt(record.serverVersion);
+      if (others.some((other) => other.serverVersion !== null && BigInt(other.serverVersion) > incoming)) return;
+      for (const other of others) db.delete(sharedAction).where(eq(sharedAction.id, other.id)).run();
+    }
+    sharedActionRows.applyCanonical(tx, record);
+  },
+};
+
 export const couplingSyncEntities: readonly SyncEntityAdapter[] = [
   // Die Kopplung ist selbst die Eigentumsgrenze; ihr Paar setzt nur der Server.
   serverManaged({ entityType: 'coupling', ownerField: 'personLowId', record: CouplingRecord, table: coupling }),
@@ -58,23 +115,5 @@ export const couplingSyncEntities: readonly SyncEntityAdapter[] = [
     },
   }),
   serverManaged({ entityType: 'island', ownerField: 'couplingId', record: IslandRecord, table: island }),
-  // Gemeinsame Aktion: Die Art steht im Vertrag als `type`, lokal als `kind`. Eine Aktion ändert sich nur
-  // einmal, mit ihrer Entscheidung; das ist ihr letzter Änderungszeitpunkt.
-  sqliteEntity({
-    entityType: 'shared_action',
-    ownerField: 'couplingId',
-    upsert: null,
-    deletable: false,
-    record: SharedAction,
-    table: sharedAction,
-    row: (id: EntityId, { type, decidedAt, createdAt, ...data }: SharedAction) => ({
-      ...data,
-      id,
-      kind: type,
-      decidedAt,
-      createdAt,
-      updatedAt: decidedAt ?? createdAt,
-    }),
-    replay: () => undefined,
-  }),
+  sharedActionEntity,
 ];

@@ -20,8 +20,9 @@ export const seedFormatVersion = 1;
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
  * Wasser-Mini-Trackers (#171), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
  * (#175). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). `leer` bis
- * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113). Zwei Installationen und
- * Offline/Sync folgen in #116.
+ * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113). `solo-energie` (Laichkugel
+ * solo mit gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
+ * Zwei Installationen und Offline/Sync folgen in #116.
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -39,6 +40,8 @@ export const SeedScenarioKey = z.enum([
   'tagesende_offen',
   'tagesende_abgeschlossen',
   'veralteter_partnerstand',
+  'solo-energie',
+  'rollenwahl-offen',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

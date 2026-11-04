@@ -79,3 +79,5 @@ manifestSuite('nach_erfuellung_korrigiert');
 manifestSuite('tagesende_offen');
 manifestSuite('tagesende_abgeschlossen');
 manifestSuite('veralteter_partnerstand');
+manifestSuite('solo-energie');
+manifestSuite('rollenwahl-offen');

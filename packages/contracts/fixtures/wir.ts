@@ -39,6 +39,17 @@ const gift = {
   requesterDisplayName: 'Anna',
 } as const;
 
+/** Offene Rollenwahl von Anna, beantwortet in der Ansicht `rollenwahl` des Tabs „Momo“ (#180). */
+const roleChoice = {
+  type: 'pending_shared_action',
+  id: sharedAction,
+  dataAsOf: now,
+  action: { actionId: 'wir.answer_role_choice', target: { type: 'momo', view: 'rollenwahl' } },
+  actionId: sharedAction,
+  kind: 'rollenwahl',
+  requesterDisplayName: 'Anna',
+} as const;
+
 const levelUp = {
   type: 'shared_event',
   id: sharedEvent,
@@ -62,6 +73,7 @@ export const wirFixtures = {
       'Gemeinschaftsprojekt': projectContribution,
       'Levelaufstieg': levelUp,
       'Deko-Geschenk': gift,
+      'Rollenwahl von Anna': roleChoice,
     },
     invalid: {
       'exakter Partneranteil in der Challenge': { ...proposal, partnerCount: 3 },
@@ -76,6 +88,8 @@ export const wirFixtures = {
     valid: {
       'lädt': { type: 'loading' },
       'bereit': { type: 'ready', data: [gift, projectContribution, levelUp] },
+      'nur die offene Rollenwahl': { type: 'ready', data: [roleChoice] },
+      'nichts zu zeigen': { type: 'ready', data: [] },
       'veraltet': { type: 'stale', data: [levelUp], dataAsOf: now },
       'Fehler mit Wiederholen': {
         type: 'error',

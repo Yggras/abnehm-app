@@ -10,6 +10,9 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
+import { appGameService } from '../island/app-game-service';
+import { createGameService } from '../island/game-service';
+import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { appNutrition, createNutrition, nutritionEntryEntity } from '../nutrition';
@@ -19,6 +22,7 @@ import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity 
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
+import { appWirContributions } from '../shell/app-wir';
 import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
@@ -47,6 +51,8 @@ const syncRegistry = createSyncRegistry([
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
 /** Mini-Tracker `trackers.weight`; seine Wiegetage liest er ebenfalls über den `PlanReader` (#175). */
 const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.weight');
+/** Momo auf „Heute“ (Spezifikation 4): bisher Laichkugel und Rollenwahl (#180). */
+const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 /** Der eigene Anzeigename für die Einstellungen (Spezifikation 5); folgt der geöffneten Kontodatenbank. */
 const ownDisplayName = followOwnDisplayName({ writer: syncWriter, clock: appClock });
@@ -93,10 +99,12 @@ function deviceState() {
       // `trackers.weight` und die Bildschirme des Bereichs (`appTrackers`). Den Schreib-Port `weightRecorder`
       // gibt der Composition Root an `composeAreaPorts` weiter, sobald alle Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
+      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands] }),
       });
       activeEngine = engine;
       void dispatcher.deliver();
@@ -107,6 +115,7 @@ function deviceState() {
         appTrackers.opened(trackers),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
+        appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

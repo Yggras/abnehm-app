@@ -47,6 +47,8 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('tagesende_offen', randzustaende),
   manifest('tagesende_abgeschlossen', randzustaende),
   manifest('veralteter_partnerstand', randzustaende),
+  manifest('solo-energie', 'apps/backend/test/seed-island-app.test.ts'),
+  manifest('rollenwahl-offen', 'apps/backend/test/seed-island-app.test.ts'),
   profile('uhr-ungesichert-24h'),
   profile('uhr-reise'),
   profile('transport-offline'),

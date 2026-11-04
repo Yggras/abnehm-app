@@ -164,6 +164,57 @@ describe('Seed-Manifest', () => {
   });
 });
 
+describe('Szenarien von Spezifikation 4 (#180)', () => {
+  const gekoppelt = seedManifests.gekoppelt;
+
+  it('solo-energie: solo ohne Kopplung, dazu zwei Gutschriften aus Tageszielen von vorgestern und gestern', () => {
+    const { initial, target, clock } = seedManifests['solo-energie'];
+    const { server, devices } = initial;
+    expect(clock).toEqual(seedClock);
+    for (const table of ['coupling', 'coupling_member', 'island', 'shared_action']) expect(server[table]).toBeUndefined();
+    const bookings = (server.energy_booking ?? []).map((row) =>
+      EnergyBooking.parse({
+        type: row.type, id: row.id, personId: row.person_id, localDate: row.local_date, bookingKey: row.booking_key,
+        amount: row.amount, trigger: row.trigger, createdAt: row.created_at,
+      }),
+    );
+    expect(bookings.map((booking) => [booking.localDate, booking.amount])).toEqual([[seedDays.vorgestern, 1], [seedDays.gestern, 1]]);
+    expect(server.daily_goal?.map((goal) => [goal.local_date, goal.baustein])).toEqual([
+      ...solo.initial.server.daily_goal!.map((goal) => [goal.local_date, goal.baustein]),
+      [seedDays.vorgestern, 'ernaehrung_erfasst'], [seedDays.vorgestern, 'wasserziel'], [seedDays.vorgestern, 'gewogen'],
+      [seedDays.gestern, 'im_kalorienbudget'], [seedDays.gestern, 'wasserziel'], [seedDays.gestern, 'sporteinheit'],
+    ]);
+    for (const goal of server.daily_goal ?? []) expect(DailyGoalSnapshot.safeParse(goal.snapshot).success).toBe(true);
+    // Dieselben IDs wie in solo; das iPhone kennt die Gutschriften.
+    expect(server.person).toEqual(solo.initial.server.person);
+    expect(devices['philipp-iphone']!.rows.energy_booking).toEqual(server.energy_booking);
+    expect(target).toEqual(initial);
+  });
+
+  it('rollenwahl-offen: gekoppelt vor dem Schlüpfen, Annas Vorschlag ist offen und auf beiden Geräten', () => {
+    const { initial, target, clock, accounts, installations } = seedManifests['rollenwahl-offen'];
+    const { server, devices } = initial;
+    expect({ clock, accounts, installations }).toEqual({ clock: gekoppelt.clock, accounts: gekoppelt.accounts, installations: gekoppelt.installations });
+    expect(server.island).toEqual([expect.objectContaining({ id: seedIds.island.philippAnna, state: 'wartet_auf_rollen', hatched_at: null, time_zone: null })]);
+    expect(server.coupling_member?.map((member) => member.role)).toEqual([null, null]);
+    const [action] = server.shared_action ?? [];
+    expect(server.shared_action).toHaveLength(1);
+    expect(action).toMatchObject({
+      id: seedIds.sharedAction.annasRollenwahl,
+      kind: 'rollenwahl',
+      requester_person_id: seedIds.person.anna,
+      payload: { proposerRole: 'natur' },
+      status: 'offen',
+      decided_at: null,
+    });
+    for (const key of ['philipp-iphone', 'anna-android']) expect(devices[key]!.rows.shared_action).toEqual(server.shared_action);
+    // Sonst wie gekoppelt: dieselben Personen, Kopplung und Projektionen.
+    expect(server.person).toEqual(gekoppelt.initial.server.person);
+    expect(server.coupling).toEqual(gekoppelt.initial.server.coupling);
+    expect(target).toEqual(initial);
+  });
+});
+
 describe('Bereichsbeiträge', () => {
   const extra: SeedPart = {
     area: 'ernaehrung',
