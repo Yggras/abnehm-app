@@ -324,8 +324,8 @@ function scaled(value: number, numerator: number, denominator: number): number {
 export const PhotoMediaType = z.enum(['image/jpeg', 'image/png', 'image/webp']);
 export type PhotoMediaType = z.infer<typeof PhotoMediaType>;
 
-/** Höchstgröße eines hochgeladenen Fotos: 8 MiB (Designwert, nicht belegt; Claude nimmt bis 10 MB je Bild). */
-export const photoUploadMaxBytes = 8 * 1024 * 1024;
+/** Höchstgröße eines hochgeladenen Fotos: 8 MB (Designwert, nicht belegt; Claude nimmt bis 10 MB je Bild). */
+export const photoUploadMaxBytes = 8_000_000;
 
 /**
  * Anfrage der Fotoanalyse: ein Bild im Feld `photo` eines `multipart/form-data`-Bodys. Das Schema
@@ -341,26 +341,25 @@ export const photoAnalysisMaxComponents = 15;
 const maxComponentKcal = 50_000;
 
 /** Ein Bestandteil, wie ihn das Modell schätzt: Menge in g bzw. ml, Nährwerte für genau diese Menge. */
-type EstimatedComponent = { name: string; amount: number; unit: BaseUnit; kcal: number; proteinG: number; carbsG: number; fatG: number };
+const EstimatedComponent = z.strictObject({
+  name: z.string().trim().min(1).max(200),
+  amount: z.number().positive(),
+  unit: BaseUnit,
+  kcal: z.number().nonnegative().max(maxComponentKcal),
+  proteinG: z.number().nonnegative(),
+  carbsG: z.number().nonnegative(),
+  fatG: z.number().nonnegative(),
+});
+type EstimatedComponent = z.infer<typeof EstimatedComponent>;
 
 /**
  * Bestandteil einer Fotoanalyse, wie das Modell ihn liefert: deutscher Name, geschätzte Menge in g
  * bzw. ml und die Nährwerte für genau diese Menge. Zahlengrenzen bildet Structured Outputs nicht ab;
  * die Zod-Prüfung beim Parsen setzt sie durch (https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
  */
-export const MealPhotoAnalysisComponent = z
-  .strictObject({
-    name: z.string().trim().min(1).max(200),
-    amount: z.number().positive(),
-    unit: BaseUnit,
-    kcal: z.number().nonnegative().max(maxComponentKcal),
-    proteinG: z.number().nonnegative(),
-    carbsG: z.number().nonnegative(),
-    fatG: z.number().nonnegative(),
-  })
-  .refine((component) => photoDraftComponentOf(component) !== null, {
-    message: 'Menge über 0 und höchstens 5 kg bzw. 5 l; Makros zusammen höchstens die Menge',
-  });
+export const MealPhotoAnalysisComponent = EstimatedComponent.refine((component) => photoDraftComponentOf(component) !== null, {
+  message: 'Menge über 0 und höchstens 5 kg bzw. 5 l; Makros zusammen höchstens die Menge',
+});
 export type MealPhotoAnalysisComponent = z.infer<typeof MealPhotoAnalysisComponent>;
 
 /** Antwortschema des Modells für die Fotoanalyse; eine leere Liste heißt „kein Essen erkannt“. */
@@ -411,7 +410,7 @@ export function photoDraftComponentOf(component: EstimatedComponent): PhotoDraft
 /** Erfolgreiche Fotoanalyse: der angelegte Fotoentwurf mit seinen Bestandteilen. */
 export const PhotoAnalysisResult = z.strictObject({
   draftId: EntityId,
-  /** Danach nimmt der Server den Entwurf nicht mehr an; spätestens dann ist er samt Bild gelöscht. */
+  /** Ab dann nimmt der Server den Entwurf nicht mehr an; spätestens 24 Stunden nach der Analyse ist er samt Bild gelöscht. */
   expiresAt: Instant,
   components: z.array(PhotoDraftComponent).min(1).max(photoAnalysisMaxComponents),
 });

@@ -18,10 +18,11 @@ import {
   type PhotoDraftComponent,
 } from '@abnehm/contracts/nutrition';
 
-import { forbiddenError, guard, policies } from '../authorization/authorization.ts';
+import { forbiddenError, guard, policies, type Actor } from '../authorization/authorization.ts';
 import type { Database } from '../database.ts';
 import { person, photoDraft } from '../db/schema/index.ts';
 import type { Job } from '../jobs/job-registry.ts';
+import { createAnalysisLimiter, MAX_ANALYSES_PER_DAY } from './analysis-limiter.ts';
 import type { MealVisionAnalyzer, MealVisionOutcome } from './meal-vision.ts';
 import { sanitizedJpeg } from './photo-image.ts';
 import type { PhotoStorage } from './photo-storage.ts';
@@ -31,11 +32,6 @@ import type { PhotoStorage } from './photo-storage.ts';
 // Fotoentwurf, den die App bestätigt (#162) oder verwirft. Nicht bestätigte Entwürfe löscht ein Job
 // samt Bild spätestens nach 24 Stunden.
 
-/** Gültigkeit eines Fotoentwurfs: 24 Stunden (#22; Designwert, nicht belegt). */
-const DRAFT_LIFETIME_MS = 24 * 60 * 60_000;
-
-/** Kostenschutz: Analysen je Person und lokalem Tag (Designwert, nicht belegt). */
-export const MAX_ANALYSES_PER_DAY = 20;
 
 /** Spielraum für Feldnamen, Dateinamen und Grenzen eines `multipart/form-data`-Bodys um das Bild. */
 const FORM_OVERHEAD_BYTES = 64 * 1024;
@@ -44,12 +40,17 @@ const FORM_OVERHEAD_BYTES = 64 * 1024;
 const CLEANUP_INTERVAL_MS = 5 * 60_000;
 
 /**
- * Wie lange vor dem Ablauf der Aufräumjob einen Entwurf schon löscht: sein Intervall plus der Takt, in
- * dem der Backend-Prozess fällige Jobs prüft (eine Minute, `job-registry.ts`). So ist jeder Entwurf
- * spätestens zu seinem Ablauf, also nach 24 Stunden, physisch gelöscht; die Bestätigung eines Entwurfs
- * in seinen letzten Minuten behandelt #162 wie einen abgelaufenen.
+ * Längste Zeit zwischen Ablauf und physischem Löschen: das Intervall des Aufräumjobs plus der Takt, in
+ * dem der Backend-Prozess fällige Jobs prüft (eine Minute, `job-registry.ts`).
  */
-const CLEANUP_LEAD_MS = CLEANUP_INTERVAL_MS + 60_000;
+const CLEANUP_DELAY_MS = CLEANUP_INTERVAL_MS + 60_000;
+
+/**
+ * Gültigkeit eines Fotoentwurfs: 24 Stunden abzüglich der Verzögerung des Aufräumjobs. So ist jeder
+ * nicht bestätigte Entwurf samt Bild spätestens nach 24 Stunden physisch gelöscht (#22), und die App
+ * sieht in `expiresAt` den Zeitpunkt, ab dem der Server ihn nicht mehr annimmt (Designwert, nicht belegt).
+ */
+const DRAFT_LIFETIME_MS = 24 * 60 * 60_000 - CLEANUP_DELAY_MS;
 
 const httpStatus = {
   photo_invalid_image: 400,
@@ -65,27 +66,6 @@ function failure(c: Context, code: PhotoAnalysisErrorCode) {
 }
 
 type AnalysisResult = Readonly<{ type: 'entwurf'; result: PhotoAnalysisResult }> | Readonly<{ type: 'fehler'; code: PhotoAnalysisErrorCode }>;
-
-/**
- * Kostenschutz im Speicher des einen Backend-Prozesses, wie die Begrenzungen der Anmeldung: höchstens
- * `MAX_ANALYSES_PER_DAY` je Person und lokalem Tag und eine laufende Analyse je Person. Ein Neustart
- * setzt die Zähler zurück.
- */
-function createAnalysisLimiter() {
-  const running = new Set<string>();
-  const today = new Map<string, { localDate: string; count: number }>();
-  return {
-    /** Belegt den Platz der Person und zählt die Analyse, oder `null` bei erreichtem Limit. */
-    start(personId: string, localDate: string): { count: number; end(): void } | null {
-      const counted = today.get(personId);
-      const count = counted?.localDate === localDate ? counted.count : 0;
-      if (running.has(personId) || count >= MAX_ANALYSES_PER_DAY) return null;
-      running.add(personId);
-      today.set(personId, { localDate, count: count + 1 });
-      return { count: count + 1, end: () => running.delete(personId) };
-    },
-  };
-}
 
 /** Was aus dem Ergebnis des Analyzers wird: die Bestandteile des Entwurfs oder ein Fehlercode. */
 function verdictOf(outcome: MealVisionOutcome): { components: PhotoDraftComponent[] } | { code: PhotoAnalysisErrorCode } {
@@ -214,6 +194,9 @@ export function createPhotoDrafts({
     .post(
       '/nutrition/photo-analysis',
       guard(policies.authenticated()),
+      // Ohne Person (vor dem Bootstrap) gibt es niemanden, dem ein Entwurf gehören könnte; entschieden
+      // wird das wie jede Autorisierung vor dem Body.
+      createMiddleware<{ Variables: { actor: Actor } }>(async (c, next) => (c.var.actor.personId === null ? c.json(forbiddenError, 403) : next())),
       bodyLimit({ maxSize: photoUploadMaxBytes + FORM_OVERHEAD_BYTES, onError: (c) => failure(c, 'photo_invalid_image') }),
       readForm,
       validator('form', (form, c) => {
@@ -224,7 +207,6 @@ export function createPhotoDrafts({
       }),
       async (c) => {
         const { personId } = c.var.actor;
-        // Ohne Person (vor dem Bootstrap) gibt es niemanden, dem ein Entwurf gehören könnte.
         if (personId === null) return c.json(forbiddenError, 403);
         const outcome = await analyze(personId, new Uint8Array(await c.req.valid('form').photo.arrayBuffer()));
         return outcome.type === 'entwurf' ? c.json(outcome.result, 201) : failure(c, outcome.code);
@@ -236,15 +218,12 @@ export function createPhotoDrafts({
       return c.body(null, 204);
     });
 
-  /** Löscht nicht bestätigte Entwürfe samt Bild spätestens zu ihrem Ablauf; idempotent. */
+  /** Löscht abgelaufene, nicht bestätigte Entwürfe samt Bild; idempotent. */
   const cleanupJob: Job = {
     name: 'fotoentwuerfe_aufraeumen',
     intervalMs: CLEANUP_INTERVAL_MS,
     async run() {
-      const due = await database.db
-        .select({ id: photoDraft.id })
-        .from(photoDraft)
-        .where(lte(photoDraft.expiresAt, new Date(nowMs() + CLEANUP_LEAD_MS)));
+      const due = await database.db.select({ id: photoDraft.id }).from(photoDraft).where(lte(photoDraft.expiresAt, new Date(nowMs())));
       for (const { id } of due) await remove(id);
     },
   };

@@ -4,7 +4,14 @@ import { isAbsolute } from 'node:path';
 import type { AuthSettings } from './auth/auth-module.ts';
 import { MIN_INVITE_CODE_SECRET_LENGTH, type InvitationSettings } from './coupling/invite-codes.ts';
 import type { DatabaseSettings } from './database.ts';
-import { mealVisionEfforts, mealVisionPrompts, type MealVisionEffort, type MealVisionPromptVersion, type MealVisionSettings } from './nutrition/claude-meal-vision.ts';
+import {
+  mealVisionDefaults,
+  mealVisionEfforts,
+  mealVisionPrompts,
+  type MealVisionEffort,
+  type MealVisionPromptVersion,
+  type MealVisionSettings,
+} from './nutrition/meal-vision-settings.ts';
 
 export type BackendConfig = {
   port: number;
@@ -19,15 +26,6 @@ export type BackendConfig = {
    */
   mealVision: MealVisionSettings | null;
 };
-
-/** Startwerte der Fotoanalyse (Spezifikation 2, Abschnitt 8): Modell aus #5, Effort `medium`. */
-const mealVisionDefaults = {
-  model: 'claude-sonnet-5-5',
-  effort: 'medium',
-  promptVersion: 'v1',
-  // Adaptives Thinking zählt mit; 16.000 lässt ihm Raum und bleibt ohne Streaming unter den HTTP-Fristen des SDK.
-  maxTokens: 16_000,
-} as const satisfies Omit<MealVisionSettings, 'apiKey'>;
 
 /** Better Auth signiert damit Sitzungstokens; `openssl rand -hex 32` ergibt 64 Zeichen. */
 const MIN_AUTH_SECRET_LENGTH = 32;

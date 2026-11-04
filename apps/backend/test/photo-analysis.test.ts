@@ -40,7 +40,8 @@ async function cameraPhoto(format: 'jpeg' | 'png' | 'webp' = 'jpeg') {
 
 function form(bytes: Uint8Array, type: string, field = 'photo') {
   const body = new FormData();
-  body.append(field, new Blob([bytes], { type }), 'teller.jpg');
+  // Kopie mit eigenem ArrayBuffer; `Blob` nimmt keine Ansicht auf einen SharedArrayBuffer.
+  body.append(field, new Blob([new Uint8Array(bytes)], { type }), 'teller.jpg');
   return body;
 }
 
@@ -61,21 +62,23 @@ function expectError(reply: { status: number; body: unknown }, status: number, c
   expect(PhotoAnalysisError.parse(reply.body)).toEqual({ code, retryable: code === 'photo_analysis_unavailable' });
 }
 
-/** Ein Analyzer, der hängt, bis der Test ihn freigibt. */
+/** Ein Analyzer, der hängt, bis der Test ihn freigibt; `entered` zählt die begonnenen Analysen. */
 function heldAnalyzer(outcome: MealVisionOutcome) {
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
+  const state = { entered: 0 };
   const analyzer: MealVisionAnalyzer = {
     async analyze() {
+      state.entered++;
       await held;
       return outcome;
     },
   };
-  return { analyzer, release: () => release() };
+  return { analyzer, state, release: () => release() };
 }
 
 describe('Fotoanalyse: Erfolg', () => {
-  it('legt einen Fotoentwurf an und liefert Entwurfs-ID, Ablauf in 24 Stunden und Bestandteile in Vertragseinheiten', async () => {
+  it('legt einen Fotoentwurf an und liefert Entwurfs-ID, Ablauf und Bestandteile in Vertragseinheiten', async () => {
     const clock = createTestClock(start);
     const { backend, anna } = await world({ clock });
 
@@ -83,7 +86,8 @@ describe('Fotoanalyse: Erfolg', () => {
 
     expect(reply.status).toBe(201);
     const result = PhotoAnalysisResult.parse(reply.body);
-    expect(result.expiresAt).toBe('2026-10-15T12:00:00.000Z');
+    // 24 Stunden abzüglich Intervall (5 min) und Prüftakt (1 min) des Aufräumjobs.
+    expect(result.expiresAt).toBe('2026-10-15T11:54:00.000Z');
     expect(result.components).toEqual([
       { name: 'Bratkartoffeln', baseUnit: 'g', baseAmount: 180_000, milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 },
       { name: 'Spiegelei', baseUnit: 'g', baseAmount: 60_000, milliKcal: 110_000, proteinMg: 7_500, carbsMg: 400, fatMg: 8_800 },
@@ -144,7 +148,7 @@ describe('Fotoanalyse: Format und Größe', () => {
     ['abgeschnittenes JPEG', async () => form((await cameraPhoto()).subarray(0, 200), 'image/jpeg')],
     ['leere Datei', async () => form(new Uint8Array(), 'image/jpeg')],
     ['falsches Feld', async () => form(await cameraPhoto(), 'image/jpeg', 'bild')],
-    ['über 8 MiB', async () => form(new Uint8Array(photoUploadMaxBytes + 1), 'image/jpeg')],
+    ['über 8 MB', async () => form(new Uint8Array(photoUploadMaxBytes + 1), 'image/jpeg')],
     ['JSON statt Formular', async () => ({ photo: 'abc' })],
   ])('%s → photo_invalid_image, ohne Analyse und ohne Entwurf', async (_, body) => {
     const { backend, anna } = await world();
@@ -153,7 +157,7 @@ describe('Fotoanalyse: Format und Größe', () => {
     expect(await drafts(backend)).toEqual([]);
   });
 
-  it('nimmt genau 8 MiB noch an', async () => {
+  it('nimmt genau 8 MB noch an', async () => {
     const { backend, anna } = await world();
     const photo = await cameraPhoto();
     const padded = new Uint8Array(photoUploadMaxBytes);
@@ -218,13 +222,15 @@ describe('Fotoanalyse: Kostenschutz und Protokoll', () => {
   });
 
   it('lässt je Person nur eine laufende Analyse zu', async () => {
-    const held = heldAnalyzer({ type: 'analysiert', analysis: fakeMealVisionAnalysis, usage: { inputTokens: 1, outputTokens: 1 } });
+    const held = heldAnalyzer({ type: 'analysiert', analysis: { components: fakeMealVisionAnalysis.components.map((component) => ({ ...component })) }, usage: { inputTokens: 1, outputTokens: 1 } });
     const { backend, anna } = await world({ mealVisionAnalyzer: held.analyzer });
     const bernd = await personWithSession(backend, 'bernd@example.test');
     const photo = await cameraPhoto();
 
     const first = analyze(backend, anna.device, form(photo, 'image/jpeg'));
-    await vi.waitFor(async () => expectError(await analyze(backend, anna.device, form(photo, 'image/jpeg')), 429, 'photo_analysis_limit_reached'));
+    // Erst wenn Annas erste Analyse im Analyzer steckt, ist ihr Platz sicher belegt.
+    await vi.waitFor(() => expect(held.state.entered).toBe(1), { timeout: 10_000 });
+    expectError(await analyze(backend, anna.device, form(photo, 'image/jpeg')), 429, 'photo_analysis_limit_reached');
     // Andere Personen warten nicht auf Anna.
     const parallel = analyze(backend, bernd.device, form(photo, 'image/jpeg'));
     held.release();
@@ -282,12 +288,12 @@ describe('Fotoentwurf: Ablauf, Verwerfen und Aufräumen', () => {
     const younger = await analyzed(backend, anna.device);
 
     // Vor dem Ablauf bleibt alles.
-    clock.set(Instant.parse('2026-10-15T11:50:00.000Z'));
+    clock.set(Instant.parse('2026-10-15T11:45:00.000Z'));
     await backend.jobs.runDue();
     expect(await drafts(backend)).toHaveLength(3);
     expect(await imageOf(backend, draft.imageKey)).not.toBeNull();
 
-    // Spätestens zum Ablauf (createdAt + 24 h) ist der Entwurf samt Bild physisch gelöscht, der fehlgeschlagene ebenso.
+    // Ab dem Ablauf löscht der Job den Entwurf samt Bild physisch, den fehlgeschlagenen ebenso.
     clock.set(draft.result.expiresAt);
     await backend.jobs.runDue();
     expect((await drafts(backend)).map(({ id }) => id)).toEqual([younger.result.draftId]);
@@ -298,6 +304,24 @@ describe('Fotoentwurf: Ablauf, Verwerfen und Aufräumen', () => {
     await backend.jobs.runDue();
     expect(await drafts(backend)).toEqual([]);
     expect(await imageOf(backend, younger.imageKey)).toBeNull();
+  });
+
+  it('im Takt des Backend-Prozesses ist ein Entwurf auch im ungünstigsten Fall spätestens 24 Stunden nach der Analyse gelöscht', async () => {
+    const clock = createTestClock(start);
+    const { backend, anna } = await world({ clock });
+    const draft = await analyzed(backend, anna.device);
+    const latest = Date.parse(start.instant) + 24 * HOUR;
+
+    // Ungünstigster Fall: Der Job läuft eine Sekunde vor dem Ablauf, danach prüft der Prozess jede Minute.
+    clock.set(Instant.parse(new Date(Date.parse(draft.result.expiresAt) - 1_000).toISOString()));
+    await backend.jobs.runDue();
+    expect(await drafts(backend)).toHaveLength(1);
+    while ((await drafts(backend)).length > 0) {
+      clock.advanceBy(60_000);
+      expect(Date.parse(clock.read().instant)).toBeLessThanOrEqual(latest);
+      await backend.jobs.runDue();
+    }
+    expect(await imageOf(backend, draft.imageKey)).toBeNull();
   });
 
   it('räumt eine Zeile ab, deren Bild fehlt', async () => {

@@ -291,9 +291,9 @@ export const nutritionFixtures = {
     invalid: { 'GIF nimmt der Server nicht an': 'image/gif', 'HEIC': 'image/heic' },
   }),
   PhotoAnalysisUpload: fixtures(PhotoAnalysisUpload, {
-    valid: { 'JPEG der App': { mediaType: 'image/jpeg', byteSize: 412_345 }, 'genau 8 MiB': { mediaType: 'image/webp', byteSize: 8 * 1024 * 1024 } },
+    valid: { 'JPEG der App': { mediaType: 'image/jpeg', byteSize: 412_345 }, 'genau 8 MB': { mediaType: 'image/webp', byteSize: 8_000_000 } },
     invalid: {
-      'über 8 MiB': { mediaType: 'image/jpeg', byteSize: 8 * 1024 * 1024 + 1 },
+      'über 8 MB': { mediaType: 'image/jpeg', byteSize: 8_000_001 },
       'leere Datei': { mediaType: 'image/png', byteSize: 0 },
       'unbekanntes Format': { mediaType: 'application/pdf', byteSize: 1_000 },
     },

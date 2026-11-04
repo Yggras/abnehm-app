@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { fakeMealVisionMarker } from '../apps/backend/dev/meal-vision/fake-analyzer.ts';
 import { deepLinkHandler, testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
 
 // Release-Sperren (Spezifikation 0, Abschnitt 12 und Testing Decisions; #112): Für jede registrierte
@@ -263,7 +264,7 @@ describe('Fake der Fotoanalyse (#161)', () => {
 
   it('ist zentral registriert, mit Modul, Steuerroute und Marker', () => {
     expect(capability).toMatchObject({ modules: ['apps/backend/dev/meal-vision/'], entries: { backendRoutes: ['POST /dev/fotoanalyse'] } });
-    expect(read('apps/backend/dev/meal-vision/fake-analyzer.ts')).toContain(capability.markers[0]);
+    expect(capability.markers).toEqual([fakeMealVisionMarker]);
   });
 
   it('das Produktions-Image enthält weder den Fake noch einen Verweis auf ihn, wohl aber den Claude-Adapter', () => {
