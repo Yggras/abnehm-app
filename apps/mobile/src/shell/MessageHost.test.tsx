@@ -1,8 +1,9 @@
 import { act, renderHook, screen, userEvent } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { AccessibilityInfo, Dimensions } from 'react-native';
+import { AccessibilityInfo } from 'react-native';
 import type * as ZodModule from 'zod';
 
+import { withDeviceConfig } from '../design/testing/device-config';
 import { hitArea } from '../design/testing/hit-area';
 import type * as MessageTextsModule from './message-texts';
 import { MessageHostProvider, MessageSlot, useMessageHost, type Message } from './MessageHost';
@@ -289,14 +290,9 @@ describe('Texte', () => {
 });
 
 describe('Schriftfaktor 2,0', () => {
-  const initial = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
-
-  afterEach(() => {
-    Dimensions.set(initial);
-  });
+  withDeviceConfig('schriftfaktor-2');
 
   test('beide Zeilen und „Rückgängig“ bleiben sichtbar und bedienbar', async () => {
-    Dimensions.set({ window: { ...initial.window, fontScale: 2 }, screen: { ...initial.screen, fontScale: 2 } });
     await renderHost();
     const message = water();
     await show(message);

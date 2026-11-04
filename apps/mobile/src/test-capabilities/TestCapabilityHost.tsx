@@ -13,6 +13,7 @@ import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
 import { transportFaultModeName } from './network';
+import { runtimeProfiles } from './profiles';
 import { runSeed } from './seed/seed-flow';
 
 // Wirt der Testfähigkeiten in Test-Artefakten (#112, #114): führt Seeds mit der App-Sitzung aus, öffnet
@@ -42,6 +43,8 @@ function statusNotice(status: TestStatus) {
     }
     case 'uhr_gestellt':
       return <Notice tone="neutral" text={`Testuhr: ${status.reading.instant}, ${status.reading.timeZone}.`} />;
+    case 'profil_gestellt':
+      return <Notice tone="neutral" text={`Laufzeitprofil „${status.profile}“: ${runtimeProfiles[status.profile].description}`} />;
     case 'geraetetest_laeuft':
       return <Notice tone="neutral" text={`Gerätetest ${phaseText[status.phase]} läuft …`} />;
     case 'geraetetest_fertig': {

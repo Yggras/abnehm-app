@@ -203,10 +203,10 @@ const korrekturAt = '2026-10-14T11:50:00.000Z';
 function nachErfuellungKorrigiert(): Randzustand {
   const synced = stateOf([...basis(water.erreicht), soloErnaehrung, { area: 'fundament', entities: completion('heute', 2, water.erreicht[3][1]) }]);
   const lastEntry = synced.server.water_entry!.find((row) => row.id === seedIds.waterEntry.philippHeute[3])!;
-  const { server_version: _version, ...row } = lastEntry;
+  // Die neue Serverversion vergibt `changedOnServer`.
   const initial = changedOnServer(synced, {
     createdAt: korrekturAt,
-    changes: [{ table: 'water_entry', entityType: 'water_entry', ownerPersonId: philipp, row: { ...row, updated_at: korrekturAt, deleted_at: korrekturAt } }],
+    changes: [{ table: 'water_entry', entityType: 'water_entry', ownerPersonId: philipp, row: { ...lastEntry, updated_at: korrekturAt, deleted_at: korrekturAt } }],
   });
   return { initial, steps: [{ type: 'sync', installation: iphone }], target: pulledBy(initial, iphone, philipp) };
 }

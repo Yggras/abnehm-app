@@ -1,0 +1,15 @@
+{
+  // Repoweite Prüfungen, die App-Code importieren (#113: Registry der Seed-Varianten). App-Code arbeitet
+  // wie die App mit Bundler-Auflösung und ohne Dateiendungen; unter `nodenext` (tsconfig.json) gälte die
+  // Datei als CommonJS. Wie apps/backend/tsconfig.app-auth.json.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "types": ["node"]
+  },
+  "include": ["test/seed-varianten.test.ts"]
+}

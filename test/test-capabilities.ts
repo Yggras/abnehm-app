@@ -72,6 +72,14 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['Fehler-Adapter'],
   },
   {
+    // #113: benannte Profile über Fehler-Adapter und Testuhr; Registry samt Tests in `test/seed-varianten.ts`.
+    key: 'laufzeitprofile',
+    description: 'Benannte, deterministische Zeit-, Transport-, Auth-, Storage- und Serverfehler über Fehler-Adapter und Testuhr, gestellt per Link `profil`',
+    modules: ['apps/mobile/src/test-capabilities/profiles.ts'],
+    entries: { deepLinks: ['profil'] },
+    markers: ['transport-antwort-verloren'],
+  },
+  {
     // #114: Maestros `setAirplaneMode` gibt es nur auf Android (https://docs.maestro.dev/api-reference/commands/setairplanemode).
     key: 'transport-fehlermodus',
     description: 'iOS-Ersatz für den Flugmodus im E2E-Build: `fehler?transport=offline` meldet dem Sync zusätzlich kein Netz, die Rückkehr zu `ok` eine Netzrückkehr',

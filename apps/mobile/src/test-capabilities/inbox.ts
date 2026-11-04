@@ -4,10 +4,11 @@ import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase, DeviceSuiteReport } from './device-suite/suite';
 import type { FaultController, FaultPlan } from './faults';
 import type { TestLink, TestLinkPath } from './links';
+import { applyRuntimeProfile, type RuntimeProfileKey } from './profiles';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
 
-// Eingang der Testfähigkeiten (#112, #114): nimmt Deep Links an, stellt Fehler-Adapter und Testuhr
-// sofort und reiht Seeds ein, bis die App-Shell sie ausführt. Ein Seed läuft nie doppelt; ein neuer
+// Eingang der Testfähigkeiten (#112, #114): nimmt Deep Links an, stellt Fehler-Adapter, Testuhr und
+// Laufzeitprofile (#113) sofort und reiht Seeds ein, bis die App-Shell sie ausführt. Ein Seed läuft nie doppelt; ein neuer
 // Link wartet, bis der laufende fertig ist. Phasen der On-Device-Suite laufen ebenso nacheinander. Der
 // Zustand ist für den Hinweis in Test-Artefakten beobachtbar; Maestro liest ihn dort ab.
 
@@ -18,6 +19,7 @@ export type TestStatus =
   | Readonly<{ type: 'seed_fehlgeschlagen'; step: Extract<SeedOutcome, { type: 'fehlgeschlagen' }>['step'] | 'unerwartet' }>
   | Readonly<{ type: 'fehler_gestellt'; plan: FaultPlan }>
   | Readonly<{ type: 'uhr_gestellt'; reading: ClockReading }>
+  | Readonly<{ type: 'profil_gestellt'; profile: RuntimeProfileKey; plan: FaultPlan; reading: ClockReading }>
   | Readonly<{ type: 'geraetetest_laeuft'; phase: DeviceSuitePhase }>
   | Readonly<{ type: 'geraetetest_fertig'; report: DeviceSuiteReport }>
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
@@ -92,6 +94,9 @@ export function createTestInbox({ faults, clock, deviceSuite }: TestInboxOptions
         case 'uhr':
           clock.adjust(link.adjustment);
           return setStatus({ type: 'uhr_gestellt', reading: clock.read() });
+        case 'profil':
+          applyRuntimeProfile(link.profile, { faults, clock });
+          return setStatus({ type: 'profil_gestellt', profile: link.profile, plan: faults.plan(), reading: clock.read() });
         case 'geraetetest':
           return runSuite(link.phase);
         case 'seed':
