@@ -15,7 +15,7 @@ import { createGameService } from '../island/game-service';
 import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, photoDraftCommand } from '../nutrition';
+import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createDeviceInvitationFlows } from '../online';
 import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
@@ -104,7 +104,7 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, photoDraftCommand({ persistence })] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, confirmPhotoDraftCommand({ persistence })] }),
       });
       activeEngine = engine;
       void dispatcher.deliver();

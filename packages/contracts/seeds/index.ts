@@ -23,6 +23,7 @@ export {
   SeedScenarioKey,
   SeedState,
   SeedStep,
+  SyntheticImage,
   seedFormatVersion,
   seedRoutePath,
   type SeedAccount,

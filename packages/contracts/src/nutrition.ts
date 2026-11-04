@@ -481,8 +481,8 @@ export const ConfirmPhotoDraft = z
   .strictObject({
     draftId: EntityId,
     photoId: EntityId,
-    /** „Mit Partner teilen“; die App schlägt ihn an vor (Standard an, #22), die Person kann ihn abwählen. */
-    sharedWithPartner: z.boolean(),
+    /** „Mit Partner teilen“; Standard an (#22), die Person kann ihn abwählen. */
+    sharedWithPartner: z.boolean().default(true),
     entries: z.array(ConfirmedPhotoEntry).min(1).max(photoMealMaxEntries),
   })
   .refine((command) => new Set(command.entries.map((item) => item.id)).size === command.entries.length, {
@@ -510,8 +510,8 @@ export function confirmPhotoDraftKey(draftId: EntityId): string {
 }
 
 /** Bildschlüssel eines Fotos in der Fotoablage: 32 Zufallsbytes in base64url, nicht erratbar. */
-export const MealPhotoImageKey = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-export type MealPhotoImageKey = z.infer<typeof MealPhotoImageKey>;
+export const PhotoImageKey = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+export type PhotoImageKey = z.infer<typeof PhotoImageKey>;
 
 /**
  * Generisches Upsert des Mahlzeitenfotos (Spezifikation 2, Abschnitt 11): nur der Freigabeschalter.
@@ -527,7 +527,7 @@ export type MealPhotoUpsert = z.infer<typeof MealPhotoUpsert>;
  * authentifizierte API abrufbar.
  */
 export const MealPhotoRecord = z.strictObject({
-  imageKey: MealPhotoImageKey,
+  imageKey: PhotoImageKey,
   /** Zeitpunkt der Analyse auf dem Server, Sekunden nach der Aufnahme. */
   capturedAt: Instant,
   sharedWithPartner: z.boolean(),

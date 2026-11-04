@@ -26,6 +26,9 @@ import type { PhotoStorage } from './photo-storage.ts';
 // zurück, besteht der Entwurf fort und ein Retry findet dieselben Dateien. Dateien, zu denen weder ein
 // Entwurf noch ein nicht gelöschtes Mahlzeitenfoto gehört, entfernt der Aufräumjob der Fotoablage.
 
+/** Ein bestätigbarer Fotoentwurf samt seinem Bild. */
+type ValidDraft = typeof photoDraft.$inferSelect & Readonly<{ image: Uint8Array }>;
+
 /** Abstand der Aufräumläufe der Fotoablage (Designwert, nicht belegt), wie bei den Fotoentwürfen. */
 const STORAGE_CLEANUP_INTERVAL_MS = 5 * 60_000;
 
@@ -60,7 +63,7 @@ export function createMealPhotos({
   });
 
   /** Der Entwurf, sofern er der Person gehört, analysiert und nicht abgelaufen ist, samt seinem Bild. */
-  async function validDraft(tx: DbExecutor, draftId: string, personId: string, at: Date) {
+  async function validDraft(tx: DbExecutor, draftId: string, personId: string, at: Date): Promise<ValidDraft | null> {
     // Sperrt den Entwurf gegen den Aufräumjob und eine zweite Bestätigung bis zum Ende der Transaktion.
     const [draft] = await tx.select().from(photoDraft).where(eq(photoDraft.id, draftId)).for('update');
     if (draft === undefined || draft.personId !== personId || draft.analysisState !== 'analysiert' || draft.expiresAt <= at) return null;
@@ -69,7 +72,7 @@ export function createMealPhotos({
   }
 
   /** Legt das Foto in der Fotoablage und in Postgres an und löscht den Entwurf; `false`, wenn das Bild nicht taugt. */
-  async function storePhoto(tx: DbExecutor, draft: NonNullable<Awaited<ReturnType<typeof validDraft>>>, input: {
+  async function storePhoto(tx: DbExecutor, draft: ValidDraft, input: {
     photoId: EntityId; personId: EntityId; sharedWithPartner: boolean; at: Date;
   }): Promise<boolean> {
     let images: Awaited<ReturnType<typeof mealPhotoImages>>;

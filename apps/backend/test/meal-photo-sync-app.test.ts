@@ -13,7 +13,7 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { mealPhoto as localMealPhoto, nutritionEntry as localNutritionEntry } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { createNutrition, mealPhotoEntity, nutritionEntryEntity, photoDraftCommand, type PhotoDraftConfirmation } from '../../mobile/src/nutrition/index.ts';
+import { createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, type PhotoDraftConfirmation } from '../../mobile/src/nutrition/index.ts';
 import {
   createHttpSyncTransport,
   createLocalCommandRegistry,
@@ -61,7 +61,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device, cl
       return backend.app.request(String(input), { ...init, headers });
     },
   });
-  const commands = createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, photoDraftCommand({ persistence })] });
+  const commands = createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, confirmPhotoDraftCommand({ persistence })] });
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: persistence.onCanonicalChanges, commands });
   return {
     nutrition: createNutrition({ database, clock, writer, persistence, newId }),

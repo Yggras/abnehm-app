@@ -18,7 +18,7 @@ import { requireOwnPerson } from '../local-db/person-header';
 import { mealPhoto } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { sqliteEntity, type LocalCommand, type SyncEntityAdapter } from '../sync';
-import { InvalidNutritionInputError, newEntryPayload, type Dependencies } from './entries';
+import { InvalidNutritionInputError, newEntryPayload, type EntryDependencies } from './entries';
 import { nutritionEntryEntity } from './entry-entity';
 import { removeUnconfirmedEntry, unlinkPhoto, writeEntry } from './entry-repository';
 
@@ -60,7 +60,7 @@ const pendingImageKey = (draftId: EntityId) => `entwurf:${draftId}`;
  */
 export function confirmPhotoDraft(
   tx: TransactionContext,
-  { clock, writer, persistence, newId }: Dependencies,
+  { clock, writer, persistence, newId }: EntryDependencies,
   input: PhotoDraftConfirmation,
 ): NutritionEntryAddedValues {
   const reading = clock.read();
@@ -111,7 +111,7 @@ function removeUnconfirmedPhoto(tx: TransactionContext, photoId: EntityId): void
  * Foto im Ergebnis entfernt die App ihr Foto. Eine Ablehnung entfernt alles, was der Server nie
  * bestätigt hat, und meldet den Tag erneut.
  */
-export function photoDraftCommand({ persistence }: Pick<Dependencies, 'persistence'>): LocalCommand<ConfirmPhotoDraft> {
+export function confirmPhotoDraftCommand({ persistence }: Pick<EntryDependencies, 'persistence'>): LocalCommand<ConfirmPhotoDraft> {
   return {
     type: 'confirmPhotoDraft',
     payload: ConfirmPhotoDraft,

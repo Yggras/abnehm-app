@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 
-import type { SeedManifest } from '@abnehm/contracts/seeds';
+import type { SeedManifest, SyntheticImage } from '@abnehm/contracts/seeds';
 
 import { mealPhotoImages } from '../../src/nutrition/photo-image.ts';
 import type { PhotoStorage } from '../../src/nutrition/photo-storage.ts';
@@ -9,8 +9,6 @@ import type { PhotoStorage } from '../../src/nutrition/photo-storage.ts';
 // enthält danach genau die synthetischen Bilder des Erweiterungspunkts `mealPhotos` (Fassung 2): je
 // Mahlzeitenfoto Vorschau und vergrößerte Fassung, je abgelaufenem Fotoentwurf sein Bild. Die Bilder sind
 // einfarbige Flächen, die sharp erzeugt; so liegen keine Bilddateien im Repo.
-
-type SyntheticImage = Readonly<{ width: number; height: number; rgb: readonly [number, number, number] }>;
 
 async function jpegOf({ width, height, rgb: [r, g, b] }: SyntheticImage): Promise<Uint8Array> {
   return new Uint8Array(await sharp({ create: { width, height, channels: 3, background: { r, g, b } } }).jpeg({ quality: 80 }).toBuffer());

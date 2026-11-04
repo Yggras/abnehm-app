@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { MealPhotoImageKey } from '@abnehm/contracts/nutrition';
+import { PhotoImageKey } from '@abnehm/contracts/nutrition';
 
 /** Die beiden Fassungen eines Mahlzeitenfotos in der Fotoablage; ihre Größen stehen in `photo-image.ts`. */
 export const mealPhotoVariants = ['vorschau', 'gross'] as const;
@@ -46,7 +46,7 @@ const partialSuffix = '.teil';
 
 function checked(imageKey: string): string {
   // Bildschlüssel stammen aus Postgres; trotzdem wird nie ein fremder Pfad zusammengesetzt.
-  if (!MealPhotoImageKey.safeParse(imageKey).success) throw new Error('Ungültiger Bildschlüssel');
+  if (!PhotoImageKey.safeParse(imageKey).success) throw new Error('Ungültiger Bildschlüssel');
   return imageKey;
 }
 
@@ -85,7 +85,7 @@ async function keysIn(directory: string, extension: string): Promise<string[]> {
     const complete = name.endsWith(partialSuffix) ? name.slice(0, -partialSuffix.length) : name;
     if (!complete.endsWith(extension)) continue;
     const key = complete.slice(0, complete.length - extension.length);
-    if (MealPhotoImageKey.safeParse(key).success) keys.add(key);
+    if (PhotoImageKey.safeParse(key).success) keys.add(key);
   }
   return [...keys].sort();
 }

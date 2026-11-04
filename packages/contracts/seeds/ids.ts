@@ -33,7 +33,7 @@ const person = { philipp: id('0002', 1), anna: id('0002', 2) };
 
 /**
  * Feste Bildschlüssel der synthetischen Fotos (#162): lesbar statt zufällig, aber im Format eines echten
- * Schlüssels (43 Zeichen base64url, `MealPhotoImageKey`).
+ * Schlüssels (43 Zeichen base64url, `PhotoImageKey`).
  */
 const imageKey = (name: string) => `seed_${name}`.padEnd(43, '0');
 export const seedImageKeys = {

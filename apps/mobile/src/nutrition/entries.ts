@@ -45,7 +45,7 @@ export type EntryUndo = Readonly<{ type: 'entry_added'; entryId: EntityId }>;
 
 export type EntryAdded = Readonly<{ messageKey: 'ernaehrung.eintrag_hinzugefuegt'; values: NutritionEntryAddedValues; undo: EntryUndo }>;
 
-export type Dependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
+export type EntryDependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
 
 /**
  * Die geprüfte Nutzlast eines neuen Eintrags: Basismenge und Summen folgen deterministisch aus Snapshot
@@ -75,7 +75,7 @@ export function newEntryPayload(reading: ClockReading, input: NewEntry, mealPhot
 }
 
 /** Legt einen Eintrag an, mit Outbox-Operation und Tagesmeldung in der Transaktion des Aufrufers. */
-export function addEntry(tx: TransactionContext, { clock, writer, persistence, newId }: Dependencies, input: NewEntry): EntryAdded {
+export function addEntry(tx: TransactionContext, { clock, writer, persistence, newId }: EntryDependencies, input: NewEntry): EntryAdded {
   // Vor dem ersten Schreibzugriff: Eine ungültige Eingabe hinterlässt nichts.
   const reading = clock.read();
   const payload = newEntryPayload(reading, input, null);
@@ -95,7 +95,7 @@ export function addEntry(tx: TransactionContext, { clock, writer, persistence, n
  * Entfernt einen Eintrag (Tombstone) und meldet seinen gespeicherten Tag erneut. Ist er schon gelöscht,
  * etwa durch einen Pull, bleibt alles, wie es ist.
  */
-export function removeEntry(tx: TransactionContext, { clock, writer, persistence }: Dependencies, entryId: EntityId, cause: DailyGoalCause): void {
+export function removeEntry(tx: TransactionContext, { clock, writer, persistence }: EntryDependencies, entryId: EntityId, cause: DailyGoalCause): void {
   const entry = readEntry(tx, entryId);
   if (entry === undefined || entry.deletedAt !== null) return;
   tombstoneEntry(tx, entryId, Instant.parse(clock.read().instant));

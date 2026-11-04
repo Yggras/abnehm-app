@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, SyncCursor, TimeZone } from '../src/base.ts';
 import { DailyGoalCause } from '../src/daily-goals.ts';
-import { MealPhotoImageKey } from '../src/nutrition.ts';
+import { PhotoImageKey } from '../src/nutrition.ts';
 import { InstallationId, OutboxOperation } from '../src/sync.ts';
 
 // Format der Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Ein Manifest beschreibt ein
@@ -178,9 +178,9 @@ export const SeedExtensions = z.strictObject({
       z.strictObject({ version: z.literal(1), photos: z.array(z.strictObject(seedPhotoFields)) }),
       z.strictObject({
         version: z.literal(2),
-        photos: z.array(z.strictObject({ ...seedPhotoFields, imageKey: MealPhotoImageKey, image: SyntheticImage })),
+        photos: z.array(z.strictObject({ ...seedPhotoFields, imageKey: PhotoImageKey, image: SyntheticImage })),
         /** Server-only: abgelaufen, also nicht mehr bestätigbar; der Aufräumjob löscht ihn beim nächsten Lauf. */
-        expiredDrafts: z.array(z.strictObject({ id: EntityId, account: SeedKey, imageKey: MealPhotoImageKey, image: SyntheticImage })),
+        expiredDrafts: z.array(z.strictObject({ id: EntityId, account: SeedKey, imageKey: PhotoImageKey, image: SyntheticImage })),
       }),
     ])
     .optional(),

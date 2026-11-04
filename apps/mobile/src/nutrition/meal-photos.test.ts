@@ -15,7 +15,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createLocalCommandRegistry, createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
-import { createNutrition, InvalidNutritionInputError, mealPhotoEntity, nutritionEntryEntity, photoDraftCommand, type DayLog, type PhotoDraftConfirmation } from '.';
+import { createNutrition, InvalidNutritionInputError, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, type DayLog, type PhotoDraftConfirmation } from '.';
 
 // Nachweis für #162 an der Naht des App-Moduls „Ernährung“: „Mahlzeit hinzufügen“ im Fotoentwurf legt in
 // einer Transaktion Einträge, Mahlzeitenfoto, genau eine Outbox-Operation `confirmPhotoDraft` und die
@@ -79,7 +79,7 @@ async function setup({ failReevaluation = false } = {}) {
     },
   };
   const nutrition = createNutrition({ database, clock, writer, newId, persistence });
-  const commands = createLocalCommandRegistry({ database, writer, commands: [photoDraftCommand({ persistence })] });
+  const commands = createLocalCommandRegistry({ database, writer, commands: [confirmPhotoDraftCommand({ persistence })] });
   const read = () =>
     database.read((tx) => ({
       photos: sqliteOf(tx).select().from(mealPhoto).all(),

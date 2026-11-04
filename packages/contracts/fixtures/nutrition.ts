@@ -11,7 +11,7 @@ import {
   FoodRefType,
   MealPhotoAnalysis,
   MealPhotoAnalysisComponent,
-  MealPhotoImageKey,
+  PhotoImageKey,
   MealPhotoRecord,
   MealPhotoUpsert,
   NutritionEntryAddedOutcome,
@@ -375,7 +375,6 @@ export const nutritionFixtures = {
       'vom Teilen ausgenommen': { ...confirmation, sharedWithPartner: false },
     },
     invalid: {
-      'ohne Freigabeschalter': without(confirmation, 'sharedWithPartner'),
       'ohne Einträge': { ...confirmation, entries: [] },
       '31 Einträge': {
         ...confirmation,
@@ -390,7 +389,7 @@ export const nutritionFixtures = {
       'mit Eigentümer': { ...confirmation, personId: philipp },
     },
   }),
-  MealPhotoImageKey: fixtures(MealPhotoImageKey, {
+  PhotoImageKey: fixtures(PhotoImageKey, {
     valid: { '32 Zufallsbytes in base64url': imageKey },
     invalid: { 'Pfad': 'seed/foto.jpg', 'zu kurz': imageKey.slice(1), 'Pfadtrenner': `${imageKey.slice(0, 42)}/` },
   }),
