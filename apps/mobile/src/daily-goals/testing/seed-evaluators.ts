@@ -2,10 +2,11 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { countedWaterMl } from '@abnehm/contracts/tracker-rules';
 
-import { createDailyGoalRegistry, type DailyGoalRegistry, type DayFactsReader } from '../../../mobile/src/daily-goals/index.ts';
-import { testBausteinEvaluators, testCheckInEvaluators, type TestDayFacts } from '../../../mobile/src/daily-goals/testing/test-evaluators.ts';
-import { nutritionEntry, sportEntry, waterEntry, weightEntry } from '../../../mobile/src/local-db/schema/index.ts';
-import { sqliteOf } from '../../../mobile/src/local-db/sqlite.ts';
+import { nutritionEntry, sportEntry, waterEntry, weightEntry } from '../../local-db/schema';
+import { sqliteOf } from '../../local-db/sqlite';
+import type { DayFactsReader } from '../evaluators';
+import { createDailyGoalRegistry, type DailyGoalRegistry } from '../registry';
+import { testBausteinEvaluators, testCheckInEvaluators, type TestDayFacts } from './test-evaluators';
 
 // Stellvertretende Evaluatoren für die Schritte der Seed-Manifeste (#113). Die echten registrieren die
 // Spezifikationen 2 und 3; bis dahin wertet der Persistenzdienst der Tagesziele (#105) in den Seed-Tests

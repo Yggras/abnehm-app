@@ -15,13 +15,19 @@ import { applyRuntimeProfile, runtimeProfiles, type RuntimeProfileKey } from './
 const start = { instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') };
 const ok = () => Promise.resolve(new Response('{}', { status: 200 }));
 
-type Adapters = { faults: FaultController; clock: AppTestClock; fetch: typeof fetch; store: SessionStore; backend: jest.Mock };
+/** Testuhr auf `start`; die Geräteuhr darf ein Profil nie lesen. */
+function fixedClock(): AppTestClock {
+  const clock = createAppTestClock({ read: () => { throw new Error('Geräteuhr'); } });
+  clock.fix(start);
+  return clock;
+}
+
+type Adapters ={ faults: FaultController; clock: AppTestClock; fetch: typeof fetch; store: SessionStore; backend: jest.Mock };
 
 /** Profil anwenden, dann über die echten Adapter beobachten. */
 function profiled(key: RuntimeProfileKey): Adapters {
   const faults = createFaultController();
-  const clock = createAppTestClock({ read: () => { throw new Error('Geräteuhr'); } });
-  clock.fix(start);
+  const clock = fixedClock();
   applyRuntimeProfile(key, { faults, clock });
   const backend = jest.fn(ok);
   let stored: StoredSession | null = null;
@@ -73,8 +79,7 @@ describe('Laufzeitprofile', () => {
 
   it('Profile ändern nur, was sie nennen, und lassen sich kombinieren', () => {
     const faults = createFaultController();
-    const clock = createAppTestClock({ read: () => { throw new Error('Geräteuhr'); } });
-    clock.fix(start);
+    const clock = fixedClock();
     applyRuntimeProfile('transport-offline', { faults, clock });
     applyRuntimeProfile('uhr-ungesichert-24h', { faults, clock });
     applyRuntimeProfile('auth-sitzung-abgelehnt', { faults, clock });
@@ -82,9 +87,10 @@ describe('Laufzeitprofile', () => {
     expect(clock.read().instant).toBe('2026-10-15T13:00:00.000Z');
   });
 
-  it('jedes Profil nennt Art und Beschreibung und stellt mindestens einen Adapter', () => {
-    for (const profile of Object.values(runtimeProfiles)) {
-      expect(['zeit', 'transport', 'auth', 'storage', 'server']).toContain(profile.kind);
+  it('die Profile decken Zeit-, Transport-, Auth-, Storage- und Serverfehler ab, jedes stellt mindestens einen Adapter', () => {
+    const profiles = Object.values(runtimeProfiles);
+    expect([...new Set(profiles.map(({ kind }) => kind))].sort()).toEqual(['auth', 'server', 'storage', 'transport', 'zeit']);
+    for (const profile of profiles) {
       expect(profile.description.length).toBeGreaterThan(0);
       expect('faults' in profile || 'clock' in profile).toBe(true);
     }
@@ -100,8 +106,7 @@ describe('Link `profil`', () => {
 
   it('der Eingang stellt das Profil sofort und meldet Plan und Ablesung', () => {
     const faults = createFaultController();
-    const clock = createAppTestClock({ read: () => { throw new Error('Geräteuhr'); } });
-    clock.fix(start);
+    const clock = fixedClock();
     const inbox = createTestInbox({ faults, clock, deviceSuite: () => Promise.reject(new Error('nicht im Test')) });
 
     inbox.receive(parseTestLink('abnehmapp-dev://profil?name=server-nicht-verfuegbar')!);

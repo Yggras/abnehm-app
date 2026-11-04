@@ -8,8 +8,8 @@ import { applyRuntimeProfile, type RuntimeProfileKey } from './profiles';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
 
 // Eingang der Testfähigkeiten (#112, #114): nimmt Deep Links an, stellt Fehler-Adapter, Testuhr und
-// Laufzeitprofile (#113) sofort und reiht Seeds ein, bis die App-Shell sie ausführt. Ein Seed läuft nie doppelt; ein neuer
-// Link wartet, bis der laufende fertig ist. Phasen der On-Device-Suite laufen ebenso nacheinander. Der
+// Laufzeitprofile (#113) sofort und reiht Seeds ein, bis die App-Shell sie ausführt. Ein Seed läuft
+// nie doppelt; ein neuer Link wartet, bis der laufende fertig ist. Phasen der On-Device-Suite laufen ebenso nacheinander. Der
 // Zustand ist für den Hinweis in Test-Artefakten beobachtbar; Maestro liest ihn dort ab.
 
 export type TestStatus =

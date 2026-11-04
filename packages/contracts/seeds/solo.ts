@@ -8,6 +8,7 @@ import {
   seedDay as day,
   seedManualOrigin,
   seedSportEntry,
+  seedWaterEntry,
   seedWeeklyPlan,
   type SeedWeeklyPlan,
 } from './rows.ts';
@@ -190,13 +191,8 @@ type SoloScenario = keyof typeof soloVariants;
 export const soloTrackerOf = (water: WaterToday): SeedPart => ({
   area: 'tracker',
   entities: [
-    ...water.map(([amount, at], index) => ({
-      table: 'water_entry',
-      // Seit #171 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
-      entityType: 'water_entry',
-      ownerPersonId: philipp,
-      row: { id: seedIds.waterEntry.philippHeute[index] as string, person_id: philipp, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
-    })),
+    ...water.map(([amountMl, loggedAt], index) =>
+      seedWaterEntry({ id: seedIds.waterEntry.philippHeute[index] as string, personId: philipp, amountMl, loggedAt, localDate: seedDays.heute })),
     seedSportEntry({
       id: seedIds.sportEntry.philippGestern,
       personId: philipp,

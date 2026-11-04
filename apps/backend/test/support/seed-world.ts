@@ -31,7 +31,7 @@ import { waterEntryEntity, weightEntryEntity } from '../../../mobile/src/tracker
 import { dumpServer, seedServer } from '../../dev/seed/server-seed.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import { signIn, type Device } from './auth-client.ts';
-import { seedDailyGoalRegistry } from './seed-evaluators.ts';
+import { seedDailyGoalRegistry } from '../../../mobile/src/daily-goals/testing/seed-evaluators.ts';
 import { uncoupleAs } from './shared-actions.ts';
 
 // Seed-Welt für Integrationstests der Manifeste (#112, #113, #117): Postgres hinter der echten Hono-App

@@ -49,7 +49,6 @@ describe('Szenario gekoppelt', () => {
     expect(gekoppelt.target).toEqual(gekoppelt.initial);
   });
 
-
   it('ein vollständiger Pull ergibt genau den geseedeten Gerätezustand: Sichtbarkeit und Partnercache passen zum Server', async () => {
     const world = await seeded(gekoppelt);
     // Was der Sync heute überträgt: Entitäten mit Eintrag im Änderungsprotokoll, seit #171 auch Wassereinträge,

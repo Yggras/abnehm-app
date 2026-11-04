@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { Instant } from '@abnehm/contracts/base';
 import { DailyGoalSnapshot } from '@abnehm/contracts/daily-goals';
-import { seedClock, seedIds, seedManifests, type SeedRow, type SeedScenarioKey } from '@abnehm/contracts/seeds';
+import { seedClock, seedIds, seedManifests, type SeedRow } from '@abnehm/contracts/seeds';
 
 import { readPartnerCache } from '../../mobile/src/partner-cache/index.ts';
 import { dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { dumpServer } from '../dev/seed/server-seed.ts';
-import { seedDailyGoalRegistry } from './support/seed-evaluators.ts';
+import { seedDailyGoalRegistry } from '../../mobile/src/daily-goals/testing/seed-evaluators.ts';
 import { runSteps, seeded, type SeedWorld } from './support/seed-world.ts';
 
 // Nachweis für #113, fachlich: Was die Randzustände nach ihren Schritten zeigen und dass ihre lokal
@@ -15,8 +15,6 @@ import { runSteps, seeded, type SeedWorld } from './support/seed-world.ts';
 // Manifest `seed-manifeste-app.test.ts`.
 
 const iphone = 'philipp-iphone';
-/** Das Manifest zum ausdrücklich genannten Schlüssel; die Registry der Seed-Varianten sucht ihn hier. */
-const manifestOf = (key: SeedScenarioKey) => seedManifests[key];
 const withoutVersion = (rows: readonly SeedRow[] = []) => rows.map((row) => ({ ...row, server_version: null }));
 
 /** Auswertung eines Tagesziels von Philipp auf dem iPhone zur Uhr des Manifests. */
@@ -30,7 +28,7 @@ describe('Randzustände der Tagesziele', () => {
   it.each(['erfuellt', 'tagesende_offen', 'tagesende_abgeschlossen'] as const)(
     '%s: Der nächste Sync bringt Erfüllungen und Buchungen unverändert auf den Server',
     async (scenario) => {
-      const world = await seeded(manifestOf(scenario));
+      const world = await seeded(seedManifests[scenario]);
       await runSteps(world);
       const local = dumpLocalDatabase(world.phones[iphone]!.database);
 
@@ -43,7 +41,7 @@ describe('Randzustände der Tagesziele', () => {
   );
 
   it('nach_erfuellung_korrigiert: Wasser ist wieder teilweise, die Erfüllung bleibt festgehalten („bereits gutgeschrieben“)', async () => {
-    const world = await seeded(manifestOf('nach_erfuellung_korrigiert'));
+    const world = await seeded(seedManifests.nach_erfuellung_korrigiert);
     await runSteps(world);
 
     expect(evaluation(world, seedIds.dailyGoal.philippHeute[1])).toMatchObject({
@@ -55,7 +53,7 @@ describe('Randzustände der Tagesziele', () => {
   });
 
   it('tagesende_offen: Das Kalorienbudget zeigt bis zum Tagesende „tagesende“ und ist nie erfüllt', async () => {
-    const world = await seeded(manifestOf('tagesende_offen'));
+    const world = await seeded(seedManifests.tagesende_offen);
     await runSteps(world);
 
     expect(evaluation(world, seedIds.dailyGoal.philippHeute[0])).toMatchObject({ type: 'evaluated', currentState: 'tagesende', dayClosed: false, completion: { type: 'nie' } });
@@ -63,7 +61,7 @@ describe('Randzustände der Tagesziele', () => {
   });
 
   it('tagesende_abgeschlossen: Nach dem Tagesende ist das Kalorienbudget von gestern erfüllt', async () => {
-    const world = await seeded(manifestOf('tagesende_abgeschlossen'));
+    const world = await seeded(seedManifests.tagesende_abgeschlossen);
     expect(evaluation(world, seedIds.dailyGoal.philippGestern[0])).toMatchObject({ currentState: 'erfuellt', dayClosed: true, completion: { type: 'nie' } });
 
     await runSteps(world);
@@ -78,7 +76,7 @@ describe('Randzustände der Tagesziele', () => {
 
 describe('Randzustand veralteter_partnerstand', () => {
   it('Philipps Gerät zeigt nach dem Sync Annas neuen Tageszielstand mit aktuellem Datenstand', async () => {
-    const world = await seeded(manifestOf('veralteter_partnerstand'));
+    const world = await seeded(seedManifests.veralteter_partnerstand);
     const partner = () => world.phones[iphone]!.database.read((tx) => readPartnerCache(tx));
     expect(partner().dailyGoalStatus).toMatchObject({ stage: 'unterwegs', dataAsOf: '2026-10-14T06:30:00.000Z' });
 

@@ -12,6 +12,7 @@ import {
   seedDay as day,
   seedManualOrigin,
   seedSportEntry,
+  seedWaterEntry,
   seedWeeklyPlan,
   type SeedWeeklyPlan,
 } from './rows.ts';
@@ -149,13 +150,7 @@ const tracker: SeedPart = {
     ...[
       { id: seedIds.waterEntry.annaHeute[0], amount: 1_200, at: '2026-10-14T07:00:00.000Z' },
       { id: seedIds.waterEntry.annaHeute[1], amount: 800, at: '2026-10-14T11:30:00.000Z' },
-    ].map(({ id, amount, at }) => ({
-      table: 'water_entry',
-      // Seit #171 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
-      entityType: 'water_entry',
-      ownerPersonId: anna,
-      row: { id, person_id: anna, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.heute), ...created(at) },
-    })),
+    ].map(({ id, amount, at }) => seedWaterEntry({ id, personId: anna, amountMl: amount, loggedAt: at, localDate: seedDays.heute })),
     {
       table: 'weight_entry',
       // Seit #175 beim Sync angemeldet: Der Eintrag steht im Änderungsprotokoll.

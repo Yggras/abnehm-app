@@ -5,7 +5,7 @@ import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
 import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedRow, type SeedScenarioKey, type SeedState, type SeedStep } from './manifest.ts';
-import { seedCompletion, seedDailyBonus, seedDailyGoals, seedDay as day, seedCreated as created, seedKiEntry, seedSportEntry } from './rows.ts';
+import { seedCompletion, seedDailyBonus, seedDailyGoals, seedKiEntry, seedSportEntry, seedWaterEntry } from './rows.ts';
 import { philippThresholds, soloErnaehrung, soloFundament, soloTrackerOf, soloZieleOf, type SoloWeeklyPlan, type WaterToday } from './solo.ts';
 
 // Randzustände der Tagesziele (Spezifikation 0, Abschnitt 12; #113): leer, teilweise, erfüllt, nach
@@ -78,17 +78,10 @@ const gestern: readonly SeedPart[] = [
   },
   {
     area: 'tracker',
-    entities: (
-      [
-        [seedIds.waterEntry.philippGestern[0], 1_500, '2026-10-13T08:00:00.000Z'],
-        [seedIds.waterEntry.philippGestern[1], 1_000, '2026-10-13T15:00:00.000Z'],
-      ] as const
-    ).map(([id, amount, at]) => ({
-      table: 'water_entry',
-      entityType: 'water_entry',
-      ownerPersonId: philipp,
-      row: { id, person_id: philipp, amount_ml: amount, origin: 'manuell', logged_at: at, ...day(seedDays.gestern), ...created(at) },
-    })),
+    entities: [
+      seedWaterEntry({ id: seedIds.waterEntry.philippGestern[0], personId: philipp, amountMl: 1_500, loggedAt: '2026-10-13T08:00:00.000Z', localDate: seedDays.gestern }),
+      seedWaterEntry({ id: seedIds.waterEntry.philippGestern[1], personId: philipp, amountMl: 1_000, loggedAt: '2026-10-13T15:00:00.000Z', localDate: seedDays.gestern }),
+    ],
   },
   {
     area: 'ernaehrung',
@@ -119,21 +112,31 @@ const completion = (localDate: 'heute' | 'gestern', slot: DailyGoalSlot, at: str
 /** Lokal angelegt und noch nicht synchronisiert: ohne Serverversion. */
 const local = (entities: readonly SeedEntity[]): SeedEntity[] => entities.map((entity) => ({ ...entity, row: { ...entity.row, server_version: null } }));
 
-/** Fachbefehl in der Outbox, wie ihn der Persistenzdienst schreibt. */
-function command(operationId: string, entity: SeedEntity): OutboxOperation {
-  const row = entity.row;
+/** Ohne Operations-ID: der Fachbefehl einer Erfüllung oder eines Tagesbonus. */
+type CommandDraft = Omit<Extract<OutboxOperation, { businessKey: string }>, 'operationId'>;
+
+/**
+ * Der Fachbefehl, den der Persistenzdienst zu einer angelegten Zeile schreibt: je Erfüllung
+ * `completeDailyGoal` (die Gutschrift reist mit ihr), je Tagesbonus `grantDailyBonus`; sonst keiner.
+ */
+function commandOf(entity: SeedEntity): CommandDraft | null {
+  const { row } = entity;
+  const personId = EntityId.parse(row.person_id);
   const localDate = LocalDate.parse(row.local_date);
-  const base = { operationId: EntityId.parse(operationId), knownServerVersion: null, schemaVersion: currentSyncSchemaVersion, createdAt: Instant.parse(now) };
+  const base = { knownServerVersion: null, schemaVersion: currentSyncSchemaVersion, createdAt: Instant.parse(now) };
   if (entity.table === 'daily_goal_completion') {
     const slot = DailyGoalSlot.parse(row.slot);
-    return OutboxOperation.parse({
+    return {
       ...base,
       type: 'completeDailyGoal',
-      businessKey: dailyGoalKey(EntityId.parse(philipp), localDate, slot),
+      businessKey: dailyGoalKey(personId, localDate, slot),
       payload: CompleteDailyGoalPayload.parse({ dailyGoalId: row.daily_goal_id, localDate, slot, baustein: row.baustein, completedAt: row.first_completed_at }),
-    });
+    };
   }
-  return OutboxOperation.parse({ ...base, type: 'grantDailyBonus', businessKey: dailyBonusKey(EntityId.parse(philipp), localDate), payload: GrantDailyBonusPayload.parse({ localDate }) });
+  if (row.type === 'daily_bonus_credit') {
+    return { ...base, type: 'grantDailyBonus', businessKey: dailyBonusKey(personId, localDate), payload: GrantDailyBonusPayload.parse({ localDate }) };
+  }
+  return null;
 }
 
 /** Zustand mit dem iPhone auf dem Stand des Servers. */
@@ -148,10 +151,10 @@ function evaluatedOnDevice(state: SeedState, created: readonly SeedEntity[], ope
   const device = state.devices[iphone]!;
   const rows: Record<string, SeedRow[]> = { ...device.rows };
   for (const { table, row } of local(created)) rows[table] = [...(rows[table] ?? []), row];
-  // Je Erfüllung und je Tagesbonus ein Fachbefehl; die Gutschrift reist mit ihrer Erfüllung.
-  const commands = created.filter((entity) => entity.table === 'daily_goal_completion' || entity.row.type === 'daily_bonus_credit');
+  const commands = created.map(commandOf).filter((draft) => draft !== null);
   if (commands.length !== operationIds.length) throw new Error('Seed: je Fachbefehl genau eine Operations-ID');
-  return { server: state.server, devices: { [iphone]: { ...device, rows, outbox: commands.map((entity, index) => command(operationIds[index]!, entity)) } } };
+  const outbox = commands.map((draft, index) => OutboxOperation.parse({ ...draft, operationId: operationIds[index] }));
+  return { server: state.server, devices: { [iphone]: { ...device, rows, outbox } } };
 }
 
 const evaluate = (localDate: 'heute' | 'gestern', cause: 'app_oeffnung' | 'tagesabschluss', operationIds: readonly string[]): SeedStep => ({

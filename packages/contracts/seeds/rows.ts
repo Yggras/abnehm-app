@@ -135,6 +135,24 @@ export function seedBlsEntry(options: {
   };
 }
 
+/** Manuell erfasster Wassereintrag (Spezifikation 3), seit #171 beim Sync angemeldet. */
+export function seedWaterEntry(options: { id: string; personId: string; amountMl: number; loggedAt: string; localDate: string }): SeedEntity {
+  return {
+    table: 'water_entry',
+    entityType: 'water_entry',
+    ownerPersonId: options.personId,
+    row: {
+      id: options.id,
+      person_id: options.personId,
+      amount_ml: options.amountMl,
+      origin: 'manuell',
+      logged_at: options.loggedAt,
+      ...seedDay(options.localDate),
+      ...seedCreated(options.loggedAt),
+    },
+  };
+}
+
 /** Manuell erfasste Sporteinheit (Spezifikation 3), weder ersetzt noch reaktiviert. */
 export function seedSportEntry(options: {
   id: string;
