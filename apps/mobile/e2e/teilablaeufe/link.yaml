@@ -1,9 +1,12 @@
 # Teilablauf: öffnet einen Deep Link der Testfähigkeiten (${LINK}, ohne Schema) im E2E-Build.
 #
-# Im iOS-Simulator (iOS 27, beobachtet am 21.10.2026) kommt der Link bereits in der App an, danach
-# fragt das System trotzdem „In „Abnehm-App E2E“ öffnen?“. Die Rückfrage verdeckt die App für Maestro.
-# „Öffnen“ stellte den Link ein zweites Mal zu (ein Seed liefe doppelt), deshalb schließt der
-# Teilablauf sie mit „Abbrechen“, sofern sie erscheint.
+# iOS-Simulator (iOS 27.0, Maestro 2.11.0, beobachtet am 04.11.2026, #276): Hat die Person die App für
+# das Schema noch nicht freigegeben, fragt das System vor dem ersten Link „In „Abnehm-App E2E“ öffnen?“.
+# Bis dahin kommt der Link nicht an; erst „Öffnen“ stellt ihn zu, und zwar genau einmal (geprüft mit dem
+# kumulativen `uhr?stunden=3`: die Testuhr stand danach 3 Stunden vor). „Abbrechen“ verwirft ihn, der
+# Seed liefe dann nie. Nach einem „Öffnen“ fragt derselbe Simulator nicht mehr. Der Teilablauf tippt
+# deshalb „Öffnen“, sofern die Rückfrage erscheint. Die Beobachtung vom 21.10.2026 (Link kommt schon vor
+# der Rückfrage an, „Öffnen“ stellt ihn ein zweites Mal zu) ließ sich nicht wiederholen.
 #
 # Vorher wartet er, bis ein Bildschirm der App steht: Auf Android geht ein Link verloren, der kurz nach
 # `launchApp` noch vor dem Start der App eintrifft (im Emulator beobachtet am 21.10.2026). Gewartet wird
@@ -22,9 +25,9 @@ appId: ${APP_ID}
       platform: iOS
     commands:
       - extendedWaitUntil:
-          visible: "Abbrechen|Cancel"
+          visible: "Öffnen|Open"
           timeout: 5000
           optional: true
       - tapOn:
-          text: "Abbrechen|Cancel"
+          text: "Öffnen|Open"
           optional: true
