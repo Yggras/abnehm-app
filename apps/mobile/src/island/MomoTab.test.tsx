@@ -85,6 +85,9 @@ describe('Ansicht rollenwahl', () => {
 
     expect(screen.getByRole('header', { name: 'Momo schlüpft, sobald ihr die Rollen verteilt habt' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Vorschlag an Anna senden' })).toBeDisabled();
+    // Was die Rollen bedeuten, steht schon vor der Wahl da (Impeccable-Prüfung von #180).
+    expect(screen.getByText('Bauen: Häuser, Wege und Brücken')).toBeOnTheScreen();
+    expect(screen.getByText('Natur: Pflanzen, Bäume und Tiere')).toBeOnTheScreen();
     await user.press(screen.getByRole('radio', { name: 'Bauen: Häuser, Wege und Brücken' }));
     expect(screen.getByRole('radio', { name: 'Bauen: Häuser, Wege und Brücken' })).toBeChecked();
     expect(screen.getByText('Du: Bauen · Anna: Natur')).toBeOnTheScreen();

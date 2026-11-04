@@ -16,7 +16,7 @@ import type { ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { couplingMember, island, sharedAction } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import type { LocalCommand, SyncWriter } from '../sync';
+import type { SyncWriter } from '../sync';
 import { sharedActionOf } from '../sync/coupling-entities';
 import { pendingCommandPayloads } from '../sync/outbox';
 
@@ -45,8 +45,6 @@ export type IslandStage =
   | Readonly<{ type: 'laichkugel'; energy: number }>
   | Readonly<{
       type: 'rollenwahl';
-      energy: number;
-      couplingId: EntityId;
       partnerDisplayName: string;
       proposal: RoleProposal | null;
     }>
@@ -108,7 +106,7 @@ export function readIslandStage(tx: ReadContext): IslandStage {
       : pendingProposal !== undefined
         ? { actionId: pendingProposal.actionId, by: 'self', proposerRole: pendingProposal.payload.proposerRole, createdAt: null }
         : null;
-  return { type: 'rollenwahl', energy, couplingId, partnerDisplayName: partner.displayName, proposal };
+  return { type: 'rollenwahl', partnerDisplayName: partner.displayName, proposal };
 }
 
 function pendingRoleRequests(tx: ReadContext) {
@@ -174,16 +172,3 @@ export function roleChoiceCommands({ writer, newId, timeZone }: RoleChoiceDepend
     },
   };
 }
-
-/** Nur vorgemerkt: keine lokale Fachzeile, deshalb auch nichts zu bereinigen, wenn der Server ablehnt. */
-const onlyQueued = { referencePaths: [], apply: () => [], reconcileRejected: () => {} } as const;
-
-/**
- * Lokale Fachbefehle der gemeinsamen Aktionen für die Sync-Engine (Spezifikation 0, Abschnitt 9). Sie
- * gelten für Rollenwahl, Rollentausch und Deko schenken; Arten mit lokaler Vormerkung, etwa ein
- * vorgemerktes Deko-Stück, ergänzen ihre Reconciliation hier.
- */
-export const sharedActionCommands: readonly LocalCommand[] = [
-  { type: 'requestSharedAction', payload: RequestSharedAction, ...onlyQueued },
-  { type: 'decideSharedAction', payload: DecideSharedAction, ...onlyQueued },
-];

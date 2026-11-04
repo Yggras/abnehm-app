@@ -8,20 +8,10 @@ import { followSource } from './followed-source';
 // Spezifikation 5 komponiert „Wir“ über `appWirContributions.source`, ohne Tabellen von Spezifikation 4
 // zu lesen. Jeder Zustand wird am Vertragsrand geprüft; ohne geöffnetes Konto lädt der Steckplatz.
 
-export type FollowedWirContributions = Readonly<{
-  /** Die Quelle für „Wir“; sie folgt dem jeweils geöffneten Konto. */
-  source: WirContributionSource;
-  /** Meldet die Quelle des geöffneten Kontos an; die Rückgabe löst sie beim Sperren wieder. */
-  opened(source: WirContributionSource): () => void;
-}>;
+const followed = followSource<ContributionState<WirContribution[]>>({ type: 'loading' });
 
-export function followWirContributions(): FollowedWirContributions {
-  const followed = followSource<ContributionState<WirContribution[]>>({ type: 'loading' });
-  return {
-    source: { subscribe: (listener) => followed.source.subscribe((state) => listener(WirContributionsState.parse(state))) },
-    opened: followed.opened,
-  };
-}
-
-/** Die Beiträge von Spezifikation 4 an „Wir“ in der App. */
-export const appWirContributions = followWirContributions();
+/** Die Beiträge von Spezifikation 4 an „Wir“ in der App: `source` für Spezifikation 5, `opened` für die App-Sitzung. */
+export const appWirContributions: Readonly<{ source: WirContributionSource; opened(source: WirContributionSource): () => void }> = {
+  source: { subscribe: (listener) => followed.source.subscribe((state) => listener(WirContributionsState.parse(state))) },
+  opened: followed.opened,
+};

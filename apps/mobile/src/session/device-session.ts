@@ -12,7 +12,7 @@ import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedD
 import { energyBookingEntity } from '../energy';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
-import { sharedActionCommands } from '../island/role-choice';
+import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { appNutrition, createNutrition, nutritionEntryEntity } from '../nutrition';

@@ -299,87 +299,90 @@ const sharingLevels: Readonly<Record<Partner, Readonly<Record<AreaKey, PartnerSh
  * Fotofreigaben. Die Annahme setzte alle Bereiche auf `zusammengefasst` und die Fotos auf `geteilt`.
  * Vor dem Schlüpfen (`hatched: false`, #180) haben die Mitglieder keine Rolle, und die Insel wartet.
  */
-const kopplungPart = ({ hatched }: Readonly<{ hatched: boolean }>): SeedPart => ({
-  area: 'fundament',
-  entities: [
-    {
-      table: 'coupling',
-      entityType: 'coupling',
-      couplingId,
-      row: {
-        id: couplingId,
-        person_low_id: philipp < anna ? philipp : anna,
-        person_high_id: philipp < anna ? anna : philipp,
-        status: 'aktiv',
-        started_at: coupledAt,
-        ended_at: null,
-        reactivated_at: null,
-        ...created(coupledAt),
+const kopplungPart = ({ hatched }: Readonly<{ hatched: boolean }>): SeedPart => {
+  // Was sich mit dem Schlüpfen ändert, an einer Stelle.
+  const islandState = hatched
+    ? { state: 'aktiv', hatched_at: hatchedAt, time_zone: seedClock.timeZone, updated_at: hatchedAt }
+    : { state: 'wartet_auf_rollen', hatched_at: null, time_zone: null, updated_at: coupledAt };
+  return {
+    area: 'fundament',
+    entities: [
+      {
+        table: 'coupling',
+        entityType: 'coupling',
+        couplingId,
+        row: {
+          id: couplingId,
+          person_low_id: philipp < anna ? philipp : anna,
+          person_high_id: philipp < anna ? anna : philipp,
+          status: 'aktiv',
+          started_at: coupledAt,
+          ended_at: null,
+          reactivated_at: null,
+          ...created(coupledAt),
+        },
       },
-    },
-    ...[
-      { id: seedIds.couplingMember.philipp, person: philipp, role: 'bauen', name: 'Philipp' },
-      { id: seedIds.couplingMember.anna, person: anna, role: 'natur', name: 'Anna' },
-    ].map(({ id, person, role, name }) => ({
-      table: 'coupling_member',
-      entityType: 'coupling_member',
-      couplingId,
-      row: {
-        id,
-        coupling_id: couplingId,
-        coupling_status: 'aktiv',
-        person_id: person,
-        role: hatched ? role : null,
-        display_name: name,
-        created_at: coupledAt,
-        updated_at: hatched ? hatchedAt : coupledAt,
-        deleted_at: null,
+      ...[
+        { id: seedIds.couplingMember.philipp, person: philipp, role: 'bauen', name: 'Philipp' },
+        { id: seedIds.couplingMember.anna, person: anna, role: 'natur', name: 'Anna' },
+      ].map(({ id, person, role, name }) => ({
+        table: 'coupling_member',
+        entityType: 'coupling_member',
+        couplingId,
+        row: {
+          id,
+          coupling_id: couplingId,
+          coupling_status: 'aktiv',
+          person_id: person,
+          role: hatched ? role : null,
+          display_name: name,
+          created_at: coupledAt,
+          updated_at: islandState.updated_at,
+          deleted_at: null,
+        },
+      })),
+      {
+        table: 'island',
+        entityType: 'island',
+        couplingId,
+        row: {
+          id: seedIds.island.philippAnna,
+          coupling_id: couplingId,
+          ...islandState,
+          created_at: coupledAt,
+          deleted_at: null,
+        },
       },
-    })),
-    {
-      table: 'island',
-      entityType: 'island',
-      couplingId,
-      row: {
-        id: seedIds.island.philippAnna,
-        coupling_id: couplingId,
-        state: hatched ? 'aktiv' : 'wartet_auf_rollen',
-        hatched_at: hatched ? hatchedAt : null,
-        time_zone: hatched ? seedClock.timeZone : null,
-        created_at: coupledAt,
-        updated_at: hatched ? hatchedAt : coupledAt,
-        deleted_at: null,
-      },
-    },
-    ...(['philipp', 'anna'] as const).flatMap((owner) =>
-      AreaKey.options.map((area) => {
-        const level = sharingLevels[owner][area];
-        const changedAt = level === 'privat' ? annaPrivateAt : coupledAt;
-        return {
-          table: 'partner_sharing',
-          entityType: 'partner_sharing',
-          ownerPersonId: seedIds.person[owner],
-          row: {
-            id: seedIds.partnerSharing[owner][area],
-            owner_person_id: seedIds.person[owner],
-            coupling_id: couplingId,
-            area,
-            level,
-            created_at: coupledAt,
-            updated_at: changedAt,
-            deleted_at: null,
-          },
-        };
-      }),
-    ),
-    ...(['philipp', 'anna'] as const).map((owner) => ({
-      table: 'photo_sharing',
-      entityType: 'photo_sharing',
-      ownerPersonId: seedIds.person[owner],
-      row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
-    })),
-  ],
-});
+      ...(['philipp', 'anna'] as const).flatMap((owner) =>
+        AreaKey.options.map((area) => {
+          const level = sharingLevels[owner][area];
+          const changedAt = level === 'privat' ? annaPrivateAt : coupledAt;
+          return {
+            table: 'partner_sharing',
+            entityType: 'partner_sharing',
+            ownerPersonId: seedIds.person[owner],
+            row: {
+              id: seedIds.partnerSharing[owner][area],
+              owner_person_id: seedIds.person[owner],
+              coupling_id: couplingId,
+              area,
+              level,
+              created_at: coupledAt,
+              updated_at: changedAt,
+              deleted_at: null,
+            },
+          };
+        }),
+      ),
+      ...(['philipp', 'anna'] as const).map((owner) => ({
+        table: 'photo_sharing',
+        entityType: 'photo_sharing',
+        ownerPersonId: seedIds.person[owner],
+        row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
+      })),
+    ],
+  };
+};
 
 /** Zusammenfassung eines Bereichs für den Partner, im Zeitraum von heute (#106). */
 function summary(owner: Partner, area: AreaKey, id: string, content: Readonly<Record<string, number | string | null>>): SeedEntity {

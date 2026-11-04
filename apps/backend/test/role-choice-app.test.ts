@@ -10,7 +10,7 @@ import { WirContributionsState, type WirContribution } from '@abnehm/contracts/w
 
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
-import { sharedActionCommands } from '../../mobile/src/island/role-choice.ts';
+import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { sharedAction as localAction } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';

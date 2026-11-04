@@ -70,7 +70,15 @@ function ChooseRole({ partner, onPropose }: { partner: string; onPropose(role: I
           />
         ))}
       </View>
-      {role === null ? <Text tone="inkMuted">{laichkugelTexts.chooseHint}</Text> : <Split own={role} partner={partner} />}
+      {role === null ? (
+        <View style={styles.split}>
+          <Text tone="inkMuted">{laichkugelTexts.chooseHint}</Text>
+          <Text variant="caption" tone="inkMuted">{laichkugelTexts.meaning('bauen')}</Text>
+          <Text variant="caption" tone="inkMuted">{laichkugelTexts.meaning('natur')}</Text>
+        </View>
+      ) : (
+        <Split own={role} partner={partner} />
+      )}
       <Button block label={laichkugelTexts.send(partner)} disabled={role === null} onPress={() => role !== null && onPropose(role)} />
     </View>
   );
