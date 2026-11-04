@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, MealKey, TimeZone, UtcOffsetMinutes } from './base.ts';
 import { addDays } from './calendar.ts';
+import { ContractErrorCode } from './errors.ts';
 import { QuickCommandOutcome } from './today.ts';
 
 // Ernährung (Spezifikation 2, Abschnitte 2–4): Lebensmittelreferenz, Nährwert-Snapshot, Eintragsmenge
@@ -316,3 +317,123 @@ function scaled(value: number, numerator: number, denominator: number): number {
   if (!Number.isSafeInteger(result)) throw new RangeError(`Wert außerhalb des Ganzzahlbereichs: ${result}`);
   return result;
 }
+
+// KI-Fotoanalyse (Spezifikation 2, Abschnitt 8) -----------------------------------------------------
+
+/** Bildformate, die der Endpunkt der Fotoanalyse annimmt; die App lädt JPEG hoch. */
+export const PhotoMediaType = z.enum(['image/jpeg', 'image/png', 'image/webp']);
+export type PhotoMediaType = z.infer<typeof PhotoMediaType>;
+
+/** Höchstgröße eines hochgeladenen Fotos: 8 MB (Designwert, nicht belegt; Claude nimmt bis 10 MB je Bild). */
+export const photoUploadMaxBytes = 8_000_000;
+
+/**
+ * Anfrage der Fotoanalyse: ein Bild im Feld `photo` eines `multipart/form-data`-Bodys. Das Schema
+ * beschreibt, welche Datei der Server annimmt; ob sie sich als Bild dekodieren lässt, prüft er danach.
+ */
+export const PhotoAnalysisUpload = z.strictObject({ mediaType: PhotoMediaType, byteSize: z.int().min(1).max(photoUploadMaxBytes) });
+export type PhotoAnalysisUpload = z.infer<typeof PhotoAnalysisUpload>;
+
+/** Höchstzahl der Bestandteile eines Fotoentwurfs (Designwert, nicht belegt). */
+export const photoAnalysisMaxComponents = 15;
+
+/** Höchstwert für kcal eines Bestandteils: 5 kg reines Fett (9 kcal/g) liegen darunter; schützt die Ganzzahlrechnung. */
+const maxComponentKcal = 50_000;
+
+/** Ein Bestandteil, wie ihn das Modell schätzt: Menge in g bzw. ml, Nährwerte für genau diese Menge. */
+const EstimatedComponent = z.strictObject({
+  name: z.string().trim().min(1).max(200),
+  amount: z.number().positive(),
+  unit: BaseUnit,
+  kcal: z.number().nonnegative().max(maxComponentKcal),
+  proteinG: z.number().nonnegative(),
+  carbsG: z.number().nonnegative(),
+  fatG: z.number().nonnegative(),
+});
+type EstimatedComponent = z.infer<typeof EstimatedComponent>;
+
+/**
+ * Bestandteil einer Fotoanalyse, wie das Modell ihn liefert: deutscher Name, geschätzte Menge in g
+ * bzw. ml und die Nährwerte für genau diese Menge. Zahlengrenzen bildet Structured Outputs nicht ab;
+ * die Zod-Prüfung beim Parsen setzt sie durch (https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+ */
+export const MealPhotoAnalysisComponent = EstimatedComponent.refine((component) => photoDraftComponentOf(component) !== null, {
+  message: 'Menge über 0 und höchstens 5 kg bzw. 5 l; Makros zusammen höchstens die Menge',
+});
+export type MealPhotoAnalysisComponent = z.infer<typeof MealPhotoAnalysisComponent>;
+
+/** Antwortschema des Modells für die Fotoanalyse; eine leere Liste heißt „kein Essen erkannt“. */
+export const MealPhotoAnalysis = z.strictObject({ components: z.array(MealPhotoAnalysisComponent).max(photoAnalysisMaxComponents) });
+export type MealPhotoAnalysis = z.infer<typeof MealPhotoAnalysis>;
+
+/**
+ * Bestandteil eines Fotoentwurfs in Vertragseinheiten: verzehrte Basismenge (mg bzw. ml) und die
+ * Nährwerte dieser Menge in `milli_kcal` und mg. Die App bildet daraus den Snapshot der Quelle `ki`
+ * mit dieser Menge als Bezugsmenge.
+ */
+export const PhotoDraftComponent = z
+  .strictObject({
+    name: trimmedText(200),
+    baseUnit: BaseUnit,
+    baseAmount: z.int().positive(),
+    milliKcal: nutrient,
+    proteinMg: nutrient,
+    carbsMg: nutrient,
+    fatMg: nutrient,
+  })
+  .refine((c) => amountWithin(c.baseUnit, c.baseAmount), { message: 'Menge höchstens 5 kg bzw. 5 l', path: ['baseAmount'] })
+  .refine((c) => c.baseUnit !== 'g' || c.proteinMg + c.carbsMg + c.fatMg <= c.baseAmount, {
+    message: 'Makros zusammen höchstens die Menge',
+    path: ['proteinMg'],
+  });
+export type PhotoDraftComponent = z.infer<typeof PhotoDraftComponent>;
+
+/**
+ * Rechnet einen Bestandteil des Modells in Vertragseinheiten um, kaufmännisch auf ganze mg, ml und
+ * `milli_kcal` gerundet. `null`, wenn sich daraus kein gültiger Bestandteil ergibt: Menge unter einer
+ * Basiseinheit oder über 5 kg bzw. 5 l, bei Gramm Makros über der Menge.
+ */
+export function photoDraftComponentOf(component: EstimatedComponent): PhotoDraftComponent | null {
+  const thousandths = (value: number) => Math.round(value * 1_000);
+  const result = PhotoDraftComponent.safeParse({
+    name: component.name.trim(),
+    baseUnit: component.unit,
+    baseAmount: component.unit === 'g' ? thousandths(component.amount) : Math.round(component.amount),
+    milliKcal: thousandths(component.kcal),
+    proteinMg: thousandths(component.proteinG),
+    carbsMg: thousandths(component.carbsG),
+    fatMg: thousandths(component.fatG),
+  });
+  return result.success ? result.data : null;
+}
+
+/** Erfolgreiche Fotoanalyse: der angelegte Fotoentwurf mit seinen Bestandteilen. */
+export const PhotoAnalysisResult = z.strictObject({
+  draftId: EntityId,
+  /** Ab dann nimmt der Server den Entwurf nicht mehr an; spätestens 24 Stunden nach der Analyse ist er samt Bild gelöscht. */
+  expiresAt: Instant,
+  components: z.array(PhotoDraftComponent).min(1).max(photoAnalysisMaxComponents),
+});
+export type PhotoAnalysisResult = z.infer<typeof PhotoAnalysisResult>;
+
+/** Fehlercodes der Fotoanalyse; `photo_draft_expired` gehört zum Bestätigen des Entwurfs. */
+export const PhotoAnalysisErrorCode = ContractErrorCode.extract([
+  'photo_invalid_image',
+  'photo_no_food_detected',
+  'photo_analysis_failed',
+  'photo_analysis_limit_reached',
+  'photo_analysis_unavailable',
+]);
+export type PhotoAnalysisErrorCode = z.infer<typeof PhotoAnalysisErrorCode>;
+
+/**
+ * Fehlerantwort der Fotoanalyse, ein `ContractError` ohne Kontext. Wiederholbar ist nur
+ * `photo_analysis_unavailable` (Anbieter oder Server nicht erreichbar).
+ */
+export const PhotoAnalysisError = z
+  .strictObject({ code: PhotoAnalysisErrorCode, retryable: z.boolean() })
+  .refine((error) => error.retryable === (error.code === 'photo_analysis_unavailable'), {
+    message: 'Wiederholbar ist nur photo_analysis_unavailable',
+    path: ['retryable'],
+  });
+export type PhotoAnalysisError = z.infer<typeof PhotoAnalysisError>;

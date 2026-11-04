@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 
 import { motionFor, useMotion } from './motion';
+import { withDeviceConfig } from './testing/device-config';
 import { motion } from './tokens';
 
 describe('motionFor', () => {
@@ -51,5 +52,21 @@ describe('useMotion', () => {
 
     await act(async () => notify?.(false));
     expect(result.current).toEqual({ type: 'spring', config: motion.spring.bouncy });
+  });
+});
+
+describe('Gerätekonfiguration reduzierte Bewegung (#113)', () => {
+  withDeviceConfig('reduzierte-bewegung');
+
+  test.each(['bounce', 'settle', 'enter', 'celebrate'] as const)('„%s“ wird zur kurzen Überblendung', async (intent) => {
+    const { result } = await renderHook(() => useMotion(intent));
+    await act(async () => {});
+    expect(result.current).toEqual({ type: 'crossfade', duration: motion.duration.fast });
+  });
+
+  test('eine Schleife steht still', async () => {
+    const { result } = await renderHook(() => useMotion('loop'));
+    await act(async () => {});
+    expect(result.current).toEqual({ type: 'still' });
   });
 });

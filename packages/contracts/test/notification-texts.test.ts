@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { notificationFixtures } from '../fixtures/notifications.ts';
 import { sharedAction } from '../fixtures/ids.ts';
 import { defineNotificationTexts, notificationText, notificationTexts } from '../src/notification-texts.ts';
+import { NotificationIntent } from '../src/notifications.ts';
 
 // Ein Testkatalog belegt das Gerüst; die echten Einträge liefern die Spezifikationen 4 und 5.
 const catalog = defineNotificationTexts({
@@ -62,7 +63,7 @@ describe('Textkatalog für Benachrichtigungen', () => {
   });
 
   it('der Eintrag passt zu Schlüssel und Werten des Intents aus den Fixtures', () => {
-    const rollenwahl = notificationFixtures.NotificationIntent.valid['Rollenwahl'];
+    const rollenwahl = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid['Rollenwahl']);
     expect(notificationTexts.renderStored(rollenwahl.messageKey, rollenwahl.payload)).toMatchObject({ type: 'rendered' });
   });
 

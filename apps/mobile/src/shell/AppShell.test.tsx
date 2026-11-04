@@ -1,12 +1,12 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
 import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native';
-import { Dimensions } from 'react-native';
 import { renderRouter, testRouter } from 'expo-router/testing-library';
 import type * as ZodModule from 'zod';
 
 import { EntityId } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 
+import { withDeviceConfig } from '../design/testing/device-config';
 import { hitArea } from '../design/testing/hit-area';
 import { appGameService } from '../island/app-game-service';
 import { fakeGameService } from '../island/testing/fake-game-service';
@@ -463,15 +463,7 @@ describe('Zugänglichkeit', () => {
 });
 
 describe('Schriftfaktor 2,0', () => {
-  const initial = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
-
-  beforeEach(() => {
-    Dimensions.set({ window: { ...initial.window, fontScale: 2 }, screen: { ...initial.screen, fontScale: 2 } });
-  });
-
-  afterEach(() => {
-    Dimensions.set(initial);
-  });
+  withDeviceConfig('schriftfaktor-2');
 
   test('Heute-Vorschau stapelt Momo und Mini-Tracker, deren getrennte Aktionen bedienbar bleiben', async () => {
     await renderRouter(appDir, { initialUrl: '/' });

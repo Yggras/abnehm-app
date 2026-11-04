@@ -57,7 +57,7 @@ type Phone = { session: AppSession; clock: AppTestClock; faults: FaultController
 
 /** Ein Gerät im Development Build: App-Sitzung mit Testuhr und Fehler-Adaptern, Backend über `app.request`. */
 function phone(backend: TestBackend): Phone {
-  const development = createDevelopmentApp({ backend, database: backend.database });
+  const development = createDevelopmentApp({ backend, database: backend.database, fakeMealVision: backend.fakeMealVision });
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({
     openSqlite: files.openSqlite,

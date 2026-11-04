@@ -74,6 +74,14 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['Fehler-Adapter'],
   },
   {
+    // #113: benannte Profile über Fehler-Adapter und Testuhr; Registry samt Tests in `test/seed-varianten.ts`.
+    key: 'laufzeitprofile',
+    description: 'Benannte, deterministische Zeit-, Transport-, Auth-, Storage- und Serverfehler über Fehler-Adapter und Testuhr, gestellt per Link `profil`',
+    modules: ['apps/mobile/src/test-capabilities/profiles.ts'],
+    entries: { deepLinks: ['profil'] },
+    markers: ['transport-antwort-verloren'],
+  },
+  {
     // #114: Maestros `setAirplaneMode` gibt es nur auf Android (https://docs.maestro.dev/api-reference/commands/setairplanemode).
     key: 'transport-fehlermodus',
     description: 'iOS-Ersatz für den Flugmodus im E2E-Build: `fehler?transport=offline` meldet dem Sync zusätzlich kein Netz, die Rückkehr zu `ok` eine Netzrückkehr',
@@ -96,6 +104,15 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/mobile/src/test-capabilities/fixture-island.ts'],
     entries: {},
     markers: ['fixture_insel_nebel'],
+  },
+  {
+    // #161: Fake des `MealVisionAnalyzer` mit Erfolg, leerer Liste, Refusal, Schemaverstoß und
+    // Zeitüberschreitung. Das produktive Backend baut seinen Analyzer nur aus dem Claude-Adapter.
+    key: 'fake-fotoanalyse',
+    description: 'Fake der KI-Fotoanalyse (`MealVisionAnalyzer`) für Tests und das Development-Backend, umstellbar über `POST /dev/fotoanalyse`',
+    modules: ['apps/backend/dev/meal-vision/'],
+    entries: { backendRoutes: ['POST /dev/fotoanalyse'] },
+    markers: ['fake_fotoanalyse'],
   },
   {
     key: 'testgeruest',

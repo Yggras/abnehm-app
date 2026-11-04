@@ -51,7 +51,7 @@ export type AuthorizationScenario<W extends AuthorizationWorld, D extends Protec
   /** Die Policy, die die Route trägt; das Gerüst prüft das an der echten App. */
   policy: Policy & { dimensions: readonly D[] };
   /** Route beziehungsweise Fachbefehl, deren Policy tatsächlich angemeldet sein muss. */
-  route?: { method: 'GET' | 'POST'; path: string };
+  route?: { method: 'GET' | 'POST' | 'DELETE'; path: string };
   command?: string;
   arrange(): Promise<W>;
   /** Die Anfrage der positiven Gegenprobe, gestellt von `device`. */

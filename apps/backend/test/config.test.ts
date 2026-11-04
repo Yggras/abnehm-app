@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, it, onTestFinished } from 'vitest';
 
 import { readConfig } from '../src/config.ts';
+import { productionMealVisionAnalyzer } from '../src/nutrition/claude-meal-vision.ts';
 
 async function secretFile(content: string, name = 'postgres_password') {
   const directory = await mkdtemp(path.join(tmpdir(), 'abnehm-config-'));
@@ -32,6 +33,7 @@ const baseEnvironment = {
   BETTER_AUTH_SECRET_FILE: authSecretFile,
   INVITE_CODE_SECRET_FILE: inviteCodeSecretFile,
   AUTH_BASE_URL: 'http://localhost:8787',
+  PHOTO_STORAGE_DIR: '/var/lib/abnehm/fotos',
 };
 
 describe('readConfig', () => {
@@ -45,6 +47,8 @@ describe('readConfig', () => {
       database: { host: 'postgres', port: 5432, name: 'abnehm', user: 'abnehm', password: 'geheim-123' },
       auth: { secret: authSecret, baseUrl: 'http://localhost:8787', trustedProxies: [] },
       invitations: { codeSecret: inviteCodeSecret },
+      photoStorageDirectory: '/var/lib/abnehm/fotos',
+      mealVision: null,
     });
   });
 
@@ -98,5 +102,64 @@ describe('readConfig', () => {
 
     expect(() => readConfig({ DATABASE_PASSWORD_FILE: file })).toThrow(/DATABASE_HOST/);
     expect(() => readConfig({ DATABASE_PASSWORD_FILE: file })).not.toThrow(/geheim/);
+  });
+
+  it('verlangt ein absolutes Verzeichnis für die Fotoentwürfe', async () => {
+    const file = await secretFile('geheim-123');
+
+    expect(() => readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, PHOTO_STORAGE_DIR: undefined })).toThrow(/PHOTO_STORAGE_DIR fehlt/);
+    expect(() => readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, PHOTO_STORAGE_DIR: 'fotos' })).toThrow(/PHOTO_STORAGE_DIR ist kein absoluter Pfad/);
+  });
+});
+
+describe('readConfig: Fotoanalyse', () => {
+  it('liest den Schlüssel aus der Secret-Datei und startet mit Sonnet 5.5, Effort medium, Prompt v1 und 16.000 Tokens', async () => {
+    const file = await secretFile('geheim-123');
+    const apiKey = await secretFile('sk-ant-test\n', 'anthropic_api_key');
+
+    const config = readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, ANTHROPIC_API_KEY_FILE: apiKey });
+
+    expect(config.mealVision).toEqual({ apiKey: 'sk-ant-test', model: 'claude-sonnet-5-5', effort: 'medium', promptVersion: 'v1', maxTokens: 16_000 });
+  });
+
+  it('nimmt Modell, Effort, Prompt-Version und max_tokens aus der Umgebung', async () => {
+    const file = await secretFile('geheim-123');
+    const apiKey = await secretFile('sk-ant-test', 'anthropic_api_key');
+
+    const config = readConfig({
+      ...baseEnvironment,
+      DATABASE_PASSWORD_FILE: file,
+      ANTHROPIC_API_KEY_FILE: apiKey,
+      MEAL_VISION_MODEL: 'claude-haiku-5-5',
+      MEAL_VISION_EFFORT: 'low',
+      MEAL_VISION_PROMPT_VERSION: 'v1',
+      MEAL_VISION_MAX_TOKENS: '8000',
+    });
+
+    expect(config.mealVision).toEqual({ apiKey: 'sk-ant-test', model: 'claude-haiku-5-5', effort: 'low', promptVersion: 'v1', maxTokens: 8_000 });
+  });
+
+  it('lehnt unbekannte Effort-Stufen, Prompt-Versionen und max_tokens ab', async () => {
+    const file = await secretFile('geheim-123');
+    const apiKey = await secretFile('sk-ant-test', 'anthropic_api_key');
+    const environment = { ...baseEnvironment, DATABASE_PASSWORD_FILE: file, ANTHROPIC_API_KEY_FILE: apiKey };
+
+    expect(() => readConfig({ ...environment, MEAL_VISION_EFFORT: 'mittel' })).toThrow(/MEAL_VISION_EFFORT/);
+    expect(() => readConfig({ ...environment, MEAL_VISION_PROMPT_VERSION: 'v9' })).toThrow(/MEAL_VISION_PROMPT_VERSION/);
+    expect(() => readConfig({ ...environment, MEAL_VISION_MAX_TOKENS: '0' })).toThrow(/MEAL_VISION_MAX_TOKENS/);
+  });
+
+  it('nimmt den Schlüssel nicht aus einer Umgebungsvariablen an', async () => {
+    const file = await secretFile('geheim-123');
+
+    expect(readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, ANTHROPIC_API_KEY: 'sk-ant-test' }).mealVision).toBeNull();
+  });
+
+  it('das produktive Backend startet ohne Schlüssel nicht; keine Einstellung wählt einen Fake', async () => {
+    const file = await secretFile('geheim-123');
+
+    const config = readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, MEAL_VISION_ANALYZER: 'fake', MEAL_VISION_MODEL: 'fake' });
+
+    expect(() => productionMealVisionAnalyzer(config.mealVision)).toThrow(/ANTHROPIC_API_KEY_FILE fehlt/);
   });
 });
