@@ -15,5 +15,5 @@
     "types": ["node"]
   },
   // postgres-server.ts deklariert den von Vitest bereitgestellten Postgres-Zugang.
-  "include": ["test/app-auth.test.ts", "test/sync-app.test.ts", "test/person-sync-app.test.ts", "test/online-app.test.ts", "test/seed-app.test.ts", "test/daily-goals-app.test.ts", "test/logout-app.test.ts", "test/partner-projections-app.test.ts", "test/uncoupling-app.test.ts", "test/seed-partner-app.test.ts", "test/water-sync-app.test.ts", "test/plan-sync-app.test.ts", "test/nutrition-sync-app.test.ts", "test/weight-sync-app.test.ts", "test/support/tracker-phones.ts", "test/support/postgres-server.ts", "test/account-name-app.test.ts", "test/fake-auth-backend.test.ts"]
+  "include": ["test/app-auth.test.ts", "test/sync-app.test.ts", "test/person-sync-app.test.ts", "test/online-app.test.ts", "test/seed-app.test.ts", "test/daily-goals-app.test.ts", "test/logout-app.test.ts", "test/partner-projections-app.test.ts", "test/uncoupling-app.test.ts", "test/seed-partner-app.test.ts", "test/water-sync-app.test.ts", "test/plan-sync-app.test.ts", "test/nutrition-sync-app.test.ts", "test/weight-sync-app.test.ts", "test/sport-sync-app.test.ts", "test/support/tracker-phones.ts", "test/support/postgres-server.ts", "test/account-name-app.test.ts", "test/fake-auth-backend.test.ts"]
 }

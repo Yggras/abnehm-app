@@ -145,7 +145,7 @@ describe('Seed-Manifest', () => {
     const tablesBesideSport = (all: Record<string, unknown>) => Object.fromEntries(Object.entries(all).filter(([table]) => !['sport_entry', 'change_log', 'sync_clock'].includes(table)));
     expect(Object.keys(tablesBesideSport(server)).sort()).toEqual(Object.keys(tablesBesideSport(solo.initial.server)).sort());
     // Die Serverversionen verschieben sich mit den zusätzlichen Einheiten; die Zeilen selbst bleiben gleich.
-    const unversioned = (rows: readonly Record<string, unknown>[] = []) => rows.map(({ server_version: _, ...row }) => row);
+    const unversioned = (rows: readonly Record<string, unknown>[] = []) => rows.map((row) => ({ ...row, server_version: undefined }));
     for (const table of ['water_entry', 'weight_entry', 'goal_version', 'daily_goal']) expect(unversioned(server[table])).toEqual(unversioned(solo.initial.server[table]));
   });
 
