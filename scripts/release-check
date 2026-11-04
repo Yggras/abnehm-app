@@ -1,0 +1,286 @@
+#!/usr/bin/env bash
+# Release-Checkliste des Produktiv-Gates (#115): prüft genau den freizugebenden Commit und gibt ihn frei.
+#   scripts/release-check --android-geraet <adb-serial> --iphone <devicectl-id> --lan-ip <LAN-IP>
+#   scripts/release-check …  --nur <schritt>[,<schritt>]   # einzelne Schritte wiederholen (gibt nie frei)
+#
+# Schritte: stand, statisch, autorisierung, release-sperren, tests, backend-image, maestro,
+# android-geraet, iphone-geraet, produktion-binaries, sichtpruefung. Ablauf und Bedeutung:
+# docs/betrieb.md › „Release-Checkliste“.
+#
+# Protokoll samt Artefakt-IDs unter ~/Library/Logs/abnehm-app/release/<Zeitpunkt>/protokoll.md. Nur ein
+# vollständiger grüner Lauf auf einem sauberen Stand, der origin/main entspricht, legt die Freigabe
+# ~/Library/Logs/abnehm-app/release/freigaben/<commit>.md an. `scripts/prod start` und `scripts/prod app` verteilen nur
+# freigegebene Stände. Für Probeläufe auf anderen Ständen: ABNEHM_RELEASE_BELIEBIGER_STAND=1 (gibt nie frei).
+set -uo pipefail
+
+# shellcheck source=prod-umgebung
+source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
+repo_root="$prod_repo_root"
+all_steps=(stand statisch autorisierung release-sperren tests backend-image maestro android-geraet iphone-geraet produktion-binaries sichtpruefung)
+
+usage() {
+  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+android_serial=""
+iphone_id=""
+lan_ip=""
+only=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --android-geraet) android_serial="${2:?--android-geraet braucht die adb-Seriennummer}"; shift ;;
+    --iphone) iphone_id="${2:?--iphone braucht die devicectl-ID}"; shift ;;
+    --lan-ip) lan_ip="${2:?--lan-ip braucht die LAN-Adresse dieses Rechners}"; shift ;;
+    --nur) only="${2:?--nur braucht Schritte}"; shift ;;
+    *) usage ;;
+  esac
+  shift
+done
+steps=("${all_steps[@]}")
+if [[ -n "$only" ]]; then
+  IFS=',' read -r -a steps <<<"$only"
+  for step in "${steps[@]}"; do [[ " ${all_steps[*]} " == *" $step "* ]] || { echo "Unbekannter Schritt: $step" >&2; exit 2; }; done
+fi
+
+load_prod_url
+prod_url="$ABNEHM_PROD_URL"
+
+cd "$repo_root"
+commit="$(git rev-parse HEAD)"
+run_dir="$release_root/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$run_dir"
+protocol="$run_dir/protokoll.md"
+interactive=false
+[[ -t 0 ]] && interactive=true
+
+{
+  echo "# Release-Checkliste $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo
+  echo "- Commit: \`$commit\`"
+  echo "- Produktivadresse: $prod_url"
+  echo "- Schritte: ${steps[*]}"
+  echo
+  echo "| Schritt | Ergebnis | Nachweis |"
+  echo "| --- | --- | --- |"
+} >"$protocol"
+
+failed=0
+record() {
+  # record <schritt> <bestanden|FEHLGESCHLAGEN|OFFEN> <nachweis>
+  echo "| $1 | $2 | $3 |" >>"$protocol"
+  echo "== $1: $2 · $3" >&2
+  [[ "$2" == bestanden ]] || failed=1
+}
+# run_step <schritt> <logdatei-name> <befehl…>: Befehl mit Protokolldatei ausführen.
+run_step() {
+  local step="$1" log="$run_dir/$2"
+  shift 2
+  echo "== $step: $*" >&2
+  if "$@" >"$log" 2>&1; then record "$step" bestanden "\`$*\` · $(basename "$log")"; return 0; fi
+  tail -n 30 "$log" >&2
+  record "$step" FEHLGESCHLAGEN "\`$*\` · $(basename "$log")"
+  return 1
+}
+ask() {
+  # ask <frage>: j/n vom Menschen; ohne Terminal bleibt der Schritt offen.
+  local answer
+  [[ "$interactive" == true ]] || return 2
+  read -r -p "$1 [j/n] " answer
+  [[ "$answer" == j || "$answer" == J ]]
+}
+artifact_line() { node -p "const a=require('$1'); a.ziel + ': ' + a.artefaktId + ' (' + a.binary + ', ' + a.commit.slice(0, 12) + (a.ungespeicherteAenderungen ? ', mit ungespeicherten Änderungen' : '') + ')'"; }
+e2e_summaries() { find "$run_dir/e2e" -name zusammenfassung.txt 2>/dev/null | sort; }
+# E2E-Backend im WLAN für das iPhone und danach wieder nur auf 127.0.0.1.
+e2e_backend() {
+  local project="${E2E_COMPOSE_PROJECT:-abnehm-e2e}"
+  "$repo_root/scripts/dev-secrets" >/dev/null
+  if [[ "${1:-}" == lan ]]; then
+    BACKEND_PORT=8788 BACKEND_PUBLISH_ADDRESS="$lan_ip" docker compose --project-name "$project" -f compose.yaml -f compose.lan.yaml up --detach --build --wait
+  else
+    BACKEND_PORT=8788 docker compose --project-name "$project" up --detach --build --wait
+  fi
+}
+
+for step in "${steps[@]}"; do
+  case "$step" in
+    stand)
+      git fetch --quiet origin main
+      if [[ -n "$(git status --porcelain)" ]]; then
+        record stand FEHLGESCHLAGEN "ungesicherte Änderungen im Checkout"
+      elif [[ "$commit" != "$(git rev-parse origin/main)" ]]; then
+        record stand FEHLGESCHLAGEN "HEAD ist nicht origin/main ($(git rev-parse --short origin/main))"
+      else
+        record stand bestanden "sauberer Checkout, HEAD = origin/main"
+      fi
+      ;;
+    statisch)
+      run_step statisch statisch.log sh -c 'npm run typecheck && npm run lint'
+      ;;
+    autorisierung)
+      # Matrix aus Spezifikation 0, Abschnitt 11: negative und positive Fälle je Endpunkt und Befehl.
+      run_step autorisierung autorisierung.log npx vitest run --project @abnehm/backend apps/backend/test/authorization- apps/backend/test/sync-authorization
+      ;;
+    release-sperren)
+      run_step release-sperren release-sperren.log sh -c 'npx vitest run --project release && npx vitest run --project @abnehm/backend apps/backend/test/release-sperren'
+      ;;
+    tests)
+      run_step tests tests.log sh -c "npm run test:app && npx vitest run --project '!release'"
+      ;;
+    backend-image)
+      # Holt den aktuellen Stand der festgelegten Basis-Images (Sicherheitsupdates) und baut das Produktions-Image;
+      # `scripts/prod start` startet genau diese Images (docs/betrieb.md › „Updates“).
+      if ABNEHM_PROD_URL="$prod_url" ABNEHM_PROD_SECRETS_DIR=/ungenutzt sh -c \
+          'docker compose --file compose.prod.yaml pull postgres && docker compose --file compose.prod.yaml build --pull backend' \
+          >"$run_dir/backend-image.log" 2>&1; then
+        {
+          echo "backend=$(image_id "$prod_backend_image")"
+          echo "postgres=$(image_id "$(ABNEHM_PROD_URL="$prod_url" prod_postgres_image)")"
+        } >"$run_dir/images.txt"
+        # Release-Sperren an genau diesem Image, nicht nur an der COPY-Liste des Dockerfiles.
+        if node test/release-sperren-artefakt.ts image "$prod_backend_image" >>"$run_dir/backend-image.log" 2>&1; then
+          record backend-image bestanden "$(tr '\n' ' ' <"$run_dir/images.txt")· ohne Testfähigkeiten"
+        else
+          record backend-image FEHLGESCHLAGEN "Testfähigkeit im Image: backend-image.log"
+        fi
+      else
+        record backend-image FEHLGESCHLAGEN "backend-image.log"
+      fi
+      ;;
+    maestro)
+      # sync-offline, geraetesmoke und geraetetest auf iOS-Simulator und Android-Emulator, E2E-Binaries dieses Commits.
+      if E2E_LOG_DIR="$run_dir/e2e" scripts/e2e-run --build >"$run_dir/maestro.log" 2>&1; then
+        record maestro bestanden "$(tail -n 3 "$(e2e_summaries | tail -n 1)" | grep -E '^(ios|android):' | tr '\n' ' ')"
+      else
+        record maestro FEHLGESCHLAGEN "maestro.log · $(e2e_summaries | tail -n 1)"
+      fi
+      ;;
+    android-geraet)
+      if [[ -z "$android_serial" ]]; then
+        record android-geraet OFFEN "--android-geraet <adb-serial> fehlt (Samsung Galaxy A34)"
+      else
+        # Einmal bauen, dann beide Abläufe gegen dasselbe Binary.
+        ok=true
+        scripts/e2e-build android --geraet >>"$run_dir/android-geraet.log" 2>&1 || ok=false
+        for flow in geraetetest geraetesmoke; do
+          [[ "$ok" == true ]] || break
+          E2E_LOG_DIR="$run_dir/e2e" scripts/e2e-run android --geraet "$android_serial" --ablauf "$flow" >>"$run_dir/android-geraet.log" 2>&1 || ok=false
+        done
+        artifact="$(scripts/e2e-build android --geraet --pfad)"
+        if [[ "$ok" == true ]]; then record android-geraet bestanden "On-Device-Suite und Gerätesmoke · $(artifact_line "$artifact")"
+        else record android-geraet FEHLGESCHLAGEN "android-geraet.log"; fi
+      fi
+      ;;
+    iphone-geraet)
+      if [[ -z "$iphone_id" || -z "$lan_ip" ]]; then
+        record iphone-geraet OFFEN "--iphone <devicectl-id> und --lan-ip <LAN-IP> fehlen (iPhone SE)"
+        continue
+      fi
+      if ! scripts/e2e-build ios --geraet --api-url "http://$lan_ip:8788" >"$run_dir/iphone-geraet.log" 2>&1 \
+        || ! e2e_backend lan >>"$run_dir/iphone-geraet.log" 2>&1 \
+        || ! xcrun devicectl device install app --device "$iphone_id" "$(dirname "$(scripts/e2e-build ios --geraet --pfad)")"/*.app >>"$run_dir/iphone-geraet.log" 2>&1; then
+        record iphone-geraet FEHLGESCHLAGEN "Bauen, LAN-Backend oder Installation: iphone-geraet.log"
+        e2e_backend >>"$run_dir/iphone-geraet.log" 2>&1 || echo "WARNUNG: E2E-Backend lauscht womöglich weiter auf $lan_ip:8788" >&2
+        continue
+      fi
+      artifact="$(scripts/e2e-build ios --geraet --pfad)"
+      launch() { xcrun devicectl device process launch --device "$iphone_id" --terminate-existing --payload-url "$1" de.yggras.abnehmapp.e2e >>"$run_dir/iphone-geraet.log" 2>&1; }
+      cat >&2 <<HINWEIS
+iPhone: Handablauf aus docs/entwicklung.md › „Echte Geräte“. Beim ersten Start „Lokales Netzwerk“ erlauben.
+  1. On-Device-Suite vor dem Neustart startet jetzt; das Ergebnis steht oben auf dem Bildschirm.
+HINWEIS
+      launch 'abnehmapp-e2e://geraetetest?phase=vor_neustart'
+      ask "Zeigt das iPhone „Gerätetest vor Neustart: … alle bestanden“?"; before=$?
+      echo "  2. App von Hand beenden (App-Umschalter), dann weiter." >&2
+      [[ "$interactive" == true ]] && read -r -p "  Beendet? [Enter] " _
+      launch 'abnehmapp-e2e://geraetetest?phase=nach_neustart'
+      ask "Zeigt das iPhone „Gerätetest nach Neustart: … alle bestanden“?"; after=$?
+      echo "  3. Gerätesmoke von Hand: Seed-Link, Tabs, ＋, Randgeste zurück, Neustart mit erhaltener Sitzung, sichere Bereiche." >&2
+      ask "Gerätesmoke auf dem iPhone ohne Befund?"; smoke=$?
+      xcrun devicectl device capture screenshot --device "$iphone_id" --destination "$run_dir/iphone-smoke.png" >>"$run_dir/iphone-geraet.log" 2>&1 || true
+      # Das Development-Backend darf nach dem Schritt nicht im WLAN bleiben (Portscan, docs/betrieb.md).
+      if ! e2e_backend >>"$run_dir/iphone-geraet.log" 2>&1; then
+        record iphone-geraet FEHLGESCHLAGEN "E2E-Backend lauscht womöglich weiter auf $lan_ip:8788; von Hand stoppen (iphone-geraet.log)"
+        continue
+      fi
+      if [[ "$before" == 2 || "$after" == 2 || "$smoke" == 2 ]]; then record iphone-geraet OFFEN "ohne Terminal keine Bestätigung · $(artifact_line "$artifact")"
+      elif [[ "$before" == 0 && "$after" == 0 && "$smoke" == 0 ]]; then record iphone-geraet bestanden "On-Device-Suite vor/nach Neustart und Gerätesmoke (Mensch bestätigt) · $(artifact_line "$artifact")"
+      else record iphone-geraet FEHLGESCHLAGEN "Mensch meldet Befund · $(artifact_line "$artifact")"; fi
+      ;;
+    produktion-binaries)
+      ok=true
+      lines=()
+      for platform in ios android; do
+        if artifact="$(scripts/app-build produktion "$platform" --api-url "$prod_url" 2>>"$run_dir/produktion-binaries.log")"; then
+          cp "$artifact" "$run_dir/produktion-$platform.json"
+          lines+=("$(artifact_line "$artifact")")
+        else
+          ok=false
+        fi
+      done
+      if [[ "$ok" == true ]]; then record produktion-binaries bestanden "TLS-Prüfung ohne Ausnahme · ${lines[*]}"
+      else record produktion-binaries FEHLGESCHLAGEN "produktion-binaries.log"; fi
+      ;;
+    sichtpruefung)
+      shots="$(find "$run_dir/e2e" -name 'smoke-*.png' 2>/dev/null | sort)"
+      if [[ -z "$shots" ]]; then record sichtpruefung OFFEN "keine Bildschirmfotos smoke-*.png in diesem Lauf"; continue; fi
+      echo "Bildschirmfotos der sicheren Bereiche:" >&2
+      echo "$shots" >&2
+      [[ "$interactive" == true ]] && open $shots 2>/dev/null
+      ask "Sichere Bereiche auf allen Bildschirmfotos korrekt (nichts unter Notch, Statusleiste oder Gestenleiste)?"
+      case $? in
+        0) record sichtpruefung bestanden "$(echo "$shots" | wc -l | tr -d ' ') Bildschirmfotos angesehen (Mensch bestätigt)" ;;
+        2) record sichtpruefung OFFEN "ohne Terminal keine Bestätigung" ;;
+        *) record sichtpruefung FEHLGESCHLAGEN "Mensch meldet Befund" ;;
+      esac
+      ;;
+  esac
+done
+
+complete=true
+[[ " ${steps[*]} " == " ${all_steps[*]} " ]] || complete=false
+
+# Bindung an den Commit: Der Lauf dauert lange, und der Checkout kann sich währenddessen ändern. Freigegeben
+# wird nur, wenn der Stand noch derselbe ist und jedes geprüfte Artefakt aus genau diesem sauberen Commit stammt.
+if [[ "$complete" == true ]]; then
+  binding=()
+  [[ "$(git rev-parse HEAD)" == "$commit" && -z "$(git status --porcelain)" ]] || binding+=("Checkout hat sich während des Laufs geändert")
+  artifacts=("$run_dir"/produktion-ios.json "$run_dir"/produktion-android.json \
+    "$(scripts/e2e-build android --geraet --pfad)" "$(scripts/e2e-build ios --geraet --pfad)")
+  while IFS= read -r copied; do artifacts+=("$copied"); done < <(find "$run_dir/e2e" -name artefakt.json 2>/dev/null)
+  for artifact in "${artifacts[@]}"; do
+    if [[ ! -f "$artifact" ]]; then binding+=("fehlt: $artifact"); continue; fi
+    node -e "const a=require('$artifact'); process.exit(a.commit === '$commit' && a.ungespeicherteAenderungen === false ? 0 : 1)" \
+      || binding+=("$(artifact_line "$artifact") stammt nicht aus dem sauberen Commit")
+  done
+  if [[ ${#binding[@]} -eq 0 ]]; then
+    record commit-bindung bestanden "${#artifacts[@]} Artefakte aus \`${commit:0:12}\` ohne ungespeicherte Änderungen"
+  else
+    record commit-bindung FEHLGESCHLAGEN "$(printf '%s; ' "${binding[@]}")"
+  fi
+fi
+
+# Artefakt-IDs aller E2E-Läufe dieses Durchgangs.
+{
+  echo
+  echo "## E2E-Läufe"
+  echo
+  for summary in $(e2e_summaries); do echo '```'; cat "$summary"; echo '```'; done
+} >>"$protocol"
+
+if [[ "$failed" == 0 && "$complete" == true && "${ABNEHM_RELEASE_BELIEBIGER_STAND:-}" != 1 ]]; then
+  approval="$(approval_path "$commit")"
+  mkdir -p "$(dirname "$approval")"
+  { echo "**Ergebnis: GRÜN.** Freigegeben ist Commit \`$commit\`."; } >>"$protocol"
+  cp "$protocol" "$approval.md"
+  for platform in ios android; do cp "$run_dir/produktion-$platform.json" "$approval-$platform.json"; done
+  cp "$run_dir/images.txt" "$approval-images.txt"
+  echo "GRÜN: $protocol" >&2
+  exit 0
+fi
+reason="ein Schritt ist nicht bestanden"
+[[ "$complete" == true ]] || reason="nicht alle Schritte gelaufen (--nur)"
+[[ "${ABNEHM_RELEASE_BELIEBIGER_STAND:-}" == 1 ]] && reason="Probelauf (ABNEHM_RELEASE_BELIEBIGER_STAND=1)"
+echo "**Ergebnis: nicht freigegeben** ($reason)." >>"$protocol"
+echo "Nicht freigegeben ($reason): $protocol" >&2
+exit 1

@@ -3,21 +3,26 @@ import type { ExportedConfig } from 'expo/config-plugins';
 
 import createConfig from '../app.config';
 
-const original = { variant: process.env.APP_VARIANT, e2e: process.env.EXPO_PUBLIC_E2E_BUILD };
+const original = {
+  variant: process.env.APP_VARIANT,
+  e2e: process.env.EXPO_PUBLIC_E2E_BUILD,
+  apiUrl: process.env.EXPO_PUBLIC_API_URL,
+};
 
-function restore(name: 'APP_VARIANT' | 'EXPO_PUBLIC_E2E_BUILD', value: string | undefined) {
+function setEnv(name: 'APP_VARIANT' | 'EXPO_PUBLIC_E2E_BUILD' | 'EXPO_PUBLIC_API_URL', value: string | undefined) {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
 }
 
 afterEach(() => {
-  restore('APP_VARIANT', original.variant);
-  restore('EXPO_PUBLIC_E2E_BUILD', original.e2e);
+  setEnv('APP_VARIANT', original.variant);
+  setEnv('EXPO_PUBLIC_E2E_BUILD', original.e2e);
+  setEnv('EXPO_PUBLIC_API_URL', original.apiUrl);
 });
 
 function configFor(variant: string | undefined, e2eBuild?: string) {
-  restore('APP_VARIANT', variant);
-  restore('EXPO_PUBLIC_E2E_BUILD', e2eBuild);
+  setEnv('APP_VARIANT', variant);
+  setEnv('EXPO_PUBLIC_E2E_BUILD', e2eBuild);
   return createConfig({ config: {} } as ConfigContext);
 }
 
@@ -67,4 +72,23 @@ test('die Testfähigkeiten lassen sich nur im E2E-Build per Bündel-Schalter ein
   }
   // Umgekehrt entsteht der E2E-Build nie ohne den Schalter, den das Bundle prüft.
   for (const value of [undefined, '1', 'false']) expect(() => configFor('e2e', value)).toThrow('EXPO_PUBLIC_E2E_BUILD=true');
+});
+
+test('der Produktionsbuild spricht das Backend nur über HTTPS an (Produktiv-Gate #115)', () => {
+  for (const url of ['http://192.168.178.20:8787', 'http://localhost:8787', 'ftp://example.test', 'keine-url']) {
+    setEnv('EXPO_PUBLIC_API_URL', url);
+    expect(() => configFor(undefined)).toThrow('nur über https://');
+    expect(() => configFor('production')).toThrow('nur über https://');
+  }
+  setEnv('EXPO_PUBLIC_API_URL', 'https://heimserver.tail0000.ts.net');
+  expect(configFor(undefined).ios?.bundleIdentifier).toBe('de.yggras.abnehmapp');
+  // Ohne Adresse bleibt der Export der Release-Sperren möglich; zur Laufzeit fehlt sie dann laut (src/backend/client.ts).
+  setEnv('EXPO_PUBLIC_API_URL', undefined);
+  expect(() => configFor(undefined)).not.toThrow();
+});
+
+test('Development- und E2E-Build dürfen das lokale Backend per HTTP ansprechen', () => {
+  setEnv('EXPO_PUBLIC_API_URL', 'http://192.168.178.20:8788');
+  expect(() => configFor('development')).not.toThrow();
+  expect(() => configFor('e2e', 'true')).not.toThrow();
 });

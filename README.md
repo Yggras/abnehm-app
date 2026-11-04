@@ -18,4 +18,6 @@ scripts/start-ticket-worktree <ticketnummer> <kurzname>
 
 App, Backend und Datenbank lokal starten: [`docs/entwicklung.md`](docs/entwicklung.md).
 
+Produktivbetrieb auf dem Laptop und Release-Checkliste: [`docs/betrieb.md`](docs/betrieb.md).
+
 Die vollständigen Arbeitsregeln stehen in [`AGENTS.md`](AGENTS.md).

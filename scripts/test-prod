@@ -1,0 +1,99 @@
+#!/bin/sh
+set -eu
+
+# Hermetischer Smoke-Test für scripts/prod und scripts/prod-secrets (#115): Git-Repo im Temp-Verzeichnis,
+# docker, tailscale und curl gemockt. Prüft Secrets (Rechte, keine Ausgabe von Werten), die Adresse und dass
+# `prod start` nur freigegebene Commits mit den freigegebenen Image-IDs startet.
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+fail() { echo "FEHLER: $*" >&2; exit 1; }
+
+mkdir -p "$tmp/repo/scripts" "$tmp/bin"
+cp "$root/scripts/prod" "$root/scripts/prod-secrets" "$root/scripts/prod-umgebung" "$tmp/repo/scripts/"
+cp "$root/compose.prod.yaml" "$tmp/repo/"
+git -C "$tmp/repo" init -q
+git -C "$tmp/repo" -c user.name=t -c user.email=t@example.test add -A
+git -C "$tmp/repo" -c user.name=t -c user.email=t@example.test commit -q -m init
+commit=$(git -C "$tmp/repo" rev-parse HEAD)
+
+# docker: Image-IDs aus $MOCK_IMAGES (Zeilen „name=id“), Aufrufe nach $MOCK_CALLS.
+cat > "$tmp/bin/docker" <<'MOCK'
+#!/bin/sh
+echo "$*" >> "$MOCK_CALLS"
+case "$*" in
+  "image inspect --format {{.Id}} "*) name=$(echo "$*" | awk '{print $NF}'); sed -n "s|^$name=||p" "$MOCK_IMAGES" | grep . ;;
+  *" ps --format {{.Image}} backend") echo abnehm-prod-backend ;;
+  *" ps --format {{.Image}} postgres") echo postgres:18.6-alpine ;;
+  *" config --format json") echo '{"services":{"postgres":{"image":"postgres:18.6-alpine"}}}' ;;
+  *) exit 0 ;;
+esac
+MOCK
+printf '%s\n' '#!/bin/sh' 'echo "https://heimserver.tail0000.ts.net (tailnet only)"' 'echo "|-- / proxy http://127.0.0.1:8790"' > "$tmp/bin/tailscale"
+printf '%s\n' '#!/bin/sh' 'exit 0' > "$tmp/bin/curl"
+chmod +x "$tmp/bin/"*
+
+export PATH="$tmp/bin:$PATH"
+export ABNEHM_PROD_DIR="$tmp/prod"
+export ABNEHM_PROD_SECRETS_DIR="$tmp/prod/secrets"
+export ABNEHM_RELEASE_DIR="$tmp/release"
+export MOCK_CALLS="$tmp/calls" MOCK_IMAGES="$tmp/images"
+: > "$MOCK_CALLS"
+printf '%s\n' 'abnehm-prod-backend=sha256:backend1' 'postgres:18.6-alpine=sha256:postgres1' > "$MOCK_IMAGES"
+prod="$tmp/repo/scripts/prod"
+secrets="$tmp/repo/scripts/prod-secrets"
+
+# Secrets ------------------------------------------------------------------------------------------
+out=$("$secrets" 2>&1) && fail "anlegen ohne API-Schlüssel meldet Erfolg"
+for name in postgres_password better_auth_secret invite_code_secret; do
+  [ "$(stat -f '%Lp' "$ABNEHM_PROD_SECRETS_DIR/$name")" = 600 ] || fail "$name nicht 0600"
+  value=$(cat "$ABNEHM_PROD_SECRETS_DIR/$name")
+  case "$out" in *"$value"*) fail "anlegen gibt den Wert von $name aus" ;; esac
+done
+[ "$(stat -f '%Lp' "$ABNEHM_PROD_SECRETS_DIR")" = 700 ] || fail "Secret-Verzeichnis nicht 0700"
+first=$(cat "$ABNEHM_PROD_SECRETS_DIR/better_auth_secret")
+echo "sk-test" | "$secrets" setzen anthropic_api_key >/dev/null
+"$secrets" >/dev/null || fail "anlegen nach setzen schlägt fehl"
+[ "$(cat "$ABNEHM_PROD_SECRETS_DIR/better_auth_secret")" = "$first" ] || fail "anlegen überschreibt bestehende Secrets"
+echo x | "$secrets" setzen unbekannt >/dev/null 2>&1 && fail "setzen akzeptiert unbekannte Namen"
+chmod 644 "$ABNEHM_PROD_SECRETS_DIR/invite_code_secret"
+"$secrets" pruefen >/dev/null 2>&1 && fail "pruefen übersieht 0644"
+chmod 600 "$ABNEHM_PROD_SECRETS_DIR/invite_code_secret"
+"$secrets" pruefen >/dev/null || fail "pruefen schlägt bei korrekten Secrets fehl"
+
+# Adresse ------------------------------------------------------------------------------------------
+"$prod" adresse http://heimserver.tail0000.ts.net >/dev/null 2>&1 && fail "adresse akzeptiert http"
+"$prod" adresse https://example.com >/dev/null 2>&1 && fail "adresse akzeptiert fremde Domain"
+"$prod" adresse https://heimserver.tail0000.ts.net >/dev/null || fail "adresse lehnt ts.net ab"
+
+# Start nur mit Freigabe ---------------------------------------------------------------------------
+started() { grep -q 'up --detach' "$MOCK_CALLS"; }
+"$prod" start >/dev/null 2>&1 && fail "start ohne Freigabe meldet Erfolg"
+started && fail "start ohne Freigabe startet Container"
+
+mkdir -p "$ABNEHM_RELEASE_DIR/freigaben"
+echo freigegeben > "$ABNEHM_RELEASE_DIR/freigaben/$commit.md"
+printf '%s\n' 'backend=sha256:backend2' 'postgres=sha256:postgres1' > "$ABNEHM_RELEASE_DIR/freigaben/$commit-images.txt"
+"$prod" start >/dev/null 2>&1 && fail "start mit fremdem Image meldet Erfolg"
+started && fail "start mit fremdem Image startet Container"
+
+printf '%s\n' 'backend=sha256:backend1' 'postgres=sha256:postgres1' > "$ABNEHM_RELEASE_DIR/freigaben/$commit-images.txt"
+"$prod" start >/dev/null || fail "start mit Freigabe schlägt fehl"
+grep -q 'up --detach --no-build --pull never --force-recreate --wait' "$MOCK_CALLS" || fail "start baut selbst oder erzeugt nicht neu"
+grep -q "^commit=$commit" "$ABNEHM_PROD_DIR/laufender-stand.txt" || fail "laufender Stand fehlt"
+
+# Probelauf: eigener Stack auf 8791, baut selbst; `app` verlangt trotzdem eine Freigabe.
+: > "$MOCK_CALLS"
+ABNEHM_PROD_BELIEBIGER_STAND=1 "$prod" start >/dev/null 2>&1 || fail "Probelauf startet nicht"
+grep -q -- '--project-name abnehm-prod-probe up --detach --build --force-recreate --wait' "$MOCK_CALLS" || fail "Probelauf nutzt nicht den Probe-Stack"
+rm "$ABNEHM_RELEASE_DIR/freigaben/$commit.md"
+ABNEHM_PROD_BELIEBIGER_STAND=1 "$prod" app android emulator-5554 >/dev/null 2>&1 && fail "app im Probelauf ohne Freigabe meldet Erfolg"
+echo freigegeben > "$ABNEHM_RELEASE_DIR/freigaben/$commit.md"
+
+echo dirty > "$tmp/repo/neu.txt"
+: > "$MOCK_CALLS"
+"$prod" start >/dev/null 2>&1 && fail "start mit ungesicherten Änderungen meldet Erfolg"
+started && fail "start mit ungesicherten Änderungen startet Container"
+
+echo "test-prod: alle Prüfungen bestanden"

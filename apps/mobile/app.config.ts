@@ -25,6 +25,18 @@ function appVariant(environment: NodeJS.ProcessEnv): AppVariant {
   return variant;
 }
 
+/**
+ * Produktiv-Gate (#115): Der Build für echte Daten erreicht das Backend nur verschlüsselt. Ohne Adresse
+ * bleibt ein Export möglich (Release-Sperren); die App bricht dann zur Laufzeit ab (src/backend/client.ts).
+ * Die Form der Adresse (Host ohne Pfad) prüft `scripts/app-build`; hier zählt nur das Schema.
+ */
+function assertProductionApiUrl(variant: AppVariant, environment: NodeJS.ProcessEnv): void {
+  const apiUrl = environment.EXPO_PUBLIC_API_URL;
+  if (variant === 'production' && apiUrl !== undefined && apiUrl !== '' && !apiUrl.startsWith('https://')) {
+    throw new Error('Der Produktionsbuild spricht das Backend nur über https:// an (EXPO_PUBLIC_API_URL)');
+  }
+}
+
 const variantIdentity: Record<AppVariant, { name: string; identifier: string; scheme: string }> = {
   development: { name: 'Abnehm-App Dev', identifier: 'de.yggras.abnehmapp.dev', scheme: 'abnehmapp-dev' },
   e2e: { name: 'Abnehm-App E2E', identifier: 'de.yggras.abnehmapp.e2e', scheme: 'abnehmapp-e2e' },
@@ -45,6 +57,7 @@ const withCleartextTraffic: ConfigPlugin = (config) =>
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const variant = appVariant(process.env);
+  assertProductionApiUrl(variant, process.env);
   // Lokales HTTP zum Entwicklungsrechner bzw. zum lokalen Backend der E2E-Läufe.
   const localNetworking = variant !== 'production';
   const { name, identifier, scheme } = variantIdentity[variant];
