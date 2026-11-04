@@ -142,8 +142,10 @@ case "${1:-}" in
     require_approval
     load_url
     "$repo_root/scripts/prod-secrets" pruefen
-    if [[ "$any_state" == true ]]; then compose up --detach --build --wait
-    else compose up --detach --no-build --pull never --wait; fi
+    # Compose erzeugt einen Container nicht neu, wenn sich nur das Image hinter dem Tag geändert hat
+    # (beobachtet am 04.11.2026); ein Update braucht deshalb --force-recreate. Das ist der Neustart.
+    if [[ "$any_state" == true ]]; then compose up --detach --build --force-recreate --wait
+    else compose up --detach --no-build --pull never --force-recreate --wait; fi
     check_images
     record_state
     check_serve
