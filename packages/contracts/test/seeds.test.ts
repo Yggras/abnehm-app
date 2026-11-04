@@ -6,6 +6,7 @@ import {
   seedClock,
   seedDays,
   seedIds,
+  seedImageKeys,
   seedManifests,
   seedPassword,
   type SeedPart,
@@ -396,15 +397,25 @@ describe('Szenario gekoppelt', () => {
     }
   });
 
-  it('reserviert versionierte Erweiterungspunkte für die Fotodaten (#162) und das Deko-Geschenk (#198)', () => {
-    expect(gekoppelt.extensions?.mealPhotos).toEqual({
-      version: 1,
+  it('füllt den Foto-Erweiterungspunkt in Fassung 2 (#162) und reserviert das Deko-Geschenk (#198)', () => {
+    expect(gekoppelt.extensions?.mealPhotos).toMatchObject({
+      version: 2,
       photos: [
-        { id: seedIds.mealPhoto.philippHeute, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippMittag, visibleTo: ['anna'] },
-        { id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'] },
+        { id: seedIds.mealPhoto.philippHeute, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippMittag, visibleTo: ['anna'],
+          imageKey: seedImageKeys.mealPhoto.philippHeute },
+        { id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'],
+          imageKey: seedImageKeys.mealPhoto.annaHeute },
       ],
+      expiredDrafts: [{ id: seedIds.photoDraft.philippAbgelaufen, account: 'philipp', imageKey: seedImageKeys.photoDraft.philippAbgelaufen }],
     });
     for (const photo of server.meal_photo ?? []) expect(photo).toMatchObject({ shared_with_partner: true, deleted_at: null });
+    // Die Fotos stehen seit #162 im Änderungsprotokoll und auf dem Gerät ihres Eigentümers; der Entwurf nur auf dem Server.
+    expect(server.change_log?.filter((entry) => entry.entity_type === 'meal_photo').map((entry) => entry.entity_id).sort()).toEqual(
+      [seedIds.mealPhoto.philippHeute, seedIds.mealPhoto.annaHeute].sort(),
+    );
+    expect(server.photo_draft).toEqual([expect.objectContaining({ id: seedIds.photoDraft.philippAbgelaufen, person_id: seedIds.person.philipp })]);
+    expect(server.photo_draft?.[0]).not.toHaveProperty('server_version');
+    for (const device of Object.values(gekoppelt.initial.devices)) expect(device.rows.photo_draft).toBeUndefined();
     expect(gekoppelt.extensions?.decoGift).toEqual({ version: 1, state: 'reserviert', actionId: seedIds.sharedAction.dekoGeschenk, from: 'anna', to: 'philipp' });
     expect(server.shared_action).toBeUndefined();
   });
@@ -418,6 +429,15 @@ describe('Szenario gekoppelt', () => {
       `Mahlzeitenfoto ${unknownPhoto} fehlt im Ausgangszustand`,
       `Mahlzeitenfoto ${unknownPhoto}: Ernährungseintrag ${seedIds.nutritionEntry.annaMittag} fehlt`,
     ]);
+    const current = gekoppelt.extensions?.mealPhotos;
+    if (current?.version !== 2) throw new Error('Fassung 2 erwartet');
+    const wrongKey = { ...current, photos: [{ ...current.photos[0]!, imageKey: seedImageKeys.mealPhoto.annaHeute }] };
+    const unknownDraft = { ...current, expiredDrafts: [{ ...current.expiredDrafts[0]!, id: '5eed0033-0000-4000-8000-000000000099' }] };
+    expect(issues({ ...gekoppelt, extensions: { mealPhotos: wrongKey } })).toEqual([`Mahlzeitenfoto ${seedIds.mealPhoto.philippHeute}: Bildschlüssel passt nicht zur Zeile`]);
+    expect(issues({ ...gekoppelt, extensions: { mealPhotos: unknownDraft } })).toEqual(['Fotoentwurf 5eed0033-0000-4000-8000-000000000099 fehlt im Ausgangszustand']);
+    expect(issues({ ...gekoppelt, clock: { ...gekoppelt.clock, instant: '2026-10-14T08:00:00.000Z' } })).toContain(
+      `Fotoentwurf ${seedIds.photoDraft.philippAbgelaufen} ist nicht abgelaufen`,
+    );
     const used = { ...gekoppelt.extensions?.decoGift, actionId: seedIds.coupling.philippAnna };
     expect(issues({ ...gekoppelt, extensions: { decoGift: used } })).toEqual([
       'initial: reservierte ID des Deko-Geschenks ist belegt',

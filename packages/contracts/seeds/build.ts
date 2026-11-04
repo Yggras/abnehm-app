@@ -26,6 +26,11 @@ export type SeedEntity = Readonly<{
   row: SeedRow;
   /** Abhängige Zeilen ohne eigene Version, etwa die Tage einer Wochenplanversion. */
   children?: SeedRows;
+  /**
+   * Nur Server, nie synchronisiert, etwa ein Fotoentwurf (#162): ohne Serverversion, ohne Eintrag im
+   * Änderungsprotokoll und auf keinem Gerät. Die Positionen der übrigen Entitäten bleiben unverändert.
+   */
+  serverOnly?: true;
 }>;
 
 export type SeedPart = Readonly<{
@@ -68,6 +73,11 @@ export function buildSeedState({
       if (typeof id !== 'string') throw new Error(`${part.area}: ${entity.table} ohne id`);
       if (seen.has(`${entity.table}:${id}`)) throw new Error(`${part.area}: ${entity.table} ${id} ist schon belegt`);
       seen.add(`${entity.table}:${id}`);
+      if (entity.serverOnly) {
+        if (entity.entityType !== undefined || entity.children !== undefined) throw new Error(`${part.area}: ${entity.table} ${id} ist nur Server`);
+        add(server, entity.table, { ...entity.row });
+        continue;
+      }
       position += 1;
       const versioned = { ...entity.row, server_version: String(position) };
       add(server, entity.table, versioned);

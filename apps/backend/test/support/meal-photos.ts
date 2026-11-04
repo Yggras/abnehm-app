@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 
-import { EntityId, Instant, LocalDate, MealKey, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, TimeZone, type MealKey } from '@abnehm/contracts/base';
 import {
   ConfirmPhotoDraft,
   confirmPhotoDraftKey,

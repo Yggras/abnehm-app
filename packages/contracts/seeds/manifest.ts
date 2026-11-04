@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, SyncCursor, TimeZone } from '../src/base.ts';
 import { DailyGoalCause } from '../src/daily-goals.ts';
+import { MealPhotoImageKey } from '../src/nutrition.ts';
 import { InstallationId, OutboxOperation } from '../src/sync.ts';
 
 // Format der Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Ein Manifest beschreibt ein
@@ -138,6 +139,28 @@ export const SeedStep = z.discriminatedUnion('type', [
 ]);
 export type SeedStep = z.infer<typeof SeedStep>;
 
+const seedPhotoFields = {
+  id: EntityId,
+  /** Eigentümer des Fotos. */
+  account: SeedKey,
+  nutritionEntryId: EntityId,
+  /** Konten außer dem Eigentümer, die das Foto im Ausgangszustand online sehen dürfen. */
+  visibleTo: z.array(SeedKey),
+};
+
+const byte = z.int().min(0).max(255);
+
+/**
+ * Ein synthetisches Bild: eine Fläche in einer Farbe, die der Seeder als JPEG erzeugt. So bleiben die
+ * Bilddaten klein, erfunden und im Manifest beschrieben statt als Datei im Repo.
+ */
+export const SyntheticImage = z.strictObject({
+  width: z.int().min(1).max(1_280),
+  height: z.int().min(1).max(1_280),
+  rgb: z.tuple([byte, byte, byte]),
+});
+export type SyntheticImage = z.infer<typeof SyntheticImage>;
+
 /**
  * Versionierte Erweiterungspunkte eines Szenarios (#117). Ein Punkt reserviert Inhalte, die ein späterer
  * Bereich liefert, samt fester IDs und Erwartungen. Der liefernde Bereich füllt ihn, indem er eine neue
@@ -146,23 +169,18 @@ export type SeedStep = z.infer<typeof SeedStep>;
 export const SeedExtensions = z.strictObject({
   /**
    * Geteilte Mahlzeitenfotos von heute. Fassung 1: Fotos samt Ernährungseintrag als Zeilen mit festen IDs
-   * und ihrer erwarteten Online-Sichtbarkeit (Fotoliste, Bildabruf). Die Bilddaten ergänzt Spezifikation 2
-   * (#162) als Fassung 2.
+   * und ihrer erwarteten Online-Sichtbarkeit (Fotoliste, Bildabruf). Fassung 2 (#162) ergänzt die
+   * Bilddaten: je Foto Bildschlüssel und ein synthetisches Bild, das der Seeder in die Fotoablage legt,
+   * dazu abgelaufene Fotoentwürfe als Randzustand.
    */
   mealPhotos: z
     .discriminatedUnion('version', [
+      z.strictObject({ version: z.literal(1), photos: z.array(z.strictObject(seedPhotoFields)) }),
       z.strictObject({
-        version: z.literal(1),
-        photos: z.array(
-          z.strictObject({
-            id: EntityId,
-            /** Eigentümer des Fotos. */
-            account: SeedKey,
-            nutritionEntryId: EntityId,
-            /** Konten außer dem Eigentümer, die das Foto im Ausgangszustand online sehen dürfen. */
-            visibleTo: z.array(SeedKey),
-          }),
-        ),
+        version: z.literal(2),
+        photos: z.array(z.strictObject({ ...seedPhotoFields, imageKey: MealPhotoImageKey, image: SyntheticImage })),
+        /** Server-only: abgelaufen, also nicht mehr bestätigbar; der Aufräumjob löscht ihn beim nächsten Lauf. */
+        expiredDrafts: z.array(z.strictObject({ id: EntityId, account: SeedKey, imageKey: MealPhotoImageKey, image: SyntheticImage })),
       }),
     ])
     .optional(),
@@ -239,6 +257,15 @@ export const SeedManifest = z
       if (!rows('nutrition_entry').some((row) => row.id === photo.nutritionEntryId && row.meal_photo_id === photo.id)) {
         problem(`Mahlzeitenfoto ${photo.id}: Ernährungseintrag ${photo.nutritionEntryId} fehlt`);
       }
+      if ('imageKey' in photo && !rows('meal_photo').some((row) => row.id === photo.id && row.image_key === photo.imageKey)) {
+        problem(`Mahlzeitenfoto ${photo.id}: Bildschlüssel passt nicht zur Zeile`);
+      }
+    }
+    for (const draft of mealPhotos?.version === 2 ? mealPhotos.expiredDrafts : []) {
+      const owner = personOf.get(draft.account);
+      const row = rows('photo_draft').find((candidate) => candidate.id === draft.id);
+      if (row === undefined || row.person_id !== owner || row.image_key !== draft.imageKey) problem(`Fotoentwurf ${draft.id} fehlt im Ausgangszustand`);
+      else if (String(row.expires_at) > manifest.clock.instant) problem(`Fotoentwurf ${draft.id} ist nicht abgelaufen`);
     }
     if (decoGift !== undefined) {
       for (const key of [decoGift.from, decoGift.to]) if (!accountKeys.has(key)) problem(`Deko-Geschenk: unbekanntes Konto ${key}`);

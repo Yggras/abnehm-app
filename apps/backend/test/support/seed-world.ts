@@ -28,6 +28,7 @@ import {
 } from '../../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
+import { seedPhotoFiles } from '../../dev/seed/photo-seed.ts';
 import { dumpServer, seedServer } from '../../dev/seed/server-seed.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import { signIn, type Device } from './auth-client.ts';
@@ -123,6 +124,7 @@ export type SeedWorld = Readonly<{ backend: TestBackend; manifest: SeedManifest;
 export async function seeded(manifest: SeedManifest): Promise<SeedWorld> {
   const backend = await createTestBackend({ clock: createTestClock(manifest.clock) });
   await seedServer(backend.database, manifest);
+  await seedPhotoFiles(backend.photoStorage, manifest);
   const phones: Record<SeedKey, SeedPhone> = {};
   for (const { key } of manifest.installations) phones[key] = await seedPhone(backend, manifest, key);
   return { backend, manifest, phones };
@@ -150,6 +152,7 @@ export async function runSteps({ backend, manifest, phones }: SeedWorld): Promis
 /** Seedet Postgres und alle Geräte erneut, etwa nach Änderungen oder den Schritten. */
 export async function reseed({ backend, manifest, phones }: SeedWorld): Promise<void> {
   await seedServer(backend.database, manifest);
+  await seedPhotoFiles(backend.photoStorage, manifest);
   for (const [key, { database }] of Object.entries(phones)) seedLocalDatabase(database, manifest, key);
 }
 

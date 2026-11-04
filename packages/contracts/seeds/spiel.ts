@@ -128,7 +128,8 @@ const rollenwahlOffenState = buildSeedState({
 export const rollenwahlOffenManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'rollenwahl-offen',
-  revision: 1,
+  // Revision 2: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
+  revision: 2,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,
