@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Prüft ein fertiges Produktions-Binary der App auf das TLS-Kriterium des Produktiv-Gates (#115):
+#   scripts/app-artefakt-pruefen <App.app | app.apk> https://<host>
+#
+# - iOS: Das ATS-Wörterbuch in Info.plist ist genau {NSAllowsArbitraryLoads: false}, also ohne
+#   NSAllowsLocalNetworking, NSExceptionDomains oder andere Ausnahmen
+#   (https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity).
+# - Android: Das Manifest der APK erlaubt keinen Klartext (`usesCleartextTraffic`) und bringt keine
+#   eigene Network Security Config mit; ab API 28 ist Klartext dann verboten
+#   (https://developer.android.com/privacy-and-security/security-config).
+# - Beide: Das JS-Bundle enthält die erwartete https-Adresse des Backends.
+# Gegenprobe: Ein E2E-Binary (mit Ausnahme) lässt die Prüfung scheitern.
+set -euo pipefail
+
+binary="${1:?Pfad zum Binary fehlt}"
+api_url="${2:?https-Adresse fehlt}"
+failures=0
+fail() { echo "FEHLER: $*" >&2; failures=1; }
+ok() { echo "ok: $*"; }
+
+if [[ -d "$binary" && "$binary" == *.app ]]; then
+  ats="$(plutil -extract NSAppTransportSecurity json -o - "$binary/Info.plist" 2>/dev/null || echo fehlt)"
+  if [[ "$ats" == '{"NSAllowsArbitraryLoads":false}' ]]; then ok "ATS ohne Ausnahme: $ats"; else fail "ATS-Wörterbuch ist $ats"; fi
+  bundle="$binary/main.jsbundle"
+  [[ -f "$bundle" ]] || fail "main.jsbundle fehlt in $binary"
+  [[ -f "$bundle" ]] && grep -a -q -F "$api_url" "$bundle" && ok "Bundle nutzt $api_url" || fail "Bundle enthält $api_url nicht"
+elif [[ -f "$binary" && "$binary" == *.apk ]]; then
+  aapt2="$(ls -d "${ANDROID_HOME:-$HOME/Library/Android/sdk}"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1)"
+  [[ -x "$aapt2" ]] || { echo "aapt2 aus den Android build-tools nicht gefunden (ANDROID_HOME)." >&2; exit 1; }
+  manifest="$("$aapt2" dump xmltree --file AndroidManifest.xml "$binary")"
+  if grep -q 'usesCleartextTraffic' <<<"$manifest"; then
+    fail "Manifest setzt usesCleartextTraffic: $(grep 'usesCleartextTraffic' <<<"$manifest" | tr -s ' ')"
+  else
+    ok "Manifest ohne usesCleartextTraffic"
+  fi
+  if grep -q 'networkSecurityConfig' <<<"$manifest"; then fail "Manifest bringt eine eigene networkSecurityConfig mit"; else ok "Manifest ohne networkSecurityConfig"; fi
+  target_sdk="$(sed -n 's/.*targetSdkVersion([^)]*)=\([0-9]*\).*/\1/p' <<<"$manifest" | head -n 1)"
+  if [[ -n "$target_sdk" && "$target_sdk" -ge 28 ]]; then ok "targetSdkVersion $target_sdk (Klartext ab 28 standardmäßig aus)"; else fail "targetSdkVersion ${target_sdk:-unbekannt} < 28"; fi
+  unzip -p "$binary" assets/index.android.bundle | grep -a -q -F "$api_url" && ok "Bundle nutzt $api_url" || fail "Bundle enthält $api_url nicht"
+else
+  echo "Erwartet eine .app (Ordner) oder .apk: $binary" >&2
+  exit 2
+fi
+
+if [[ "$failures" != 0 ]]; then
+  echo "Das Binary erfüllt das TLS-Kriterium nicht und darf nicht verteilt werden." >&2
+  exit 1
+fi
+echo "TLS-Kriterium erfüllt: $(basename "$binary")"

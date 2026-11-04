@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Sammelt die Infrastruktur-Nachweise des Produktiv-Gates (#115) auf diesem Laptop als Markdown.
+#   scripts/gate-nachweis            # ohne Administratorrechte
+#   scripts/gate-nachweis --sudo     # zusätzlich Root-Dienste: alle lauschenden Ports, „Entfernte Anmeldung“
+#
+# Ausgabe auf stdout und unter ~/Library/Logs/abnehm-app/gate/<Zeitpunkt>.md. Was nur ein Mensch belegen
+# kann (Portscan von einem anderen Gerät, Bildschirmfoto der Update-Einstellungen), nennt der Bericht am Ende.
+# Hintergrund und Bewertung der einzelnen Punkte: docs/betrieb.md › „Gate-Nachweise“.
+set -uo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+base_dir="${ABNEHM_PROD_DIR:-$HOME/Library/Application Support/abnehm-app/produktion}"
+secrets_dir="${ABNEHM_PROD_SECRETS_DIR:-$base_dir/secrets}"
+with_sudo=false
+[[ "${1:-}" == "--sudo" ]] && with_sudo=true
+[[ $# -gt 0 && "$1" != "--sudo" ]] && { sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+if [[ "$with_sudo" == true ]]; then sudo -v || exit 1; fi
+
+log_dir="$HOME/Library/Logs/abnehm-app/gate"
+mkdir -p "$log_dir"
+report="$log_dir/$(date +%Y%m%d-%H%M%S).md"
+
+block() { echo '```'; "$@" 2>&1; echo '```'; }
+# Gerät und FileVault-Status des Dateisystems, auf dem ein Pfad liegt.
+storage_of() {
+  local path="$1" device
+  device="$(df -P "$path" 2>/dev/null | awk 'NR==2 {print $1}')"
+  echo "$path"
+  echo "  Dateisystem: $device, eingehängt auf $(df -P "$path" | awk 'NR==2 {print $6}')"
+  diskutil info "$device" | grep -E 'Volume Name|FileVault' | sed 's/^ */  /'
+}
+
+{
+  echo "# Gate-Nachweis Laptop ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+  echo
+  echo "- Rechner: $(sysctl -n hw.model), macOS $(sw_vers -productVersion) ($(sw_vers -buildVersion))"
+  echo "- Repo-Stand: $(git -C "$repo_root" rev-parse HEAD) ($(git -C "$repo_root" rev-parse --abbrev-ref HEAD))"
+  echo "- Mit Administratorrechten: $with_sudo"
+  echo
+
+  echo "## Datenträgerverschlüsselung"
+  echo
+  block fdesetup status
+  echo
+  echo "Speicherorte der Produktivdaten und ihr Datenträger:"
+  echo
+  docker_raw="$(find "$HOME/Library/Containers/com.docker.docker/Data/vms" -maxdepth 3 -name '*.raw' 2>/dev/null | head -n 1)"
+  echo '```'
+  # Docker Desktop speichert Images, Container und Volumes in diesem Disk-Image der Linux-VM
+  # (Einstellung „Disk image location“, https://docs.docker.com/desktop/settings-and-maintenance/settings/).
+  if [[ -n "$docker_raw" ]]; then storage_of "$docker_raw"; else echo "Docker-Disk-Image nicht gefunden"; fi
+  storage_of "$secrets_dir"
+  echo
+  echo "Docker-Datenverzeichnis in der VM: $(docker info --format '{{.DockerRootDir}}' 2>&1)"
+  for volume in abnehm-prod_postgres-data abnehm-prod_photo-data; do
+    docker volume inspect --format "{{.Name}} -> {{.Mountpoint}} (Treiber {{.Driver}})" "$volume" 2>&1
+  done
+  echo "Einbindung im Container:"
+  docker inspect --format '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}' abnehm-prod-postgres-1 abnehm-prod-backend-1 2>&1 | sed '/^$/d'
+  echo '```'
+  echo
+
+  echo "## Secrets"
+  echo
+  echo '```'
+  ls -la "$secrets_dir" 2>&1 | sed -E 's/ [0-9]+ [A-Z][a-z]{2}\.? +[0-9]+ [0-9:]+ / /'
+  ABNEHM_PROD_SECRETS_DIR="$secrets_dir" "$repo_root/scripts/prod-secrets" pruefen 2>&1
+  echo "In Git verfolgte Dateien namens secrets/*: $(git -C "$repo_root" ls-files | grep -c -E '(^|/)secrets/' || true)"
+  echo '```'
+  echo
+
+  echo "## Lauschende Ports"
+  echo
+  echo "Alles außer 127.0.0.1/::1 ist aus dem Netz erreichbar."
+  echo
+  if [[ "$with_sudo" == true ]]; then
+    block sudo lsof -nP -iTCP -sTCP:LISTEN
+    block sudo lsof -nP -iUDP
+  else
+    echo "Ohne --sudo nur Prozesse des eigenen Nutzers:"
+    block lsof -nP -iTCP -sTCP:LISTEN
+  fi
+  echo
+  echo "Produktiv-Stack:"
+  block docker ps --filter label=com.docker.compose.project=abnehm-prod --format '{{.Names}}\t{{.Ports}}'
+  echo
+
+  echo "## HTTPS über Tailscale Serve"
+  echo
+  ts_cli="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
+  block "$ts_cli" serve status
+  block "$ts_cli" version
+  echo
+
+  echo "## Entfernte Anmeldung (SSH)"
+  echo
+  echo "Ohne Eintrag com.openssh.sshd in den Überschreibungen gilt der Standard aus ssh.plist (Disabled = true):"
+  block sh -c "launchctl print-disabled system | grep -i openssh || echo 'keine Überschreibung für com.openssh.sshd'"
+  block plutil -extract Disabled raw /System/Library/LaunchDaemons/ssh.plist
+  if [[ "$with_sudo" == true ]]; then
+    block sudo systemsetup -getremotelogin
+    block sh -c "sudo lsof -nP -iTCP:22 -sTCP:LISTEN || echo 'nichts lauscht auf Port 22'"
+  fi
+  echo
+
+  echo "## Firewall"
+  echo
+  block /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate --getstealthmode --getallowsigned
+  echo
+
+  echo "## Automatische Updates"
+  echo
+  block softwareupdate --schedule
+  echo
+  echo "Lokale Einstellungen (Hinweis: Apple führt diese Schlüssel als Profilschlüssel mit „Removed: macOS 27+“,"
+  echo "https://developer.apple.com/documentation/devicemanagement/softwareupdate; maßgeblich ist das Bildschirmfoto):"
+  echo '```'
+  for key in AutomaticDownload AutomaticallyInstallMacOSUpdates CriticalUpdateInstall ConfigDataInstall; do
+    echo "$key = $(defaults read /Library/Preferences/com.apple.SoftwareUpdate "$key" 2>/dev/null || echo 'nicht gesetzt')"
+  done
+  echo '```'
+  echo
+  echo "Ausstehende Updates:"
+  block softwareupdate --list
+  echo
+
+  echo "## Von Hand zu ergänzen"
+  echo
+  echo "- Portscan von einem anderen Gerät im selben WLAN: \`nmap -Pn -p- <LAN-IP>\` und \`nmap -Pn -sU --top-ports 200 <LAN-IP>\`"
+  echo "  (docs/betrieb.md › „Portscan“). Ergebnis als Kommentar in #115."
+  echo "- Bildschirmfoto: Systemeinstellungen › Allgemein › Softwareupdate › Automatische Updates (ⓘ)."
+} | tee "$report"
+
+echo >&2
+echo "Gespeichert: $report" >&2

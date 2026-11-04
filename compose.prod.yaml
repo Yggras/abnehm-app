@@ -1,0 +1,99 @@
+# Produktivbetrieb auf diesem Laptop (Produktiv-Gate #115). Nur über `scripts/prod` starten; Ablauf,
+# Einrichtung und Nachweise: docs/betrieb.md.
+#
+# - Eigener Stack `abnehm-prod` mit eigenen Volumes, unabhängig von `npm run backend` (abnehm-app)
+#   und den E2E-Stacks (abnehm-e2e*). Er läuft aus dem primären Checkout auf `main`.
+# - Postgres veröffentlicht keinen Port. Das Backend lauscht nur auf 127.0.0.1:8790; HTTPS und
+#   Erreichbarkeit im Tailnet liefert `tailscale serve` auf dem Laptop (docs/betrieb.md).
+# - Secrets liegen außerhalb des Repos (ABNEHM_PROD_SECRETS_DIR, angelegt von `scripts/prod-secrets`),
+#   Verzeichnis 0700, Dateien 0600; Wiederherstellungsquelle ist Philipps Passwortmanager (#22).
+name: abnehm-prod
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: abnehm
+      POSTGRES_DB: abnehm
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    networks:
+      - intern
+    healthcheck:
+      # Über TCP prüfen, wie in compose.yaml begründet.
+      test: ["CMD-SHELL", "pg_isready --host 127.0.0.1 --username \"$$POSTGRES_USER\" --dbname \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    # Bewusst ohne `ports`: Postgres ist nur im Docker-Netz erreichbar.
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      # Ohne Testfähigkeiten (#112); test/release-sperren.test.ts prüft die Stage.
+      target: production
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: abnehm
+      DATABASE_USER: abnehm
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
+      INVITE_CODE_SECRET_FILE: /run/secrets/invite_code_secret
+      ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
+      # Öffentliche HTTPS-Adresse aus `tailscale serve`, z. B. https://<maschine>.<tailnet>.ts.net
+      AUTH_BASE_URL: "${ABNEHM_PROD_URL:?ABNEHM_PROD_URL (https://…ts.net) fehlt; scripts/prod setzt sie}"
+      # Anfragen über die Portweiterleitung kommen im Container vom Gateway des Netzes `intern`.
+      # Davor steht nur `tailscale serve`; es setzt X-Forwarded-For auf die Tailnet-Adresse des Geräts
+      # (docs/betrieb.md, „Quelladresse und Anmeldebegrenzung“).
+      AUTH_TRUSTED_PROXIES: "172.30.115.1"
+      PHOTO_STORAGE_DIR: /var/lib/abnehm/fotos
+    secrets:
+      - postgres_password
+      - better_auth_secret
+      - invite_code_secret
+      - anthropic_api_key
+    volumes:
+      - photo-data:/var/lib/abnehm/fotos
+    networks:
+      - intern
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Nur auf 127.0.0.1; nie auf einer LAN-Adresse (Portscan in docs/betrieb.md).
+      - "127.0.0.1:8790:8787"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8787/v1/status"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+networks:
+  intern:
+    # Festes Netz, damit AUTH_TRUSTED_PROXIES genau das Gateway nennt.
+    ipam:
+      config:
+        - subnet: 172.30.115.0/24
+          gateway: 172.30.115.1
+
+secrets:
+  postgres_password:
+    file: ${ABNEHM_PROD_SECRETS_DIR:?ABNEHM_PROD_SECRETS_DIR fehlt; scripts/prod setzt sie}/postgres_password
+  better_auth_secret:
+    file: ${ABNEHM_PROD_SECRETS_DIR:?}/better_auth_secret
+  invite_code_secret:
+    file: ${ABNEHM_PROD_SECRETS_DIR:?}/invite_code_secret
+  anthropic_api_key:
+    file: ${ABNEHM_PROD_SECRETS_DIR:?}/anthropic_api_key
+
+volumes:
+  postgres-data:
+  photo-data:

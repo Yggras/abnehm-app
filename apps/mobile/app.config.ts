@@ -22,6 +22,12 @@ function appVariant(environment: NodeJS.ProcessEnv): AppVariant {
   if (variant !== 'e2e' && e2eBundle) {
     throw new Error('EXPO_PUBLIC_E2E_BUILD gibt es nur im E2E-Build (APP_VARIANT=e2e)');
   }
+  // Produktiv-Gate (#115): Der Build für echte Daten erreicht das Backend nur verschlüsselt. Ohne Adresse
+  // bleibt ein Export möglich (Release-Sperren); die App bricht dann zur Laufzeit ab (src/backend/client.ts).
+  const apiUrl = environment.EXPO_PUBLIC_API_URL;
+  if (variant === 'production' && apiUrl !== undefined && apiUrl !== '' && !apiUrl.startsWith('https://')) {
+    throw new Error('Der Produktionsbuild spricht das Backend nur über https:// an (EXPO_PUBLIC_API_URL)');
+  }
   return variant;
 }
 

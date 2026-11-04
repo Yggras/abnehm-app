@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Produktivbetrieb auf diesem Laptop (#115). Ablauf und Nachweise: docs/betrieb.md.
+#   scripts/prod adresse https://<maschine>.<tailnet>.ts.net   # HTTPS-Adresse aus `tailscale serve` festhalten
+#   scripts/prod start                    # freigegebene Images starten bzw. aktualisieren, HTTPS-Zugang prüfen
+#   scripts/prod app ios <devicectl-id>   # freigegebenes Produktions-Binary per Kabel installieren
+#   scripts/prod app android <adb-serial>
+#   scripts/prod status                   # Container, laufender Stand und HTTPS-Zugang
+#   scripts/prod stop                     # Stack anhalten; Volumes bleiben
+#   scripts/prod logs                     # Protokoll des Backends verfolgen
+#
+# Verteilt wird nur, was `scripts/release-check` für den aktuellen Commit freigegeben hat (gleiche Image- bzw.
+# Artefakt-IDs). Nur für Probeläufe mit synthetischen Daten überspringt ABNEHM_PROD_BELIEBIGER_STAND=1 die
+# Freigabe; `start` baut das Image dann selbst.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+base_dir="${ABNEHM_PROD_DIR:-$HOME/Library/Application Support/abnehm-app/produktion}"
+release_root="${ABNEHM_RELEASE_DIR:-$HOME/Library/Logs/abnehm-app/release}"
+env_file="$base_dir/produktion.env"
+export ABNEHM_PROD_SECRETS_DIR="${ABNEHM_PROD_SECRETS_DIR:-$base_dir/secrets}"
+local_port=8790
+any_state=false
+[[ "${ABNEHM_PROD_BELIEBIGER_STAND:-}" == 1 ]] && any_state=true
+
+usage() {
+  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+compose() { docker compose --file "$repo_root/compose.prod.yaml" "$@"; }
+
+tailscale_cli() {
+  if command -v tailscale >/dev/null 2>&1; then
+    tailscale "$@"
+  elif [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]]; then
+    # App-Store-Variante: die CLI liegt im App-Bundle (https://tailscale.com/kb/1080/cli).
+    /Applications/Tailscale.app/Contents/MacOS/Tailscale "$@"
+  else
+    echo "Tailscale ist nicht installiert (docs/betrieb.md › „HTTPS über Tailscale Serve“)." >&2
+    return 1
+  fi
+}
+
+load_url() {
+  [[ -f "$env_file" ]] || { echo "Keine Adresse festgehalten: scripts/prod adresse https://<maschine>.<tailnet>.ts.net" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  source "$env_file"
+  export ABNEHM_PROD_URL
+}
+
+commit="$(git -C "$repo_root" rev-parse HEAD)"
+approval="$release_root/freigaben/$commit"
+
+require_approval() {
+  if [[ "$any_state" == true ]]; then
+    echo "Achtung: ABNEHM_PROD_BELIEBIGER_STAND=1 – ohne Freigabe, nur für synthetische Daten." >&2
+    return
+  fi
+  [[ -z "$(git -C "$repo_root" status --porcelain)" ]] || { echo "Der Checkout hat ungesicherte Änderungen." >&2; exit 1; }
+  [[ -f "$approval.md" ]] || {
+    echo "Commit $commit ist nicht freigegeben: zuerst scripts/release-check (docs/betrieb.md › „Release-Checkliste“)." >&2
+    exit 1
+  }
+}
+
+image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }
+
+check_images() {
+  [[ "$any_state" == true ]] && return
+  local expected_backend expected_postgres
+  expected_backend="$(sed -n 's/^backend=//p' "$approval-images.txt")"
+  expected_postgres="$(sed -n 's/^postgres=//p' "$approval-images.txt")"
+  [[ "$(image_id "$(compose ps --format '{{.Image}}' backend)")" == "$expected_backend" ]] \
+    || { echo "Das laufende Backend-Image ist nicht das freigegebene ($expected_backend)." >&2; exit 1; }
+  [[ "$(image_id "$(compose ps --format '{{.Image}}' postgres)")" == "$expected_postgres" ]] \
+    || { echo "Das laufende Postgres-Image ist nicht das freigegebene ($expected_postgres)." >&2; exit 1; }
+  echo "Images entsprechen der Freigabe von $commit."
+}
+
+check_serve() {
+  local status
+  if ! status="$(tailscale_cli serve status 2>&1)"; then
+    echo "HTTPS-Zugang: tailscale serve status schlug fehl: $status" >&2
+    return 1
+  fi
+  if [[ "$status" != *"http://127.0.0.1:$local_port"* ]]; then
+    echo "HTTPS-Zugang fehlt. Einmalig einrichten: tailscale serve --bg --https=443 http://127.0.0.1:$local_port" >&2
+    return 1
+  fi
+  echo "HTTPS-Zugang: tailscale serve leitet auf http://127.0.0.1:$local_port"
+}
+
+record_state() {
+  {
+    echo "gestartet=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "commit=$commit"
+    echo "freigabe=$([[ "$any_state" == true ]] && echo 'keine (Probelauf)' || echo "$approval.md")"
+    echo "backendImage=$(image_id "$(compose ps --format '{{.Image}}' backend)")"
+    echo "postgresImage=$(image_id "$(compose ps --format '{{.Image}}' postgres)")"
+    echo "adresse=$ABNEHM_PROD_URL"
+  } >"$base_dir/laufender-stand.txt"
+  cat "$base_dir/laufender-stand.txt"
+}
+
+# Artefakt-ID wie scripts/app-build: SHA-256 der APK bzw. über die sortierten Prüfsummen aller Dateien der .app.
+artifact_id_of() {
+  if [[ -d "$1" ]]; then
+    (cd "$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 | shasum -a 256 | cut -d ' ' -f 1)
+  else
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  fi
+}
+
+install_app() {
+  local platform="$1" device="$2" artifact binary expected actual
+  artifact="$repo_root/apps/mobile/build/produktion/$platform-geraet/artefakt.json"
+  [[ -f "$artifact" ]] || { echo "Kein Produktions-Binary: scripts/release-check baut es." >&2; exit 1; }
+  binary="$(dirname "$artifact")/$(node -p "require('$artifact').binary")"
+  actual="sha256:$(artifact_id_of "$binary")"
+  if [[ "$any_state" != true ]]; then
+    expected="$(node -p "require('$approval-$platform.json').artefaktId")"
+    [[ "$actual" == "$expected" ]] || { echo "Das Binary ($actual) ist nicht das freigegebene ($expected)." >&2; exit 1; }
+    echo "Binary entspricht der Freigabe von $commit: $actual"
+  fi
+  if [[ "$platform" == ios ]]; then
+    xcrun devicectl device install app --device "$device" "$binary"
+  else
+    "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s "$device" install -r "$binary"
+  fi
+}
+
+case "${1:-}" in
+  adresse)
+    url="${2:-}"
+    [[ "$url" =~ ^https://[a-z0-9-]+\.[a-z0-9-]+\.ts\.net$ ]] || { echo "Erwartet: https://<maschine>.<tailnet>.ts.net ohne Pfad" >&2; exit 2; }
+    mkdir -p "$base_dir"
+    chmod 700 "$base_dir"
+    echo "ABNEHM_PROD_URL=$url" >"$env_file"
+    echo "Festgehalten: $url"
+    ;;
+  start)
+    require_approval
+    load_url
+    "$repo_root/scripts/prod-secrets" pruefen
+    if [[ "$any_state" == true ]]; then compose up --detach --build --wait
+    else compose up --detach --no-build --pull never --wait; fi
+    check_images
+    record_state
+    check_serve
+    curl --fail --silent --show-error "$ABNEHM_PROD_URL/v1/status" >/dev/null && echo "Status über HTTPS erreichbar: $ABNEHM_PROD_URL/v1/status"
+    ;;
+  app)
+    [[ "${2:-}" == ios || "${2:-}" == android ]] && [[ -n "${3:-}" ]] || usage
+    require_approval
+    install_app "$2" "$3"
+    ;;
+  status)
+    load_url
+    compose ps
+    [[ -f "$base_dir/laufender-stand.txt" ]] && cat "$base_dir/laufender-stand.txt"
+    check_serve
+    ;;
+  stop) load_url; compose stop ;;
+  logs) load_url; compose logs --follow backend ;;
+  *) usage ;;
+esac
