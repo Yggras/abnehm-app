@@ -22,7 +22,7 @@ export type BackendConfig = {
   photoStorageDirectory: string;
   /**
    * Modellaufruf der Fotoanalyse; `null` ohne `ANTHROPIC_API_KEY_FILE`. Das produktive Backend startet
-   * dann nicht (`productionMealVisionAnalyzer`), nur das Development-Backend nutzt seinen Fake.
+   * dann nicht (`productionMealVisionAnalyzer`); das Development-Backend nutzt ohnehin seinen Fake.
    */
   mealVision: MealVisionSettings | null;
 };

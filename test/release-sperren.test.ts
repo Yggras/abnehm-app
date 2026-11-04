@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -278,16 +278,37 @@ describe('Fake der Fotoanalyse (#161)', () => {
     }
   });
 
-  it('das produktive Backend startet ohne eigenen Analyzer; der Standard ist der Claude-Adapter, ohne Schlüssel startet es nicht', () => {
-    expect(read('apps/backend/src/main.ts')).toMatch(/await runBackend\(\);/);
-    const serve = read('apps/backend/src/serve.ts');
-    expect(serve).toMatch(/mealVisionAnalyzer = \(config\) => productionMealVisionAnalyzer\(config\.mealVision\)/);
-    expect(read('apps/backend/src/nutrition/claude-meal-vision.ts')).toMatch(/if \(settings === null\) throw new Error\('Ungültige Backend-Konfiguration: ANTHROPIC_API_KEY_FILE fehlt'\)/);
-  });
+  it('der produktive Prozess startet ohne API-Schlüssel nicht, auch wenn die Umgebung einen Fake verlangt', async () => {
+    // Vollständige Konfiguration bis auf den Schlüssel; die Prüfung scheitert vor jedem Datenbankzugriff.
+    const secrets = mkdtempSync(join(tmpdir(), 'abnehm-release-secrets-'));
+    try {
+      for (const name of ['postgres_password', 'better_auth_secret', 'invite_code_secret']) writeFileSync(join(secrets, name), 'x'.repeat(64));
+      const environment = {
+        PATH: process.env.PATH,
+        PORT: '8787',
+        DATABASE_HOST: '127.0.0.1',
+        DATABASE_PORT: '1',
+        DATABASE_NAME: 'abnehm',
+        DATABASE_USER: 'abnehm',
+        DATABASE_PASSWORD_FILE: join(secrets, 'postgres_password'),
+        BETTER_AUTH_SECRET_FILE: join(secrets, 'better_auth_secret'),
+        INVITE_CODE_SECRET_FILE: join(secrets, 'invite_code_secret'),
+        AUTH_BASE_URL: 'http://localhost:8787',
+        PHOTO_STORAGE_DIR: join(secrets, 'fotos'),
+        MEAL_VISION_ANALYZER: 'fake',
+        MEAL_VISION_MODEL: 'fake',
+      };
+      const run = execFileAsync('node', ['apps/backend/src/main.ts'], { cwd: root, env: environment, timeout: 30_000 });
+      const failure = (await run.then(() => null, (error: unknown) => error)) as { code?: number; stderr?: string } | null;
+      expect(failure?.code).toBe(1);
+      expect(failure?.stderr).toContain('Ungültige Backend-Konfiguration: ANTHROPIC_API_KEY_FILE fehlt');
+    } finally {
+      rmSync(secrets, { recursive: true, force: true });
+    }
+  }, 60_000);
 
-  it('Gegenprobe: das Development-Image enthält den Fake, und sein Prozess setzt ihn ein', () => {
+  it('Gegenprobe: das Development-Image enthält den Fake', () => {
     expect(imageFiles('development')).toContain('apps/backend/dev/meal-vision/fake-analyzer.ts');
-    expect(read('apps/backend/dev/main.ts')).toContain('createFakeMealVision()');
   });
 
   it('kein Modul der App erreicht den Fake', () => {

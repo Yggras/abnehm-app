@@ -7,7 +7,7 @@ import { createMiddleware } from 'hono/factory';
 import { validator } from 'hono/validator';
 
 import type { Clock } from '@abnehm/clock';
-import { TimeZone } from '@abnehm/contracts/base';
+import { TimeZone, type EntityId } from '@abnehm/contracts/base';
 import {
   PhotoAnalysisResult,
   PhotoAnalysisUpload,
@@ -22,8 +22,8 @@ import { forbiddenError, guard, policies, type Actor } from '../authorization/au
 import type { Database } from '../database.ts';
 import { person, photoDraft } from '../db/schema/index.ts';
 import type { Job } from '../jobs/job-registry.ts';
-import { createAnalysisLimiter, MAX_ANALYSES_PER_DAY } from './analysis-limiter.ts';
-import type { MealVisionAnalyzer, MealVisionOutcome } from './meal-vision.ts';
+import { createAnalysisLimiter } from './analysis-limiter.ts';
+import type { MealVisionAnalyzer, MealVisionOutcome, TokenUsage } from './meal-vision.ts';
 import { sanitizedJpeg } from './photo-image.ts';
 import type { PhotoStorage } from './photo-storage.ts';
 
@@ -67,21 +67,25 @@ function failure(c: Context, code: PhotoAnalysisErrorCode) {
 
 type AnalysisResult = Readonly<{ type: 'entwurf'; result: PhotoAnalysisResult }> | Readonly<{ type: 'fehler'; code: PhotoAnalysisErrorCode }>;
 
+type Verdict = Readonly<{ type: 'bestandteile'; components: PhotoDraftComponent[] }> | Readonly<{ type: 'fehler'; code: PhotoAnalysisErrorCode }>;
+
 /** Was aus dem Ergebnis des Analyzers wird: die Bestandteile des Entwurfs oder ein Fehlercode. */
-function verdictOf(outcome: MealVisionOutcome): { components: PhotoDraftComponent[] } | { code: PhotoAnalysisErrorCode } {
-  if (outcome.type === 'nicht_erreichbar') return { code: 'photo_analysis_unavailable' };
-  if (outcome.type === 'fehlgeschlagen') return { code: 'photo_analysis_failed' };
-  if (outcome.analysis.components.length === 0) return { code: 'photo_no_food_detected' };
+function verdictOf(outcome: MealVisionOutcome): Verdict {
+  if (outcome.type === 'nicht_erreichbar') return { type: 'fehler', code: 'photo_analysis_unavailable' };
+  if (outcome.type === 'fehlgeschlagen') return { type: 'fehler', code: 'photo_analysis_failed' };
+  if (outcome.analysis.components.length === 0) return { type: 'fehler', code: 'photo_no_food_detected' };
   // Das Schema `MealPhotoAnalysis` hat die Umrechnung schon beim Parsen geprüft.
   const components = outcome.analysis.components.map(photoDraftComponentOf);
-  return components.every((component): component is PhotoDraftComponent => component !== null) ? { components } : { code: 'photo_analysis_failed' };
+  return components.every((component): component is PhotoDraftComponent => component !== null)
+    ? { type: 'bestandteile', components }
+    : { type: 'fehler', code: 'photo_analysis_failed' };
 }
 
 /**
  * Protokoll einer Analyse: nur Anzahl, Tokens, Dauer und Fehlercode, nie Bild, Modellantwort oder eine
  * Kennung der Person (#22).
  */
-function logAnalysis(entry: { analysesToday: number; usage: { inputTokens: number; outputTokens: number } | null; durationMs: number | null; errorCode: string | null }) {
+function logAnalysis(entry: { analysesToday: number; usage: TokenUsage | null; durationMs: number | null; errorCode: PhotoAnalysisErrorCode | null }) {
   console.info(
     '[fotoanalyse]',
     JSON.stringify({
@@ -121,8 +125,8 @@ export function createPhotoDrafts({
     if (jpeg === null) return { type: 'fehler', code: 'photo_invalid_image' };
 
     const slot = limiter.start(personId, await localDateOf(personId));
-    if (slot === null) {
-      logAnalysis({ analysesToday: MAX_ANALYSES_PER_DAY, usage: null, durationMs: null, errorCode: 'photo_analysis_limit_reached' });
+    if (slot.type !== 'belegt') {
+      logAnalysis({ analysesToday: slot.count, usage: null, durationMs: null, errorCode: 'photo_analysis_limit_reached' });
       return { type: 'fehler', code: 'photo_analysis_limit_reached' };
     }
     try {
@@ -147,11 +151,11 @@ export function createPhotoDrafts({
    * nur Zustand und Fehlercode, denn niemand kann ihn bestätigen. Die Zeile entsteht vor der Datei: Bricht
    * das Schreiben ab, räumt der Job eine Zeile ohne Bild ab, aber nie ein Bild ohne Zeile.
    */
-  async function storeDraft(personId: string, jpeg: Uint8Array, verdict: ReturnType<typeof verdictOf>): Promise<AnalysisResult> {
+  async function storeDraft(personId: string, jpeg: Uint8Array, verdict: Verdict): Promise<AnalysisResult> {
     const createdAt = new Date(nowMs());
     const expiresAt = new Date(createdAt.getTime() + DRAFT_LIFETIME_MS);
     const draft = { id: randomUUID(), personId, imageKey: storage.newImageKey(), createdAt, expiresAt };
-    if ('code' in verdict) {
+    if (verdict.type === 'fehler') {
       await database.db.insert(photoDraft).values({ ...draft, analysisState: 'fehlgeschlagen', components: null, errorCode: verdict.code });
       return { type: 'fehler', code: verdict.code };
     }
@@ -196,7 +200,12 @@ export function createPhotoDrafts({
       guard(policies.authenticated()),
       // Ohne Person (vor dem Bootstrap) gibt es niemanden, dem ein Entwurf gehören könnte; entschieden
       // wird das wie jede Autorisierung vor dem Body.
-      createMiddleware<{ Variables: { actor: Actor } }>(async (c, next) => (c.var.actor.personId === null ? c.json(forbiddenError, 403) : next())),
+      createMiddleware<{ Variables: { actor: Actor; personId: EntityId } }>(async (c, next) => {
+        const { personId } = c.var.actor;
+        if (personId === null) return c.json(forbiddenError, 403);
+        c.set('personId', personId);
+        return next();
+      }),
       bodyLimit({ maxSize: photoUploadMaxBytes + FORM_OVERHEAD_BYTES, onError: (c) => failure(c, 'photo_invalid_image') }),
       readForm,
       validator('form', (form, c) => {
@@ -206,9 +215,7 @@ export function createPhotoDrafts({
         return { photo };
       }),
       async (c) => {
-        const { personId } = c.var.actor;
-        if (personId === null) return c.json(forbiddenError, 403);
-        const outcome = await analyze(personId, new Uint8Array(await c.req.valid('form').photo.arrayBuffer()));
+        const outcome = await analyze(c.var.personId, new Uint8Array(await c.req.valid('form').photo.arrayBuffer()));
         return outcome.type === 'entwurf' ? c.json(outcome.result, 201) : failure(c, outcome.code);
       },
     )

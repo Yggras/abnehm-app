@@ -7,12 +7,17 @@
 /** Analysen je Person und lokalem Tag (Designwert, nicht belegt). */
 export const MAX_ANALYSES_PER_DAY = 20;
 
-/** Ein belegter Platz: die wievielte Analyse des Tages und die Freigabe danach. */
-export type AnalysisSlot = Readonly<{ count: number; end(): void }>;
+/**
+ * Ergebnis von `start`: ein belegter Platz mit der Freigabe danach, oder die Ablehnung samt Grund.
+ * `count` ist jeweils die Zahl der Analysen der Person an diesem Tag, die belegte eingeschlossen.
+ */
+export type AnalysisStart =
+  | Readonly<{ type: 'belegt'; count: number; end(): void }>
+  | Readonly<{ type: 'tageslimit' | 'laeuft_schon'; count: number }>;
 
 export type AnalysisLimiter = Readonly<{
-  /** Belegt den Platz der Person und zählt die Analyse, oder `null` bei erreichtem Limit. */
-  start(personId: string, localDate: string): AnalysisSlot | null;
+  /** Belegt den Platz der Person und zählt die Analyse, sofern weder das Tageslimit erreicht ist noch eine läuft. */
+  start(personId: string, localDate: string): AnalysisStart;
 }>;
 
 export function createAnalysisLimiter(): AnalysisLimiter {
@@ -23,10 +28,11 @@ export function createAnalysisLimiter(): AnalysisLimiter {
     start(personId, localDate) {
       const counted = today.get(personId);
       const count = counted?.localDate === localDate ? counted.count : 0;
-      if (running.has(personId) || count >= MAX_ANALYSES_PER_DAY) return null;
+      if (count >= MAX_ANALYSES_PER_DAY) return { type: 'tageslimit', count };
+      if (running.has(personId)) return { type: 'laeuft_schon', count };
       running.add(personId);
       today.set(personId, { localDate, count: count + 1 });
-      return { count: count + 1, end: () => running.delete(personId) };
+      return { type: 'belegt', count: count + 1, end: () => running.delete(personId) };
     },
   };
 }

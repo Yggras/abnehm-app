@@ -2,7 +2,7 @@ import { createBackend } from '../backend.ts';
 import { readConfig } from '../config.ts';
 import { openDatabase } from '../database.ts';
 import { errorCodeForLog } from '../log.ts';
-import { productionMealVisionAnalyzer } from '../nutrition/claude-meal-vision.ts';
+import type { MealVisionAnalyzer } from '../nutrition/meal-vision.ts';
 
 // Administrativer Passwort-Reset (Spezifikation 0, Abschnitt 9): einziger Weg zu einem neuen Passwort
 // ohne das alte; einen öffentlichen Reset-Ablauf gibt es nicht. Läuft auf dem Server, z. B.
@@ -15,6 +15,14 @@ if (email === undefined || email === '') {
   process.exit(2);
 }
 
+/**
+ * Der Reset nutzt nur das Auth-Modul und beantwortet keine Anfragen. Er braucht deshalb weder den
+ * API-Schlüssel der Fotoanalyse noch einen Analyzer; dieser hier wird nie aufgerufen.
+ */
+const withoutPhotoAnalysis: MealVisionAnalyzer = {
+  analyze: () => Promise.reject(new Error('Der Passwort-Reset analysiert keine Fotos')),
+};
+
 const config = readConfig(process.env);
 const database = openDatabase(config.database);
 try {
@@ -23,7 +31,7 @@ try {
     authSettings: config.auth,
     invitationSettings: config.invitations,
     photoStorageDirectory: config.photoStorageDirectory,
-    mealVisionAnalyzer: productionMealVisionAnalyzer(config.mealVision),
+    mealVisionAnalyzer: withoutPhotoAnalysis,
   });
   const result = await backend.auth.admin.resetPassword(email);
   if (result.type === 'unknown_account') {
