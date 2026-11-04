@@ -14,6 +14,7 @@ export { Button, IconButton, type ButtonProps, type IconButtonProps } from './Bu
 export { Card, type CardProps, type CardVariant } from './Card';
 export { Chip, type ChipProps, type ChipSelection } from './Chip';
 export { Notice, type NoticeProps } from './Notice';
+export { ProblemMessage, type ProblemMessageProps } from './ProblemMessage';
 export { ListGroup, ListRow, type ListRowProps } from './ListRow';
 export { TextField, type TextFieldHandle, type TextFieldKind, type TextFieldProps } from './TextField';
 export { Toast, type ToastLine, type ToastProps } from './Toast';

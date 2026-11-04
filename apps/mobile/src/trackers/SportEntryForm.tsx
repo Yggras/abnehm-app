@@ -13,7 +13,7 @@ import {
 } from '@abnehm/contracts/tracker-rules';
 
 import { useClock } from '../clock/clock-context';
-import { Button, Chip, DateTimePicker, ListGroup, ListRow, space, Text, TextField } from '../design';
+import { Button, Chip, DateTimePicker, ListGroup, ListRow, ProblemMessage, space, Text, TextField } from '../design';
 import { activityNames } from '../shell/texts';
 import { useUndoableMessage } from '../shell/use-undoable-message';
 import { activityIcons } from './activity-icons';
@@ -21,7 +21,9 @@ import type { Trackers } from './trackers';
 
 // Formular „+ Einheit“ (Spezifikation 3, Abschnitte 3–5; #38). Eine typische Einheit ist mit wenigen
 // Tipps eingetragen: Die zuletzt genutzte Art steht oben und ist gewählt, die letzte Dauer vorausgefüllt,
-// die Schnellwahl bietet 15, 30, 45 und 60 Minuten, der Beginn ist „jetzt − Dauer“. Tag und Uhrzeit des
+// die Schnellwahl bietet 15, 30, 45 und 60 Minuten, der Beginn ist „jetzt − Dauer“. Mit Vorbelegung zeigt
+// die Liste nur die gewählte Art und „Andere Art“, damit „Speichern“ auch auf dem iPhone SE ohne Scrollen
+// zu sehen ist (Impeccable-Kritik, #173). Tag und Uhrzeit des
 // Beginns sind änderbar; danach folgt der Beginn der Dauer nicht mehr. Kalorien sind optional und werden
 // nur angezeigt. Es gibt keine Intensität. Nach dem Speichern zeigt der Meldungs-Host
 // „30 min Laufen eingetragen · Rückgängig“.
@@ -70,6 +72,8 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
   const [last] = useState(() => trackers.lastSport());
   const [order] = useState<readonly ActivityType[]>(() => (last === null ? activityTypes : [last.activityType, ...activityTypes.filter((type) => type !== last.activityType)]));
   const [activity, setActivity] = useState<ActivityType | null>(last?.activityType ?? null);
+  /** Alle Arten sichtbar; mit Vorbelegung zunächst nur die gewählte. */
+  const [allKinds, setAllKinds] = useState(last === null);
   const [minutesText, setMinutesText] = useState(last === null ? '' : String(last.durationMinutes));
   /** Selbst gewählter Beginn; `null`, solange er „jetzt − Dauer“ folgt. */
   const [chosenStart, setChosenStart] = useState<Instant | null>(null);
@@ -115,7 +119,7 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
       <View style={styles.group}>
         <Text variant="label" accessibilityRole="header">Art</Text>
         <ListGroup>
-          {order.map((type) => (
+          {order.filter((type) => allKinds || type === activity).map((type) => (
             <ListRow
               key={type}
               icon={activityIcons[type]}
@@ -128,10 +132,13 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
               }}
             />
           ))}
+          {allKinds ? null : <ListRow icon="more" title="Andere Art" onPress={() => setAllKinds(true)} />}
         </ListGroup>
-        {problems.has('missingActivity') ? <Text variant="label" tone="problem">{texts.missingActivity}</Text> : null}
+        {problems.has('missingActivity') ? <ProblemMessage text={texts.missingActivity} /> : null}
       </View>
       <View style={styles.group}>
+        {/* Sichtbar über Schnellwahl und Feld; das Feld trägt denselben Namen für Screenreader. */}
+        <Text variant="label" importantForAccessibility="no">Dauer</Text>
         <View style={styles.chips}>
           {quickMinutes.map((quick) => (
             <Chip key={quick} label={`${quick} min`} selection="single" selected={minutes === quick} onPress={() => changeMinutes(String(quick))} />
@@ -139,6 +146,7 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
         </View>
         <TextField
           label="Dauer"
+          hideLabel
           kind="number"
           unit="min"
           value={minutesText}
@@ -160,7 +168,7 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
           timeZone={now.timeZone}
           maximum={now.instant}
         />
-        {problems.has('futureStart') ? <Text variant="label" tone="problem">{texts.futureStart}</Text> : null}
+        {problems.has('futureStart') ? <ProblemMessage text={texts.futureStart} /> : null}
       </View>
       <TextField
         label="Kalorien (optional)"

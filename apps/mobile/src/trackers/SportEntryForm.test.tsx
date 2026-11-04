@@ -88,14 +88,13 @@ test('eine typische Einheit ist drei Tipps: Art, Schnellwahl, Speichern; Beginn 
   expect(within(screen.getByTestId('message-slot')).getByText('30 min Laufen eingetragen')).toBeOnTheScreen();
 });
 
-test('mit früherer Einheit: zuletzt genutzte Art oben und gewählt, letzte Dauer vorausgefüllt; ein Tipp speichert', async () => {
+test('mit früherer Einheit: zuletzt genutzte Art gewählt, letzte Dauer vorausgefüllt; ein Tipp speichert', async () => {
   const { added } = await renderForm({ earlier: [yesterday] });
 
-  expect(kinds()[0]).toHaveProp('accessibilityLabel', 'Radfahren');
+  // Eingeklappt: nur die gewählte Art und „Andere Art“, damit „Speichern“ ohne Scrollen sichtbar bleibt.
+  expect(kinds().map((radio) => radio.props.accessibilityLabel)).toEqual(['Radfahren']);
   expect(kind('Radfahren')).toBeChecked();
-  expect(kinds().map((radio) => radio.props.accessibilityLabel)).toEqual([
-    'Radfahren', 'Gehen', 'Laufen', 'Schwimmen', 'Krafttraining', 'Yoga & Dehnen', 'Mannschaftssport', 'Sonstiges',
-  ]);
+  expect(screen.getByRole('button', { name: 'Andere Art' })).toBeOnTheScreen();
   expect(duration()).toHaveDisplayValue('45');
   expect(screen.getByRole('radio', { name: '45 min' })).toBeChecked();
   expect(start()).toHaveDisplayValue('2026-10-14T09:15:00.000Z');
@@ -103,6 +102,21 @@ test('mit früherer Einheit: zuletzt genutzte Art oben und gewählt, letzte Daue
   await save();
 
   expect(added()).toEqual([expect.objectContaining({ activityType: 'radfahren', durationMinutes: 45, startedAt: '2026-10-14T09:15:00.000Z' })]);
+});
+
+test('„Andere Art“ klappt alle Arten auf, die zuletzt genutzte oben', async () => {
+  const { added } = await renderForm({ earlier: [yesterday] });
+
+  await user.press(screen.getByRole('button', { name: 'Andere Art' }));
+
+  expect(kinds().map((radio) => radio.props.accessibilityLabel)).toEqual([
+    'Radfahren', 'Gehen', 'Laufen', 'Schwimmen', 'Krafttraining', 'Yoga & Dehnen', 'Mannschaftssport', 'Sonstiges',
+  ]);
+  expect(screen.queryByRole('button', { name: 'Andere Art' })).not.toBeOnTheScreen();
+  await user.press(kind('Schwimmen'));
+  await save();
+
+  expect(added()).toEqual([expect.objectContaining({ activityType: 'schwimmen', durationMinutes: 45 })]);
 });
 
 test('die Dauer geht frei einzugeben; der Beginn folgt der Dauer, bis man ihn selbst ändert', async () => {
