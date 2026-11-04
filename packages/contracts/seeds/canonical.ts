@@ -27,6 +27,27 @@ export function canonicalRows(rows: SeedRows): SeedRows {
 }
 
 /**
+ * Spalten, die ein Sollzustand nicht nennt, weil sie aus anderen Werten folgen (#116): Von einer
+ * verarbeiteten Operation sind Request- und Fach-Hash SHA-256 über die kanonische Operation, und die
+ * gespeicherte Antwort wiederholt Ergebnis und kanonische Zeilen, die das Manifest schon nennt. Der
+ * Vergleich lässt sie auf beiden Seiten weg; die Manifest-Suite prüft sie semantisch.
+ */
+export const derivedColumns: Readonly<Record<string, readonly string[]>> = {
+  processed_operation: ['request_hash', 'payload_hash', 'result'],
+};
+
+/** Zeilen ohne die abgeleiteten Spalten aus `derivedColumns`, für den Vergleich mit einem Sollzustand. */
+export function withoutDerivedColumns(rows: SeedRows): SeedRows {
+  return Object.fromEntries(
+    Object.entries(rows).map(([table, tableRows]) => {
+      const derived = derivedColumns[table];
+      if (derived === undefined) return [table, tableRows];
+      return [table, tableRows.map((row) => Object.fromEntries(Object.entries(row).filter(([column]) => !derived.includes(column))))];
+    }),
+  );
+}
+
+/**
  * Tabellen so geordnet, dass jede nach den Tabellen kommt, auf die ihre Fremdschlüssel zeigen; beide
  * Seeder fügen in dieser Reihenfolge ein und leeren in umgekehrter. Selbstbezüge zählen nicht.
  */

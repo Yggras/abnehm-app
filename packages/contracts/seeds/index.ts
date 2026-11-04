@@ -4,6 +4,7 @@ import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { soloManifests } from './solo.ts';
+import { syncSzenarioManifests } from './sync-szenarien.ts';
 import { veralteterPartnerstandManifest } from './veralteter-partnerstand.ts';
 
 // Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Nur für Development- und Testartefakte:
@@ -28,7 +29,7 @@ export {
   type SeedInstallation,
   type SeedValue,
 } from './manifest.ts';
-export { canonicalJson, canonicalRows, dependencyOrder } from './canonical.ts';
+export { canonicalJson, canonicalRows, dependencyOrder, derivedColumns, withoutDerivedColumns } from './canonical.ts';
 export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedInstallations, seedPassword } from './ids.ts';
@@ -42,4 +43,5 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   frisches_konto: frischesKontoManifest,
   ...randzustandManifests,
   veralteter_partnerstand: veralteterPartnerstandManifest,
+  ...syncSzenarioManifests,
 };
