@@ -18,15 +18,19 @@ export type Reply = { status: number; body: unknown; headers: Headers };
 /** Was `call` braucht: die echte App oder eine Test-App mit derselben Autorisierung. */
 type Requestable = { app: { request(input: string, init: RequestInit): Response | Promise<Response> } };
 
-/** HTTP-Aufruf an die echte Hono-App, mit `X-Forwarded-For` und optional `Authorization: Bearer`. */
-export async function call(backend: Requestable, method: 'GET' | 'POST', path: string, device: Device, body?: unknown): Promise<Reply> {
+/**
+ * HTTP-Aufruf an die echte Hono-App, mit `X-Forwarded-For` und optional `Authorization: Bearer`. Ein
+ * `FormData`-Body geht als `multipart/form-data`, jeder andere als JSON.
+ */
+export async function call(backend: Requestable, method: 'GET' | 'POST' | 'DELETE', path: string, device: Device, body?: unknown): Promise<Reply> {
   const headers = new Headers({ 'x-forwarded-for': device.ip });
   if (device.token !== undefined) headers.set('authorization', `Bearer ${device.token}`);
-  if (body !== undefined) headers.set('content-type', 'application/json');
+  const form = body instanceof FormData;
+  if (body !== undefined && !form) headers.set('content-type', 'application/json');
   const response = await backend.app.request(`${testBaseUrl}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : form ? body : JSON.stringify(body),
   });
   const text = await response.text();
   const json = response.headers.get('content-type')?.includes('application/json') === true;

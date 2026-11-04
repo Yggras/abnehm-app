@@ -1,21 +1,35 @@
 import { serve } from '@hono/node-server';
 
 import { createBackend, type Backend } from './backend.ts';
-import { readConfig } from './config.ts';
+import { readConfig, type BackendConfig } from './config.ts';
 import { openDatabase, type Database } from './database.ts';
 import { migrateDatabase } from './db/migrate.ts';
 import { errorCodeForLog } from './log.ts';
+import { productionMealVisionAnalyzer } from './nutrition/claude-meal-vision.ts';
+import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 
 /** Was der Server beantwortet: die Hono-App des Backends oder eine App, die sie einbettet. */
 export type ServedApp = { fetch: (request: Request) => Response | Promise<Response> };
 
+export type BackendProcess = {
+  /** Was der Server beantwortet; ohne Angabe nur die App des Backends. */
+  served?: (backend: Backend, database: Database) => ServedApp;
+  /** KI-Bildanalyse; ohne Angabe der Claude-Adapter, der einen Schlüssel verlangt. */
+  mealVisionAnalyzer?: (config: BackendConfig) => MealVisionAnalyzer;
+};
+
 /**
  * Startet den Backend-Prozess: Konfiguration lesen, migrieren, Module zusammensetzen, Jobs und HTTP
- * starten, bei SIGTERM/SIGINT geordnet herunterfahren. `src/main.ts` beantwortet nur die App des
- * Backends; das Development-Backend (`apps/backend/dev/main.ts`) bettet sie in seine Testfähigkeiten ein.
+ * starten, bei SIGTERM/SIGINT geordnet herunterfahren. `src/main.ts` startet ohne Angaben: nur die App
+ * des Backends, Analyse über Claude. Das Development-Backend (`apps/backend/dev/main.ts`) bettet die App
+ * in seine Testfähigkeiten ein und bringt seinen Analyzer mit.
  */
-export async function runBackend(served: (backend: Backend, database: Database) => ServedApp = (backend) => backend.app) {
+export async function runBackend({
+  served = (backend) => backend.app,
+  mealVisionAnalyzer = (config) => productionMealVisionAnalyzer(config.mealVision),
+}: BackendProcess = {}) {
   const config = readConfig(process.env);
+  const analyzer = mealVisionAnalyzer(config);
   const database = openDatabase(config.database);
   // Erst migrieren, dann Anfragen annehmen; ohne aktuelles Schema startet das Backend nicht.
   try {
@@ -25,7 +39,13 @@ export async function runBackend(served: (backend: Backend, database: Database) 
     await database.close();
     process.exit(1);
   }
-  const backend = createBackend({ database, authSettings: config.auth, invitationSettings: config.invitations });
+  const backend = createBackend({
+    database,
+    authSettings: config.auth,
+    invitationSettings: config.invitations,
+    photoStorageDirectory: config.photoStorageDirectory,
+    mealVisionAnalyzer: analyzer,
+  });
   // Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts).
   const stopJobs = backend.jobs.start();
 

@@ -35,6 +35,9 @@ COPY packages/game-rules/content packages/game-rules/content
 COPY apps/backend/src apps/backend/src
 # Migrationen laufen beim Start (src/main.ts) und per `npm run db:migrate`.
 COPY apps/backend/drizzle apps/backend/drizzle
+# Fotoentwürfe (#161) liegen außerhalb der App in einem eigenen Volume (compose.yaml, PHOTO_STORAGE_DIR).
+# Das Verzeichnis gehört `node`; Docker übernimmt den Eigentümer beim ersten Einbinden eines leeren Volumes.
+RUN mkdir -p /var/lib/abnehm/fotos && chown node:node /var/lib/abnehm/fotos && chmod 700 /var/lib/abnehm/fotos
 
 USER node
 EXPOSE 8787
