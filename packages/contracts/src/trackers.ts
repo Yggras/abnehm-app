@@ -60,7 +60,8 @@ export const WaterAddedOutcome = QuickCommandOutcome.extend({
 export type WaterAddedOutcome = z.infer<typeof WaterAddedOutcome>;
 
 /** Aktivitätsart eines Sporteintrags; es gibt keine Intensität (Spezifikation 3, Abschnitt 3). */
-const ActivityType = z.enum(activityTypes);
+export const ActivityType = z.enum(activityTypes);
+export type ActivityType = z.infer<typeof ActivityType>;
 
 /** Dauer einer manuellen Einheit in ganzen Minuten, 1–600 (Designwert aus Spezifikation 3, Abschnitt 3). */
 export const ManualSportMinutes = z.int().min(manualSportMinutes.min).max(manualSportMinutes.max);

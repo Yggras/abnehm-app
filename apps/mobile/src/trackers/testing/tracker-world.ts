@@ -9,12 +9,12 @@ import { insertPersonForTest } from '../../daily-goals/testing/persisted';
 import { energyBookingEntity } from '../../energy';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { dirtyDay, waterEntry, weightEntry } from '../../local-db/schema';
+import { dirtyDay, sportEntry, waterEntry, weightEntry } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
-import { createTrackers, waterEntryEntity, weightEntryEntity, type TrackerDependencies, type Trackers } from '..';
+import { createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity, type TrackerDependencies, type Trackers } from '..';
 
 // Testaufbau des Tracker-Moduls: echte SQLite-Datei mit denselben Migrationen wie die App, eigene
 // Person, Sync-Writer und der echte Persistenzdienst der Tagesziele. Die Uhr, in der Regel die Testuhr,
@@ -30,10 +30,13 @@ export type DayReport = { personId: EntityId; localDates: readonly LocalDate[]; 
 
 export type TrackerWorld = Readonly<{
   database: LocalDatabase;
+  /** Die Abhängigkeiten des Tracker-Moduls, etwa für ein zweites Modul über derselben Datenbank. */
+  dependencies: TrackerDependencies;
   trackers: Trackers;
   reports: DayReport[];
   waters(): (typeof waterEntry.$inferSelect)[];
   weights(): (typeof weightEntry.$inferSelect)[];
+  sports(): (typeof sportEntry.$inferSelect)[];
   operations(): ReturnType<typeof pendingOperations>;
   markers(): (typeof dirtyDay.$inferSelect)[];
   failReevaluation(failing: boolean): void;
@@ -51,7 +54,7 @@ export async function createTrackerWorld(clock: Clock, { person = true }: { pers
   const database = await databases.open('konto_a');
   if (person) database.transaction((tx) => insertPersonForTest(tx, philipp));
   const newId = () => EntityId.parse(randomUUID());
-  const syncRegistry = createSyncRegistry([waterEntryEntity, weightEntryEntity, dailyGoalCompletionEntity, energyBookingEntity]);
+  const syncRegistry = createSyncRegistry([waterEntryEntity, weightEntryEntity, sportEntryEntity, dailyGoalCompletionEntity, energyBookingEntity]);
   const writer = createSyncWriter({ registry: syncRegistry, clock, newId });
   const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
   const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock, writer, dispatcher });
@@ -71,10 +74,12 @@ export async function createTrackerWorld(clock: Clock, { person = true }: { pers
   };
   return {
     database,
+    dependencies,
     trackers: createTrackers(dependencies),
     reports,
     waters: () => database.read((tx) => sqliteOf(tx).select().from(waterEntry).all()),
     weights: () => database.read((tx) => sqliteOf(tx).select().from(weightEntry).all()),
+    sports: () => database.read((tx) => sqliteOf(tx).select().from(sportEntry).all()),
     operations: () => database.read((tx) => pendingOperations(tx, 100)),
     markers: () => database.read((tx) => sqliteOf(tx).select().from(dirtyDay).all()),
     failReevaluation: (value) => {

@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   ManualSportMinutes,
   ManualWeightG,
   SportEntryRecord,
@@ -86,6 +87,10 @@ export const trackerFixtures = {
       'fertiger Text': { messageKey: 'wasser.hinzugefuegt', values: { ml: 250, text: '+250 ml Wasser' }, undoToken: 'undo-7f3a' },
       'synchronisiertes Feld': { messageKey: 'wasser.hinzugefuegt', values: { ml: 250 }, undoToken: 'undo-7f3a', entryId: philipp },
     },
+  }),
+  ActivityType: fixtures(ActivityType, {
+    valid: { 'Laufen': 'laufen', 'Yoga und Dehnen': 'yoga_dehnen', 'Sonstiges': 'sonstiges' },
+    invalid: { 'Anzeigename': 'Laufen', 'Plattformart': 'HKWorkoutActivityTypeRunning', 'mit Intensität': 'laufen_intensiv' },
   }),
   ManualSportMinutes: fixtures(ManualSportMinutes, {
     valid: { 'eine halbe Stunde': 30, 'kürzeste Einheit': 1, 'längste Einheit': 600 },
