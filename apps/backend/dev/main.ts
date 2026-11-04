@@ -1,5 +1,4 @@
-import { createSystemClock } from '@abnehm/clock';
-
+import { serverSystemClock } from '../src/backend.ts';
 import { runBackend } from '../src/serve.ts';
 import { createDevelopmentApp } from './app.ts';
 import { createFakeMealVision } from './meal-vision/fake-analyzer.ts';
@@ -11,7 +10,7 @@ import { createServerClock } from './server-clock.ts';
 // die steuerbare Serveruhr (#271): bis zum ersten Stellen die Systemuhr, danach stellen Seed und
 // `POST /dev/uhr` sie.
 const fakeMealVision = createFakeMealVision();
-const serverClock = createServerClock(createSystemClock({ timeZone: () => 'UTC' }));
+const serverClock = createServerClock(serverSystemClock());
 
 await runBackend({
   clock: serverClock,

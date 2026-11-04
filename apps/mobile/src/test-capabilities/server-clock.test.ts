@@ -3,7 +3,7 @@ import { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { createAppTestClock } from './clock';
 import { createFaultController, faultyFetch } from './faults';
 import { applyRuntimeProfile } from './profiles';
-import { followingServerClock } from './server-clock';
+import { fetchFollowingServerClock } from './server-clock';
 
 // Nachweis für #271: Die Serveruhr des Development-Backends folgt jeder Stellung der Testuhr, sofort
 // oder vor der nächsten Anfrage, wenn das Netz fehlte. Das Backend steht hier als aufzeichnendes `fetch`.
@@ -37,7 +37,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('ohne Stellen der Testuhr bleibt die Serveruhr unberührt', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    const fetch = followingServerClock(server.fetch, { clock, baseUrl });
+    const fetch = fetchFollowingServerClock(server.fetch, { clock, baseUrl });
 
     await fetch(`${baseUrl}/v1/status`);
 
@@ -47,7 +47,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('stellt die Serveruhr sofort, wenn die Testuhr steht oder vorgestellt wird', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    followingServerClock(server.fetch, { clock, baseUrl });
+    fetchFollowingServerClock(server.fetch, { clock, baseUrl });
 
     clock.fix(manifestClock);
     await settled();
@@ -60,7 +60,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('folgt auch Laufzeitprofilen und Reisen; eine neue Zone schickt denselben Zeitpunkt', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    followingServerClock(server.fetch, { clock, baseUrl });
+    fetchFollowingServerClock(server.fetch, { clock, baseUrl });
     clock.fix(manifestClock);
     await settled();
 
@@ -76,7 +76,7 @@ describe('Serveruhr folgt der Testuhr', () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
     const faults = createFaultController({ transport: 'offline' });
-    const fetch = faultyFetch(followingServerClock(server.fetch, { clock, baseUrl }), faults);
+    const fetch = faultyFetch(fetchFollowingServerClock(server.fetch, { clock, baseUrl }), faults);
 
     clock.fix(manifestClock);
     await settled();
@@ -89,7 +89,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('ohne Netz holt die nächste Anfrage das Stellen nach, bevor sie selbst gesendet wird', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    const fetch = followingServerClock(server.fetch, { clock, baseUrl });
+    const fetch = fetchFollowingServerClock(server.fetch, { clock, baseUrl });
     clock.fix(manifestClock);
     await settled();
     server.state.online = false;
@@ -108,7 +108,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('gleichzeitige Anfragen warten auf genau ein Stellen', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    const fetch = followingServerClock(server.fetch, { clock, baseUrl });
+    const fetch = fetchFollowingServerClock(server.fetch, { clock, baseUrl });
     server.state.online = false;
     clock.fix(manifestClock);
     await settled();
@@ -122,7 +122,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('eine Stellung während des Sendens schickt die Anfrage erst nach dem neuen Zeitpunkt los', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    const fetch = followingServerClock(server.fetch, { clock, baseUrl });
+    const fetch = fetchFollowingServerClock(server.fetch, { clock, baseUrl });
 
     clock.fix(manifestClock);
     clock.adjust({ advanceHours: 1 });
@@ -135,7 +135,7 @@ describe('Serveruhr folgt der Testuhr', () => {
   it('lehnt das Backend das Stellen ab, geht die Anfrage trotzdem durch; die nächste versucht es erneut', async () => {
     const server = backend();
     const clock = createAppTestClock(deviceClock);
-    const fetch = followingServerClock(server.fetch, { clock, baseUrl });
+    const fetch = fetchFollowingServerClock(server.fetch, { clock, baseUrl });
     server.state.clockStatus = 404;
     clock.fix(manifestClock);
     await settled();

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createTestClock } from '@abnehm/clock/testing';
-import { Instant, TimeZone, type LocalDate } from '@abnehm/contracts/base';
+import { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { seedManifests, seedRoutePath, serverClockRoutePath } from '@abnehm/contracts/seeds';
 
 import type { SessionStore, StoredSession } from '../../mobile/src/auth/app-auth.ts';
@@ -11,7 +11,7 @@ import { createAppSession } from '../../mobile/src/session/app-session.ts';
 import { createAppTestClock } from '../../mobile/src/test-capabilities/clock.ts';
 import { createFaultController, faultyFetch } from '../../mobile/src/test-capabilities/faults.ts';
 import { runSeed } from '../../mobile/src/test-capabilities/seed/seed-flow.ts';
-import { followingServerClock } from '../../mobile/src/test-capabilities/server-clock.ts';
+import { fetchFollowingServerClock } from '../../mobile/src/test-capabilities/server-clock.ts';
 import { createDevelopmentTestBackend, testBaseUrl, type DevelopmentTestBackend } from './support/app.ts';
 import { call, newDevice } from './support/auth-client.ts';
 import { canonical, seedPhone, stateOf, type SeedWorld } from './support/seed-world.ts';
@@ -105,7 +105,7 @@ function memoryStore(): SessionStore {
 }
 
 /** Geräteuhr vor dem Seed: irgendeine echte Uhrzeit, nicht die des Manifests. */
-const deviceClock = { read: () => ({ instant: Instant.parse('2026-11-04T10:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin'), localDate: '2026-11-04' as LocalDate, utcOffsetMinutes: 60 }) };
+const deviceClock = { read: () => ({ instant: Instant.parse('2026-11-04T10:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin'), localDate: LocalDate.parse('2026-11-04'), utcOffsetMinutes: 60 }) };
 
 /**
  * Ein Gerät im Development Build, verdrahtet wie `deviceSession`: Fehler-Adapter außen, darunter die
@@ -131,7 +131,7 @@ function phone(backend: DevelopmentTestBackend) {
   };
   const session = createAppSession({
     baseUrl: testBaseUrl,
-    fetch: faultyFetch(followingServerClock(raw, { clock, baseUrl: testBaseUrl }), faults),
+    fetch: faultyFetch(fetchFollowingServerClock(raw, { clock, baseUrl: testBaseUrl }), faults),
     sessionStore: memoryStore(),
     databases,
     onAccountOpened: () => () => undefined,

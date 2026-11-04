@@ -13,13 +13,13 @@ import { fixtureIsland, type FixtureIsland } from './fixture-island';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
 import { faultyNetwork } from './network';
-import { followingServerClock } from './server-clock';
+import { fetchFollowingServerClock } from './server-clock';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
 // Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #182, #271): Seed-Deep-Link,
 // Testuhr samt Serveruhr des Development-Backends, Fehler-Adapter für Transport, Server, Auth und
-// Storage samt Transport-Fehlermodus, die On-Device-Suite und die Fixture-Insel. App-Code erreicht diesen Ordner nur über
-// `src/build-capabilities.ts`; im Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer
+// Storage samt Transport-Fehlermodus, die On-Device-Suite und die Fixture-Insel. App-Code erreicht
+// diesen Ordner nur über `src/build-capabilities.ts`; im Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer
 // Testfähigkeit der zentralen Registry (`test/test-capabilities.ts`).
 
 export type TestCapabilities = Readonly<{
@@ -60,7 +60,7 @@ function Host({ session, gate }: { session: () => AppSession; gate: SessionGate 
 export const testCapabilities: TestCapabilities = {
   clock,
   adapters: {
-    fetch: (inner, baseUrl) => faultyFetch(followingServerClock(inner, { clock, baseUrl }), faults),
+    fetch: (inner, baseUrl) => faultyFetch(fetchFollowingServerClock(inner, { clock, baseUrl }), faults),
     sessionStore: (inner) => faultySessionStore(inner, faults),
     network: (inner) => faultyNetwork(inner, faults),
   },

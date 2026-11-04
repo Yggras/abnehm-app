@@ -13,7 +13,7 @@ import type { AppTestClock } from './clock';
 // echter Netzausfall verschiebt es auf die nächste Anfrage.
 
 /** `fetch` der App-Sitzung, vor dem die Serveruhr der Testuhr folgt. Einmal je Sitzung anlegen. */
-export function followingServerClock(inner: typeof fetch, { clock, baseUrl }: { clock: AppTestClock; baseUrl: string }): typeof fetch {
+export function fetchFollowingServerClock(inner: typeof fetch, { clock, baseUrl }: { clock: AppTestClock; baseUrl: string }): typeof fetch {
   /** Zähler der Stellungen der Testuhr und der letzten, die der Server übernommen hat. */
   let changes = 0;
   let followed = 0;
