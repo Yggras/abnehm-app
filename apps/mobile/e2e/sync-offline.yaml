@@ -10,7 +10,8 @@
 # Person wie bei jeder Reise über den Fachbefehl `updatePersonTimeZone` mit Outbox (#110); die Zone
 # ändert sie erst mit dem kanonischen Ergebnis. Solange die Operation offen ist, bleibt die Zone der
 # Person Europe/Berlin; danach zeigt der Kopf den Tag in Kiritimati: Nach 25 Stunden ist es dort schon
-# Freitag, 16.10., in Berlin erst Donnerstag.
+# Freitag, 16.10., in Berlin erst Donnerstag. Die Serveruhr des E2E-Backends folgt der Testuhr (#271);
+# auf Android holt die erste Anfrage nach dem Flugmodus das nach, bevor der Sync den Server erreicht.
 # Zweite lokale Änderung (#171): „+250 ml Wasser“ im ＋-Sheet bucht über `water.quick_add` auf den
 # Freitag in Kiritimati. Nach der Netzrückkehr zählt der Mini-Tracker den kanonischen Eintrag weiter
 # auf diesen Tag; das Wasserziel (2,5 l) liest er über den `PlanReader` aus der Zielversion des Seeds (#128).

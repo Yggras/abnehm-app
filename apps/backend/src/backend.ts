@@ -34,6 +34,11 @@ import { sportEntryEntity } from './trackers/sport-entity.ts';
 import { waterEntryEntity } from './trackers/water-entity.ts';
 import { weightEntryEntity } from './trackers/weight-entity.ts';
 
+/** Systemuhr des Servers: Ohne Argument liest er in UTC, lokale Tage einer Person in ihrer Zone. */
+export function serverSystemClock(): Clock {
+  return createSystemClock({ timeZone: () => 'UTC' });
+}
+
 /**
  * Setzt die Module des Backends über einer Datenbank zusammen; gemeinsam genutzt von `main.ts`, den
  * Server-Kommandos und den Integrationstests. Weitere Bereiche melden ihre Jobs hier an, ohne die
@@ -43,7 +48,7 @@ export function createBackend({
   database,
   authSettings,
   invitationSettings,
-  clock = createSystemClock({ timeZone: () => 'UTC' }),
+  clock = serverSystemClock(),
   syncPullPageSize,
   photoStorageDirectory,
   mealVisionAnalyzer,
