@@ -89,7 +89,9 @@ export const seedIds = {
       iphone: { gewicht: id('0090', 6), wasser: id('0090', 7), erfuellung: id('0090', 8) },
       ipad: { gewicht: id('0090', 9), wasser: id('0090', 10), erfuellung: id('0090', 11) },
     },
-    offlineSync: { gewicht: id('0090', 12), tippfehler: id('0090', 13), korrektur: id('0090', 14), gegenLoeschung: id('0090', 15), ungesichert: id('0090', 16) },
+    offlineSync: {
+      gewicht: id('0090', 12), tippfehler: id('0090', 13), erfuellung: id('0090', 17), korrektur: id('0090', 14), gegenLoeschung: id('0090', 15), ungesichert: id('0090', 16),
+    },
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   coupling: { philippAnna: id('0040', 1) },

@@ -1,6 +1,8 @@
 import { dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { EntityId, Instant, LocalDate } from '../src/base.ts';
+import { CompleteDailyGoalPayload } from '../src/energy.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
+import { WaterEntryUpsert, WeightEntryUpsert } from '../src/trackers.ts';
 import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedKey, type SeedRow, type SeedScenarioKey, type SeedState, type SeedStep } from './manifest.ts';
@@ -18,8 +20,10 @@ import { soloParts } from './solo.ts';
 //   das iPad ersetzt sein Duplikat. Beim Gewicht gilt, was der Server zuletzt annimmt (Last-Write-Wins in
 //   Server-Eingangsreihenfolge), nicht die Gerätezeit.
 // - `offline_sync`: Das iPhone hat eine ungesicherte Buchung, ein Offline-Update gegen eine Löschung, eine
-//   dauerhaft abgelehnte Operation mit neuerer Operation derselben Entität und einen Feldkonflikt. Die
-//   widerrufene Partnerprojektion aus Abschnitt 12 deckt `nach_entkopplung` ab (#117).
+//   dauerhaft abgelehnte Operation mit neuerer Operation derselben Entität und einen Feldkonflikt. Ein
+//   Fachbefehl zwischen beiden teilt den Push in zwei Batches; so ist die neuere Operation noch offen,
+//   wenn das Gerät die Ablehnung übernimmt. Die widerrufene Partnerprojektion aus Abschnitt 12 deckt
+//   `nach_entkopplung` ab (#117).
 //
 // Alle Werte sind erfunden.
 
@@ -36,7 +40,7 @@ const rowById = (state: SeedState, table: string, id: string): SeedRow => {
 };
 
 /** Vollständige Upsert-Nutzlast eines Wassereintrags aus seiner Zeile, wie sie der Sync-Writer schreibt. */
-const waterPayload = (row: SeedRow) => ({
+const waterPayload = (row: SeedRow): WaterEntryUpsert => WaterEntryUpsert.parse({
   amountMl: row.amount_ml,
   origin: row.origin,
   loggedAt: row.logged_at,
@@ -46,7 +50,7 @@ const waterPayload = (row: SeedRow) => ({
 });
 
 /** Vollständige Upsert-Nutzlast eines manuellen Gewichtseintrags aus seiner Zeile. */
-const weightPayload = (row: SeedRow) => ({
+const weightPayload = (row: SeedRow): WeightEntryUpsert => WeightEntryUpsert.parse({
   weightG: row.weight_g,
   origin: row.origin,
   measuredAt: row.measured_at,
@@ -55,25 +59,52 @@ const weightPayload = (row: SeedRow) => ({
   utcOffsetMinutes: row.utc_offset_minutes,
 });
 
-const payloadOf: Readonly<Record<string, (row: SeedRow) => Record<string, unknown>>> = { water_entry: waterPayload, weight_entry: weightPayload };
+const payloadOf: Readonly<Record<string, (row: SeedRow) => WaterEntryUpsert | WeightEntryUpsert>> = { water_entry: waterPayload, weight_entry: weightPayload };
+
+/** Was ein Gerät offline in einer Transaktion geschrieben hat: lokale Zeilen und ihre eine Operation. */
+type OfflineChange = Readonly<{ rows: readonly Readonly<{ table: string; row: SeedRow }>[]; operation: OutboxOperation }>;
 
 /**
- * Eine offline geänderte Zeile auf einem Gerät: Fachspalten und `updated_at` wie beim Erfassen, die
- * Serverversion bleibt die zuletzt bekannte (`null` bei neuen Einträgen). Dazu ihre Upsert-Operation.
+ * Eine offline geänderte Zeile: Fachspalten und `updated_at` wie beim Erfassen, die Serverversion bleibt
+ * die zuletzt bekannte (`null` bei neuen Einträgen), dazu ihre Upsert-Operation. `payload` ersetzt die
+ * Nutzlast aus der Zeile, etwa für eine Operation, die der Server ablehnen muss.
  */
-type OfflineChange = Readonly<{ table: string; row: SeedRow; operationId: string; at: string; payload?: Record<string, unknown> }>;
+function offlineUpsert(table: string, row: SeedRow, { operationId, at, payload }: { operationId: string; at: string; payload?: Record<string, unknown> }): OfflineChange {
+  return {
+    rows: [{ table, row }],
+    operation: OutboxOperation.parse({
+      type: 'upsert_entity',
+      operationId,
+      entityType: table,
+      entityId: row.id,
+      payload: payload ?? payloadOf[table]!(row),
+      knownServerVersion: row.server_version ?? null,
+      schemaVersion: currentSyncSchemaVersion,
+      createdAt: at,
+    }),
+  };
+}
 
-function upsertOf({ table, row, operationId, at, payload }: OfflineChange): OutboxOperation {
-  return OutboxOperation.parse({
-    type: 'upsert_entity',
-    operationId,
-    entityType: table,
-    entityId: row.id,
-    payload: payload ?? payloadOf[table]!(row),
-    knownServerVersion: row.server_version ?? null,
-    schemaVersion: currentSyncSchemaVersion,
-    createdAt: at,
-  });
+/**
+ * Eine offline angelegte Erfüllung samt `+1`, noch ohne Serverversion, und ihr Fachbefehl
+ * `completeDailyGoal`, wie der Persistenzdienst (#105) sie schreibt.
+ */
+function offlineCompletion({ slot, at, operationId }: { slot: DailyGoalSlot; at: string; operationId: string }): OfflineChange {
+  const dailyGoalId = seedIds.dailyGoal.philippHeute[slot - 1]!;
+  const [completion, credit] = seedCompletion({ personId: philipp, dailyGoalId, localDate: seedDays.heute, slot, baustein: 'wasserziel', at });
+  const localDate = LocalDate.parse(seedDays.heute);
+  return {
+    rows: [completion!, credit!].map(({ table, row }) => ({ table, row: { ...row, server_version: null } })),
+    operation: OutboxOperation.parse({
+      type: 'completeDailyGoal',
+      operationId,
+      businessKey: dailyGoalKey(EntityId.parse(philipp), localDate, slot),
+      payload: CompleteDailyGoalPayload.parse({ dailyGoalId, localDate, slot, baustein: 'wasserziel', completedAt: at }),
+      knownServerVersion: null,
+      schemaVersion: currentSyncSchemaVersion,
+      createdAt: at,
+    }),
+  };
 }
 
 /** Die Geräte haben offline geändert: Zeilen ersetzt oder ergänzt, die Operationen in Reihenfolge in der Outbox. */
@@ -81,13 +112,14 @@ function changedOffline(state: SeedState, installation: SeedKey, changes: readon
   const device = state.devices[installation];
   if (device === undefined) throw new Error(`Seed: unbekannte Installation ${installation}`);
   const rows: Record<string, SeedRow[]> = { ...device.rows };
-  for (const { table, row } of changes) {
+  for (const { table, row } of changes.flatMap((change) => change.rows)) {
     const local = rows[table] ?? [];
     rows[table] = local.some((candidate) => candidate.id === row.id)
       ? local.map((candidate) => (candidate.id === row.id ? row : candidate))
       : [...local, row];
   }
-  return { server: state.server, devices: { ...state.devices, [installation]: { ...device, rows, outbox: [...device.outbox, ...changes.map(upsertOf)] } } };
+  const outbox = [...device.outbox, ...changes.map((change) => change.operation)];
+  return { server: state.server, devices: { ...state.devices, [installation]: { ...device, rows, outbox } } };
 }
 
 /** Ergebnis einer verarbeiteten Operation von Philipp, ohne die abgeleiteten Spalten (`derivedColumns`). */
@@ -113,8 +145,8 @@ function afterSync(state: SeedState, processedOperations: readonly SeedRow[], in
   return { server: result.server, devices: Object.fromEntries(Object.entries(result.devices).map(([key, device]) => [key, { ...device, outbox: [] }])) };
 }
 
-/** Eine geänderte Fassung einer Serverzeile, wie der Server sie mit seiner Uhr schreibt. */
-const written = (table: string, row: SeedRow, at: string = now): SeedEntity => ({
+/** Eine neue Fassung einer Serverzeile, wie der Server sie mit seiner Uhr schreibt. */
+const serverRevision = (table: string, row: SeedRow, at: string = now): SeedEntity => ({
   table,
   entityType: table,
   ownerPersonId: philipp,
@@ -163,13 +195,13 @@ function zweiInstallationen(): Szenario {
   const waterOf = { iphone: offlineWater(seedIds.waterEntry.philippIphoneOffline, 500, '2026-10-14T11:40:00.000Z'), ipad: offlineWater(seedIds.waterEntry.philippIpadOffline, 500, '2026-10-14T11:50:00.000Z') };
   const initial = changedOffline(
     changedOffline(synced, iphone, [
-      { table: 'weight_entry', row: correctedOn(91_600, '2026-10-14T11:30:00.000Z'), operationId: ops.iphone.gewicht, at: '2026-10-14T11:30:00.000Z' },
-      { table: 'water_entry', row: waterOf.iphone, operationId: ops.iphone.wasser, at: '2026-10-14T11:40:00.000Z' },
+      offlineUpsert('weight_entry', correctedOn(91_600, '2026-10-14T11:30:00.000Z'), { operationId: ops.iphone.gewicht, at: '2026-10-14T11:30:00.000Z' }),
+      offlineUpsert('water_entry', waterOf.iphone, { operationId: ops.iphone.wasser, at: '2026-10-14T11:40:00.000Z' }),
     ]),
     ipad,
     [
-      { table: 'weight_entry', row: correctedOn(91_700, '2026-10-14T11:20:00.000Z'), operationId: ops.ipad.gewicht, at: '2026-10-14T11:20:00.000Z' },
-      { table: 'water_entry', row: waterOf.ipad, operationId: ops.ipad.wasser, at: '2026-10-14T11:50:00.000Z' },
+      offlineUpsert('weight_entry', correctedOn(91_700, '2026-10-14T11:20:00.000Z'), { operationId: ops.ipad.gewicht, at: '2026-10-14T11:20:00.000Z' }),
+      offlineUpsert('water_entry', waterOf.ipad, { operationId: ops.ipad.wasser, at: '2026-10-14T11:50:00.000Z' }),
     ],
   );
 
@@ -195,10 +227,10 @@ function zweiInstallationen(): Szenario {
   const server = changedOnServer(initial, {
     createdAt: now,
     changes: [
-      written('weight_entry', { ...weight, weight_g: 91_600 }),
+      serverRevision('weight_entry', { ...weight, weight_g: 91_600 }),
       createdWater(seedIds.waterEntry.philippIphoneOffline, 500, '2026-10-14T11:40:00.000Z'),
       ...seedCompletion({ personId: philipp, dailyGoalId: seedIds.dailyGoal.philippHeute[1], localDate: seedDays.heute, slot, baustein: 'wasserziel', at: '2026-10-14T11:40:00.000Z', createdAt: now }),
-      written('weight_entry', { ...weight, weight_g: 91_700 }),
+      serverRevision('weight_entry', { ...weight, weight_g: 91_700 }),
       createdWater(seedIds.waterEntry.philippIpadOffline, 500, '2026-10-14T11:50:00.000Z'),
     ],
   });
@@ -223,10 +255,14 @@ function zweiInstallationen(): Szenario {
  *
  * 1. 11:00 den Gewichtseintrag von gestern auf 91,6 kg korrigiert (Feldkonflikt). Gewinner: das iPhone,
  *    weil es zuletzt eingeht, obwohl es auf dem Gerät früher entstand.
- * 2. 11:05 den Wassereintrag von 06:30 auf 5500 ml geändert und 11:06 auf 550 ml korrigiert. Die erste
- *    Operation lehnt der Server dauerhaft ab (`invalid_payload`): Mehr als 3000 ml je Eintrag verbietet
- *    das Vertragsschema; die aktuelle App sendet so etwas nicht, der Server muss es trotzdem ablehnen.
- *    Gewinner: die neuere Operation derselben Entität; ihre 550 ml bleiben.
+ * 2. 11:05 den Wassereintrag von 06:30 auf 5500 ml geändert. Damit war das Wasserziel (Platz 2) erfüllt,
+ *    und der Persistenzdienst hat die Erfüllung samt `+1` angelegt. 11:06 hat Philipp auf 550 ml
+ *    korrigiert. Die erste Operation lehnt der Server dauerhaft ab (`invalid_payload`): Mehr als 3000 ml
+ *    je Eintrag verbietet das Vertragsschema; die aktuelle App sendet so etwas nicht, der Server muss es
+ *    trotzdem ablehnen. Der Fachbefehl der Erfüllung beendet den ersten Push-Batch, die Korrektur ist
+ *    dabei noch offen: Das iPhone übernimmt den kanonischen Eintrag (500 ml) und wendet die Korrektur
+ *    erneut an. Gewinner: die neuere Operation derselben Entität; ihre 550 ml bleiben. Die Erfüllung bleibt
+ *    ebenfalls; eine spätere Korrektur bucht keine Energie zurück (Abschnitt 4).
  * 3. 11:20 den Wassereintrag von 10:15 auf 500 ml geändert. Gewinner: die Löschung (`conflict`); Löschen
  *    gewinnt gegen ein späteres Offline-Update.
  * 4. 11:45 250 ml gebucht, noch ungesichert. Gewinner: das iPhone; der Server legt den Eintrag an.
@@ -238,24 +274,26 @@ function offlineSync(): Szenario {
   const [morgens, vormittags] = [rowById(synced, 'water_entry', seedIds.waterEntry.philippHeute[0]), rowById(synced, 'water_entry', seedIds.waterEntry.philippHeute[1])];
   const deleted = '2026-10-14T11:30:00.000Z';
   const onServer = changedOnServer(
-    changedOnServer(synced, { createdAt: '2026-10-14T11:10:00.000Z', changes: [written('weight_entry', { ...weight, weight_g: 91_500 }, '2026-10-14T11:10:00.000Z')] }),
-    { createdAt: deleted, changes: [written('water_entry', { ...vormittags, deleted_at: deleted }, deleted)] },
+    changedOnServer(synced, { createdAt: '2026-10-14T11:10:00.000Z', changes: [serverRevision('weight_entry', { ...weight, weight_g: 91_500 }, '2026-10-14T11:10:00.000Z')] }),
+    { createdAt: deleted, changes: [serverRevision('water_entry', { ...vormittags, deleted_at: deleted }, deleted)] },
   );
   const korrigiert = { ...morgens, amount_ml: 550, updated_at: '2026-10-14T11:06:00.000Z' };
   const initial = changedOffline(onServer, iphone, [
-    { table: 'weight_entry', row: { ...weight, weight_g: 91_600, updated_at: '2026-10-14T11:00:00.000Z' }, operationId: ops.gewicht, at: '2026-10-14T11:00:00.000Z' },
-    { table: 'water_entry', row: korrigiert, operationId: ops.tippfehler, at: '2026-10-14T11:05:00.000Z', payload: { ...waterPayload(morgens), amountMl: 5_500 } },
-    { table: 'water_entry', row: korrigiert, operationId: ops.korrektur, at: '2026-10-14T11:06:00.000Z' },
-    { table: 'water_entry', row: { ...vormittags, amount_ml: 500, updated_at: '2026-10-14T11:20:00.000Z' }, operationId: ops.gegenLoeschung, at: '2026-10-14T11:20:00.000Z' },
-    { table: 'water_entry', row: offlineWater(seedIds.waterEntry.philippUngesichert, 250, '2026-10-14T11:45:00.000Z'), operationId: ops.ungesichert, at: '2026-10-14T11:45:00.000Z' },
+    offlineUpsert('weight_entry', { ...weight, weight_g: 91_600, updated_at: '2026-10-14T11:00:00.000Z' }, { operationId: ops.gewicht, at: '2026-10-14T11:00:00.000Z' }),
+    offlineUpsert('water_entry', korrigiert, { operationId: ops.tippfehler, at: '2026-10-14T11:05:00.000Z', payload: { ...waterPayload(morgens), amountMl: 5_500 } }),
+    offlineCompletion({ slot: 2, at: '2026-10-14T11:05:00.000Z', operationId: ops.erfuellung }),
+    offlineUpsert('water_entry', korrigiert, { operationId: ops.korrektur, at: '2026-10-14T11:06:00.000Z' }),
+    offlineUpsert('water_entry', { ...vormittags, amount_ml: 500, updated_at: '2026-10-14T11:20:00.000Z' }, { operationId: ops.gegenLoeschung, at: '2026-10-14T11:20:00.000Z' }),
+    offlineUpsert('water_entry', offlineWater(seedIds.waterEntry.philippUngesichert, 250, '2026-10-14T11:45:00.000Z'), { operationId: ops.ungesichert, at: '2026-10-14T11:45:00.000Z' }),
   ]);
 
-  // In Server-Eingangsreihenfolge; die beiden abgelehnten Operationen schreiben nichts.
+  // In Server-Eingangsreihenfolge über beide Batches; die beiden abgelehnten Operationen schreiben nichts.
   const server = changedOnServer(initial, {
     createdAt: now,
     changes: [
-      written('weight_entry', { ...weight, weight_g: 91_600 }),
-      written('water_entry', { ...morgens, amount_ml: 550 }),
+      serverRevision('weight_entry', { ...weight, weight_g: 91_600 }),
+      ...seedCompletion({ personId: philipp, dailyGoalId: seedIds.dailyGoal.philippHeute[1], localDate: seedDays.heute, slot: 2, baustein: 'wasserziel', at: '2026-10-14T11:05:00.000Z', createdAt: now }),
+      serverRevision('water_entry', { ...morgens, amount_ml: 550 }),
       createdWater(seedIds.waterEntry.philippUngesichert, 250, '2026-10-14T11:45:00.000Z'),
     ],
   });
@@ -263,6 +301,7 @@ function offlineSync(): Szenario {
   const target = afterSync(server, [
     processed(ops.gewicht, 'applied', { entityType: 'weight_entry', entityId: weight.id as string }),
     processed(ops.tippfehler, 'permanently_rejected', water(seedIds.waterEntry.philippHeute[0])),
+    processed(ops.erfuellung, 'applied', { command: 'completeDailyGoal', businessKey: dailyGoalKey(EntityId.parse(philipp), LocalDate.parse(seedDays.heute), 2) }),
     processed(ops.korrektur, 'applied', water(seedIds.waterEntry.philippHeute[0])),
     processed(ops.gegenLoeschung, 'permanently_rejected', water(seedIds.waterEntry.philippHeute[1])),
     processed(ops.ungesichert, 'applied', water(seedIds.waterEntry.philippUngesichert)),

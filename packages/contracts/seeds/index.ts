@@ -29,7 +29,7 @@ export {
   type SeedInstallation,
   type SeedValue,
 } from './manifest.ts';
-export { canonicalJson, canonicalRows, dependencyOrder, derivedColumns, withoutDerivedColumns } from './canonical.ts';
+export { canonicalJson, canonicalRows, dependencyOrder, withoutDerivedColumns } from './canonical.ts';
 export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedInstallations, seedPassword } from './ids.ts';

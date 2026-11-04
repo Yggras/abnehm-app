@@ -25,6 +25,7 @@ import {
   foundationLocalCommands,
   foundationSyncEntities,
   setPartnerSharing,
+  type PushNowResult,
 } from '../../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
@@ -54,6 +55,8 @@ export type SeedPhone = Readonly<{
   database: LocalDatabase;
   /** Push und Pull; übernommene Tage wertet der Persistenzdienst in derselben Transaktion aus. */
   sync(): Promise<void>;
+  /** Genau ein Push-Batch ohne Pull (`pushNow`), etwa um einen Zwischenstand zu prüfen. */
+  pushOnce(): Promise<PushNowResult>;
   /** Schritt `tagesziele_auswerten`; der Writer vergibt dabei genau die Operations-IDs des Schritts. */
   evaluate(step: Extract<SeedStep, { type: 'tagesziele_auswerten' }>): Promise<void>;
   partner(): ReturnType<typeof readPartnerCache>;
@@ -118,6 +121,8 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
     device,
     personId: account.personId,
     database,
+    // Die Frist liegt eine Minute nach der Uhr des Manifests; die Testuhr steht still.
+    pushOnce: () => engine.pushNow({ deadline: Instant.parse(new Date(Date.parse(clock.read().instant) + 60_000).toISOString()) }),
     async sync() {
       expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
       await dispatcher.deliver();
@@ -180,7 +185,7 @@ export async function reseed({ backend, manifest, phones }: SeedWorld): Promise<
 
 /**
  * Kanonischer Gesamtzustand: Postgres ohne Better-Auth-Tabellen und Sicherheitslog, je Installation SQLite.
- * Wie im Manifest fehlen die abgeleiteten Spalten verarbeiteter Operationen; sie prüft `processedOperationsMatch`.
+ * Wie im Manifest fehlen die abgeleiteten Spalten verarbeiteter Operationen; sie prüft `expectProcessedOperations`.
  */
 export async function stateOf({ backend, phones }: SeedWorld): Promise<SeedState> {
   return {
@@ -204,7 +209,7 @@ export function canonical(state: SeedState): SeedState {
  * - `result` ist ein gültiges Push-Ergebnis dieser Operation mit dem gespeicherten Ausgang, genau das, was
  *   das Gerät erhalten hat. Ein Retry derselben Operation erhielte `already_applied`; die Szenarien wiederholen keine.
  */
-export async function processedOperationsMatch({ backend, phones }: SeedWorld): Promise<void> {
+export async function expectProcessedOperations({ backend, phones }: SeedWorld): Promise<void> {
   const sent = new Map<string, OutboxOperation>(Object.values(phones).flatMap((phone) => phone.pushedOperations()).map((operation) => [operation.operationId, operation]));
   const received = new Map<string, PushResult>(Object.values(phones).flatMap((phone) => phone.pushResults()).map((result) => [result.operationId, result]));
   const rows = await backend.database.db.select().from(processedOperation);

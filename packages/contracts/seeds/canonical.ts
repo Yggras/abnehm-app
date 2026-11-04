@@ -32,7 +32,7 @@ export function canonicalRows(rows: SeedRows): SeedRows {
  * gespeicherte Antwort wiederholt Ergebnis und kanonische Zeilen, die das Manifest schon nennt. Der
  * Vergleich lässt sie auf beiden Seiten weg; die Manifest-Suite prüft sie semantisch.
  */
-export const derivedColumns: Readonly<Record<string, readonly string[]>> = {
+const derivedColumns: Readonly<Record<string, readonly string[]>> = {
   processed_operation: ['request_hash', 'payload_hash', 'result'],
 };
 
