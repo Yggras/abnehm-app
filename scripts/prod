@@ -65,16 +65,23 @@ require_approval() {
 
 image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }
 
+# check_images <vorher|laufend>: Images gegen die Freigabe prüfen, vor dem Start die lokalen Tags,
+# danach die Images der laufenden Container.
 check_images() {
   [[ "$any_state" == true ]] && return
-  local expected_backend expected_postgres
+  local expected_backend expected_postgres backend postgres
   expected_backend="$(sed -n 's/^backend=//p' "$approval-images.txt")"
   expected_postgres="$(sed -n 's/^postgres=//p' "$approval-images.txt")"
-  [[ "$(image_id "$(compose ps --format '{{.Image}}' backend)")" == "$expected_backend" ]] \
-    || { echo "Das laufende Backend-Image ist nicht das freigegebene ($expected_backend)." >&2; exit 1; }
-  [[ "$(image_id "$(compose ps --format '{{.Image}}' postgres)")" == "$expected_postgres" ]] \
-    || { echo "Das laufende Postgres-Image ist nicht das freigegebene ($expected_postgres)." >&2; exit 1; }
-  echo "Images entsprechen der Freigabe von $commit."
+  if [[ "$1" == vorher ]]; then
+    backend="$(image_id abnehm-prod-backend)"
+    postgres="$(image_id "$(sed -n 's/^ *image: *//p' "$repo_root/compose.prod.yaml" | head -n 1)")"
+  else
+    backend="$(image_id "$(compose ps --format '{{.Image}}' backend)")"
+    postgres="$(image_id "$(compose ps --format '{{.Image}}' postgres)")"
+  fi
+  [[ "$backend" == "$expected_backend" ]] || { echo "Backend-Image ($1) ist nicht das freigegebene: ${backend:-fehlt} statt $expected_backend." >&2; exit 1; }
+  [[ "$postgres" == "$expected_postgres" ]] || { echo "Postgres-Image ($1) ist nicht das freigegebene: ${postgres:-fehlt} statt $expected_postgres." >&2; exit 1; }
+  echo "Images ($1) entsprechen der Freigabe von $commit."
 }
 
 check_serve() {
@@ -142,11 +149,12 @@ case "${1:-}" in
     require_approval
     load_url
     "$repo_root/scripts/prod-secrets" pruefen
+    check_images vorher
     # Compose erzeugt einen Container nicht neu, wenn sich nur das Image hinter dem Tag geändert hat
     # (beobachtet am 04.11.2026); ein Update braucht deshalb --force-recreate. Das ist der Neustart.
     if [[ "$any_state" == true ]]; then compose up --detach --build --force-recreate --wait
     else compose up --detach --no-build --pull never --force-recreate --wait; fi
-    check_images
+    check_images laufend
     record_state
     check_serve
     curl --fail --silent --show-error "$ABNEHM_PROD_URL/v1/status" >/dev/null && echo "Status über HTTPS erreichbar: $ABNEHM_PROD_URL/v1/status"
