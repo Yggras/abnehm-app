@@ -158,7 +158,8 @@ function Tracker({ label, value, of, status, detail, quick, quickLabel, progress
   status?: string;
   /** Bezug des Werts, etwa „von 2,5 l“. */
   of?: string;
-  progress?: { value: number; target: number };
+  /** Fortschritt samt Name für Screenreader, etwa „Wasser heute“ oder „Sport diese Woche“. */
+  progress?: { label: string; value: number; target: number };
 }) {
   const runCommand = useQuickCommand();
   const valueText = of ? `${value} ${of}` : value;
@@ -169,7 +170,7 @@ function Tracker({ label, value, of, status, detail, quick, quickLabel, progress
       <Text variant="numberM">{value}</Text>
       {of ? <Text variant="caption" tone="inkMuted">{of}</Text> : null}
     </Pressable>
-    {progress ? <ProgressBar label={`${label} heute`} value={progress.value} target={progress.target} valueText={valueText} legend={false} /> : null}
+    {progress ? <ProgressBar label={progress.label} value={progress.value} target={progress.target} valueText={valueText} legend={false} /> : null}
     {status ? <Text variant="label" tone="inkMuted">{status}</Text> : null}
     <Button compact block dense variant="secondary" label={quickLabel} accessibilityLabel={`${label}: ${quickLabel}`}
       onPress={() => quick.type === 'navigate' ? action(quick.intent) : runCommand(quick)} />
@@ -223,8 +224,8 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
     <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b, stale) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} stale={stale} />}</CardPair></View>
     <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b, stale) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} stale={stale} />}</CardPair></View>
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} l`} of={`von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} / ${d.weeklyTargetMinutes} min`} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} l`} of={`von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ label: 'Wasser heute', value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} min`} of={`von ${d.weeklyTargetMinutes} min diese Woche`} progress={{ label: 'Sport diese Woche', value: d.weekMinutes, target: d.weeklyTargetMinutes }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} status={weighDayText(d.status, clock.read().localDate)} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>

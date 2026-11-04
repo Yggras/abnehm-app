@@ -50,6 +50,106 @@ export function isInFuture(instant: string, now: string): boolean {
   return Date.parse(instant) > Date.parse(now);
 }
 
+/**
+ * Aktivitätsarten aus #38, jeweils mit Symbol in der Oberfläche. Plattformarten bildet der Health-Import
+ * auf diese Liste ab; Unbekanntes wird `sonstiges`. Es gibt keine Intensität: Jede Minute zählt 1:1, eine
+ * bewusste Vereinfachung gegenüber der WHO-Äquivalenz (Spezifikation 3, Abschnitt 3).
+ */
+export const activityTypes = ['gehen', 'laufen', 'radfahren', 'schwimmen', 'krafttraining', 'yoga_dehnen', 'mannschaftssport', 'sonstiges'] as const;
+
+/** Herkunft eines importierten Eintrags (Spezifikation 3, Abschnitt 6). */
+export const importOrigins = ['apple_health', 'health_connect'] as const;
+
+/** Dauer eines Sporteintrags laut Schema in ganzen Minuten; Importe außerhalb werden nicht übernommen. */
+export const sportEntryMinutes = { min: 1, max: 1440 } as const;
+
+/** Gültige manuelle Dauer in ganzen Minuten (Designwert aus Spezifikation 3, Abschnitt 3). */
+export const manualSportMinutes = { min: 1, max: 600 } as const;
+
+/** Gültige optionale Kalorien einer manuellen Einheit: 0–5000 kcal in `milli_kcal` (Designwert). */
+export const manualSportMilliKcal = { min: 0, max: 5_000_000 } as const;
+
+/** Ob eine Dauer als manuelle Einheit gültig ist: ganze Minuten im Bereich 1–600. */
+export function isValidManualSportMinutes(minutes: number): boolean {
+  return Number.isInteger(minutes) && minutes >= manualSportMinutes.min && minutes <= manualSportMinutes.max;
+}
+
+/** Ob optionale Kalorien gültig sind: keine Angabe oder ganze `milli_kcal` im Bereich 0–5000 kcal. */
+export function isValidManualSportMilliKcal(milliKcal: number | null): boolean {
+  return milliKcal === null || (Number.isInteger(milliKcal) && milliKcal >= manualSportMilliKcal.min && milliKcal <= manualSportMilliKcal.max);
+}
+
+/** Was die Sport-Zählregel von einem Sporteintrag braucht. */
+export type SportEntryFacts = Readonly<{
+  id: string;
+  origin: string;
+  durationMinutes: number;
+  localDate: string;
+  deletedAt: string | null;
+  /** Nur bei Importen. */
+  hiddenAt: string | null;
+  /** Nur bei manuellen Einträgen: der ersetzende Import. */
+  replacedByEntryId: string | null;
+  /** Nur bei manuellen Einträgen. */
+  reactivatedAt: string | null;
+}>;
+
+/**
+ * Zählende Sporteinträge (Spezifikation 3, Abschnitt 3), in der gegebenen Reihenfolge:
+ * - Ein importierter Eintrag zählt, wenn er weder gelöscht noch ausgeblendet ist.
+ * - Ein manueller Eintrag zählt, wenn er nicht gelöscht ist und keinen „ersetzt durch“-Verweis hat, reaktiviert
+ *   ist oder sein ersetzender Import nicht mehr zählt.
+ *
+ * Die letzte Bedingung wird hier berechnet und nie gespeichert; so bleibt sie bei Mehrgeräte-Sync
+ * widerspruchsfrei. Der ersetzende Import muss deshalb unter `entries` sein. Fehlt er, zählt der manuelle
+ * Eintrag, damit kein Training verschwindet.
+ */
+export function countingSportEntries<T extends SportEntryFacts>(entries: readonly T[]): T[] {
+  const countingImports = new Set(entries.filter((entry) => entry.origin !== manualOrigin && isCountingImport(entry)).map((entry) => entry.id));
+  return entries.filter((entry) => {
+    if (entry.origin !== manualOrigin) return countingImports.has(entry.id);
+    if (entry.deletedAt !== null) return false;
+    return entry.replacedByEntryId === null || entry.reactivatedAt !== null || !countingImports.has(entry.replacedByEntryId);
+  });
+}
+
+function isCountingImport(entry: SportEntryFacts): boolean {
+  return entry.deletedAt === null && entry.hiddenAt === null;
+}
+
+/** Montag und Sonntag der Woche eines lokalen Tags (Spezifikation 3, Abschnitt 3: Montag bis Sonntag). */
+export function weekOf(localDate: string): Readonly<{ monday: string; sunday: string }> {
+  const day = calendarDay(localDate);
+  // `getUTCDay` zählt ab Sonntag (0); die Woche beginnt am Montag.
+  const monday = day - ((new Date(day * msPerDay).getUTCDay() + 6) % 7);
+  return { monday: localDateOf(monday), sunday: localDateOf(monday + 6) };
+}
+
+/**
+ * Wochenminuten: die Summe der zählenden Einträge, deren gespeicherter lokaler Tag in der Woche (Montag bis
+ * Sonntag) von `localDate` liegt; jede Minute zählt 1:1. Maßgeblich ist der lokale Tag des Eintrags, nicht
+ * die Stundenzahl der Woche, deshalb ändert ein Sommerzeitwechsel nichts.
+ */
+export function weekMinutes(entries: readonly SportEntryFacts[], localDate: string): number {
+  const { monday, sunday } = weekOf(localDate);
+  let sum = 0;
+  for (const entry of countingSportEntries(entries)) if (entry.localDate >= monday && entry.localDate <= sunday) sum += entry.durationMinutes;
+  return sum;
+}
+
+// Kalenderrechnung auf lokalen Tagen (`YYYY-MM-DD`): Ein lokaler Tag ist ein Datum, kein Zeitpunkt. UTC dient
+// nur als zonenfreier Kalender; das Modul hat bewusst keine Importe.
+const msPerDay = 86_400_000;
+
+function calendarDay(localDate: string): number {
+  const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
+  return Date.UTC(year, month - 1, day) / msPerDay;
+}
+
+function localDateOf(day: number): string {
+  return new Date(day * msPerDay).toISOString().slice(0, 10);
+}
+
 /** Was die Gewichtsregeln von einem Gewichtseintrag brauchen. */
 export type WeightEntryFacts = Readonly<{
   weightG: number;

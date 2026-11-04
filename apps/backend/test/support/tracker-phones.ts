@@ -15,13 +15,13 @@ import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../../mobile/src/sync/index.ts';
-import { createTrackers, waterEntryEntity, weightEntryEntity, type Trackers } from '../../../mobile/src/trackers/index.ts';
+import { createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity, type Trackers } from '../../../mobile/src/trackers/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import { defaultPassword, newDevice, signIn, type Device } from './auth-client.ts';
 import { personWithSession } from './authorization.ts';
 
 // Zwei Installationen derselben Person gegen die echte Hono-App, so zusammengesetzt wie im Composition
-// Root: Sync, Persistenzdienst und Tracker-Modul (#171, #175). App-Code läuft auf echtem SQLite
+// Root: Sync, Persistenzdienst und Tracker-Modul (#171, #173, #175). App-Code läuft auf echtem SQLite
 // (better-sqlite3), der HTTP-Transport über `app.request`.
 
 export type TrackerPhone = Readonly<{
@@ -42,7 +42,7 @@ async function trackerPhone(backend: TestBackend, accountId: string, device: Dev
   const database = await databases.open(accountId);
   const clock = createTestClock(start);
   const newId = () => EntityId.parse(randomUUID());
-  const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity]);
+  const registry = createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity]);
   const writer = createSyncWriter({ registry, clock, newId });
   const signals: DaysChanged[] = [];
   const dispatcher = createDaysChangedDispatcher({ database, observers: [(signal) => void signals.push(signal)], onError: (error) => { throw error; } });

@@ -30,6 +30,7 @@ import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
+import { sportEntryEntity } from './trackers/sport-entity.ts';
 import { waterEntryEntity } from './trackers/water-entity.ts';
 import { weightEntryEntity } from './trackers/weight-entity.ts';
 
@@ -98,6 +99,7 @@ export function createBackend({
   // Wasser, Sport und Gewicht (Spezifikation 3).
   sync.registerEntity(waterEntryEntity);
   sync.registerEntity(weightEntryEntity);
+  sync.registerEntity(sportEntryEntity);
   // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.
   const partnerProjections = createPartnerProjections({ clock });
   for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);

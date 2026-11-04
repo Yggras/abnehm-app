@@ -53,7 +53,8 @@ const planVersionIds = (idOf: (personId: EntityId, validFrom: LocalDate) => Enti
 export const seedIds = {
   account: { philipp: id('0001', 1), anna: id('0001', 2) },
   person,
-  installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2) },
+  /** `philippIpad` ist Philipps zweites Gerät, nur im Szenario `zwei_installationen` (#116). */
+  installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2), philippIpad: id('0003', 3) },
   goalVersion: planVersionIds(goalVersionId),
   weeklyPlanVersion: planVersionIds(weeklyPlanVersionId),
   dailyGoal: {
@@ -71,10 +72,19 @@ export const seedIds = {
     annaHeute: [id('0020', 3), id('0020', 4)],
     /** Nur in den Randzuständen zum Tagesende (#113). */
     philippGestern: [id('0020', 8), id('0020', 9)],
+    /** Offline gebucht, nur in `zwei_installationen` (#116): je Gerät ein Eintrag. */
+    philippIphoneOffline: id('0020', 10),
+    philippIpadOffline: id('0020', 11),
+    /** Offline gebucht und noch nicht gesichert, nur in `offline_sync` (#116). */
+    philippUngesichert: id('0020', 12),
   },
   weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
-  sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3), philippHeuteKurz: id('0022', 4) },
+  // 0022/5–8: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).
+  sportEntry: {
+    philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3), philippHeuteKurz: id('0022', 4),
+    philippVorgestern: id('0022', 5), philippWoche: [id('0022', 6), id('0022', 7), id('0022', 8)],
+  },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   // 0031/5–7: Philipps Mahlzeiten von gestern, nur in den Randzuständen zum Tagesende (#113).
   nutritionEntry: {
@@ -91,6 +101,14 @@ export const seedIds = {
     erfuellt: [id('0090', 1)],
     tagesendeOffen: [id('0090', 2), id('0090', 3)],
     tagesendeAbgeschlossen: [id('0090', 4), id('0090', 5)],
+    /** Offene Operationen der Mehrgeräte- und Sync-Szenarien (#116), je Gerät in Entstehungsreihenfolge. */
+    zweiInstallationen: {
+      iphone: { gewicht: id('0090', 6), wasser: id('0090', 7), erfuellung: id('0090', 8) },
+      ipad: { gewicht: id('0090', 9), wasser: id('0090', 10), erfuellung: id('0090', 11) },
+    },
+    offlineSync: {
+      gewicht: id('0090', 12), tippfehler: id('0090', 13), erfuellung: id('0090', 17), korrektur: id('0090', 14), gegenLoeschung: id('0090', 15), ungesichert: id('0090', 16),
+    },
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   /** Server-only; ein abgelaufener Fotoentwurf als Randzustand (#162). */
@@ -125,4 +143,5 @@ export const seedAccounts = {
 export const seedInstallations = {
   philippIphone: { key: 'philipp-iphone', installationId: seedIds.installation.philippIphone, account: 'philipp', platform: 'ios' },
   annaAndroid: { key: 'anna-android', installationId: seedIds.installation.annaAndroid, account: 'anna', platform: 'android' },
+  philippIpad: { key: 'philipp-ipad', installationId: seedIds.installation.philippIpad, account: 'philipp', platform: 'ios' },
 } as const;

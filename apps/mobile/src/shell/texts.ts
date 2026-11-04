@@ -1,4 +1,5 @@
 import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
+import type { ActivityType } from '@abnehm/contracts/trackers';
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
 import type { QuickCommandKey } from '@abnehm/contracts/today';
 
@@ -6,6 +7,21 @@ import { ownerOf, type Owner } from '../navigation/route-catalog';
 
 // Sichtbare Texte und zugängliche Namen der App-Shell. Sie entstehen hier in der App aus
 // Routennamen und typisierten Werten, nie im Transport (Spezifikation 0, Abschnitt 2).
+
+/**
+ * Namen der Aktivitätsarten (#38). „Yoga & Dehnen“ statt „Yoga/Dehnen“ aus #38, weil Screenreader den
+ * Schrägstrich mitlesen.
+ */
+export const activityNames: Readonly<Record<ActivityType, string>> = {
+  gehen: 'Gehen',
+  laufen: 'Laufen',
+  radfahren: 'Radfahren',
+  schwimmen: 'Schwimmen',
+  krafttraining: 'Krafttraining',
+  yoga_dehnen: 'Yoga & Dehnen',
+  mannschaftssport: 'Mannschaftssport',
+  sonstiges: 'Sonstiges',
+};
 
 type SettingsSection = NonNullable<Extract<RouteTarget, { type: 'settings' }>['section']>;
 

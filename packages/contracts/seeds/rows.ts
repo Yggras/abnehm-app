@@ -153,7 +153,7 @@ export function seedWaterEntry(options: { id: string; personId: string; amountMl
   };
 }
 
-/** Manuell erfasste Sporteinheit (Spezifikation 3), weder ersetzt noch reaktiviert. */
+/** Manuell erfasster Sporteintrag (Spezifikation 3), weder ersetzt noch reaktiviert; seit #173 beim Sync angemeldet. */
 export function seedSportEntry(options: {
   id: string;
   personId: string;
@@ -165,6 +165,7 @@ export function seedSportEntry(options: {
 }): SeedEntity {
   return {
     table: 'sport_entry',
+    entityType: 'sport_entry',
     ownerPersonId: options.personId,
     row: {
       id: options.id,
@@ -248,7 +249,8 @@ export function seedKiEntry(options: {
 
 /**
  * Tageszielerfüllung samt `+1`-Gutschrift, wie sie der Fachbefehl `completeDailyGoal` anlegt (#105): IDs
- * und Schlüssel aus Person, Tag und Platz, Erfüllung und Buchung zum selben Zeitpunkt.
+ * und Schlüssel aus Person, Tag und Platz. `at` ist der Erfüllungszeitpunkt des Geräts; `createdAt` setzt
+ * der Server mit seiner Uhr, wenn er den Befehl annimmt (#116), sonst gilt `at`.
  */
 export function seedCompletion(options: {
   personId: string;
@@ -257,8 +259,10 @@ export function seedCompletion(options: {
   slot: DailyGoalSlot;
   baustein: BausteinKey;
   at: string;
+  createdAt?: string;
 }): SeedEntity[] {
   const { personId, localDate, slot, at } = options;
+  const createdAt = options.createdAt ?? at;
   const key = dailyGoalKey(EntityId.parse(personId), LocalDate.parse(localDate), slot);
   const id = dailyGoalCompletionId(key);
   return [
@@ -275,7 +279,7 @@ export function seedCompletion(options: {
         baustein: options.baustein,
         first_completed_at: at,
         completion_key: key,
-        created_at: at,
+        created_at: createdAt,
       },
     },
     {
@@ -294,7 +298,7 @@ export function seedCompletion(options: {
         island_object_id: null,
         community_project_id: null,
         original_booking_id: null,
-        created_at: at,
+        created_at: createdAt,
       },
     },
   ];

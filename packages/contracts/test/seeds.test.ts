@@ -16,11 +16,11 @@ import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
 import { PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
-import { countedWaterMl, dayWeights, isWeighDay, trackerStatus } from '../src/tracker-rules.ts';
+import { countedWaterMl, dayWeights, isWeighDay, trackerStatus, weekMinutes } from '../src/tracker-rules.ts';
 
-// Nachweis für #112 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
+// Nachweis für #112, #116 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
 // Partner-Szenarien `gekoppelt` und `nach_entkopplung`; für #171 die Wassereinträge von solo und seine
-// Varianten je Status des Wasser-Mini-Trackers. Dass Server und Geräte die Manifeste tatsächlich so
+// Varianten je Status des Wasser-Mini-Trackers; für #173 die Sportwoche von solo und seine Varianten. Dass Server und Geräte die Manifeste tatsächlich so
 // herstellen und erreichen, prüft `apps/backend/test/seed-partner-app.test.ts`.
 
 const solo = seedManifests.solo;
@@ -58,6 +58,8 @@ describe('Seed-Manifest', () => {
       expect.objectContaining({ entity_type: 'weekly_plan_version', entity_id: seedIds.weeklyPlanVersion.philipp, owner_person_id: philipp, operation: 'upsert' }),
       ...seedIds.waterEntry.philippHeute.slice(0, 2).map((id) =>
         expect.objectContaining({ entity_type: 'water_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...[seedIds.sportEntry.philippVorgestern, seedIds.sportEntry.philippGestern].map((id) =>
+        expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.weightEntry.philippVorgestern, seedIds.weightEntry.philippGestern].map((id) =>
         expect.objectContaining({ entity_type: 'weight_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
@@ -120,6 +122,34 @@ describe('Seed-Manifest', () => {
     expect(server.goal_version).toEqual(solo.initial.server.goal_version);
   });
 
+  it.each([
+    ['solo', 75, 'teil'],
+    ['solo-sport-erreicht', 150, 'erreicht'],
+    ['solo-sport-ueber-ziel', 170, 'ueber_ziel'],
+  ] as const)('%s: %s Wochenminuten aus manuellen Einheiten über die Woche, Mini-Tracker %s', (scenario, minutes, status) => {
+    const { server, devices } = seedManifests[scenario].initial;
+    const rows = server.sport_entry ?? [];
+    const entries = rows.map((row) => ({
+      id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
+      deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
+    }));
+    const target = Number(server.goal_version?.[0]?.weekly_sport_target_minutes);
+
+    expect(target).toBe(150);
+    expect(weekMinutes(entries, seedDays.heute)).toBe(minutes);
+    expect(trackerStatus(minutes, target)).toBe(status);
+    expect(rows.every((row) => row.origin === 'manuell')).toBe(true);
+    // Über die Woche: Montag und Dienstag, heute noch keine Einheit, damit die Sporteinheit von heute offen bleibt.
+    expect([...new Set(rows.map((row) => row.local_date))].sort()).toEqual([seedDays.vorgestern, seedDays.gestern]);
+    expect(devices['philipp-iphone']!.rows.sport_entry).toEqual(rows);
+    // Nur die Sportwoche unterscheidet die Varianten von solo.
+    const tablesBesideSport = (all: Record<string, unknown>) => Object.fromEntries(Object.entries(all).filter(([table]) => !['sport_entry', 'change_log', 'sync_clock'].includes(table)));
+    expect(Object.keys(tablesBesideSport(server)).sort()).toEqual(Object.keys(tablesBesideSport(solo.initial.server)).sort());
+    // Die Serverversionen verschieben sich mit den zusätzlichen Einheiten; die Zeilen selbst bleiben gleich.
+    const unversioned = (rows: readonly Record<string, unknown>[] = []) => rows.map((row) => ({ ...row, server_version: undefined }));
+    for (const table of ['water_entry', 'weight_entry', 'goal_version', 'daily_goal']) expect(unversioned(server[table])).toEqual(unversioned(solo.initial.server[table]));
+  });
+
   it('solo: fertige Person ohne Kopplung und ohne Insel, mit Zielen, Wochenplan, drei Tageszielen und eigenen Daten', () => {
     const { server } = solo.initial;
     expect(server.person).toEqual([expect.objectContaining({ onboarding_status: 'abgeschlossen', display_name: 'Philipp' })]);
@@ -162,6 +192,15 @@ describe('Seed-Manifest', () => {
       'Schritt sync: unbekannte Installation anna-android',
     ]);
     expect(issues({ ...solo, accounts: [solo.accounts[0], solo.accounts[0]] })).toContain(`Konto doppelt: key philipp`);
+  });
+
+  it('lehnt eine Operations-ID ab, die schon in einer Outbox des Ausgangszustands steht', () => {
+    const zwei = seedManifests.zwei_installationen;
+    const [first] = zwei.initial.devices['philipp-iphone']!.outbox;
+    const step = { type: 'tagesziele_auswerten', installation: 'philipp-ipad', localDates: [seedDays.heute], cause: 'app_oeffnung', operationIds: [first!.operationId] };
+    expect(SeedManifest.safeParse({ ...zwei, steps: [step] }).error?.issues.map(({ message }) => message)).toEqual([
+      `Operations-ID doppelt: ${first!.operationId}`,
+    ]);
   });
 });
 
