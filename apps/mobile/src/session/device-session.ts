@@ -27,7 +27,7 @@ import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { appTrackers, createTrackers, waterEntryEntity, weightEntryEntity } from '../trackers';
+import { appTrackers, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -46,11 +46,14 @@ const newId = () => EntityId.parse(uuid.v4());
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
   ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, waterEntryEntity, weightEntryEntity,
+  sportEntryEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
 /** Mini-Tracker `trackers.weight`; seine Wiegetage liest er ebenfalls über den `PlanReader` (#175). */
 const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.weight');
+/** Mini-Tracker `trackers.sport`; sein Sportwochenziel liest er ebenfalls über den `PlanReader` (#173). */
+const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.sport');
 /** Momo auf „Heute“ (Spezifikation 4): bisher Laichkugel und Rollenwahl (#180). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
@@ -95,9 +98,10 @@ function deviceState() {
       });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
-      // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water` und
-      // `trackers.weight` und die Bildschirme des Bereichs (`appTrackers`). Den Schreib-Port `weightRecorder`
-      // gibt der Composition Root an `composeAreaPorts` weiter, sobald alle Pflichtports angemeldet sind.
+      // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
+      // `trackers.sport` und `trackers.weight` und die Bildschirme des Bereichs (`appTrackers`). Den
+      // Schreib-Port `weightRecorder` gibt der Composition Root an `composeAreaPorts` weiter, sobald alle
+      // Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
@@ -115,6 +119,7 @@ function deviceState() {
         appTrackers.opened(trackers),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
+        sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());

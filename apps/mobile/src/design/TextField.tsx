@@ -2,6 +2,7 @@ import { useImperativeHandle, useRef, useState, type ComponentRef, type Ref } fr
 import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { Icon } from './Icon';
+import { ProblemMessage } from './ProblemMessage';
 import { Text } from './Text';
 import { color, radius, size, space, textScale, type } from './tokens';
 
@@ -135,12 +136,7 @@ export function TextField({
       </View>
       {/* Screenreader hören den Satz als Hinweis des Felds, nicht ein zweites Mal als Text. */}
       {problem ? (
-        <View style={styles.message} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Icon name="alert" size="sm" tone="problem" />
-          <Text variant="label" tone="problem" style={styles.messageText}>
-            {problem}
-          </Text>
-        </View>
+        <ProblemMessage text={problem} hiddenFromScreenReader />
       ) : hint ? (
         <View style={styles.message} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Text variant="caption" tone={disabled ? 'inkDisabled' : 'inkMuted'} style={styles.messageText}>

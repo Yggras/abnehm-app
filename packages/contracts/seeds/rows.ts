@@ -153,7 +153,7 @@ export function seedWaterEntry(options: { id: string; personId: string; amountMl
   };
 }
 
-/** Manuell erfasste Sporteinheit (Spezifikation 3), weder ersetzt noch reaktiviert. */
+/** Manuell erfasster Sporteintrag (Spezifikation 3), weder ersetzt noch reaktiviert; seit #173 beim Sync angemeldet. */
 export function seedSportEntry(options: {
   id: string;
   personId: string;
@@ -165,6 +165,7 @@ export function seedSportEntry(options: {
 }): SeedEntity {
   return {
     table: 'sport_entry',
+    entityType: 'sport_entry',
     ownerPersonId: options.personId,
     row: {
       id: options.id,

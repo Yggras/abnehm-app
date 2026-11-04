@@ -29,7 +29,7 @@ import {
   requestPersonTimeZone,
 } from '../../mobile/src/sync/index.ts';
 import { seedLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
-import { waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
+import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { seedServer } from '../dev/seed/server-seed.ts';
 import { couplingMember, person } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
@@ -50,7 +50,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity,
 ]);
 
 /**

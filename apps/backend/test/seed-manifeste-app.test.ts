@@ -68,6 +68,8 @@ manifestSuite('solo');
 manifestSuite('solo-wasser-leer');
 manifestSuite('solo-wasser-erreicht');
 manifestSuite('solo-wasser-ueber-ziel');
+manifestSuite('solo-sport-erreicht');
+manifestSuite('solo-sport-ueber-ziel');
 manifestSuite('solo-ohne-wiegetag');
 manifestSuite('gekoppelt');
 manifestSuite('nach_entkopplung');

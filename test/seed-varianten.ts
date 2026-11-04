@@ -36,6 +36,8 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('solo-wasser-leer'),
   manifest('solo-wasser-erreicht'),
   manifest('solo-wasser-ueber-ziel'),
+  manifest('solo-sport-erreicht'),
+  manifest('solo-sport-ueber-ziel'),
   manifest('solo-ohne-wiegetag'),
   manifest('gekoppelt', 'apps/backend/test/seed-app.test.ts'),
   manifest('nach_entkopplung', 'apps/backend/test/seed-app.test.ts'),

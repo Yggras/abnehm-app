@@ -64,7 +64,11 @@ export const seedIds = {
   },
   weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
-  sportEntry: { philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3), philippHeuteKurz: id('0022', 4) },
+  // 0022/5–8: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).
+  sportEntry: {
+    philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3), philippHeuteKurz: id('0022', 4),
+    philippVorgestern: id('0022', 5), philippWoche: [id('0022', 6), id('0022', 7), id('0022', 8)],
+  },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   // 0031/5–7: Philipps Mahlzeiten von gestern, nur in den Randzuständen zum Tagesende (#113).
   nutritionEntry: {
