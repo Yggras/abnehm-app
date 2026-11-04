@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, SyncCursor, TimeZone } from '../src/base.ts';
 import { DailyGoalCause } from '../src/daily-goals.ts';
+import { PhotoImageKey } from '../src/nutrition.ts';
 import { InstallationId, OutboxOperation } from '../src/sync.ts';
 
 // Format der Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Ein Manifest beschreibt ein
@@ -11,24 +12,28 @@ import { InstallationId, OutboxOperation } from '../src/sync.ts';
 // UUIDs, lokale Tage (`YYYY-MM-DD`) und Zeitpunkte (UTC-ISO-8601 mit Millisekunden) als Text,
 // Messwerte als Ganzzahl, `server_version` und Positionen als Dezimalzeichenfolge, JSON-Spalten als
 // JSON. Konten und Sitzungen (Better-Auth-Tabellen) stehen nicht als Zeilen im Manifest: Der Seeder
-// legt sie aus `accounts` an; nur dort steht die E-Mail.
+// legt sie aus `accounts` an; nur dort steht die E-Mail. Verarbeitete Operationen nennt ein Sollzustand
+// ohne Hashes und gespeicherte Antwort (`derivedColumns` in `canonical.ts`).
 
 /** Version des Formats; ein inkompatibles Format zählt sie hoch. */
 export const seedFormatVersion = 1;
 
 /**
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
- * Wasser-Mini-Trackers (#171), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
+ * Wasser-Mini-Trackers (#171), `solo-sport-*` die Status „Wochenziel erreicht“ und „über dem
+ * Wochenziel“ des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
  * (#175). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). `leer` bis
- * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113). `solo-energie` (Laichkugel
- * solo mit gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
- * Zwei Installationen und Offline/Sync folgen in #116.
+ * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113), `zwei_installationen` und
+ * `offline_sync` die Mehrgeräte- und Sync-Szenarien (#116). `solo-energie` (Laichkugel solo mit
+ * gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
   'solo-wasser-leer',
   'solo-wasser-erreicht',
   'solo-wasser-ueber-ziel',
+  'solo-sport-erreicht',
+  'solo-sport-ueber-ziel',
   'solo-ohne-wiegetag',
   'gekoppelt',
   'nach_entkopplung',
@@ -40,6 +45,8 @@ export const SeedScenarioKey = z.enum([
   'tagesende_offen',
   'tagesende_abgeschlossen',
   'veralteter_partnerstand',
+  'zwei_installationen',
+  'offline_sync',
   'solo-energie',
   'rollenwahl-offen',
 ]);
@@ -109,7 +116,7 @@ export const SeedState = z.strictObject({
 });
 export type SeedState = z.infer<typeof SeedState>;
 
-/** Benannte Operation zwischen Ausgangs- und Sollzustand; weitere Arten ergänzt #116. */
+/** Benannte Operation zwischen Ausgangs- und Sollzustand. */
 export const SeedStep = z.discriminatedUnion('type', [
   /**
    * Push und Pull einer Installation. Übernimmt der Pull tagesbezogene Entitäten, wertet der
@@ -121,7 +128,8 @@ export const SeedStep = z.discriminatedUnion('type', [
    * Manifests aus, etwa bei App-Öffnung (`app_oeffnung`) oder Tagesabschluss (`tagesabschluss`). Er legt
    * Erfüllungen, Gutschriften und Tagesbonus an und schreibt ihre Fachbefehle in die Outbox; deren
    * Operations-IDs vergibt der Sync-Writer der Reihe nach aus `operationIds`. `pull` entsteht nur im
-   * Schritt `sync`.
+   * Schritt `sync`. `at` ist die Uhrzeit des Geräts bei dieser Auswertung, etwa wenn zwei Geräte offline
+   * nacheinander erfüllen (#116); ohne `at` gilt die Uhr des Manifests, und danach steht das Gerät wieder dort.
    */
   z.strictObject({
     type: z.literal('tagesziele_auswerten'),
@@ -129,6 +137,7 @@ export const SeedStep = z.discriminatedUnion('type', [
     localDates: z.array(LocalDate).min(1),
     cause: DailyGoalCause.exclude(['pull']),
     operationIds: z.array(EntityId),
+    at: Instant.optional(),
   }),
   /**
    * Ein Mitglied entkoppelt über den Entkopplungs-Kern (#107) in eigener Transaktion, wie es der Befehl
@@ -138,6 +147,28 @@ export const SeedStep = z.discriminatedUnion('type', [
 ]);
 export type SeedStep = z.infer<typeof SeedStep>;
 
+const seedPhotoFields = {
+  id: EntityId,
+  /** Eigentümer des Fotos. */
+  account: SeedKey,
+  nutritionEntryId: EntityId,
+  /** Konten außer dem Eigentümer, die das Foto im Ausgangszustand online sehen dürfen. */
+  visibleTo: z.array(SeedKey),
+};
+
+const byte = z.int().min(0).max(255);
+
+/**
+ * Ein synthetisches Bild: eine Fläche in einer Farbe, die der Seeder als JPEG erzeugt. So bleiben die
+ * Bilddaten klein, erfunden und im Manifest beschrieben statt als Datei im Repo.
+ */
+export const SyntheticImage = z.strictObject({
+  width: z.int().min(1).max(1_280),
+  height: z.int().min(1).max(1_280),
+  rgb: z.tuple([byte, byte, byte]),
+});
+export type SyntheticImage = z.infer<typeof SyntheticImage>;
+
 /**
  * Versionierte Erweiterungspunkte eines Szenarios (#117). Ein Punkt reserviert Inhalte, die ein späterer
  * Bereich liefert, samt fester IDs und Erwartungen. Der liefernde Bereich füllt ihn, indem er eine neue
@@ -146,23 +177,18 @@ export type SeedStep = z.infer<typeof SeedStep>;
 export const SeedExtensions = z.strictObject({
   /**
    * Geteilte Mahlzeitenfotos von heute. Fassung 1: Fotos samt Ernährungseintrag als Zeilen mit festen IDs
-   * und ihrer erwarteten Online-Sichtbarkeit (Fotoliste, Bildabruf). Die Bilddaten ergänzt Spezifikation 2
-   * (#162) als Fassung 2.
+   * und ihrer erwarteten Online-Sichtbarkeit (Fotoliste, Bildabruf). Fassung 2 (#162) ergänzt die
+   * Bilddaten: je Foto Bildschlüssel und ein synthetisches Bild, das der Seeder in die Fotoablage legt,
+   * dazu abgelaufene Fotoentwürfe als Randzustand.
    */
   mealPhotos: z
     .discriminatedUnion('version', [
+      z.strictObject({ version: z.literal(1), photos: z.array(z.strictObject(seedPhotoFields)) }),
       z.strictObject({
-        version: z.literal(1),
-        photos: z.array(
-          z.strictObject({
-            id: EntityId,
-            /** Eigentümer des Fotos. */
-            account: SeedKey,
-            nutritionEntryId: EntityId,
-            /** Konten außer dem Eigentümer, die das Foto im Ausgangszustand online sehen dürfen. */
-            visibleTo: z.array(SeedKey),
-          }),
-        ),
+        version: z.literal(2),
+        photos: z.array(z.strictObject({ ...seedPhotoFields, imageKey: PhotoImageKey, image: SyntheticImage })),
+        /** Server-only: abgelaufen, also nicht mehr bestätigbar; der Aufräumjob löscht ihn beim nächsten Lauf. */
+        expiredDrafts: z.array(z.strictObject({ id: EntityId, account: SeedKey, imageKey: PhotoImageKey, image: SyntheticImage })),
       }),
     ])
     .optional(),
@@ -226,7 +252,11 @@ export const SeedManifest = z
       if (step.type !== 'entkoppeln' && !installationKeys.has(step.installation)) problem(`Schritt ${step.type}: unbekannte Installation ${step.installation}`);
       if (step.type === 'entkoppeln' && !accountKeys.has(step.account)) problem(`Schritt ${step.type}: unbekanntes Konto ${step.account}`);
     }
-    const operationIds = manifest.steps.flatMap((step) => (step.type === 'tagesziele_auswerten' ? step.operationIds : []));
+    // Eine Operations-ID gibt es nur einmal: in den Outboxen des Ausgangszustands und in den Schritten.
+    const operationIds = [
+      ...Object.values(manifest.initial.devices).flatMap((device) => device.outbox.map((operation) => operation.operationId)),
+      ...manifest.steps.flatMap((step) => (step.type === 'tagesziele_auswerten' ? step.operationIds : [])),
+    ];
     for (const value of duplicates(operationIds)) problem(`Operations-ID doppelt: ${value}`);
 
     const { mealPhotos, decoGift } = manifest.extensions ?? {};
@@ -239,6 +269,15 @@ export const SeedManifest = z
       if (!rows('nutrition_entry').some((row) => row.id === photo.nutritionEntryId && row.meal_photo_id === photo.id)) {
         problem(`Mahlzeitenfoto ${photo.id}: Ernährungseintrag ${photo.nutritionEntryId} fehlt`);
       }
+      if ('imageKey' in photo && !rows('meal_photo').some((row) => row.id === photo.id && row.image_key === photo.imageKey)) {
+        problem(`Mahlzeitenfoto ${photo.id}: Bildschlüssel passt nicht zur Zeile`);
+      }
+    }
+    for (const draft of mealPhotos?.version === 2 ? mealPhotos.expiredDrafts : []) {
+      const owner = personOf.get(draft.account);
+      const row = rows('photo_draft').find((candidate) => candidate.id === draft.id);
+      if (row === undefined || row.person_id !== owner || row.image_key !== draft.imageKey) problem(`Fotoentwurf ${draft.id} fehlt im Ausgangszustand`);
+      else if (String(row.expires_at) > manifest.clock.instant) problem(`Fotoentwurf ${draft.id} ist nicht abgelaufen`);
     }
     if (decoGift !== undefined) {
       for (const key of [decoGift.from, decoGift.to]) if (!accountKeys.has(key)) problem(`Deko-Geschenk: unbekanntes Konto ${key}`);

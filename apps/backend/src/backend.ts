@@ -18,6 +18,7 @@ import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
 import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
+import { createMealPhotos } from './nutrition/meal-photos.ts';
 import { createPhotoDrafts } from './nutrition/photo-drafts.ts';
 import { createPhotoStorage } from './nutrition/photo-storage.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
@@ -29,6 +30,7 @@ import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
+import { sportEntryEntity } from './trackers/sport-entity.ts';
 import { waterEntryEntity } from './trackers/water-entity.ts';
 import { weightEntryEntity } from './trackers/weight-entity.ts';
 
@@ -49,7 +51,7 @@ export function createBackend({
   database: Database;
   authSettings: AuthSettings;
   invitationSettings: InvitationSettings;
-  /** Verzeichnis der Fotoentwürfe (`PHOTO_STORAGE_DIR`). */
+  /** Verzeichnis der Fotoentwürfe und der Fotoablage (`PHOTO_STORAGE_DIR`, Aufbau in `photo-storage.ts`). */
   photoStorageDirectory: string;
   /**
    * KI-Bildanalyse: produktiv der Claude-Adapter (`productionMealVisionAnalyzer`), in Tests und im
@@ -86,12 +88,18 @@ export function createBackend({
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
-  // Ernährung (Spezifikation 2).
-  sync.registerEntity(nutritionEntryEntity({ clock }));
-  const photoDrafts = createPhotoDrafts({ database, clock, analyzer: mealVisionAnalyzer, storage: createPhotoStorage({ directory: photoStorageDirectory }) });
+  // Ernährung (Spezifikation 2): Einträge, Fotoentwürfe und Mahlzeitenfotos samt Fotoablage.
+  const nutritionEntries = nutritionEntryEntity({ clock });
+  sync.registerEntity(nutritionEntries);
+  const photoStorage = createPhotoStorage({ directory: photoStorageDirectory });
+  const photoDrafts = createPhotoDrafts({ database, clock, analyzer: mealVisionAnalyzer, storage: photoStorage });
+  const mealPhotos = createMealPhotos({ database, storage: photoStorage, entries: nutritionEntries });
+  sync.registerEntity(mealPhotos.entity);
+  sync.registerCommand(mealPhotos.confirmCommand);
   // Wasser, Sport und Gewicht (Spezifikation 3).
   sync.registerEntity(waterEntryEntity);
   sync.registerEntity(weightEntryEntity);
+  sync.registerEntity(sportEntryEntity);
   // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.
   const partnerProjections = createPartnerProjections({ clock });
   for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);
@@ -109,9 +117,11 @@ export function createBackend({
   const jobs = createJobRegistry({ clock });
   jobs.register(securityLog.cleanupJob);
   jobs.register(photoDrafts.cleanupJob);
+  jobs.register(mealPhotos.storageCleanupJob);
   return {
     app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts }),
     clock,
+    photoStorage,
     securityLog,
     auth,
     authorization,

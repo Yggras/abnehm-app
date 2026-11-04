@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { SportCaptureScreen } from '../../trackers/SportCaptureScreen';
 
-export default placeholderRoute('capture.sport');
+export default routeScreen('capture.sport', SportCaptureScreen);

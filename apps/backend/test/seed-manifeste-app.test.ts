@@ -6,7 +6,7 @@ import { seedManifests, type SeedScenarioKey } from '@abnehm/contracts/seeds';
 
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { account, user } from '../src/db/schema/index.ts';
-import { canonical, reseed, runSteps, seeded, stateOf, type SeedWorld } from './support/seed-world.ts';
+import { canonical, expectProcessedOperations, reseed, runSteps, seeded, stateOf, type SeedWorld } from './support/seed-world.ts';
 
 // Nachweis für #113: Jedes Seed-Manifest wird auf Postgres und auf jedem Gerät (better-sqlite3) gegen
 // die echte Hono-App nur im Ausgangszustand hergestellt. Danach laufen die benannten Schritte des
@@ -14,6 +14,8 @@ import { canonical, reseed, runSteps, seeded, stateOf, type SeedWorld } from './
 // SQLite-Datenbanken stimmen kanonisch mit dem Sollzustand überein. Wiederholtes Seeden ergibt für
 // Fach- und Sync-Daten exakt denselben Stand, auch nach Änderungen und nach den Schritten; Konten werden
 // semantisch geprüft (feste ID und E-Mail, Hash passt zum Testpasswort), weil ihr Hash gesalzen ist.
+// Verarbeitete Operationen vergleicht die Suite ohne Hashes und gespeicherte Antwort und prüft diese
+// semantisch (`expectProcessedOperations`, #116).
 //
 // Jedes Szenario steht hier ausdrücklich mit seinem Schlüssel; die Registry der Seed-Varianten
 // (`test/seed-varianten.ts`) verweist darauf.
@@ -60,6 +62,7 @@ function manifestSuite(key: SeedScenarioKey) {
       const world = await seeded(manifest);
       await runSteps(world);
       expect(await stateOf(world)).toEqual(canonical(manifest.target));
+      await expectProcessedOperations(world);
     });
   });
 }
@@ -68,6 +71,8 @@ manifestSuite('solo');
 manifestSuite('solo-wasser-leer');
 manifestSuite('solo-wasser-erreicht');
 manifestSuite('solo-wasser-ueber-ziel');
+manifestSuite('solo-sport-erreicht');
+manifestSuite('solo-sport-ueber-ziel');
 manifestSuite('solo-ohne-wiegetag');
 manifestSuite('gekoppelt');
 manifestSuite('nach_entkopplung');
@@ -79,5 +84,7 @@ manifestSuite('nach_erfuellung_korrigiert');
 manifestSuite('tagesende_offen');
 manifestSuite('tagesende_abgeschlossen');
 manifestSuite('veralteter_partnerstand');
+manifestSuite('zwei_installationen');
+manifestSuite('offline_sync');
 manifestSuite('solo-energie');
 manifestSuite('rollenwahl-offen');

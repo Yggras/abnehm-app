@@ -181,6 +181,7 @@ export function createSyncEngine({ database, registry, transport, clock, install
                 if (!protectedChanges.has(`${change.entityType}:${change.entityId}`) &&
                   !hasPending(tx, change.entityType, change.entityId)) changes.push(apply(tx, change));
               }
+              commands?.reconcileApplied(tx, operation, result);
             }
           } else if (result.type === 'permanently_rejected') {
             changes.push(reconcile(tx, operation, result));

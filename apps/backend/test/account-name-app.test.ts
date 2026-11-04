@@ -10,7 +10,7 @@ import { InstallationId } from '@abnehm/contracts/sync';
 
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
-import { nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
+import { mealPhotoEntity, nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
 import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
@@ -29,7 +29,7 @@ import {
   requestPersonTimeZone,
 } from '../../mobile/src/sync/index.ts';
 import { seedLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
-import { waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
+import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
 import { seedServer } from '../dev/seed/server-seed.ts';
 import { couplingMember, person } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
@@ -50,7 +50,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity,
 ]);
 
 /**

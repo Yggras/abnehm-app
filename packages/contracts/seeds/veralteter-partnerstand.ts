@@ -44,7 +44,8 @@ const refreshed = changedOnServer(initial, {
 export const veralteterPartnerstandManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'veralteter_partnerstand',
-  revision: 1,
+  // Revision 2: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
+  revision: 2,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

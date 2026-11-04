@@ -59,8 +59,9 @@ const classes = {
       return { id: await insert.mealPhoto(other, other.anna) };
     }),
     entkopplung: uncouple,
+    // Keine verbotene Operation: Seit `confirmPhotoDraft` (#162) kennt das Mahlzeitenfoto alle vier,
+    // das Anlegen nur als Fachbefehl. Den Partner schließt die Regel für alles außer Lesen aus.
     freigabeentzug: (world) => setPhotoSharing(world, world.anna, 'privat'),
-    verbotene_operation: withOperation('meal_photo', 'befehl'),
   }),
   'Partnerfoto (Fotoliste)': authorizationCases({
     // Beide Mitglieder sehen die Fotoliste des jeweils anderen.

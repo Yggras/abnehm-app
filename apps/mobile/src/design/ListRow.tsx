@@ -20,6 +20,11 @@ export type ListRowProps = Pick<PressableProps, 'testOnly_pressed'> & {
   disabled?: boolean;
   /** Navigation: Pfeil rechts. */
   onPress?: () => void;
+  /**
+   * Auswahl aus einer kurzen Liste, etwa der Aktivitätsart: Die Zeile ist ein Radiobutton und zeigt statt
+   * des Pfeils ein Häkchen, ausgewählt nie nur über Farbe. Nur zusammen mit `onPress`.
+   */
+  selected?: boolean;
   /** Bedienelement rechts statt Wert oder Pfeil, etwa ein `Switch`. */
   accessory?: ReactNode;
   /** Zugänglicher Name der ganzen Zeile, wenn Titel, Unterzeile und Wert allein nicht reichen. */
@@ -36,10 +41,12 @@ export function ListRow({
   replaced = false,
   disabled = false,
   onPress,
+  selected,
   accessory,
   accessibilityLabel,
   testOnly_pressed,
 }: ListRowProps) {
+  const choice = selected !== undefined;
   const content = (
     <>
       {icon ? (
@@ -49,8 +56,8 @@ export function ListRow({
       ) : null}
       <View style={styles.main}>
         <Text
-          variant="body"
-          tone={disabled ? 'inkDisabled' : replaced ? 'inkMuted' : 'ink'}
+          variant={selected ? 'bodyStrong' : 'body'}
+          tone={disabled ? 'inkDisabled' : replaced ? 'inkMuted' : selected ? 'primary' : 'ink'}
           style={replaced && styles.replaced}
         >
           {title}
@@ -72,7 +79,11 @@ export function ListRow({
         </Text>
       ) : null}
       {accessory}
-      {onPress ? <Icon name="chevron" tone={disabled ? 'inkDisabled' : 'inkMuted'} /> : null}
+      {choice ? (
+        <View style={styles.mark}>{selected ? <Icon name="check" tone={disabled ? 'inkDisabled' : 'primary'} /> : null}</View>
+      ) : onPress ? (
+        <Icon name="chevron" tone={disabled ? 'inkDisabled' : 'inkMuted'} />
+      ) : null}
     </>
   );
 
@@ -85,9 +96,9 @@ export function ListRow({
   }
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={choice ? 'radio' : 'button'}
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      accessibilityState={choice ? { disabled, checked: selected } : { disabled }}
       disabled={disabled}
       onPress={onPress}
       testOnly_pressed={testOnly_pressed}
@@ -137,6 +148,8 @@ const styles = StyleSheet.create({
   },
   main: { flex: 1, gap: space[1] },
   replaced: { textDecorationLine: 'line-through' },
+  /** Platz des Häkchens, auch ohne Auswahl, damit die Zeilen beim Wählen nicht springen. */
+  mark: { width: size.iconMd, alignItems: 'center' },
   tag: {
     alignSelf: 'flex-start',
     paddingHorizontal: space[2],

@@ -15,7 +15,7 @@ import { sharedActionCommands } from '../../mobile/src/island/shared-action-comm
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
+import { mealPhotoEntity, nutritionEntryEntity } from '../../mobile/src/nutrition/index.ts';
 import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
 import {
   createHttpSyncTransport,
@@ -45,7 +45,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity,
 ]);
 
 type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; sync(): Promise<void> }>;

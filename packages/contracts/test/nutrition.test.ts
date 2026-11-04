@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { LocalDate } from '../src/base.ts';
+import { EntityId, LocalDate } from '../src/base.ts';
 
 import {
+  confirmPhotoDraftKey,
   dailyIntakeKcal,
   entryAmount,
   entryTotals,
@@ -10,6 +11,7 @@ import {
   MealPhotoAnalysis,
   NutritionSnapshot,
   photoDraftComponentOf,
+  photoDraftSnapshot,
   roundKcal,
   roundMacroGrams,
   type EntryAmount,
@@ -204,5 +206,35 @@ describe('Fotoanalyse: Bestandteile in Vertragseinheiten', () => {
     expect(MealPhotoAnalysis.safeParse({ components: [{ ...component, kcal: -1 }] }).success).toBe(false);
     expect(MealPhotoAnalysis.safeParse({ components: [{ ...component, fatG: 60 }] }).success).toBe(false);
     expect(MealPhotoAnalysis.safeParse({ components: Array.from({ length: 16 }, () => component) }).success).toBe(false);
+  });
+});
+
+describe('Fotoentwurf bestätigen', () => {
+  const potatoes = { name: 'Bratkartoffeln', baseUnit: 'g', baseAmount: 180_000, milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 } as const;
+
+  it('bildet aus einem Bestandteil den KI-Snapshot mit der geschätzten Menge als Bezugsmenge', () => {
+    const snapshot = photoDraftSnapshot(potatoes);
+    expect(snapshot).toEqual({
+      name: 'Bratkartoffeln',
+      baseUnit: 'g',
+      referenceAmount: 180_000,
+      milliKcal: 270_000,
+      proteinMg: 4_000,
+      carbsMg: 32_000,
+      fatMg: 13_000,
+      portions: [],
+      source: 'ki',
+      attribution: null,
+    });
+    // Unverändert übernommen ergibt er genau die geschätzten Werte, die halbe Menge die halben.
+    const whole = entryAmount(snapshot, 'g', 180_000);
+    const half = entryAmount(snapshot, 'g', 90_000);
+    if (whole.type !== 'menge' || half.type !== 'menge') throw new Error('Menge erwartet');
+    expect(entryTotals(snapshot, whole.amount)).toEqual({ milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 });
+    expect(entryTotals(snapshot, half.amount)).toEqual({ milliKcal: 135_000, proteinMg: 2_000, carbsMg: 16_000, fatMg: 6_500 });
+  });
+
+  it('der fachliche Schlüssel nennt den Fotoentwurf', () => {
+    expect(confirmPhotoDraftKey(EntityId.parse('5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03'))).toBe('fotoentwurf:5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03');
   });
 });

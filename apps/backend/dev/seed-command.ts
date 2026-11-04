@@ -30,7 +30,7 @@ try {
     photoStorageDirectory: config.photoStorageDirectory,
     mealVisionAnalyzer: createFakeMealVision().analyzer,
   });
-  await seedScenario(database, backend.uncoupling, manifest);
+  await seedScenario(database, backend, manifest);
   console.log(`[seed] Szenario ${manifest.scenario} (Revision ${manifest.revision}) geseedet. Testkonten:`);
   for (const account of manifest.accounts) console.log(`[seed]   ${account.email} / ${account.password}`);
 } catch (error) {

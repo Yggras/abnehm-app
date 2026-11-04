@@ -14,9 +14,10 @@ import {
   type SeedValue,
 } from '@abnehm/contracts/seeds';
 
-import type { Uncoupling } from '../../src/coupling/uncoupling.ts';
+import type { Backend } from '../../src/backend.ts';
 import type { Database, DbExecutor } from '../../src/database.ts';
 import * as schema from '../../src/db/schema/index.ts';
+import { seedPhotoFiles } from './photo-seed.ts';
 
 // Seeder für Postgres (Spezifikation 0, Abschnitt 12; #112). Nur im Development-Backend und in Tests.
 //
@@ -82,12 +83,18 @@ export async function seedServer(database: Database, manifest: SeedManifest): Pr
 }
 
 /**
- * Seed der Development-Abläufe (Seed-Route und Seed-Kommando, #117): Ausgangszustand herstellen, dann die
- * Serverschritte des Manifests ausführen. `entkoppeln` läuft über den Entkopplungs-Kern (#107), der
- * Widerruf ist also echt. Die Geräte starten im Ausgangszustand und holen die Schritte mit ihrem Sync nach.
+ * Seed der Development-Abläufe (Seed-Route und Seed-Kommando, #117): Ausgangszustand herstellen, samt
+ * Bilddaten in der Fotoablage (#162), dann die Serverschritte des Manifests ausführen. `entkoppeln` läuft
+ * über den Entkopplungs-Kern (#107), der Widerruf ist also echt. Die Geräte starten im Ausgangszustand und
+ * holen die Schritte mit ihrem Sync nach.
  */
-export async function seedScenario(database: Database, uncoupling: Uncoupling, manifest: SeedManifest): Promise<void> {
+export async function seedScenario(
+  database: Database,
+  { uncoupling, photoStorage }: Pick<Backend, 'uncoupling' | 'photoStorage'>,
+  manifest: SeedManifest,
+): Promise<void> {
   await seedServer(database, manifest);
+  await seedPhotoFiles(photoStorage, manifest);
   for (const step of manifest.steps) {
     if (step.type !== 'entkoppeln') continue;
     const request = uncouplingRequestOf(step, manifest.accounts);

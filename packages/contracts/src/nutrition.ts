@@ -437,3 +437,102 @@ export const PhotoAnalysisError = z
     path: ['retryable'],
   });
 export type PhotoAnalysisError = z.infer<typeof PhotoAnalysisError>;
+
+/**
+ * Snapshot eines KI-Bestandteils aus dem Fotoentwurf: Quelle `ki`, die geschätzte Menge als
+ * Bezugsmenge, ohne Portionsumrechnung und Quellenangabe (Spezifikation 2, Abschnitt 8). Ändert die
+ * Person die Menge, skalieren seine Nährwerte damit linear.
+ */
+export function photoDraftSnapshot(component: PhotoDraftComponent): NutritionSnapshot {
+  return NutritionSnapshot.parse({
+    name: component.name,
+    baseUnit: component.baseUnit,
+    referenceAmount: component.baseAmount,
+    milliKcal: component.milliKcal,
+    proteinMg: component.proteinMg,
+    carbsMg: component.carbsMg,
+    fatMg: component.fatMg,
+    portions: [],
+    source: 'ki',
+    attribution: null,
+  });
+}
+
+// Fotoentwurf bestätigen und Mahlzeitenfoto (Spezifikation 2, Abschnitte 8, 9 und 11) ---------------
+
+/**
+ * Höchstzahl der Einträge einer bestätigten Fotomahlzeit: die höchstens 15 geschätzten Bestandteile
+ * und solche, die die Person ergänzt (Designwert, nicht belegt).
+ */
+export const photoMealMaxEntries = 30;
+
+/** Ein Eintrag der bestätigten Fotomahlzeit: die ID, die die App vergeben hat, und seine vollständige Nutzlast. */
+export const ConfirmedPhotoEntry = z.strictObject({ id: EntityId, entry: NutritionEntryUpsert });
+export type ConfirmedPhotoEntry = z.infer<typeof ConfirmedPhotoEntry>;
+
+/**
+ * Nutzlast des Fachbefehls `confirmPhotoDraft` (Spezifikation 2, Abschnitt 8): Entwurfs-ID, die von
+ * der App vergebene ID des Mahlzeitenfotos, der Freigabeschalter „Mit Partner teilen“ (Standard an)
+ * und alle Einträge der Mahlzeit. Jeder Eintrag stammt aus dem Foto und verweist auf dieses
+ * Mahlzeitenfoto; alle gehören zu derselben Mahlzeit desselben Tags. Ist der Entwurf nicht mehr
+ * gültig, legt der Server die Einträge trotzdem an, dann ohne Foto.
+ */
+export const ConfirmPhotoDraft = z
+  .strictObject({
+    draftId: EntityId,
+    photoId: EntityId,
+    /** „Mit Partner teilen“; Standard an (#22), die Person kann ihn abwählen. */
+    sharedWithPartner: z.boolean().default(true),
+    entries: z.array(ConfirmedPhotoEntry).min(1).max(photoMealMaxEntries),
+  })
+  .refine((command) => new Set(command.entries.map((item) => item.id)).size === command.entries.length, {
+    message: 'Eintrags-IDs sind eindeutig',
+    path: ['entries'],
+  })
+  .refine((command) => command.entries.every(({ entry }) => entry.captureMethod === 'foto' && entry.mealPhotoId === command.photoId), {
+    message: 'Jeder Eintrag stammt aus dem Foto und verweist auf dieses Mahlzeitenfoto',
+    path: ['entries'],
+  })
+  .refine(
+    ({ entries: [first, ...rest] }) =>
+      first === undefined || rest.every(({ entry }) => entry.meal === first.entry.meal && entry.localDate === first.entry.localDate),
+    { message: 'Alle Einträge gehören zu derselben Mahlzeit desselben Tags', path: ['entries'] },
+  );
+export type ConfirmPhotoDraft = z.infer<typeof ConfirmPhotoDraft>;
+
+/**
+ * Fachlicher Idempotenzschlüssel von `confirmPhotoDraft`: der Fotoentwurf. Ein Entwurf wird höchstens
+ * einmal zur Mahlzeit; eine zweite, abweichende Bestätigung desselben Entwurfs (etwa ein Doppeltipp)
+ * ist ein `operation_conflict` statt einer doppelten Mahlzeit, ein identischer Retry `already_applied`.
+ */
+export function confirmPhotoDraftKey(draftId: EntityId): string {
+  return `fotoentwurf:${draftId}`;
+}
+
+/** Bildschlüssel eines Fotos in der Fotoablage: 32 Zufallsbytes in base64url, nicht erratbar. */
+export const PhotoImageKey = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+export type PhotoImageKey = z.infer<typeof PhotoImageKey>;
+
+/**
+ * Generisches Upsert des Mahlzeitenfotos (Spezifikation 2, Abschnitt 11): nur der Freigabeschalter.
+ * Löschen ist ein Tombstone. Ein Mahlzeitenfoto entsteht nur über `confirmPhotoDraft`; ein
+ * generisches Create gibt es nicht.
+ */
+export const MealPhotoUpsert = z.strictObject({ sharedWithPartner: z.boolean() });
+export type MealPhotoUpsert = z.infer<typeof MealPhotoUpsert>;
+
+/**
+ * Kanonische Metadaten eines Mahlzeitenfotos (Spezifikation 2, Abschnitt 9): Person, Bildschlüssel,
+ * Aufnahmezeit und Freigabeschalter. Die Bilddatei liegt nur im Serverspeicher und ist nur über die
+ * authentifizierte API abrufbar.
+ */
+export const MealPhotoRecord = z.strictObject({
+  imageKey: PhotoImageKey,
+  /** Zeitpunkt der Analyse auf dem Server, Sekunden nach der Aufnahme. */
+  capturedAt: Instant,
+  sharedWithPartner: z.boolean(),
+  personId: EntityId,
+  createdAt: Instant,
+  updatedAt: Instant,
+});
+export type MealPhotoRecord = z.infer<typeof MealPhotoRecord>;

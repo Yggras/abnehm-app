@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
+import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
 import { EntityId, LocalDate, ServerVersion } from '@abnehm/contracts/base';
@@ -21,7 +22,7 @@ import { couplingMember as localMember } from '../../mobile/src/local-db/schema/
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
-import { revocationNotice } from '../src/db/schema/index.ts';
+import { photoDraft, revocationNotice } from '../src/db/schema/index.ts';
 import type { TestBackend } from './support/app.ts';
 import type { Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
@@ -98,7 +99,7 @@ describe('Szenario gekoppelt', () => {
   it('Mahlzeitenfotos: Online-Sichtbarkeit wie im Erweiterungspunkt, ohne Bereichsfreigabe Ernährung', async () => {
     const { backend, phones } = await seeded(gekoppelt);
     const photos = gekoppelt.extensions?.mealPhotos;
-    expect(photos?.version).toBe(1);
+    expect(photos?.version).toBe(2);
     const deviceOf = (account: SeedKey) => Object.values(phones).find(({ personId }) => personId === seedIds.person[account as 'philipp' | 'anna'])!.device;
 
     for (const photo of photos!.photos) {
@@ -109,6 +110,33 @@ describe('Szenario gekoppelt', () => {
         expect(await probe(backend, 'partner_photo_list', deviceOf(viewer))).toBe('erlaubt');
       }
     }
+  });
+
+  it('Mahlzeitenfotos (#162): synthetische Bilder in der Fotoablage, ein abgelaufener Entwurf, Fotos auf dem eigenen Gerät', async () => {
+    const { backend, phones } = await seeded(gekoppelt);
+    const photos = gekoppelt.extensions?.mealPhotos;
+    if (photos?.version !== 2) throw new Error('Fassung 2 erwartet');
+
+    for (const photo of photos.photos) {
+      const large = await backend.photoStorage.readPhoto(photo.imageKey, 'gross');
+      const preview = await backend.photoStorage.readPhoto(photo.imageKey, 'vorschau');
+      expect([large, preview].every((image) => image !== null)).toBe(true);
+      const [largeMeta, previewMeta] = await Promise.all([sharp(large!).metadata(), sharp(preview!).metadata()]);
+      expect([largeMeta.width, largeMeta.height]).toEqual([photo.image.width, photo.image.height]);
+      expect(Math.max(previewMeta.width!, previewMeta.height!)).toBe(400);
+      // Das Foto liegt mit seinem Bildschlüssel auf dem Gerät seiner Eigentümerin, nicht beim Partner.
+      const owner = Object.values(phones).find(({ personId }) => personId === seedIds.person[photo.account as 'philipp' | 'anna'])!;
+      expect(dumpLocalDatabase(owner.database).rows.meal_photo?.map((row) => [row.id, row.image_key])).toEqual([[photo.id, photo.imageKey]]);
+    }
+    const [draft] = photos.expiredDrafts;
+    expect(await backend.photoStorage.readDraft(draft!.imageKey)).not.toBeNull();
+    expect((await backend.database.db.select().from(photoDraft)).map((row) => row.id)).toEqual([draft!.id]);
+
+    // Der Aufräumjob entfernt den abgelaufenen Entwurf samt Bild; die Fotos bleiben.
+    await backend.jobs.runDue();
+    expect(await backend.database.db.select().from(photoDraft)).toEqual([]);
+    expect((await backend.photoStorage.storedKeys()).drafts).toEqual([]);
+    expect((await backend.photoStorage.storedKeys()).photos).toEqual(photos.photos.map(({ imageKey }) => imageKey).sort());
   });
 
   it('Projektionsübergang: Anna stellt Wasser auf privat; Philipps Gerät verliert genau diese Zusammenfassung', async () => {

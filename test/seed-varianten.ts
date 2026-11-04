@@ -26,6 +26,7 @@ export type SeedVariant = Readonly<{
 
 const manifestSuite = 'apps/backend/test/seed-manifeste-app.test.ts';
 const randzustaende = 'apps/backend/test/seed-randzustaende-app.test.ts';
+const syncSzenarien = 'apps/backend/test/seed-sync-szenarien-app.test.ts';
 const profiles = 'apps/mobile/src/test-capabilities/profiles.test.ts';
 
 const manifest = (key: string, ...tests: string[]): SeedVariant => ({ kind: 'seed-manifest', key, tests: [manifestSuite, ...tests] });
@@ -36,6 +37,8 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('solo-wasser-leer'),
   manifest('solo-wasser-erreicht'),
   manifest('solo-wasser-ueber-ziel'),
+  manifest('solo-sport-erreicht'),
+  manifest('solo-sport-ueber-ziel'),
   manifest('solo-ohne-wiegetag'),
   manifest('gekoppelt', 'apps/backend/test/seed-app.test.ts'),
   manifest('nach_entkopplung', 'apps/backend/test/seed-app.test.ts'),
@@ -47,6 +50,8 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('tagesende_offen', randzustaende),
   manifest('tagesende_abgeschlossen', randzustaende),
   manifest('veralteter_partnerstand', randzustaende),
+  manifest('zwei_installationen', syncSzenarien),
+  manifest('offline_sync', syncSzenarien),
   manifest('solo-energie', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('rollenwahl-offen', 'apps/backend/test/seed-island-app.test.ts'),
   profile('uhr-ungesichert-24h'),

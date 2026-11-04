@@ -10,6 +10,7 @@ import { createTestBackend } from './support/app.ts';
 import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession, registeredCommandCases } from './support/authorization.ts';
 import { bonusOp, completeOp, dailyGoalCommandScenarios, insertDailyGoals } from './support/daily-goals.ts';
+import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
 import { planCommandScenarios } from './support/plan.ts';
 import { sharedActionCommandScenarios } from './support/shared-actions.ts';
@@ -135,8 +136,9 @@ describe('Gegenbuchung', () => {
 describe('Autorisierung der Fachbefehle', () => {
   it('das Backend meldet genau diese Fachbefehle an; für jeden gibt es ein Szenario', async () => {
     const { backend } = await setup();
-    // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107) und die Fassungen (#128) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
-    const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+    // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107), die Fassungen (#128) und `confirmPhotoDraft` (#162) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
+    const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
+      confirmPhotoDraft: confirmPhotoDraftScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });
 

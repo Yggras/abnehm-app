@@ -38,7 +38,8 @@ services:
       INVITE_CODE_SECRET_FILE: /run/secrets/invite_code_secret
       # Öffentliche Adresse des Backends für Better Auth; lokal der Entwicklungsrechner.
       AUTH_BASE_URL: "http://localhost:${BACKEND_PORT:-8787}"
-      # Fotoentwürfe (#161): außerhalb der App, im Volume `photo-data`.
+      # Fotoentwürfe (#161) und Fotoablage der Mahlzeitenfotos (#162): außerhalb der App, im Volume
+      # `photo-data`; Backup und Restore sichern es zusammen mit Postgres (#115).
       PHOTO_STORAGE_DIR: /var/lib/abnehm/fotos
       # Das Development-Backend analysiert Fotos mit dem Fake (#161); einen API-Schlüssel braucht es nicht.
     secrets:
