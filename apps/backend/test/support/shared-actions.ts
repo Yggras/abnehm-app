@@ -149,13 +149,13 @@ export function uncoupleAs(
 export const uncoupleWorld = (world: CoupledWorld) => uncoupleAs(world.backend, { couplingId: world.couplingId, requesterPersonId: world.anna.personId });
 
 /**
- * Anna und Philipp, gekoppelt über die echte Einladung, mit beiden Test-Arten und dem Cursor nach dem
- * ersten Pull; der materialisiert auch den Partner-Tageszielstatus beider Personen.
+ * Anna und Philipp, gekoppelt über die echte Einladung, mit beiden Test-Arten (oder den genannten) und dem
+ * Cursor nach dem ersten Pull; der materialisiert auch den Partner-Tageszielstatus beider Personen. Die
+ * Rollenwahl meldet `createBackend` selbst an (#180).
  */
-export async function invitedCouple() {
+export async function invitedCouple({ kinds = [testRoleKind, testGiftKind] }: { kinds?: readonly (typeof testRoleKind | typeof testGiftKind)[] } = {}) {
   const backend = await createTestBackend({ clock: createTestClock(worldStart) });
-  backend.sharedActions.registerKind(testRoleKind);
-  backend.sharedActions.registerKind(testGiftKind);
+  for (const kind of kinds) backend.sharedActions.registerKind(kind);
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   const { couplingId } = await coupleByInvitation(backend, anna.device, philipp.device);

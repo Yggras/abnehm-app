@@ -12,6 +12,7 @@ import { createSharedActions } from './coupling/shared-actions.ts';
 import { createUncoupling } from './coupling/uncoupling.ts';
 import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
 import { energyBookingEntity } from './energy/bookings.ts';
+import { roleChoiceKind } from './island/role-choice.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
@@ -61,6 +62,8 @@ export function createBackend({
   // Gemeinsame Aktionen: Spezifikation 4 meldet ihre Arten an `sharedActions` an.
   const sharedActions = createSharedActions();
   for (const command of sharedActions.commands) sync.registerCommand(command);
+  // Momo, Insel & Challenges (Spezifikation 4): Rollenwahl (#180).
+  sharedActions.registerKind(roleChoiceKind);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.
