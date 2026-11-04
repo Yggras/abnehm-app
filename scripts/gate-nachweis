@@ -56,7 +56,7 @@ storage_of() {
     docker volume inspect --format "{{.Name}} -> {{.Mountpoint}} (Treiber {{.Driver}})" "$volume" 2>&1
   done
   echo "Einbindung im Container:"
-  docker inspect --format '{{range .Mounts}}{{.Name}} -> {{.Destination}}{{"\n"}}{{end}}' abnehm-prod-postgres-1 abnehm-prod-backend-1 2>&1 | sed '/^$/d'
+  docker inspect --format '{{range .Mounts}}{{if .Name}}{{.Name}}{{else}}{{.Source}}{{end}} -> {{.Destination}}{{"\n"}}{{end}}' abnehm-prod-postgres-1 abnehm-prod-backend-1 2>&1 | sed '/^$/d'
   echo '```'
   echo
 

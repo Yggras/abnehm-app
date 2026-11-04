@@ -154,7 +154,7 @@ nmap -Pn -sU --top-ports 200 <LAN-IP-des-Laptops>
 
 Weder Postgres (`5432`) noch das Backend (`8787`–`8790`) noch ein HTTPS-Port dürfen erscheinen; HTTPS gibt es nur im Tailnet. Das Ergebnis kommt als Kommentar in #115.
 
-Geduldet sind Dienste von macOS selbst, die nichts mit der App zu tun haben (Nutzerentscheidung vom 04.11.2026). Am 04.11.2026 lauschten auf allen Adressen: `ControlCenter` auf TCP 5000 und 7000 (AirPlay-Empfänger) und `rapportd` auf TCP 60752 (laut `lsof`). Der Nachweis nennt solche Funde und bewertet sie. Ein neuer, unbekannter Fund wird geklärt, bevor das Gate gilt.
+Geduldet sind Dienste von macOS selbst, die nichts mit der App zu tun haben (Nutzerentscheidung vom 04.11.2026). Am 04.11.2026 lauschten auf allen Adressen: `ControlCenter` auf TCP 5000 und 7000 (laut Apple „AirPlay“, [Apple: TCP- und UDP-Ports](https://support.apple.com/en-us/103229)) und `rapportd` auf TCP 60752 (laut `lsof`). Der Nachweis nennt solche Funde und bewertet sie. Ein neuer, unbekannter Fund wird geklärt, bevor das Gate gilt.
 
 ## Backup
 
