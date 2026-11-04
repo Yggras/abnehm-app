@@ -62,7 +62,7 @@ test('Tipps erreichen „Speichern“ auch bei offener Tastatur, statt sie nur z
   await act(() => router.push({ pathname: '/capture/weight', params: { newEntry: 'true' } }));
 
   // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
-  expect(screen.getByTestId('sync-scroll').props.keyboardShouldPersistTaps).toBe('handled');
+  expect(screen.getByTestId('screen-scroll').props.keyboardShouldPersistTaps).toBe('handled');
 });
 
 test('ohne newEntry zeigt die Route bis zum Detailbildschirm (#176) den Platzhalter des Bereichs', async () => {

@@ -1,6 +1,8 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
 import { act, fireEvent, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type * as React from 'react';
 
 import { createTestClock } from '@abnehm/clock/testing';
@@ -100,6 +102,24 @@ describe('Schritt 1 „Willkommen“', () => {
 
     expect(await screen.findByRole('header', { name: 'Willkommen bei Gemeinsam leichter' })).toBeOnTheScreen();
     expect(screen.getByRole('checkbox', { name: /^Verstanden/ })).toBeChecked();
+  });
+});
+
+describe('Maestro-Teilablauf `link.yaml`', () => {
+  // `link.yaml` wartet vor jedem Deep Link auf diese Kennung; seit #138 ist der Willkommensschritt der
+  // erste Bildschirm einer frischen App (#276).
+  const linkFlow = readFileSync(join(__dirname, '../../e2e/teilablaeufe/link.yaml'), 'utf8');
+  const awaitedId = /extendedWaitUntil:\s*\n\s*visible:\s*\n\s*id: ([\w-]+)/.exec(linkFlow)?.[1];
+
+  it('findet die Kennung, auf die der erste Bildschirm einer frischen App wartet, im Willkommensschritt und beim Anmelden', async () => {
+    expect(awaitedId).toBeDefined();
+    await openApp();
+    expect(screen.getByTestId(awaitedId!)).toBeOnTheScreen();
+
+    await toAccountStep();
+    await user.press(screen.getByRole('button', { name: 'Ich habe schon ein Konto' }));
+    expect(await screen.findByRole('header', { name: 'Anmelden' })).toBeOnTheScreen();
+    expect(screen.getByTestId(awaitedId!)).toBeOnTheScreen();
   });
 });
 

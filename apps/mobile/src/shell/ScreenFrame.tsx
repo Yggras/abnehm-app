@@ -19,6 +19,12 @@ export type ScreenFrameProps = {
   onRefresh?: () => Promise<unknown>;
 };
 
+/**
+ * Kennung der scrollenden Inhaltsfläche jedes Bildschirmrahmens (`ScreenFrame`, `OnboardingFrame`).
+ * Der Maestro-Teilablauf `e2e/teilablaeufe/link.yaml` wartet darauf, bevor er einen Deep Link öffnet (#276).
+ */
+export const screenScrollId = 'screen-scroll';
+
 // Tabs enden über der Tab-Leiste, die den unteren sicheren Bereich selbst freihält.
 const edges: Record<Presentation, Edge[]> = {
   tab: ['top', 'left', 'right'],
@@ -45,7 +51,7 @@ export function ScreenFrame({ title, presentation, children, compactTabTitle = f
       {/* Auf iOS weicht der Inhalt der Tastatur aus (`automaticallyAdjustKeyboardInsets` gibt es nur dort; #119).
           `handled`: Ein Tipp auf einen Button oder Treffer wirkt auch bei offener Tastatur, statt sie nur zu
           schließen (https://reactnative.dev/docs/scrollview; #119, #155). */}
-      <ScrollView testID="sync-scroll" contentContainerStyle={styles.content} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" refreshControl={pullToRefresh ? (
+      <ScrollView testID={screenScrollId} contentContainerStyle={styles.content} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" refreshControl={pullToRefresh ? (
         <RefreshControl refreshing={refreshing} onRefresh={() => {
           setRefreshing(true);
           void pullToRefresh().finally(() => setRefreshing(false));

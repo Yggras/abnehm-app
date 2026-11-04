@@ -5,14 +5,16 @@
 # „Öffnen“ stellte den Link ein zweites Mal zu (ein Seed liefe doppelt), deshalb schließt der
 # Teilablauf sie mit „Abbrechen“, sofern sie erscheint.
 #
-# Vorher wartet er, bis ein Bildschirm der App steht (`sync-scroll` trägt jeder `ScreenFrame`): Auf
-# Android geht ein Link verloren, der kurz nach `launchApp` noch vor dem Start der App eintrifft
-# (im Emulator beobachtet am 21.10.2026).
+# Vorher wartet er, bis ein Bildschirm der App steht: Auf Android geht ein Link verloren, der kurz nach
+# `launchApp` noch vor dem Start der App eintrifft (im Emulator beobachtet am 21.10.2026). Gewartet wird
+# auf `screen-scroll`, die Inhaltsfläche jedes Bildschirmrahmens (`ScreenFrame` und `OnboardingFrame`,
+# `screenScrollId` in src/shell/ScreenFrame.tsx). So trägt sie auch der erste Bildschirm einer frischen
+# App, seit #138 der Willkommensschritt des Onboardings, und der Anmeldeschritt (#276).
 appId: ${APP_ID}
 ---
 - extendedWaitUntil:
     visible:
-      id: sync-scroll
+      id: screen-scroll
     timeout: 30000
 - openLink: ${SCHEME}://${LINK}
 - runFlow:

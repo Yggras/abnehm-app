@@ -120,7 +120,7 @@ async function open(target: RouteTarget) {
 describe('Tab-Leiste', () => {
   test('Heute, andere Tabs und Bereichsseiten besitzen Pull-to-Refresh', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
-    const canRefresh = () => screen.getAllByTestId('sync-scroll').some((node) => node.props.refreshControl != null);
+    const canRefresh = () => screen.getAllByTestId('screen-scroll').some((node) => node.props.refreshControl != null);
     expect(canRefresh()).toBe(true);
     await user.press(screen.getByRole('tab', { name: 'Protokoll' }));
     expect(canRefresh()).toBe(true);
