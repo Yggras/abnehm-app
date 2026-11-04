@@ -8,6 +8,8 @@ import { EntityId } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 
 import { hitArea } from '../design/testing/hit-area';
+import { appIsland } from '../island/app-island';
+import { fakeIsland } from '../island/testing/fake-island';
 import { textScale } from '../design/tokens';
 import { hrefFor, openTarget, routeCatalog } from '../navigation';
 import type * as MessageTextsModule from './message-texts';
@@ -57,13 +59,18 @@ jest.mock('./message-texts', () => {
 
 let execute: jest.Mock;
 let undo: jest.Mock;
+let closeIsland: () => void = () => {};
 
+// Der Tab „Momo“ zeigt die geschlüpfte Insel; Laichkugel und Rollenwahl prüft `island/MomoTab.test.tsx`.
 beforeEach(() => {
+  closeIsland = appIsland.opened(fakeIsland({ type: 'geschluepft' }));
   jest.mocked(useMomoTabBadge).mockReturnValue(false);
   execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undoData: 'eintrag-1' }));
   undo = jest.fn();
   mockQuickCommands.handler = quickCommands.quickCommandHandler<'water.quick_add', string>({ execute, undo });
 });
+
+afterEach(() => closeIsland());
 
 const id = EntityId.parse('0b9f4a1e-6c1d-4f7b-9a51-2f3d8c7e1a10');
 

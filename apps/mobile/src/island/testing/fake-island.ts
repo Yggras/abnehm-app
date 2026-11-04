@@ -1,0 +1,33 @@
+import { momoCharacterOf, wirContributionsOf, type Island } from '../island';
+import type { IslandStage } from '../role-choice';
+
+/**
+ * Spieldienst mit fester Stufe für Tests anderer Bereiche, etwa der App-Shell. Er meldet nur die Stufe
+ * und die daraus abgeleiteten Beiträge; Befehle sind dort kein Thema und scheitern.
+ */
+export function fakeIsland(stage: IslandStage): Island {
+  const refuse = () => {
+    throw new Error('Der Spieldienst-Fake nimmt keine Befehle an');
+  };
+  return {
+    observeStage(listener) {
+      listener(stage);
+      return () => {};
+    },
+    proposeRoles: refuse,
+    declineRoles: refuse,
+    withdrawRoles: refuse,
+    momoCharacter: {
+      subscribe(listener) {
+        listener(momoCharacterOf(stage));
+        return () => {};
+      },
+    },
+    wirContributions: {
+      subscribe(listener) {
+        listener(wirContributionsOf(stage));
+        return () => {};
+      },
+    },
+  };
+}
