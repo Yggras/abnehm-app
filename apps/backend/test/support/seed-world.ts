@@ -13,7 +13,7 @@ import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
-import { nutritionEntryEntity } from '../../../mobile/src/nutrition/index.ts';
+import { mealPhotoEntity, nutritionEntryEntity, photoDraftCommand } from '../../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../../mobile/src/partner-cache/index.ts';
 import { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
 import {
@@ -43,7 +43,7 @@ import { uncoupleAs } from './shared-actions.ts';
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity,
 ]);
 
 export type SeedPhone = Readonly<{
@@ -95,7 +95,7 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
     clock,
     installationId: InstallationId.parse(installation.installationId),
     onCanonicalChanges: persistence.onCanonicalChanges,
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, photoDraftCommand({ persistence })] }),
   });
   return {
     device,

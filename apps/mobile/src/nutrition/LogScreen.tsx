@@ -76,10 +76,11 @@ function MealSection({ meal, localDate }: { meal: DayLogMeal; localDate: LocalDa
             return (
               <ListRow
                 key={entry.id}
+                icon={entry.fromPhoto ? 'camera' : undefined}
                 title={entry.name}
                 subtitle={amount}
                 value={kcalText(entry.kcal)}
-                accessibilityLabel={nutritionTexts.entry(meal.meal, entry.name, amount, entry.kcal)}
+                accessibilityLabel={nutritionTexts.entry(meal.meal, entry.name, amount, entry.kcal, entry.fromPhoto)}
               />
             );
           })}

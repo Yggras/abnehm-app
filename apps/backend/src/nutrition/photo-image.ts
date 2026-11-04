@@ -27,3 +27,25 @@ export async function sanitizedJpeg(upload: Uint8Array): Promise<Uint8Array | nu
     return null;
   }
 }
+
+/**
+ * Lange Kante der Fassungen eines Mahlzeitenfotos (Designwerte, nicht belegt): die Vorschau für Protokoll
+ * und „Wir“, die vergrößerte Fassung wie das Bild der App (1.280 px, Spezifikation 2, Abschnitt 8).
+ */
+const LONG_EDGE = { vorschau: 400, gross: 1_280 } as const;
+
+/**
+ * Vorschau und vergrößerte Fassung eines bestätigten Fotos (Spezifikation 2, Abschnitt 8) aus dem schon
+ * bereinigten Bild des Entwurfs: höchstens so groß wie die lange Kante, nie vergrößert, als JPEG ohne
+ * Metadaten (https://sharp.pixelplumbing.com/api-resize, https://sharp.pixelplumbing.com/api-output).
+ */
+export async function mealPhotoVariants(jpeg: Uint8Array): Promise<Record<keyof typeof LONG_EDGE, Uint8Array>> {
+  const resized = async (edge: number) =>
+    new Uint8Array(
+      await sharp(jpeg, { limitInputPixels: MAX_INPUT_PIXELS, failOn: 'error' })
+        .resize({ width: edge, height: edge, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: JPEG_QUALITY })
+        .toBuffer(),
+    );
+  return { vorschau: await resized(LONG_EDGE.vorschau), gross: await resized(LONG_EDGE.gross) };
+}
