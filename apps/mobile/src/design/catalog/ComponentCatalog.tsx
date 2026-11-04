@@ -293,6 +293,10 @@ function Rows() {
         <ListRow icon="gear" title="Gedrückt" onPress={noop} testOnly_pressed />
         <ListRow icon="pulse" title="Health" subtitle="Braucht Internet" onPress={noop} disabled />
       </ListGroup>
+      <ListGroup>
+        <ListRow icon="run" title="Laufen" selected onPress={noop} />
+        <ListRow icon="bike" title="Radfahren" selected={false} onPress={noop} />
+      </ListGroup>
       <ContextMenu
         actions={[
           { id: 'edit', title: 'Bearbeiten' },

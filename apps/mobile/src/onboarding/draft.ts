@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { EntityId, type Instant, LocalDate, Weekday } from '@abnehm/contracts/base';
@@ -6,8 +5,7 @@ import { ActivityLevel, CalculationSex } from '@abnehm/contracts/person';
 import { Pace } from '@abnehm/contracts/ports';
 
 import type { ReadContext, TransactionContext } from '../local-db';
-import { deviceState } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
+import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 
 // Lokaler Onboarding-Entwurf (Spezifikation 1, Abschnitt 9): die Eingaben der Schritte 3–8, bis
 // Schritt 8 den Plan speichert. Er ist Gerätezustand der Kontodatenbank (`device_state`) und wird nicht
@@ -49,8 +47,7 @@ const draftKey = 'onboarding_draft';
 
 /** Der Entwurf des Geräts; leer, wenn es keinen gibt oder ein gespeicherter nicht mehr passt. */
 export function readOnboardingDraft(tx: ReadContext): OnboardingDraft {
-  const row = sqliteOf(tx).select({ value: deviceState.value }).from(deviceState).where(eq(deviceState.key, draftKey)).get();
-  return onboardingDraftSchema.safeParse(row?.value ?? {}).data ?? {};
+  return onboardingDraftSchema.safeParse(readDeviceState(tx, draftKey) ?? {}).data ?? {};
 }
 
 /** Übernimmt die Änderung in den Entwurf und gibt ihn zurück; ungültige Werte werfen, bevor etwas geschrieben wird. */
@@ -58,10 +55,6 @@ export function updateOnboardingDraft(tx: TransactionContext, change: Onboarding
   const draft = onboardingDraftSchema.parse({ ...readOnboardingDraft(tx), ...change });
   // JSON kennt kein `undefined`: Gelöschte Felder fehlen danach ganz.
   const value = JSON.parse(JSON.stringify(draft)) as OnboardingDraft;
-  sqliteOf(tx)
-    .insert(deviceState)
-    .values({ key: draftKey, value, updatedAt: at })
-    .onConflictDoUpdate({ target: deviceState.key, set: { value, updatedAt: at } })
-    .run();
+  writeDeviceState(tx, draftKey, value, at);
   return value;
 }

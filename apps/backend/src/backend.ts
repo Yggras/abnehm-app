@@ -12,6 +12,7 @@ import { createSharedActions } from './coupling/shared-actions.ts';
 import { createUncoupling } from './coupling/uncoupling.ts';
 import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
 import { energyBookingEntity } from './energy/bookings.ts';
+import { roleChoiceKind } from './island/role-choice.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
@@ -28,6 +29,7 @@ import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
+import { sportEntryEntity } from './trackers/sport-entity.ts';
 import { waterEntryEntity } from './trackers/water-entity.ts';
 import { weightEntryEntity } from './trackers/weight-entity.ts';
 
@@ -73,6 +75,8 @@ export function createBackend({
   // Gemeinsame Aktionen: Spezifikation 4 meldet ihre Arten an `sharedActions` an.
   const sharedActions = createSharedActions();
   for (const command of sharedActions.commands) sync.registerCommand(command);
+  // Momo, Insel & Challenges (Spezifikation 4): Rollenwahl (#180).
+  sharedActions.registerKind(roleChoiceKind);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.
@@ -89,6 +93,7 @@ export function createBackend({
   // Wasser, Sport und Gewicht (Spezifikation 3).
   sync.registerEntity(waterEntryEntity);
   sync.registerEntity(weightEntryEntity);
+  sync.registerEntity(sportEntryEntity);
   // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.
   const partnerProjections = createPartnerProjections({ clock });
   for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);

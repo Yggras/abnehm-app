@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { notificationFixtures } from '../fixtures/notifications.ts';
+import { sharedAction } from '../fixtures/ids.ts';
 import { defineNotificationTexts, notificationText, notificationTexts } from '../src/notification-texts.ts';
+import { NotificationIntent } from '../src/notifications.ts';
 
 // Ein Testkatalog belegt das Gerüst; die echten Einträge liefern die Spezifikationen 4 und 5.
 const catalog = defineNotificationTexts({
@@ -46,8 +49,26 @@ describe('Textkatalog für Benachrichtigungen', () => {
     });
   });
 
-  it('der gemeinsame Katalog ist noch leer: jeder Schlüssel ist ein Typfehler', () => {
-    // @ts-expect-error – Einträge kommen mit den Spezifikationen 4 und 5
+  it('der gemeinsame Katalog: Rollenwahl-Anfrage (Spezifikation 4, Abschnitt 12)', () => {
+    const values = { actionId: sharedAction, kind: 'rollenwahl', senderDisplayName: 'Anna' } as const;
+    expect(notificationTexts.render('rollen_anfrage.rollenwahl', values)).toEqual({
+      title: 'Anna schlägt eure Rollen vor',
+      body: 'Wenn du zustimmst, schlüpft Momo 🐣',
+    });
+    // Der Rollentausch hat einen eigenen Text, den das Ticket „Rollentausch“ liefert.
+    expect(notificationTexts.renderStored('rollen_anfrage.rollenwahl', { ...values, kind: 'rollentausch' })).toMatchObject({
+      type: 'contract_error',
+      error: { code: 'invalid_payload' },
+    });
+  });
+
+  it('der Eintrag passt zu Schlüssel und Werten des Intents aus den Fixtures', () => {
+    const rollenwahl = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid['Rollenwahl']);
+    expect(notificationTexts.renderStored(rollenwahl.messageKey, rollenwahl.payload)).toMatchObject({ type: 'rendered' });
+  });
+
+  it('Schlüssel ohne Eintrag sind ein Typfehler', () => {
+    // @ts-expect-error – Einträge kommen mit den Tickets der Spezifikationen 4 und 5
     expect(() => notificationTexts.render('levelaufstieg', { level: 7 })).toThrow();
     expect(notificationTexts.renderStored('levelaufstieg', { level: 7 })).toMatchObject({ type: 'contract_error' });
   });

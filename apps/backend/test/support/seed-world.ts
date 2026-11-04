@@ -28,7 +28,7 @@ import {
   type PushNowResult,
 } from '../../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../../mobile/src/test-capabilities/seed/local-seed.ts';
-import { waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
+import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
 import { dumpServer, seedServer } from '../../dev/seed/server-seed.ts';
 import { processedOperation } from '../../src/db/schema/index.ts';
 import { payloadHash } from '../../src/sync/sync.ts';
@@ -46,7 +46,7 @@ import { uncoupleAs } from './shared-actions.ts';
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity,
 ]);
 
 export type SeedPhone = Readonly<{

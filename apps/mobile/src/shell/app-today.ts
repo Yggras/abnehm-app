@@ -2,6 +2,7 @@ import type { Clock } from '@abnehm/clock';
 
 import type { LocalDatabase } from '../local-db';
 import { observePersonHeader } from '../local-db/person-header';
+import { followSource } from './followed-source';
 import { todayHeaderSource, type HeaderPerson } from './header-source';
 import { createTodayRegistry, type TodayOwner, type TodayRegistry, type TodaySlot, type TodaySource, type TodayState } from './today-registry';
 
@@ -34,35 +35,7 @@ export function followTodayContribution<K extends TodaySlot>(
   owner: TodayOwner,
   key: K,
 ): (source: TodaySource<K>) => () => void {
-  let current: TodaySource<K> | null = null;
-  const followers = new Set<() => void>();
-  const changed = () => {
-    for (const follow of followers) follow();
-  };
-  registry.register(owner, key, {
-    subscribe(listener) {
-      let stop: (() => void) | null = null;
-      const follow = () => {
-        stop?.();
-        stop = null;
-        if (current === null) listener({ type: 'loading' } as TodayState<K>);
-        else stop = current.subscribe(listener);
-      };
-      followers.add(follow);
-      follow();
-      return () => {
-        followers.delete(follow);
-        stop?.();
-      };
-    },
-  });
-  return (source) => {
-    current = source;
-    changed();
-    return () => {
-      if (current !== source) return;
-      current = null;
-      changed();
-    };
-  };
+  const followed = followSource<TodayState<K>>({ type: 'loading' } as TodayState<K>);
+  registry.register(owner, key, followed.source);
+  return followed.opened;
 }

@@ -285,87 +285,91 @@ const sharingLevels: Readonly<Record<Partner, Readonly<Record<AreaKey, PartnerSh
 /**
  * Fundament (#103, #106): Kopplung samt Mitgliedern und geschlüpfter Insel, Partnerfreigaben und
  * Fotofreigaben. Die Annahme setzte alle Bereiche auf `zusammengefasst` und die Fotos auf `geteilt`.
+ * Vor dem Schlüpfen (`hatched: false`, #180) haben die Mitglieder keine Rolle, und die Insel wartet.
  */
-const kopplung: SeedPart = {
-  area: 'fundament',
-  entities: [
-    {
-      table: 'coupling',
-      entityType: 'coupling',
-      couplingId,
-      row: {
-        id: couplingId,
-        person_low_id: philipp < anna ? philipp : anna,
-        person_high_id: philipp < anna ? anna : philipp,
-        status: 'aktiv',
-        started_at: coupledAt,
-        ended_at: null,
-        reactivated_at: null,
-        ...created(coupledAt),
+const kopplungPart = ({ hatched }: Readonly<{ hatched: boolean }>): SeedPart => {
+  // Was sich mit dem Schlüpfen ändert, an einer Stelle.
+  const islandState = hatched
+    ? { state: 'aktiv', hatched_at: hatchedAt, time_zone: seedClock.timeZone, updated_at: hatchedAt }
+    : { state: 'wartet_auf_rollen', hatched_at: null, time_zone: null, updated_at: coupledAt };
+  return {
+    area: 'fundament',
+    entities: [
+      {
+        table: 'coupling',
+        entityType: 'coupling',
+        couplingId,
+        row: {
+          id: couplingId,
+          person_low_id: philipp < anna ? philipp : anna,
+          person_high_id: philipp < anna ? anna : philipp,
+          status: 'aktiv',
+          started_at: coupledAt,
+          ended_at: null,
+          reactivated_at: null,
+          ...created(coupledAt),
+        },
       },
-    },
-    ...[
-      { id: seedIds.couplingMember.philipp, person: philipp, role: 'bauen', name: 'Philipp' },
-      { id: seedIds.couplingMember.anna, person: anna, role: 'natur', name: 'Anna' },
-    ].map(({ id, person, role, name }) => ({
-      table: 'coupling_member',
-      entityType: 'coupling_member',
-      couplingId,
-      row: {
-        id,
-        coupling_id: couplingId,
-        coupling_status: 'aktiv',
-        person_id: person,
-        role,
-        display_name: name,
-        created_at: coupledAt,
-        updated_at: hatchedAt,
-        deleted_at: null,
+      ...[
+        { id: seedIds.couplingMember.philipp, person: philipp, role: 'bauen', name: 'Philipp' },
+        { id: seedIds.couplingMember.anna, person: anna, role: 'natur', name: 'Anna' },
+      ].map(({ id, person, role, name }) => ({
+        table: 'coupling_member',
+        entityType: 'coupling_member',
+        couplingId,
+        row: {
+          id,
+          coupling_id: couplingId,
+          coupling_status: 'aktiv',
+          person_id: person,
+          role: hatched ? role : null,
+          display_name: name,
+          created_at: coupledAt,
+          updated_at: islandState.updated_at,
+          deleted_at: null,
+        },
+      })),
+      {
+        table: 'island',
+        entityType: 'island',
+        couplingId,
+        row: {
+          id: seedIds.island.philippAnna,
+          coupling_id: couplingId,
+          ...islandState,
+          created_at: coupledAt,
+          deleted_at: null,
+        },
       },
-    })),
-    {
-      table: 'island',
-      entityType: 'island',
-      couplingId,
-      row: {
-        id: seedIds.island.philippAnna,
-        coupling_id: couplingId,
-        state: 'aktiv',
-        hatched_at: hatchedAt,
-        time_zone: seedClock.timeZone,
-        created_at: coupledAt,
-        updated_at: hatchedAt,
-        deleted_at: null,
-      },
-    },
-    ...(['philipp', 'anna'] as const).flatMap((owner) =>
-      AreaKey.options.map((area) => {
-        const level = sharingLevels[owner][area];
-        const changedAt = level === 'privat' ? annaPrivateAt : coupledAt;
-        return {
-          table: 'partner_sharing',
-          entityType: 'partner_sharing',
-          ownerPersonId: seedIds.person[owner],
-          row: {
-            id: seedIds.partnerSharing[owner][area],
-            owner_person_id: seedIds.person[owner],
-            coupling_id: couplingId,
-            area,
-            level,
-            created_at: coupledAt,
-            updated_at: changedAt,
-            deleted_at: null,
-          },
-        };
-      }),
-    ),
-    ...(['philipp', 'anna'] as const).map((owner) => ({
-      table: 'photo_sharing',
-      entityType: 'photo_sharing',
-      ownerPersonId: seedIds.person[owner],
-      row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
-    })),
-  ],
+      ...(['philipp', 'anna'] as const).flatMap((owner) =>
+        AreaKey.options.map((area) => {
+          const level = sharingLevels[owner][area];
+          const changedAt = level === 'privat' ? annaPrivateAt : coupledAt;
+          return {
+            table: 'partner_sharing',
+            entityType: 'partner_sharing',
+            ownerPersonId: seedIds.person[owner],
+            row: {
+              id: seedIds.partnerSharing[owner][area],
+              owner_person_id: seedIds.person[owner],
+              coupling_id: couplingId,
+              area,
+              level,
+              created_at: coupledAt,
+              updated_at: changedAt,
+              deleted_at: null,
+            },
+          };
+        }),
+      ),
+      ...(['philipp', 'anna'] as const).map((owner) => ({
+        table: 'photo_sharing',
+        entityType: 'photo_sharing',
+        ownerPersonId: seedIds.person[owner],
+        row: { id: seedIds.photoSharing[owner], owner_person_id: seedIds.person[owner], coupling_id: couplingId, level: 'geteilt', ...created(coupledAt) },
+      })),
+    ],
+  };
 };
 
 /** Zusammenfassung eines Bereichs für den Partner, im Zeitraum von heute (#106), berechnet zu `dataAsOf`. */
@@ -443,13 +447,23 @@ const projektionenOf = (annas: AnnasProjections): SeedPart => ({
   ],
 });
 
-/** Beiträge des Szenarios in Reihenfolge, Annas Projektionen zu einem früheren Stand (#113). */
-export const gekoppeltPartsWith = (annas: AnnasProjections): readonly SeedPart[] => [
-  ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplung, projektionenOf(annas),
+/**
+ * Beiträge beider Partner in Reihenfolge; Philipps Daten sind die aus `solo`. Vor dem Schlüpfen
+ * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine. `annas` legt den
+ * Stand von Annas Projektionen fest (#113).
+ */
+const partnerParts = ({ hatched, annas }: Readonly<{ hatched: boolean; annas: AnnasProjections }>): readonly SeedPart[] => [
+  ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched }), projektionenOf(annas),
 ];
 
-/** Beiträge des Szenarios in Reihenfolge; Philipps Daten sind die aus `solo`. */
+/** Beiträge des Szenarios, Annas Projektionen zu einem früheren Stand (#113). */
+export const gekoppeltPartsWith = (annas: AnnasProjections): readonly SeedPart[] => partnerParts({ hatched: true, annas });
+
+/** Beiträge des Szenarios `gekoppelt`. */
 export const gekoppeltParts: readonly SeedPart[] = gekoppeltPartsWith(annasProjectionsNow);
+
+/** Dieselben Beiträge vor dem Schlüpfen; Spezifikation 4 ergänzt darauf die offene Rollenwahl (`rollenwahl-offen`). */
+export const vorDemSchluepfenParts = partnerParts({ hatched: false, annas: annasProjectionsNow });
 
 /** Erweiterungspunkte beider Partner-Szenarien; die Fotos gelten im Ausgangszustand. */
 export const gekoppeltExtensions = SeedExtensions.parse({
@@ -476,10 +490,11 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, dazu Philipps Sportwoche aus `solo`.
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 4,
+  revision: 5,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

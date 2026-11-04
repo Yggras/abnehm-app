@@ -59,8 +59,14 @@ export const MomoCharacterReady = z
   });
 export type MomoCharacterReady = z.infer<typeof MomoCharacterReady>;
 
-/** Leer-Gründe von `momo.character`; sie ersetzen den Momo-Bereich auf „Heute“. */
-export const MomoCharacterEmptyReason = z.enum(['momo_wartet_im_ei', 'rollenwahl_offen']);
+/**
+ * Leer-Gründe von `momo.character`; sie ersetzen den Momo-Bereich auf „Heute“. Vor dem Schlüpfen
+ * unterscheidet `rollenwahl_gesendet` die Person, deren Vorschlag offen ist, von allen anderen Fällen
+ * (`rollenwahl_offen`), damit dort neutral „Vorschlag gesendet“ steht (Spezifikation 4, Abschnitt 7;
+ * Nutzerentscheidung https://github.com/Yggras/abnehm-app/issues/180#issuecomment-6633701866, Nachtrag
+ * https://github.com/Yggras/abnehm-app/issues/71#issuecomment-6633704762).
+ */
+export const MomoCharacterEmptyReason = z.enum(['momo_wartet_im_ei', 'rollenwahl_offen', 'rollenwahl_gesendet']);
 export type MomoCharacterEmptyReason = z.infer<typeof MomoCharacterEmptyReason>;
 
 /** Ohne Kopplung lädt die Leer-Aktion den Partner ein, vor der Rollenwahl öffnet sie die Rollenwahl. */
@@ -167,24 +173,31 @@ export const TrackerWaterReady = z
   });
 export type TrackerWaterReady = z.infer<typeof TrackerWaterReady>;
 
-export const TrackerSportReady = z.strictObject({
-  key: z.literal('sport'),
-  weekMinutes: z.int().nonnegative(),
-  weeklyTargetMinutes: z.int().positive(),
-  status: TrackerStatus,
-  detailAction: actionTo('capture.sport'),
-  quickAction: TrackerQuickAction,
-});
-export type TrackerSportReady = z.infer<typeof TrackerSportReady>;
+/** Knopf eines Mini-Trackers, der immer das Formular für einen neuen Eintrag öffnet (Spezifikation 3, Abschnitt 4). */
+const opensNewEntry = (intent: { target: { newEntry?: true } }) => intent.target.newEntry === true;
+const newEntryRefinement = { message: 'Öffnet das Formular für einen neuen Eintrag', path: ['target', 'newEntry'] };
+const sportNewEntry = z.strictObject({ type: z.literal('navigate'), intent: actionTo('capture.sport').refine(opensNewEntry, newEntryRefinement) });
+const weightNewEntry = z.strictObject({ type: z.literal('navigate'), intent: actionTo('capture.weight').refine(opensNewEntry, newEntryRefinement) });
 
-/** Knopf des Gewichts-Mini-Trackers: öffnet immer das Formular für einen neuen Eintrag (Spezifikation 3, Abschnitt 4). */
-const weightNewEntry = z.strictObject({
-  type: z.literal('navigate'),
-  intent: actionTo('capture.weight').refine((intent) => intent.target.newEntry === true, {
-    message: 'Öffnet das Formular für einen neuen Eintrag',
-    path: ['target', 'newEntry'],
-  }),
-});
+/**
+ * Sport-Mini-Tracker: Wochenminuten (Montag bis Sonntag) und Sportwochenziel der gültigen Zielversion. Der
+ * Status folgt aus beiden (`trackerStatus` der Tracker-Regeln) und ist immer neutral; der Knopf „+ Einheit“
+ * öffnet das Formular für eine neue Einheit.
+ */
+export const TrackerSportReady = z
+  .strictObject({
+    key: z.literal('sport'),
+    weekMinutes: z.int().nonnegative(),
+    weeklyTargetMinutes: z.int().positive(),
+    status: TrackerStatus,
+    detailAction: actionTo('capture.sport'),
+    quickAction: sportNewEntry,
+  })
+  .refine((sport) => sport.status === trackerStatus(sport.weekMinutes, sport.weeklyTargetMinutes), {
+    message: 'Status passt nicht zu Wochenminuten und Sportwochenziel',
+    path: ['status'],
+  });
+export type TrackerSportReady = z.infer<typeof TrackerSportReady>;
 
 /**
  * Gewichts-Mini-Tracker: letztes Tagesgewicht bzw. ab drei Tagesgewichten der Trendwert und der Stand

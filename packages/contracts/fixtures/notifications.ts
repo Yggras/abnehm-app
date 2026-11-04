@@ -1,4 +1,4 @@
-import { NotificationIntent } from '../src/notifications.ts';
+import { NotificationIntent, RoleRequestPayload } from '../src/notifications.ts';
 import { fixtures } from './define.ts';
 import { anna, challenge, now, philipp, sharedAction, sharedEvent } from './ids.ts';
 
@@ -17,6 +17,16 @@ const encouragement = {
 } as const;
 
 export const notificationFixtures = {
+  RoleRequestPayload: fixtures(RoleRequestPayload, {
+    valid: {
+      'Rollenwahl': { actionId: sharedAction, kind: 'rollenwahl', senderDisplayName: 'Anna' },
+      'Rollentausch': { actionId: sharedAction, kind: 'rollentausch', senderDisplayName: 'Anna' },
+    },
+    invalid: {
+      'Deko schenken ist keine Rollen-Anfrage': { actionId: sharedAction, kind: 'deko_schenken', senderDisplayName: 'Anna' },
+      'ohne Absender': { actionId: sharedAction, kind: 'rollenwahl' },
+    },
+  }),
   NotificationIntent: fixtures(NotificationIntent, {
     valid: {
       'Anfeuern': encouragement,
@@ -35,6 +45,11 @@ export const notificationFixtures = {
       'Challenge-Erfolg': {
         ...intent('challenge_erfolg'),
         payload: { challengeId: challenge, templateKey: 'gut_getrunken' },
+      },
+      'Rollenwahl': {
+        ...intent('rollen_anfrage'),
+        messageKey: 'rollen_anfrage.rollenwahl',
+        payload: { actionId: sharedAction, kind: 'rollenwahl', senderDisplayName: 'Anna' },
       },
       'Rollentausch': {
         ...intent('rollen_anfrage'),

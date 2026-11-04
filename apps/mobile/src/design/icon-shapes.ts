@@ -189,6 +189,41 @@ export const iconShapes = {
     { type: 'circle', cx: 12, cy: 12, r: 1.1 },
     { type: 'circle', cx: 18, cy: 12, r: 1.1 },
   ],
+
+  // Aktivitätsarten des Sports (#38, Spezifikation 3, Abschnitt 3), ergänzt für #173: Das Artifact zeigt
+  // nur das Hantel-Icon `sport`. Eigene Zeichnungen im selben Raster, Strich und Stil; Krafttraining nutzt
+  // `sport`, Sonstiges `pulse`.
+  /** Gehen */
+  walk: [
+    { type: 'circle', cx: 13, cy: 4.5, r: 1.8 },
+    { type: 'path', d: 'M12.5 8.5l-1.5 6 3 3v4M11 14.5l-3 6.5M12.5 8.5l3 3.5 2.5.5M12.5 8.5L9.5 10.5 8.5 13.5' },
+  ],
+  /** Laufen */
+  run: [
+    { type: 'circle', cx: 15.5, cy: 4.5, r: 1.8 },
+    { type: 'path', d: 'M14.5 8.5l-3 5 4 2.5-1 5.5M11.5 13.5L6.5 15M14.5 8.5l3 3h3M14.5 8.5l-4 .5-2.5 3' },
+  ],
+  /** Radfahren */
+  bike: [
+    { type: 'circle', cx: 6, cy: 16, r: 3.5 },
+    { type: 'circle', cx: 18, cy: 16, r: 3.5 },
+    { type: 'path', d: 'M6 16l3.5-6.5h6L18 16M9.5 9.5L12.5 16h-6.5M15.5 9.5l-1-3h2.5' },
+  ],
+  /** Schwimmen */
+  swim: [
+    { type: 'circle', cx: 17, cy: 7, r: 1.8 },
+    { type: 'path', d: 'M3.5 16.5c1.4 1 2.8 1 4.2 0s2.8-1 4.2 0 2.8 1 4.2 0 2.8-1 4.2 0M3.5 20c1.4 1 2.8 1 4.2 0s2.8-1 4.2 0 2.8 1 4.2 0 2.8-1 4.2 0M6.5 13l4-4 3 2.5 3.5-2' },
+  ],
+  /** Yoga und Dehnen */
+  yoga: [
+    { type: 'circle', cx: 12, cy: 4.5, r: 1.8 },
+    { type: 'path', d: 'M12 8.5v5.5M4.5 10.5l7.5-2 7.5 2M12 14l-5 5h10l-5-5' },
+  ],
+  /** Mannschaftssport */
+  ball: [
+    { type: 'circle', cx: 12, cy: 12, r: 8.5 },
+    { type: 'path', d: 'M12 8l3.8 2.8-1.5 4.4H9.7l-1.5-4.4zM12 3.5V8M15.8 10.8l3.9-1.3M14.3 15.2l2.4 3.4M9.7 15.2l-2.4 3.4M8.2 10.8L4.3 9.5' },
+  ],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof iconShapes;

@@ -55,6 +55,15 @@ const water = {
   quickAction: { type: 'command', commandKey: 'water.quick_add', params: { ml: 250 } },
 } as const;
 
+const sport = {
+  key: 'sport',
+  weekMinutes: 165,
+  weeklyTargetMinutes: 150,
+  status: 'ueber_ziel',
+  detailAction: action('tracker.sport.open', { type: 'capture.sport' }),
+  quickAction: { type: 'navigate', intent: action('tracker.sport.add', { type: 'capture.sport', newEntry: true }) },
+} as const;
+
 const weight = {
   key: 'gewicht',
   value: { type: 'trend', weightG: 79_600 },
@@ -129,7 +138,11 @@ export const todayFixtures = {
     },
   }),
   MomoCharacterEmptyReason: fixtures(MomoCharacterEmptyReason, {
-    valid: { 'ohne Kopplung': 'momo_wartet_im_ei', 'vor der Rollenwahl': 'rollenwahl_offen' },
+    valid: {
+      'ohne Kopplung': 'momo_wartet_im_ei',
+      'vor der Rollenwahl': 'rollenwahl_offen',
+      'eigener Vorschlag gesendet': 'rollenwahl_gesendet',
+    },
     invalid: { 'beliebiger Grund': 'kein_level' },
   }),
   MomoCharacterState: fixtures(MomoCharacterState, {
@@ -145,6 +158,11 @@ export const todayFixtures = {
         reasonKey: 'rollenwahl_offen',
         action: action('momo.open_role_choice', { type: 'momo', view: 'rollenwahl' }),
       },
+      'eigener Vorschlag gesendet': {
+        type: 'empty',
+        reasonKey: 'rollenwahl_gesendet',
+        action: action('momo.open_role_choice', { type: 'momo', view: 'rollenwahl' }),
+      },
     },
     invalid: {
       'unbekannter Leer-Grund': { type: 'empty', reasonKey: 'keine_insel' },
@@ -154,6 +172,7 @@ export const todayFixtures = {
         reasonKey: 'rollenwahl_offen',
         action: action('momo.open', { type: 'momo', view: 'insel' }),
       },
+      'Vorschlag gesendet ohne Aktion': { type: 'empty', reasonKey: 'rollenwahl_gesendet' },
     },
   }),
   MomoDailyGoalsReady: fixtures(MomoDailyGoalsReady, {
@@ -238,24 +257,22 @@ export const todayFixtures = {
   }),
   TrackerSportReady: fixtures(TrackerSportReady, {
     valid: {
-      'über Ziel': {
-        key: 'sport',
-        weekMinutes: 165,
-        weeklyTargetMinutes: 150,
-        status: 'ueber_ziel',
-        detailAction: action('tracker.sport.open', { type: 'capture.sport' }),
-        quickAction: { type: 'navigate', intent: action('tracker.sport.add', { type: 'capture.sport', newEntry: true }) },
-      },
+      'über Ziel': sport,
+      'leer': { ...sport, weekMinutes: 0, status: 'leer' },
+      'unterwegs': { ...sport, weekMinutes: 75, status: 'teil' },
+      'genau erreicht': { ...sport, weekMinutes: 150, status: 'erreicht' },
     },
     invalid: {
-      'Minuten als Text': {
-        key: 'sport',
-        weekMinutes: '165',
-        weeklyTargetMinutes: 150,
-        status: 'ueber_ziel',
-        detailAction: action('tracker.sport.open', { type: 'capture.sport' }),
-        quickAction: { type: 'navigate', intent: action('tracker.sport.add', { type: 'capture.sport' }) },
+      'Minuten als Text': { ...sport, weekMinutes: '165' },
+      'Status im Ton problem': { ...sport, status: 'problem' },
+      'Status passt nicht zum Wert': { ...sport, weekMinutes: 150, status: 'teil' },
+      'Knopf öffnet nicht das Formular': { ...sport, quickAction: { type: 'navigate', intent: action('tracker.sport.add', { type: 'capture.sport' }) } },
+      'Knopf öffnet den falschen Bereich': {
+        ...sport,
+        quickAction: { type: 'navigate', intent: action('tracker.sport.add', { type: 'capture.weight', newEntry: true }) },
       },
+      'Knopf bucht statt zu navigieren': { ...sport, quickAction: { type: 'command', commandKey: 'water.quick_add', params: { ml: 250 } } },
+      'Detailaktion zur falschen Route': { ...sport, detailAction: action('tracker.sport.open', { type: 'capture.water' }) },
     },
   }),
   TrackerWeightReady: fixtures(TrackerWeightReady, {
