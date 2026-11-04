@@ -1,15 +1,33 @@
 import { readFileSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 
 import type { AuthSettings } from './auth/auth-module.ts';
 import { MIN_INVITE_CODE_SECRET_LENGTH, type InvitationSettings } from './coupling/invite-codes.ts';
 import type { DatabaseSettings } from './database.ts';
+import { mealVisionEfforts, mealVisionPrompts, type MealVisionEffort, type MealVisionPromptVersion, type MealVisionSettings } from './nutrition/claude-meal-vision.ts';
 
 export type BackendConfig = {
   port: number;
   database: DatabaseSettings;
   auth: AuthSettings;
   invitations: InvitationSettings;
+  /** Verzeichnis der Fotoentwürfe, außerhalb der App und jedes öffentlichen Pfads. */
+  photoStorageDirectory: string;
+  /**
+   * Modellaufruf der Fotoanalyse; `null` ohne `ANTHROPIC_API_KEY_FILE`. Das produktive Backend startet
+   * dann nicht (`productionMealVisionAnalyzer`), nur das Development-Backend nutzt seinen Fake.
+   */
+  mealVision: MealVisionSettings | null;
 };
+
+/** Startwerte der Fotoanalyse (Spezifikation 2, Abschnitt 8): Modell aus #5, Effort `medium`. */
+const mealVisionDefaults = {
+  model: 'claude-sonnet-5-5',
+  effort: 'medium',
+  promptVersion: 'v1',
+  // Adaptives Thinking zählt mit; 16.000 lässt ihm Raum und bleibt ohne Streaming unter den HTTP-Fristen des SDK.
+  maxTokens: 16_000,
+} as const satisfies Omit<MealVisionSettings, 'apiKey'>;
 
 /** Better Auth signiert damit Sitzungstokens; `openssl rand -hex 32` ergibt 64 Zeichen. */
 const MIN_AUTH_SECRET_LENGTH = 32;
@@ -45,6 +63,34 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
     if (raw !== '' && !URL.canParse(raw)) problems.push(`${name} ist keine URL`);
     return raw;
   };
+  const absolutePath = (name: string) => {
+    const raw = required(name);
+    if (raw !== '' && !isAbsolute(raw)) problems.push(`${name} ist kein absoluter Pfad`);
+    return raw;
+  };
+  /** Optionale Einstellung mit Startwert; erlaubt nur die genannten Werte. */
+  const oneOf = <T extends string>(name: string, allowed: readonly T[], fallback: T): T => {
+    const raw = environment[name];
+    if (raw === undefined || raw === '') return fallback;
+    if (!(allowed as readonly string[]).includes(raw)) problems.push(`${name} ist keiner von ${allowed.join(', ')}`);
+    return raw as T;
+  };
+  const mealVisionSettings = (): MealVisionSettings | null => {
+    const model = environment.MEAL_VISION_MODEL || mealVisionDefaults.model;
+    const effort = oneOf<MealVisionEffort>('MEAL_VISION_EFFORT', mealVisionEfforts, mealVisionDefaults.effort);
+    const promptVersion = oneOf<MealVisionPromptVersion>(
+      'MEAL_VISION_PROMPT_VERSION',
+      Object.keys(mealVisionPrompts) as MealVisionPromptVersion[],
+      mealVisionDefaults.promptVersion,
+    );
+    const rawMaxTokens = environment.MEAL_VISION_MAX_TOKENS;
+    const maxTokens = rawMaxTokens === undefined || rawMaxTokens === '' ? mealVisionDefaults.maxTokens : Number(rawMaxTokens);
+    if (!Number.isInteger(maxTokens) || maxTokens < 1) problems.push('MEAL_VISION_MAX_TOKENS ist keine positive ganze Zahl');
+    if ((environment.ANTHROPIC_API_KEY_FILE ?? '') === '') return null;
+    const apiKey = secret('ANTHROPIC_API_KEY_FILE');
+    return { apiKey, model, effort, promptVersion, maxTokens };
+  };
+
   const authSecret = secret('BETTER_AUTH_SECRET_FILE');
   if (authSecret !== '' && authSecret.length < MIN_AUTH_SECRET_LENGTH) {
     problems.push(`Secret aus BETTER_AUTH_SECRET_FILE ist kürzer als ${MIN_AUTH_SECRET_LENGTH} Zeichen`);
@@ -74,6 +120,8 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
         .filter((entry) => entry !== ''),
     },
     invitations: { codeSecret: inviteCodeSecret },
+    photoStorageDirectory: absolutePath('PHOTO_STORAGE_DIR'),
+    mealVision: mealVisionSettings(),
   };
   if (problems.length > 0) throw new Error(`Ungültige Backend-Konfiguration: ${problems.join(', ')}`);
   return config;

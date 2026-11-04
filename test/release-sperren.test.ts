@@ -237,10 +237,62 @@ describe('Produktions-Image des Backends', () => {
 
   it('Gegenprobe: das Development-Image enthält die Fähigkeiten des Backends', () => {
     const development = imageFiles('development');
-    for (const module of ['apps/backend/dev/main.ts', 'apps/backend/dev/seed/server-seed.ts', 'apps/backend/dev/seed-command.ts', 'packages/contracts/seeds/index.ts']) {
+    for (const module of [
+      'apps/backend/dev/main.ts',
+      'apps/backend/dev/seed/server-seed.ts',
+      'apps/backend/dev/seed-command.ts',
+      'apps/backend/dev/meal-vision/fake-analyzer.ts',
+      'packages/contracts/seeds/index.ts',
+    ]) {
       expect(development).toContain(module);
     }
     expect(read('apps/backend/Dockerfile')).toMatch(/AS development[^]*CMD \["node", "apps\/backend\/dev\/main\.ts"\]/);
+  });
+});
+
+// Fake der Fotoanalyse (#161) ------------------------------------------------------------------------
+//
+// #112: „Spätere Tickets müssen neue Testfähigkeiten zentral registrieren und ihren eigenen negativen
+// Produktionsartefakt-Test ergänzen.“ Die allgemeinen Prüfungen oben laufen für `fake-fotoanalyse` schon
+// über die Registry; dieser Block belegt zusätzlich, dass das produktive Backend den Fake auch nicht über
+// seine Konfiguration erreicht.
+
+describe('Fake der Fotoanalyse (#161)', () => {
+  const capability = testCapabilities.find(({ key }) => key === 'fake-fotoanalyse')!;
+  const production = imageFiles('production');
+
+  it('ist zentral registriert, mit Modul, Steuerroute und Marker', () => {
+    expect(capability).toMatchObject({ modules: ['apps/backend/dev/meal-vision/'], entries: { backendRoutes: ['POST /dev/fotoanalyse'] } });
+    expect(read('apps/backend/dev/meal-vision/fake-analyzer.ts')).toContain(capability.markers[0]);
+  });
+
+  it('das Produktions-Image enthält weder den Fake noch einen Verweis auf ihn, wohl aber den Claude-Adapter', () => {
+    expect(production).toContain('apps/backend/src/nutrition/claude-meal-vision.ts');
+    expect(production.filter((file) => belongsTo(file, capability.modules))).toEqual([]);
+    for (const file of production.filter((path) => /\.[cm]?[jt]s$/.test(path))) {
+      const content = read(file);
+      for (const reference of ['fake-analyzer', 'createFakeMealVision', '/dev/fotoanalyse', ...capability.markers]) {
+        expect(content.includes(reference), `${file}: ${reference}`).toBe(false);
+      }
+    }
+  });
+
+  it('das produktive Backend startet ohne eigenen Analyzer; der Standard ist der Claude-Adapter, ohne Schlüssel startet es nicht', () => {
+    expect(read('apps/backend/src/main.ts')).toMatch(/await runBackend\(\);/);
+    const serve = read('apps/backend/src/serve.ts');
+    expect(serve).toMatch(/mealVisionAnalyzer = \(config\) => productionMealVisionAnalyzer\(config\.mealVision\)/);
+    expect(read('apps/backend/src/nutrition/claude-meal-vision.ts')).toMatch(/if \(settings === null\) throw new Error\('Ungültige Backend-Konfiguration: ANTHROPIC_API_KEY_FILE fehlt'\)/);
+  });
+
+  it('Gegenprobe: das Development-Image enthält den Fake, und sein Prozess setzt ihn ein', () => {
+    expect(imageFiles('development')).toContain('apps/backend/dev/meal-vision/fake-analyzer.ts');
+    expect(read('apps/backend/dev/main.ts')).toContain('createFakeMealVision()');
+  });
+
+  it('kein Modul der App erreicht den Fake', () => {
+    for (const bundle of [...bundles.production, ...bundles.development, ...bundles.e2e]) {
+      expect(bundle.sources.filter((source) => belongsTo(source, capability.modules)), bundle.platform).toEqual([]);
+    }
   });
 });
 

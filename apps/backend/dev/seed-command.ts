@@ -5,6 +5,7 @@ import { readConfig } from '../src/config.ts';
 import { openDatabase } from '../src/database.ts';
 import { migrateDatabase } from '../src/db/migrate.ts';
 import { errorCodeForLog } from '../src/log.ts';
+import { createFakeMealVision } from './meal-vision/fake-analyzer.ts';
 import { seedScenario } from './seed/server-seed.ts';
 
 // Seed-Kommando des Development-Backends (#112): setzt Postgres auf den Ausgangszustand eines
@@ -22,7 +23,13 @@ const database = openDatabase(config.database);
 try {
   await migrateDatabase(database);
   // Dieselben Module wie im Backend-Prozess, damit angemeldete Entkopplungs-Beobachter mitlaufen.
-  const backend = createBackend({ database, authSettings: config.auth, invitationSettings: config.invitations });
+  const backend = createBackend({
+    database,
+    authSettings: config.auth,
+    invitationSettings: config.invitations,
+    photoStorageDirectory: config.photoStorageDirectory,
+    mealVisionAnalyzer: createFakeMealVision().analyzer,
+  });
   await seedScenario(database, backend.uncoupling, manifest);
   console.log(`[seed] Szenario ${manifest.scenario} (Revision ${manifest.revision}) geseedet. Testkonten:`);
   for (const account of manifest.accounts) console.log(`[seed]   ${account.email} / ${account.password}`);

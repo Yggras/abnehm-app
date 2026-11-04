@@ -2,6 +2,7 @@ import { createBackend } from '../backend.ts';
 import { readConfig } from '../config.ts';
 import { openDatabase } from '../database.ts';
 import { errorCodeForLog } from '../log.ts';
+import { productionMealVisionAnalyzer } from '../nutrition/claude-meal-vision.ts';
 
 // Administrativer Passwort-Reset (Spezifikation 0, Abschnitt 9): einziger Weg zu einem neuen Passwort
 // ohne das alte; einen öffentlichen Reset-Ablauf gibt es nicht. Läuft auf dem Server, z. B.
@@ -17,7 +18,14 @@ if (email === undefined || email === '') {
 const config = readConfig(process.env);
 const database = openDatabase(config.database);
 try {
-  const result = await createBackend({ database, authSettings: config.auth, invitationSettings: config.invitations }).auth.admin.resetPassword(email);
+  const backend = createBackend({
+    database,
+    authSettings: config.auth,
+    invitationSettings: config.invitations,
+    photoStorageDirectory: config.photoStorageDirectory,
+    mealVisionAnalyzer: productionMealVisionAnalyzer(config.mealVision),
+  });
+  const result = await backend.auth.admin.resetPassword(email);
   if (result.type === 'unknown_account') {
     console.error('[admin] Kein Konto mit dieser E-Mail');
     process.exitCode = 1;

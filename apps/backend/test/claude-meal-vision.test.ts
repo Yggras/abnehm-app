@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createClaudeMealVisionAnalyzer, mealVisionPrompts, type MealVisionSettings } from '../src/nutrition/meal-vision.ts';
+import { createClaudeMealVisionAnalyzer, mealVisionPrompts, type MealVisionSettings } from '../src/nutrition/claude-meal-vision.ts';
 
 // Produktiver `MealVisionAnalyzer` (Spezifikation 2, Abschnitt 8; #161) gegen einen gefälschten
 // HTTP-Transport des Anthropic-SDK: Form der Anfrage, Datensparsamkeit und die Abbildung jeder

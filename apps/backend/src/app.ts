@@ -7,6 +7,7 @@ import type { Authorization } from './authorization/authorization.ts';
 import type { invitationRoutes } from './coupling/invitations.ts';
 import type { Database } from './database.ts';
 import type { Logout } from './logout/logout.ts';
+import type { PhotoDrafts } from './nutrition/photo-drafts.ts';
 import { bootstrapRoutes } from './person/bootstrap.ts';
 import { statusRoutes } from './status.ts';
 import type { Sync } from './sync/sync.ts';
@@ -19,13 +20,14 @@ export type AppDependencies = {
   sync: Sync;
   invitations: ReturnType<typeof invitationRoutes>;
   logout: Logout;
+  photoDrafts: PhotoDrafts;
 };
 
 /**
  * Die vollständige Hono-App. Alle Pfade sind versioniert (`/v1/…`), Better Auth unter `/v1/auth`.
  * Jede Route beginnt mit einem Guard der zentralen Autorisierung; `enforce` lehnt alle anderen ab.
  */
-export function createApp({ database, clock, auth, authorization, sync, invitations, logout }: AppDependencies) {
+export function createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts }: AppDependencies) {
   return new Hono()
     .use('*', authorization.enforce)
     .route('/v1', statusRoutes({ database }))
@@ -33,7 +35,8 @@ export function createApp({ database, clock, auth, authorization, sync, invitati
     .route('/v1', logout.routes)
     .route('/v1', bootstrapRoutes({ database, clock }))
     .route('/v1', sync.routes)
-    .route('/v1', invitations);
+    .route('/v1', invitations)
+    .route('/v1', photoDrafts.routes);
 }
 
 export type App = ReturnType<typeof createApp>;

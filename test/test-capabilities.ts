@@ -96,6 +96,15 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['fixture_insel_nebel'],
   },
   {
+    // #161: Fake des `MealVisionAnalyzer` mit Erfolg, leerer Liste, Refusal, Schemaverstoß und
+    // Zeitüberschreitung. Das produktive Backend baut seinen Analyzer nur aus dem Claude-Adapter.
+    key: 'fake-fotoanalyse',
+    description: 'Fake der KI-Fotoanalyse (`MealVisionAnalyzer`) für Tests und das Development-Backend, umstellbar über `POST /dev/fotoanalyse`',
+    modules: ['apps/backend/dev/meal-vision/'],
+    entries: { backendRoutes: ['POST /dev/fotoanalyse'] },
+    markers: ['fake_fotoanalyse'],
+  },
+  {
     key: 'testgeruest',
     description: 'Gemeinsames Gerüst: Development-Server und -App des Backends, Eingang, Deep Links und Wirt der App-Testfähigkeiten',
     modules: [
