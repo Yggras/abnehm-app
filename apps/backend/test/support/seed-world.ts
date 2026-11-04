@@ -13,7 +13,7 @@ import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
-import { nutritionEntryEntity } from '../../../mobile/src/nutrition/index.ts';
+import { mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand } from '../../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../../mobile/src/partner-cache/index.ts';
 import { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
 import {
@@ -29,6 +29,7 @@ import {
 } from '../../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
+import { seedPhotoFiles } from '../../dev/seed/photo-seed.ts';
 import { dumpServer, seedServer } from '../../dev/seed/server-seed.ts';
 import { processedOperation } from '../../src/db/schema/index.ts';
 import { payloadHash } from '../../src/sync/sync.ts';
@@ -46,7 +47,7 @@ import { uncoupleAs } from './shared-actions.ts';
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity,
 ]);
 
 export type SeedPhone = Readonly<{
@@ -115,7 +116,7 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
     clock,
     installationId: InstallationId.parse(installation.installationId),
     onCanonicalChanges: persistence.onCanonicalChanges,
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, confirmPhotoDraftCommand({ persistence })] }),
   });
   return {
     device,
@@ -153,6 +154,7 @@ export type SeedWorld = Readonly<{ backend: TestBackend; manifest: SeedManifest;
 export async function seeded(manifest: SeedManifest): Promise<SeedWorld> {
   const backend = await createTestBackend({ clock: createTestClock(manifest.clock) });
   await seedServer(backend.database, manifest);
+  await seedPhotoFiles(backend.photoStorage, manifest);
   const phones: Record<SeedKey, SeedPhone> = {};
   for (const { key } of manifest.installations) phones[key] = await seedPhone(backend, manifest, key);
   return { backend, manifest, phones };
@@ -180,6 +182,7 @@ export async function runSteps({ backend, manifest, phones }: SeedWorld): Promis
 /** Seedet Postgres und alle Geräte erneut, etwa nach Änderungen oder den Schritten. */
 export async function reseed({ backend, manifest, phones }: SeedWorld): Promise<void> {
   await seedServer(backend.database, manifest);
+  await seedPhotoFiles(backend.photoStorage, manifest);
   for (const [key, { database }] of Object.entries(phones)) seedLocalDatabase(database, manifest, key);
 }
 

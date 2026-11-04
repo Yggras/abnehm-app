@@ -266,6 +266,10 @@ _Avoid_: KI-Eintrag, Fotoergebnis
 Das nach Bestätigung eines Fotoentwurfs aufbewahrte Bild. Es kann mehreren daraus erzeugten Ernährungseinträgen zugeordnet und unabhängig von ihnen gelöscht werden.
 _Avoid_: Fotoentwurf, Ernährungseintrag
 
+**Fotoablage**:
+Der geschützte Speicher des Servers für die Bilder der Mahlzeitenfotos, je Foto als Vorschau und vergrößerte Fassung. Die Bilder sind nur über die angemeldete Schnittstelle abrufbar, nie auf dem Gerät gespeichert.
+_Avoid_: Fotospeicher, Bildordner
+
 **Lebensmittelfavorit**:
 Ein als häufig verwendet markiertes einzelnes Lebensmittel. Er folgt Änderungen am referenzierten Lebensmittel, bleibt durch seine letzte bekannte Fassung aber auch ohne die Quelle nutzbar.
 _Avoid_: Favorit, sofern dadurch eine Zusammenstellung gemeint sein könnte

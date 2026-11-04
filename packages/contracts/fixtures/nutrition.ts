@@ -2,6 +2,8 @@ import {
   BaseUnit,
   BlsKey,
   CaptureMethod,
+  ConfirmedPhotoEntry,
+  ConfirmPhotoDraft,
   DisplayUnit,
   EntryAmount,
   EntryTotals,
@@ -9,6 +11,9 @@ import {
   FoodRefType,
   MealPhotoAnalysis,
   MealPhotoAnalysisComponent,
+  PhotoImageKey,
+  MealPhotoRecord,
+  MealPhotoUpsert,
   NutritionEntryAddedOutcome,
   NutritionEntryAddedValues,
   NutritionEntryRecord,
@@ -113,6 +118,28 @@ const photoEntry = {
   amount: { baseAmount: 180_000, displayUnit: 'g', displayAmountMilli: 180_000 },
   totals: { milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 },
   mealPhotoId: mealPhoto,
+} as const;
+
+const photoMealEntry = '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e04';
+const imageKey = 'q8Vh2mT0bX4nR7cJ1wK9pL3sY6dF5gA2zE8uN0oI4tM';
+
+/** Ein durch ein Suchergebnis ersetzter Bestandteil: Referenz und Snapshot aus dem BLS, die geschätzte Menge. */
+const replacedEntry = {
+  ...photoEntry,
+  foodRef: { type: 'bls', key: 'C133000' },
+  snapshot: blsSnapshot,
+  amount: { baseAmount: 60_000, displayUnit: 'g', displayAmountMilli: 60_000 },
+  totals: searchEntry.totals,
+} as const;
+
+const confirmation = {
+  draftId: photoDraft,
+  photoId: mealPhoto,
+  sharedWithPartner: true,
+  entries: [
+    { id: photoMealEntry, entry: photoEntry },
+    { id: '5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e05', entry: replacedEntry },
+  ],
 } as const;
 
 export const nutritionFixtures = {
@@ -337,6 +364,49 @@ export const nutritionFixtures = {
   PhotoAnalysisErrorCode: fixtures(PhotoAnalysisErrorCode, {
     valid: { 'kein Bild': 'photo_invalid_image', 'kein Essen': 'photo_no_food_detected', 'Limit': 'photo_analysis_limit_reached' },
     invalid: { 'Ablauf gehört zum Bestätigen': 'photo_draft_expired', 'allgemeiner Fehler': 'forbidden' },
+  }),
+  ConfirmedPhotoEntry: fixtures(ConfirmedPhotoEntry, {
+    valid: { 'KI-Bestandteil': { id: photoMealEntry, entry: photoEntry } },
+    invalid: { 'ohne ID': { entry: photoEntry }, 'ungültiger Eintrag': { id: photoMealEntry, entry: { ...photoEntry, captureMethod: 'suche' } } },
+  }),
+  ConfirmPhotoDraft: fixtures(ConfirmPhotoDraft, {
+    valid: {
+      'KI-Bestandteil und ersetzter Bestandteil, geteilt': confirmation,
+      'vom Teilen ausgenommen': { ...confirmation, sharedWithPartner: false },
+    },
+    invalid: {
+      'ohne Einträge': { ...confirmation, entries: [] },
+      '31 Einträge': {
+        ...confirmation,
+        entries: Array.from({ length: 31 }, (_, index) => ({ id: `5c7e9a1b-3d5f-4a7c-9e1b-${String(index).padStart(12, '0')}`, entry: photoEntry })),
+      },
+      'doppelte Eintrags-ID': { ...confirmation, entries: [confirmation.entries[0], { ...confirmation.entries[1], id: photoMealEntry }] },
+      'Eintrag aus der Suche': { ...confirmation, entries: [{ id: photoMealEntry, entry: { ...searchEntry, mealPhotoId: mealPhoto } }] },
+      'Eintrag ohne Fotoverweis': { ...confirmation, entries: [{ id: photoMealEntry, entry: { ...photoEntry, mealPhotoId: null } }] },
+      'Eintrag mit anderem Foto': { ...confirmation, photoId: photoDraft },
+      'zwei Mahlzeiten': { ...confirmation, entries: [confirmation.entries[0], { ...confirmation.entries[1], entry: { ...replacedEntry, meal: 'snacks' } }] },
+      'zwei Tage': { ...confirmation, entries: [confirmation.entries[0], { ...confirmation.entries[1], entry: { ...replacedEntry, localDate: '2026-10-13' } }] },
+      'mit Eigentümer': { ...confirmation, personId: philipp },
+    },
+  }),
+  PhotoImageKey: fixtures(PhotoImageKey, {
+    valid: { '32 Zufallsbytes in base64url': imageKey },
+    invalid: { 'Pfad': 'seed/foto.jpg', 'zu kurz': imageKey.slice(1), 'Pfadtrenner': `${imageKey.slice(0, 42)}/` },
+  }),
+  MealPhotoUpsert: fixtures(MealPhotoUpsert, {
+    valid: { 'vom Teilen ausgenommen': { sharedWithPartner: false } },
+    invalid: {
+      'mit Bildschlüssel (generisches Create)': { sharedWithPartner: true, imageKey },
+      'mit Aufnahmezeit': { sharedWithPartner: true, capturedAt: now },
+      'ohne Schalter': {},
+    },
+  }),
+  MealPhotoRecord: fixtures(MealPhotoRecord, {
+    valid: { 'kanonisch': { imageKey, capturedAt: now, sharedWithPartner: true, personId: philipp, createdAt: now, updatedAt: now } },
+    invalid: {
+      'ohne Eigentümer': { imageKey, capturedAt: now, sharedWithPartner: true, createdAt: now, updatedAt: now },
+      'Bildschlüssel als Pfad': { imageKey: 'fotos/a.jpg', capturedAt: now, sharedWithPartner: true, personId: philipp, createdAt: now, updatedAt: now },
+    },
   }),
   PhotoAnalysisError: fixtures(PhotoAnalysisError, {
     valid: {

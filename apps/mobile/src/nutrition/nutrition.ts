@@ -1,6 +1,13 @@
 import type { Clock } from '@abnehm/clock';
 import { EntityId, type LocalDate } from '@abnehm/contracts/base';
-import { entryAmount, type DisplayUnit, type FoodRef, type NutritionEntryAddedOutcome, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import {
+  entryAmount,
+  type DisplayUnit,
+  type FoodRef,
+  type NutritionEntryAddedOutcome,
+  type NutritionEntryAddedValues,
+  type NutritionSnapshot,
+} from '@abnehm/contracts/nutrition';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { LocalDatabase } from '../local-db';
@@ -11,6 +18,7 @@ import { defaultAmountMilli } from './amount-input';
 import { readDayLog, type DayLog } from './day-log';
 import { addEntry, removeEntry, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
+import { confirmPhotoDraft, type PhotoDraftConfirmation } from './meal-photos';
 
 export type NutritionDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl ist genau eine Transaktion darin. */
@@ -34,6 +42,14 @@ export type Nutrition = Readonly<{
    * ungültigen Menge, einem künftigen Tag oder einem inkonsistenten Eintrag, ohne etwas zu schreiben.
    */
   addEntry(input: NewEntry): NutritionEntryAddedOutcome;
+  /**
+   * „Mahlzeit hinzufügen“ im Fotoentwurf (Spezifikation 2, Abschnitt 8): legt in einer eigenen lokalen
+   * Transaktion die Einträge (Erfassungsart `foto`), das Mahlzeitenfoto und genau eine Operation
+   * `confirmPhotoDraft` an. Liefert Mahlzeit und gerundete kcal für die Meldung. Wirft
+   * `InvalidNutritionInputError` bei einer ungültigen Menge, einem künftigen Tag oder einer
+   * inkonsistenten Mahlzeit, ohne etwas zu schreiben.
+   */
+  confirmPhotoDraft(input: PhotoDraftConfirmation): NutritionEntryAddedValues;
   /** „Rückgängig“: entfernt den Eintrag zum Token höchstens einmal, in einer eigenen Transaktion. */
   undo(undoToken: string): UndoOutcome;
   /** Beendet einen Token, sobald seine Meldung kein „Rückgängig“ mehr anbietet. */
@@ -63,6 +79,7 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
       const { messageKey, values, undo } = database.transaction((tx) => addEntry(tx, dependencies, input));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => removeEntry(tx, dependencies, undo.entryId, 'rueckgaengig')) };
     },
+    confirmPhotoDraft: (input) => database.transaction((tx) => confirmPhotoDraft(tx, dependencies, input)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
     observeDayLog: (localDate, listener) => database.observe((tx) => readDayLog(tx, localDate), listener),

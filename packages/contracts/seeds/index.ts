@@ -24,6 +24,7 @@ export {
   SeedScenarioKey,
   SeedState,
   SeedStep,
+  SyntheticImage,
   seedFormatVersion,
   seedRoutePath,
   type SeedAccount,
@@ -33,7 +34,7 @@ export {
 export { canonicalJson, canonicalRows, dependencyOrder, withoutDerivedColumns } from './canonical.ts';
 export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts, vorDemSchluepfenParts } from './gekoppelt.ts';
-export { seedAccounts, seedClock, seedDays, seedIds, seedInstallations, seedPassword } from './ids.ts';
+export { seedAccounts, seedClock, seedDays, seedIds, seedImageKeys, seedInstallations, seedPassword } from './ids.ts';
 export { uncoupledState, uncouplingRequestOf, type SeedUncouplingRequest } from './nach-entkopplung.ts';
 
 /** Alle Szenarien mit Manifest. */

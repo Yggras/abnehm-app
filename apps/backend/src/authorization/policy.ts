@@ -49,7 +49,9 @@ export const operationMatrix = {
   partner_tageszielstatus: { operations: ['lesen'], coupled: ['lesen'], shared: [] },
   widerrufshinweis: { operations: ['lesen'], coupled: [], shared: [] },
   fotofreigabe: { operations: ['lesen', 'upsert'], coupled: [], shared: [] },
-  partnerfoto: { operations: ['lesen', 'upsert', 'loeschen'], coupled: ['lesen'], shared: ['lesen'] },
+  // Schreiben „nur Eigentümer gemäß Foto-Fachregeln“: Freigabeschalter und Löschen generisch, das
+  // Anlegen nur über den Fachbefehl `confirmPhotoDraft` (Spezifikation 2, Abschnitt 11; #162).
+  partnerfoto: { operations: ['lesen', 'upsert', 'loeschen', 'befehl'], coupled: ['lesen'], shared: ['lesen'] },
   push_installation: { operations: ['lesen', 'upsert'], coupled: [], shared: [] },
   serverdaten: { operations: [], coupled: [], shared: [] },
 } as const satisfies Readonly<Record<ResourceClass, MatrixRow>>;

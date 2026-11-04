@@ -35,7 +35,7 @@ import { sqlStateOf, type Database, type DbExecutor } from '../database.ts';
 import { changeLog, couplingMember, processedOperation } from '../db/schema/index.ts';
 import { errorCodeForLog } from '../log.ts';
 import { currentServerVersion, lockSyncClock, nextServerVersion, recordChange } from './change-log.ts';
-import type { ServerSyncEntity, StoredEntity } from './registry.ts';
+import type { EntityWrite, ServerSyncEntity, StoredEntity } from './registry.ts';
 import { CommandRejection, type ServerCommand } from './commands.ts';
 
 // Push/Pull-Sync (Spezifikation 0, Abschnitt 10; #99). Push verarbeitet die geordnete Liste in einer
@@ -235,22 +235,22 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
       return await tx.transaction(async (savepoint) => {
         const current = (await entity.read(savepoint, [operation.entityId])).get(operation.entityId);
         if (current?.deletedAt != null) throw new Rejection('conflict');
-        const serverVersion = await nextServerVersion(savepoint);
         if (operation.type === 'upsert_entity') {
           const parsed = entity.upsert!.safeParse(operation.payload);
           if (!parsed.success || ('id' in parsed.data && parsed.data.id !== operation.entityId)) throw new Rejection('invalid_payload');
-          const write = { entityId: operation.entityId, payload: parsed.data, ownerPersonId: actor.personId, serverVersion, at, exists: current !== undefined };
-          const problem = (await entity.validate?.(savepoint, write)) ?? null;
+          const problem = await upsertEntity(savepoint, entity, {
+            entityId: operation.entityId, payload: parsed.data, ownerPersonId: actor.personId, at, exists: current !== undefined,
+          });
           if (problem !== null) throw new Rejection(problem);
-          await entity.write(savepoint, write);
-        } else {
-          await entity.remove(savepoint, { entityId: operation.entityId, ownerPersonId: actor.personId, serverVersion, at });
+          return { type: 'applied', operationId: operation.operationId, canonical: await canonicalAfterWrite(savepoint, entity, operation.entityId) } as const;
         }
+        const serverVersion = await nextServerVersion(savepoint);
+        await entity.remove(savepoint, { entityId: operation.entityId, ownerPersonId: actor.personId, serverVersion, at });
         await recordChange(savepoint, {
           position: serverVersion,
           entityType: entity.entityType,
           entityId: operation.entityId,
-          operation: operation.type === 'upsert_entity' ? 'upsert' : 'delete',
+          operation: 'delete',
           ownerPersonId: actor.personId,
           createdAt: at,
         });
@@ -488,6 +488,24 @@ export function canonicalOf(entity: ServerSyncEntity, entityId: EntityId, stored
     return { type: 'tombstone', entityType: entity.entityType, entityId, serverVersion, deletedAt: Instant.parse(stored.deletedAt.toISOString()) };
   }
   return { type: 'record', entityType: entity.entityType, entityId, serverVersion, data: stored.data };
+}
+
+/**
+ * Schreibweg des generischen Upserts für eine schon geprüfte Nutzlast: fachliche Prüfung der Entität
+ * (`validate`), Schreiben mit neuer Serverversion und Eintrag im Änderungsprotokoll. Fachbefehle, die
+ * Zeilen einer angemeldeten Entität anlegen (etwa `confirmPhotoDraft` die Ernährungseinträge), nutzen
+ * ihn, damit Prüfungen und Ableitungen der Entität auch dort greifen. Liefert den Fehlercode der
+ * Prüfung, ohne zu schreiben, sonst `null`.
+ */
+export async function upsertEntity(tx: DbExecutor, entity: ServerSyncEntity, change: Omit<EntityWrite, 'serverVersion'>): Promise<ContractErrorCode | null> {
+  const serverVersion = await nextServerVersion(tx);
+  const write = { ...change, serverVersion };
+  const problem = (await entity.validate?.(tx, write)) ?? null;
+  if (problem !== null) return problem;
+  await entity.write(tx, write);
+  await recordChange(tx, { position: serverVersion, entityType: entity.entityType, entityId: change.entityId, operation: 'upsert',
+    ownerPersonId: change.ownerPersonId, createdAt: change.at });
+  return null;
 }
 
 /** Kanonischer Datensatz einer Entität, die der Aufrufer in seiner Transaktion gerade geschrieben hat. */

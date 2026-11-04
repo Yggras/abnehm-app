@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { DisplayUnit, type FoodRef, type NutritionEntryRecord, type NutritionEntryUpsert } from '@abnehm/contracts/nutrition';
+import { CaptureMethod, DisplayUnit, SnapshotSource, type FoodRef, type NutritionEntryRecord, type NutritionEntryUpsert } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { nutritionEntry } from '../local-db/schema';
@@ -23,6 +23,8 @@ export type StoredEntry = Readonly<{
 export type LoggedEntry = Readonly<{
   id: EntityId;
   meal: MealKey;
+  captureMethod: CaptureMethod;
+  source: SnapshotSource;
   name: string;
   displayUnit: DisplayUnit;
   displayAmountMilli: number;
@@ -82,6 +84,16 @@ export function tombstoneEntry(tx: TransactionContext, entityId: EntityId, at: I
   sqliteOf(tx).update(nutritionEntry).set({ deletedAt: at, updatedAt: at }).where(eq(nutritionEntry.id, entityId)).run();
 }
 
+/** Löst alle Einträge von einem Mahlzeitenfoto; die Einträge selbst bleiben unverändert. */
+export function unlinkPhoto(tx: TransactionContext, photoId: EntityId): void {
+  sqliteOf(tx).update(nutritionEntry).set({ mealPhotoId: null }).where(eq(nutritionEntry.mealPhotoId, photoId)).run();
+}
+
+/** Entfernt einen Eintrag, den der Server nie bestätigt hat; ein bestätigter bleibt. */
+export function removeUnconfirmedEntry(tx: TransactionContext, entityId: EntityId): void {
+  sqliteOf(tx).delete(nutritionEntry).where(and(eq(nutritionEntry.id, entityId), isNull(nutritionEntry.serverVersion))).run();
+}
+
 export function readEntry(tx: ReadContext, entityId: EntityId): StoredEntry | undefined {
   const row = sqliteOf(tx)
     .select({
@@ -107,6 +119,8 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
     .select({
       id: nutritionEntry.id,
       meal: nutritionEntry.meal,
+      captureMethod: nutritionEntry.captureMethod,
+      source: nutritionEntry.snapshotSource,
       name: nutritionEntry.snapshotName,
       displayUnit: nutritionEntry.displayUnit,
       displayAmountMilli: nutritionEntry.displayAmountMilli,
@@ -116,7 +130,14 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
     .where(and(eq(nutritionEntry.personId, personId), eq(nutritionEntry.localDate, localDate), isNull(nutritionEntry.deletedAt)))
     .orderBy(asc(nutritionEntry.consumedAt), asc(nutritionEntry.createdAt), asc(nutritionEntry.id))
     .all()
-    .map((row) => ({ ...row, id: EntityId.parse(row.id), meal: MealKey.parse(row.meal), displayUnit: DisplayUnit.parse(row.displayUnit) }));
+    .map((row) => ({
+      ...row,
+      id: EntityId.parse(row.id),
+      meal: MealKey.parse(row.meal),
+      captureMethod: CaptureMethod.parse(row.captureMethod),
+      source: SnapshotSource.parse(row.source),
+      displayUnit: DisplayUnit.parse(row.displayUnit),
+    }));
 }
 
 /** Menge und Einheit des zuletzt erfassten, nicht gelöschten Eintrags mit dieser Lebensmittelreferenz. */

@@ -32,6 +32,16 @@ const id = (kind: string, n: number) => `5eed${kind}-0000-4000-8000-${n.toString
 const person = { philipp: id('0002', 1), anna: id('0002', 2) };
 
 /**
+ * Feste Bildschlüssel der synthetischen Fotos (#162): lesbar statt zufällig, aber im Format eines echten
+ * Schlüssels (43 Zeichen base64url, `PhotoImageKey`).
+ */
+const imageKey = (name: string) => `seed_${name}`.padEnd(43, '0');
+export const seedImageKeys = {
+  mealPhoto: { philippHeute: imageKey('mahlzeitenfoto_philipp_heute'), annaHeute: imageKey('mahlzeitenfoto_anna_heute') },
+  photoDraft: { philippAbgelaufen: imageKey('fotoentwurf_philipp_abgelaufen') },
+} as const;
+
+/**
  * Ziel- und Wochenplanversionen tragen die ID aus Person und `valid_from` (#128); nur so ersetzt eine
  * spätere Fassung desselben Tags die Zeile, statt am natürlichen Schlüssel zu scheitern.
  */
@@ -101,6 +111,8 @@ export const seedIds = {
     },
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
+  /** Server-only; ein abgelaufener Fotoentwurf als Randzustand (#162). */
+  photoDraft: { philippAbgelaufen: id('0033', 1) },
   coupling: { philippAnna: id('0040', 1) },
   couplingMember: { philipp: id('0041', 1), anna: id('0041', 2) },
   island: { philippAnna: id('0042', 1) },

@@ -11,4 +11,5 @@ export type { DayLog, DayLogEntry, DayLogMeal } from './day-log';
 export { InvalidNutritionInputError, type NewEntry } from './entries';
 export { nutritionEntryEntity } from './entry-entity';
 export { createFoodSearch, type FoodSearch, type FoodSearchHit, type FoodSearchResult, type SearchMark } from './food-search';
+export { mealPhotoEntity, confirmPhotoDraftCommand, type PhotoDraftConfirmation, type PhotoMealComponent } from './meal-photos';
 export { createNutrition, type AmountPrefill, type Nutrition, type NutritionDependencies } from './nutrition';

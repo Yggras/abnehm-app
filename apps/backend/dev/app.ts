@@ -18,14 +18,14 @@ export function createDevelopmentApp({
   database,
   fakeMealVision,
 }: {
-  backend: Pick<Backend, 'app' | 'uncoupling'>;
+  backend: Pick<Backend, 'app' | 'uncoupling' | 'photoStorage'>;
   database: Database;
   /** Fake der Fotoanalyse (#161); `POST /dev/fotoanalyse` stellt seine Antwort um, etwa für E2E-Abläufe. */
   fakeMealVision: FakeMealVision;
 }) {
   return new Hono()
     .post(seedRoutePath, jsonBody(SeedRequest), async (c) => {
-      await seedScenario(database, backend.uncoupling, seedManifests[c.req.valid('json').scenario]);
+      await seedScenario(database, backend, seedManifests[c.req.valid('json').scenario]);
       return c.body(null, 204);
     })
     .post('/dev/fotoanalyse', jsonBody(FakeMealVisionRequest), (c) => {

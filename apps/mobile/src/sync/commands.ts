@@ -16,6 +16,12 @@ export type LocalCommand<P extends EntityData = EntityData> = Readonly<{
   /** Liefert jede lokal optimistisch geänderte Entität, auch abgeleitete Zeilen. */
   apply(tx: TransactionContext, payload: P): readonly { entityType: string; entityId: EntityId }[];
   reconcileRejected(tx: TransactionContext, operation: Extract<OutboxOperation, { businessKey: string }>, result: Extract<PushResult, { type: 'permanently_rejected' }>): void;
+  /**
+   * Optional: gleicht den lokalen Stand nach einer Bestätigung ab, nachdem die Engine die kanonischen
+   * Ergebnisse übernommen hat, in derselben Transaktion. Nötig, wenn der Server eine optimistisch
+   * angelegte Zeile nicht anlegt, etwa ein Mahlzeitenfoto aus einem abgelaufenen Entwurf (#162).
+   */
+  reconcileApplied?(tx: TransactionContext, operation: Extract<OutboxOperation, { businessKey: string }>, result: Extract<PushResult, { type: 'applied' | 'already_applied' }>): void;
 }>;
 
 export function createLocalCommandRegistry({ database, writer, commands }: {
@@ -43,6 +49,9 @@ export function createLocalCommandRegistry({ database, writer, commands }: {
     },
     reconcileRejected(tx: TransactionContext, operation: Extract<OutboxOperation, { businessKey: string }>, result: Extract<PushResult, { type: 'permanently_rejected' }>) {
       requireCommand(operation.type).reconcileRejected(tx, operation, result);
+    },
+    reconcileApplied(tx: TransactionContext, operation: Extract<OutboxOperation, { businessKey: string }>, result: Extract<PushResult, { type: 'applied' | 'already_applied' }>) {
+      byType.get(operation.type)?.reconcileApplied?.(tx, operation, result);
     },
   };
 }

@@ -3,7 +3,7 @@ import type { PartnerSharingLevel } from '../src/coupling.ts';
 import type { DailyGoalSlot } from '../src/daily-goals.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
 import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
-import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
+import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedImageKeys, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow } from './manifest.ts';
 import {
   seedCompletion,
@@ -29,7 +29,7 @@ import { soloParts } from './solo.ts';
 // Alle Werte sind erfunden; die Zielwerte sind plausibel, aber nicht mit dem Zielrechner berechnet.
 //
 // Zwei Inhalte reserviert das Manifest als versionierte Erweiterungspunkte (`extensions`): die
-// Bilddaten der Fotos (Spezifikation 2, #162) und das offene Deko-Geschenk von Anna an Philipp als
+// Bilddaten der Fotos (Spezifikation 2, seit #162 Fassung 2) und das offene Deko-Geschenk von Anna an Philipp als
 // antwortbedürftigen Vorgang (Spezifikation 4, #198). Weitere Bereiche ergänzen ihren Beitrag hier,
 // etwa Level 6 und die aktive Challenge (Spezifikation 4).
 
@@ -211,21 +211,46 @@ function photoLunch(options: {
   };
 }
 
+/** Ein abgelaufener Fotoentwurf von Philipp: gestern analysiert, seit heute 08:54 UTC nicht mehr bestätigbar. */
+const expiredDraft = {
+  id: seedIds.photoDraft.philippAbgelaufen,
+  createdAt: '2026-10-13T09:00:00.000Z',
+  expiresAt: '2026-10-14T08:54:00.000Z',
+  /** Ein Bestandteil in Vertragseinheiten (`PhotoDraftComponent`), wie die Analyse ihn lieferte. */
+  components: [{ name: 'Nudelsalat', baseUnit: 'g', baseAmount: 250_000, milliKcal: 450_000, proteinMg: 11_000, carbsMg: 55_000, fatMg: 20_000 }] as SeedRow[],
+};
+
 /**
- * Ernährung (Spezifikation 2): je Person ein geteiltes Mahlzeitenfoto von heute samt Eintrag. Die
- * Bilddaten fehlen noch; sie ergänzt der Erweiterungspunkt `mealPhotos` in Fassung 2 (#162).
+ * Ernährung (Spezifikation 2): je Person ein geteiltes Mahlzeitenfoto von heute samt Eintrag, seit #162
+ * mit festem Bildschlüssel und im Änderungsprotokoll; die synthetischen Bilder beschreibt der
+ * Erweiterungspunkt `mealPhotos` (Fassung 2). Dazu Philipps abgelaufener Fotoentwurf (nur Server).
  */
 const ernaehrung: SeedPart = {
   area: 'ernaehrung',
   entities: [
     ...[
-      { id: seedIds.mealPhoto.philippHeute, person: philipp, at: '2026-10-14T10:30:00.000Z' },
-      { id: seedIds.mealPhoto.annaHeute, person: anna, at: '2026-10-14T10:45:00.000Z' },
-    ].map(({ id, person, at }) => ({
+      { id: seedIds.mealPhoto.philippHeute, imageKey: seedImageKeys.mealPhoto.philippHeute, person: philipp, at: '2026-10-14T10:30:00.000Z' },
+      { id: seedIds.mealPhoto.annaHeute, imageKey: seedImageKeys.mealPhoto.annaHeute, person: anna, at: '2026-10-14T10:45:00.000Z' },
+    ].map(({ id, imageKey, person, at }) => ({
       table: 'meal_photo',
+      entityType: 'meal_photo',
       ownerPersonId: person,
-      row: { id, person_id: person, image_key: `seed/${id}.jpg`, captured_at: at, shared_with_partner: true, ...created(at) },
+      row: { id, person_id: person, image_key: imageKey, captured_at: at, shared_with_partner: true, ...created(at) },
     })),
+    {
+      table: 'photo_draft',
+      serverOnly: true,
+      row: {
+        id: expiredDraft.id,
+        person_id: philipp,
+        image_key: seedImageKeys.photoDraft.philippAbgelaufen,
+        analysis_state: 'analysiert',
+        components: expiredDraft.components,
+        error_code: null,
+        created_at: expiredDraft.createdAt,
+        expires_at: expiredDraft.expiresAt,
+      },
+    },
     {
       table: 'nutrition_entry',
       // Seit #155 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
@@ -467,11 +492,21 @@ export const vorDemSchluepfenParts = partnerParts({ hatched: false, annas: annas
 
 /** Erweiterungspunkte beider Partner-Szenarien; die Fotos gelten im Ausgangszustand. */
 export const gekoppeltExtensions = SeedExtensions.parse({
+  // Fassung 2 (#162): Bilddaten als synthetische Farbflächen, dazu der abgelaufene Fotoentwurf.
   mealPhotos: {
-    version: 1,
+    version: 2,
     photos: [
-      { id: seedIds.mealPhoto.philippHeute, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippMittag, visibleTo: ['anna'] },
-      { id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'] },
+      {
+        id: seedIds.mealPhoto.philippHeute, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippMittag, visibleTo: ['anna'],
+        imageKey: seedImageKeys.mealPhoto.philippHeute, image: { width: 1_280, height: 960, rgb: [196, 120, 52] },
+      },
+      {
+        id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'],
+        imageKey: seedImageKeys.mealPhoto.annaHeute, image: { width: 960, height: 1_280, rgb: [214, 168, 40] },
+      },
+    ],
+    expiredDrafts: [
+      { id: expiredDraft.id, account: 'philipp', imageKey: seedImageKeys.photoDraft.philippAbgelaufen, image: { width: 1_280, height: 960, rgb: [232, 200, 150] } },
     ],
   },
   decoGift: { version: 1, state: 'reserviert', actionId: seedIds.sharedAction.dekoGeschenk, from: 'anna', to: 'philipp' },
@@ -490,11 +525,12 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 6: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
   // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, dazu Philipps Sportwoche aus `solo`.
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 5,
+  revision: 6,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

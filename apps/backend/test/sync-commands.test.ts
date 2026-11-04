@@ -12,6 +12,7 @@ import { createTestBackend, type TestBackend } from './support/app.ts';
 import { authorizationCases, personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
 import { dailyGoalCommandScenarios } from './support/daily-goals.ts';
 import type { Device } from './support/auth-client.ts';
+import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
 import { planCommandScenarios } from './support/plan.ts';
 import { sharedActionCommandScenarios } from './support/shared-actions.ts';
@@ -100,7 +101,8 @@ describe('Fachbefehl über Push', () => {
   it('erfasst alle registrierten Fachbefehle im Negativtest-Gerüst', async () => {
     const { backend } = await setup();
     // Die Welten der echten Fachbefehle sind andere; deren Fälle laufen in ihren eigenen Tests.
-    const real = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+    const real = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
+      confirmPhotoDraft: confirmPhotoDraftScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(() => registeredCommandCases(backend, real)).toThrow('saveMealFavorite');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),
@@ -151,7 +153,7 @@ describe('Fachbefehl über Push', () => {
     const targetId = randomUUID();
     const disclosedId = randomUUID();
     await push(backend, anna.device, [upsertOp(targetId, water(250)), upsertOp(disclosedId, water(300))]);
-    backend.sync.registerCommand({ type: 'confirmPhotoDraft', identity: 'none', policy: policies.resource('water_entry', 'befehl'),
+    backend.sync.registerCommand({ type: 'thankEncouragements', identity: 'none', policy: policies.resource('water_entry', 'befehl'),
       payload: z.strictObject({ targetId: EntityId, disclosedId: EntityId }),
       target: (operation) => ({ id: operation.payload.targetId }),
       canonicalRequest: (operation) => operation.payload,
@@ -163,7 +165,7 @@ describe('Fachbefehl über Push', () => {
           serverVersion: ServerVersion.parse(row.serverVersion.toString()), data: row.data }] };
       },
     });
-    const operation = { ...command(randomUUID(), 'bonus:1'), type: 'confirmPhotoDraft' as const,
+    const operation = { ...command(randomUUID(), 'bonus:1'), type: 'thankEncouragements' as const,
       payload: { targetId, disclosedId } };
     expect((await push(backend, anna.device, [operation]))[0]?.type).toBe('applied');
     const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
@@ -175,12 +177,12 @@ describe('Fachbefehl über Push', () => {
 
   it('verweigert einem ID-erzeugenden Handler ohne vollständige kanonische Zuordnung die Bestätigung', async () => {
     const { backend, anna } = await setup();
-    backend.sync.registerCommand({ type: 'confirmPhotoDraft', identity: 'mapped', policy: policies.resource('water_entry', 'befehl'),
+    backend.sync.registerCommand({ type: 'thankEncouragements', identity: 'mapped', policy: policies.resource('water_entry', 'befehl'),
       payload: z.strictObject({ localId: EntityId }), target: (operation) => ({ id: operation.payload.localId }),
       canonicalRequest: () => ({}), duplicate: () => [],
       async execute() { return { changes: [], idMappings: [] }; },
     });
-    const request = { ...command(randomUUID(), 'bonus:broken'), type: 'confirmPhotoDraft' as const, payload: { localId: randomUUID() } };
+    const request = { ...command(randomUUID(), 'bonus:broken'), type: 'thankEncouragements' as const, payload: { localId: randomUUID() } };
     expect((await push(backend, anna.device, [request]))[0]).toMatchObject({ type: 'permanently_rejected',
       error: { code: 'invalid_payload' } });
   });

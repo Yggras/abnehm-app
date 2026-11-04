@@ -3,8 +3,9 @@ import { act, screen, userEvent, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import type * as React from 'react';
 
-import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
-import { seedClock, seedIds, seedManifests } from '@abnehm/contracts/seeds';
+import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { photoDraftSnapshot } from '@abnehm/contracts/nutrition';
+import { seedClock, seedDays, seedIds, seedManifests } from '@abnehm/contracts/seeds';
 
 import { testCapabilities } from '../build-capabilities';
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
@@ -72,6 +73,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
     clock.release();
   });
   return {
+    nutrition,
     entries: () => database.read((tx) => sqliteOf(tx).select().from(nutritionEntry).all()).filter((row) => row.deletedAt === null),
     operations: () => database.read((tx) => pendingOperations(tx, 100)).map(({ type }) => type),
   };
@@ -102,6 +104,30 @@ describe('Protokoll', () => {
       // Genau eine Aktion im Leerzustand.
       expect(within(meal(key)).getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual([`${name} hinzufügen`]);
     }
+  });
+
+  it('kennzeichnet Einträge aus einem Foto mit dem Foto-/KI-Symbol und „KI-Schätzung“ im zugänglichen Namen (#162)', async () => {
+    const { nutrition } = await openAccount();
+    // Eine Bestätigung aus dem Fotoentwurf: ein unveränderter KI-Bestandteil zum Mittagessen.
+    nutrition.confirmPhotoDraft({
+      draftId: EntityId.parse('5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03'),
+      localDate: LocalDate.parse(seedDays.heute),
+      meal: 'mittagessen',
+      components: [{
+        foodRef: null,
+        snapshot: photoDraftSnapshot({ name: 'Bratkartoffeln', baseUnit: 'g', baseAmount: 180_000, milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 }),
+        displayUnit: 'g',
+        displayAmountMilli: 180_000,
+      }],
+    });
+    await renderRouter(appDir, { initialUrl: '/log' });
+
+    const lunch = meal('mittagessen');
+    const fromPhoto = await within(lunch).findByLabelText('Mittagessen: Bratkartoffeln, 180 g, 270 kcal, KI-Schätzung');
+    expect(within(fromPhoto).getByTestId('icon-camera', { includeHiddenElements: true })).toBeOnTheScreen();
+    // Einträge aus der Suche tragen weder Symbol noch Hinweis.
+    const fromSearch = within(meal('fruehstueck')).getByLabelText('Frühstück: Hafer Flocken, 60 g, 209 kcal');
+    expect(within(fromSearch).queryByTestId('icon-camera', { includeHiddenElements: true })).not.toBeOnTheScreen();
   });
 
   it('zeigt an einem leeren Tag 0 kcal und vier Leerzustände', async () => {
