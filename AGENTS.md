@@ -38,6 +38,7 @@ Aufbau (npm-Workspace mit `apps/mobile`, `apps/backend`, `packages/contracts`, `
 - Zeitpunkt, Zeitzone und lokaler Tag kommen nur aus der `Clock`-Schnittstelle von `@abnehm/clock` (für einen gegebenen Zeitpunkt, etwa einen nachgetragenen, aus `readingOf`), nie aus `Date.now()`, `new Date()` oder `Intl`. Das prüft `npm run lint`, ebenso die Importgrenzen des Vertragsmoduls.
 - Zod-Schemas und Typen, die App und Backend teilen, liegen nur im Vertragsmodul `@abnehm/contracts`. Einzige Ausnahme sind die Spielregeln samt Katalogformat und Spielkatalog im reinen Paket `@abnehm/game-rules` ([Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83), Abschnitt 1); Spielformeln stehen nur dort.
 - Das Datenmodell ändert sich nur in beiden Drizzle-Schemas zugleich (Postgres und SQLite), samt mit `drizzle-kit generate` erzeugter Migration je Workspace. Bereichscode schreibt lokal nur über `LocalDatabase.transaction` aus `apps/mobile/src/local-db/`.
+- Simulatoren, Emulatoren und App-Builds nur unter der **Gerätesperre**: vor dem ersten Geräteschritt `scripts/geraete-slot nehmen --warten`, direkt nach dem letzten `scripts/geraete-slot freigeben`. Genutzt werden die festen gemeinsamen Geräte und der E2E-Stack `abnehm-e2e`. Ablauf und Gründe: `docs/entwicklung.md` › „Gerätesperre“.
 - Vor dem Pull Request laufen `npm run typecheck`, `npm run lint` und `npm test`; die CI wiederholt sie.
 
 ## Parallele Sessions und Git-Worktrees

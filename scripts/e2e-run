@@ -7,9 +7,9 @@
 #
 # Abläufe (apps/mobile/e2e/): sync-offline (E2E), geraetesmoke (Shell), geraetetest (On-Device-Suite).
 # Das E2E-Backend ist ein eigener Compose-Stack `abnehm-e2e` (Development-Image mit Seed-Route) auf
-# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Ein Worktree mit
-# eigenen Secrets (scripts/dev-secrets) braucht ein eigenes Postgres-Volume und wählt dafür einen
-# anderen Stack (gleicher Port, also nie zwei zugleich): E2E_COMPOSE_PROJECT=abnehm-e2e-<ticket> … Jeder Lauf
+# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Der Lauf nimmt die
+# Gerätesperre (scripts/geraete-slot). Alle Worktrees teilen den Stack; die Sperre entfernt ihn samt Volume,
+# wenn ihr Inhaber wechselt, weil jeder Worktree eigene Secrets hat (scripts/dev-secrets). Jeder Lauf
 # schreibt Protokoll, Bildschirmfotos, JUnit-Bericht und die Artefakt-IDs der getesteten Binaries nach
 # ~/Library/Logs/abnehm-app/e2e/<Zeitpunkt>/; die Zusammenfassung steht in zusammenfassung.txt.
 set -euo pipefail
@@ -45,6 +45,10 @@ log_dir="${E2E_LOG_DIR:-$HOME/Library/Logs/abnehm-app/e2e}/$(date -u +%Y%m%dT%H%
 mkdir -p "$log_dir"
 summary="$log_dir/zusammenfassung.txt"
 echo "E2E-Lauf $(date -u +%Y-%m-%dT%H:%M:%SZ), Commit $(cd "$repo_root" && git rev-parse HEAD)" > "$summary"
+
+# Gerätesperre (#282) wie in scripts/app-build -----------------------------------------------------
+slot="$(cd "$repo_root" && scripts/geraete-slot nehmen --warten)"
+[[ "$slot" != genommen ]] || trap '(cd "$repo_root" && scripts/geraete-slot freigeben)' EXIT
 
 # E2E-Backend ---------------------------------------------------------------------------------------
 echo "Starte das E2E-Backend auf 127.0.0.1:$port …" >&2
@@ -92,6 +96,7 @@ android_device() {
 # Läufe ---------------------------------------------------------------------------------------------
 failed=0
 for platform in "${platforms[@]}"; do
+  (cd "$repo_root" && scripts/geraete-slot nehmen >/dev/null)  # erneuern, damit die Sperre nicht verfällt
   if [[ -n "$device" && "$platform" == ios ]]; then
     # Maestro meldet ein per Kabel angeschlossenes iPhone als „not connected“ (#101); dort läuft der
     # Ablauf von Hand, siehe docs/entwicklung.md › „Echte Geräte“.

@@ -102,7 +102,20 @@ e2e_backend() {
   fi
 }
 
+# Gerätesperre (#282) für Schritte mit Builds, Simulatoren und Geräten. Selbst genommen → am Ende freigeben.
+slot=""
 for step in "${steps[@]}"; do
+  case "$step" in
+    maestro|android-geraet|iphone-geraet|produktion-binaries)
+      slot="$(scripts/geraete-slot nehmen --warten)" || exit 1
+      [[ "$slot" != genommen ]] || trap 'scripts/geraete-slot freigeben' EXIT
+      break ;;
+  esac
+done
+
+for step in "${steps[@]}"; do
+  # Erneuern, damit die Sperre während langer Handschritte nicht verfällt.
+  [[ -z "$slot" ]] || scripts/geraete-slot nehmen >/dev/null
   case "$step" in
     stand)
       git fetch --quiet origin main
