@@ -5,8 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "APP_VARIANT=development expo start",
-    "ios": "APP_VARIANT=development expo run:ios",
-    "android": "APP_VARIANT=development expo run:android",
+    "ios": "../../scripts/geraete-slot nehmen >/dev/null && APP_VARIANT=development expo run:ios",
+    "android": "../../scripts/geraete-slot nehmen >/dev/null && APP_VARIANT=development expo run:android",
     "typecheck": "tsc --noEmit",
     "bls-katalog": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/bls-catalog/build.ts",
     "test": "jest"

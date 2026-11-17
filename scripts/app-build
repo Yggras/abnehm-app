@@ -69,6 +69,9 @@ fi
 target="$platform-$([[ "$device" == true ]] && echo geraet || ([[ "$platform" == ios ]] && echo simulator || echo emulator))"
 out="$mobile/build/$variant/$target"
 if [[ "$only_path" == true ]]; then echo "$out/artefakt.json"; exit 0; fi
+# Gerätesperre (#282): Nur eine Session baut oder nutzt Geräte. Selbst genommen → am Ende wieder freigeben.
+slot="$(cd "$repo_root" && scripts/geraete-slot nehmen --warten)"
+[[ "$slot" != genommen ]] || trap '(cd "$repo_root" && scripts/geraete-slot freigeben)' EXIT
 rm -rf "$out"
 mkdir -p "$out"
 
@@ -115,7 +118,11 @@ if [[ "$platform" == "ios" ]]; then
 else
   echo "Baue die Release-APK …" >&2
   # Ohne Daemon, damit der Build sicher in der Umgebung dieses Aufrufs bündelt (Variante, Schalter, Backend).
-  (cd android && ./gradlew --no-daemon --quiet :app:assembleRelease >&2)
+  gradle_args=(--no-daemon --quiet)
+  # Der Emulator `medium_phone` ist arm64-v8a (abi.type in der config.ini des AVD). Nur diese ABI zu bauen spart
+  # den Großteil der nativen Build-Zeit (https://reactnative.dev/docs/build-speed); Gerät und Produktion bauen alle.
+  [[ "$device" == true ]] || gradle_args+=(-PreactNativeArchitectures=arm64-v8a)
+  (cd android && ./gradlew "${gradle_args[@]}" :app:assembleRelease >&2)
   mv android/app/build/outputs/apk/release/app-release.apk "$out/$apk_name"
   binary="$out/$apk_name"
   artifact_id="$(artifact_id_of "$binary")"
