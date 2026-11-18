@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { NotificationsScreen } from '../../settings';
 
-export default placeholderRoute('settings', { section: 'notifications' });
+export default routeScreen('settings', NotificationsScreen, { section: 'notifications' });

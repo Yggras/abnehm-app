@@ -7,6 +7,7 @@ import type { HealthScenario } from '../health/testing/fake-platform';
 import type { FaultController, FaultPlan } from './faults';
 import type { TestHealth } from './health';
 import type { TestLink, TestLinkPath } from './links';
+import type { NotificationTestControl, NotificationTestMode } from './notifications';
 import { applyRuntimeProfile, type RuntimeProfileKey } from './profiles';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
 
@@ -27,6 +28,7 @@ export type TestStatus =
   | Readonly<{ type: 'geraetetest_fertig'; report: DeviceSuiteReport }>
   /** `outcome` ist das Ergebnis des Verbindens, `ohne_konto` ohne geöffnetes Konto. */
   | Readonly<{ type: 'health_gestellt'; scenario: HealthScenario; outcome: HealthConnectOutcome['type'] | 'ohne_konto' | 'fehlgeschlagen' }>
+  | Readonly<{ type: 'mitteilungen_gestellt'; mode: NotificationTestMode }>
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 export type SeedHandler = (run: SeedRun) => Promise<SeedOutcome>;
@@ -34,6 +36,8 @@ export type SeedHandler = (run: SeedRun) => Promise<SeedOutcome>;
 export type TestInboxOptions = {
   faults: FaultController;
   clock: AppTestClock;
+  /** Mitteilungs-Port der App: Fake oder echter Port (#125). */
+  notifications: NotificationTestControl;
   /** Führt eine Phase der On-Device-Suite auf den Dateien des Geräts aus. */
   deviceSuite(phase: DeviceSuitePhase): Promise<DeviceSuiteReport>;
   /** Health-Attrappe (#183). */
@@ -48,7 +52,7 @@ export type TestInbox = {
   subscribe(listener: () => void): () => void;
 };
 
-export function createTestInbox({ faults, clock, deviceSuite, health }: TestInboxOptions): TestInbox {
+export function createTestInbox({ faults, clock, notifications, deviceSuite, health }: TestInboxOptions): TestInbox {
   let current: TestStatus = { type: 'ruhe' };
   const listeners = new Set<() => void>();
   const queue: SeedRun[] = [];
@@ -114,6 +118,9 @@ export function createTestInbox({ faults, clock, deviceSuite, health }: TestInbo
           );
           return;
         }
+        case 'mitteilungen':
+          notifications.simulate(link.permission, link.answer);
+          return setStatus({ type: 'mitteilungen_gestellt', mode: notifications.mode() });
         case 'seed':
           queue.push({ scenario: link.scenario, installation: link.installation, target: link.target });
           void drain();

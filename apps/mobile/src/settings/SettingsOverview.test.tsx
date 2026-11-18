@@ -92,7 +92,6 @@ test.each([
   ['Ziele', '/settings/goals', 'Ziele', 'Kommt mit: Ziele & Onboarding'],
   ['Wochenplan', '/settings/weekly_plan', 'Wochenplan', 'Kommt mit: Ziele & Onboarding'],
   ['Partner & Freigaben', '/settings/partner_sharing', 'Partner & Freigaben', 'Kommt mit: Partner & Benachrichtigungen'],
-  ['Benachrichtigungen', '/settings/notifications', 'Benachrichtigungen', 'Kommt mit: Partner & Benachrichtigungen'],
   ['Apple Health', '/settings/health', 'Gesundheitsdaten', 'Kommt mit: Wasser, Sport, Gewicht & Health'],
 ])('„%s“ öffnet %s mit deutschem Platzhalter, System-Zurück führt zur Übersicht', async (row, pathname, title, owner) => {
   await openOverview();
@@ -103,6 +102,19 @@ test.each([
   expect(await screen.findByRole('header', { name: title })).toBeOnTheScreen();
   expect(screen.getByText('Dieser Bereich ist noch in Arbeit.')).toBeOnTheScreen();
   expect(screen.getByText(owner)).toBeOnTheScreen();
+  await act(() => testRouter.back());
+  expect(screen).toHavePathname('/settings');
+});
+
+test('„Benachrichtigungen“ öffnet die Seite mit dem Systemstatus statt eines Platzhalters (#125)', async () => {
+  await openOverview();
+
+  await user.press(screen.getByRole('button', { name: 'Benachrichtigungen' }));
+
+  expect(screen).toHavePathname('/settings/notifications');
+  expect(await screen.findByRole('header', { name: 'Benachrichtigungen' })).toBeOnTheScreen();
+  expect(screen.queryByText('Dieser Bereich ist noch in Arbeit.')).not.toBeOnTheScreen();
+  expect(screen.getByText('Mitteilungen sind erlaubt')).toBeOnTheScreen();
   await act(() => testRouter.back());
   expect(screen).toHavePathname('/settings');
 });

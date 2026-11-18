@@ -172,7 +172,7 @@ describe('Registry der Testfähigkeiten', () => {
   it('jeder registrierte Deep Link wird ausschließlich im Deep-Link-Modul der Testfähigkeiten angenommen', () => {
     const handler = read(deepLinkHandler);
     const paths = testCapabilities.flatMap(({ entries }) => entries.deepLinks ?? []);
-    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'health', 'profil', 'seed', 'uhr']);
+    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'health', 'mitteilungen', 'profil', 'seed', 'uhr']);
     for (const path of paths) expect(handler, path).toContain(`'${path}'`);
     expect(testCapabilities.some(({ modules }) => belongsTo(deepLinkHandler, modules))).toBe(true);
   });
@@ -426,7 +426,7 @@ describe('Produktions-Bundle der App', () => {
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
     expect(appCapabilities.map(({ key }) => key).sort()).toEqual([
-      'fehler-adapter', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
+      'fehler-adapter', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'mitteilungen', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
     ]);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {

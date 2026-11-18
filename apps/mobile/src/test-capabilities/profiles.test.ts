@@ -5,6 +5,7 @@ import { createAppTestClock, type AppTestClock } from './clock';
 import { createFaultController, faultyFetch, faultySessionStore, type FaultController } from './faults';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
+import { createNotificationTestControl } from './notifications';
 import { applyRuntimeProfile, runtimeProfiles, type RuntimeProfileKey } from './profiles';
 
 // Nachweis für #113: Jedes Laufzeitprofil bildet seinen Zeit-, Transport-, Auth-, Storage- oder
@@ -107,7 +108,7 @@ describe('Link `profil`', () => {
   it('der Eingang stellt das Profil sofort und meldet Plan und Ablesung', () => {
     const faults = createFaultController();
     const clock = fixedClock();
-    const inbox = createTestInbox({ faults, clock, deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) } });
+    const inbox = createTestInbox({ faults, clock, notifications: createNotificationTestControl(), deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) } });
 
     inbox.receive(parseTestLink('abnehmapp-dev://profil?name=server-nicht-verfuegbar')!);
 

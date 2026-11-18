@@ -12,6 +12,7 @@ import { isSessionScreenGate, sessionScreenPath } from '../shell/session-routes'
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
+import { permissionNames, type NotificationTestControl, type NotificationTestMode } from './notifications';
 import { transportFaultModeName } from './network';
 import { runtimeProfiles } from './profiles';
 import { runSeed } from './seed/seed-flow';
@@ -56,10 +57,21 @@ function statusNotice(status: TestStatus) {
     }
     case 'health_gestellt':
       return <Notice tone="neutral" text={`Health-Attrappe „${status.scenario}“: ${healthOutcomeText[status.outcome]}`} />;
+    case 'mitteilungen_gestellt':
+      return <Notice tone="neutral" text={notificationModeText(status.mode)} />;
     case 'ungueltig':
       return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger Link „${status.capability}“ der Testfähigkeiten. Parameter stehen in docs/entwicklung.md.`} />;
   }
 }
+
+function notificationModeText(mode: NotificationTestMode): string {
+  return mode.type === 'system'
+    ? 'Mitteilungen: echter Port des Systems.'
+    : `Mitteilungen simuliert: ${permissionNames[mode.permission]}, Systemdialog antwortet „${permissionNames[mode.answer]}“.`;
+}
+
+/** So lange steht der Stand des Mitteilungs-Ports nach dem Link `mitteilungen`. */
+export const notificationNoticeMs = 5000;
 
 const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
 
@@ -74,11 +86,13 @@ const healthOutcomeText: Record<Extract<TestStatus, { type: 'health_gestellt' }>
 export function TestCapabilityHost({
   inbox,
   clock,
+  notifications,
   session,
   gate,
 }: {
   inbox: TestInbox;
   clock: AppTestClock;
+  notifications: NotificationTestControl;
   session: () => AppSession;
   /** Die Sitzungs-Weiche aus dem Wurzel-Layout; ein eigener Import ergäbe einen Zyklus über `device-session`. */
   gate: SessionGate | null;
@@ -93,11 +107,11 @@ export function TestCapabilityHost({
   useEffect(
     () =>
       inbox.handleSeeds(async (run) => {
-        const outcome = await runSeed(run, { session: session(), clock });
+        const outcome = await runSeed(run, { session: session(), clock, notifications });
         if (outcome.type === 'geseedet') setSeeded({ target: outcome.target });
         return outcome;
       }),
-    [inbox, clock, session],
+    [inbox, clock, notifications, session],
   );
 
   // Das Ziel erst öffnen, wenn die Weiche die Fachoberfläche freigibt und der Router die Sitzungsseite
@@ -110,7 +124,16 @@ export function TestCapabilityHost({
     router.replace(hrefFor(seeded.target));
   }, [seeded, gate, pathname]);
 
-  const notice = statusNotice(status);
+  // Der Stand des Mitteilungs-Ports verdeckt sonst dauerhaft den Kopf der Seite, etwa auf Bildern für
+  // Impeccable; Maestro liest ihn sofort nach dem Link ab (#125).
+  const [expiredStatus, setExpiredStatus] = useState<TestStatus | null>(null);
+  useEffect(() => {
+    if (status.type !== 'mitteilungen_gestellt') return;
+    const timer = setTimeout(() => setExpiredStatus(status), notificationNoticeMs);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  const notice = expiredStatus === status ? null : statusNotice(status);
   if (notice === null) return null;
   return (
     <View pointerEvents="box-none" style={[styles.overlay, { top: insets.top + space[2] }]}>

@@ -315,16 +315,17 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 7: unentschiedene Erlaubnis für Mitteilungen auf dem iPhone seit #125.
     // Revision 6: eigene Lebensmittel seit #157 (ein eigenes mit Portion, eine BLS-Korrektur).
     // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 6,
+    revision: 7,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,
     accounts: [seedAccounts.philipp],
-    installations: [seedInstallations.philippIphone],
+    installations: [{ ...seedInstallations.philippIphone, notificationPermission: 'undetermined' }],
     initial: state,
     // Ein Sync ändert nichts: Das iPhone ist schon auf dem Stand des Servers.
     steps: [{ type: 'sync', installation: seedInstallations.philippIphone.key }],

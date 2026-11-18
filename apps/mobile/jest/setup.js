@@ -17,3 +17,11 @@ jest.mock('@shopify/react-native-skia', () => {
   const nothing = () => null;
   return { Canvas: View, Circle: nothing, Fill: nothing, Group: nothing, Oval: nothing, Path: nothing };
 });
+
+// Mitteilungs-Port (#125): Die Jest-Attrappe von expo-notifications ist unvollständig (etwa
+// `setNotificationHandler`). Tests mit der echten App, etwa `src/shell/AppShell.test.tsx`, sprechen
+// deshalb mit dem Fake der Testfähigkeit `mitteilungen` wie ein frisch installiertes Gerät.
+// `src/notifications/expo-port.test.ts` prüft den echten Adapter gegen eine eigene Attrappe.
+jest.mock('../src/notifications/expo-port', () => ({
+  expoNotificationPort: require('../src/test-capabilities/notifications').createFakeNotificationPort({ permission: 'undetermined' }),
+}));

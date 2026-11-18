@@ -263,6 +263,8 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     ["import Database from 'better-sqlite3';\nexport const d = Database;", 'apps/mobile/src/local-db/testing/probe.ts'],
     ["import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;", 'apps/mobile/src/auth/secure-session-store.ts'],
     ["import { useMutation } from '@tanstack/react-query';\nexport const m = useMutation;", 'apps/mobile/src/online/probe.ts'],
+    ["import * as Notifications from 'expo-notifications';\nexport const n = Notifications;", 'apps/mobile/src/notifications/expo-port.ts'],
+    ["import { Linking } from 'react-native';\nexport const o = () => Linking.openSettings();", 'apps/mobile/src/notifications/expo-port.ts'],
   ])('erlaubt %s in %s', async (code, filePath) => {
     expect(await violations(code, filePath)).toEqual([]);
   });
@@ -279,7 +281,19 @@ describe('Plattformbibliotheken nur hinter ihrem Projektmodul', () => {
     "import Database from 'better-sqlite3';\nexport const d = Database;",
     "import * as SecureStore from 'expo-secure-store';\nexport const s = SecureStore;",
     "import { useQuery } from '@tanstack/react-query';\nexport const q = useQuery;",
+    "import * as Notifications from 'expo-notifications';\nexport const n = Notifications;",
   ])('verbietet im Bereichscode: %s', async (code) => {
     expect(await violations(code, 'apps/mobile/src/start/probe.tsx')).toContain('abnehm/bibliotheksgrenzen');
+  });
+
+  it('verbietet expo-notifications auch im übrigen Mitteilungsmodul (#125)', async () => {
+    const code = "import * as Notifications from 'expo-notifications';\nexport const n = Notifications;";
+    expect(await violations(code, 'apps/mobile/src/notifications/notifications.ts')).toContain('abnehm/bibliotheksgrenzen');
+  });
+
+  it('öffnet die System-Einstellungen nur über den Mitteilungs-Port (#125)', async () => {
+    const code = "import { Linking } from 'react-native';\nexport const o = () => Linking.openSettings();";
+    expect(await violations(code, 'apps/mobile/src/settings/probe.tsx')).toContain('no-restricted-properties');
+    expect(await violations(code, 'apps/mobile/src/settings/probe.test.tsx')).toEqual([]);
   });
 });

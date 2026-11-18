@@ -85,3 +85,11 @@ export function notificationTarget(intent: NotificationIntent): RouteTarget {
       return { type: 'partner' };
   }
 }
+
+/**
+ * Erlaubnis für Mitteilungen auf einem Gerät (Spezifikation 5, Abschnitt 8): `undetermined`, solange
+ * die Person den Systemdialog nicht beantwortet hat. Die App liest sie über den Mitteilungs-Port; Seeds
+ * legen sie je Installation fest, die Push-Installation meldet sie dem Server (Abschnitt 9).
+ */
+export const NotificationPermission = z.enum(['undetermined', 'granted', 'denied']);
+export type NotificationPermission = z.infer<typeof NotificationPermission>;

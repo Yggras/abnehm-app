@@ -13,10 +13,12 @@ import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { personRow } from '../../local-db/testing/rows';
 import { createLogout, syncBeforeLogout, type LogoutRecord, type LogoutStore } from '../../logout';
 import { ClockProvider } from '../../clock/clock-context';
+import { createNotifications, NotificationsProvider, type NotificationPermission } from '../../notifications';
 import { MessageHostProvider } from '../../shell/MessageHost';
 import { createAppSession } from '../../session/app-session';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities, unsecuredOperationCount } from '../../sync';
 import { createFaultController, faultyFetch } from '../../test-capabilities/faults';
+import { createFakeNotificationPort } from '../../test-capabilities/notifications';
 import { AccountProvider, type AccountPorts } from '../AccountProvider';
 import { followOwnDisplayName } from '../own-display-name';
 
@@ -52,7 +54,7 @@ function memory<T>(): { read(): Promise<T | null>; write(value: T): Promise<void
 export type AccountWorld = Awaited<ReturnType<typeof createAccountWorld>>;
 
 /** Philipp ist angemeldet, seine Kontodatenbank ist offen und enthält seine Person. */
-export async function createAccountWorld({ clock }: { clock: Clock }) {
+export async function createAccountWorld({ clock, notificationPermission = 'granted' }: { clock: Clock; notificationPermission?: NotificationPermission }) {
   const files = createBetterSqliteFiles();
   const errors: unknown[] = [];
   const onError = (error: unknown) => errors.push(error);
@@ -100,13 +102,18 @@ export async function createAccountWorld({ clock }: { clock: Clock }) {
   });
 
   const ports: AccountPorts = { auth: session.auth, logout, displayName };
+  // Mitteilungen über den Fake-Mitteilungs-Port der Testfähigkeit `mitteilungen` (#125).
+  const notificationPort = createFakeNotificationPort({ permission: notificationPermission });
+  const notifications = createNotifications({ port: notificationPort, onError });
   /** Wurzel-Layout für `renderRouter`: Uhr, Meldungs-Host und die Ports dieser Welt wie in `src/app/_layout.tsx`. */
   function Layout() {
     return (
       <ClockProvider clock={clock}>
         <MessageHostProvider>
           <AccountProvider ports={ports}>
-            <Stack screenOptions={{ headerShown: false }} />
+            <NotificationsProvider notifications={notifications}>
+              <Stack screenOptions={{ headerShown: false }} />
+            </NotificationsProvider>
           </AccountProvider>
         </MessageHostProvider>
       </ClockProvider>
@@ -115,6 +122,8 @@ export async function createAccountWorld({ clock }: { clock: Clock }) {
   return {
     ports,
     Layout,
+    notificationPort,
+    notifications,
     auth: session.auth,
     backend,
     faults,

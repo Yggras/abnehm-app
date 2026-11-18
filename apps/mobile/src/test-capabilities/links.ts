@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { TimeZone } from '@abnehm/contracts/base';
+import type { NotificationPermission } from '@abnehm/contracts/notifications';
 import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
@@ -9,6 +10,7 @@ import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
+import { permissionOfName, type NotificationAnswer } from './notifications';
 import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 
 // Deep Links der Testfähigkeiten (#112, #114), nur in Test-Artefakten (Development- und E2E-Build;
@@ -28,6 +30,9 @@ import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 //     führt eine Phase der On-Device-Suite aus;
 //   abnehmapp-dev://health?szenario=erstimport
 //     stellt die Health-Attrappe auf ein Szenario (#183) und verbindet den Health-Import.
+//   abnehmapp-dev://mitteilungen?erlaubnis=unentschieden|erlaubt|verweigert[&antwort=erlaubt|verweigert]
+//     stellt den Mitteilungs-Port auf den Fake mit dieser Erlaubnis und dieser Antwort im Systemdialog
+//     (#125); `erlaubnis=system` stellt ihn zurück auf den echten Port.
 //
 // Geparst wird von Hand: Die URL-Implementierung von React Native ist unvollständig.
 
@@ -38,11 +43,13 @@ export type TestLink =
   | Readonly<{ type: 'profil'; profile: RuntimeProfileKey }>
   | Readonly<{ type: 'geraetetest'; phase: DeviceSuitePhase }>
   | Readonly<{ type: 'health'; scenario: HealthScenario }>
+  /** `permission: null` ist der echte Port des Systems. */
+  | Readonly<{ type: 'mitteilungen'; permission: NotificationPermission | null; answer: NotificationAnswer }>
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 /** Pfade der Deep Links; der Release-Test gleicht sie mit der Registry ab (`test/test-capabilities.ts`). */
-export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health' } as const;
+export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health', mitteilungen: 'mitteilungen' } as const;
 export type TestLinkPath = keyof typeof testLinkPaths;
 
 const clockParams = z
@@ -54,6 +61,10 @@ const deviceSuiteParams = z.strictObject({ phase: z.enum(deviceSuitePhases) });
 const profileParams = z.strictObject({ name: runtimeProfileKeySchema });
 
 const healthParams = z.strictObject({ szenario: z.enum(healthScenarios) });
+const notificationParams = z.strictObject({
+  erlaubnis: z.enum(['system', 'unentschieden', 'erlaubt', 'verweigert']),
+  antwort: z.enum(['erlaubt', 'verweigert']).default('erlaubt'),
+});
 
 /** Der Link als Testfähigkeit, oder `null`, wenn er keiner ist. */
 export function parseTestLink(link: string): TestLink | null {
@@ -94,6 +105,12 @@ export function parseTestLink(link: string): TestLink | null {
   if (path === testLinkPaths.health) {
     const health = healthParams.safeParse(Object.fromEntries(params));
     return health.success ? { type: 'health', scenario: health.data.szenario } : { type: 'ungueltig', capability: 'health' };
+  }
+  if (path === testLinkPaths.mitteilungen) {
+    const notifications = notificationParams.safeParse(Object.fromEntries(params));
+    if (!notifications.success) return { type: 'ungueltig', capability: 'mitteilungen' };
+    const { erlaubnis, antwort } = notifications.data;
+    return { type: 'mitteilungen', permission: erlaubnis === 'system' ? null : permissionOfName[erlaubnis], answer: permissionOfName[antwort] };
   }
   return null;
 }

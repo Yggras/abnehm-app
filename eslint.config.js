@@ -276,7 +276,24 @@ export default defineConfig([
             allowedIn: ['apps/mobile/src/auth/secure-session-store.ts'],
             message: 'Die Sitzung liegt nur über das Auth-Modul in SecureStore (apps/mobile/src/auth/).',
           },
+          {
+            // Spezifikation 5, Abschnitt 8: der Mitteilungs-Port ist die einzige Stelle mit Zugriff darauf (#125).
+            modules: ['expo-notifications'],
+            allowedIn: ['apps/mobile/src/notifications/expo-port.ts'],
+            message: 'Mitteilungen laufen über den Mitteilungs-Port aus apps/mobile/src/notifications/.',
+          },
         ],
+      ],
+    },
+  },
+  {
+    // Auch die System-Einstellungen öffnet nur der Mitteilungs-Port (Spezifikation 5, Abschnitt 8; #125).
+    files: ['apps/mobile/src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}', 'apps/mobile/src/notifications/expo-port.ts'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        { object: 'Linking', property: 'openSettings', message: 'Die System-Einstellungen öffnet `useNotifications().openSettings()` über den Mitteilungs-Port (apps/mobile/src/notifications/).' },
       ],
     },
   },

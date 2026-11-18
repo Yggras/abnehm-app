@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { NotificationPermissionScreen } from '../../notifications';
 
-export default placeholderRoute('notifications.permission');
+export default routeScreen('notifications.permission', NotificationPermissionScreen);

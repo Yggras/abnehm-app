@@ -10,6 +10,7 @@ import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/bette
 import { createAppSession } from '../../mobile/src/session/app-session.ts';
 import { createAppTestClock } from '../../mobile/src/test-capabilities/clock.ts';
 import { createFaultController, faultyFetch } from '../../mobile/src/test-capabilities/faults.ts';
+import { createNotificationTestControl } from '../../mobile/src/test-capabilities/notifications.ts';
 import { runSeed } from '../../mobile/src/test-capabilities/seed/seed-flow.ts';
 import { fetchFollowingServerClock } from '../../mobile/src/test-capabilities/server-clock.ts';
 import { createDevelopmentTestBackend, testBaseUrl, type DevelopmentTestBackend } from './support/app.ts';
@@ -139,7 +140,7 @@ function phone(backend: DevelopmentTestBackend) {
       throw error;
     },
   });
-  return { session, clock, faults, network };
+  return { session, clock, faults, network, notifications: createNotificationTestControl() };
 }
 
 const solo = { scenario: 'solo', installation: null, target: { type: 'today' } } as const;

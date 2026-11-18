@@ -20,10 +20,13 @@ import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
+import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
+import { expoNotificationPort } from '../notifications/expo-port';
 import { createDeviceInvitationFlows } from '../online';
 import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
+import { appOnboardingRegistry } from '../shell/onboarding-registry';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { appWirContributions } from '../shell/app-wir';
 import { appTodayRefresh } from '../shell/today-refresh';
@@ -208,6 +211,29 @@ function deviceState() {
   device = { session, gate, logout, account: { auth: session.auth, logout, displayName: ownDisplayName }, onboarding };
   return device;
 }
+
+let notifications: AppNotifications | null = null;
+
+/**
+ * Mitteilungen des Geräts (Spezifikation 5, Abschnitt 8). Das Wurzel-Layout ruft das beim Start auf:
+ * Dann legt die App die Android-Kanäle an und das Vordergrundverhalten fest, vor jeder Erlaubnisanfrage.
+ * Die Erlaubnis liest sie bei jeder Rückkehr in den Vordergrund neu, etwa aus den System-Einstellungen.
+ * In Test-Artefakten liegt vor dem echten Port der Umschalter auf den Fake (#125).
+ */
+export function deviceNotifications(): AppNotifications {
+  if (notifications !== null) return notifications;
+  const port = testCapabilities?.adapters.notifications(expoNotificationPort) ?? expoNotificationPort;
+  const created = createNotifications({ port, onError });
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') void created.refresh();
+  });
+  testCapabilities?.notificationsChanged(() => void created.refresh());
+  notifications = created;
+  return created;
+}
+
+/** Onboarding-Schritt 10 (Spezifikation 5): Erklärung und Systemdialog. */
+appOnboardingRegistry.register('partner', 'notifications', NotificationsStep);
 
 /** Das Onboarding-Modul des Geräts für die Routen `sitzung` und `onboarding`. */
 export function deviceOnboarding(): Onboarding {

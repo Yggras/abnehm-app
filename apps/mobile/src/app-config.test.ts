@@ -1,7 +1,7 @@
 import type { ConfigContext } from 'expo/config';
-import type { ExportedConfig } from 'expo/config-plugins';
+import { AndroidConfig, type ExportedConfig } from 'expo/config-plugins';
 
-import createConfig from '../app.config';
+import createConfig, { exactAlarmPermissions } from '../app.config';
 
 const original = {
   variant: process.env.APP_VARIANT,
@@ -85,6 +85,24 @@ test('der Produktionsbuild spricht das Backend nur über HTTPS an (Produktiv-Gat
   // Ohne Adresse bleibt der Export der Release-Sperren möglich; zur Laufzeit fehlt sie dann laut (src/backend/client.ts).
   setEnv('EXPO_PUBLIC_API_URL', undefined);
   expect(() => configFor(undefined)).not.toThrow();
+});
+
+test('jeder Build entfernt Exact-Alarm-Berechtigungen aus dem zusammengeführten Manifest (#125)', async () => {
+  for (const config of [configFor(undefined), configFor('development'), configFor('e2e', 'true')]) {
+    expect(config.android?.blockedPermissions).toEqual(exactAlarmPermissions);
+    // Expos Plugin für `blockedPermissions`, wie `expo prebuild` es anwendet, auf ein Manifest, in das ein Paket beide eingetragen hat.
+    const withMod = AndroidConfig.Permissions.withInternalBlockedPermissions(config);
+    const fromPackage = { manifest: { $: {}, 'uses-permission': exactAlarmPermissions.map((name) => ({ $: { 'android:name': name } })) } };
+    const result = await (withMod as ExportedConfig).mods!.android!.manifest!({ modRequest: {}, modResults: fromPackage } as never);
+    const permissions = (result as unknown as { modResults: { manifest: { 'uses-permission': { $: Record<string, string> }[] } } }).modResults.manifest['uses-permission'];
+    expect(permissions.map((permission) => permission.$)).toEqual(
+      exactAlarmPermissions.map((name) => ({ 'android:name': name, 'tools:node': 'remove' })),
+    );
+  }
+});
+
+test('lokale Benachrichtigungen ohne APNs-Entitlement, bis Server-Push kommt (#125)', () => {
+  expect(configFor(undefined).plugins).toContainEqual(['expo-notifications', { enableRemoteNotifications: false }]);
 });
 
 test('Development- und E2E-Build dürfen das lokale Backend per HTTP ansprechen', () => {

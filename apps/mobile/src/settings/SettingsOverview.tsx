@@ -3,6 +3,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { color, ListGroup, ListRow, size, Skeleton, space, Text, type IconName } from '../design';
 import { openTarget, type RouteScreenProps } from '../navigation';
+import { notificationTexts, useNotificationPermission } from '../notifications';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 import { useAccountEmail, useDisplayName, type EmailState } from './AccountProvider';
@@ -48,6 +49,10 @@ function rowTitle(section: Section): string {
 }
 
 export function SettingsOverview({ target }: RouteScreenProps<'settings'>) {
+  const permission = useNotificationPermission();
+  // „Aus“, wenn Mitteilungen nicht erlaubt sind, auch solange die Person nicht entschieden hat (#125).
+  const subtitle = (section: Section) =>
+    section === 'notifications' && permission !== null && permission !== 'granted' ? notificationTexts.overviewOff : undefined;
   return (
     <ScreenFrame title={titleOf(target)} presentation="page">
       <AccountHeader />
@@ -56,7 +61,7 @@ export function SettingsOverview({ target }: RouteScreenProps<'settings'>) {
           <SectionTitle>{group.title}</SectionTitle>
           <ListGroup>
             {group.rows.map(({ section, icon }) => (
-              <ListRow key={section} icon={icon} title={rowTitle(section)} onPress={() => openTarget({ type: 'settings', section })} />
+              <ListRow key={section} icon={icon} title={rowTitle(section)} subtitle={subtitle(section)} onPress={() => openTarget({ type: 'settings', section })} />
             ))}
           </ListGroup>
         </View>
