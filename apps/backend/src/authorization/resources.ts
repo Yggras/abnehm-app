@@ -467,6 +467,26 @@ const sharedActionDecisionRule = byId(
   { onlyOperations: ['befehl'] },
 );
 
+/**
+ * Auf ein Inselfeld bauen (`buildObject`): nur auf ein eigenes Feld und nur als aktives Mitglied der
+ * Kopplung, der die Insel gehört. Felder des Partners und gemeinsame Bereiche ohne Besitzer sind damit
+ * verboten, ebenso eine archivierte Kopplung (Spezifikation 4, Abschnitt 3; Spezifikation 0, Abschnitt 11).
+ */
+const ownFieldRule = byId(
+  'kopplungsinhalte',
+  islandField,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await first(
+      context.db.select({ couplingId: islandField.couplingId, owner: islandField.ownerPersonId }).from(islandField).where(eq(islandField.id, id)),
+    );
+    if (found?.owner !== personId) return denied;
+    const membership = await activeMembership(context.db, found.couplingId, personId);
+    return membership === null ? denied : allowed({ ownerPersonId: personId, couplingId: found.couplingId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
 /** Revocation-Notice: nur der ehemals bezeichnete Empfänger, auch nach Rechteentzug. */
 const revocationNoticeRule = byId('widerrufshinweis', revocationNotice, async (context, id) => {
   const found = await first(
@@ -526,6 +546,7 @@ export const resourceEntities = {
   blueprint_unlock: coupled('kopplungsinhalte', blueprintUnlock, inCoupling(blueprintUnlock)),
   area_unlock: coupled('kopplungsinhalte', areaUnlock, inCoupling(areaUnlock)),
   island_field: coupled('kopplungsinhalte', islandField, inCoupling(islandField)),
+  island_field_build: ownFieldRule,
   island_object: coupled('kopplungsinhalte', islandObject, inCoupling(islandObject)),
   community_project: coupled('kopplungsinhalte', communityProject, inCoupling(communityProject)),
   island_event: coupled('kopplungsinhalte', islandEvent, inCoupling(islandEvent)),

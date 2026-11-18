@@ -212,6 +212,7 @@ describe('Beiträge gegen die Vertrags-Fixtures', () => {
         ownHalfPercent: 0,
         partnerHalfPercent: 0,
         waitingForPartner: false,
+        partnerDisplayName: 'Anna',
       },
     });
     expect(WirContributionsState.parse(contributions.at(-1))).toEqual({

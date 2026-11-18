@@ -1,11 +1,11 @@
 import { minutesOfDay, type Clock } from '@abnehm/clock';
-import type { IslandProgress } from '@abnehm/contracts/island';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useClock } from '../clock/clock-context';
 import { color, space } from '../design';
+import type { IslandHalves } from './halves';
 import { IslandBar, type IslandEntry } from './IslandBar';
 import { IslandCanvas } from './IslandCanvas';
 import { IslandHud } from './IslandHud';
@@ -14,7 +14,8 @@ import { islandTexts } from './texts';
 
 export type IslandViewProps = {
   island: IslandSceneInput;
-  progress: IslandProgress;
+  /** Levelbalken; die eigene Hälfte ist lokal sofort wirksam (#191). */
+  halves: IslandHalves;
   viewerPersonId: string;
   partnerName: string;
   /** Angezeigte eigene Energie, mindestens 0. */
@@ -35,7 +36,7 @@ export type IslandViewProps = {
  * HUD, unten die Leiste. Die Szene folgt der lokalen Uhrzeit der betrachtenden Person und dem
  * Schalter „Bereiche“.
  */
-export function IslandView({ island, progress, viewerPersonId, partnerName, energy, onOpen, onFieldPress, onMomoPress, onLevelPress, bottomInset = 0 }: IslandViewProps) {
+export function IslandView({ island, halves, viewerPersonId, partnerName, energy, onOpen, onFieldPress, onMomoPress, onLevelPress, bottomInset = 0 }: IslandViewProps) {
   const localTime = useLocalTime(useClock());
   const [areas, setAreas] = useState(false);
   const [selectedField, setSelectedField] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function IslandView({ island, progress, viewerPersonId, partnerName, ener
       <IslandCanvas
         testID="insel"
         scene={scene}
-        accessibilityLabel={islandTexts.island(progress.level, ownObjects)}
+        accessibilityLabel={islandTexts.island(halves.level, ownObjects)}
         onHit={(hit) => {
           if (hit?.type === 'momo') {
             onMomoPress?.();
@@ -66,8 +67,7 @@ export function IslandView({ island, progress, viewerPersonId, partnerName, ener
           season={scene.season}
           daytime={scene.daytime}
           energy={energy}
-          progress={progress}
-          viewerPersonId={viewerPersonId}
+          halves={halves}
           partnerName={partnerName}
           areas={areas}
           onToggleAreas={() => setAreas((on) => !on)}

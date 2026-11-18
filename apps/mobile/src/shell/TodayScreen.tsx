@@ -19,7 +19,7 @@ import { PartnerStage } from '../partner/PartnerStage';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
-import { thousandthsWithOneDecimal } from './texts';
+import { thousandthsWithOneDecimal, waitingForPartnerText } from './texts';
 import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContributionError } from './today-registry';
 
 type Data<S> = S extends ContributionState<infer D, string> ? D : never;
@@ -116,7 +116,7 @@ function MomoArea({ character, goals, large, stale }: { character: MomoCharacter
       {stale ? <Text tone="inkMuted">{staleLabel(stale)}</Text> : null}
       <Text variant="headline" accessibilityRole="header">Momo · Level {character.level}</Text>
       <View style={styles.row}><EnergySymbol /><Text>{character.energy} Energie</Text></View>
-      <Text tone="inkMuted">{character.waitingForPartner ? 'Dein Teil ist voll. Momo wartet auf euch beide.' : 'Euer gemeinsamer Fortschritt'}</Text>
+      <Text tone="inkMuted">{character.waitingForPartner ? waitingForPartnerText(character.partnerDisplayName) : 'Euer gemeinsamer Fortschritt'}</Text>
       <View accessible accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 200, now: character.ownHalfPercent + character.partnerHalfPercent, text: `Dein Anteil ${character.ownHalfPercent} Prozent, Partneranteil ${character.partnerHalfPercent} Prozent` }} accessibilityLabel={`Gemeinsamer Levelbalken, Level ${character.level}`}>
         <View style={styles.levelbar}>
           <View style={styles.levelHalf}><View style={[styles.ownFill, { width: `${character.ownHalfPercent}%` }]} /></View>
@@ -248,7 +248,7 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} l`} of={`von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ label: 'Wasser heute', value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} min`} of={`von ${d.weeklyTargetMinutes} min diese Woche`} progress={{ label: 'Sport diese Woche', value: d.weekMinutes, target: d.weeklyTargetMinutes }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
-      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} status={weighDayText(d.status, clock.read().localDate)} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
+      <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} of={d.value?.type === 'trend' ? 'Trend' : undefined} status={weighDayText(d.status, clock.read().localDate)} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
     <View testID="today-slot-partner"><PartnerSlot registry={registry} /></View>
   </View>;

@@ -301,8 +301,9 @@ describe('Nachholen', () => {
   it('legt fehlende Tage genau im 7-Tage-Fenster an, mit den damals gültigen Fassungen und der aktuellen Zone', async () => {
     const world = await setup({ at: '2026-10-01T10:00:00.000Z' });
     await world.saveOn('2026-10-01T10:00:00.000Z');
-    // Ab 11.10. gilt ein höheres Wasserziel. Auch dieses Speichern ist ein Auslöser: Es holt den 05. bis
-    // 10.10. mit der damals gültigen Fassung nach, der 02. bis 04.10. liegen außerhalb des Fensters.
+    // Am 11.10. erneut gespeichert: Das höhere Wasserziel gilt ab 12.10. (#134). Auch dieses Speichern ist
+    // ein Auslöser: Es holt den 05. bis 10.10. mit der damals gültigen Fassung nach, der 02. bis 04.10.
+    // liegen außerhalb des Fensters.
     await world.saveOn('2026-10-11T10:00:00.000Z', { waterTargetMl: 2_000 });
     // Nach einer Reise nach London: heute ist der 14.10., der 12. bis 14.10. fehlen noch.
     world.trigger('2026-10-14T10:00:00.000Z', london);
@@ -312,7 +313,7 @@ describe('Nachholen', () => {
     ]);
     const water = (localDate: string) => world.goals(localDate).find((goal) => goal.baustein === 'wasserziel')!;
     expect(water('2026-10-10').snapshot).toMatchObject({ targetMl: 1_500, timeZone: berlin, dayEndsAt: '2026-10-10T22:00:00.000Z' });
-    expect(water('2026-10-11').snapshot).toMatchObject({ targetMl: 2_000, timeZone: berlin });
+    expect(water('2026-10-11').snapshot).toMatchObject({ targetMl: 1_500, timeZone: berlin });
     expect(water('2026-10-12').snapshot).toMatchObject({ targetMl: 2_000, timeZone: london, dayEndsAt: '2026-10-12T23:00:00.000Z' });
     expect(materializations(world.operations()).map((operation) => operation.payload.localDate)).toEqual([
       '2026-10-01', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14',
@@ -329,7 +330,8 @@ describe('Nachholen', () => {
     expect(world.days()).toEqual(['2026-10-01', '2026-10-02', '2026-10-03']);
     expect(world.reportsOf('tagesabschluss')).toEqual([['2026-10-01', '2026-10-02']]);
     expect(world.reportsOf('app_oeffnung')).toEqual([]);
-    expect(world.reportsOf('planaenderung')[0]![0]).toBe('2026-10-03');
+    // Unverändert gespeichert: Es entsteht keine Fassung, also meldet es keine Planänderung (#134).
+    expect(world.reportsOf('planaenderung')).toEqual([]);
   });
 
   it('legt nie einen Tag vor dem ersten valid_from an', async () => {
@@ -396,8 +398,9 @@ describe('Keine Rückwirkung', () => {
     await world.saveOn('2026-10-14T10:00:00.000Z');
     const before = world.goals();
 
-    // Erneutes Speichern am selben Tag ersetzt die Fassungen lokal (#128); ob der Server das annimmt, klären #134 und #144.
+    // Erneutes Speichern am selben Tag legt Fassungen ab morgen an (#134), „Ziele ändern“ ebenso.
     await world.saveOn('2026-10-14T11:00:00.000Z', { waterTargetMl: 2_500, weeklySportTargetMinutes: 200, sportDays: ['mittwoch'], weighDay: 'freitag' });
+    world.plan.changeGoals({ ...draft, waterTargetMl: 3_000 });
     world.trigger('2026-10-14T12:00:00.000Z', tokyo);
 
     expect(world.goals('2026-10-14')).toEqual(before);

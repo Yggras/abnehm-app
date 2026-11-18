@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CatalogKey, EntityId, Instant, ServerVersion, TimeZone } from './base.ts';
+import { CatalogKey, EntityId, Instant, LocalDate, ServerVersion, TimeZone } from './base.ts';
 
 // Momo, Insel und gemeinsame Aktionen (Spezifikation 0, Abschnitte 5, 6 und 9). Die Spielregeln
 // selbst liefert Spezifikation 4; hier stehen nur die geteilten Formen.
@@ -162,6 +162,28 @@ export function sharedActionRequestKey(actionId: EntityId): string {
  */
 export function sharedActionDecisionKey(actionId: EntityId): string {
   return `shared_action:${actionId}:entscheidung`;
+}
+
+/**
+ * Nutzlast des Fachbefehls `buildObject` (Spezifikation 4, Abschnitte 2.5 und 7): ein Bauplan auf ein
+ * eigenes freies Feld. Objekt, Feldbelegung und `build_debit` entstehen in einem Befehl; den Preis
+ * berechnen App und Server mit den Spielregeln aus dem Bauplan, nie aus der Nutzlast. Person und Insel
+ * kommen aus der Sitzung und dem Feld. Alle IDs vergibt das Gerät.
+ */
+export const BuildObject = z.strictObject({
+  /** ID des Spielbefehls; zugleich Buchungsschlüssel der `build_debit` (Spezifikation 0, Abschnitt 4). */
+  commandId: EntityId,
+  islandObjectId: EntityId,
+  fieldId: EntityId,
+  blueprintKey: CatalogKey,
+  /** Lokaler Tag der Ausgabe auf dem Gerät; Tag der Buchung. */
+  localDate: LocalDate,
+});
+export type BuildObject = z.infer<typeof BuildObject>;
+
+/** Fachlicher Schlüssel von `buildObject`: je Spielbefehl genau ein Bau. */
+export function buildObjectKey(commandId: EntityId): string {
+  return `bauen:${commandId}`;
 }
 
 /** Entwicklungsform zum Level (Kaulquappe ab Level 1 … Lagunendrache ab Level 43). */

@@ -23,7 +23,9 @@ export const seedFormatVersion = 1;
  * Szenarien mit Manifest. `solo-wasser-*` sind Varianten von `solo` für jeden Status des
  * Wasser-Mini-Trackers (#171), `solo-sport-*` die Status „Wochenziel erreicht“ und „über dem
  * Wochenziel“ des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` der Randzustand „Wochenplan ohne Wiegetag“
- * (#175). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). `leer` bis
+ * (#175). `solo-gewicht-steigend`, `solo-gewicht-ohne-14-tage` und `solo-haltemodus` sind die Randzustände
+ * „steigender Trend“, „kein Tagesgewicht in den letzten 14 Tagen“ und „Prognose im Haltemodus entfallen“ des
+ * Gewichtstrends; „unter drei Tagesgewichten“ zeigt schon `solo` (#176). `frisches_konto` ist das erste Szenario aus Spezifikation 1 (#138). `leer` bis
  * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113), `zwei_installationen` und
  * `offline_sync` die Mehrgeräte- und Sync-Szenarien (#116). `solo-energie` (Laichkugel solo mit
  * gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
@@ -38,6 +40,9 @@ export const SeedScenarioKey = z.enum([
   'solo-sport-erreicht',
   'solo-sport-ueber-ziel',
   'solo-ohne-wiegetag',
+  'solo-gewicht-steigend',
+  'solo-gewicht-ohne-14-tage',
+  'solo-haltemodus',
   'gekoppelt',
   'nach_entkopplung',
   'frisches_konto',
@@ -54,6 +59,8 @@ export const SeedScenarioKey = z.enum([
   'rollenwahl-offen',
   'tage_ohne_app_oeffnung',
   'zeitzonen_reisen',
+  'haelfte-voll',
+  'doppelausgabe',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

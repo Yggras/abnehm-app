@@ -12,6 +12,7 @@ import { createSharedActions } from './coupling/shared-actions.ts';
 import { createUncoupling } from './coupling/uncoupling.ts';
 import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
 import { energyBookingEntity } from './energy/bookings.ts';
+import { buildObjectCommand } from './island/build-object.ts';
 import { islandSyncEntities } from './island/island-entities.ts';
 import { roleChoiceKind } from './island/role-choice.ts';
 import type { Database } from './database.ts';
@@ -84,9 +85,10 @@ export function createBackend({
   const sharedActions = createSharedActions();
   for (const command of sharedActions.commands) sync.registerCommand(command);
   // Momo, Insel & Challenges (Spezifikation 4): Rollenwahl (#180), deren Annahme das Schlüpfen ist,
-  // und die Inselinhalte im Sync (#184).
+  // die Inselinhalte im Sync (#184) und Bauen (#191).
   sharedActions.registerKind(roleChoiceKind);
   for (const entity of islandSyncEntities) sync.registerEntity(entity);
+  sync.registerCommand(buildObjectCommand);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.

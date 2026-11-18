@@ -1,4 +1,5 @@
 import {
+  BuildObject,
   ChallengeStatus,
   CommonStage,
   DecideSharedAction,
@@ -16,7 +17,7 @@ import {
   SharedActionDecision,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
-import { anna, coupling, island, islandObject, now, philipp, project, sharedAction, timeZone } from './ids.ts';
+import { anna, command, coupling, island, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
 
 const progress = {
   islandId: island,
@@ -156,6 +157,19 @@ export const islandFixtures = {
       'ohne Entscheidung': { actionId: sharedAction, timeZone },
       'ohne Zone des Geräts': { actionId: sharedAction, decision: 'annehmen' },
       'Entscheider aus dem Client': { actionId: sharedAction, decision: 'ablehnen', timeZone, deciderPersonId: philipp },
+    },
+  }),
+  BuildObject: fixtures(BuildObject, {
+    valid: {
+      'Laterne auf ein eigenes Feld': { commandId: command, islandObjectId: islandObject, fieldId: islandField, blueprintKey: 'laterne', localDate: today },
+    },
+    invalid: {
+      'Preis aus dem Client': { commandId: command, islandObjectId: islandObject, fieldId: islandField, blueprintKey: 'laterne', localDate: today, price: 0 },
+      'Besitzer aus dem Client': {
+        commandId: command, islandObjectId: islandObject, fieldId: islandField, blueprintKey: 'laterne', localDate: today, ownerPersonId: anna,
+      },
+      'Bauplanschlüssel mit Großbuchstaben': { commandId: command, islandObjectId: islandObject, fieldId: islandField, blueprintKey: 'Laterne', localDate: today },
+      'ohne Feld': { commandId: command, islandObjectId: islandObject, blueprintKey: 'laterne', localDate: today },
     },
   }),
   MomoForm: fixtures(MomoForm, {

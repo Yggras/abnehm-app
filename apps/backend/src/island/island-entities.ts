@@ -4,18 +4,40 @@ import {
   CommunityProjectRecord,
   IslandEventRecord,
   IslandFieldRecord,
+  IslandObjectRecord,
 } from '@abnehm/contracts/island-records';
 
-import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandProgress } from '../db/schema/index.ts';
+import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandObject, islandProgress } from '../db/schema/index.ts';
 import { iso, isoOrNull, serverManaged, type ServerSyncEntity } from '../sync/registry.ts';
 import { islandProgressRecord } from './progress-projector.ts';
 
 // Inselinhalte im Sync (Spezifikation 0, Abschnitte 8 und 10; Spezifikation 4, Abschnitt 11): Felder,
-// Freischaltungen, Gemeinschaftsprojekte, Ereignisse und der Inselfortschritt. Sie gehören der Kopplung,
+// Objekte, Freischaltungen, Gemeinschaftsprojekte, Ereignisse und der Inselfortschritt. Sie gehören der Kopplung,
 // entstehen nur serverseitig (Schlüpfen, später Bauen, Levelaufstieg und Ereigniserzeugung) und kommen
 // per Pull zu beiden aktiven Mitgliedern; ein generisches Upsert oder Löschen gibt es nicht.
 
 const owned = (row: { islandId: string; couplingId: string }) => ({ islandId: row.islandId, couplingId: row.couplingId });
+
+/** Inselobjekt: entsteht nur in Fachbefehlen wie `buildObject` (#191), beide Mitglieder sehen es. */
+export const islandObjectEntity = serverManaged({
+  entityType: 'island_object',
+  resource: 'island_object',
+  table: islandObject,
+  record: (row) =>
+    IslandObjectRecord.parse({
+      ...owned(row),
+      ownerPersonId: row.ownerPersonId,
+      catalogKey: row.catalogKey,
+      origin: row.origin,
+      level: row.level,
+      fieldId: row.fieldId,
+      createdAt: iso(row.createdAt),
+      updatedAt: iso(row.updatedAt),
+    }),
+});
+
+/** Inselfortschritt: lesbar nur für aktive Mitglieder (Regel `inselfortschritt`); die Zeile kennt nur Felder des Vertrags. */
+export const islandProgressEntity = serverManaged({ entityType: 'island_progress', resource: 'island_progress', table: islandProgress, record: islandProgressRecord });
 
 export const islandSyncEntities: readonly ServerSyncEntity[] = [
   serverManaged({
@@ -72,6 +94,6 @@ export const islandSyncEntities: readonly ServerSyncEntity[] = [
         updatedAt: iso(row.updatedAt),
       }),
   }),
-  // Lesbar nur für aktive Mitglieder (Regel `inselfortschritt`); die Zeile kennt nur Felder des Vertrags.
-  serverManaged({ entityType: 'island_progress', resource: 'island_progress', table: islandProgress, record: islandProgressRecord }),
+  islandObjectEntity,
+  islandProgressEntity,
 ];

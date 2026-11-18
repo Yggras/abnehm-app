@@ -167,6 +167,10 @@ export function createSyncEngine({ database, registry, transport, clock, install
             if (result.type === 'permanently_rejected') {
               if (commands === undefined) throw new Error(`Fachbefehl ${operation.type} hat keine lokale Reconciliation`);
               commands.reconcileRejected(tx, operation, result);
+              // Nennt die Ablehnung den kanonischen Datensatz der betroffenen Entität (Spezifikation 0,
+              // Abschnitt 10), gilt er wie bei generischen Operationen, außer über jüngeren offenen Operationen.
+              const { canonical } = result;
+              if (canonical.type !== 'absent' && !hasPending(tx, canonical.entityType, canonical.entityId)) changes.push(apply(tx, canonical));
             } else {
               const protectedChanges = new Set<string>();
               for (const mapping of result.idMappings ?? []) {

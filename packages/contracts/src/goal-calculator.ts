@@ -2,6 +2,7 @@ import type { LocalDate } from './base.ts';
 import { addDays, fullYearsBetween, yearAndMonth } from './calendar.ts';
 import type { ActivityLevel, CalculationSex } from './person.ts';
 import type { MaintenanceReason, Pace } from './ports.ts';
+import { forecastWeeklyLossG } from './tracker-rules.ts';
 import { heightCmLimits } from './units.ts';
 
 // Zielrechner (Spezifikation 1, Abschnitt 3): reine Funktionen für App und Server. Die App zeigt
@@ -147,8 +148,8 @@ const palTenths: Record<ActivityLevel, number> = { wenig_aktiv: 14, maessig_akti
 /** Defizit je Tempo: S3-Leitlinie Adipositas 2024 (Empf. 5.11) bzw. AHA/ACC/TOS 2013. */
 const deficitKcal: Record<Pace, number> = { entspannt: 500, zuegiger: 750 };
 
-/** Erwartete Abnahme je Woche und Tempo in g (#14). */
-const weeklyLossG: Record<Pace, number> = { entspannt: 500, zuegiger: 750 };
+/** Erwartete Abnahme je Woche und Tempo in g (#14), aus den Tracker-Regeln wie die Prognose des Gewicht-Detailbildschirms. */
+const weeklyLossG: Readonly<Record<Pace, number>> = forecastWeeklyLossG;
 
 /** Feste Untergrenze des Kalorienbudgets (#14); höher ist sie, wenn der Grundumsatz darüber liegt. */
 const minimumBudgetKcal = 1_200;

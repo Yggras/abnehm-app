@@ -10,6 +10,7 @@ import { InstallationId } from '@abnehm/contracts/sync';
 import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
+import { buildObjectCommand } from '../../mobile/src/island/build-object.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
@@ -81,7 +82,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     }),
     clock,
     installationId: InstallationId.parse(installation.installationId),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
   });
   const game = createGameService({ database, writer, clock, newId });
   let stage: IslandStage | null = null;
@@ -125,7 +126,7 @@ async function runSyncSteps(manifest: SeedManifest, { phones }: World) {
   }
 }
 
-describe.each(['solo-energie', 'rollenwahl-offen'] as const)('Szenario %s', (scenario) => {
+describe.each(['solo-energie', 'rollenwahl-offen', 'haelfte-voll'] as const)('Szenario %s', { timeout: 30_000 }, (scenario) => {
   const manifest = seedManifests[scenario];
 
   it('stellt Postgres und die Geräte exakt her, wiederholbar; nach den benannten Schritten gilt der Sollzustand', async () => {
@@ -160,4 +161,38 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
 
     expect(anna.stage()).toMatchObject({ type: 'rollenwahl', proposal: null });
   });
+
+  it('gekoppelt: Level 3, Philipp hat 23 Energie und seine Hälfte zu 53 %, Anna zu 46 % (#191)', { timeout: 30_000 }, async () => {
+    const { phones } = await seeded(seedManifests.gekoppelt);
+    expect(islandOf(phones['philipp-iphone']!)).toMatchObject({ energy: 23, halves: { level: 3, own: { halfPercent: 53 }, partner: { halfPercent: 46 }, waitingForPartner: false } });
+    expect(islandOf(phones['philipp-iphone']!).objects).toHaveLength(20);
+    expect(islandOf(phones['anna-android']!)).toMatchObject({ energy: 25, halves: { own: { halfPercent: 46 }, partner: { halfPercent: 53 } } });
+  });
+
+  it('haelfte-voll: Philipps Hälfte ist voll, Momo wartet auf Anna; Anna sieht nur die volle Partnerhälfte (#191)', { timeout: 30_000 }, async () => {
+    const { phones } = await seeded(seedManifests['haelfte-voll']);
+    expect(islandOf(phones['philipp-iphone']!)).toMatchObject({ energy: 17, halves: { level: 3, own: { halfPercent: 100, halfFull: true }, waitingForPartner: true } });
+    expect(islandOf(phones['anna-android']!)).toMatchObject({ halves: { level: 3, partner: { halfFull: true }, waitingForPartner: false } });
+  });
+
+  it('doppelausgabe: Beide Geräte bauen offline mit derselben Energie; nach dem Sync stehen alle acht Bauten, und beide zeigen 0 Energie (#191)', { timeout: 30_000 }, async () => {
+    const world = await seeded(seedManifests.doppelausgabe);
+    const [iphone, ipad] = [world.phones['philipp-iphone']!, world.phones['philipp-ipad']!];
+    // Offline sieht jedes Gerät nur die eigenen vier Laternen: 23 − 12 = 11.
+    expect(islandOf(iphone)).toMatchObject({ energy: 11, halves: { own: { halfPercent: 100 } } });
+    expect(islandOf(ipad)).toMatchObject({ energy: 11 });
+
+    await runSyncSteps(seedManifests.doppelausgabe, world);
+
+    for (const phone of [iphone, ipad]) {
+      expect(islandOf(phone)).toMatchObject({ energy: 0, halves: { level: 3, own: { halfPercent: 100 } } });
+      expect(islandOf(phone).objects).toHaveLength(20 + 8);
+    }
+  });
 });
+
+function islandOf(phone: Phone) {
+  const stage = phone.stage();
+  if (stage.type !== 'geschluepft' || stage.island === null) throw new Error(`Nicht geschlüpft: ${JSON.stringify(stage)}`);
+  return stage.island;
+}

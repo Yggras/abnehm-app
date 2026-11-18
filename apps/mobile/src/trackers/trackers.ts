@@ -1,7 +1,7 @@
 import type { Clock } from '@abnehm/clock';
 import type { EntityId } from '@abnehm/contracts/base';
-import type { PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
-import type { SportRecordedOutcome, WaterAddedOutcome, WeightRecordedOutcome } from '@abnehm/contracts/trackers';
+import type { PlanReader, WeightRecorder, WeightTrendReader } from '@abnehm/contracts/ports';
+import type { SportRecordedOutcome, WaterAddedOutcome, WeightDeletedOutcome, WeightRecordedOutcome, WeightUpdatedOutcome } from '@abnehm/contracts/trackers';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { LocalDatabase, TransactionContext } from '../local-db';
@@ -12,12 +12,24 @@ import type { SyncWriter } from '../sync';
 import { applyHealthImport, type HealthImportBatch } from './health-import';
 import { lastSportOf, recordSportEntry, undoSport, type LastSport, type SportInput } from './sport';
 import { sportTodaySource } from './sport-today';
-import type { Refresh } from './today-source';
+import type { Source } from '../shell/followed-source';
+import type { Refresh } from './observed-source';
 import { addWaterEntry, undoWater, type WaterUndo } from './water';
 import { waterTodaySource } from './water-today';
-import { lastWeightsOf, recordWeightEntry, undoWeight, type LastWeights, type WeightInput } from './weight';
+import {
+  deleteWeightEntry,
+  lastWeightsOf,
+  recordWeightEntry,
+  undoWeight,
+  updateWeightEntry,
+  type LastWeights,
+  type WeightChanged,
+  type WeightInput,
+} from './weight';
+import { weightDetailSource, type WeightDetailState } from './weight-detail';
 import { createWeightRecorder } from './weight-recorder';
 import { weightTodaySource } from './weight-today';
+import { createWeightTrendReader } from './weight-trend-reader';
 
 export type TrackerDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl ist genau eine Transaktion darin. */
@@ -45,6 +57,19 @@ export type Trackers = Readonly<{
    */
   recordWeight(input: WeightInput): WeightRecordedOutcome;
   /**
+   * Ändert Wert und Messzeitpunkt eines manuellen Gewichtseintrags, in einer eigenen lokalen Transaktion,
+   * und meldet den alten und den neuen Tag. Zone und Offset bleiben die der Anlage. „Rückgängig“ schreibt
+   * die vorherigen Werte zurück. Wirft `InvalidTrackerInputError` wie `recordWeight` und für einen
+   * unbekannten, gelöschten oder importierten Eintrag, ohne etwas zu schreiben.
+   */
+  updateWeight(entryId: EntityId, input: WeightInput): WeightUpdatedOutcome;
+  /**
+   * Löscht einen manuellen Gewichtseintrag ohne Bestätigungsdialog, in einer eigenen lokalen Transaktion.
+   * „Rückgängig“ legt einen neuen Eintrag mit neuer ID und denselben fachlichen Werten an. Wirft
+   * `InvalidTrackerInputError` für einen unbekannten, schon gelöschten oder importierten Eintrag.
+   */
+  deleteWeight(entryId: EntityId): WeightDeletedOutcome;
+  /**
    * Legt einen manuellen Sporteintrag an, in einer eigenen lokalen Transaktion. Lokaler Tag, Zone und
    * Offset gehören zum Beginn in der Zone der Uhr; Art und Dauer merkt sich das Gerät als Vorbelegung.
    * Kalorien werden nur angezeigt, nie auf das Kalorienbudget gutgeschrieben. Wirft
@@ -56,13 +81,14 @@ export type Trackers = Readonly<{
   lastSport(): LastSport | null;
   /**
    * Letztes Gewicht (Vorbelegung des Formulars) und letztes Tagesgewicht (Vergleichswert der Frage
-   * „Tippfehler?“) der eigenen Person; `null`, wenn sie noch nie gewogen hat.
+   * „Tippfehler?“) der eigenen Person; `null`, wenn sie noch nie gewogen hat. `except` lässt eine Messung
+   * aus, etwa die gerade bearbeitete.
    */
-  lastWeights(): LastWeights | null;
+  lastWeights(except?: EntityId): LastWeights | null;
   /**
    * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
-   * Tokens aus `addWater`, `recordWeight` und `recordSport`; Buchungen über `water.quick_add` nimmt die
-   * Quick-Command-Registry mit ihren eigenen Tokens zurück.
+   * Tokens aus `addWater`, `recordWeight`, `updateWeight`, `deleteWeight` und `recordSport`; Buchungen über
+   * `water.quick_add` nimmt die Quick-Command-Registry mit ihren eigenen Tokens zurück.
    */
   undo(undoToken: string): UndoOutcome;
   /** Beendet einen Token, sobald seine Meldung kein „Rückgängig“ mehr anbietet. */
@@ -80,6 +106,18 @@ export type Trackers = Readonly<{
    * Composition Root gibt ihn an `composeAreaPorts` weiter (`weightRecorder: () => trackers.weightRecorder`).
    */
   weightRecorder: WeightRecorder;
+  /**
+   * Lesender Port für *Ziele & Onboarding* über dieser Kontodatenbank, in Lesetransaktionen und gegen Zod
+   * geprüft. Der Composition Root gibt ihn an `composeAreaPorts` weiter
+   * (`weightTrendReader: () => trackers.weightTrendReader`).
+   */
+  weightTrendReader: WeightTrendReader;
+  /**
+   * Lesemodell des Gewicht-Detailbildschirms: Trend, „seit Start“, Veränderung in 2 Wochen, Prognose mit
+   * Zielgewicht und Tempo aus dem `PlanReader` und alle zählenden Messungen. `refresh` stößt das erneute
+   * Lesen ohne Datenbankänderung an, etwa am Tageswechsel.
+   */
+  weightDetail(planReader: PlanReader, refresh: Refresh): Source<WeightDetailState>;
   /**
    * Beitrag `trackers.water` für „Heute“: heute gezählte ml und Wasserziel aus dem `PlanReader`.
    * `refresh` stößt das erneute Lesen ohne Datenbankänderung an, etwa am Tageswechsel.
@@ -104,17 +142,22 @@ export type Trackers = Readonly<{
 export function createTrackers(dependencies: TrackerDependencies): Trackers {
   const { database } = dependencies;
   const tokens = createUndoTokens();
+  /** Ergebnis eines Gewichtsbefehls nach seiner Transaktion: Meldung und Werte samt Undo-Token. */
+  const weightOutcome = <K extends string>({ messageKey, values, undo }: WeightChanged<K>) => ({
+    messageKey,
+    values,
+    undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)),
+  });
 
   return {
     addWater({ ml }) {
       const { messageKey, values, undo } = database.transaction((tx) => addWaterEntry(tx, dependencies, ml));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWater(tx, dependencies, undo)) };
     },
-    recordWeight(input) {
-      const { messageKey, values, undo } = database.transaction((tx) => recordWeightEntry(tx, dependencies, dependencies.newId(), input));
-      return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)) };
-    },
-    lastWeights: () => database.read((tx) => lastWeightsOf(tx)),
+    recordWeight: (input) => weightOutcome(database.transaction((tx) => recordWeightEntry(tx, dependencies, dependencies.newId(), input))),
+    updateWeight: (entryId, input) => weightOutcome(database.transaction((tx) => updateWeightEntry(tx, dependencies, entryId, input))),
+    deleteWeight: (entryId) => weightOutcome(database.transaction((tx) => deleteWeightEntry(tx, dependencies, entryId))),
+    lastWeights: (except) => database.read((tx) => lastWeightsOf(tx, except)),
     recordSport(input) {
       const { messageKey, values, undo } = database.transaction((tx) => recordSportEntry(tx, dependencies, dependencies.newId(), input));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoSport(tx, dependencies, undo)) };
@@ -137,6 +180,8 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
       }),
     },
     weightRecorder: createWeightRecorder(dependencies),
+    weightTrendReader: createWeightTrendReader(database),
+    weightDetail: (planReader, refresh) => weightDetailSource(dependencies, planReader, refresh),
     waterToday: (planReader, refresh) => waterTodaySource(dependencies, planReader, refresh),
     weightToday: (planReader, refresh) => weightTodaySource(dependencies, planReader, refresh),
     sportToday: (planReader, refresh) => sportTodaySource(dependencies, planReader, refresh),

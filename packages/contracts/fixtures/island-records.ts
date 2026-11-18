@@ -4,9 +4,11 @@ import {
   CommunityProjectRecord,
   IslandEventRecord,
   IslandFieldRecord,
+  IslandObjectOrigin,
+  IslandObjectRecord,
 } from '../src/island-records.ts';
 import { fixtures } from './define.ts';
-import { coupling, island, now, philipp } from './ids.ts';
+import { coupling, island, islandField, now, philipp } from './ids.ts';
 
 const owned = { islandId: island, couplingId: coupling };
 
@@ -18,6 +20,17 @@ const project = {
   natureNeed: 20,
   status: 'aktiv',
   completedAt: null,
+  createdAt: now,
+  updatedAt: now,
+} as const;
+
+const builtLantern = {
+  ...owned,
+  ownerPersonId: philipp,
+  catalogKey: 'laterne',
+  origin: 'gebaut',
+  level: 1,
+  fieldId: islandField,
   createdAt: now,
   updatedAt: now,
 } as const;
@@ -51,6 +64,21 @@ export const islandRecordFixtures = {
       'Lichtung ohne Besitzer': { ...owned, fieldKey: 'grundinsel:7:7', ownerPersonId: null, createdAt: now },
     },
     invalid: { 'Schlüssel ohne Koordinaten': { ...owned, fieldKey: 'grundinsel', ownerPersonId: null, createdAt: now } },
+  }),
+  IslandObjectOrigin: fixtures(IslandObjectOrigin, {
+    valid: { 'gebaut': 'gebaut', 'Deko aus einer Challenge': 'challenge' },
+    invalid: { 'gekauft': 'gekauft' },
+  }),
+  IslandObjectRecord: fixtures(IslandObjectRecord, {
+    valid: {
+      'gebaute Laterne auf einem Feld': builtLantern,
+      'Deko im Lager': { ...builtLantern, catalogKey: 'muschelkranz', origin: 'besucher', fieldId: null },
+    },
+    invalid: {
+      'Stufe 4': { ...builtLantern, level: 4 },
+      'unbekannte Herkunft': { ...builtLantern, origin: 'gekauft' },
+      'ohne Besitzer': { ...builtLantern, ownerPersonId: null },
+    },
   }),
   CommunityProjectRecord: fixtures(CommunityProjectRecord, {
     valid: {

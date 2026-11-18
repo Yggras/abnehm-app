@@ -1,9 +1,9 @@
-import type { IslandProgress } from '@abnehm/contracts/island';
 import type { Season } from '@abnehm/game-rules/catalog';
 import { StyleSheet, View } from 'react-native';
 
 import { boxShadow, color, EnergySymbol, Icon, IconButton, LevelBar, radius, space, Text, useLargeTextLayout } from '../design';
-import { halvesFor } from './halves';
+import { waitingForPartnerText } from '../shell/texts';
+import type { IslandHalves } from './halves';
 import type { Daytime } from './scene-model';
 import { islandTexts, momoSheetTexts } from './texts';
 
@@ -12,8 +12,8 @@ export type IslandHudProps = {
   daytime: Daytime;
   /** Angezeigte eigene Energie, mindestens 0. */
   energy: number;
-  progress: IslandProgress;
-  viewerPersonId: string;
+  /** Levelbalken aus Sicht der betrachtenden Person; die eigene Hälfte ist lokal sofort wirksam (#191). */
+  halves: IslandHalves;
   partnerName: string;
   /** Bereichsansicht eingeschaltet. */
   areas: boolean;
@@ -26,11 +26,12 @@ export type IslandHudProps = {
  * HUD oben auf der Insel (Spezifikation 4, Abschnitt 7): Jahreszeit mit Tageszeit, eigene Energie,
  * Schalter „Bereiche“ und der Levelbalken. Jahreszeit und Energie sind Anzeigen ohne Sockelkante,
  * damit sie nicht wie Buttons aussehen (Impeccable-Prüfung, B19). Ab Schriftfaktor 1,3 bricht die
- * obere Zeile um (B12).
+ * obere Zeile um (B12). Ist die eigene Hälfte voll, steht unter dem Balken neutral „Deine Hälfte ist
+ * voll – Momo wartet auf ‹Name›“ (#191).
  */
-export function IslandHud({ season, daytime, energy, progress, viewerPersonId, partnerName, areas, onToggleAreas, onLevelPress }: IslandHudProps) {
+export function IslandHud({ season, daytime, energy, halves, partnerName, areas, onToggleAreas, onLevelPress }: IslandHudProps) {
   const large = useLargeTextLayout();
-  const { own, partner } = halvesFor(progress, viewerPersonId);
+  const { own, partner } = halves;
   return (
     <View style={styles.hud}>
       <View style={[styles.row, large && styles.wrap]}>
@@ -48,12 +49,13 @@ export function IslandHud({ season, daytime, energy, progress, viewerPersonId, p
       </View>
       <View style={styles.card}>
         <LevelBar
-          level={progress.level}
+          level={halves.level}
           ownPercent={own.halfPercent}
           partnerPercent={partner.halfPercent}
           partnerName={partnerName}
           action={onLevelPress && { label: momoSheetTexts.growth, onPress: onLevelPress }}
         />
+        {halves.waitingForPartner ? <Text variant="label" tone="inkMuted">{waitingForPartnerText(partnerName)}</Text> : null}
       </View>
     </View>
   );
@@ -73,5 +75,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: color.surfaceCard,
   },
-  card: { padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceCard, boxShadow: boxShadow.card },
+  card: { gap: space[2], padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceCard, boxShadow: boxShadow.card },
 });

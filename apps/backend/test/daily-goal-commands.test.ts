@@ -9,6 +9,7 @@ import { bookCounterBooking } from '../src/energy/bookings.ts';
 import { createTestBackend } from './support/app.ts';
 import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession, registeredCommandCases } from './support/authorization.ts';
+import { buildObjectCommandScenario } from './support/building.ts';
 import { bonusOp, completeOp, dailyGoalCommandScenarios, insertDailyGoals } from './support/daily-goals.ts';
 import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
@@ -136,9 +137,9 @@ describe('Gegenbuchung', () => {
 describe('Autorisierung der Fachbefehle', () => {
   it('das Backend meldet genau diese Fachbefehle an; für jeden gibt es ein Szenario', async () => {
     const { backend } = await setup();
-    // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107), die Fassungen (#128) und `confirmPhotoDraft` (#162) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
+    // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107), die Fassungen (#128), `confirmPhotoDraft` (#162) und `buildObject` (#191) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
     const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
-      confirmPhotoDraft: confirmPhotoDraftScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+      confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });
 
