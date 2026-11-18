@@ -57,11 +57,17 @@ export const FoodRef = z.discriminatedUnion('type', [
 ]);
 export type FoodRef = z.infer<typeof FoodRef>;
 
+/** Höchstlänge eines Lebensmittelnamens in Zeichen (Designwert, nicht belegt). */
+export const foodNameMaxLength = 200;
+
+/** Höchstlänge der Bezeichnung einer Umrechnung wie „1 Becher“ (Designwert, nicht belegt). */
+export const portionLabelMaxLength = 40;
+
 /** Bekannte Umrechnung von Stück bzw. Portion in die Basiseinheit. */
 export const PortionConversion = z.strictObject({
   unit: z.enum(['stueck', 'portion']),
   /** Bezeichnung wie „1 Becher“; ohne sie heißt die Einheit nur „Stück“ bzw. „Portion“. */
-  label: trimmedText(40).nullable(),
+  label: trimmedText(portionLabelMaxLength).nullable(),
   /** Basismenge eines Stücks bzw. einer Portion in mg bzw. ml. */
   baseAmount: z.int().positive(),
 });
@@ -71,7 +77,7 @@ const nutrient = z.int().nonnegative();
 
 /** Name, Einheit, Nährwerte und Umrechnungen eines Lebensmittels: gemeinsam für Snapshot und eigenes Lebensmittel. */
 const foodValueFields = {
-  name: trimmedText(200),
+  name: trimmedText(foodNameMaxLength),
   baseUnit: BaseUnit,
   /** Bezugsmenge der Nährwerte in der Basiseinheit, z. B. 100.000 für 100 g. */
   referenceAmount: z.int().positive(),
@@ -84,6 +90,14 @@ const foodValueFields = {
 };
 
 type FoodValueFields = { [K in keyof typeof foodValueFields]: z.output<(typeof foodValueFields)[K]> };
+
+/** Name, Basiseinheit, Bezugsmenge, Nährwerte und Umrechnungen eines Lebensmittels, ohne Quelle und Herkunftsreferenz. */
+export type FoodValues = Readonly<FoodValueFields>;
+
+/** Die Werte eines Snapshots, eines eigenen Lebensmittels oder seines Datensatzes, ohne alle übrigen Felder. */
+export function foodValuesOf({ name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions }: FoodValues): FoodValues {
+  return { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions };
+}
 
 /**
  * Regeln der Werte eines Lebensmittels (Spezifikation 2, Abschnitt 2), für Snapshot und eigenes
@@ -165,9 +179,8 @@ export type OwnFoodRecord = z.infer<typeof OwnFoodRecord>;
  * Die aktuelle Fassung eines eigenen Lebensmittels als Snapshot: Quelle `eigen`, ohne Quellenangabe.
  * Daraus entstehen Snapshots künftiger Einträge; gespeicherte Einträge behalten ihren.
  */
-export function ownFoodSnapshot(food: Omit<OwnFoodUpsert, 'origin'>): NutritionSnapshot {
-  const { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions } = food;
-  return NutritionSnapshot.parse({ name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions, source: 'eigen', attribution: null });
+export function ownFoodSnapshot(food: FoodValues): NutritionSnapshot {
+  return NutritionSnapshot.parse({ ...foodValuesOf(food), source: 'eigen', attribution: null });
 }
 
 /** Einheit, in der die Person eine Menge eingibt und sieht. */

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
-import type { OwnFoodUpsert } from '@abnehm/contracts/nutrition';
+import type { FoodValues, OwnFoodUpsert } from '@abnehm/contracts/nutrition';
 
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { ownFood as localOwnFood } from '../../mobile/src/local-db/schema/index.ts';
@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 /** Apfel roh aus dem BLS 4.0 (F110100), korrigiert um ein Stück von 180 g. */
-const correctedApple = {
+const correctedApple: FoodValues = {
   name: 'Apfel roh',
   baseUnit: 'g',
   referenceAmount: 100_000,
@@ -42,7 +42,7 @@ const correctedApple = {
   carbsMg: 11_700,
   fatMg: 500,
   portions: [{ unit: 'stueck', label: '1 mittelgroßer', baseAmount: 180_000 }],
-} as const;
+};
 
 async function phone(backend: TestBackend, accountId: string, device: Device) {
   const files = createBetterSqliteFiles();
@@ -139,7 +139,7 @@ describe('Eigenes Lebensmittel im Sync', () => {
     ['negative kcal', { milliKcal: -1 }],
     ['negatives Eiweiß', { proteinMg: -1 }],
     ['Makros schwerer als die Bezugsmenge', { proteinMg: 40_000, carbsMg: 40_000, fatMg: 20_001 }],
-    ['Herkunft ohne gültigen BLS-Schlüssel', { origin: { type: 'bls', key: 'apfel' } }],
+    ['Herkunftsreferenz ohne gültigen BLS-Schlüssel', { origin: { type: 'bls', key: 'apfel' } }],
     ['ohne Fett', { fatMg: undefined }],
   ])('lehnt %s dauerhaft ab, ohne etwas zu speichern', async (_, change) => {
     const { backend, anna } = await setup();

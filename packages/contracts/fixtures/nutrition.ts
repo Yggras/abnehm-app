@@ -72,7 +72,7 @@ const ownSnapshot = {
   attribution: null,
 } as const;
 
-/** Der Apfel aus dem Garten als eigenes Lebensmittel, ohne Herkunft. */
+/** Der Apfel aus dem Garten als eigenes Lebensmittel, ohne Herkunftsreferenz. */
 const ownFoodValues = {
   name: ownSnapshot.name,
   baseUnit: ownSnapshot.baseUnit,
@@ -85,7 +85,7 @@ const ownFoodValues = {
   origin: null,
 } as const;
 
-/** Hafer Flocken aus dem BLS, korrigiert um eine Portion von 40 g: ein eigenes Lebensmittel mit Herkunft. */
+/** Hafer Flocken aus dem BLS, korrigiert um eine Portion von 40 g: ein eigenes Lebensmittel mit Herkunftsreferenz. */
 const correctedOats = {
   name: blsSnapshot.name,
   baseUnit: 'g',
@@ -333,7 +333,7 @@ export const nutritionFixtures = {
   }),
   OwnFoodOrigin: fixtures(OwnFoodOrigin, {
     valid: { 'BLS-Lebensmittel': { type: 'bls', key: 'C133000' }, 'Barcode': { type: 'off', key: '4006040001234' } },
-    invalid: { 'eigenes Lebensmittel ist keine Herkunft': { type: 'eigen', key: ownFood }, 'BLS-Schlüssel zu kurz': { type: 'bls', key: 'C13300' } },
+    invalid: { 'eigenes Lebensmittel ist keine Herkunftsreferenz': { type: 'eigen', key: ownFood }, 'BLS-Schlüssel zu kurz': { type: 'bls', key: 'C13300' } },
   }),
   OwnFoodUpsert: fixtures(OwnFoodUpsert, {
     valid: {
@@ -348,8 +348,8 @@ export const nutritionFixtures = {
       'negatives Fett': { ...ownFoodValues, fatMg: -1 },
       'Makros schwerer als die Bezugsmenge': { ...ownFoodValues, proteinMg: 1, carbsMg: 0, fatMg: 100_000 },
       'mit Quelle wie ein Snapshot': { ...ownFoodValues, source: 'eigen' },
-      'eigenes Lebensmittel als Herkunft': { ...ownFoodValues, origin: { type: 'eigen', key: ownFood } },
-      'ohne Herkunft statt null': without(ownFoodValues, 'origin'),
+      'eigenes Lebensmittel als Herkunftsreferenz': { ...ownFoodValues, origin: { type: 'eigen', key: ownFood } },
+      'ohne Herkunftsreferenz statt null': without(ownFoodValues, 'origin'),
       'mit Eigentümer': { ...ownFoodValues, personId: philipp },
     },
   }),

@@ -1,5 +1,5 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
-import { OwnFoodUpsert, ownFoodSnapshot, type FoodRef, type NutritionSnapshot, type OwnFoodOrigin } from '@abnehm/contracts/nutrition';
+import { OwnFoodUpsert, ownFoodSnapshot, type FoodRef, type FoodValues, type OwnFoodOrigin } from '@abnehm/contracts/nutrition';
 
 import type { TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
@@ -13,27 +13,17 @@ import { readOwnFood, tombstoneOwnFood, writeOwnFood, type OwnFoodChoice } from 
 // betrifft keinen Tag, denn Einträge tragen ihren Snapshot. Deshalb melden die Befehle keine Tage an
 // `reevaluateDailyGoals`.
 
-/** Werte eines eigenen Lebensmittels, wie die Person sie eingibt; die Herkunft legt das Modul fest. */
-export type OwnFoodValues = Omit<OwnFoodUpsert, 'origin'>;
+/** Werte eines eigenen Lebensmittels, wie die Person sie eingibt; die Herkunftsreferenz legt das Modul fest. */
+export type OwnFoodValues = FoodValues;
 
 /**
  * Was die Person ändert: `null` legt ein neues eigenes Lebensmittel an, ein eigenes ändert genau
- * dieses, ein BLS-Lebensmittel wird zum eigenen Lebensmittel mit dieser Herkunft. Barcode-Herkünfte
+ * dieses, ein BLS-Lebensmittel wird zum eigenen Lebensmittel mit dieser Herkunftsreferenz. Barcodes
  * mit ihrer deterministischen ID ergänzt der Barcode-Scan (#160).
  */
 export type OwnFoodBase = Exclude<FoodRef, { type: 'off' }> | null;
 
 type OwnFoodDependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'newId'>;
-
-/** Was eine Änderung an diesem Lebensmittel speichern würde; `undefined`, wo das noch nicht geht (Barcode, #160). */
-export function ownFoodBaseOf(ref: FoodRef): OwnFoodBase | undefined {
-  return ref.type === 'off' ? undefined : ref;
-}
-
-/** Die Werte einer Fassung ohne Quelle und Quellenangabe, etwa um eine Umrechnung zu ergänzen. */
-export function ownFoodValuesOf({ name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions }: NutritionSnapshot): OwnFoodValues {
-  return { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions };
-}
 
 /**
  * Speichert die Werte als eigenes Lebensmittel und liefert Referenz und neue Fassung. Externe Daten

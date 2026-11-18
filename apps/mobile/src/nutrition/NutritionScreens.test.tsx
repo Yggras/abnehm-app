@@ -440,6 +440,21 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     expect(entries().find((entry) => entry.snapshotName === 'Hafer Flocken')).toMatchObject({ snapshotMilliKcal: 348_000, totalMilliKcal: 208_800 });
   });
 
+  it('legt nichts an, wenn die Person ein BLS-Lebensmittel ohne Änderung speichert', async () => {
+    const { ownFoods, operations } = await openCapture();
+    await search('Haferflocken');
+    await user.press(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, BLS' }));
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Werte korrigieren' }));
+    await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
+
+    expect(ownFoods()).toHaveLength(2);
+    expect(operations()).toEqual([]);
+    // Zurück in der Mengenprüfung der unveränderten Quelle.
+    expect(within(sheet()).getByText('Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0')).toBeOnTheScreen();
+    expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('60');
+  });
+
   it('ändert und löscht ein eigenes Lebensmittel nach Rückfrage', async () => {
     const { ownFoods, operations } = await openCapture();
     await search('Bircher');

@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 
 import { EntityId, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { BaseUnit, OwnFoodOrigin, ownFoodSnapshot, type FoodRef, type NutritionSnapshot, type OwnFoodRecord, type OwnFoodUpsert } from '@abnehm/contracts/nutrition';
+import { BaseUnit, foodValuesOf, OwnFoodOrigin, ownFoodSnapshot, type FoodRef, type NutritionSnapshot, type OwnFoodRecord, type OwnFoodUpsert } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { ownFood } from '../local-db/schema';
@@ -11,7 +11,7 @@ import { searchNames, type SearchQuery } from './search-text';
 
 // Repository der eigenen Lebensmittel (Spezifikation 2, Abschnitt 3): neben dem Sync-Adapter die
 // einzige Stelle, die Drizzle und die Tabellen `own_food` und `own_food_search` sieht. Die Nutzlast
-// führt die Herkunft als Referenz, die Tabelle als `origin_type` und `origin_key`.
+// führt die Herkunftsreferenz als `origin`, die Tabelle als `origin_type` und `origin_key`.
 //
 // `own_food_search` ist der lokale FTS5-Index (Migration `0004_own_food_search`). Er enthält genau die
 // nicht gelöschten eigenen Lebensmittel mit ihren normalisierten Suchnamen. SQLite kann Umlaute und ß
@@ -92,14 +92,14 @@ export function readOwnFood(tx: ReadContext, entityId: EntityId): StoredOwnFood 
   );
 }
 
-/** Überdeckte Quellen: die Herkünfte aller nicht gelöschten eigenen Lebensmittel als `typ:schlüssel`. */
-export function overlaidOrigins(tx: ReadContext): ReadonlySet<string> {
-  const rows = sqliteOf(tx)
+/** Überdeckte Quellen: die Herkunftsreferenzen aller nicht gelöschten eigenen Lebensmittel. */
+export function overlaidOrigins(tx: ReadContext): OwnFoodOrigin[] {
+  return sqliteOf(tx)
     .select({ type: ownFood.originType, key: ownFood.originKey })
     .from(ownFood)
     .where(and(isNull(ownFood.deletedAt), isNotNull(ownFood.originType)))
-    .all();
-  return new Set(rows.map(({ type, key }) => `${type}:${key}`));
+    .all()
+    .map((origin) => OwnFoodOrigin.parse(origin));
 }
 
 /** Die nicht gelöschten eigenen Lebensmittel zur Anfrage, in der Rangfolge aus `ranked-search.ts`. */
@@ -141,8 +141,7 @@ function insertIndexRow(tx: TransactionContext, entityId: string, name: string):
 }
 
 function valuesOf(row: typeof ownFood.$inferSelect) {
-  const { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions } = row;
-  return { name, baseUnit: BaseUnit.parse(baseUnit), referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions };
+  return foodValuesOf({ ...row, baseUnit: BaseUnit.parse(row.baseUnit) });
 }
 
 /** Text mit `?`-Platzhaltern und Parametern als Drizzle-Abfrage; der Text enthält sonst kein `?`. */

@@ -70,7 +70,7 @@ export type Nutrition = Readonly<{
   /**
    * Speichert ein eigenes Lebensmittel (Spezifikation 2, Abschnitt 3) in einer eigenen lokalen
    * Transaktion samt Outbox-Operation. `base` ist `null` für ein neues, ein eigenes Lebensmittel für
-   * genau dieses oder ein BLS-Lebensmittel, aus dem ein eigenes mit dieser Herkunft wird; die externen
+   * genau dieses oder ein BLS-Lebensmittel, aus dem ein eigenes mit dieser Herkunftsreferenz wird; die externen
    * Daten bleiben unverändert. Liefert Referenz und neue Fassung für künftige Einträge; gespeicherte
    * Einträge behalten ihren Snapshot. Wirft `InvalidNutritionInputError`, ohne etwas zu schreiben.
    */

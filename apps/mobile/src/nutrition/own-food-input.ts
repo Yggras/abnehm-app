@@ -1,7 +1,16 @@
-import { maxBaseAmount, OwnFoodUpsert, type BaseUnit, type NutritionSnapshot, type PortionConversion } from '@abnehm/contracts/nutrition';
+import {
+  foodNameMaxLength,
+  maxBaseAmount,
+  OwnFoodUpsert,
+  portionLabelMaxLength,
+  type BaseUnit,
+  type FoodRef,
+  type NutritionSnapshot,
+  type PortionConversion,
+} from '@abnehm/contracts/nutrition';
 
 import { parseDecimalMilli } from './amount-input';
-import type { OwnFoodValues } from './own-foods';
+import type { OwnFoodBase, OwnFoodValues } from './own-foods';
 import { milliText } from './texts';
 
 // Formular „Eigenes Lebensmittel“ (Spezifikation 2, Abschnitte 2 und 3): Die Person tippt deutsche
@@ -47,16 +56,31 @@ export type OwnFoodCheck =
   | { type: 'werte'; values: OwnFoodValues }
   | { type: 'probleme'; problems: Readonly<Partial<Record<OwnFoodField, OwnFoodProblem>>> };
 
-/** Höchstlängen wie im Vertrag (Designwerte, nicht belegt). */
-const maxNameLength = 200;
-const maxLabelLength = 40;
 
 const emptyPortion: PortionDraft = { amount: '', label: '' };
 
-const portionFields = {
+/** Stück oder Portion. */
+export type ConversionUnit = PortionConversion['unit'];
+
+/** Die Formularfelder einer Umrechnung: Gewicht bzw. Volumen und Bezeichnung. */
+export const conversionFields = {
   stueck: { amount: 'stueckAmount', label: 'stueckLabel' },
   portion: { amount: 'portionAmount', label: 'portionLabel' },
-} as const satisfies Record<PortionConversion['unit'], Record<'amount' | 'label', OwnFoodField>>;
+} as const satisfies Record<ConversionUnit, Record<'amount' | 'label', OwnFoodField>>;
+
+/** Die Umrechnungseinheit eines Formularfelds; `undefined` für Name, Nährwerte und Bezugsmenge. */
+export function conversionUnitOf(field: OwnFoodField): ConversionUnit | undefined {
+  return (['stueck', 'portion'] as const).find((unit) => Object.values(conversionFields[unit]).includes(field as never));
+}
+
+/**
+ * Was eine Änderung an diesem Lebensmittel speichern würde: das eigene Lebensmittel selbst oder die
+ * BLS-Quelle, aus der ein eigenes Lebensmittel wird. `undefined` für ein Barcode-Produkt; dessen
+ * Korrektur samt deterministischer ID liefert #160.
+ */
+export function editableBaseOf(ref: FoodRef): Exclude<OwnFoodBase, null> | undefined {
+  return ref.type === 'off' ? undefined : ref;
+}
 
 /** Ein leeres Formular, etwa mit dem Suchtext als Name; Bezugsmenge 100 g. */
 export function emptyOwnFoodDraft(name = ''): OwnFoodDraft {
@@ -66,7 +90,7 @@ export function emptyOwnFoodDraft(name = ''): OwnFoodDraft {
 /** Das Formular vorbelegt mit der aktuellen Fassung eines Lebensmittels, etwa zum Korrigieren. */
 export function ownFoodDraftOf(snapshot: NutritionSnapshot): OwnFoodDraft {
   const base = (amount: number) => milliText(snapshot.baseUnit === 'g' ? amount : amount * 1_000);
-  const portionOf = (unit: PortionConversion['unit']): PortionDraft => {
+  const portionOf = (unit: ConversionUnit): PortionDraft => {
     const conversion = snapshot.portions.find((candidate) => candidate.unit === unit);
     return conversion === undefined ? emptyPortion : { amount: base(conversion.baseAmount), label: conversion.label ?? '' };
   };
@@ -93,7 +117,7 @@ export function checkOwnFoodDraft(draft: OwnFoodDraft): OwnFoodCheck {
 
   const name = draft.name.trim();
   if (name === '') fail('name', 'leer');
-  else if ([...name].length > maxNameLength) fail('name', 'zu_lang');
+  else if ([...name].length > foodNameMaxLength) fail('name', 'zu_lang');
 
   const referenceAmount = baseAmountOf(draft.baseUnit, draft.referenceAmount, (problem) => fail('referenceAmount', problem));
   const milliKcal = nonNegative(draft.kcal, (problem) => fail('kcal', problem));
@@ -112,7 +136,7 @@ export function checkOwnFoodDraft(draft: OwnFoodDraft): OwnFoodCheck {
     const conversion = checkPortionDraft(unit, draft.baseUnit, portion);
     if (conversion.type === 'umrechnung') portions.push(conversion.conversion);
     else {
-      const fields = portionFields[unit];
+      const fields = conversionFields[unit];
       if (conversion.problems.amount !== undefined) fail(fields.amount, conversion.problems.amount);
       if (conversion.problems.label !== undefined) fail(fields.label, conversion.problems.label);
     }
@@ -132,14 +156,14 @@ export type PortionCheck =
   | { type: 'probleme'; problems: Readonly<Partial<Record<'amount' | 'label', OwnFoodProblem>>> };
 
 /** Prüft eine Umrechnung: Gewicht bzw. Volumen ist Pflicht, die Bezeichnung optional. */
-export function checkPortionDraft(unit: PortionConversion['unit'], baseUnit: BaseUnit, draft: PortionDraft): PortionCheck {
+export function checkPortionDraft(unit: ConversionUnit, baseUnit: BaseUnit, draft: PortionDraft): PortionCheck {
   const problems: Partial<Record<'amount' | 'label', OwnFoodProblem>> = {};
   const baseAmount = baseAmountOf(baseUnit, draft.amount, (problem) => {
     problems.amount = problem === 'leer' ? 'gewicht_fehlt' : problem;
     return null;
   });
   const label = draft.label.trim();
-  if ([...label].length > maxLabelLength) problems.label = 'zu_lang';
+  if ([...label].length > portionLabelMaxLength) problems.label = 'zu_lang';
   if (baseAmount === null || problems.label !== undefined) return { type: 'probleme', problems };
   return { type: 'umrechnung', conversion: { unit, label: label === '' ? null : label, baseAmount } };
 }
