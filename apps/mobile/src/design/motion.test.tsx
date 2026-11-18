@@ -24,7 +24,15 @@ describe('motionFor', () => {
     });
   });
 
-  test.each(['bounce', 'settle', 'celebrate', 'enter', 'exit', 'move'] as const)(
+  test('Ring und Levelbalken füllen sich in `duration-slow` (Design-System › Bewegung)', () => {
+    expect(motionFor('fill', { reduceMotion: false })).toEqual({
+      type: 'timing',
+      duration: motion.duration.slow,
+      easing: motion.easing.standard,
+    });
+  });
+
+  test.each(['bounce', 'settle', 'celebrate', 'enter', 'exit', 'move', 'fill'] as const)(
     'reduzierte Bewegung ersetzt „%s“ durch eine kurze Überblendung',
     (intent) => {
       expect(motionFor(intent, { reduceMotion: true })).toEqual({ type: 'crossfade', duration: motion.duration.fast });

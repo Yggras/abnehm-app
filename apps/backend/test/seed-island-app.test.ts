@@ -14,6 +14,7 @@ import { buildObjectCommand } from '../../mobile/src/island/build-object.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
+import { quietGameDependencies } from '../../mobile/src/island/testing/quiet-game.ts';
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
@@ -84,7 +85,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     installationId: InstallationId.parse(installation.installationId),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
   });
-  const game = createGameService({ database, writer, clock, newId });
+  const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   let stage: IslandStage | null = null;
   cleanups.push(game.observeStage((next) => (stage = next)));
   return {

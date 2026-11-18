@@ -12,6 +12,7 @@ import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedD
 import { energyBookingEntity } from '../energy';
 import { createHealthImport, unavailableHealthPlatform } from '../health';
 import { appHealthImport } from '../health/app-health';
+import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
 import { buildObjectCommand } from '../island/build-object';
@@ -156,7 +157,8 @@ function deviceState() {
       // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
       const planToday = plan.today(dailyGoalRegistry);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
-      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
+      // Stimmungen folgen der Uhr im Takt von „Heute“; die Erfolgshaptik löst nur dieser Dienst aus (#188).
+      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,

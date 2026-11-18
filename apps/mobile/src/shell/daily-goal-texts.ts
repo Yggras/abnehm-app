@@ -1,9 +1,8 @@
 import { z } from 'zod';
 
-import type { BausteinKey } from '@abnehm/contracts/base';
 import type { DailyGoalEvaluated, DailyGoalState } from '@abnehm/contracts/daily-goals';
 
-import { thousandthsWithOneDecimal } from './texts';
+import { bausteinNames, thousandthsWithOneDecimal } from './texts';
 
 // Texte der Tagesziele auf „Heute“ (Spezifikation 1, Abschnitt 6): Sie entstehen in der App aus
 // `messageKey` und typisierten Werten (Spezifikation 0, Abschnitt 2). Der Schlüssel heißt
@@ -17,14 +16,6 @@ import { thousandthsWithOneDecimal } from './texts';
  * `status` ist der Zustand in Worten; `null`, wenn der Wert ihn schon sagt („am Tagesende“).
  */
 export type DailyGoalText = Readonly<{ title: string; name: string; detail: string | null; status: string | null }>;
-
-export const bausteinNames: Readonly<Record<BausteinKey, string>> = {
-  ernaehrung_erfasst: 'Ernährung erfasst',
-  im_kalorienbudget: 'Im Kalorienbudget',
-  wasserziel: 'Wasserziel',
-  sporteinheit: 'Sporteinheit',
-  gewogen: 'Gewogen',
-};
 
 const stateNames: Readonly<Record<DailyGoalState, string>> = {
   offen: 'offen',

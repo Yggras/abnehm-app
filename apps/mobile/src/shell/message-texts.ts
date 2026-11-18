@@ -1,24 +1,30 @@
-import type { MealKey } from '@abnehm/contracts/base';
+import { BausteinKey, type MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
 import { SportRecordedValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
-import { activityNames, quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
+import { activityNames, bausteinNames, germanList, quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
 
 // Texte des Meldungs-Hosts: Die sichtbare Zeile entsteht in der App aus `messageKey` und
 // typisierten Werten (Spezifikation 0, Abschnitt 2). Bereiche tragen ihre Meldungen hier ein,
 // etwa Spezifikation 3 „+250 ml Wasser“ und Spezifikation 4 „Wasserziel erfüllt · +1 Energie“.
 
-/** Ein Eintrag: Schema der Werte und die daraus erzeugte Zeile. */
+/**
+ * Die Zeilen einer Meldung: meist eine, für Momos Reaktion auf gestern und heute zwei (#188). Eine
+ * zweizeilige Meldung hat nie „Rückgängig“.
+ */
+export type MessageLines = ToastLine | readonly [ToastLine, ToastLine];
+
+/** Ein Eintrag: Schema der Werte und die daraus erzeugten Zeilen. */
 export type MessageTextEntry<S extends z.ZodType = z.ZodType> = Readonly<{
   values: S;
-  render: (values: z.output<S>) => ToastLine;
+  render: (values: z.output<S>) => MessageLines;
 }>;
 
 /** Typisiert einen Eintrag, sodass `render` die Werte aus dem Schema kennt. */
-export function messageText<S extends z.ZodType>(values: S, render: (values: z.output<S>) => ToastLine): MessageTextEntry {
+export function messageText<S extends z.ZodType>(values: S, render: (values: z.output<S>) => MessageLines): MessageTextEntry {
   return { values, render } as MessageTextEntry;
 }
 
@@ -53,6 +59,42 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'sport.eingetragen': messageText(SportRecordedValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,
   })),
+  /**
+   * Spezifikation 4: Momos Reaktion auf neue eigene Gutschriften eines Commits, als eine Meldung (#188):
+   * „Wasserziel erfüllt · +1 Energie“ und „Alle drei geschafft · +1 Energie“ wie in Abschnitt 6. Kommen
+   * mehrere zusammen, fasst die Meldung sie mit der Summe der Energie zusammen, etwa „Alle drei geschafft ·
+   * +2 Energie“ für das dritte Tagesziel samt Bonus. Die gebündelten Tagesende-Gutschriften des Vortags
+   * stehen in einer eigenen Zeile über heute, etwa „Gestern im Kalorienbudget, alle drei geschafft · +2
+   * Energie“; sie gibt es nur für „Im Kalorienbudget“ und den Bonus an solchen Tagen (CONTEXT.md).
+   * `energie` und `gesternEnergie` sind die Summen der Gutschriften je Tag, 0 heißt ohne diesen Tag
+   * (Nutzerentscheidungen in #188, https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756).
+   * Die zusammengesetzten Wortlaute sind Designwerte, nicht belegt. Ohne „Rückgängig“; steht eine Meldung
+   * mit „Rückgängig“, hängt der Host die Zeile von heute an.
+   */
+  'momo.energie': messageText(
+    z
+      .strictObject({
+        ziel1: BausteinKey.optional(),
+        ziel2: BausteinKey.optional(),
+        ziel3: BausteinKey.optional(),
+        bonus: z.boolean(),
+        energie: z.int().nonnegative(),
+        gesternBonus: z.boolean(),
+        gesternEnergie: z.int().nonnegative(),
+      })
+      .refine((values) => values.energie + values.gesternEnergie > 0, { message: 'Meldung ohne Gutschrift' }),
+    ({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }) => {
+      const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
+      const todayText = bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`;
+      const today: ToastLine = { text: `${todayText} · +${energie} Energie`, energy: true };
+      const yesterday: ToastLine = {
+        text: `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''} · +${gesternEnergie} Energie`,
+        energy: true,
+      };
+      if (gesternEnergie === 0) return today;
+      return energie === 0 ? yesterday : [yesterday, today];
+    },
+  ),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */

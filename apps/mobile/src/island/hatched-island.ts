@@ -11,7 +11,7 @@ import { formAt } from '@abnehm/game-rules/unlocks';
 
 import { bookingsOf } from '../energy';
 import type { ReadContext } from '../local-db';
-import { areaUnlock, communityProject, couplingMember, island, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
+import { areaUnlock, blueprintUnlock, communityProject, couplingMember, island, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { halvesFor, type IslandHalves } from './halves';
 import { islandProgressOf } from './island-entities';
@@ -30,6 +30,9 @@ const catalog = indexCatalog(gameCatalog);
  */
 export type PlacedObject = Readonly<{ id: string; fieldKey: string; art: ArtKey; ownerPersonId: string }>;
 
+/** Ein materialisiertes Inselfeld; über seine ID baut der Spieldienst darauf. */
+export type IslandField = IslandFieldOwner & Readonly<{ id: EntityId }>;
+
 /** Ein gemeinsames Ereignis für „Neu bei euch“, etwa „Momo ist geschlüpft“. */
 export type SharedIslandEvent = Readonly<{ eventId: EntityId; type: SharedEventType; occurredAt: Instant }>;
 
@@ -44,18 +47,20 @@ export type HatchedIsland = Readonly<{
   progress: IslandProgress;
   /** Levelbalken: Level und Partner aus der Projektion, die eigene Hälfte aus den eigenen Buchungen. */
   halves: IslandHalves;
-  fields: readonly IslandFieldOwner[];
+  fields: readonly IslandField[];
   /** Objekte auf Feldern; was im Lager liegt, steht nicht auf der Insel. */
   objects: readonly PlacedObject[];
   unlockedAreas: readonly string[];
+  /** Schlüssel der Baupläne, die die Insel freigeschaltet hat (#192). */
+  unlockedBlueprints: readonly string[];
   appearance: MomoAppearance;
   sharedEvents: readonly SharedIslandEvent[];
 }>;
 
 /**
- * Momo, wie beide Personen es sehen: Form aus dem Level der Projektion. Stimmungen liefert „Momo-Reaktionen
- * und Stimmungen“ (#188), Accessoires „Momos Wunsch, Schrank und Ankleiden“ (#206); bis dahin ist Momo zufrieden
- * und trägt nichts.
+ * Momo, wie beide Personen es sehen: Form aus dem Level der Projektion. Die Stimmung gehört nur der
+ * betrachtenden Person; der Spieldienst leitet sie je Ansicht ab und ersetzt den Standard „zufrieden“ (#188).
+ * Accessoires liefert „Momos Wunsch, Schrank und Ankleiden“ (#206); bis dahin trägt Momo nichts.
  */
 export function appearanceAt(level: number): MomoAppearance {
   return MomoAppearance.parse({ stage: 'geschluepft', formKey: formAt(level), moodKey: 'zufrieden', accessories: { kopf: null, hals: null } });
@@ -88,11 +93,12 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
     progress,
     halves: halvesFor(progress, personId, spentOnIsland(bookingsOf(tx, personId), holdings)),
     fields: db
-      .select({ key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId })
+      .select({ id: islandField.id, key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId })
       .from(islandField)
       .where(eq(islandField.islandId, islandId))
       .orderBy(asc(islandField.fieldKey))
-      .all(),
+      .all()
+      .map((field) => ({ ...field, id: EntityId.parse(field.id) })),
     objects: db
       .select({ id: islandObject.id, fieldKey: islandField.fieldKey, catalogKey: islandObject.catalogKey, level: islandObject.level, ownerPersonId: islandObject.ownerPersonId })
       .from(islandObject)
@@ -106,6 +112,13 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .from(areaUnlock)
       .where(eq(areaUnlock.islandId, islandId))
       .orderBy(asc(areaUnlock.level))
+      .all()
+      .map((row) => row.key),
+    unlockedBlueprints: db
+      .select({ key: blueprintUnlock.catalogKey })
+      .from(blueprintUnlock)
+      .where(eq(blueprintUnlock.islandId, islandId))
+      .orderBy(asc(blueprintUnlock.catalogKey))
       .all()
       .map((row) => row.key),
     appearance: appearanceAt(progress.level),

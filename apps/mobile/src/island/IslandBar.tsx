@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { boxShadow, color, Icon, pressedEdge, radius, size, space, Text, textScale, type IconName } from '../design';
+import { boxShadow, Button, color, Icon, pressedEdge, radius, size, space, Text, textScale, type IconName } from '../design';
 import type { TargetOf } from '../navigation';
-import { islandTexts } from './texts';
+import { buildTexts, islandTexts } from './texts';
 
 /** Ansichten des Tabs „Momo“, die die Leiste öffnet: Werte des Parameters `view` der Route `momo`. */
 export type IslandEntry = Extract<NonNullable<TargetOf<'momo'>['view']>, 'lager' | 'projekt' | 'bauen' | 'ereignisse'>;
@@ -64,7 +64,43 @@ export function IslandBar({ onOpen }: IslandBarProps) {
   );
 }
 
+export type BuildModeBarProps = {
+  /** Name des gewählten Bauplans. */
+  name: string;
+  onCancel: () => void;
+};
+
+/**
+ * Leiste im Bau-Modus anstelle der Einstiege (#192): was gebaut wird, wie es geht, und „Abbrechen“, das
+ * jederzeit erreichbar ist (Spezifikation 4, Abschnitt 7). Der Hinweis wird angesagt, sobald der
+ * Bau-Modus beginnt.
+ */
+export function BuildModeBar({ name, onCancel }: BuildModeBarProps) {
+  return (
+    <View style={styles.building}>
+      <View style={styles.buildingText} accessible accessibilityLiveRegion="polite" accessibilityLabel={`${buildTexts.placing(name)}. ${buildTexts.placingHint}`}>
+        <Text variant="headline">{buildTexts.placing(name)}</Text>
+        <Text variant="label" tone="inkMuted">
+          {buildTexts.placingHint}
+        </Text>
+      </View>
+      <Button variant="secondary" label={buildTexts.cancel} onPress={onCancel} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  building: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space[3],
+    padding: space[3],
+    borderRadius: radius.md,
+    backgroundColor: color.surfaceCard,
+    boxShadow: boxShadow.card,
+  },
+  buildingText: { flexGrow: 1, flexShrink: 1, flexBasis: 160, gap: space[1] },
   bar: { flexDirection: 'row', alignItems: 'flex-end', gap: space[2] },
   entry: {
     flex: 1,

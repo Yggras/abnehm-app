@@ -2,7 +2,7 @@ import { passwordPolicy } from '@abnehm/contracts/auth';
 import { bodyInputLimits, type SafetyTrigger } from '@abnehm/contracts/goal-calculator';
 
 import type { PasswordRejection } from '../auth';
-import { thousandthsWithOneDecimal as kg } from '../shell/texts';
+import { germanList, thousandthsWithOneDecimal as kg } from '../shell/texts';
 import type { BodyDataProblem } from './body-data';
 
 // Sichtbare Texte und zugängliche Namen des Onboardings. Der Hinweis aus Schritt 1 und der
@@ -102,11 +102,6 @@ const safetyReasons: Record<SafetyTrigger, string> = {
   essstoerung: 'einer bekannten Essstörung',
   untergewicht: 'eines BMI unter 18,5',
 };
-
-/** „A“, „A und B“, „A, B und C“. */
-function germanList(items: readonly string[]): string {
-  return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} und ${items.at(-1)}`;
-}
 
 /**
  * Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9; User Stories 9–13). Der

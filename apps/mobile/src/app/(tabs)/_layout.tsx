@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { color, space } from '../../design';
+import { useMomoReactions } from '../../island/use-momo-reactions';
 import { MessageSlot } from '../../shell/MessageHost';
 import { TabBar } from '../../shell/TabBar';
 import { isSceneTab, TabBarOverlap } from '../../shell/tab-bar-overlap';
@@ -17,6 +18,8 @@ import { useMomoTabBadge } from '../../shell/tab-badge';
  */
 export default function TabsLayout() {
   const momoBadge = useMomoTabBadge();
+  // Momos Reaktionen auf erfüllte Tagesziele erscheinen auf jedem Tab und über Seiten (#188).
+  useMomoReactions();
   // Über Seiten und modalen Abläufen zeigt `ScreenFrame` die Meldung.
   const [barHeight, setBarHeight] = useState(0);
   const focused = useIsFocused();

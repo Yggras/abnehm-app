@@ -1,6 +1,6 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { Instant, type EntityId, type LocalDate, type ServerVersion } from '@abnehm/contracts/base';
+import { Instant, LocalDate, type EntityId, type ServerVersion } from '@abnehm/contracts/base';
 import { DailyGoalCompletionRecord, type DailyGoalCompletion, type DailyGoalSnapshot } from '@abnehm/contracts/daily-goals';
 
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -36,6 +36,21 @@ export function completionsOfDay(tx: ReadContext, personId: EntityId, localDate:
     .all()
     .map(recordOf)
     .sort((a, b) => a.slot - b.slot);
+}
+
+/**
+ * Lokaler Tag der jüngsten Tageszielerfüllung einer Person; `null` ohne jede. Spezifikation 4 leitet
+ * daraus ab, ob Momo döst (#188).
+ */
+export function latestCompletionDate(tx: ReadContext, personId: EntityId): LocalDate | null {
+  const row = sqliteOf(tx)
+    .select({ localDate: dailyGoalCompletion.localDate })
+    .from(dailyGoalCompletion)
+    .where(eq(dailyGoalCompletion.personId, personId))
+    .orderBy(desc(dailyGoalCompletion.localDate))
+    .limit(1)
+    .get();
+  return row === undefined ? null : LocalDate.parse(row.localDate);
 }
 
 export function insertCompletion(tx: TransactionContext, record: DailyGoalCompletionRecord): void {
