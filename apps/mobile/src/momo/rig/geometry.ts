@@ -31,6 +31,26 @@ export function capsule(a: Point, b: Point, r: number): string {
   ].join(' ');
 }
 
+/**
+ * Rundes Blatt vom schmalen Ansatz `base` zur runden Spitze `tip` mit Radius `r`: Kiemenwedel, Kronen-
+ * und Flügellappen („rund, gewellt“, Design-System › Momo).
+ */
+export function petal(base: Point, tip: Point, r: number, root = r * 0.45): string {
+  const length = Math.hypot(tip.x - base.x, tip.y - base.y) || 1;
+  const d = { x: (tip.x - base.x) / length, y: (tip.y - base.y) / length };
+  const n = { x: -d.y, y: d.x };
+  const along = (t: number, side: number) => ({ x: base.x + d.x * t + n.x * side, y: base.y + d.y * t + n.y * side });
+  return smooth([
+    along(0, root),
+    along(length * 0.55, r * 0.9),
+    along(length - r * 0.15, r * 0.75),
+    along(length + r * 0.35, 0),
+    along(length - r * 0.15, -r * 0.75),
+    along(length * 0.55, -r * 0.9),
+    along(0, -root),
+  ]);
+}
+
 /** Band zwischen zwei Kreisbögen um denselben Mittelpunkt: Lachaugen, Lächeln, Brauen, Fragezeichen. */
 export function arcBand(cx: number, cy: number, outer: number, inner: number, from: number, to: number): string {
   const large = to - from > 180 ? 1 : 0;

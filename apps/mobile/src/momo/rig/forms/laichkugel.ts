@@ -8,7 +8,6 @@ import { face, fill, type RigManifest } from '../types';
 export const laichkugel: RigManifest = {
   form: 'laichkugel',
   ground: { x: 50, y: 98 },
-  lightAxis: 50,
   face: { x: 44, y: 57, rotation: 0, scale: 0.45 },
   // Die Laichkugel trägt keine Accessoires; die Anker bleiben ungenutzt.
   slots: {
@@ -22,7 +21,7 @@ export const laichkugel: RigManifest = {
     children: [
       fill(ellipse(50, 58, 38, 38), 'momoBelly', { shade: true }),
       // Der eingerollte Schwanz der schlafenden Kaulquappe.
-      fill(arcBand(50, 60, 24, 15, -30, 120), 'momoBody', { shade: true }),
+      fill(arcBand(48, 58, 22, 15, -40, 110), 'momoBody', { shade: true }),
       fill(capsule({ x: 33, y: 49 }, { x: 25, y: 41 }, 3), 'momoFrond'),
       fill(capsule({ x: 32, y: 55 }, { x: 23, y: 55 }, 3), 'momoFrond'),
       fill(capsule({ x: 55, y: 48 }, { x: 62, y: 40 }, 3), 'momoFrond'),

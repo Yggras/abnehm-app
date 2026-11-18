@@ -12,7 +12,7 @@ import type { Point } from './geometry';
  */
 export type RigTone = Extract<ColorToken, 'momoBody' | 'momoBelly' | 'momoFrond' | 'momoCheek' | 'ink'> | 'licht';
 
-/** Fläche ohne Kontur und Verlauf. `shade`: Die rechte Hälfte ab der Lichtachse liegt im Schatten. */
+/** Fläche ohne Kontur und Verlauf. `shade`: Eine Sichel an der rechten und unteren Kante liegt im Schatten. */
 export type RigShape = Readonly<{ path: string; tone: RigTone; opacity?: number; shade?: boolean }>;
 
 /** Gelenke, die die Clips antreiben; eine Form hat nur die, die ihr Körperbau braucht. */
@@ -37,8 +37,6 @@ export type RigManifest = Readonly<{
   form: RigForm;
   /** Bodenpunkt im Rahmen 100 × 100: Hier steht die Figur auf dem Inselfeld. */
   ground: Point;
-  /** Ab hier liegt die rechte Körperhälfte im Schatten (Licht von links oben). */
-  lightAxis: number;
   root: Joint;
   /** Wo das gemeinsame Gesicht sitzt und wie groß es ist. */
   face: Anchor;

@@ -15,7 +15,8 @@ require('react-native-gesture-handler/jestSetup');
 jest.mock('@shopify/react-native-skia', () => {
   const { View } = require('react-native');
   const nothing = () => null;
-  return { Canvas: View, Circle: nothing, Fill: nothing, Group: nothing, Oval: nothing, Path: nothing, Rect: nothing };
+  const noPath = () => null;
+  return { Canvas: View, Circle: nothing, Fill: nothing, Group: nothing, Oval: nothing, Path: nothing, PathOp: {}, Skia: { Path: { MakeFromSVGString: noPath, MakeFromOp: noPath } } };
 });
 
 // Mitteilungs-Port (#125): Die Jest-Attrappe von expo-notifications ist unvollständig (etwa

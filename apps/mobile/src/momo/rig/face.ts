@@ -99,7 +99,7 @@ const effects: Readonly<Record<RigMood, readonly EffectShape[]>> = {
     { path: zee(2, -6, 7.5), tone: 'inkMuted' },
   ],
   // kleiner Mond
-  schlaeft: [{ path: 'M0 -7 A7 7 0 1 0 6.06 3.5 A8 8 0 0 0 0 -7 Z', tone: 'islandLamp' }],
+  schlaeft: [{ path: 'M0 -7 A7 7 0 1 0 6.06 3.5 A8 8 0 0 1 0 -7 Z', tone: 'islandLamp' }],
   wartet_im_ei: [],
 };
 
