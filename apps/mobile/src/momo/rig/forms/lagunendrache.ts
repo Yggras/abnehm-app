@@ -104,9 +104,9 @@ export const lagunendrache: RigManifest = {
             { shade: true },
           ),
         ]),
-        slot('hals.hinten'),
+        slot('hals', 'hinten'),
         joint('kopf', { x: 44, y: 42 }, [
-          slot('kopf.hinten'),
+          slot('kopf', 'hinten'),
           joint('wedel_links', { x: 27, y: 22 }, [
             lobe({ x: 28, y: 19 }, { x: 17, y: 11 }, 3.8),
             lobe({ x: 27, y: 25 }, { x: 13, y: 24 }, 3.8),
@@ -124,9 +124,9 @@ export const lagunendrache: RigManifest = {
           fill(ellipse(44, 26, 19, 16), 'momoBody', { shade: true }),
           fill(ellipse(34, 17, 4.5, 2.6), 'licht', { opacity: 0.45 }),
           face,
-          slot('kopf.vorn'),
+          slot('kopf', 'vorn'),
         ]),
-        slot('hals.vorn'),
+        slot('hals', 'vorn'),
       ]),
     ],
   },

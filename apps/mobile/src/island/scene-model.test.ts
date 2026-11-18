@@ -431,17 +431,17 @@ describe('Treffer-Umkehrung', () => {
     expect(islandScene(request({ zoom: 2 })).hitAt({ x: 64, y: 16 })).toEqual({ type: 'momo' });
   });
 
-  test('Momos Trefferfläche ist mindestens 44 × 44 dp: ein Quadrat um die Figur, deren Mitte 12 dp über der Feldmitte liegt', () => {
+  test('Momos Trefferfläche ist mindestens 44 × 44 dp: ein Rechteck um das Rig, dessen Mitte 19 dp über der Feldmitte liegt (#187)', () => {
     const scene = islandScene(request());
 
-    // Figurmitte (32, 20); das Quadrat reicht von (10, −2) bis (54, 42).
-    expect(scene.hitAt({ x: 10, y: 20 })).toEqual({ type: 'momo' });
-    expect(scene.hitAt({ x: 54, y: 20 })).toEqual({ type: 'momo' });
-    expect(scene.hitAt({ x: 32, y: -2 })).toEqual({ type: 'momo' });
-    expect(scene.hitAt({ x: 32, y: 42 })).toEqual({ type: 'momo' });
-    // Rand von Momos eigenem Feld (1, 0), außerhalb des Quadrats: das Feld, nicht Momo.
+    // Figurmitte (32, 13); das Rechteck reicht von (10, −10) bis (54, 36), bis über Krone und Strohhütchen.
+    expect(scene.hitAt({ x: 10, y: 13 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 54, y: 13 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 32, y: -10 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 32, y: 36 })).toEqual({ type: 'momo' });
+    // Rand von Momos eigenem Feld (1, 0), außerhalb des Rechtecks: das Feld, nicht Momo.
     expect(scene.hitAt({ x: 58, y: 34 })).toMatchObject({ type: 'feld', field: 'grundinsel:1:0' });
-    expect(scene.hitAt({ x: 32, y: 44 })).toMatchObject({ type: 'feld' });
+    expect(scene.hitAt({ x: 32, y: 38 })).toMatchObject({ type: 'feld' });
   });
 
   test('ohne Lichtung gibt es keinen Momo-Treffer', () => {

@@ -21,7 +21,7 @@ export const kaulquappe: RigManifest = {
     origin: { x: 50, y: 98 },
     children: [
       joint('koerper', { x: 50, y: 98 }, [
-        slot('hals.hinten'),
+        slot('hals', 'hinten'),
         joint('schwanz', { x: 56, y: 58 }, [
           fill(
             smooth([
@@ -59,7 +59,7 @@ export const kaulquappe: RigManifest = {
           ),
         ]),
         joint('kopf', { x: 48, y: 58 }, [
-          slot('kopf.hinten'),
+          slot('kopf', 'hinten'),
           joint('wedel_links', { x: 22, y: 31 }, [
             frond({ x: 23, y: 27 }, { x: 11, y: 15 }),
             frond({ x: 21, y: 32 }, { x: 6, y: 30 }),
@@ -73,9 +73,9 @@ export const kaulquappe: RigManifest = {
           fill(ellipse(48, 36, 30, 25), 'momoBody', { shade: true }),
           fill(ellipse(34, 21, 7, 4), 'licht', { opacity: 0.45 }),
           face,
-          slot('kopf.vorn'),
+          slot('kopf', 'vorn'),
         ]),
-        slot('hals.vorn'),
+        slot('hals', 'vorn'),
       ]),
     ],
   },

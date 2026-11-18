@@ -3,11 +3,10 @@ import { createContext, use } from 'react';
 import { useDerivedValue } from 'react-native-reanimated';
 
 import { color } from '../design';
-import type { AccessoryShape } from './rig/accessories';
 import { keyMotion, poseOf, type JointPose, type PoseTarget, type RigMood } from './rig/clips';
 import { effectsOf, expression } from './rig/face';
 import type { Point } from './rig/geometry';
-import type { Anchor, Joint, RigNode, RigShape, SlotName } from './rig/types';
+import type { Anchor, Flat, Joint, RigNode, SlotPlace, SlotSide } from './rig/types';
 import { shadeOf } from './shade';
 import { useMomoMotion, type MomoDrive } from './use-momo-motion';
 import type { MomoVisual, WornAccessory } from './visual';
@@ -33,7 +32,7 @@ const useRig = (): Rig => {
 export function MomoRig({ visual, reduceMotion }: { visual: MomoVisual; reduceMotion: boolean }) {
   const drive = useMomoMotion(visual.mood, reduceMotion);
   return (
-    <RigContext value={{ visual, drive: reduceMotion ? null : drive }}>
+    <RigContext value={{ visual, drive }}>
       <JointView joint={visual.manifest.root} />
     </RigContext>
   );
@@ -50,18 +49,20 @@ function toTransform(pose: JointPose): Transforms3d {
   ];
 }
 
-/** Transformation eines Gelenks: bei erlaubter Bewegung ein abgeleiteter Wert, sonst die feste Schlüsselpose. */
+/**
+ * Pose eines Gelenks: bei erlaubter Bewegung je Frame einmal aus den Antrieben abgeleitet, sonst die
+ * feste Schlüsselpose ohne Shared Values.
+ */
 function usePose(target: PoseTarget, amplitude: number) {
   const { visual, drive } = useRig();
   const mood: RigMood = visual.mood;
   const key = poseOf(mood, target, keyMotion(mood), amplitude);
-  const moving = useDerivedValue(() =>
-    drive === null ? toTransform(key) : toTransform(poseOf(mood, target, { phase: drive.phase.value, lift: drive.lift.value, burst: drive.burst.value }, amplitude)),
+  const pose = useDerivedValue(() =>
+    drive === null ? key : poseOf(mood, target, { phase: drive.phase.value, lift: drive.lift.value, burst: drive.burst.value }, amplitude),
   );
-  const fade = useDerivedValue(() =>
-    drive === null ? key.opacity : poseOf(mood, target, { phase: drive.phase.value, lift: drive.lift.value, burst: drive.burst.value }, amplitude).opacity,
-  );
-  return drive === null ? { transform: toTransform(key), opacity: key.opacity } : { transform: moving, opacity: fade };
+  const transform = useDerivedValue(() => toTransform(pose.value));
+  const opacity = useDerivedValue(() => pose.value.opacity);
+  return drive === null ? { transform: toTransform(key), opacity: key.opacity } : { transform, opacity };
 }
 
 function JointView({ joint }: { joint: Joint }) {
@@ -86,20 +87,20 @@ function NodeView({ node }: { node: RigNode }) {
     case 'gesicht':
       return <Face />;
     case 'steckplatz':
-      return <Slot slot={node.slot} />;
+      return <Slot place={node.place} side={node.side} />;
   }
 }
 
-function fillOf(tone: RigShape['tone'] | AccessoryShape['tone']): string {
+function fillOf(tone: Flat['tone']): string {
   return tone === 'licht' ? color.surfaceCard : color[tone];
 }
 
 /** Fläche; mit `shade` liegt eine Sichel an ihrer rechten und unteren Kante im Schatten. */
-function Shape({ shape }: { shape: RigShape | AccessoryShape }) {
+function Shape({ shape }: { shape: Flat }) {
   const shade = shape.shade ? shadeOf(shape.path) : null;
   return (
     <Group>
-      <Path path={shape.path} color={fillOf(shape.tone)} opacity={'opacity' in shape ? shape.opacity : undefined} />
+      <Path path={shape.path} color={fillOf(shape.tone)} opacity={shape.opacity} />
       {shade === null ? null : <Path path={shade} color={color.ink} opacity={shadeOpacity} />}
     </Group>
   );
@@ -120,21 +121,21 @@ function Face() {
   return (
     <Group transform={anchored(visual.manifest.face)}>
       {expression(visual.mood).map((shape, index) => (
-        <Path key={index} path={shape.path} color={fillOf(shape.tone)} opacity={shape.opacity} />
+        <Shape key={index} shape={shape} />
       ))}
     </Group>
   );
 }
 
 /** Hinter- oder Vorderteil eines getragenen Accessoires am Steckplatz, eingepasst mit der Passung der Form. */
-function Slot({ slot }: { slot: SlotName }) {
+function Slot({ place, side }: { place: SlotPlace; side: SlotSide }) {
   const { visual } = useRig();
-  const [place, side] = slot.split('.') as ['kopf' | 'hals', 'hinten' | 'vorn'];
   const worn = visual.accessories[place];
-  const shapes = worn === null ? [] : (worn.art[side] ?? []);
-  if (worn === null || shapes.length === 0) return null;
+  const anchor = visual.manifest.slots?.[place];
+  const shapes = worn?.art[side] ?? [];
+  if (worn === null || anchor === undefined || shapes.length === 0) return null;
   return (
-    <Group transform={anchored(visual.manifest.slots[place], worn.fit)}>
+    <Group transform={anchored(anchor, worn.fit)}>
       {shapes.map((shape, index) => (
         <Shape key={index} shape={shape} />
       ))}
@@ -153,7 +154,7 @@ function Effects() {
     <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>
       <Group transform={transform} opacity={opacity}>
         {shapes.map((shape, index) => (
-          <Path key={index} path={shape.path} color={color[shape.tone]} />
+          <Shape key={index} shape={shape} />
         ))}
       </Group>
     </Group>

@@ -1,13 +1,12 @@
 import { LocalDate } from '@abnehm/contracts/base';
-import type { MomoAppearance, MomoMood } from '@abnehm/contracts/island';
+import { MomoMood, type MomoAppearance } from '@abnehm/contracts/island';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, color, radius, size, space, Text } from '../../design';
 import { IslandCanvas } from '../../island/IslandCanvas';
 import { islandScene, type SceneField, type SceneObject } from '../../island/scene-model';
-import { MomoAppearanceProvider, MomoFigure } from '../../momo';
-import { moodNames } from '../../momo/texts';
+import { MomoAppearanceProvider, MomoFigure, moodNames } from '../../momo';
 import type { MomoGalleryView } from './views';
 
 // Momo-Galerie (#187), nur in Test-Artefakten: Sie zeigt den vertikalen Schnitt des Momo-Rigs für die
@@ -15,7 +14,7 @@ import type { MomoGalleryView } from './views';
 // Stimmungen mit und ohne Accessoires in 104 dp (`momo-today`), dazu Laichkugel und Leerzustand;
 // `insel` zeigt Momo im Insel-Canvas, verdeckt von einem Objekt davor, am Tag und am Abend.
 
-const moods: readonly MomoMood[] = ['zufrieden', 'freut_sich', 'begeistert', 'neugierig', 'doest', 'schlaeft'];
+const moods = MomoMood.options;
 const dressed = { kopf: 'strohhuetchen', hals: 'muschelkette' } as const;
 const bare = { kopf: null, hals: null } as const;
 

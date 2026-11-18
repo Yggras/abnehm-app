@@ -9,11 +9,6 @@ export const laichkugel: RigManifest = {
   form: 'laichkugel',
   ground: { x: 50, y: 98 },
   face: { x: 44, y: 57, rotation: 0, scale: 0.45 },
-  // Die Laichkugel trägt keine Accessoires; die Anker bleiben ungenutzt.
-  slots: {
-    kopf: { x: 44, y: 41, rotation: 0, scale: 0.45 },
-    hals: { x: 44, y: 67, rotation: 0, scale: 0.45 },
-  },
   effects: { x: 80, y: 18 },
   root: {
     name: 'figur',

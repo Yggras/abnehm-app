@@ -4,7 +4,7 @@ import type { AccessoryFit, GameCatalog } from '@abnehm/game-rules/catalog';
 import { accessoryArt, type AccessoryArt } from './rig/accessories';
 import type { RigMood } from './rig/clips';
 import { manifests } from './rig/manifest';
-import type { RigForm, RigManifest } from './rig/types';
+import type { RigForm, RigManifest, SlotPlace } from './rig/types';
 import { eggLabel, momoLabel } from './texts';
 
 // Vom fachlichen Zustand zum Rig (Recherche Produktionsstrategie, Abschnitt 7.1): Fachcode nennt nur
@@ -22,9 +22,9 @@ export type MomoVisual = Readonly<{
 
 /**
  * Formen mit eigenem Manifest. Die übrigen zeichnet das Rig bis „Momo-Rig: Formen 2–7“ (#213) als
- * Kaulquappe; der zugängliche Name nennt trotzdem die echte Form.
+ * Kaulquappe, Accessoires dann auch mit deren Passung; der zugängliche Name nennt trotzdem die echte Form.
  */
-const drawnAs: Readonly<Record<MomoForm, RigForm>> = {
+const drawnAs: Readonly<Record<MomoForm, Extract<RigForm, MomoForm>>> = {
   kaulquappe: 'kaulquappe',
   huepfer: 'kaulquappe',
   krabbler: 'kaulquappe',
@@ -43,13 +43,14 @@ export function momoVisual(appearance: MomoAppearance | null, mood: MomoMood, ca
     return { manifest: manifests.laichkugel, mood: 'wartet_im_ei', accessories: nothingWorn, label: eggLabel };
   }
   const form = appearance.formKey;
-  const worn = (slot: 'kopf' | 'hals'): WornAccessory | null => {
+  const drawn = drawnAs[form];
+  const worn = (slot: SlotPlace): WornAccessory | null => {
     const key = appearance.accessories[slot];
     const accessory = key === null ? undefined : catalog.accessories.find((entry) => entry.key === key && entry.slot === slot);
     const art = accessory === undefined ? undefined : accessoryArt[accessory.art];
-    return accessory === undefined || art === undefined ? null : { name: accessory.name, art, fit: accessory.fit[form] };
+    return accessory === undefined || art === undefined ? null : { name: accessory.name, art, fit: accessory.fit[drawn] };
   };
   const accessories = { kopf: worn('kopf'), hals: worn('hals') };
   const names = [accessories.kopf, accessories.hals].flatMap((accessory) => (accessory === null ? [] : [accessory.name]));
-  return { manifest: manifests[drawnAs[form]], mood, accessories, label: momoLabel(form, mood, names) };
+  return { manifest: manifests[drawn], mood, accessories, label: momoLabel(form, mood, names) };
 }

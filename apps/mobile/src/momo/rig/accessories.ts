@@ -1,6 +1,7 @@
 import type { ArtKey } from '@abnehm/game-rules/catalog';
 
 import type { ColorToken } from '../../design';
+import type { Flat } from './types';
 
 // Accessoire-Grafiken (Spezifikation 4, Abschnitt 6; Design-System › Momo-Accessoires). Jedes
 // Accessoire ist einmal gezeichnet, höchstens als Hinter- und Vorderteil; das Rig setzt es an den
@@ -9,7 +10,7 @@ import type { ColorToken } from '../../design';
 // Ursprung ist der Steckplatz: am Kopf der Scheitel, am Hals die Mitte vorn. Maße und Farben sind
 // Designwerte aus #187, nicht belegt.
 
-export type AccessoryShape = Readonly<{ path: string; tone: ColorToken; shade?: boolean }>;
+export type AccessoryShape = Flat<ColorToken>;
 export type AccessoryArt = Readonly<{ hinten?: readonly AccessoryShape[]; vorn: readonly AccessoryShape[] }>;
 
 /** Muschel, die mit dem Scharnier an der Kette hängt. */

@@ -1,7 +1,7 @@
-import type { ColorToken } from '../../design';
+import { opacity, type ColorToken } from '../../design';
 import type { RigMood } from './clips';
 import { arcBand, capsule, ellipse, polygon, star } from './geometry';
-import type { RigShape } from './types';
+import type { Flat, RigShape } from './types';
 
 // Das Gesicht ist auf allen Formen gleich (Spezifikation 4, Abschnitt 6); das Manifest setzt es nur an
 // seinen Anker. Je Stimmung ein Ausdruck aus Augen, Brauen, Mund und Wangen (Design-System › Momo,
@@ -11,7 +11,7 @@ import type { RigShape } from './types';
 const eyeX = 12;
 const sides = [-1, 1] as const;
 
-const cheeks: RigShape[] = sides.map((side) => ({ path: ellipse(side * 19, 6, 4.4, 3.2), tone: 'momoCheek', opacity: 0.55 }));
+const cheeks: RigShape[] = sides.map((side) => ({ path: ellipse(side * 19, 6, 4.4, 3.2), tone: 'momoCheek', opacity: opacity.cheek }));
 
 /** Offene Augen mit weißem Lichtpunkt. */
 const openEyes = (r: number): RigShape[] =>
@@ -59,7 +59,7 @@ export function expression(mood: RigMood): readonly RigShape[] {
 }
 
 /** Zeichen über dem Kopf in Tokens des Design-Systems; der Mond ist ein Designwert aus #187. */
-export type EffectShape = Readonly<{ path: string; tone: Extract<ColorToken, 'energy' | 'hint' | 'inkMuted' | 'islandLamp'> }>;
+export type EffectShape = Flat<Extract<ColorToken, 'energy' | 'hint' | 'inkMuted' | 'islandLamp'>>;
 
 /** Buchstabe „z“ als Fläche, Kantenlänge `s`. */
 function zee(x: number, y: number, s: number): string {

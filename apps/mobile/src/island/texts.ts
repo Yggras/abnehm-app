@@ -1,7 +1,7 @@
 import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
 import type { Season } from '@abnehm/game-rules/catalog';
 
-import { formNames } from '../momo/texts';
+import { formNames } from '../momo';
 import type { IslandEntry } from './IslandBar';
 import type { Daytime } from './scene-model';
 

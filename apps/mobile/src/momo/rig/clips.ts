@@ -1,4 +1,4 @@
-import type { MomoMood } from '@abnehm/contracts/island';
+import { MomoMood } from '@abnehm/contracts/island';
 
 import type { JointName } from './types';
 
@@ -14,7 +14,7 @@ import type { JointName } from './types';
 
 /** Die sechs Stimmungen plus „wartet im Ei“, die Stufe `laichkugel`. */
 export type RigMood = MomoMood | 'wartet_im_ei';
-export const rigMoods: readonly RigMood[] = ['zufrieden', 'freut_sich', 'begeistert', 'neugierig', 'doest', 'schlaeft', 'wartet_im_ei'];
+export const rigMoods: readonly RigMood[] = [...MomoMood.options, 'wartet_im_ei'];
 
 /** Gelenke der Form plus die Zeichen über dem Kopf. */
 export type PoseTarget = JointName | 'effekt';
@@ -37,6 +37,7 @@ export const loopDuration: Readonly<Record<RigMood, number>> = {
 
 /** Ob die Stimmung mit einem Hüpfer bzw. Sprung beginnt. */
 export function hops(mood: RigMood): boolean {
+  'worklet';
   return mood === 'freut_sich' || mood === 'begeistert';
 }
 
@@ -60,7 +61,7 @@ const turn = 2 * Math.PI;
 export function poseOf(mood: RigMood, target: PoseTarget, { phase, lift, burst }: MotionInput, amplitude: number): JointPose {
   'worklet';
   const wave = Math.sin(phase * turn);
-  const happy = mood === 'freut_sich' || mood === 'begeistert';
+  const happy = hops(mood);
   const resting = mood === 'doest' || mood === 'schlaeft';
   switch (target) {
     case 'figur': {

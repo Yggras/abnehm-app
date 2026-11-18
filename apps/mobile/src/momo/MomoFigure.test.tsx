@@ -1,20 +1,20 @@
 /**
  * @jest-environment ./jest/skia-environment.js
  */
-import type { MomoAppearance, MomoMood } from '@abnehm/contracts/island';
+import { MomoMood, type MomoAppearance } from '@abnehm/contracts/island';
 import { act, render, screen } from '@testing-library/react-native';
 import { AccessibilityInfo } from 'react-native';
 
 import { withDeviceConfig } from '../design/testing/device-config';
 import type * as mockSkia from '../island/testing/skia-mock';
-import { MomoAppearanceProvider, MomoFigure } from './index';
+import { formNames, MomoAppearanceProvider, MomoFigure, moodNames } from './index';
 
 // Nachweis für #187 (und den zugänglichen Namen aus #109): `MomoFigure` zeichnet das Skia-Rig mit dem
 // echten Skia-Code (CanvasKit, siehe jest/skia-environment.js), benennt Momo mit Form, Stimmung und
 // Accessoires und steht bei „Bewegung reduzieren“ in der Schlüsselpose still.
 jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('../island/testing/skia-mock').skiaWithCanvasKit());
 
-const moods: readonly MomoMood[] = ['zufrieden', 'freut_sich', 'begeistert', 'neugierig', 'doest', 'schlaeft'];
+const moods = MomoMood.options;
 
 const hatched = (formKey: MomoAppearance['formKey'], accessories: MomoAppearance['accessories'] = { kopf: null, hals: null }): MomoAppearance => ({
   stage: 'geschluepft',
@@ -60,7 +60,7 @@ describe('alle Stimmungen', () => {
     '%s zeichnet „%s“ als Skia-Rig',
     async (form, mood) => {
       await renderFigure(hatched(form, { kopf: 'strohhuetchen', hals: 'muschelkette' }), mood);
-      expect(screen.getByRole('image', { name: new RegExp(`^Momo, \\S+, ${mood === 'freut_sich' ? 'freut sich' : mood === 'doest' ? 'döst' : mood === 'schlaeft' ? 'schläft' : mood}`) })).toBeOnTheScreen();
+      expect(screen.getByRole('image', { name: `Momo, ${formNames[form]}, ${moodNames[mood]}, trägt Strohhütchen und Muschelkette` })).toBeOnTheScreen();
       expect(skiaNodes().drawn.length).toBeGreaterThan(20);
     },
   );

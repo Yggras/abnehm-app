@@ -1,3 +1,5 @@
+import type { Accessory } from '@abnehm/game-rules/catalog';
+
 import type { ColorToken } from '../../design';
 import type { Point } from './geometry';
 
@@ -12,19 +14,27 @@ import type { Point } from './geometry';
  */
 export type RigTone = Extract<ColorToken, 'momoBody' | 'momoBelly' | 'momoFrond' | 'momoCheek' | 'ink'> | 'licht';
 
-/** Fläche ohne Kontur und Verlauf. `shade`: Eine Sichel an der rechten und unteren Kante liegt im Schatten. */
-export type RigShape = Readonly<{ path: string; tone: RigTone; opacity?: number; shade?: boolean }>;
+/**
+ * Fläche ohne Kontur und Verlauf, gemeinsam für Form, Gesicht, Accessoires und Zeichen. `shade`: Eine
+ * Sichel an der rechten und unteren Kante liegt im Schatten (`shade.ts`).
+ */
+export type Flat<Tone extends ColorToken | 'licht' = ColorToken | 'licht'> = Readonly<{ path: string; tone: Tone; opacity?: number; shade?: boolean }>;
+
+/** Fläche der Form und des Gesichts, nur in Momos Token-Farben. */
+export type RigShape = Flat<RigTone>;
 
 /** Gelenke, die die Clips antreiben; eine Form hat nur die, die ihr Körperbau braucht. */
 export type JointName = 'figur' | 'koerper' | 'kopf' | 'wedel_links' | 'wedel_rechts' | 'schwanz' | 'fluegel';
 
-export type SlotName = 'kopf.hinten' | 'kopf.vorn' | 'hals.hinten' | 'hals.vorn';
+/** Stelle eines Accessoires und Teil davor oder dahinter: `kopf.hinten`, `kopf.vorn`, `hals.hinten`, `hals.vorn`. */
+export type SlotPlace = Accessory['slot'];
+export type SlotSide = 'hinten' | 'vorn';
 
 export type RigNode =
   | Readonly<{ type: 'flaeche'; shape: RigShape }>
   | Readonly<{ type: 'gelenk'; joint: Joint }>
   | Readonly<{ type: 'gesicht' }>
-  | Readonly<{ type: 'steckplatz'; slot: SlotName }>;
+  | Readonly<{ type: 'steckplatz'; place: SlotPlace; side: SlotSide }>;
 
 export type Joint = Readonly<{ name: JointName; origin: Point; children: readonly RigNode[] }>;
 
@@ -40,8 +50,8 @@ export type RigManifest = Readonly<{
   root: Joint;
   /** Wo das gemeinsame Gesicht sitzt und wie groß es ist. */
   face: Anchor;
-  /** Steckplätze für Kopf- und Hals-Accessoires; die Passung des Accessoires gilt relativ dazu. */
-  slots: Readonly<{ kopf: Anchor; hals: Anchor }>;
+  /** Steckplätze für Kopf- und Hals-Accessoires; die Passung des Accessoires gilt relativ dazu. Die Laichkugel hat keine. */
+  slots?: Readonly<Record<SlotPlace, Anchor>>;
   /** Ort der Zeichen über dem Kopf: Funken, Fragezeichen, „z z“, Mond. */
   effects: Point;
   /** Formspezifische Korrektur der gemeinsamen Clips: Faktor auf den Ausschlag je Gelenk. */
@@ -54,5 +64,5 @@ export const fill = (path: string, tone: RigTone, options: Omit<RigShape, 'path'
   shape: { path, tone, ...options },
 });
 export const joint = (name: JointName, origin: Point, children: readonly RigNode[]): RigNode => ({ type: 'gelenk', joint: { name, origin, children } });
-export const slot = (name: SlotName): RigNode => ({ type: 'steckplatz', slot: name });
+export const slot = (place: SlotPlace, side: SlotSide): RigNode => ({ type: 'steckplatz', place, side });
 export const face: RigNode = { type: 'gesicht' };

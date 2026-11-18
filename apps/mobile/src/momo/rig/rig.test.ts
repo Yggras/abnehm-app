@@ -1,5 +1,5 @@
 import { accessoryArt } from './accessories';
-import { motionInputs, keyMotion, poseOf, rigMoods, type RigMood } from './clips';
+import { keyMotion, motionInputs, poseOf, rigMoods } from './clips';
 import { expression, effectsOf } from './face';
 import { manifests, nodesOf, type RigManifest } from './manifest';
 
@@ -25,7 +25,7 @@ describe('Rig-Manifeste', () => {
     (_, manifest) => {
       const nodes = nodesOf(manifest);
       expect(nodes.filter((node) => node.type === 'gesicht')).toHaveLength(1);
-      const slots = nodes.flatMap((node) => (node.type === 'steckplatz' ? [node.slot] : []));
+      const slots = nodes.flatMap((node) => (node.type === 'steckplatz' ? [`${node.place}.${node.side}`] : []));
       expect(slots.sort()).toEqual(['hals.hinten', 'hals.vorn', 'kopf.hinten', 'kopf.vorn']);
     },
   );
@@ -142,15 +142,5 @@ describe('Clips', () => {
 });
 
 function jointNames(manifest: RigManifest): string[] {
-  const names: string[] = [];
-  const visit = (joint: RigManifest['root']) => {
-    names.push(joint.name);
-    for (const child of joint.children) if (child.type === 'gelenk') visit(child.joint);
-  };
-  visit(manifest.root);
-  return names;
+  return [manifest.root.name, ...nodesOf(manifest).flatMap((node) => (node.type === 'gelenk' ? [node.joint.name] : []))];
 }
-
-// Typprüfung: Stimmungen des Rigs sind die sechs Stimmungen plus „wartet im Ei“.
-const _moods: readonly RigMood[] = ['zufrieden', 'freut_sich', 'begeistert', 'neugierig', 'doest', 'schlaeft', 'wartet_im_ei'];
-void _moods;

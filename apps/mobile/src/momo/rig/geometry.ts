@@ -1,5 +1,5 @@
 // Bausteine für die flächigen Pfade des Momo-Rigs. Jeder liefert eine geschlossene SVG-Pfadangabe,
-// die Skias `Path` direkt zeichnet und als Clip nimmt ([Skia-Doku: Path](https://shopify.github.io/react-native-skia/docs/shapes/path)).
+// die Skias `Path` direkt zeichnet ([Skia-Doku: Path](https://shopify.github.io/react-native-skia/docs/shapes/path)).
 // Koordinaten in Rig-Einheiten, y nach unten; Winkel in Grad, 0° zeigt nach rechts, positiv im
 // Uhrzeigersinn wie auf dem Bildschirm.
 

@@ -66,6 +66,11 @@ describe('Accessoires', () => {
     expect(visual.accessories.hals).toBeNull();
   });
 
+  test('passt Accessoires einer Form ohne eigenes Manifest wie an der gezeichneten Kaulquappe ein', () => {
+    const visual = momoVisual(hatched('huepfer', { kopf: 'strohhuetchen', hals: null }), 'zufrieden', gameCatalog);
+    expect(visual.accessories.kopf?.fit).toEqual(gameCatalog.accessories.find(({ key }) => key === 'strohhuetchen')!.fit.kaulquappe);
+  });
+
   test('übergeht unbekannte Schlüssel und Grafiken, statt zu raten', () => {
     const catalog: GameCatalog = {
       ...gameCatalog,

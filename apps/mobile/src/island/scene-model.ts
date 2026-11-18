@@ -261,14 +261,16 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
 }
 
 /**
- * Momos Trefferfläche bei Zoom 1: ein Quadrat von 44 × 44 dp um die Figur, die mittig 12 dp über der
- * Feldmitte steht (Vorzeichnung in `IslandArt.tsx`: von 28 dp darüber bis 4 dp darunter). 44 × 44 pt ist
- * laut Apple HIG die Standardgröße von Bedienelementen auf iOS, das Minimum 28 × 28 pt
+ * Momos Trefferfläche bei Zoom 1: ein Rechteck von 44 × 46 dp um die Figur, deren Mitte 19 dp über der
+ * Feldmitte liegt. Das Momo-Rig steht dort in einem Rahmen von 40 dp mit dem Bodenpunkt auf der
+ * Feldmitte (`IslandArt.tsx`, #187); Kopf, Krone und Strohhütchen reichen bis etwa 40 dp darüber, das
+ * Rechteck von 42 dp darüber bis 4 dp darunter. 44 × 44 pt ist laut Apple HIG die Standardgröße von
+ * Bedienelementen auf iOS, das Minimum 28 × 28 pt
  * (https://developer.apple.com/design/human-interface-guidelines/accessibility, „Mobility“).
  * Vorher deckte die Fläche nur die Figur ab; ein Tipp an Momos Kopfkante traf im Android-Emulator das Feld
  * dahinter (Impeccable-Kritik zu #184).
  */
-const momoHit = { lift: 12, half: 22 } as const;
+const momoHit = { lift: 19, halfWidth: 22, halfHeight: 23 } as const;
 
 /** Isometrische Projektion 2:1: Feld `island-tile` breit und halb so hoch, jeweils mal Zoom. */
 function projection(zoom: number) {
@@ -284,7 +286,7 @@ function projection(zoom: number) {
     onMomo(cell: Cell, point: Point): boolean {
       const { x, y } = top(cell);
       const figure = { x, y: y + halfHeight - momoHit.lift * zoom };
-      return Math.abs(point.x - figure.x) <= momoHit.half * zoom && Math.abs(point.y - figure.y) <= momoHit.half * zoom;
+      return Math.abs(point.x - figure.x) <= momoHit.halfWidth * zoom && Math.abs(point.y - figure.y) <= momoHit.halfHeight * zoom;
     },
     /** Raute eines Felds im Uhrzeigersinn ab der oberen Ecke. */
     diamond(cell: Cell): Polygon {
