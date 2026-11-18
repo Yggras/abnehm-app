@@ -4,7 +4,8 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 slot="$root/scripts/geraete-slot"
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+agent=
+trap '[ -z "$agent" ] || kill "$agent" 2>/dev/null || true; rm -rf "$tmp"' EXIT HUP INT TERM
 mkdir -p "$tmp/bin" "$tmp/main"
 git -C "$tmp/main" init -q
 git -C "$tmp/main" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
@@ -67,4 +68,62 @@ wait "$waiter" || fail 'warten fehlgeschlagen'
 # Notfall: erzwungene Freigabe einer fremden Sperre.
 in_dir "$tmp/main" freigeben --erzwingen 2>/dev/null
 [ "$(in_dir "$tmp/main" status)" = frei ] || fail 'erzwungene Freigabe'
+
+# Automatische Erneuerung (#294): Ruft eine Agent-Session `nehmen` auf, erneuert ein Hintergrundprozess die
+# Sperre, solange diese Session lebt. `testagent` steht für Claude Code bzw. Pi; Frist 3 s, Takt 1 s.
+printf '%s\n' '#!/bin/sh' '"$@"' 'while :; do sleep 1; done' > "$tmp/bin/testagent"
+chmod +x "$tmp/bin/testagent"
+export ABNEHM_GERAETE_SLOT_AGENTEN=testagent ABNEHM_GERAETE_SLOT_SEKUNDEN=3 ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
+state="$(git -C "$tmp/main" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-geraete-slot"
+renewer() { sed -n 's/^erneuerer=//p' "$state"; }
+alive() { kill -0 "$1" 2>/dev/null; }
+gone_within() { n=0; while alive "$1"; do n=$((n + 1)); [ "$n" -le 30 ] || return 1; sleep 0.2; done; }
+agent_takes() { # $1 Worktree; startet eine Agent-Session, die die Sperre nimmt und weiterläuft
+  "$tmp/bin/testagent" sh -c "cd '$1' && '$slot' nehmen > '$tmp/agent' 2>/dev/null" &
+  agent=$!
+  n=0; until [ -s "$tmp/agent" ] && [ -n "$(renewer 2>/dev/null)" ]; do n=$((n + 1)); [ "$n" -le 50 ] || fail 'Agent hat die Sperre nicht genommen'; sleep 0.2; done
+}
+
+# Ohne Agent unter den Vorfahren bleibt es beim bisherigen Verhalten: kein Erneuerer.
+in_dir "$tmp/main" nehmen > /dev/null 2>&1
+[ -z "$(renewer)" ] || fail 'Erneuerer ohne Agent-Session gestartet'
+in_dir "$tmp/main" freigeben 2>/dev/null
+
+# Die lebende Session behält die Sperre über die Frist hinaus.
+agent_takes "$tmp/work2"
+[ "$(cat "$tmp/agent")" = genommen ] || fail 'Agent: nehmen'
+first=$(renewer)
+alive "$first" || fail 'Erneuerer läuft nicht'
+sleep 5
+status=0; in_dir "$tmp/main" nehmen > /dev/null 2>&1 || status=$?
+[ "$status" = 3 ] || fail "lebende Session nach Ablauf der Frist verdrängt (Exit $status)"
+
+# Ein weiteres `nehmen` im selben Worktree startet keinen zweiten Erneuerer.
+"$tmp/bin/testagent" sh -c "cd '$tmp/work2' && '$slot' nehmen > '$tmp/agent2' 2>/dev/null; kill \$PPID" 2>/dev/null || true
+[ "$(cat "$tmp/agent2")" = erneuert ] || fail 'zweites nehmen derselben Session'
+[ "$(renewer)" = "$first" ] || fail 'zweiter Erneuerer gestartet'
+
+# Endet die Session, verfällt die Sperre nach der Frist, und der Erneuerer endet.
+kill "$agent"; wait "$agent" 2>/dev/null || true
+gone_within "$first" || fail 'Erneuerer läuft nach Ende der Session weiter'
+sleep 4
+[ "$(in_dir "$tmp/main" nehmen 2>/dev/null)" = genommen ] || fail 'Sperre der beendeten Session nicht verfallen'
+in_dir "$tmp/main" freigeben 2>/dev/null
+
+# Freigeben beendet die Erneuerung sofort, nicht erst beim nächsten Takt (hier 30 s).
+ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=30
+agent_takes "$tmp/work2"
+pid=$(renewer)
+in_dir "$tmp/work2" freigeben 2>/dev/null
+gone_within "$pid" || fail 'Erneuerer läuft nach freigeben weiter'
+kill "$agent"; wait "$agent" 2>/dev/null || true
+ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
+
+# Fehlt der Worktree des Inhabers, endet der Erneuerer.
+git -C "$tmp/main" worktree add -qb work/900003-test "$tmp/work3"
+agent_takes "$tmp/work3"
+pid=$(renewer)
+rm -rf "$tmp/work3"
+gone_within "$pid" || fail 'Erneuerer läuft ohne Worktree weiter'
+kill "$agent"; wait "$agent" 2>/dev/null || true
 printf 'geraete-slot: OK\n'
