@@ -272,7 +272,7 @@ Nimmt der Partner die Rollenwahl an, schlüpft Momo (Abschnitte 2.1, 2.4, 5 und 
   - `packages/game-rules/test/hatching.test.ts` prüft die Spielregel, `apps/backend/test/hatching.test.ts` Schlüpfen und Projector über Push und Pull: Tracer, genau ein Ereignis bei Wiederholung, Rollback bei Fehler und eine Projektion ohne Energiemengen.
   - `hatching-app.test.ts` lässt den Spieldienst zweier Geräte gegen die Hono-App laufen (`test/support/game-phones.ts`, auch für `role-choice-app.test.ts`).
   - `src/island/HatchedIslandScreen.test.tsx` prüft Tab, Momo-Sheet und Einmal-Flag mit echtem Skia-Code und Gesten, `MomoTab.test.tsx` Annehmen und die Beiträge.
-  - Maestro: `apps/mobile/e2e/schluepfen.yaml` (Seed `rollenwahl-offen` → Annehmen → „So wächst Momo“ → Insel auf Level 1 → „Momo · Level 1“ auf „Heute“).
+  - Maestro: `apps/mobile/e2e/schluepfen.yaml` (Seed `rollenwahl-offen` → Annehmen → „So wächst Momo“ → Insel auf Level 1 → Einmal-Flag nach Tab-Wechsel; „Heute“ erst mit `momo.daily_goals` aus #136).
 
 ### Ports zwischen Bereichen
 
@@ -587,7 +587,7 @@ Maestro-Abläufe gegen fertige Release-Binaries und eine On-Device-Suite mit dem
   - `sync-offline.yaml`: Seed `solo`, Tabs und ＋ bedienen, Transport aus (Android: Flugmodus; iOS: Transport-Fehlermodus), als lokale Änderung reist die Testuhr nach `Pacific/Kiritimati` (Fachbefehl `updatePersonTimeZone` in der Outbox), Uhr 25 Stunden vor (die Serveruhr folgt, auf Android erst vor dem ersten Sync nach dem Flugmodus), Hinweis „Noch nicht gesichert …“ erscheint, als zweite lokale Änderung bucht „+250 ml Wasser“ im ＋-Sheet auf Freitag, Transport zurück, Hinweis verschwindet, der Kopf zeigt den Tag aus der kanonischen Zone („Freitag, 16.10.2026“), und der Mini-Tracker zählt den kanonischen Wassereintrag weiter auf diesen Tag (#171).
   - `geraetesmoke.yaml`: eigene Tab-Leiste, sichere Bereiche (Bildschirmfotos), System-Zurück auf modalem Ablauf und Seite, Sitzung aus SecureStore nach einem Neustart.
   - `geraetetest.yaml`: On-Device-Suite vor und nach einem echten Neustart der App.
-  - `schluepfen.yaml`: Seed `rollenwahl-offen`, Philipp nimmt Annas Rollenwahl an, nach dem Sync erscheint „So wächst Momo“ und die Insel auf Level 1, „Heute“ zeigt „Momo · Level 1“, das Einmal-Flag hält (#184).
+  - `schluepfen.yaml`: Seed `rollenwahl-offen`, Philipp nimmt Annas Rollenwahl an, nach dem Sync erscheint „So wächst Momo“ und die Insel auf Level 1, das Einmal-Flag hält nach einem Wechsel zu „Heute“ (#184). Den Momo-Bereich auf „Heute“ prüft er erst, wenn #136 `momo.daily_goals` liefert.
   - Deep Links öffnen die Abläufe nur über `teilablaeufe/link.yaml`: Er wartet auf den ersten Bildschirm (Kennung `screen-scroll` jedes Bildschirmrahmens; auf Android ginge ein zu früher Link verloren) und bestätigt die Rückfrage „In … öffnen?“, die iOS vor dem ersten Link eines Simulators zeigt; erst danach kommt der Link an, genau einmal.
 - **Netz im E2E-Build:** Der iOS-Simulator erreicht das Backend über `localhost`, der Android-Emulator über `10.0.2.2` ([Android](https://developer.android.com/studio/run/emulator-networking-address)). Mit `adb reverse` und `localhost` klappte im Emulator der Push trotz Maestro-Flugmodus, mit `10.0.2.2` trennte der Flugmodus den Sync (beobachtet am 21.10.2026). Deshalb nutzen nur echte Android-Geräte `adb reverse`.
 - **Echte Geräte:** Maestro steuert ein per Kabel angeschlossenes iPhone nicht (#101), wohl aber ein Android-Gerät.

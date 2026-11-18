@@ -4,7 +4,11 @@
 # wartet auf die Rollen, und Anna hat vorgeschlagen, sich um die Natur zu kümmern. Philipp nimmt im Tab
 # „Momo“ an. Die Annahme ist zuerst nur vorgemerkt („Angenommen“); mit dem nächsten Sync schlüpft Momo auf
 # dem Server, und der Pull bringt Insel, Felder, Fortschritt und Ereignis. Danach zeigt der Tab die echte
-# Insel auf Level 1, beim ersten Öffnen mit „So wächst Momo“, und „Heute“ zeigt Momo mit Level.
+# Insel auf Level 1, beim ersten Öffnen mit „So wächst Momo“.
+#
+# „Heute“ prüft der Ablauf nicht: Den Momo-Bereich zeigt „Heute“ nur zusammen mit `momo.daily_goals`, und
+# den Beitrag liefert erst #136. `momo.character` im Zustand `ready` belegen `hatching-app.test.ts` und
+# `MomoTab.test.tsx`.
 appId: ${APP_ID}
 name: Rollenwahl annehmen, Momo schlüpft
 ---
@@ -41,15 +45,10 @@ name: Rollenwahl annehmen, Momo schlüpft
 - assertVisible: "Level 1"
 - takeScreenshot: schluepfen-3-insel
 
-# „Heute“ zeigt Momo mit Level -----------------------------------------------------------------------
+# Einmal-Flag: Nach einem Wechsel zu „Heute“ und zurück erscheint „So wächst Momo“ nicht wieder.
 - tapOn:
     id: tab-today
-- extendedWaitUntil:
-    visible: "Momo · Level 1"
-    timeout: 10000
-- takeScreenshot: schluepfen-4-heute
-
-# Einmal-Flag: Zurück im Tab „Momo“ erscheint „So wächst Momo“ nicht wieder.
+- assertVisible: "Hallo, Philipp"
 - tapOn:
     id: tab-momo
 - assertVisible: "Momos Insel, Level 1, 0 eigene Objekte"
