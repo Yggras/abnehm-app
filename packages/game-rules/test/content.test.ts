@@ -44,3 +44,17 @@ describe('Schlüpfen', () => {
     expect(index.find('gemeinschaftsprojekt', first!.key)).toMatchObject({ type: 'found', entry: { sequenceNumber: 1 } });
   });
 });
+
+// Nachweis für #187: Der vertikale Schnitt des Momo-Rigs bringt je ein Accessoire für Kopf und Hals.
+describe('Momo-Accessoires', () => {
+  it('gibt es je eines für Kopf und Hals: Strohhütchen und Muschelkette', () => {
+    expect(gameCatalog.accessories.map(({ name, slot }) => [slot, name])).toEqual([
+      ['kopf', 'Strohhütchen'],
+      ['hals', 'Muschelkette'],
+    ]);
+  });
+
+  it('passen auf alle acht Formen', () => {
+    for (const accessory of gameCatalog.accessories) expect(Object.keys(accessory.fit)).toHaveLength(8);
+  });
+});

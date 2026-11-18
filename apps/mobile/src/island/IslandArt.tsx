@@ -1,10 +1,12 @@
 import type { MomoAppearance } from '@abnehm/contracts/island';
 import type { ArtKey } from '@abnehm/game-rules/catalog';
+import { gameCatalog } from '@abnehm/game-rules/content';
 import { Circle, Group, Oval, Path } from '@shopify/react-native-skia';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { color, opacity, size, useMotion, type ColorToken } from '../design';
+import { color, size, useMotion, type ColorToken } from '../design';
+import { MomoRig, momoVisual } from '../momo';
 import { artOf, shadow, type ArtPrimitive } from './art';
 import type { Point, Polygon } from './scene-model';
 
@@ -12,14 +14,10 @@ import type { Point, Polygon } from './scene-model';
 // links oben: rechte Hälften `opacity-shade-right`, linke Flächen `opacity-shade-left`, Schlagschatten
 // nach rechts unten (`opacity-cast-shadow`; Design-System › Insel). Abgedunkelt wird mit `ink`, der
 // dunkelsten Farbe der Tokens. Maße in dp bei Zoom 1; ein Feld ist `island-tile` breit. Die Objekte
-// zeichnen ihre Grundformen aus `art.ts` (#192); Momo ist eine Vorzeichnung, bis das Skia-Rig aus #187
-// sie ersetzt.
+// zeichnen ihre Grundformen aus `art.ts` (#192), Momo zeichnet das Skia-Rig aus `src/momo` (#187).
 
 const tile = size.islandTile;
-const shade = color.ink;
 
-/** Momos rechte Körperhälfte: „10 % Schwarz“ (Design-System › Momo, Zeichenstil). */
-const momoShade = 0.1;
 /** Schein einer Laterne am Abend und Deckkraft der Wellen (Designwerte aus #182, nicht belegt). */
 const lampGlowOpacity = 0.35;
 const waveOpacity = 0.7;
@@ -149,51 +147,29 @@ export function Particle({ at, phase, tone, progress }: { at: Point; phase: numb
 }
 
 /**
- * Momo auf der Insel, etwa ein Feld hoch, mit Ruheatmung. Vorzeichnung der Kaulquappe nach
- * `MomoFigure`, bis das Skia-Rig aus #187 sie ersetzt.
+ * Momos Rahmen auf der Insel: das Rig steht in 100 × 100 Einheiten, hier 40 dp groß; die Figur ist damit
+ * etwa ein Feld hoch (Spezifikation 4, Abschnitt 6; 40 px als Annäherung aus prototypes/momo-lagunenling,
+ * Designwert, nicht belegt).
  */
-export function MomoOnIsland({ at, appearance, progress }: { at: Point; appearance: MomoAppearance; progress: SharedValue<number> }) {
-  const breath = useDerivedValue(() => [
-    { translateX: at.x },
-    { translateY: at.y },
-    { scaleY: 1 + Math.sin(progress.value * fullCircle) * 0.03 },
-  ]);
-  const asleep = appearance.moodKey === 'schlaeft';
-  if (appearance.stage === 'laichkugel') {
-    return (
-      <Group transform={breath}>
-        <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
-        <Circle cx={0} cy={-14} r={14} color={color.momoBelly} />
-        <Oval x={-6} y={-19} width={12} height={9} color={color.momoBody} />
-      </Group>
-    );
-  }
+const momoOnIslandFrame = 40;
+
+/**
+ * Momo auf der Insel: das Skia-Rig (`src/momo`) mit dem Bodenpunkt auf der Feldmitte, darunter der
+ * Schlagschatten. Momo steht in der Zeichenliste zwischen den Objekten, ein Objekt weiter vorn verdeckt
+ * ihn also (Szenenmodell, Zeichenreihenfolge Zeile + Spalte).
+ */
+export function MomoOnIsland({ at, appearance, reduceMotion }: { at: Point; appearance: MomoAppearance; reduceMotion: boolean }) {
+  const visual = useMemo(() => momoVisual(appearance, appearance.moodKey ?? 'zufrieden', gameCatalog), [appearance]);
+  const k = momoOnIslandFrame / 100;
+  const { ground } = visual.manifest;
   return (
-    <Group transform={breath}>
-      <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
-      <Oval x={6} y={-12} width={14} height={8} color={color.momoBody} />
-      {[-1, 1].map((side) => (
-        <Group key={side}>
-          <Circle cx={side * 13} cy={-24} r={3.5} color={color.momoFrond} />
-          <Circle cx={side * 15} cy={-19} r={3.5} color={color.momoFrond} />
-          <Circle cx={side * 14} cy={-14} r={3} color={color.momoFrond} />
-        </Group>
-      ))}
-      <Oval x={-13} y={-28} width={26} height={26} color={color.momoBody} />
-      <Path path={rightHalf(0, -15, 13)} color={shade} opacity={momoShade} />
-      <Oval x={-8} y={-16} width={16} height={11} color={color.momoBelly} />
-      {asleep ? (
-        <>
-          <Path path="M-6.5 -18 L-2.5 -18 M2.5 -18 L6.5 -18" style="stroke" strokeWidth={1.5} strokeCap="round" color={color.ink} />
-        </>
-      ) : (
-        <>
-          <Circle cx={-4.5} cy={-18} r={1.8} color={color.ink} />
-          <Circle cx={4.5} cy={-18} r={1.8} color={color.ink} />
-        </>
-      )}
-      <Circle cx={-8} cy={-14} r={2} color={color.momoCheek} opacity={opacity.cheek} />
-      <Circle cx={8} cy={-14} r={2} color={color.momoCheek} opacity={opacity.cheek} />
+    <Group>
+      <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>
+        <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
+      </Group>
+      <Group transform={[{ translateX: at.x - ground.x * k }, { translateY: at.y - ground.y * k }, { scale: k }]}>
+        <MomoRig visual={visual} reduceMotion={reduceMotion} />
+      </Group>
     </Group>
   );
 }

@@ -88,7 +88,7 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
   const reduceMotion = useReducedMotion();
   const progress = useLoop(reduceMotion);
   const pulse = usePulse(reduceMotion);
-  const drawing = useMemo(() => drawScene(scene, transform, { progress, pulse }), [scene, transform, progress, pulse]);
+  const drawing = useMemo(() => drawScene(scene, transform, { progress, pulse, reduceMotion }), [scene, transform, progress, pulse, reduceMotion]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -138,10 +138,13 @@ function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, mot
 /** Einträge im Ausschnitt; Lagune und Abend füllen den Canvas und zeichnet `drawScene` selbst. */
 type FramedItem = Exclude<SceneItem, Readonly<{ type: 'wasser' | 'abend' }>>;
 
-/** Takte der Bewegung: `progress` für Wellen, Atmung und Partikel, `pulse` für die gültigen Felder im Bau-Modus. */
-type Motion = Readonly<{ progress: SharedValue<number>; pulse: SharedValue<number> }>;
+/**
+ * Takte der Bewegung: `progress` für Wellen und Partikel, `pulse` für die gültigen Felder im Bau-Modus;
+ * Momo bewegt sein Rig selbst und braucht nur die Einstellung „Bewegung reduzieren“.
+ */
+type Motion = Readonly<{ progress: SharedValue<number>; pulse: SharedValue<number>; reduceMotion: boolean }>;
 
-function Item({ item, foliage, motion: { progress, pulse } }: { item: FramedItem; foliage: IslandScene['foliage']; motion: Motion }) {
+function Item({ item, foliage, motion: { progress, pulse, reduceMotion } }: { item: FramedItem; foliage: IslandScene['foliage']; motion: Motion }) {
   switch (item.type) {
     case 'inselschatten':
       return <Path path={polygonPath(item.polygon)} color={color[item.tone]} />;
@@ -168,7 +171,7 @@ function Item({ item, foliage, motion: { progress, pulse } }: { item: FramedItem
     case 'objekt':
       return <ObjectArt at={item.at} art={item.art} foliage={foliage} appearing={item.appearing} />;
     case 'momo':
-      return <MomoOnIsland at={item.at} appearance={item.appearance} progress={progress} />;
+      return <MomoOnIsland at={item.at} appearance={item.appearance} reduceMotion={reduceMotion} />;
     case 'nebel':
       return <Path path={fogPath(item.cells)} color={color[item.tone]} opacity={item.opacity} />;
     case 'partikel':

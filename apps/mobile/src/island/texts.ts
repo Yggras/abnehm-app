@@ -1,6 +1,7 @@
 import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
 import type { Season } from '@abnehm/game-rules/catalog';
 
+import { formNames } from '../momo/texts';
 import type { IslandEntry } from './IslandBar';
 import type { Daytime } from './scene-model';
 
@@ -55,16 +56,7 @@ export const laichkugelTexts = {
  */
 export const momoSheetTexts = {
   title: 'Momo',
-  form: {
-    kaulquappe: 'Kaulquappe',
-    huepfer: 'Hüpfer',
-    krabbler: 'Krabbler',
-    aufrechter: 'Aufrechter',
-    springer: 'Springer',
-    spirale: 'Spirale',
-    fluegling: 'Flügling',
-    lagunendrache: 'Lagunendrache',
-  } satisfies Record<MomoForm, string>,
+  form: formNames,
   formAndLevel: (form: MomoForm, level: number) => `${momoSheetTexts.form[form]} · Level ${level}`,
   growth: 'So wächst Momo',
   growthSentences: [
