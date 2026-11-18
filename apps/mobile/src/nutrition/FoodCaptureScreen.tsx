@@ -1,43 +1,36 @@
 import type { LocalDate, MealKey } from '@abnehm/contracts/base';
-import { roundKcal, type DisplayUnit, type NutritionEntryAddedOutcome } from '@abnehm/contracts/nutrition';
+import { foodValuesOf, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
-import { Button, Chip, IconButton, ListGroup, ListRow, Sheet, size, Skeleton, space, Text, TextField, type IconName } from '../design';
+import { ListGroup, ListRow, Sheet, size, Skeleton, space, Text, TextField, type IconName } from '../design';
 import { closeRoute, openTarget, type RouteScreenProps } from '../navigation';
 import { Placeholder } from '../shell/Placeholder';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { UnknownTarget } from '../shell/UnknownTarget';
 import { useUndoableMessage } from '../shell/use-undoable-message';
 import { isTestArtifact } from '../test-artifact';
-import { checkAmountInput, defaultAmountMilli } from './amount-input';
 import { useNutrition } from './app-nutrition';
+import { AmountReview, type Selection } from './AmountReview';
 import { BlsCatalogProvider, useFoodSearch } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
-import { useLocalToday } from './use-day-log';
 import type { Nutrition } from './nutrition';
-import {
-  amountProblemText,
-  dateText,
-  kcalText,
-  macrosText,
-  markNames,
-  mealNames,
-  milliText,
-  nutritionTexts,
-  sourceNames,
-  unitChipText,
-  unitText,
-} from './texts';
+import { editableBaseOf, emptyOwnFoodDraft, ownFoodDraftOf, type OwnFoodDraft } from './own-food-input';
+import type { OwnFoodBase } from './own-foods';
+import { OwnFoodForm } from './OwnFoodForm';
+import { dateText, markNames, mealNames, nutritionTexts } from './texts';
+import { useLocalToday } from './use-day-log';
 
 // Hinzufügen-Bildschirm (Spezifikation 2, Abschnitt 6) für die Route `capture.food`: feste Plätze in
 // der Reihenfolge Suche, „Barcode scannen“, „Foto aufnehmen“, Mahlzeitenfavoriten, „Zuletzt verwendet“,
-// Lebensmittelfavoriten und „Eigenes Lebensmittel anlegen“. #155 füllt die Suche; die übrigen Plätze
-// füllen ihre Tickets (#157–#163). Vor jedem Speichern prüft die Person Menge und Einheit im Sheet.
+// Lebensmittelfavoriten und „Eigenes Lebensmittel anlegen“. #155 füllt die Suche, #157 den letzten Platz
+// samt Formular; die übrigen Plätze füllen ihre Tickets (#158–#163). Vor jedem Speichern prüft die
+// Person Menge und Einheit im Sheet. Das Formular „Eigenes Lebensmittel“ ist ein Schritt dieses
+// Bildschirms, kein Sheet: Es braucht Tastatur und Platz, und Sheets liegen nie in Sheets.
 
-/** Die Plätze in fester Reihenfolge; die Suche steht immer oben. */
-const laterSlots = ['barcode', 'foto', 'mahlzeitenfavoriten', 'zuletzt', 'lebensmittelfavoriten', 'eigenes_lebensmittel'] as const;
+/** Plätze, die spätere Tickets füllen, in fester Reihenfolge zwischen Suche und eigenem Lebensmittel. */
+const laterSlots = ['barcode', 'foto', 'mahlzeitenfavoriten', 'zuletzt', 'lebensmittelfavoriten'] as const;
 type LaterSlot = (typeof laterSlots)[number];
 
 const slotIcons: Readonly<Record<LaterSlot, IconName>> = {
@@ -46,7 +39,6 @@ const slotIcons: Readonly<Record<LaterSlot, IconName>> = {
   mahlzeitenfavoriten: 'plate',
   zuletzt: 'undo',
   lebensmittelfavoriten: 'star',
-  eigenes_lebensmittel: 'pencil',
 };
 
 export function FoodCaptureScreen({ target }: RouteScreenProps<'capture.food'>) {
@@ -77,28 +69,115 @@ function AddFood({ meal, localDate, today }: { meal: MealKey; localDate: LocalDa
   );
 }
 
+/** Der Formularschritt „Eigenes Lebensmittel“: was gespeichert wird und womit das Formular beginnt. */
+type FormStep = Readonly<{
+  base: OwnFoodBase;
+  initial: OwnFoodDraft;
+  title: string;
+  hint?: string;
+  captureMethod: CaptureMethod;
+  /** Beim Ändern das Lebensmittel, aus dem das Formular kam: Speichern ohne Änderung kehrt zu ihm zurück. */
+  from?: Selection;
+}>;
+
+const sameValues = (a: FoodValues, b: FoodValues) => JSON.stringify(foodValuesOf(a)) === JSON.stringify(foodValuesOf(b));
+
 function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: MealKey; localDate: LocalDate }) {
-  const search = useFoodSearch();
+  const search = useFoodSearch(nutrition);
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<FoodSearchHit | null>(null);
-  const result = useMemo(() => search.search(query), [search, query]);
+  const [selected, setSelected] = useState<Selection | null>(null);
+  const [form, setForm] = useState<FormStep | null>(null);
+  // Jede Änderung an einem eigenen Lebensmittel zählt hoch; danach liest die Suche neu.
+  const [ownFoodChanges, setOwnFoodChanges] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `ownFoodChanges` löst das erneute Lesen aus.
+  const result = useMemo(() => search.search(query), [search, query, ownFoodChanges]);
   const message = useUndoableMessage();
 
-  const add = (hit: FoodSearchHit, displayUnit: DisplayUnit, displayAmountMilli: number) => {
-    let outcome: NutritionEntryAddedOutcome;
+  /** Führt einen Befehl aus; scheitert er technisch, sieht die Person „Das hat nicht geklappt …“. */
+  const attempt = <T,>(command: () => T): { done: true; value: T } | { done: false } => {
     try {
-      outcome = nutrition.addEntry({ localDate, meal, captureMethod: 'suche', foodRef: hit.ref, snapshot: hit.snapshot, displayUnit, displayAmountMilli });
+      return { done: true, value: command() };
     } catch (error) {
       message.failed(error);
-      return;
+      return { done: false };
     }
-    message.show(outcome, { run: () => nutrition.undo(outcome.undoToken), expire: () => nutrition.expire(outcome.undoToken) });
+  };
+
+  const add = (choice: Selection, displayUnit: DisplayUnit, displayAmountMilli: number) => {
+    const added = attempt(() =>
+      nutrition.addEntry({ localDate, meal, captureMethod: choice.captureMethod, foodRef: choice.ref, snapshot: choice.snapshot, displayUnit, displayAmountMilli }),
+    );
+    if (!added.done) return;
+    const { undoToken } = added.value;
+    message.show(added.value, { run: () => nutrition.undo(undoToken), expire: () => nutrition.expire(undoToken) });
     setSelected(null);
     // Speichern kehrt zum Protokoll zurück (Spezifikation 2, Abschnitt 6), auch ohne Rückweg, etwa nach
     // einem Link. Kam die Person aus dem Protokoll, bringt sie schon `closeRoute` dorthin.
     closeRoute();
     openTarget({ type: 'log' });
   };
+
+  /** Speichert ein eigenes Lebensmittel und öffnet es danach in der Mengenprüfung. */
+  const saveOwnFood = (base: OwnFoodBase, values: FoodValues, captureMethod: CaptureMethod, unit?: DisplayUnit) => {
+    // Das Formular hat die Werte schon geprüft; scheitert der Befehl trotzdem, ist das ein Fehler.
+    const saved = attempt(() => nutrition.saveOwnFood(base, values));
+    if (!saved.done) return;
+    setOwnFoodChanges((count) => count + 1);
+    setForm(null);
+    setSelected({ ...saved.value, captureMethod, unit });
+  };
+
+  const create = (name = '') =>
+    setForm({ base: null, initial: emptyOwnFoodDraft(name), title: nutritionTexts.ownFood.create, captureMethod: 'eigenes_lebensmittel' });
+
+  /** „Bearbeiten“ eines eigenen bzw. „Werte korrigieren“ eines BLS-Lebensmittels aus der Mengenprüfung. */
+  const edit = (choice: Selection) => {
+    const base = editableBaseOf(choice.ref);
+    if (base === undefined) return;
+    const own = base.type === 'eigen';
+    setSelected(null);
+    setForm({
+      base,
+      initial: ownFoodDraftOf(choice.snapshot),
+      title: own ? nutritionTexts.ownFood.edit : nutritionTexts.ownFood.correct,
+      hint: own ? undefined : nutritionTexts.ownFood.correctHint,
+      captureMethod: choice.captureMethod,
+      from: choice,
+    });
+  };
+
+  /** Ohne Änderung entsteht nichts: Erst eine geänderte Fassung wird zum eigenen Lebensmittel (#157). */
+  const submit = (step: FormStep, values: FoodValues) => {
+    if (step.from !== undefined && sameValues(values, step.from.snapshot)) {
+      setForm(null);
+      setSelected(step.from);
+      return;
+    }
+    saveOwnFood(step.base, values, step.captureMethod);
+  };
+
+  if (form !== null) {
+    const { base } = form;
+    return (
+      <OwnFoodForm
+        title={form.title}
+        hint={form.hint}
+        initial={form.initial}
+        onSave={(values) => submit(form, values)}
+        onCancel={() => setForm(null)}
+        onDelete={
+          base?.type === 'eigen'
+            ? () => {
+                // Scheitert das Löschen, bleibt das Formular offen.
+                if (!attempt(() => nutrition.deleteOwnFood(base.key)).done) return;
+                setOwnFoodChanges((count) => count + 1);
+                setForm(null);
+              }
+            : undefined
+        }
+      />
+    );
+  }
 
   return (
     <>
@@ -112,15 +191,31 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
           onChangeText={setQuery}
         />
       </View>
-      {result.type === 'treffer' ? <SearchHits hits={result.hits} query={query} onSelect={setSelected} /> : <LaterSlots />}
+      {result.type === 'treffer' ? (
+        <SearchHits
+          hits={result.hits}
+          query={query}
+          onSelect={(hit) => setSelected({ ref: hit.ref, snapshot: hit.snapshot, captureMethod: 'suche' })}
+          onCreate={create}
+        />
+      ) : (
+        <Slots onCreate={() => create()} />
+      )}
       <Sheet visible={selected !== null} onClose={() => setSelected(null)} height="full">
         {selected === null ? null : (
           <AmountReview
-            key={`${selected.ref.type}:${selected.ref.key}`}
-            hit={selected}
+            key={`${selected.ref.type}:${selected.ref.key}:${ownFoodChanges}`}
+            selection={selected}
             nutrition={nutrition}
             onClose={() => setSelected(null)}
             onAdd={(displayUnit, displayAmountMilli) => add(selected, displayUnit, displayAmountMilli)}
+            onEdit={() => edit(selected)}
+            onConversion={(conversion) => {
+              const base = editableBaseOf(selected.ref);
+              if (base === undefined) return;
+              const values = foodValuesOf(selected.snapshot);
+              saveOwnFood(base, { ...values, portions: [...values.portions, conversion] }, selected.captureMethod, conversion.unit);
+            }}
           />
         )}
       </Sheet>
@@ -128,8 +223,28 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
   );
 }
 
-function SearchHits({ hits, query, onSelect }: { hits: readonly FoodSearchHit[]; query: string; onSelect: (hit: FoodSearchHit) => void }) {
-  if (hits.length === 0) return <Text tone="inkMuted">{nutritionTexts.noHits(query)}</Text>;
+function SearchHits({
+  hits,
+  query,
+  onSelect,
+  onCreate,
+}: {
+  hits: readonly FoodSearchHit[];
+  query: string;
+  onSelect: (hit: FoodSearchHit) => void;
+  onCreate: (name: string) => void;
+}) {
+  if (hits.length === 0) {
+    // Ohne Treffer: „Eigenes Lebensmittel anlegen“ mit dem Suchtext als Namen (Spezifikation 2, Abschnitt 4).
+    return (
+      <>
+        <Text tone="inkMuted">{nutritionTexts.noHits(query)}</Text>
+        <ListGroup>
+          <ListRow icon="pencil" title={nutritionTexts.createNamed(query)} onPress={() => onCreate(query)} />
+        </ListGroup>
+      </>
+    );
+  }
   return (
     <ListGroup>
       {hits.map((hit) => {
@@ -150,10 +265,11 @@ function SearchHits({ hits, query, onSelect }: { hits: readonly FoodSearchHit[];
 }
 
 /**
- * Plätze, die spätere Tickets füllen. Test-Artefakte zeigen sie als „Kommt noch“, damit die Reihenfolge
- * sichtbar bleibt; im Release ist ein fehlender Platz ein Integrationsfehler wie ein fehlender Bildschirm.
+ * Die Plätze unter der Suche, „Eigenes Lebensmittel anlegen“ als letzter. Plätze, die spätere Tickets
+ * füllen, zeigen Test-Artefakte als „Kommt noch“, damit die Reihenfolge sichtbar bleibt; im Release ist
+ * ein fehlender Platz ein Integrationsfehler wie ein fehlender Bildschirm.
  */
-function LaterSlots() {
+function Slots({ onCreate }: { onCreate: () => void }) {
   if (!isTestArtifact()) throw new Error(`Integrationsfehler: Auf dem Hinzufügen-Bildschirm fehlen die Plätze ${laterSlots.join(', ')}.`);
   return (
     <ListGroup>
@@ -162,91 +278,10 @@ function LaterSlots() {
           <ListRow icon={slotIcons[slot]} title={nutritionTexts.slots[slot]} subtitle={nutritionTexts.slotInWork} disabled />
         </View>
       ))}
+      <View testID="platz-eigenes_lebensmittel">
+        <ListRow icon="pencil" title={nutritionTexts.slots.eigenes_lebensmittel} onPress={onCreate} />
+      </View>
     </ListGroup>
-  );
-}
-
-/**
- * Mengenprüfung als Sheet: Name und Quelle, Mengenfeld mit Einheiten-Chips, kcal groß, Makros klein und
- * „Hinzufügen“. Vorbelegt ist die letzte Menge dieses Lebensmittels, sonst eine Portion, sonst 100 g bzw. ml.
- */
-function AmountReview({
-  hit,
-  nutrition,
-  onClose,
-  onAdd,
-}: {
-  hit: FoodSearchHit;
-  nutrition: Nutrition;
-  onClose: () => void;
-  onAdd: (displayUnit: DisplayUnit, displayAmountMilli: number) => void;
-}) {
-  const { snapshot } = hit;
-  const [prefill] = useState(() => nutrition.prefillAmount(hit.ref, snapshot));
-  const [unit, setUnit] = useState<DisplayUnit>(prefill.displayUnit);
-  const [input, setInput] = useState(() => milliText(prefill.displayAmountMilli));
-  const [submitted, setSubmitted] = useState(false);
-  const check = checkAmountInput(snapshot, unit, input);
-  // Ein leeres Feld beim Tippen ist noch kein Fehler; erst „Hinzufügen“ fragt nach der Menge.
-  const problem = check.type === 'problem' && (submitted || check.problem !== 'leer') ? amountProblemText(check.problem, snapshot.baseUnit) : undefined;
-  const units: DisplayUnit[] = [snapshot.baseUnit, ...snapshot.portions.map((portion) => portion.unit)];
-  // Die Quellenangabe nennt die Quelle schon (BLS, Open Food Facts); sonst die Art der Werte.
-  const source = snapshot.attribution ?? sourceNames[snapshot.source];
-  const kcal = check.type === 'menge' ? kcalText(roundKcal(check.totals.milliKcal)) : nutritionTexts.noKcal;
-
-  return (
-    <View style={styles.sheet}>
-      <View style={styles.sheetHead}>
-        <View style={styles.grow}>
-          <Text variant="title" accessibilityRole="header">
-            {snapshot.name}
-          </Text>
-          <Text variant="caption" tone="inkMuted">
-            {source}
-          </Text>
-        </View>
-        <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
-      </View>
-      <TextField
-        kind="number"
-        label={nutritionTexts.amount}
-        unit={unitText(unit)}
-        value={input}
-        onChangeText={setInput}
-        problem={problem}
-      />
-      <View style={styles.units}>
-        {units.map((option) => (
-          <Chip
-            key={option}
-            label={unitChipText(snapshot, option)}
-            selection="single"
-            selected={option === unit}
-            onPress={() => {
-              if (option === unit) return;
-              setUnit(option);
-              setInput(milliText(defaultAmountMilli(snapshot, option)));
-            }}
-          />
-        ))}
-      </View>
-      <View style={styles.values}>
-        <Text variant="numberXl">{kcal}</Text>
-        {check.type === 'menge' ? (
-          <Text variant="label" tone="inkMuted">
-            {macrosText(check.totals)}
-          </Text>
-        ) : null}
-      </View>
-      <Button
-        label={nutritionTexts.add}
-        block
-        onPress={() => {
-          setSubmitted(true);
-          if (check.type === 'menge') onAdd(unit, check.amount.displayAmountMilli);
-        }}
-      />
-    </View>
   );
 }
 
@@ -260,10 +295,5 @@ function CaptureSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  sheet: { gap: space[4] },
-  sheetHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] },
-  grow: { flex: 1, gap: space[1] },
-  units: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  values: { gap: space[1] },
   skeleton: { gap: space[4] },
 });

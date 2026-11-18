@@ -258,6 +258,10 @@ _Avoid_: Kalorieneintrag, Essen
 Ein vom Nutzer angelegter oder korrigierter Nährwertdatensatz, der unabhängig von den externen Quelldaten gespeichert wird.
 _Avoid_: Benutzerprodukt, korrigiertes Produkt
 
+**Herkunftsreferenz**:
+Das BLS-Lebensmittel oder der Barcode, den ein eigenes Lebensmittel korrigiert; solange es besteht, überdeckt es diese Quelle in der Suche.
+_Avoid_: Herkunft (bezeichnet die Quelle eines Wasser-, Sport- oder Gewichtseintrags)
+
 **Fotoentwurf**:
 Eine noch nicht bestätigte, kurzlebige KI-Schätzung, die eine fotografierte Mahlzeit in einzeln änderbare Bestandteile mit Mengen und Nährwerten zerlegt.
 _Avoid_: KI-Eintrag, Fotoergebnis

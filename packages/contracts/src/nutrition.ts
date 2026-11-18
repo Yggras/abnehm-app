@@ -43,22 +43,31 @@ export const BlsKey = z.string().regex(/^[A-Z][0-9A-Z]{6}$/);
 /** Barcode als GTIN-8, -12, -13 oder -14 (https://www.gs1.org/standards/id-keys/gtin); UPC-E hat 8 Stellen. */
 const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
 
+const BlsRef = z.strictObject({ type: z.literal(FoodRefType.enum.bls), key: BlsKey });
+const OffRef = z.strictObject({ type: z.literal(FoodRefType.enum.off), key: Barcode });
+
 /**
  * Lebensmittelreferenz: woher die Werte eines Eintrags oder Favoriten stammen. In SQLite und Postgres
  * steht sie als `food_ref_type` und `food_ref_key`.
  */
 export const FoodRef = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal(FoodRefType.enum.bls), key: BlsKey }),
-  z.strictObject({ type: z.literal(FoodRefType.enum.off), key: Barcode }),
+  BlsRef,
+  OffRef,
   z.strictObject({ type: z.literal(FoodRefType.enum.eigen), key: EntityId }),
 ]);
 export type FoodRef = z.infer<typeof FoodRef>;
+
+/** Höchstlänge eines Lebensmittelnamens in Zeichen (Designwert, nicht belegt). */
+export const foodNameMaxLength = 200;
+
+/** Höchstlänge der Bezeichnung einer Umrechnung wie „1 Becher“ (Designwert, nicht belegt). */
+export const portionLabelMaxLength = 40;
 
 /** Bekannte Umrechnung von Stück bzw. Portion in die Basiseinheit. */
 export const PortionConversion = z.strictObject({
   unit: z.enum(['stueck', 'portion']),
   /** Bezeichnung wie „1 Becher“; ohne sie heißt die Einheit nur „Stück“ bzw. „Portion“. */
-  label: trimmedText(40).nullable(),
+  label: trimmedText(portionLabelMaxLength).nullable(),
   /** Basismenge eines Stücks bzw. einer Portion in mg bzw. ml. */
   baseAmount: z.int().positive(),
 });
@@ -66,46 +75,73 @@ export type PortionConversion = z.infer<typeof PortionConversion>;
 
 const nutrient = z.int().nonnegative();
 
+/** Name, Einheit, Nährwerte und Umrechnungen eines Lebensmittels: gemeinsam für Snapshot und eigenes Lebensmittel. */
+const foodValueFields = {
+  name: trimmedText(foodNameMaxLength),
+  baseUnit: BaseUnit,
+  /** Bezugsmenge der Nährwerte in der Basiseinheit, z. B. 100.000 für 100 g. */
+  referenceAmount: z.int().positive(),
+  milliKcal: nutrient,
+  proteinMg: nutrient,
+  carbsMg: nutrient,
+  fatMg: nutrient,
+  /** Höchstens eine Umrechnung je Einheit: Die Mengenprüfung bietet je Einheit einen Chip. */
+  portions: z.array(PortionConversion).max(2),
+};
+
+type FoodValueFields = { [K in keyof typeof foodValueFields]: z.output<(typeof foodValueFields)[K]> };
+
+/** Name, Basiseinheit, Bezugsmenge, Nährwerte und Umrechnungen eines Lebensmittels, ohne Quelle und Herkunftsreferenz. */
+export type FoodValues = Readonly<FoodValueFields>;
+
+/** Die Werte eines Snapshots, eines eigenen Lebensmittels oder seines Datensatzes, ohne alle übrigen Felder. */
+export function foodValuesOf({ name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions }: FoodValues): FoodValues {
+  return { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions };
+}
+
+/**
+ * Regeln der Werte eines Lebensmittels (Spezifikation 2, Abschnitt 2), für Snapshot und eigenes
+ * Lebensmittel gleich: nicht negative Nährwerte (`nutrient`), Makros höchstens in Höhe der Bezugsmenge,
+ * Bezugsmenge und Umrechnungen höchstens 5 kg bzw. 5 l, höchstens eine Umrechnung je Einheit.
+ */
+function withFoodValueRules<T extends z.ZodType<FoodValueFields>>(schema: T) {
+  return (
+    schema
+      // Bezugsmenge und Umrechnungen begrenzt wie die Menge je Eintrag (Designwert, nicht belegt): Größere
+      // Werte ergäben keinen erfassbaren Eintrag und halten die Rechnung im sicheren Ganzzahlbereich.
+      .refine((s) => amountWithin(s.baseUnit, s.referenceAmount), {
+        message: 'Bezugsmenge höchstens 5 kg bzw. 5 l',
+        path: ['referenceAmount'],
+      })
+      // Makros und Bezugsmenge sind nur bei der Basiseinheit g beide Massen; bei ml hinge der Vergleich
+      // von der Dichte ab. So prüfen es auch die CHECKs `*_macros_check` beider Datenbankschemas.
+      .refine((s) => s.baseUnit !== 'g' || s.proteinMg + s.carbsMg + s.fatMg <= s.referenceAmount, {
+        message: 'Makros zusammen höchstens die Bezugsmenge',
+        path: ['proteinMg'],
+      })
+      .refine((s) => new Set(s.portions.map((portion) => portion.unit)).size === s.portions.length, {
+        message: 'Höchstens eine Umrechnung je Einheit',
+        path: ['portions'],
+      })
+      .refine((s) => s.portions.every((portion) => amountWithin(s.baseUnit, portion.baseAmount)), {
+        message: 'Stück bzw. Portion höchstens 5 kg bzw. 5 l',
+        path: ['portions'],
+      })
+  );
+}
+
 /**
  * Vollständiger Nährwert-Snapshot, wie er an jedem Ernährungseintrag und jeder Favoritenfassung
  * gespeichert wird. Spätere Korrekturen am Lebensmittel ändern ihn nicht (Spezifikation 2, Abschnitt 2).
  */
-export const NutritionSnapshot = z
-  .strictObject({
-    name: trimmedText(200),
-    baseUnit: BaseUnit,
-    /** Bezugsmenge der Nährwerte in der Basiseinheit, z. B. 100.000 für 100 g. */
-    referenceAmount: z.int().positive(),
-    milliKcal: nutrient,
-    proteinMg: nutrient,
-    carbsMg: nutrient,
-    fatMg: nutrient,
-    /** Höchstens eine Umrechnung je Einheit: Die Mengenprüfung bietet je Einheit einen Chip. */
-    portions: z.array(PortionConversion).max(2),
+export const NutritionSnapshot = withFoodValueRules(
+  z.strictObject({
+    ...foodValueFields,
     source: SnapshotSource,
     /** Quellenangabe, etwa für BLS und Open Food Facts; eigene Lebensmittel und KI-Schätzungen brauchen keine. */
     attribution: trimmedText(300).nullable(),
-  })
-  // Bezugsmenge und Umrechnungen begrenzt wie die Menge je Eintrag (Designwert, nicht belegt): Größere
-  // Werte ergäben keinen erfassbaren Eintrag und halten die Rechnung im sicheren Ganzzahlbereich.
-  .refine((s) => amountWithin(s.baseUnit, s.referenceAmount), {
-    message: 'Bezugsmenge höchstens 5 kg bzw. 5 l',
-    path: ['referenceAmount'],
-  })
-  // Makros und Bezugsmenge sind nur bei der Basiseinheit g beide Massen; bei ml hinge der Vergleich
-  // von der Dichte ab. So prüfen es auch die CHECKs `*_macros_check` beider Datenbankschemas.
-  .refine((s) => s.baseUnit !== 'g' || s.proteinMg + s.carbsMg + s.fatMg <= s.referenceAmount, {
-    message: 'Makros zusammen höchstens die Bezugsmenge',
-    path: ['proteinMg'],
-  })
-  .refine((s) => new Set(s.portions.map((portion) => portion.unit)).size === s.portions.length, {
-    message: 'Höchstens eine Umrechnung je Einheit',
-    path: ['portions'],
-  })
-  .refine((s) => s.portions.every((portion) => amountWithin(s.baseUnit, portion.baseAmount)), {
-    message: 'Stück bzw. Portion höchstens 5 kg bzw. 5 l',
-    path: ['portions'],
-  })
+  }),
+)
   .refine((s) => (s.source !== 'bls' && s.source !== 'off') || s.attribution !== null, {
     message: 'BLS und Open Food Facts brauchen eine Quellenangabe',
     path: ['attribution'],
@@ -115,6 +151,37 @@ export const NutritionSnapshot = z
     path: ['source'],
   });
 export type NutritionSnapshot = z.infer<typeof NutritionSnapshot>;
+
+// Eigenes Lebensmittel (Spezifikation 2, Abschnitt 3) ------------------------------------------------
+
+/**
+ * Herkunftsreferenz eines eigenen Lebensmittels: das BLS-Lebensmittel bzw. der Barcode, den es
+ * korrigiert. Ab dann überdeckt es diese Quelle; die externen Daten bleiben unverändert.
+ */
+export const OwnFoodOrigin = z.discriminatedUnion('type', [BlsRef, OffRef]);
+export type OwnFoodOrigin = z.infer<typeof OwnFoodOrigin>;
+
+const ownFoodFields = { ...foodValueFields, origin: OwnFoodOrigin.nullable() };
+
+/**
+ * Nutzlast eines eigenen Lebensmittels im Sync (Spezifikation 2, Abschnitt 11): generisches
+ * Upsert/Delete, Last-Write-Wins pro Zeile, Löschen ist ein Tombstone. Server und App prüfen dieselben
+ * Regeln wie am Snapshot: nicht negative Nährwerte, Makros höchstens in Höhe der Bezugsmenge.
+ */
+export const OwnFoodUpsert = withFoodValueRules(z.strictObject(ownFoodFields));
+export type OwnFoodUpsert = z.infer<typeof OwnFoodUpsert>;
+
+/** Kanonisches eigenes Lebensmittel des Servers: Nutzlast samt Eigentümer und Zeitpunkten. */
+export const OwnFoodRecord = withFoodValueRules(z.strictObject({ ...ownFoodFields, personId: EntityId, createdAt: Instant, updatedAt: Instant }));
+export type OwnFoodRecord = z.infer<typeof OwnFoodRecord>;
+
+/**
+ * Die aktuelle Fassung eines eigenen Lebensmittels als Snapshot: Quelle `eigen`, ohne Quellenangabe.
+ * Daraus entstehen Snapshots künftiger Einträge; gespeicherte Einträge behalten ihren.
+ */
+export function ownFoodSnapshot(food: FoodValues): NutritionSnapshot {
+  return NutritionSnapshot.parse({ ...foodValuesOf(food), source: 'eigen', attribution: null });
+}
 
 /** Einheit, in der die Person eine Menge eingibt und sieht. */
 export const DisplayUnit = z.enum(['g', 'ml', 'stueck', 'portion']);

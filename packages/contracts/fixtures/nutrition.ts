@@ -19,6 +19,9 @@ import {
   NutritionEntryRecord,
   NutritionEntryUpsert,
   NutritionSnapshot,
+  OwnFoodOrigin,
+  OwnFoodRecord,
+  OwnFoodUpsert,
   PhotoAnalysisError,
   PhotoAnalysisErrorCode,
   PhotoAnalysisResult,
@@ -67,6 +70,32 @@ const ownSnapshot = {
   portions: [{ unit: 'stueck', label: null, baseAmount: 125_000 }],
   source: 'eigen',
   attribution: null,
+} as const;
+
+/** Der Apfel aus dem Garten als eigenes Lebensmittel, ohne Herkunftsreferenz. */
+const ownFoodValues = {
+  name: ownSnapshot.name,
+  baseUnit: ownSnapshot.baseUnit,
+  referenceAmount: ownSnapshot.referenceAmount,
+  milliKcal: ownSnapshot.milliKcal,
+  proteinMg: ownSnapshot.proteinMg,
+  carbsMg: ownSnapshot.carbsMg,
+  fatMg: ownSnapshot.fatMg,
+  portions: ownSnapshot.portions,
+  origin: null,
+} as const;
+
+/** Hafer Flocken aus dem BLS, korrigiert um eine Portion von 40 g: ein eigenes Lebensmittel mit Herkunftsreferenz. */
+const correctedOats = {
+  name: blsSnapshot.name,
+  baseUnit: 'g',
+  referenceAmount: 100_000,
+  milliKcal: 372_000,
+  proteinMg: 13_500,
+  carbsMg: 58_700,
+  fatMg: 7_000,
+  portions: [{ unit: 'portion', label: '1 Schale', baseAmount: 40_000 }],
+  origin: { type: 'bls', key: 'C133000' },
 } as const;
 
 const aiSnapshot = {
@@ -300,6 +329,35 @@ export const nutritionFixtures = {
       'ohne Eigentümer': { ...searchEntry, createdAt: now, updatedAt: now },
       'Summen passen nicht zur Menge': { ...searchEntry, totals: { ...searchEntry.totals, fatMg: 0 }, personId: philipp, createdAt: now, updatedAt: now },
       'mit Serverversion': { ...searchEntry, personId: philipp, createdAt: now, updatedAt: now, serverVersion: '1842' },
+    },
+  }),
+  OwnFoodOrigin: fixtures(OwnFoodOrigin, {
+    valid: { 'BLS-Lebensmittel': { type: 'bls', key: 'C133000' }, 'Barcode': { type: 'off', key: '4006040001234' } },
+    invalid: { 'eigenes Lebensmittel ist keine Herkunftsreferenz': { type: 'eigen', key: ownFood }, 'BLS-Schlüssel zu kurz': { type: 'bls', key: 'C13300' } },
+  }),
+  OwnFoodUpsert: fixtures(OwnFoodUpsert, {
+    valid: {
+      'neu angelegt mit Stück': ownFoodValues,
+      'Korrektur eines BLS-Lebensmittels mit Portion': correctedOats,
+      'Getränk in ml, Makros nicht mit der Bezugsmenge vergleichbar': {
+        ...ownFoodValues, name: 'Hafer Drink', baseUnit: 'ml', referenceAmount: 100, carbsMg: 6_700, portions: [], origin: { type: 'off', key: '4006040001234' },
+      },
+    },
+    invalid: {
+      'negative kcal': { ...ownFoodValues, milliKcal: -1 },
+      'negatives Fett': { ...ownFoodValues, fatMg: -1 },
+      'Makros schwerer als die Bezugsmenge': { ...ownFoodValues, proteinMg: 1, carbsMg: 0, fatMg: 100_000 },
+      'mit Quelle wie ein Snapshot': { ...ownFoodValues, source: 'eigen' },
+      'eigenes Lebensmittel als Herkunftsreferenz': { ...ownFoodValues, origin: { type: 'eigen', key: ownFood } },
+      'ohne Herkunftsreferenz statt null': without(ownFoodValues, 'origin'),
+      'mit Eigentümer': { ...ownFoodValues, personId: philipp },
+    },
+  }),
+  OwnFoodRecord: fixtures(OwnFoodRecord, {
+    valid: { 'kanonisch': { ...correctedOats, personId: philipp, createdAt: now, updatedAt: now } },
+    invalid: {
+      'ohne Eigentümer': { ...correctedOats, createdAt: now, updatedAt: now },
+      'Makros schwerer als die Bezugsmenge': { ...correctedOats, proteinMg: 100_000, personId: philipp, createdAt: now, updatedAt: now },
     },
   }),
   NutritionEntryAddedValues: fixtures(NutritionEntryAddedValues, {

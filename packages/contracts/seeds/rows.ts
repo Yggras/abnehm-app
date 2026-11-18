@@ -3,7 +3,7 @@ import { seedClock, seedUtcOffsetMinutes } from './ids.ts';
 import { EntityId, LocalDate, type BausteinKey, type MealKey } from '../src/base.ts';
 import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { dailyBonusKey, energyBookingId } from '../src/energy.ts';
-import { entryAmount, entryTotals, NutritionSnapshot } from '../src/nutrition.ts';
+import { entryAmount, entryTotals, NutritionSnapshot, OwnFoodUpsert } from '../src/nutrition.ts';
 
 // Zeilenhelfer der Bereichsbeiträge: wiederkehrende Zeilenformen der Spezifikationen 1–3 in der
 // kanonischen Form des Manifests. Der Baukasten (`build.ts`) kennt sie nicht; er setzt nur zusammen.
@@ -130,6 +130,31 @@ export function seedBlsEntry(options: {
       total_carbs_mg: totals.carbsMg,
       total_fat_mg: totals.fatMg,
       meal_photo_id: null,
+      ...seedCreated(options.at),
+    },
+  };
+}
+
+/** Eigenes Lebensmittel (Spezifikation 2, Abschnitt 3), seit #157 beim Sync angemeldet; die Werte prüft der Vertrag. */
+export function seedOwnFood(options: { id: string; personId: string; at: string; food: OwnFoodUpsert }): SeedEntity {
+  const food = OwnFoodUpsert.parse(options.food);
+  return {
+    table: 'own_food',
+    entityType: 'own_food',
+    ownerPersonId: options.personId,
+    row: {
+      id: options.id,
+      person_id: options.personId,
+      name: food.name,
+      base_unit: food.baseUnit,
+      reference_amount: food.referenceAmount,
+      milli_kcal: food.milliKcal,
+      protein_mg: food.proteinMg,
+      carbs_mg: food.carbsMg,
+      fat_mg: food.fatMg,
+      portions: food.portions,
+      origin_type: food.origin?.type ?? null,
+      origin_key: food.origin?.key ?? null,
       ...seedCreated(options.at),
     },
   };
