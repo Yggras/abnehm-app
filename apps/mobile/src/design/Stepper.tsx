@@ -21,9 +21,9 @@ export type StepperProps = {
 
 /**
  * Stepper aus den Tokens und `IconButton` des Design-Systems. `research/design-system.md` kennt keinen
- * Stepper; Aufbau und Verhalten sind Designwerte ohne Beleg (#147). Beschriftung, darunter bei großer Schrift die Bedienung aus „−“, Wert
- * und „+“ als runde 48-dp-Buttons. An einer Grenze ist die Richtung gesperrt, statt den Wert zu
- * beschneiden. Die Buttons heißen „<Beschriftung> verringern“ und „<Beschriftung> erhöhen“; der Wert
+ * Stepper; Aufbau und Verhalten sind Designwerte ohne Beleg (#147). Beschriftung, daneben, bei großer
+ * Schrift darunter, die Bedienung aus „−“, Wert und „+“ als runde 48-dp-Buttons. An einer Grenze ist
+ * die Richtung gesperrt, statt den Wert zu beschneiden. Die Buttons heißen „<Beschriftung> verringern“ und „<Beschriftung> erhöhen“; der Wert
  * trägt Beschriftung und Wert als Namen.
  */
 export function Stepper({ label, value, valueText, min, max, step, onChange, hint }: StepperProps) {
