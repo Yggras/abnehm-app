@@ -303,6 +303,21 @@ describe('Quick-Commands und Meldungen', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  test.each([
+    [{ type: 'tageszielerfuellung', baustein: 'wasserziel' }, 'Wasserziel erfüllt · +1 Energie'],
+    [{ type: 'tagesbonus' }, 'Alle drei geschafft · +1 Energie'],
+    [{ type: 'tagesende', energy: 1, bonus: false }, 'Gestern im Kalorienbudget · +1 Energie'],
+    [{ type: 'tagesende', energy: 2, bonus: true }, 'Gestern im Kalorienbudget, alle drei geschafft · +2 Energie'],
+  ] as const)('Momos Reaktion %o erscheint über den Meldungs-Host (#188)', async (reaction, text) => {
+    closeIsland();
+    closeIsland = appGameService.opened(fakeGameService(hatchedStage(), [reaction]));
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    const slot = await screen.findByTestId('message-slot');
+    expect(within(slot).getByText(text)).toBeOnTheScreen();
+    expect(within(slot).queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
+  });
+
   test('im Release ist ein fehlender Handler ein Integrationsfehler', async () => {
     const runtime = globalThis as unknown as { __DEV__: boolean };
     mockQuickCommands.handler = undefined;

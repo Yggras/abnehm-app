@@ -84,7 +84,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     installationId: InstallationId.parse(installation.installationId),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
   });
-  const game = createGameService({ database, writer, clock, newId });
+  const game = createGameService({ database, writer, clock, newId, haptics: { feedback() {} }, refresh: () => () => {} });
   let stage: IslandStage | null = null;
   cleanups.push(game.observeStage((next) => (stage = next)));
   return {

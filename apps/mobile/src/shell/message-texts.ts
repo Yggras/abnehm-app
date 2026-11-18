@@ -1,11 +1,11 @@
-import type { MealKey } from '@abnehm/contracts/base';
+import { BausteinKey, type MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
 import { SportRecordedValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
-import { activityNames, quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
+import { activityNames, bausteinNames, quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
 
 // Texte des Meldungs-Hosts: Die sichtbare Zeile entsteht in der App aus `messageKey` und
 // typisierten Werten (Spezifikation 0, Abschnitt 2). Bereiche tragen ihre Meldungen hier ein,
@@ -52,6 +52,25 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Spezifikation 3: manueller Sporteintrag angelegt („30 min Laufen eingetragen · Rückgängig“). */
   'sport.eingetragen': messageText(SportRecordedValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,
+  })),
+  /**
+   * Spezifikation 4: ein Tagesziel erstmals erfüllt („Wasserziel erfüllt · +1 Energie“; #188). Wie alle
+   * Spielreaktionen ohne „Rückgängig“; steht eine Meldung mit „Rückgängig“, wird sie deren zweite Zeile.
+   */
+  'momo.tagesziel_erfuellt': messageText(z.strictObject({ baustein: BausteinKey }), ({ baustein }) => ({
+    text: `${bausteinNames[baustein]} erfüllt · +1 Energie`,
+    energy: true,
+  })),
+  /** Spezifikation 4: Tagesbonus, alle drei Tagesziele erfüllt (#188). */
+  'momo.tagesbonus': messageText(z.strictObject({}), () => ({ text: 'Alle drei geschafft · +1 Energie', energy: true })),
+  /**
+   * Spezifikation 4: Tagesende-Gutschriften des Vortags, gebündelt beim ersten Öffnen nach Mitternacht
+   * (#188). Tagesende-Gutschriften gibt es nur für „Im Kalorienbudget“ und den Bonus an solchen Tagen
+   * (CONTEXT.md). Der Wortlaut ist ein Designwert, nicht belegt.
+   */
+  'momo.tagesende': messageText(z.strictObject({ energy: z.int().min(1).max(2), bonus: z.boolean() }), ({ energy, bonus }) => ({
+    text: `Gestern im Kalorienbudget${bonus ? ', alle drei geschafft' : ''} · +${energy} Energie`,
+    energy: true,
   })),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),

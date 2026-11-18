@@ -53,9 +53,9 @@ export type HatchedIsland = Readonly<{
 }>;
 
 /**
- * Momo, wie beide Personen es sehen: Form aus dem Level der Projektion. Stimmungen liefert „Momo-Reaktionen
- * und Stimmungen“ (#188), Accessoires „Momos Wunsch, Schrank und Ankleiden“ (#206); bis dahin ist Momo zufrieden
- * und trägt nichts.
+ * Momo, wie beide Personen es sehen: Form aus dem Level der Projektion. Die Stimmung gehört nur der
+ * betrachtenden Person; der Spieldienst leitet sie je Ansicht ab und ersetzt den Standard „zufrieden“ (#188).
+ * Accessoires liefert „Momos Wunsch, Schrank und Ankleiden“ (#206); bis dahin trägt Momo nichts.
  */
 export function appearanceAt(level: number): MomoAppearance {
   return MomoAppearance.parse({ stage: 'geschluepft', formKey: formAt(level), moodKey: 'zufrieden', accessories: { kopf: null, hals: null } });

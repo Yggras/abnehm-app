@@ -1,3 +1,4 @@
+import type { BausteinKey } from '@abnehm/contracts/base';
 import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
 import type { ActivityType } from '@abnehm/contracts/trackers';
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
@@ -21,6 +22,15 @@ export const activityNames: Readonly<Record<ActivityType, string>> = {
   yoga_dehnen: 'Yoga & Dehnen',
   mannschaftssport: 'Mannschaftssport',
   sonstiges: 'Sonstiges',
+};
+
+/** Namen der Tagesziel-Bausteine, auf „Heute“ und in „‹Baustein› erfüllt · +1 Energie“. */
+export const bausteinNames: Readonly<Record<BausteinKey, string>> = {
+  ernaehrung_erfasst: 'Ernährung erfasst',
+  im_kalorienbudget: 'Im Kalorienbudget',
+  wasserziel: 'Wasserziel',
+  sporteinheit: 'Sporteinheit',
+  gewogen: 'Gewogen',
 };
 
 /**

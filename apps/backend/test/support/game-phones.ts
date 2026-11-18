@@ -87,7 +87,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     installationId: newId(),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
   });
-  const game: GameService = createGameService({ database, writer, clock, newId });
+  const game: GameService = createGameService({ database, writer, clock, newId, haptics: { feedback() {} }, refresh: () => () => {} });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
     let value: T | undefined;
     cleanups.push(subscribe((next) => (value = next)));
