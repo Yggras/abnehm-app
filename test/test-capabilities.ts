@@ -112,15 +112,6 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['geraetetest_neustart'],
   },
   {
-    // #182: Bis „Schlüpfen“ (#184) die echte Insel anschließt, zeigt der Tab „Momo“ in Test-Artefakten
-    // eine Insel aus Spielkatalog und Seed-Personen; im Produktionsbuild bleibt dort der Platzhalter.
-    key: 'fixture-insel',
-    description: 'Fixture-Insel der Test-Artefakte: Grundinsel des Spielkatalogs mit Objekten, Inselfortschritt Level 6 und einem Gebiet unter Nebel für den Tab „Momo“',
-    modules: ['apps/mobile/src/test-capabilities/fixture-island.ts'],
-    entries: {},
-    markers: ['fixture_insel_nebel'],
-  },
-  {
     // #161: Fake des `MealVisionAnalyzer` mit Erfolg, leerer Liste, Refusal, Schemaverstoß und
     // Zeitüberschreitung. Das produktive Backend baut seinen Analyzer nur aus dem Claude-Adapter.
     key: 'fake-fotoanalyse',

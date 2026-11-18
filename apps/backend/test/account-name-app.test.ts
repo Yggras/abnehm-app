@@ -8,6 +8,7 @@ import { EntityId, TimeZone } from '@abnehm/contracts/base';
 import { seedManifests, type SeedKey, type SeedManifest } from '@abnehm/contracts/seeds';
 import { InstallationId } from '@abnehm/contracts/sync';
 
+import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
 import { mealPhotoEntity, nutritionEntryEntity, ownFoodEntity } from '../../mobile/src/nutrition/index.ts';
@@ -50,7 +51,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
 ]);
 
 /**

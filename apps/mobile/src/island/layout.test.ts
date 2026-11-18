@@ -1,13 +1,18 @@
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { testCatalog } from '@abnehm/game-rules/fixtures';
+import { hatching } from '@abnehm/game-rules/hatching';
 
 import { islandLayout } from './layout';
 import { anna, philipp } from './testing/persons';
 
-const sides = { a: philipp, b: anna };
+// Nachweis für #182 und #184: Lage und Feldart kommen aus dem Spielkatalog, der Besitzer aus dem
+// materialisierten Inselfeld. Die Felder der Grundinsel materialisiert das Schlüpfen; Philipp hat Bauen
+// (Seite a), Anna Natur (Seite b).
 
-test('die Grundinsel des ausgelieferten Katalogs: Seite a gehört der einen, Seite b der anderen Person', () => {
-  const { fields, fog } = islandLayout(gameCatalog, { sides, unlockedAreas: [] });
+const hatched = (catalog = gameCatalog) => hatching(catalog, { proposerPersonId: philipp, proposerRole: 'bauen', partnerPersonId: anna }).fields;
+
+test('die Grundinsel des ausgelieferten Katalogs mit den Besitzern der Inselfelder', () => {
+  const { fields, fog } = islandLayout(gameCatalog, { fields: hatched(), unlockedAreas: [] });
   const field = (key: string) => fields.find((candidate) => candidate.key === key);
 
   expect(fields).toHaveLength(16 * 12);
@@ -18,7 +23,7 @@ test('die Grundinsel des ausgelieferten Katalogs: Seite a gehört der einen, Sei
 });
 
 test('gesperrte Gebiete liegen mit ihren Rasterzellen unter Nebel', () => {
-  const { fields, fog } = islandLayout(testCatalog(), { sides, unlockedAreas: [] });
+  const { fields, fog } = islandLayout(testCatalog(), { fields: hatched(testCatalog()), unlockedAreas: [] });
 
   expect(fields).toHaveLength(16 * 12);
   expect(fog.map(({ area, cells }) => [area, cells.length])).toEqual([
@@ -28,11 +33,19 @@ test('gesperrte Gebiete liegen mit ihren Rasterzellen unter Nebel', () => {
   expect(fog[0]!.cells[0]).toEqual({ x: 0, y: -5 });
 });
 
-test('ein freigeschaltetes Gebiet bringt Felder für beide Seiten und verlässt den Nebel', () => {
-  const { fields, fog } = islandLayout(testCatalog(), { sides, unlockedAreas: ['t_gebiet_1'] });
+test('ein freigeschaltetes Gebiet verlässt den Nebel; seine Felder kommen mit Besitzer als Inselfelder', () => {
+  const unlocked = [
+    { key: 't_gebiet_1:0:-5', ownerPersonId: philipp },
+    { key: 't_gebiet_1:15:-1', ownerPersonId: anna },
+  ];
+  const { fields, fog } = islandLayout(testCatalog(), { fields: [...hatched(testCatalog()), ...unlocked], unlockedAreas: ['t_gebiet_1'] });
 
-  expect(fields).toHaveLength(16 * 12 + 80);
+  expect(fields).toHaveLength(16 * 12 + 2);
   expect(fields.find((field) => field.key === 't_gebiet_1:0:-5')).toEqual({ key: 't_gebiet_1:0:-5', x: 0, y: -5, kind: 'ecke', ownerPersonId: philipp });
   expect(fields.find((field) => field.key === 't_gebiet_1:15:-1')).toMatchObject({ kind: 'ecke', ownerPersonId: anna });
   expect(fog.map(({ area }) => area)).toEqual(['t_gebiet_2']);
+});
+
+test('ein Inselfeld, das der Katalog nicht kennt, ist ein Integrationsfehler', () => {
+  expect(() => islandLayout(gameCatalog, { fields: [{ key: 'grundinsel:99:99', ownerPersonId: null }], unlockedAreas: [] })).toThrow('grundinsel:99:99');
 });

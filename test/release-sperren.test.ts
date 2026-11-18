@@ -426,7 +426,7 @@ describe('Produktions-Bundle der App', () => {
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
     expect(appCapabilities.map(({ key }) => key).sort()).toEqual([
-      'fehler-adapter', 'fixture-insel', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
+      'fehler-adapter', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
     ]);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {

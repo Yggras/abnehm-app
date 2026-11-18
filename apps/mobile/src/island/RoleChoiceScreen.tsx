@@ -1,25 +1,27 @@
 import type { IslandRole } from '@abnehm/contracts/island';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { otherRole } from '@abnehm/game-rules/hatching';
 
 import { Button, Chip, space, Text } from '../design';
 import { LaichkugelFrame } from './LaichkugelScreen';
-import { otherRole, type RoleProposal } from './role-choice';
+import type { RoleProposal } from './role-choice';
 import { laichkugelTexts } from './texts';
 
-// Ansicht `rollenwahl` des Tabs „Momo“ (Spezifikation 4, Abschnitt 7; #180): eigene Rolle wählen und
-// vorschlagen, den Vorschlag des Partners sehen und ablehnen, den eigenen zurückziehen. Annehmen und
-// damit das Schlüpfen liefert #184.
+// Ansicht `rollenwahl` des Tabs „Momo“ (Spezifikation 4, Abschnitt 7; #180, #184): eigene Rolle wählen
+// und vorschlagen, den Vorschlag des Partners sehen, annehmen oder ablehnen, den eigenen zurückziehen.
+// Die Annahme ist das Schlüpfen; bis der Sync sie sichert, steht dort „Angenommen“.
 
 export type RoleChoiceScreenProps = Readonly<{
   partnerDisplayName: string;
   proposal: RoleProposal | null;
   onPropose(role: IslandRole): void;
+  onAccept(proposal: RoleProposal): void;
   onDecline(proposal: RoleProposal): void;
   onWithdraw(proposal: RoleProposal): void;
 }>;
 
-export function RoleChoiceScreen({ partnerDisplayName, proposal, onPropose, onDecline, onWithdraw }: RoleChoiceScreenProps) {
+export function RoleChoiceScreen({ partnerDisplayName, proposal, onPropose, onAccept, onDecline, onWithdraw }: RoleChoiceScreenProps) {
   return (
     <LaichkugelFrame headline={laichkugelTexts.hatchesAfterRoles}>
       {proposal === null ? (
@@ -31,10 +33,17 @@ export function RoleChoiceScreen({ partnerDisplayName, proposal, onPropose, onDe
           <Text tone="inkMuted">{laichkugelTexts.answerHint(partnerDisplayName)}</Text>
           <Button block variant="secondary" label={laichkugelTexts.withdraw} onPress={() => onWithdraw(proposal)} />
         </View>
+      ) : proposal.accepted ? (
+        <View style={styles.block}>
+          <Text variant="headline" accessibilityRole="header">{laichkugelTexts.accepted}</Text>
+          <Split own={otherRole(proposal.proposerRole)} partner={partnerDisplayName} />
+          <Text tone="inkMuted">{laichkugelTexts.acceptedHint}</Text>
+        </View>
       ) : (
         <View style={styles.block}>
           <Text variant="headline" accessibilityRole="header">{laichkugelTexts.proposedBy(partnerDisplayName)}</Text>
           <Split own={otherRole(proposal.proposerRole)} partner={partnerDisplayName} />
+          <Button block label={laichkugelTexts.accept} onPress={() => onAccept(proposal)} />
           <Button block variant="secondary" label={laichkugelTexts.decline} onPress={() => onDecline(proposal)} />
         </View>
       )}

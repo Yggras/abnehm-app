@@ -1,11 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 
-import { Instant } from '@abnehm/contracts/base';
+import { EntityId, Instant } from '@abnehm/contracts/base';
 
 import type { SharedActionKind } from '../coupling/shared-actions.ts';
 import { couplingMember, island } from '../db/schema/index.ts';
 import { CommandRejection } from '../sync/commands.ts';
 import { insertNotificationIntent } from '../sync/notification-intents.ts';
+import { hatch } from './hatching.ts';
 
 // Rollenwahl (Spezifikation 4, Abschnitte 2.4 und 7): Eine Person schlägt die Verteilung vor, indem sie
 // ihre eigene Rolle wählt; der Partner antwortet. Den Rahmen samt Beteiligung, Zurückziehen und
@@ -15,8 +16,8 @@ import { insertNotificationIntent } from '../sync/notification-intents.ts';
 
 /**
  * Die Art `rollenwahl`. Beantragen geht nur, solange die Insel auf die Rollen wartet, und benachrichtigt
- * den Partner in derselben Transaktion (`rollen_anfrage`). Die Annahme ist das Schlüpfen (#184); bis
- * dahin lehnt der Server sie ab, und der Vorschlag bleibt offen.
+ * den Partner in derselben Transaktion (`rollen_anfrage`). Die Annahme ist das Schlüpfen (`hatching.ts`,
+ * #184) in der Zone des annehmenden Geräts.
  */
 export const roleChoiceKind: SharedActionKind<'rollenwahl'> = {
   type: 'rollenwahl',
@@ -39,7 +40,14 @@ export const roleChoiceKind: SharedActionKind<'rollenwahl'> = {
       payload: { actionId: action.id, kind: 'rollenwahl', senderDisplayName: requester.displayName },
     });
   },
-  async accept() {
-    throw new CommandRejection('conflict');
+  async accept(tx, { action, partnerPersonId, at, timeZone }) {
+    await hatch(tx, {
+      couplingId: EntityId.parse(action.couplingId),
+      proposerPersonId: EntityId.parse(action.requesterPersonId),
+      proposerRole: action.payload.proposerRole,
+      partnerPersonId,
+      timeZone,
+      at,
+    });
   },
 };

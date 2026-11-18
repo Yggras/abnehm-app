@@ -14,6 +14,10 @@ import type { DbExecutor } from '../database.ts';
 // an; der Sync-Kern bleibt dabei unverändert. Für eigene Einträge mit `person_id` baut `ownedEntity`
 // die Operationen aus der Tabelle.
 
+/** Zeitpunkt einer Zeile als UTC-ISO-8601, wie ihn die Transport-Schemas erwarten. */
+export const iso = (value: Date) => value.toISOString();
+export const isoOrNull = (value: Date | null) => (value === null ? null : value.toISOString());
+
 /** Eine Entität, wie sie in Postgres liegt: Serverversion, Löschmarkierung und kanonische Felder. */
 export type StoredEntity = Readonly<{ serverVersion: bigint; deletedAt: Date | null; data: EntityData }>;
 
@@ -121,6 +125,41 @@ export function ownedEntity<T extends PgTable & OwnedColumns, U extends EntityDa
         .update(table)
         .set({ deletedAt: removal.at, updatedAt: removal.at, serverVersion: removal.serverVersion } as never)
         .where(and(eq(table.id, removal.entityId), eq(table.personId, removal.ownerPersonId)));
+    },
+  };
+}
+
+/**
+ * Nur lesbare Entität einer Tabelle, die allein der Server schreibt, etwa Kopplung, Insel und ihre
+ * Inhalte: kein generisches Upsert, kein Löschen. Unveränderliche Tabellen ohne `deleted_at` liefern
+ * nie eine Löschmarkierung.
+ */
+export function serverManaged<T extends PgTable & { id: AnyPgColumn<{ data: string }> }>(options: {
+  entityType: SyncEntityType;
+  resource: ResourceEntity;
+  table: T;
+  record(row: T['$inferSelect']): EntityData;
+  archiveStatus?: boolean;
+}): ServerSyncEntity {
+  return {
+    entityType: options.entityType,
+    resource: options.resource,
+    upsert: null,
+    deletable: false,
+    archiveStatus: options.archiveStatus ?? false,
+    async read(tx, ids) {
+      if (ids.length === 0) return new Map();
+      const rows = (await tx
+        .select()
+        .from(options.table as PgTable)
+        .where(inArray(options.table.id, [...ids]))) as (T['$inferSelect'] & { id: string; serverVersion: bigint; deletedAt?: Date | null })[];
+      return new Map(rows.map((row) => [row.id, { serverVersion: row.serverVersion, deletedAt: row.deletedAt ?? null, data: options.record(row) }]));
+    },
+    async write() {
+      throw new Error(`${options.entityType} entsteht nur serverseitig`);
+    },
+    async remove() {
+      throw new Error(`${options.entityType} wird nicht über den Sync gelöscht`);
     },
   };
 }

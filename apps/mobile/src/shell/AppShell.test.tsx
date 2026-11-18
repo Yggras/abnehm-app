@@ -10,6 +10,7 @@ import { withDeviceConfig } from '../design/testing/device-config';
 import { hitArea } from '../design/testing/hit-area';
 import { appGameService } from '../island/app-game-service';
 import { fakeGameService } from '../island/testing/fake-game-service';
+import { hatchedStage } from '../island/testing/hatched-stage';
 import { textScale } from '../design/tokens';
 import { hrefFor, openTarget, routeCatalog } from '../navigation';
 import type * as MessageTextsModule from './message-texts';
@@ -64,7 +65,7 @@ let closeIsland: () => void = () => {};
 
 // Der Tab „Momo“ zeigt die geschlüpfte Insel; Laichkugel und Rollenwahl prüft `island/MomoTab.test.tsx`.
 beforeEach(() => {
-  closeIsland = appGameService.opened(fakeGameService({ type: 'geschluepft' }));
+  closeIsland = appGameService.opened(fakeGameService(hatchedStage()));
   jest.mocked(useMomoTabBadge).mockReturnValue(false);
   execute = jest.fn((_tx: unknown, { ml }: { ml: number }) => ({ messageKey: 'test.wasser', values: { ml }, undoData: 'eintrag-1' }));
   undo = jest.fn();
@@ -109,7 +110,7 @@ const heading = (title: string) => screen.findByRole('header', { name: title });
 
 /**
  * Woran man einen Bildschirm erkennt: seine Titelzeile. Der Tab „Momo“ ist die bildschirmfüllende
- * Insel ohne Titelzeile (#182); in Test-Artefakten zeigt er die Fixture-Insel.
+ * Insel ohne Titelzeile (#182), hier die geschlüpfte Insel aus `island/testing/hatched-stage.ts` (#184).
  */
 const landmark = (title: string) =>
   title === 'Momo' ? screen.findByRole('image', { name: /^Momos Insel/ }) : heading(title);

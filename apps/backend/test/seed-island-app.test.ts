@@ -7,6 +7,7 @@ import { EntityId } from '@abnehm/contracts/base';
 import { canonicalRows, seedIds, seedManifests, type SeedKey, type SeedManifest, type SeedState } from '@abnehm/contracts/seeds';
 import { InstallationId } from '@abnehm/contracts/sync';
 
+import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
@@ -45,7 +46,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
 ]);
 
 type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; sync(): Promise<void> }>;

@@ -124,6 +124,12 @@ export const seedIds = {
   coupling: { philippAnna: id('0040', 1) },
   couplingMember: { philipp: id('0041', 1), anna: id('0041', 2) },
   island: { philippAnna: id('0042', 1) },
+  /** Inhalte der geschlüpften Insel (#184): je Feld der Grundinsel eine ID in Katalogreihenfolge. */
+  islandField: (n: number) => id('0046', n),
+  blueprintUnlock: (n: number) => id('0047', n),
+  communityProject: { gartenhaeuschen: id('0048', 1) },
+  islandEvent: { geschluepft: id('0049', 1) },
+  islandProgress: { philippAnna: id('0052', 1) },
   partnerSharing: {
     philipp: { ernaehrung: id('0043', 1), wasser: id('0043', 2), sport: id('0043', 3), gewicht: id('0043', 4) },
     anna: { ernaehrung: id('0043', 5), wasser: id('0043', 6), sport: id('0043', 7), gewicht: id('0043', 8) },

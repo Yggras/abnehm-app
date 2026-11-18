@@ -14,6 +14,7 @@ import { createHealthImport, unavailableHealthPlatform } from '../health';
 import { appHealthImport } from '../health/app-health';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
+import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
@@ -48,7 +49,7 @@ const newId = () => EntityId.parse(uuid.v4());
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
   ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
-  weightEntryEntity, sportEntryEntity,
+  weightEntryEntity, sportEntryEntity, ...islandSyncEntities,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
@@ -56,7 +57,7 @@ const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 't
 const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.weight');
 /** Mini-Tracker `trackers.sport`; sein Sportwochenziel liest er ebenfalls über den `PlanReader` (#173). */
 const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.sport');
-/** Momo auf „Heute“ (Spezifikation 4): bisher Laichkugel und Rollenwahl (#180). */
+/** Momo auf „Heute“ (Spezifikation 4): Laichkugel und Rollenwahl (#180), nach dem Schlüpfen Momo mit Level (#184). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 /**

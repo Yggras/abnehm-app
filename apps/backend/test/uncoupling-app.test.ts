@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId } from '@abnehm/contracts/base';
 
+import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { coupling as localCoupling, couplingMember as localMember, sharedAction as localAction } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
@@ -47,7 +48,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
   });
   const engine = createSyncEngine({
     database,
-    registry: createSyncRegistry(foundationSyncEntities),
+    registry: createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities]),
     transport: http,
     clock: createTestClock(worldStart),
     installationId: EntityId.parse(randomUUID()),

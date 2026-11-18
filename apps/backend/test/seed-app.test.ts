@@ -4,6 +4,7 @@ import { Instant, TimeZone, type LocalDate } from '@abnehm/contracts/base';
 import { canonicalRows, seedManifests, type SeedManifest } from '@abnehm/contracts/seeds';
 import { InstallationId } from '@abnehm/contracts/sync';
 
+import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import type { SessionStore, StoredSession } from '../../mobile/src/auth/app-auth.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
@@ -100,7 +101,7 @@ function sync(device: Phone, manifest: SeedManifest, installation: string) {
   const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });
   const database = device.session.databases.current()!;
   // Wie der Composition Root: Die Bereiche melden ihre Entitäten an, hier Ziel- und Wochenplanversion (#128), Wasser- und Gewichtseintrag (#171, #175) und der Ernährungseintrag (#155).
-  const registry = createSyncRegistry([...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity]);
+  const registry = createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity]);
   return createSyncEngine({ database, registry, transport, clock: device.clock, installationId }).sync();
 }
 
@@ -194,7 +195,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.initial.devices['philipp-iphone']!));
 
     const registry = createSyncRegistry([
-      ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
+      ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
     ]);
     const installationId = InstallationId.parse(manifest.installations[0]!.installationId);
     const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });

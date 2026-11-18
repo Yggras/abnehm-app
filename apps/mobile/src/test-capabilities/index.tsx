@@ -10,7 +10,6 @@ import type { ObserveNetwork } from '../sync/triggers';
 import { createAppTestClock, type AppTestClock } from './clock';
 import { runDeviceSuite } from './device-suite/suite';
 import { createFaultController, faultyFetch, faultySessionStore } from './faults';
-import { fixtureIsland, type FixtureIsland } from './fixture-island';
 import { createTestHealth } from './health';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
@@ -18,9 +17,9 @@ import { faultyNetwork } from './network';
 import { fetchFollowingServerClock } from './server-clock';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
-// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #182, #271): Seed-Deep-Link,
+// Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #271): Seed-Deep-Link,
 // Testuhr samt Serveruhr des Development-Backends, Fehler-Adapter für Transport, Server, Auth und
-// Storage samt Transport-Fehlermodus, die On-Device-Suite, die Fixture-Insel und die Health-Attrappe (#183). App-Code erreicht
+// Storage samt Transport-Fehlermodus, die On-Device-Suite und die Health-Attrappe (#183). App-Code erreicht
 // diesen Ordner nur über `src/build-capabilities.ts`; im Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer
 // Testfähigkeit der zentralen Registry (`test/test-capabilities.ts`).
 
@@ -43,8 +42,6 @@ export type TestCapabilities = Readonly<{
    * Wurzel-Layouts; Seed-Ziele öffnet der Host erst, wenn sie die Fachoberfläche freigibt.
    */
   Host: ComponentType<{ session: () => AppSession; gate: SessionGate | null }>;
-  /** Insel des Tabs „Momo“, bis das Schlüpfen die echte Insel anschließt (#182, #184). */
-  fixtureIsland: FixtureIsland;
 }>;
 
 const clock = createAppTestClock(deviceClock);
@@ -78,5 +75,4 @@ export const testCapabilities: TestCapabilities = {
     return '/';
   },
   Host,
-  fixtureIsland: fixtureIsland(),
 };
