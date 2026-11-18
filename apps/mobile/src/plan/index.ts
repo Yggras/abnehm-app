@@ -5,7 +5,13 @@
 // Fassungen in `@abnehm/contracts/plan`.
 export {
   createPlan,
+  type GoalChangeResult,
   type GoalDraft,
+  type GoalVersionField,
+  type PlanSettings,
+  type WeeklyPlanChangeResult,
+  type WeeklyPlanDayError,
+  type WeeklyPlanInput,
   type InitialPlanDraft,
   type InitialPlanResult,
   type Plan,
