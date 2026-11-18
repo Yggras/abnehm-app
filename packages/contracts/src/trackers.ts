@@ -205,3 +205,20 @@ export const WeightRecordedOutcome = QuickCommandOutcome.extend({
   values: WeightRecordedValues,
 });
 export type WeightRecordedOutcome = z.infer<typeof WeightRecordedOutcome>;
+
+/**
+ * Ergebnis von `updateWeight` (Wert und Messzeitpunkt eines manuellen Eintrags geändert), etwa
+ * „82,1 kg gespeichert · Rückgängig“; die Werte sind das neue Gewicht.
+ */
+export const WeightUpdatedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('gewicht.geaendert'),
+  values: WeightRecordedValues,
+});
+export type WeightUpdatedOutcome = z.infer<typeof WeightUpdatedOutcome>;
+
+/** Ergebnis von `deleteWeight` ohne Bestätigungsdialog, etwa „82,4 kg gelöscht · Rückgängig“. */
+export const WeightDeletedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('gewicht.geloescht'),
+  values: WeightRecordedValues,
+});
+export type WeightDeletedOutcome = z.infer<typeof WeightDeletedOutcome>;

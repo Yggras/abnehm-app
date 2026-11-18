@@ -122,6 +122,18 @@ it('zeigt das letzte Tagesgewicht eines früheren Tags, solange heute am Wiegeta
   expect(latest()).toEqual(ready({ type: 'tagesgewicht', weightG: 82_600 }, { type: 'wiegetag_offen' }));
 });
 
+it('zeigt ab drei Tagesgewichten den Trendwert statt des letzten Tagesgewichts (#176)', async () => {
+  const { weigh, latest } = await setup();
+  await weigh(80_000, '2026-10-11T05:30:00.000Z');
+  await weigh(81_000, '2026-10-12T05:30:00.000Z');
+  expect(latest()).toEqual(ready({ type: 'tagesgewicht', weightG: 81_000 }, { type: 'wiegetag_offen' }));
+
+  await weigh(79_000, '2026-10-14T05:30:00.000Z');
+
+  // 80 000 → 80 100 → 80 100 + (1 − 0,9²) × (79 000 − 80 100) = 79 891
+  expect(latest()).toEqual(ready({ type: 'trend', weightG: 79_891 }, { type: 'gewogen' }));
+});
+
 it('zählt eine rückgängig gemachte Messung nicht mehr', async () => {
   const { trackers, weigh, latest } = await setup();
   await weigh(82_800, '2026-10-13T05:30:00.000Z');

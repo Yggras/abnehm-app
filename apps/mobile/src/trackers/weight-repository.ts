@@ -16,6 +16,10 @@ import type { StoredImport } from './stored-import';
 /** Was Befehle und Sync von einem gespeicherten Eintrag wissen müssen. */
 export type StoredWeightEntry = Readonly<{
   personId: EntityId;
+  /** `manuell` oder die Herkunft eines Imports; nur manuelle Einträge lassen sich bearbeiten und löschen. */
+  origin: string;
+  weightG: number;
+  measuredAt: Instant;
   localDate: LocalDate;
   /** Zone und Offset der Anlage; eine Aktualisierung behält beide (Spezifikation 3, Abschnitt 4). */
   timeZone: TimeZone;
@@ -52,6 +56,9 @@ export function readWeightEntry(tx: ReadContext, entityId: EntityId): StoredWeig
   const row = sqliteOf(tx)
     .select({
       personId: weightEntry.personId,
+      origin: weightEntry.origin,
+      weightG: weightEntry.weightG,
+      measuredAt: weightEntry.measuredAt,
       localDate: weightEntry.localDate,
       timeZone: weightEntry.timeZone,
       utcOffsetMinutes: weightEntry.utcOffsetMinutes,
@@ -63,6 +70,9 @@ export function readWeightEntry(tx: ReadContext, entityId: EntityId): StoredWeig
     .get();
   return row && {
     personId: EntityId.parse(row.personId),
+    origin: row.origin,
+    weightG: row.weightG,
+    measuredAt: row.measuredAt as Instant,
     localDate: LocalDate.parse(row.localDate),
     timeZone: TimeZone.parse(row.timeZone),
     utcOffsetMinutes: row.utcOffsetMinutes,
@@ -71,10 +81,26 @@ export function readWeightEntry(tx: ReadContext, entityId: EntityId): StoredWeig
   };
 }
 
-/** Alle Gewichtseinträge einer Person, auch gelöschte und ausgeblendete; die Regeln filtern selbst. */
-export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightEntryFacts[] {
+/** Ein Gewichtseintrag mit allem, was Regeln und Verlauf brauchen. */
+export type WeightRow = WeightEntryFacts &
+  Readonly<{
+    id: string;
+    /** `manuell` oder die Herkunft eines Imports. */
+    origin: string;
+    /** Anzeigename der Quell-App eines Imports, falls bekannt. */
+    sourceAppName: string | null;
+  }>;
+
+/**
+ * Alle Gewichtseinträge einer Person, auch gelöschte und ausgeblendete; die Regeln filtern selbst.
+ * Aufsteigend nach Messzeitpunkt.
+ */
+export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightRow[] {
   return sqliteOf(tx)
     .select({
+      id: weightEntry.id,
+      origin: weightEntry.origin,
+      sourceAppName: weightEntry.sourceAppName,
       weightG: weightEntry.weightG,
       measuredAt: weightEntry.measuredAt,
       localDate: weightEntry.localDate,
