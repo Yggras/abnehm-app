@@ -10,8 +10,10 @@ import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createAppSession } from '../../session/app-session';
 import { followSessionGate } from '../../session/session-gate';
-import { createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncCycleResult } from '../../sync';
+import { createSyncRegistry, createSyncWriter, foundationSyncEntities, unsecuredOperationCount, type SyncCycleResult } from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
+import { createLogout, syncBeforeLogout, type LogoutRecord } from '../../logout';
+import { followOwnDisplayName, type AccountPorts } from '../../settings';
 // Der Fehler-Adapter aus #112 schaltet den Transport ab, wie in den Test-Artefakten der App.
 import { createFaultController, faultyFetch } from '../../test-capabilities/faults';
 import { createOnboarding } from '../onboarding';
@@ -82,9 +84,42 @@ export function createOnboardingDevice(clock: Clock) {
     onError: rethrow,
   });
   const gate = followSessionGate(session.auth);
-  const onboarding = createOnboarding({ auth: session.auth, clock, writer, sync, onError: rethrow });
+  const onboarding = createOnboarding({ auth: session.auth, clock, writer, sync, onError: rethrow, newId });
+  // Abmelden, etwa vom Sperrbildschirm unter 18, über das echte Abmeldemodul (#111). Der Sync davor
+  // erreicht den Server, solange der Fehler-Adapter Verbindung hat, sichert aber nichts.
+  let logoutRecord: LogoutRecord | null = null;
+  const logout = createLogout({
+    auth: session.auth,
+    revocations: session.revocations,
+    databases,
+    store: {
+      read: async () => logoutRecord,
+      write: async (record) => {
+        logoutRecord = record;
+      },
+      clear: async () => {
+        logoutRecord = null;
+      },
+    },
+    sync: () => {
+      const database = databases.current();
+      const reachable = faults.plan().transport !== 'offline';
+      return syncBeforeLogout(
+        database && {
+          sync: async () => (reachable ? { push: 'done', pull: 'done' } : { push: 'unavailable', pull: 'unavailable' }),
+          unsecuredOperations: () => unsecuredOperationCount(database),
+        },
+      );
+    },
+    newId,
+    onError: rethrow,
+  });
+  const displayName = followOwnDisplayName({ writer, clock });
+  /** Die Ports der Einstellungen für `AccountProvider`, wie `deviceAccount()` im Composition Root. */
+  const account: AccountPorts = { auth: session.auth, logout, displayName };
+
   opened = (database) => {
-    const stops = [gate.opened(database), onboarding.opened(database)];
+    const stops = [gate.opened(database), onboarding.opened(database), displayName.opened(database)];
     return () => {
       for (const stop of stops) stop();
     };
@@ -92,6 +127,7 @@ export function createOnboardingDevice(clock: Clock) {
 
   return {
     onboarding,
+    account,
     session,
     gate,
     server,

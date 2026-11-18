@@ -189,7 +189,7 @@ function deviceState() {
   // Die Weiche folgt dem Auth-Modul ab seiner Entstehung; vorher öffnet es keine Kontodatenbank.
   gate = followSessionGate(session.auth);
   // Onboarding (Spezifikation 1): Schritte 1–2 vor dem Konto, Einrichtung und Bestätigung an der Person.
-  onboarding = createOnboarding({ auth: session.auth, clock: appClock, writer: syncWriter, sync: () => activeEngine?.sync(), onError });
+  onboarding = createOnboarding({ auth: session.auth, clock: appClock, writer: syncWriter, sync: () => activeEngine?.sync(), onError, newId });
   const logout = createLogout({
     auth: session.auth,
     revocations: session.revocations,
