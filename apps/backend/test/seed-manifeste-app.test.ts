@@ -88,3 +88,5 @@ manifestSuite('zwei_installationen');
 manifestSuite('offline_sync');
 manifestSuite('solo-energie');
 manifestSuite('rollenwahl-offen');
+manifestSuite('tage_ohne_app_oeffnung');
+manifestSuite('zeitzonen_reisen');

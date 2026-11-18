@@ -18,7 +18,7 @@ import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createDeviceInvitationFlows } from '../online';
-import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
@@ -103,6 +103,11 @@ function deviceState() {
       // Schreib-Port `weightRecorder` gibt der Composition Root an `composeAreaPorts` weiter, sobald alle
       // Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Plan-Modul (Spezifikation 1): Seine Materialisierung legt fehlende Tage im Nachholfenster an, bevor
+      // der Persistenzdienst auswertet (#131). Das Startgewicht des Erstplans läuft über den `WeightRecorder`
+      // des Tracker-Moduls.
+      const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
+      persistence.registerMissingDaysHook(plan.materializeMissingDays);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
@@ -121,6 +126,27 @@ function deviceState() {
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
+        // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
+        followDailyGoalTriggers({
+          ensure: plan.ensureDailyGoals,
+          today: () => appClock.read().localDate,
+          observeForeground(listener) {
+            const subscription = AppState.addEventListener('change', (state) => {
+              if (state === 'active') listener();
+            });
+            return () => subscription.remove();
+          },
+          // Im Minutentakt; in Test-Artefakten auch bei jedem Sprung der Testuhr (#114).
+          observeTicks(listener) {
+            const interval = setInterval(listener, 60_000);
+            const stopClock = testCapabilities?.clock.subscribe(listener);
+            return () => {
+              clearInterval(interval);
+              stopClock?.();
+            };
+          },
+          onError,
+        }),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

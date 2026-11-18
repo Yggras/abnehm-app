@@ -6,6 +6,7 @@ import { randzustandManifests } from './randzustaende.ts';
 import { soloManifests } from './solo.ts';
 import { rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
 import { syncSzenarioManifests } from './sync-szenarien.ts';
+import { tageszielManifests } from './tagesziele.ts';
 import { veralteterPartnerstandManifest } from './veralteter-partnerstand.ts';
 
 // Seed-Manifeste (Spezifikation 0, Abschnitt 12; #112). Nur für Development- und Testartefakte:
@@ -49,4 +50,5 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   ...randzustandManifests,
   veralteter_partnerstand: veralteterPartnerstandManifest,
   ...syncSzenarioManifests,
+  ...tageszielManifests,
 };
