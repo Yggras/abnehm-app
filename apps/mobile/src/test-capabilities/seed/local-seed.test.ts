@@ -11,6 +11,8 @@ import { createLocalDatabases } from '../../local-db/local-databases';
 import { person } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
+import { createNutrition } from '../../nutrition';
+import { openTestCatalog } from '../../nutrition/testing/test-catalog';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from './local-seed';
 
 // Nachweis für #112: Seed der lokalen Kontodatenbank auf echtem SQLite (better-sqlite3, dieselben Migrationen).
@@ -41,6 +43,25 @@ describe('Seed der lokalen Datenbank', () => {
     const database = await openDatabase();
     seedLocalDatabase(database, solo, 'philipp-iphone');
     expect(dumpLocalDatabase(database)).toEqual(canonicalDevice(solo.initial.devices['philipp-iphone']!));
+  });
+
+  it('baut den lokalen Suchindex der eigenen Lebensmittel aus den Seed-Zeilen auf (#157)', async () => {
+    const database = await openDatabase();
+    const catalog = openTestCatalog();
+    cleanups.push(catalog.close);
+    const unused = () => {
+      throw new Error('Die Suche schreibt nichts');
+    };
+    const nutrition = createNutrition({ database, clock: { read: unused }, writer: { upsert: unused, delete: unused, command: unused }, persistence: { reevaluateDailyGoals: unused }, newId: unused });
+
+    seedLocalDatabase(database, solo, 'philipp-iphone');
+
+    const result = nutrition.foodSearch(catalog.database).search('Apfel roh');
+    expect(result.type === 'treffer' && result.hits.map((hit) => `${hit.mark}: ${hit.snapshot.name}`)).toEqual([
+      'eigen: Apfel roh', 'bls: Apfel geschält, roh', 'bls: Granatapfel roh',
+    ]);
+    const muesli = nutrition.foodSearch(catalog.database).search('Bircher');
+    expect(muesli.type === 'treffer' && muesli.hits[0]).toMatchObject({ mark: 'eigen', snapshot: { name: 'Bircher-Müsli, selbst gemacht' } });
   });
 
   it('ist idempotent und setzt einen veränderten Stand zurück', async () => {

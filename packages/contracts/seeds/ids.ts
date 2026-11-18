@@ -117,6 +117,8 @@ export const seedIds = {
     zeitzonenReisen: Array.from({ length: 16 }, (_, index) => id('0090', 26 + index)),
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
+  /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */
+  ownFood: { philippBircher: id('0034', 1), philippApfel: id('0034', 2) },
   /** Server-only; ein abgelaufener Fotoentwurf als Randzustand (#162). */
   photoDraft: { philippAbgelaufen: id('0033', 1) },
   coupling: { philippAnna: id('0040', 1) },

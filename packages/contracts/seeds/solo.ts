@@ -7,6 +7,7 @@ import {
   seedDailyGoals,
   seedDay as day,
   seedManualOrigin,
+  seedOwnFood,
   seedSportEntry,
   seedWaterEntry,
   seedWeeklyPlan,
@@ -272,6 +273,32 @@ export const soloErnaehrung: SeedPart = {
   ],
 };
 
+/**
+ * Eigene Lebensmittel (Spezifikation 2, Abschnitt 3; #157), nur in `solo` und seinen Varianten: ein
+ * selbst gemachtes Bircher-Müsli mit der Portion „1 Glas“ und eine Korrektur des BLS-Lebensmittels
+ * „Apfel roh“ (F110100) um ein Stück von 180 g. Die Korrektur behält die BLS-Werte und überdeckt die
+ * Quelle in der Suche. Die Werte des Müslis und das Stückgewicht sind erfunden.
+ */
+export const soloEigeneLebensmittel: SeedPart = {
+  area: 'ernaehrung',
+  entities: [
+    seedOwnFood({
+      id: seedIds.ownFood.philippBircher, personId: philipp, at: '2026-10-10T06:00:00.000Z',
+      food: {
+        name: 'Bircher-Müsli, selbst gemacht', baseUnit: 'g', referenceAmount: 100_000, milliKcal: 150_000, proteinMg: 4_500, carbsMg: 21_000, fatMg: 5_200,
+        portions: [{ unit: 'portion', label: '1 Glas', baseAmount: 250_000 }], origin: null,
+      },
+    }),
+    seedOwnFood({
+      id: seedIds.ownFood.philippApfel, personId: philipp, at: '2026-10-11T15:00:00.000Z',
+      food: {
+        name: 'Apfel roh', baseUnit: 'g', referenceAmount: 100_000, milliKcal: 58_000, proteinMg: 424, carbsMg: 11_700, fatMg: 500,
+        portions: [{ unit: 'stueck', label: '1 mittelgroßer', baseAmount: 180_000 }], origin: { type: 'bls', key: 'F110100' },
+      },
+    }),
+  ],
+};
+
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
 const soloPartsWith = ({ water, sport, plan }: SoloVariant): readonly SeedPart[] => [soloFundament, soloZieleOf(plan), soloTrackerOf(water, sport), soloErnaehrung];
 
@@ -281,17 +308,18 @@ export const soloParts = soloPartsWith(soloVariants.solo);
 /** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute, in der Sportwoche oder im Wochenplan. */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
-    parts: soloPartsWith(soloVariants[scenario]),
+    parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel],
     createdAt: seedClock.instant,
     devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
   });
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 6: eigene Lebensmittel seit #157 (ein eigenes mit Portion, eine BLS-Korrektur).
     // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 5,
+    revision: 6,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,
