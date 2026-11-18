@@ -6,7 +6,7 @@ import { dailyGoalSnapshotsOf, MaterializeDailyGoals } from '@abnehm/contracts/p
 import type { DailyGoalPersistence, MissingDaysHook } from '../daily-goals';
 import type { TransactionContext } from '../local-db';
 import type { SyncWriter } from '../sync';
-import { hasDailyGoals, insertDailyGoals, materializedDays } from './daily-goal-repository';
+import { dailyGoalEntityType, hasDailyGoals, insertDailyGoals, materializedDays } from './daily-goal-repository';
 import { readEffectivePlan, readWeeklyPlan } from './plan-repository';
 
 // Materialisierung der Tagesziele und Anstoß des Tagesabschlusses (Spezifikation 1, Abschnitt 5). Ein
@@ -26,14 +26,14 @@ export function catchUpWindow(today: LocalDate): LocalDate[] {
 }
 
 export type DailyGoalMaterialization = Readonly<{
-  /** Legt den Tag an, wenn er fehlt und an ihm beide Fassungen gelten; `true`, wenn er neu entstand. */
-  materializeDay(tx: TransactionContext, personId: EntityId, localDate: LocalDate, reading: ClockReading): boolean;
   /**
    * Ein Auslöser: stellt heute und die fehlenden Tage des Nachholfensters sicher, wertet neu angelegte
    * offene Tage mit `app_oeffnung` aus und meldet jeden materialisierten Tag des Fensters, dessen
-   * Tagesende erreicht ist, mit `tagesabschluss`. Wiederholt bleibt das folgenlos.
+   * Tagesende erreicht ist, mit `tagesabschluss`. Wiederholt bleibt das folgenlos. Ohne
+   * `reportCreatedOpenDays` meldet der Aufrufer die neuen offenen Tage selbst, etwa „Erstplan speichern“
+   * mit `planaenderung`.
    */
-  ensure(tx: TransactionContext, personId: EntityId): void;
+  ensure(tx: TransactionContext, personId: EntityId, options?: Readonly<{ reportCreatedOpenDays: boolean }>): void;
   /** Haken für fehlende Tage am Persistenzdienst: Tage im Nachholfenster entstehen vor der Auswertung. */
   missingDaysHook: MissingDaysHook;
 }>;
@@ -47,6 +47,7 @@ export function createDailyGoalMaterialization({
   writer: SyncWriter;
   persistence: Pick<DailyGoalPersistence, 'reevaluateDailyGoals'>;
 }>): DailyGoalMaterialization {
+  /** Legt den Tag an, wenn er fehlt und an ihm beide Fassungen gelten; `true`, wenn er neu entstand. */
   function materializeDay(tx: TransactionContext, personId: EntityId, localDate: LocalDate, reading: ClockReading): boolean {
     if (hasDailyGoals(tx, personId, localDate)) return false;
     // Fehlt eine der beiden Fassungen, liegt der Tag vor dem ersten `valid_from` und bleibt ohne Tagesziele.
@@ -73,24 +74,22 @@ export function createDailyGoalMaterialization({
       businessKey: dailyGoalsKey(personId, localDate),
       payload,
       knownServerVersion: null,
-      affectedRefs: payload.goals.map(({ id }) => ({ entityType: 'daily_goal', entityId: id })),
+      affectedRefs: payload.goals.map(({ id }) => ({ entityType: dailyGoalEntityType, entityId: id })),
       referencePaths: [],
     });
     return true;
   }
 
   return {
-    materializeDay,
-
-    ensure(tx, personId) {
+    ensure(tx, personId, { reportCreatedOpenDays } = { reportCreatedOpenDays: true }) {
       const reading = clock.read();
       const at = Instant.parse(reading.instant);
       const window = catchUpWindow(reading.localDate);
       const created = window.filter((localDate) => materializeDay(tx, personId, localDate, reading));
       const days = materializedDays(tx, personId, window[0]!, reading.localDate);
       const closed = days.filter((day) => Date.parse(day.dayEndsAt) <= Date.parse(at)).map((day) => day.localDate);
-      const opened = created.filter((localDate) => !closed.includes(localDate));
-      if (opened.length > 0) persistence.reevaluateDailyGoals(tx, personId, opened, 'app_oeffnung');
+      const createdOpenDays = created.filter((localDate) => !closed.includes(localDate));
+      if (reportCreatedOpenDays && createdOpenDays.length > 0) persistence.reevaluateDailyGoals(tx, personId, createdOpenDays, 'app_oeffnung');
       if (closed.length > 0) persistence.reevaluateDailyGoals(tx, personId, closed, 'tagesabschluss');
     },
 

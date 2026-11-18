@@ -61,7 +61,7 @@ export function startOfLocalDate(localDate: LocalDate, timeZone: TimeZone): Inst
     if (readingAt(middle * minuteMs, timeZone).localDate >= target) high = middle;
     else low = middle + 1;
   }
-  return Instant.parse(new Date(low * minuteMs).toISOString());
+  return readingAt(low * minuteMs, timeZone).instant;
 }
 
 /**

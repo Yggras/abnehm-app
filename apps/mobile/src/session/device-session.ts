@@ -136,15 +136,9 @@ function deviceState() {
             });
             return () => subscription.remove();
           },
-          // Im Minutentakt; in Test-Artefakten auch bei jedem Sprung der Testuhr (#114).
-          observeTicks(listener) {
-            const interval = setInterval(listener, 60_000);
-            const stopClock = testCapabilities?.clock.subscribe(listener);
-            return () => {
-              clearInterval(interval);
-              stopClock?.();
-            };
-          },
+          // Derselbe Takt wie für „Heute“: im Minutentakt, im Vordergrund und in Test-Artefakten bei jedem
+          // Sprung der Testuhr (#114); er löst nur aus, wenn sich der lokale Tag geändert hat.
+          observeTicks: appTodayRefresh,
           onError,
         }),
       ];

@@ -77,7 +77,9 @@ export type Plan = Readonly<{
    * Erstplan speichern (Onboarding-Schritt 8): erst das Startgewicht über den `WeightRecorder`, dann in
    * einer lokalen Transaktion samt Outbox die Personenfelder, die Zielversion und die Wochenplanversion ab
    * heute sowie die Meldung der Tage bis heute + 13 mit `planaenderung`. Der Onboarding-Stand bleibt
-   * `begonnen`. Erneutes Speichern ersetzt die Fassungen desselben Tags und schreibt nur, was sich geändert hat.
+   * `begonnen`. Erneutes Speichern ersetzt die Fassungen desselben Tags und schreibt nur, was sich geändert hat;
+   * die heutigen Tagesziele behalten die Werte des ersten Speicherns (Widerspruch zu Spezifikation 1,
+   * Abschnitt 4, offen in #134 und #144).
    */
   saveInitialPlan(draft: InitialPlanDraft): Promise<InitialPlanResult>;
   /**
@@ -155,9 +157,11 @@ export function createPlan(dependencies: PlanDependencies): Plan {
         }, at);
         saveGoalVersion(tx, personId, goal, at);
         saveWeeklyPlan(tx, personId, weeklyPlan, at);
-        // Die heutigen Tagesziele entstehen mit den Fassungen; die Meldung unten wertet sie sofort aus,
-        // sodass ein Startgewicht am Wiegetag „Gewogen“ erfüllt.
-        dailyGoals.materializeDay(tx, personId, today, reading);
+        // „Erstplan speichern“ ist ein Auslöser: Die heutigen Tagesziele entstehen mit den Fassungen und
+        // werden sofort ausgewertet, sodass ein Startgewicht am Wiegetag „Gewogen“ erfüllt. Wie jeder
+        // Auslöser holt er fehlende Tage nach und meldet abgelaufene mit `tagesabschluss` (#131). Den
+        // heutigen Tag meldet die Planänderung.
+        dailyGoals.ensure(tx, personId, { reportCreatedOpenDays: false });
         persistence.reevaluateDailyGoals(tx, personId, planChangeDays(today, today), 'planaenderung');
       });
       return {

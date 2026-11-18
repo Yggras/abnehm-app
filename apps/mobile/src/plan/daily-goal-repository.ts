@@ -4,12 +4,15 @@ import { Instant, LocalDate, type EntityId } from '@abnehm/contracts/base';
 import type { MaterializeDailyGoals } from '@abnehm/contracts/plan';
 
 import type { ReadContext, TransactionContext } from '../local-db';
-import { dailyGoal, dailyGoalCompletion } from '../local-db/schema';
+import { dailyGoal } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 
 // Repository der materialisierten Tagesziele (Spezifikation 1, Abschnitt 5): Das Plan-Modul legt sie an
 // und entfernt sie nur, wenn der Server ihre Materialisierung nie bestätigt hat. Ausgewertet werden sie
 // vom Persistenzdienst des Fundaments, der die Tabelle selbst liest.
+
+/** Sync-Typ der Tagesziele in `affectedRefs`; den Sync-Adapter für kanonische Tagesziele liefert #133. */
+export const dailyGoalEntityType = 'daily_goal';
 
 /** Ein materialisierter Tag einer Person: lokaler Tag und festgeschriebenes Tagesende. */
 export type MaterializedDay = Readonly<{ localDate: LocalDate; dayEndsAt: Instant }>;
@@ -59,14 +62,11 @@ export function insertDailyGoals(
 }
 
 /**
- * Entfernt die Tagesziele eines Tags, solange der Server keines davon bestätigt hat und keine Erfüllung
- * mehr auf sie zeigt; sonst bleibt der Tag, wie er ist. Die unbestätigten Erfüllungen und Gutschriften
- * räumt vorher das Fundament ab (`removeUnconfirmedDayCredits`).
+ * Entfernt die Tagesziele eines Tags, solange der Server keines davon bestätigt hat; sonst bleibt der Tag,
+ * wie er ist. Ob noch eine Erfüllung auf sie zeigt, klärt vorher das Fundament (`removeUnconfirmedDayCredits`).
  */
 export function removeUnconfirmedDailyGoals(tx: TransactionContext, ids: readonly EntityId[]): void {
   const db = sqliteOf(tx);
   const confirmed = db.select({ id: dailyGoal.id }).from(dailyGoal).where(and(inArray(dailyGoal.id, [...ids]), isNotNull(dailyGoal.serverVersion))).limit(1).get();
-  const referenced = db.select({ id: dailyGoalCompletion.id }).from(dailyGoalCompletion).where(inArray(dailyGoalCompletion.dailyGoalId, [...ids])).limit(1).get();
-  if (confirmed !== undefined || referenced !== undefined) return;
-  db.delete(dailyGoal).where(inArray(dailyGoal.id, [...ids])).run();
+  if (confirmed === undefined) db.delete(dailyGoal).where(inArray(dailyGoal.id, [...ids])).run();
 }

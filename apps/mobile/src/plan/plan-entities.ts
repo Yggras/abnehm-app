@@ -107,8 +107,7 @@ export const planCommands: readonly LocalCommand[] = [
      */
     reconcileRejected(tx, operation) {
       const { localDate, goals } = MaterializeDailyGoals.parse(operation.payload);
-      removeUnconfirmedDayCredits(tx, goals[0].snapshot.personId, localDate);
-      removeUnconfirmedDailyGoals(tx, goals.map(({ id }) => id));
+      if (removeUnconfirmedDayCredits(tx, goals[0].snapshot.personId, localDate)) removeUnconfirmedDailyGoals(tx, goals.map(({ id }) => id));
     },
   },
 ];
