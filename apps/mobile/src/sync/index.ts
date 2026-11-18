@@ -42,7 +42,7 @@ export {
   type SyncEntityAdapter,
   type SyncRegistry,
 } from './registry';
-export { sqliteEntity } from './sqlite-entity';
+export { serverManagedEntity, sqliteEntity } from './sqlite-entity';
 
 /** Die Entitäten des Fundaments; Bereiche ergänzen ihre im Composition Root. */
 export const foundationSyncEntities: readonly SyncEntityAdapter[] = [

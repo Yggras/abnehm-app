@@ -27,7 +27,7 @@ platforms=(ios android)
 if [[ "${1:-}" == "ios" || "${1:-}" == "android" ]]; then platforms=("$1"); shift
 elif [[ "${1:-}" == "alle" ]]; then shift; fi
 build=false
-flows=(sync-offline geraetesmoke geraetetest mitteilungen-erlauben)
+flows=(sync-offline geraetesmoke geraetetest schluepfen mitteilungen-erlauben)
 device=""
 while [[ $# -gt 0 ]]; do
   case "$1" in

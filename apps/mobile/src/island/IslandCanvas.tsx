@@ -52,7 +52,14 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
     laidOut.current = size;
     screen.value = size;
     if (previous === null) view.value = startView(size, scene.focus);
-    else view.modify((current) => resizeView(current, previous, size));
+    // `modify` ruft die Funktion auf dem UI-Thread auf; ohne `'worklet'` brach die App auf Android beim
+    // Verlassen des Tabs ab („Tried to synchronously call a Remote Function“, beobachtet im Emulator am
+    // 18.11.2026, #184; https://docs.swmansion.com/react-native-worklets/docs/guides/troubleshooting).
+    else
+      view.modify((current) => {
+        'worklet';
+        return resizeView(current, previous, size);
+      });
   };
 
   const pan = usePanGesture({

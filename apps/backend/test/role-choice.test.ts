@@ -19,7 +19,7 @@ import { pullAll, push, pushOutcome } from './support/sync.ts';
 import type { Device } from './support/auth-client.ts';
 
 // Nachweis für #180: die Art `rollenwahl` (Spezifikation 4, Abschnitte 2.4 und 7) über Push und Pull der
-// echten Hono-App mit isoliertem Postgres und Testuhr. Die Annahme ist das Schlüpfen; das liefert #184.
+// echten Hono-App mit isoliertem Postgres und Testuhr. Die Annahme ist das Schlüpfen (`hatching.test.ts`, #184).
 
 const proposal = (proposerRole: IslandRole, actionId = EntityId.parse(randomUUID())) =>
   requestOp({ type: 'rollenwahl', actionId, payload: { proposerRole } });
@@ -163,17 +163,6 @@ describe('Rollenwahl vorschlagen und beantworten', () => {
 
     expect(await push(backend, philipp.device, [proposal('bauen')])).toMatchObject([{ type: 'permanently_rejected', error: { code: 'conflict' } }]);
     expect(await intentsOf(backend)).toEqual([]);
-  });
-
-  it('annehmen schlüpft erst mit #184: bis dahin wird die Annahme abgelehnt, und der Vorschlag bleibt offen', async () => {
-    const { backend, philipp, anna } = await couple();
-    const operation = proposal('bauen');
-    await push(backend, philipp.device, [operation]);
-
-    expect(await push(backend, anna.device, [decideOp(actionIdOf(operation), 'annehmen')])).toMatchObject([
-      { type: 'permanently_rejected', error: { code: 'conflict' } },
-    ]);
-    expect(await openRoleChoices(backend, anna.device)).toHaveLength(1);
   });
 });
 

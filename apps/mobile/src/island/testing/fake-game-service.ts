@@ -15,6 +15,8 @@ export function fakeGameService(stage: IslandStage): GameService {
       return () => {};
     },
     proposeRoles: refuse,
+    acceptRoles: refuse,
+    takeGrowthIntro: () => false,
     declineRoles: refuse,
     withdrawRoles: refuse,
     momoCharacter: {

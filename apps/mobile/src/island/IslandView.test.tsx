@@ -7,6 +7,7 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { contractFixtures } from '@abnehm/contracts/fixtures';
 import { IslandProgress, MomoAppearance } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { hatching } from '@abnehm/game-rules/hatching';
 import { createGestureController } from 'react-native-gesture-handler/jest-utils';
 
 import { IslandView, type IslandViewProps } from './IslandView';
@@ -21,7 +22,8 @@ jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia
 
 const progress = IslandProgress.parse(contractFixtures.island!.IslandProgress!.valid['Level 6, eigene Hälfte voll']);
 const momo = MomoAppearance.parse(Object.values(contractFixtures.island!.MomoAppearance!.valid).find((value) => (value as MomoAppearance).stage === 'geschluepft'));
-const island = { ...islandLayout(gameCatalog, { sides: { a: philipp, b: anna }, unlockedAreas: [] }), objects: [], momo };
+const fields = hatching(gameCatalog, { proposerPersonId: philipp, proposerRole: 'bauen', partnerPersonId: anna }).fields;
+const island = { ...islandLayout(gameCatalog, { fields, unlockedAreas: [] }), objects: [], momo };
 // Mittwoch, 14. Oktober 2026, 14 Uhr in Berlin: Herbst, Tag.
 const clock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
 
@@ -53,12 +55,14 @@ test('zeigt die Grundinsel aus den Vertrags-Fixtures mit HUD und Leiste', async 
   expect(screen.getByRole('button', { name: 'Bauen' })).toBeOnTheScreen();
 });
 
-test('ein Tipp in der Bildschirmmitte trifft die Lichtung, einer weiter oben links die eigene Ecke', async () => {
+test('ein Tipp rechts neben Momo trifft die Lichtung, einer weiter oben links die eigene Ecke', async () => {
   const onFieldPress = jest.fn();
-  await renderIsland({ onFieldPress });
+  const onMomoPress = jest.fn();
+  await renderIsland({ onFieldPress, onMomoPress });
 
   // Mitte der Lichtung (Felder 6–9 × 5–9) liegt im Szenenraum bei (16, 248), am Start also bei (200, 400).
-  tapAt(200, 400);
+  // Feld (8, 7) hat seine Mitte bei (16, 256); rechts davon, bei (36, 256), steht Momo nicht mehr.
+  tapAt(220, 408);
   // Feld (0, 0) hat seine Mitte bei (0, 16), am Start also 16 links und 232 über der Bildschirmmitte.
   tapAt(184, 168);
 
@@ -66,6 +70,20 @@ test('ein Tipp in der Bildschirmmitte trifft die Lichtung, einer weiter oben lin
     [{ type: 'feld', field: 'grundinsel:8:7', kind: 'lichtung', owner: null }],
     [{ type: 'feld', field: 'grundinsel:0:0', kind: 'ecke', owner: 'self' }],
   ]);
+  expect(onMomoPress).not.toHaveBeenCalled();
+});
+
+test('Momo antippen: Momo steht auf der Lichtung (7, 7), Mitte (0, 240), am Start also bei (184, 392) (#184)', async () => {
+  const onFieldPress = jest.fn();
+  const onMomoPress = jest.fn();
+  await renderIsland({ onFieldPress, onMomoPress });
+
+  tapAt(184, 392);
+  // Momos Kopf ragt über das Feld dahinter.
+  tapAt(184, 368);
+
+  expect(onMomoPress).toHaveBeenCalledTimes(2);
+  expect(onFieldPress).not.toHaveBeenCalled();
 });
 
 test('Ziehen verschiebt: Nach 100 dp nach links trifft die Bildschirmmitte ein Feld weiter rechts', async () => {
@@ -109,8 +127,8 @@ test('wird der Canvas höher, etwa wenn die Tab-Leiste über die Insel wechselt,
   // `renderIsland` legt 400 × 800 an; vorher war der Canvas 100 dp niedriger.
   await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 900 } } });
 
-  // Mitte (200, 450) zeigt weiter (16, 248), Feld (8, 7).
-  tapAt(200, 450);
+  // Mitte (200, 450) zeigt weiter (16, 248); rechts neben Momo bei (36, 256) liegt Feld (8, 7).
+  tapAt(220, 458);
 
   expect(onFieldPress).toHaveBeenCalledWith(expect.objectContaining({ field: 'grundinsel:8:7' }));
 });

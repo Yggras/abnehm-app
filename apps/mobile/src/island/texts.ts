@@ -1,4 +1,4 @@
-import type { IslandRole } from '@abnehm/contracts/island';
+import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
 import type { Season } from '@abnehm/game-rules/catalog';
 
 import type { IslandEntry } from './IslandBar';
@@ -41,4 +41,36 @@ export const laichkugelTexts = {
   withdraw: 'Vorschlag zurückziehen',
   proposedBy: (partner: string) => `${partner} schlägt eure Rollen vor`,
   decline: 'Ablehnen',
+  accept: 'Annehmen',
+  // „Angenommen“ und sein Hinweis: vorgemerkte Annahme bis zum Sync (Spezifikation 4, Abschnitt 11:
+  // gemeinsame Aktionen sind offline nur vorgemerkt). Designwerte aus #184, nicht belegt.
+  accepted: 'Angenommen',
+  acceptedHint: 'Momo schlüpft, sobald deine Antwort gesichert ist.',
+};
+
+/**
+ * Texte von Momo-Sheet und „So wächst Momo“ (#184). Die drei Sätze und die Formnamen stehen in
+ * Spezifikation 4, Abschnitte 5 und 7; „Verstanden“ und die Zeile mit Form und Level sind Designwerte
+ * dieses Tickets (nicht belegt).
+ */
+export const momoSheetTexts = {
+  title: 'Momo',
+  form: {
+    kaulquappe: 'Kaulquappe',
+    huepfer: 'Hüpfer',
+    krabbler: 'Krabbler',
+    aufrechter: 'Aufrechter',
+    springer: 'Springer',
+    spirale: 'Spirale',
+    fluegling: 'Flügling',
+    lagunendrache: 'Lagunendrache',
+  } satisfies Record<MomoForm, string>,
+  formAndLevel: (form: MomoForm, level: number) => `${momoSheetTexts.form[form]} · Level ${level}`,
+  growth: 'So wächst Momo',
+  growthSentences: [
+    'Tagesziele bringen Energie.',
+    'Bauen gibt Energie aus und füllt deine Hälfte.',
+    'Sind beide Hälften voll, steigt Momo ein Level.',
+  ],
+  understood: 'Verstanden',
 };

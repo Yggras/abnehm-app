@@ -6,6 +6,8 @@ import { createTestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { contractFixtures } from '@abnehm/contracts/fixtures';
 import { DecideSharedAction, RequestSharedAction } from '@abnehm/contracts/island';
+import { MomoCharacterState } from '@abnehm/contracts/today';
+import { WirContributionsState } from '@abnehm/contracts/wir';
 
 import { ClockProvider } from '../clock/clock-context';
 import { hitArea } from '../design/testing/hit-area';
@@ -15,7 +17,7 @@ import { placeholderRoute } from '../shell/Placeholder';
 import { appGameService } from './app-game-service';
 import { momoCharacterOf, wirContributionsOf } from './game-service';
 import { MomoTab } from './MomoTab';
-import { createLaichkugelWorld, type LaichkugelWorld } from './testing/laichkugel-world';
+import { createLaichkugelWorld, islandId, type LaichkugelWorld } from './testing/laichkugel-world';
 
 // Nachweis für #180: Tab „Momo“ mit Laichkugel und Ansicht `rollenwahl` über den Spieldienst des
 // geöffneten Kontos (`appGameService`) auf echter SQLite, dazu `momo.character` und die Beiträge an „Wir“
@@ -123,6 +125,24 @@ describe('Ansicht rollenwahl', () => {
     expect(screen.getByText('Du: Natur · Anna: Bauen')).toBeOnTheScreen();
   });
 
+  test('Vorschlag des Partners annehmen: vorgemerkt, bis der Sync Momo schlüpfen lässt (#184)', async () => {
+    let actionId = '';
+    const world = await open((w) => {
+      w.couple();
+      actionId = w.proposeOnServer('anna', 'natur');
+    });
+    expect(tooSmall()).toEqual([]);
+
+    await user.press(screen.getByRole('button', { name: 'Annehmen' }));
+
+    expect(DecideSharedAction.parse(requests(world)[0])).toMatchObject({ actionId, decision: 'annehmen', timeZone: 'Europe/Berlin' });
+    expect(screen.getByRole('header', { name: 'Angenommen' })).toBeOnTheScreen();
+    expect(screen.getByText('Momo schlüpft, sobald deine Antwort gesichert ist.')).toBeOnTheScreen();
+    expect(screen.getByText('Du: Bauen · Anna: Natur')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Ablehnen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Annehmen' })).toBeNull();
+  });
+
   test('jede Ansicht des Tabs zeigt vor dem Schlüpfen die Rollenwahl', async () => {
     await open((w) => w.couple());
     await act(() => router.replace({ pathname: '/momo', params: { view: 'bauen' } }));
@@ -165,10 +185,38 @@ describe('Beiträge gegen die Vertrags-Fixtures', () => {
     expect(states[0]).toEqual(wirFixtures['nichts zu zeigen']);
   });
 
-  test('Stufen ohne eigene Person und nach dem Schlüpfen laden (den Zustand ready liefert #184)', () => {
+  test('ohne eigene Person und solange die geschlüpfte Insel noch nicht vollständig angekommen ist, laden die Beiträge', () => {
     expect(momoCharacterOf({ type: 'ohne_person' })).toEqual({ type: 'loading' });
-    expect(momoCharacterOf({ type: 'geschluepft' })).toEqual({ type: 'loading' });
+    expect(momoCharacterOf({ type: 'geschluepft', island: null })).toEqual({ type: 'loading' });
     expect(wirContributionsOf({ type: 'ohne_person' })).toEqual(wirFixtures['lädt']);
-    expect(wirContributionsOf({ type: 'geschluepft' })).toEqual(wirFixtures['nichts zu zeigen']);
+    expect(wirContributionsOf({ type: 'geschluepft', island: null })).toEqual(wirFixtures['lädt']);
+  });
+
+  test('nach dem Schlüpfen: momo.character ready und das gemeinsame Ereignis „Momo geschlüpft“ auf „Wir“ (#184)', async () => {
+    const world = await createLaichkugelWorld(clock);
+    cleanups.push(() => world.close());
+    world.couple();
+    world.credit(2);
+    world.hatch();
+    const characters: unknown[] = [];
+    const contributions: unknown[] = [];
+    cleanups.push(world.game.momoCharacter.subscribe((state) => characters.push(state)));
+    cleanups.push(world.game.wirContributions.subscribe((state) => contributions.push(state)));
+
+    expect(MomoCharacterState.parse(characters.at(-1))).toEqual({
+      type: 'ready',
+      data: {
+        appearance: { stage: 'geschluepft', formKey: 'kaulquappe', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } },
+        energy: 2,
+        level: 1,
+        ownHalfPercent: 0,
+        partnerHalfPercent: 0,
+        waitingForPartner: false,
+      },
+    });
+    expect(WirContributionsState.parse(contributions.at(-1))).toEqual({
+      type: 'ready',
+      data: [expect.objectContaining({ type: 'shared_event', eventType: 'momo_geschluepft', messageKey: 'neu_bei_euch.momo_geschluepft', objectId: islandId })],
+    });
   });
 });

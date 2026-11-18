@@ -19,6 +19,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import type { SyncWriter } from '../sync';
 import { sharedActionOf } from '../sync/coupling-entities';
 import { pendingCommandPayloads } from '../sync/outbox';
+import { readHatchedIsland, type HatchedIsland } from './hatched-island';
 
 // Laichkugel und Rollenwahl (Spezifikation 4, Abschnitte 2.4 und 7; #180). Ohne aktive Kopplung wartet
 // Momo als Laichkugel; mit der Kopplung wartet die Insel auf die Rollen. Eine Person schlägt dann die
@@ -37,6 +38,8 @@ export type RoleProposal = Readonly<{
   proposerRole: IslandRole;
   /** Vom Server bestätigt erstellt; `null`, solange der eigene Vorschlag nur vorgemerkt ist. */
   createdAt: Instant | null;
+  /** Die eigene Annahme ist vorgemerkt; Momo schlüpft mit dem nächsten Sync. */
+  accepted: boolean;
 }>;
 
 /** Wo Momo steht: noch ohne eigene Person, als Laichkugel ohne Kopplung, vor der Rollenwahl oder geschlüpft. */
@@ -48,12 +51,8 @@ export type IslandStage =
       partnerDisplayName: string;
       proposal: RoleProposal | null;
     }>
-  | Readonly<{ type: 'geschluepft' }>;
-
-/** Die Rolle des Partners, wenn die vorschlagende Person `role` wählt. */
-export function otherRole(role: IslandRole): IslandRole {
-  return role === 'bauen' ? 'natur' : 'bauen';
-}
+  /** `island` ist `null`, solange ein Teil der Insel noch nicht per Pull angekommen ist. */
+  | Readonly<{ type: 'geschluepft'; island: HatchedIsland | null }>;
 
 /** Liest Stufe, Partner und offenen Vorschlag samt vorgemerkter Befehle in einer Lesetransaktion. */
 export function readIslandStage(tx: ReadContext): IslandStage {
@@ -71,7 +70,7 @@ export function readIslandStage(tx: ReadContext): IslandStage {
   if (membership === undefined) return { type: 'laichkugel', energy };
   const couplingId = EntityId.parse(membership.couplingId);
   const state = db.select({ state: island.state }).from(island).where(eq(island.couplingId, couplingId)).get()?.state;
-  if (state === 'aktiv') return { type: 'geschluepft' };
+  if (state === 'aktiv') return { type: 'geschluepft', island: readHatchedIsland(tx, { couplingId, personId, energy }) };
   // Die Insel kommt im selben Pull wie die Kopplung; bis sie da ist, wartet Momo noch im Ei.
   if (state !== 'wartet_auf_rollen') return { type: 'laichkugel', energy };
   const partner = db
@@ -81,7 +80,10 @@ export function readIslandStage(tx: ReadContext): IslandStage {
     .get();
   if (partner === undefined) return { type: 'laichkugel', energy };
 
-  const decided = new Set(pendingDecisions(tx).map((decision) => decision.actionId));
+  const decisions = pendingDecisions(tx);
+  // Abgelehnt oder zurückgezogen ist ein Vorschlag sofort weg; angenommen bleibt er bis zum Schlüpfen sichtbar.
+  const decided = new Set(decisions.filter((decision) => decision.decision !== 'annehmen').map((decision) => decision.actionId));
+  const accepted = new Set(decisions.filter((decision) => decision.decision === 'annehmen').map((decision) => decision.actionId));
   const canonical = db
     .select()
     .from(sharedAction)
@@ -102,9 +104,15 @@ export function readIslandStage(tx: ReadContext): IslandStage {
   // lehnt der Server ab, sobald ein anderer offen ist.
   const proposal: RoleProposal | null =
     canonical !== undefined
-      ? { actionId: canonical.action.id, by: canonical.by, proposerRole: canonical.action.payload.proposerRole, createdAt: canonical.action.createdAt }
+      ? {
+          actionId: canonical.action.id,
+          by: canonical.by,
+          proposerRole: canonical.action.payload.proposerRole,
+          createdAt: canonical.action.createdAt,
+          accepted: accepted.has(canonical.action.id),
+        }
       : pendingProposal !== undefined
-        ? { actionId: pendingProposal.actionId, by: 'self', proposerRole: pendingProposal.payload.proposerRole, createdAt: null }
+        ? { actionId: pendingProposal.actionId, by: 'self', proposerRole: pendingProposal.payload.proposerRole, createdAt: null, accepted: false }
         : null;
   return { type: 'rollenwahl', partnerDisplayName: partner.displayName, proposal };
 }
@@ -119,6 +127,12 @@ function pendingDecisions(tx: ReadContext) {
   return pendingCommandPayloads(tx, 'decideSharedAction').map((payload) => DecideSharedAction.parse(payload));
 }
 
+/** Ob die Person den offenen Vorschlag des Partners noch beantworten kann. */
+function answerable(tx: ReadContext, actionId: EntityId): boolean {
+  const stage = readIslandStage(tx);
+  return stage.type === 'rollenwahl' && stage.proposal?.by === 'partner' && stage.proposal.actionId === actionId && !stage.proposal.accepted;
+}
+
 /** Ergebnis eines Befehls der Rollenwahl; `nicht_moeglich`, wenn der lokale Stand ihn nicht zulässt. */
 export type RoleChoiceOutcome = 'vorgemerkt' | 'nicht_moeglich';
 
@@ -131,7 +145,8 @@ export type RoleChoiceDependencies = Readonly<{
 
 /**
  * Die Befehle der Rollenwahl, je in der Transaktion des Aufrufers. Vorschlagen geht nur ohne offenen
- * Vorschlag, ablehnen nur einen des Partners, zurückziehen nur einen eigenen.
+ * Vorschlag, annehmen und ablehnen nur einen des Partners, zurückziehen nur einen eigenen. Annehmen ist
+ * das Schlüpfen; es geschieht auf dem Server (#184), bis zum Sync ist es nur vorgemerkt.
  */
 export function roleChoiceCommands({ writer, newId, timeZone }: RoleChoiceDependencies) {
   const decide = (tx: TransactionContext, actionId: EntityId, decision: SharedActionDecision) =>
@@ -158,15 +173,19 @@ export function roleChoiceCommands({ writer, newId, timeZone }: RoleChoiceDepend
       });
       return 'vorgemerkt';
     },
+    accept(tx: TransactionContext, actionId: EntityId): RoleChoiceOutcome {
+      if (!answerable(tx, actionId)) return 'nicht_moeglich';
+      decide(tx, actionId, 'annehmen');
+      return 'vorgemerkt';
+    },
     decline(tx: TransactionContext, actionId: EntityId): RoleChoiceOutcome {
-      const stage = readIslandStage(tx);
-      if (stage.type !== 'rollenwahl' || stage.proposal?.by !== 'partner' || stage.proposal.actionId !== actionId) return 'nicht_moeglich';
+      if (!answerable(tx, actionId)) return 'nicht_moeglich';
       decide(tx, actionId, 'ablehnen');
       return 'vorgemerkt';
     },
     withdraw(tx: TransactionContext, actionId: EntityId): RoleChoiceOutcome {
       const stage = readIslandStage(tx);
-      if (stage.type !== 'rollenwahl' || stage.proposal?.by !== 'self' || stage.proposal.actionId !== actionId) return 'nicht_moeglich';
+      if (stage.type !== 'rollenwahl' || stage.proposal?.by !== 'self' || stage.proposal.actionId !== actionId || stage.proposal.accepted) return 'nicht_moeglich';
       decide(tx, actionId, 'zurueckziehen');
       return 'vorgemerkt';
     },

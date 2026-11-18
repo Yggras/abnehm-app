@@ -208,8 +208,8 @@ describe('Nebel', () => {
   });
 
   test('ein Tipp in den Nebel trifft das gesperrte Gebiet, nicht ein Feld', () => {
-    // Mitte von Feld (0, −1): (32, 0).
-    expect(islandScene(fogged).hitAt({ x: 32, y: 0 })).toEqual({ type: 'nebel', area: 'nordstrand' });
+    // Mitte von Feld (1, −1): (64, 16). Feld (0, −1) liegt direkt hinter Momo; dort trifft man Momo (#184).
+    expect(islandScene(fogged).hitAt({ x: 64, y: 16 })).toEqual({ type: 'nebel', area: 'nordstrand' });
   });
 
   test('der Sockel schließt das Gebiet ein: Erde nur an seinen freien Rändern', () => {
@@ -376,6 +376,35 @@ describe('Treffer-Umkehrung', () => {
 
   test('bei Zoom 2 trifft der doppelt so weit entfernte Punkt dasselbe Feld', () => {
     expect(islandScene(request({ zoom: 2 })).hitAt({ x: 64, y: 128 })).toMatchObject({ field: 'grundinsel:2:1' });
+  });
+
+  test('Momo trifft man auf seinem Feld und an seinem Kopf darüber; daneben bleibt es das Feld (#184)', () => {
+    const scene = islandScene(request());
+
+    // Momo steht mittig auf der Lichtung (1, 0): Mitte (32, 32), etwa ein Feld hoch.
+    expect(scene.hitAt({ x: 32, y: 34 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 32, y: 8 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 0, y: 16 })).toMatchObject({ type: 'feld', field: 'grundinsel:0:0' });
+    expect(islandScene(request({ zoom: 2 })).hitAt({ x: 64, y: 16 })).toEqual({ type: 'momo' });
+  });
+
+  test('Momos Trefferfläche ist mindestens 44 × 44 dp: ein Quadrat um die Figur, deren Mitte 12 dp über der Feldmitte liegt', () => {
+    const scene = islandScene(request());
+
+    // Figurmitte (32, 20); das Quadrat reicht von (10, −2) bis (54, 42).
+    expect(scene.hitAt({ x: 10, y: 20 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 54, y: 20 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 32, y: -2 })).toEqual({ type: 'momo' });
+    expect(scene.hitAt({ x: 32, y: 42 })).toEqual({ type: 'momo' });
+    // Rand von Momos eigenem Feld (1, 0), außerhalb des Quadrats: das Feld, nicht Momo.
+    expect(scene.hitAt({ x: 58, y: 34 })).toMatchObject({ type: 'feld', field: 'grundinsel:1:0' });
+    expect(scene.hitAt({ x: 32, y: 44 })).toMatchObject({ type: 'feld' });
+  });
+
+  test('ohne Lichtung gibt es keinen Momo-Treffer', () => {
+    const ohneLichtung = { ...island, fields: island.fields.filter((field) => field.kind !== 'lichtung') };
+
+    expect(islandScene(request({ island: ohneLichtung })).hitAt({ x: 32, y: 34 })).toBeNull();
   });
 
   test('Wasser neben der Insel trifft nichts', () => {
