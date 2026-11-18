@@ -67,6 +67,8 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.ownFood.philippBircher, seedIds.ownFood.philippApfel].map((id) =>
         expect.objectContaining({ entity_type: 'own_food', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...seedIds.sportEntry.philippVorwoche.map((id) =>
+        expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
   });
 
@@ -188,8 +190,10 @@ describe('Seed-Manifest', () => {
     ['solo-sport-ueber-ziel', 170, 'ueber_ziel'],
   ] as const)('%s: %s Wochenminuten aus manuellen Einheiten über die Woche, Mini-Tracker %s', (scenario, minutes, status) => {
     const { server, devices } = seedManifests[scenario].initial;
-    const rows = server.sport_entry ?? [];
-    const entries = rows.map((row) => ({
+    const all = server.sport_entry ?? [];
+    // Die Vorwoche (#174) zählt nicht zu dieser Woche; sie steht in allen Varianten gleich.
+    const rows = all.filter((row) => String(row.local_date) >= seedDays.vorgestern);
+    const entries = all.map((row) => ({
       id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
       deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
     }));
@@ -201,13 +205,31 @@ describe('Seed-Manifest', () => {
     expect(rows.every((row) => row.origin === 'manuell')).toBe(true);
     // Über die Woche: Montag und Dienstag, heute noch keine Einheit, damit die Sporteinheit von heute offen bleibt.
     expect([...new Set(rows.map((row) => row.local_date))].sort()).toEqual([seedDays.vorgestern, seedDays.gestern]);
-    expect(devices['philipp-iphone']!.rows.sport_entry).toEqual(rows);
+    expect(devices['philipp-iphone']!.rows.sport_entry).toEqual(all);
     // Nur die Sportwoche unterscheidet die Varianten von solo.
     const tablesBesideSport = (all: Record<string, unknown>) => Object.fromEntries(Object.entries(all).filter(([table]) => !['sport_entry', 'change_log', 'sync_clock'].includes(table)));
     expect(Object.keys(tablesBesideSport(server)).sort()).toEqual(Object.keys(tablesBesideSport(solo.initial.server)).sort());
     // Die Serverversionen verschieben sich mit den zusätzlichen Einheiten; die Zeilen selbst bleiben gleich.
     const unversioned = (rows: readonly Record<string, unknown>[] = []) => rows.map((row) => ({ ...row, server_version: undefined }));
     for (const table of ['water_entry', 'weight_entry', 'goal_version', 'daily_goal']) expect(unversioned(server[table])).toEqual(unversioned(solo.initial.server[table]));
+  });
+
+  it('solo und seine Varianten: Vorwoche mit 80 Minuten und einem Tag mit zwei Einheiten (#174)', () => {
+    for (const scenario of ['solo', 'solo-sport-erreicht', 'solo-wasser-leer'] as const) {
+      const rows = seedManifests[scenario].initial.server.sport_entry ?? [];
+      const entries = rows.map((row) => ({
+        id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
+        deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
+      }));
+      const previous = rows.filter((row) => String(row.local_date) < seedDays.vorgestern);
+
+      expect(weekMinutes(entries, '2026-10-08')).toBe(80);
+      expect(previous.map((row) => [row.local_date, row.activity_type])).toEqual([
+        ['2026-10-05', 'laufen'],
+        ['2026-10-08', 'krafttraining'],
+        ['2026-10-08', 'yoga_dehnen'],
+      ]);
+    }
   });
 
   it('solo: fertige Person ohne Kopplung und ohne Insel, mit Zielen, Wochenplan, drei Tageszielen und eigenen Daten', () => {

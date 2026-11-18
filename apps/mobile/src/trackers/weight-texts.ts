@@ -1,15 +1,13 @@
-import { minutesOfDay, readingOf } from '@abnehm/clock';
-import { localDateAfter, weekdayOf, type Instant, type LocalDate, type TimeZone } from '@abnehm/contracts/base';
+import type { LocalDate } from '@abnehm/contracts/base';
 import { changeInTenthKg, type WeightChange } from '@abnehm/contracts/tracker-rules';
 
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
-import type { WeightHistoryEntry } from './weight-detail';
+import { dayText } from './entry-texts';
 
 // Texte des Gewicht-Detailbildschirms (Spezifikation 3, Abschnitt 5). Gewichte stehen in g und werden nur
 // hier auf 0,1 kg gerundet. Veränderungen sind neutral formuliert: Ein steigender Trend ist eine Zahl mit
 // Vorzeichen, ohne Wertung und ohne Warnfarbe.
 
-const weekdaysShort = { montag: 'Mo', dienstag: 'Di', mittwoch: 'Mi', donnerstag: 'Do', freitag: 'Fr', samstag: 'Sa', sonntag: 'So' } as const;
 const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'] as const;
 const minus = '−';
 
@@ -45,34 +43,6 @@ function longDateText(localDate: LocalDate): string {
   const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
   return `${day}. ${months[month - 1]} ${year}`;
 }
-
-/** „heute“, „gestern“ oder Wochentag und Datum, etwa „Mo, 12.10.“. */
-export function dayText(localDate: LocalDate, today: LocalDate): string {
-  if (localDate === today) return 'heute';
-  if (localDateAfter(localDate, 1) === today) return 'gestern';
-  const [, month, day] = localDate.split('-');
-  return `${weekdaysShort[weekdayOf(localDate)]}, ${day}.${month}.`;
-}
-
-/** Kurz für die Messliste: „heute“, „gestern“ oder nur das Datum, etwa „12.10.“, damit die Zeile auf dem iPhone SE einzeilig bleibt. */
-export function shortDayText(localDate: LocalDate, today: LocalDate): string {
-  if (localDate === today || localDateAfter(localDate, 1) === today) return dayText(localDate, today);
-  const [, month, day] = localDate.split('-');
-  return `${day}.${month}.`;
-}
-
-/** Uhrzeit eines Zeitpunkts in einer Zone, etwa „07:30“. */
-export function timeText(instant: Instant, timeZone: TimeZone): string {
-  const minutes = minutesOfDay(readingOf(instant, timeZone));
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
-
-/** Herkunft einer Messung für die Liste (`CONTEXT.md`: manuell, Apple Health oder Health Connect). */
-export const originNames: Readonly<Record<WeightHistoryEntry['origin'], string>> = {
-  manuell: 'Manuell',
-  apple_health: 'Apple Health',
-  health_connect: 'Health Connect',
-};
 
 export const weightTexts = {
   trendLabel: 'Trendgewicht',

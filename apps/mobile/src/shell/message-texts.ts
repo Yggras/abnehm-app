@@ -53,6 +53,14 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'sport.eingetragen': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,
   })),
+  /** Spezifikation 3: manuelle Einheit bearbeitet („45 min Laufen gespeichert · Rückgängig“; #174). */
+  'sport.geaendert': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
+    text: `${durationMinutes} min ${activityNames[activityType]} gespeichert`,
+  })),
+  /** Spezifikation 3: manuelle Einheit ohne Bestätigungsdialog gelöscht („30 min Laufen gelöscht · Rückgängig“; #174). */
+  'sport.geloescht': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
+    text: `${durationMinutes} min ${activityNames[activityType]} gelöscht`,
+  })),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */

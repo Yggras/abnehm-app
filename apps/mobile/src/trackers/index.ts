@@ -5,7 +5,7 @@
 // stehen im geteilten Modul `@abnehm/contracts/tracker-rules`.
 // Bildschirme (TSX) importieren die Routendateien direkt, etwa `WeightCaptureScreen` oder `SportCaptureScreen`: Die Node-Tests des
 // Backends laden diesen Index und kennen kein JSX.
-export { appTrackers, appWeightDetail, useAppTrackers } from './app-trackers';
+export { appSportWeeks, appTrackers, appWeightDetail, useAppTrackers } from './app-trackers';
 export { createTrackers, type TrackerDependencies, type Trackers } from './trackers';
 export { InvalidTrackerInputError } from './invalid-input';
 export type { HealthImportBatch } from './health-import';
