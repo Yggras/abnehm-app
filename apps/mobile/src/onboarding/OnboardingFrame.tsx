@@ -58,7 +58,12 @@ export function OnboardingFrame({ step, title, onBack, primary, secondary, child
 
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+      {/*
+        `padding` auch auf Android: Im Emulator `medium_phone` (Android-Development-Build, 18.11.2026, #141)
+        schrumpfte das Fenster bei offener Tastatur nicht, und ohne `behavior` lagen „Weiter“ und das
+        Gewichtsfeld unter ihr. Mit `padding` stehen beide darüber.
+      */}
+      <KeyboardAvoidingView behavior="padding" style={styles.screen}>
         <View style={styles.bar}>
           {onBack === undefined ? null : <IconButton icon="back" accessibilityLabel={shellTexts.back} onPress={onBack} />}
           <View style={styles.progress}>
