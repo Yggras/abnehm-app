@@ -121,9 +121,18 @@ test('schlüpft Momo, während die Person einen anderen Bildschirm sieht, ersche
   await act(() => world.hatch());
 
   // Auch im verdeckten, aber gemounteten Bildschirm darf das Sheet nicht aufgehen.
-  expect(screen.queryByText('So wächst Momo', { includeHiddenElements: true })).toBeNull();
+  expect(screen.queryByTestId('sheet', { includeHiddenElements: true })).toBeNull();
 
   await act(() => router.back());
+  expect(screen.getByRole('header', { name: 'So wächst Momo' })).toBeOnTheScreen();
+});
+
+test('der Levelbalken öffnet „So wächst Momo“ als zweiter Einstieg neben Momo', async () => {
+  await openHatched();
+  await user.press(screen.getByRole('button', { name: 'Verstanden' }));
+
+  await user.press(screen.getByRole('progressbar', { name: 'Level 1' }));
+
   expect(screen.getByRole('header', { name: 'So wächst Momo' })).toBeOnTheScreen();
 });
 

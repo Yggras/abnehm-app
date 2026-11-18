@@ -16,7 +16,8 @@ import { momoSheetTexts } from './texts';
 // Die geschlüpfte Insel im Tab „Momo“ (Spezifikation 4, Abschnitt 7; #184): die Inselansicht aus den
 // lokalen Daten, das Momo-Sheet nach einem Tipp auf Momo und beim ersten Öffnen einmalig „So wächst
 // Momo“. Beide teilen ein Sheet, denn Sheets in Sheets gibt es nicht (`design/native/Sheet.tsx`); aus
-// dem Momo-Sheet heraus wechselt der Inhalt zur Erklärung. Objekte zeigt die Insel mit dem Bauen (#191).
+// dem Momo-Sheet heraus wechselt der Inhalt zur Erklärung. Der Levelbalken öffnet die Erklärung als
+// zweiter Einstieg (Impeccable-Kritik zu #184). Objekte zeigt die Insel mit dem Bauen (#191).
 
 export type HatchedIslandScreenProps = Readonly<{
   island: HatchedIsland;
@@ -57,6 +58,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, onOpen, bottomIns
         energy={island.energy}
         onOpen={onOpen}
         onMomoPress={() => setSheet('momo')}
+        onLevelPress={() => setSheet('wachstum')}
         bottomInset={bottomInset}
       />
       <Sheet visible={sheet !== null} onClose={() => setSheet(null)}>

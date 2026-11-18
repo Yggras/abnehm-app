@@ -243,8 +243,15 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   };
 }
 
-/** Momos Kopf über der Feldmitte in halben Feldhöhen: 28 von 16 dp bei Zoom 1 (Vorzeichnung in `IslandArt.tsx`). */
-const momoHeadHeight = 28 / 16;
+/**
+ * Momos Trefferfläche bei Zoom 1: ein Quadrat von 44 × 44 dp um die Figur, die mittig 12 dp über der
+ * Feldmitte steht (Vorzeichnung in `IslandArt.tsx`: von 28 dp darüber bis 4 dp darunter). 44 × 44 pt ist
+ * laut Apple HIG die Standardgröße von Bedienelementen auf iOS, das Minimum 28 × 28 pt
+ * (https://developer.apple.com/design/human-interface-guidelines/accessibility, „Mobility“).
+ * Vorher deckte die Fläche nur die Figur ab; ein Tipp an Momos Kopfkante traf im Android-Emulator das Feld
+ * dahinter (Impeccable-Kritik zu #184).
+ */
+const momoHit = { lift: 12, half: 22 } as const;
 
 /** Isometrische Projektion 2:1: Feld `island-tile` breit und halb so hoch, jeweils mal Zoom. */
 function projection(zoom: number) {
@@ -256,15 +263,11 @@ function projection(zoom: number) {
     depth: halfHeight,
     /** Punkt der Inselebene zu Rasterkoordinaten, auch zwischen den Feldern. */
     point: top,
-    /**
-     * Ob ein Punkt Momo auf seinem Feld trifft: ein Rechteck, so breit wie eine halbe Raute, von Momos
-     * Kopf (28 dp über der Feldmitte bei Zoom 1, wie die Vorzeichnung in `IslandArt.tsx`) bis eine viertel
-     * Feldhöhe unter die Mitte. So zählt auch der Kopf über der Raute (Designwert aus #184, nicht belegt).
-     */
+    /** Ob ein Punkt Momo auf seinem Feld trifft (`momoHit`, mit dem Zoom skaliert). */
     onMomo(cell: Cell, point: Point): boolean {
       const { x, y } = top(cell);
-      const middle = { x, y: y + halfHeight };
-      return Math.abs(point.x - middle.x) <= halfWidth / 2 && point.y >= middle.y - momoHeadHeight * halfHeight && point.y <= middle.y + halfHeight / 2;
+      const figure = { x, y: y + halfHeight - momoHit.lift * zoom };
+      return Math.abs(point.x - figure.x) <= momoHit.half * zoom && Math.abs(point.y - figure.y) <= momoHit.half * zoom;
     },
     /** Raute eines Felds im Uhrzeigersinn ab der oberen Ecke. */
     diamond(cell: Cell): Polygon {

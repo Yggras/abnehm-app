@@ -24,6 +24,8 @@ export type IslandViewProps = {
   onFieldPress?: (hit: Exclude<SceneHit, { type: 'momo' }>) => void;
   /** Ein Tipp auf Momo; öffnet das Momo-Sheet (#184). */
   onMomoPress?: () => void;
+  /** Ein Tipp auf den Levelbalken; öffnet „So wächst Momo“ (#184). */
+  onLevelPress?: () => void;
   /** Wie weit Leisten des Rahmens unten über der Insel liegen, etwa die Tab-Leiste. */
   bottomInset?: number;
 };
@@ -33,7 +35,7 @@ export type IslandViewProps = {
  * HUD, unten die Leiste. Die Szene folgt der lokalen Uhrzeit der betrachtenden Person und dem
  * Schalter „Bereiche“.
  */
-export function IslandView({ island, progress, viewerPersonId, partnerName, energy, onOpen, onFieldPress, onMomoPress, bottomInset = 0 }: IslandViewProps) {
+export function IslandView({ island, progress, viewerPersonId, partnerName, energy, onOpen, onFieldPress, onMomoPress, onLevelPress, bottomInset = 0 }: IslandViewProps) {
   const localTime = useLocalTime(useClock());
   const [areas, setAreas] = useState(false);
   const [selectedField, setSelectedField] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export function IslandView({ island, progress, viewerPersonId, partnerName, ener
           partnerName={partnerName}
           areas={areas}
           onToggleAreas={() => setAreas((on) => !on)}
+          onLevelPress={onLevelPress}
         />
       </View>
       <View style={[styles.bottom, { paddingBottom: bottomInset + space[3] }]} pointerEvents="box-none">

@@ -15,7 +15,7 @@ import { islandLayout } from '../layout';
 // gesperrten Gebiets unter Nebel. Alle Werte sind synthetisch; Objekte, Hälften und das Gebiet sind
 // Designwerte für den Lastrahmen.
 
-export type RichIsland = Omit<IslandViewProps, 'onOpen' | 'onFieldPress' | 'onMomoPress' | 'bottomInset'>;
+export type RichIsland = Omit<IslandViewProps, 'onOpen' | 'onFieldPress' | 'onMomoPress' | 'onLevelPress' | 'bottomInset'>;
 
 const philipp = EntityId.parse(seedIds.person.philipp);
 const anna = EntityId.parse(seedIds.person.anna);

@@ -94,3 +94,18 @@ test('der Schalter hat mindestens 48 × 48 dp Trefferfläche', async () => {
   expect(area.width).toBeGreaterThanOrEqual(48);
   expect(area.height).toBeGreaterThanOrEqual(48);
 });
+
+test('der Levelbalken öffnet „So wächst Momo“ und sagt das sichtbar an (#184)', async () => {
+  const onLevelPress = jest.fn();
+  await render(hud({ onLevelPress }));
+
+  expect(screen.getByText('So wächst Momo')).toBeOnTheScreen();
+  await userEvent.press(screen.getByRole('progressbar', { name: 'Level 6' }));
+  expect(onLevelPress).toHaveBeenCalledTimes(1);
+});
+
+test('ohne Handler bleibt der Levelbalken reine Anzeige', async () => {
+  await render(hud());
+
+  expect(screen.queryByText('So wächst Momo')).not.toBeOnTheScreen();
+});

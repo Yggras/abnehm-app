@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { boxShadow, color, EnergySymbol, Icon, IconButton, LevelBar, radius, space, Text, useLargeTextLayout } from '../design';
 import { halvesFor } from './halves';
 import type { Daytime } from './scene-model';
-import { islandTexts } from './texts';
+import { islandTexts, momoSheetTexts } from './texts';
 
 export type IslandHudProps = {
   season: Season;
@@ -18,6 +18,8 @@ export type IslandHudProps = {
   /** Bereichsansicht eingeschaltet. */
   areas: boolean;
   onToggleAreas: () => void;
+  /** Öffnet „So wächst Momo“; ohne Handler bleibt der Levelbalken reine Anzeige (#184). */
+  onLevelPress?: () => void;
 };
 
 /**
@@ -26,7 +28,7 @@ export type IslandHudProps = {
  * damit sie nicht wie Buttons aussehen (Impeccable-Prüfung, B19). Ab Schriftfaktor 1,3 bricht die
  * obere Zeile um (B12).
  */
-export function IslandHud({ season, daytime, energy, progress, viewerPersonId, partnerName, areas, onToggleAreas }: IslandHudProps) {
+export function IslandHud({ season, daytime, energy, progress, viewerPersonId, partnerName, areas, onToggleAreas, onLevelPress }: IslandHudProps) {
   const large = useLargeTextLayout();
   const { own, partner } = halvesFor(progress, viewerPersonId);
   return (
@@ -50,6 +52,7 @@ export function IslandHud({ season, daytime, energy, progress, viewerPersonId, p
           ownPercent={own.halfPercent}
           partnerPercent={partner.halfPercent}
           partnerName={partnerName}
+          action={onLevelPress && { label: momoSheetTexts.growth, onPress: onLevelPress }}
         />
       </View>
     </View>
