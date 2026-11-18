@@ -100,3 +100,4 @@ manifestSuite('tage_ohne_app_oeffnung');
 manifestSuite('zeitzonen_reisen');
 manifestSuite('haelfte-voll');
 manifestSuite('doppelausgabe');
+manifestSuite('feldkonflikt');

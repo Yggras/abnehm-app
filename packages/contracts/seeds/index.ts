@@ -4,7 +4,7 @@ import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { soloManifests } from './solo.ts';
-import { doppelausgabeManifest, haelfteVollManifest, rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
+import { doppelausgabeManifest, feldkonfliktManifest, haelfteVollManifest, rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
 import { syncSzenarioManifests } from './sync-szenarien.ts';
 import { tageszielManifests } from './tagesziele.ts';
 import { veralteterPartnerstandManifest } from './veralteter-partnerstand.ts';
@@ -49,6 +49,7 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   'rollenwahl-offen': rollenwahlOffenManifest,
   'haelfte-voll': haelfteVollManifest,
   doppelausgabe: doppelausgabeManifest,
+  feldkonflikt: feldkonfliktManifest,
   ...randzustandManifests,
   veralteter_partnerstand: veralteterPartnerstandManifest,
   ...syncSzenarioManifests,

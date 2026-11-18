@@ -192,6 +192,24 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
       expect(islandOf(phone).objects).toHaveLength(20 + 8);
     }
   });
+
+  it('feldkonflikt: Beide Geräte stellen offline auf dasselbe Feld; nach dem Sync liegt die zuerst platzierte Laterne auf beiden im Lager (#194)', { timeout: 30_000 }, async () => {
+    const world = await seeded(seedManifests.feldkonflikt);
+    const [iphone, ipad] = [world.phones['philipp-iphone']!, world.phones['philipp-ipad']!];
+    const [first, second] = [seedIds.islandObject(1), seedIds.islandObject(2)];
+    const at = (phone: Phone, id: string) => islandOf(phone).objects.find((object) => object.id === id)?.fieldKey;
+    // Offline steht auf jedem Gerät die eigene Laterne auf `grundinsel:2:2`.
+    expect(at(iphone, first)).toBe('grundinsel:2:2');
+    expect(at(ipad, second)).toBe('grundinsel:2:2');
+
+    await runSyncSteps(seedManifests.feldkonflikt, world);
+
+    for (const phone of [iphone, ipad]) {
+      expect(at(phone, second)).toBe('grundinsel:2:2');
+      expect(islandOf(phone).storage.map((object) => object.id)).toEqual([first]);
+      expect(islandOf(phone).energy).toBe(23);
+    }
+  });
 });
 
 function islandOf(phone: Phone) {

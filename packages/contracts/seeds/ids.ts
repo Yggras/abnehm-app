@@ -53,7 +53,7 @@ const planVersionIds = (idOf: (personId: EntityId, validFrom: LocalDate) => Enti
 export const seedIds = {
   account: { philipp: id('0001', 1), anna: id('0001', 2) },
   person,
-  /** `philippIpad` ist Philipps zweites Gerät, nur in den Szenarien `zwei_installationen` (#116) und `doppelausgabe` (#191). */
+  /** `philippIpad` ist Philipps zweites Gerät, nur in `zwei_installationen` (#116), `doppelausgabe` (#191) und `feldkonflikt` (#194). */
   installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2), philippIpad: id('0003', 3) },
   goalVersion: planVersionIds(goalVersionId),
   weeklyPlanVersion: planVersionIds(weeklyPlanVersionId),
@@ -125,6 +125,8 @@ export const seedIds = {
       iphone: Array.from({ length: 4 }, (_, index) => id('0090', 42 + index)),
       ipad: Array.from({ length: 4 }, (_, index) => id('0090', 46 + index)),
     },
+    /** Offline-Platzierungen in `feldkonflikt` (#194): je Gerät eine. */
+    feldkonflikt: { iphone: id('0090', 50), ipad: id('0090', 51) },
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */
@@ -143,6 +145,8 @@ export const seedIds = {
   /** Gebaute Objekte (#191) und die IDs ihrer Spielbefehle, je Bau dieselbe laufende Nummer. */
   islandObject: (n: number) => id('0053', n),
   buildCommand: (n: number) => id('0054', n),
+  /** IDs der Spielbefehle `placeObject` (#194), fortlaufend. */
+  placeCommand: (n: number) => id('0055', n),
   partnerSharing: {
     philipp: { ernaehrung: id('0043', 1), wasser: id('0043', 2), sport: id('0043', 3), gewicht: id('0043', 4) },
     anna: { ernaehrung: id('0043', 5), wasser: id('0043', 6), sport: id('0043', 7), gewicht: id('0043', 8) },
