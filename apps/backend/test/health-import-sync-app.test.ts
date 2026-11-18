@@ -108,6 +108,40 @@ describe('Health-Import über zwei Geräte derselben Person', () => {
     expect(weights(b)).toHaveLength(1);
   });
 
+  it('Ausblenden und überschriebene Art reisen auf das zweite Gerät und überdauern dort einen eigenen Import (#186)', async () => {
+    const phones = await sameAccountPhones(start);
+    closes.push(phones.close);
+    const { backend, anna, a, b } = phones;
+    const personId = EntityId.parse(anna.personId);
+    const onA = healthOf(a);
+    const onB = healthOf(b);
+    fill(onA.fake);
+    fill(onB.fake);
+    await onA.health.connect();
+    await onA.health.idle();
+    await a.sync();
+    await b.sync();
+    const sportId = importedSportEntryId(personId, 'apple_health', '5B0E3F6A-2C1D-4E8F-9A7B-3C2D1E0F9A8B');
+    const weightId = importedWeightEntryId(personId, 'apple_health', '3F2B8C1E-7D4A-4B9E-8A1F-6C5D4E3B2A10');
+
+    a.trackers.expire(a.trackers.overrideActivityType(sportId, 'krafttraining').undoToken);
+    a.trackers.expire(a.trackers.hideImported(weightId).undoToken);
+    await a.sync();
+    await b.sync();
+
+    expect(await backend.database.db.select().from(sportEntry)).toEqual([expect.objectContaining({ id: sportId, activityType: 'laufen', overrideActivityType: 'krafttraining' })]);
+    expect(await backend.database.db.select().from(weightEntry)).toEqual([expect.objectContaining({ id: weightId, hiddenAt: expect.any(Date) })]);
+    expect(sports(b)).toEqual([expect.objectContaining({ id: sportId, activityType: 'laufen', overrideActivityType: 'krafttraining', hiddenAt: null })]);
+    expect(weights(b)).toEqual([expect.objectContaining({ id: weightId, weightG: 82_437, hiddenAt: expect.any(String) })]);
+
+    // Gerät B importiert danach dieselben Datensätze selbst: Ausblendung und Art bleiben, nichts zu pushen.
+    await onB.health.connect();
+    await onB.health.idle();
+    expect(sports(b)).toEqual([expect.objectContaining({ id: sportId, overrideActivityType: 'krafttraining' })]);
+    expect(weights(b)).toEqual([expect.objectContaining({ id: weightId, hiddenAt: expect.any(String) })]);
+    expect(await b.sync()).toEqual({ push: 'nothing_to_do', pull: 'done' });
+  });
+
   it('nimmt importierte Gewichte nur mit externem Schlüssel und im Bereich 20–350 kg an', async () => {
     const phones = await sameAccountPhones(start);
     closes.push(phones.close);

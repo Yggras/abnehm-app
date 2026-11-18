@@ -1,7 +1,7 @@
 import { BausteinKey, DisplayName, type MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
-import { SportMessageValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
+import { ImportedSportMessageValues, ImportedWeightMessageValues, SportMessageValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
@@ -67,6 +67,16 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'sport.geloescht': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} gelöscht`,
   })),
+  /** Spezifikation 3: importiertes Training ohne Bestätigungsdialog ausgeblendet („52 min Radfahren ausgeblendet · Rückgängig“; #186). */
+  'sport.ausgeblendet': messageText(ImportedSportMessageValues, ({ activityType, durationMinutes }) => ({
+    text: `${durationMinutes} min ${activityNames[activityType]} ausgeblendet`,
+  })),
+  /** Spezifikation 3: Aktivitätsart eines importierten Trainings geändert („52 min Krafttraining gespeichert · Rückgängig“; #186). */
+  'sport.art_geaendert': messageText(ImportedSportMessageValues, ({ activityType, durationMinutes }) => ({
+    text: `${durationMinutes} min ${activityNames[activityType]} gespeichert`,
+  })),
+  /** Spezifikation 3: importiertes Gewicht ohne Bestätigungsdialog ausgeblendet („82,4 kg ausgeblendet · Rückgängig“; #186). */
+  'gewicht.ausgeblendet': messageText(ImportedWeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg ausgeblendet` })),
   /**
    * Spezifikation 4: Momos Reaktion auf neue eigene Gutschriften eines Commits, als eine Meldung (#188):
    * „Wasserziel erfüllt · +1 Energie“ und „Alle drei geschafft · +1 Energie“ wie in Abschnitt 6. Kommen

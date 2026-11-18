@@ -110,7 +110,7 @@ test('zeigt den Wochenbalken „X von Wochenziel min“ als Fortschrittsanzeige 
   expect(screen.queryByText('Schwimmen')).not.toBeOnTheScreen();
 });
 
-test('zeigt importierte Einträge mit Herkunftsabzeichen und ohne Bearbeiten', async () => {
+test('zeigt importierte Einträge mit Herkunftsabzeichen; sie öffnen das schreibgeschützte Sheet statt des Formulars (#186)', async () => {
   const world = await open({ units: [] });
   await act(async () => {
     world.trackers.importHealth(
@@ -139,8 +139,13 @@ test('zeigt importierte Einträge mit Herkunftsabzeichen und ohne Bearbeiten', a
   });
 
   expect(screen.getByText('Health Connect')).toBeOnTheScreen();
-  expect(screen.getByText('17:00 · Fitbit')).toBeOnTheScreen();
-  expect(screen.getByLabelText('Sonstiges, 45 min, 17:00 · Fitbit, Health Connect').props.accessibilityRole).not.toBe('button');
+  // Die bekannte Kennung von Google Health hat Vorrang vor dem gelieferten Namen (Spezifikation 3, Abschnitt 6).
+  expect(screen.getByText('17:00 · Google Health (Fitbit)')).toBeOnTheScreen();
+  await user.press(screen.getByRole('button', { name: 'Sonstiges, 45 min, 17:00 · Google Health (Fitbit), Health Connect' }));
+  const sheet = within(screen.getByTestId('sheet'));
+  expect(sheet.getByRole('header', { name: 'Training aus Health Connect' })).toBeOnTheScreen();
+  expect(sheet.queryByLabelText('Dauer')).not.toBeOnTheScreen();
+  expect(sheet.queryByRole('button', { name: 'Speichern' })).not.toBeOnTheScreen();
 });
 
 test('blättert in die Vergangenheit und zurück, aber nicht über die laufende Woche hinaus', async () => {

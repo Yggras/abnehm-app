@@ -8,6 +8,7 @@ import { openTarget } from '../navigation';
 import { activityNames } from '../shell/texts';
 import { activityIcons } from './activity-icons';
 import { originNames } from './entry-texts';
+import { ImportedEntrySheet, type ImportedSheetTrackers } from './ImportedEntrySheet';
 import { SportEntryForm, type EditedSport, type SportFormTrackers } from './SportEntryForm';
 import { sportTexts } from './sport-texts';
 import type { SportDay, SportListEntry, SportWeek } from './sport-week';
@@ -15,12 +16,13 @@ import type { SportDay, SportListEntry, SportWeek } from './sport-week';
 // Inhalt des Sport-Detailbildschirms `capture.sport` (Spezifikation 3, Abschnitt 5; #38), von oben nach
 // unten: Wochenwechsel, Wochenbalken „X von Wochenziel min“ (Montag bis Sonntag), „+ Einheit“ und die
 // Einträge nach Tag. Geblättert wird nur in die Vergangenheit und zurück bis zur laufenden Woche. Manuelle
-// Einheiten öffnen das Bearbeitungs-Sheet; nirgends gibt es einen Bestätigungsdialog. Importierte zeigen
-// ihre Herkunft; ihr schreibgeschütztes Sheet und das Abzeichen „ersetzt“ liefern #185 und #186.
+// Einheiten öffnen das Bearbeitungs-Sheet, importierte ihr schreibgeschütztes Sheet mit „Aktivitätsart
+// ändern“ und „Ausblenden“ (#186); nirgends gibt es einen Bestätigungsdialog. Das Abzeichen „ersetzt“
+// liefert #185.
 
 export type SportWeekContentProps = {
   week: SportWeek;
-  trackers: SportFormTrackers;
+  trackers: SportFormTrackers & ImportedSheetTrackers;
   /** Blättert zur Woche, die diesen Tag enthält; `null` ist die laufende Woche. */
   onWeek: (day: LocalDate | null) => void;
 };
@@ -29,6 +31,7 @@ const addTarget = { type: 'capture.sport', newEntry: true } as const;
 
 export function SportWeekContent({ week, trackers, onWeek }: SportWeekContentProps) {
   const [editing, setEditing] = useState<EditedSport | null>(null);
+  const [viewing, setViewing] = useState<SportListEntry | null>(null);
   return (
     <>
       <WeekSwitch week={week} onWeek={onWeek} />
@@ -38,11 +41,22 @@ export function SportWeekContent({ week, trackers, onWeek }: SportWeekContentPro
           <Text>{sportTexts.empty(week.isCurrent)}</Text>
         </Card>
       ) : (
-        week.days.map((day) => <DayGroup key={day.localDate} day={day} today={week.today} onEdit={setEditing} />)
+        week.days.map((day) => <DayGroup key={day.localDate} day={day} today={week.today} onEdit={setEditing} onView={setViewing} />)
       )}
       <Sheet visible={editing !== null} onClose={() => setEditing(null)} height="full">
         {editing !== null ? (
           <SportEntryForm key={editing.id} trackers={trackers} entry={editing} title={sportTexts.editTitle} onSaved={() => setEditing(null)} />
+        ) : null}
+      </Sheet>
+      <Sheet visible={viewing !== null} onClose={() => setViewing(null)} height="full">
+        {viewing !== null ? (
+          <ImportedEntrySheet
+            key={viewing.id}
+            imported={{ type: 'training', entry: viewing }}
+            today={week.today}
+            trackers={trackers}
+            onDone={() => setViewing(null)}
+          />
         ) : null}
       </Sheet>
     </>
@@ -105,7 +119,9 @@ function WeekSwitch({ week, onWeek }: Pick<SportWeekContentProps, 'week' | 'onWe
   );
 }
 
-function DayGroup({ day, today, onEdit }: { day: SportDay; today: SportWeek['today']; onEdit: (entry: EditedSport) => void }) {
+type EntryActions = Readonly<{ onEdit: (entry: EditedSport) => void; onView: (entry: SportListEntry) => void }>;
+
+function DayGroup({ day, today, onEdit, onView }: { day: SportDay; today: SportWeek['today'] } & EntryActions) {
   return (
     <View style={styles.day}>
       <Text variant="label" tone="inkMuted" accessibilityRole="header">
@@ -113,14 +129,14 @@ function DayGroup({ day, today, onEdit }: { day: SportDay; today: SportWeek['tod
       </Text>
       <ListGroup>
         {day.entries.map((entry) => (
-          <EntryRow key={entry.id} entry={entry} onEdit={onEdit} />
+          <EntryRow key={entry.id} entry={entry} onEdit={onEdit} onView={onView} />
         ))}
       </ListGroup>
     </View>
   );
 }
 
-function EntryRow({ entry, onEdit }: { entry: SportListEntry; onEdit: (entry: EditedSport) => void }) {
+function EntryRow({ entry, onEdit, onView }: { entry: SportListEntry } & EntryActions) {
   const imported = entry.origin !== 'manuell';
   return (
     <ListRow
@@ -130,7 +146,7 @@ function EntryRow({ entry, onEdit }: { entry: SportListEntry; onEdit: (entry: Ed
       subtitle={sportTexts.details(entry)}
       tag={imported ? originNames[entry.origin] : undefined}
       accessibilityLabel={sportTexts.entrySpoken(entry)}
-      onPress={imported ? undefined : () => onEdit(editedOf(entry))}
+      onPress={imported ? () => onView(entry) : () => onEdit(editedOf(entry))}
     />
   );
 }

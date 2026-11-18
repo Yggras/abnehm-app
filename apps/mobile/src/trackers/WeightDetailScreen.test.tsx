@@ -115,7 +115,7 @@ test('listet alle Messungen mit Herkunft und kennzeichnet das Tagesgewicht', asy
   expect(screen.getByRole('button', { name: '80,0 kg, 12.10. · 07:30 · Tagesgewicht · Manuell' })).toBeOnTheScreen();
 });
 
-test('zeigt importierte Messungen mit Herkunft und Quell-App, ohne Bearbeiten', async () => {
+test('zeigt importierte Messungen mit Herkunft und Quell-App; sie öffnen das schreibgeschützte Sheet (#186)', async () => {
   const world = await open({ weighings: falling });
   await act(async () => {
     world.trackers.importHealth(
@@ -131,9 +131,10 @@ test('zeigt importierte Messungen mit Herkunft und Quell-App, ohne Bearbeiten', 
     );
   });
 
-  expect(screen.getByLabelText('79,4 kg, gestern · 07:00 · Tagesgewicht · Withings, Apple Health')).toBeOnTheScreen();
-  expect(screen.queryByRole('button', { name: /^79,4 kg/ })).not.toBeOnTheScreen();
   expect(screen.getByText('Apple Health')).toBeOnTheScreen();
+  await user.press(screen.getByRole('button', { name: '79,4 kg, gestern · 07:00 · Tagesgewicht · Withings, Apple Health' }));
+  expect(within(screen.getByTestId('sheet')).getByRole('header', { name: 'Gewicht aus Apple Health' })).toBeOnTheScreen();
+  expect(within(screen.getByTestId('sheet')).queryByRole('textbox')).not.toBeOnTheScreen();
 });
 
 test('unter drei Tagesgewichten: Tagesgewicht und der Satz zum Trend, ohne Trendwerte', async () => {

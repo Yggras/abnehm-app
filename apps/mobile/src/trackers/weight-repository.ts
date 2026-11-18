@@ -89,7 +89,8 @@ export type WeightRow = WeightEntryFacts &
   Readonly<{
     id: string;
     origin: WeightOrigin;
-    /** Anzeigename der Quell-App eines Imports, falls bekannt. */
+    /** Kennung und Anzeigename der Quell-App eines Imports, falls bekannt. */
+    sourceAppId: string | null;
     sourceAppName: string | null;
     /** Zone der Anlage; in ihr gilt der lokale Tag des Eintrags. */
     timeZone: string;
@@ -104,6 +105,7 @@ export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightRow[
     .select({
       id: weightEntry.id,
       origin: weightEntry.origin,
+      sourceAppId: weightEntry.sourceAppId,
       sourceAppName: weightEntry.sourceAppName,
       timeZone: weightEntry.timeZone,
       weightG: weightEntry.weightG,
@@ -135,7 +137,7 @@ export function readImportedWeight(tx: ReadContext, entityId: EntityId): StoredI
     timeZone: row.timeZone,
     utcOffsetMinutes: row.utcOffsetMinutes,
   });
-  return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
+  return { personId: EntityId.parse(row.personId), payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
 }
 
 /** Nicht gelöschte Importe einer Person aus einer Herkunft: externer Schlüssel und Messzeitpunkt. */

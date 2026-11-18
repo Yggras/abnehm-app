@@ -135,6 +135,7 @@ export type SportRow = SportEntryFacts &
     startedAt: string;
     timeZone: string;
     activeMilliKcal: number | null;
+    sourceAppId: string | null;
     sourceAppName: string | null;
   }>;
 
@@ -146,6 +147,7 @@ const rowColumns = {
   startedAt: sportEntry.startedAt,
   durationMinutes: sportEntry.durationMinutes,
   activeMilliKcal: sportEntry.activeMilliKcal,
+  sourceAppId: sportEntry.sourceAppId,
   sourceAppName: sportEntry.sourceAppName,
   localDate: sportEntry.localDate,
   timeZone: sportEntry.timeZone,
@@ -193,7 +195,7 @@ export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredIm
     timeZone: row.timeZone,
     utcOffsetMinutes: row.utcOffsetMinutes,
   });
-  return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
+  return { personId: EntityId.parse(row.personId), payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
 }
 
 /** Nicht gelöschte Importe einer Person aus einer Herkunft: externer Schlüssel und Beginn. */

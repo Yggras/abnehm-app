@@ -33,7 +33,8 @@ export type WeightHistoryEntry = Readonly<{
   /** Zone der Anlage; in ihr zeigt der Verlauf die Uhrzeit. */
   timeZone: TimeZone;
   origin: WeightOrigin;
-  /** Anzeigename der Quell-App eines Imports, falls bekannt. */
+  /** Kennung und Anzeigename der Quell-App eines Imports, falls bekannt. */
+  sourceAppId: string | null;
   sourceAppName: string | null;
   /** Die früheste zählende Messung ihres Tags. */
   isDayWeight: boolean;
@@ -118,6 +119,7 @@ function historyOf(rows: readonly WeightRow[]): WeightHistoryEntry[] {
       localDate: LocalDate.parse(row.localDate),
       timeZone: TimeZone.parse(row.timeZone),
       origin: row.origin,
+      sourceAppId: row.sourceAppId,
       sourceAppName: row.sourceAppName,
       isDayWeight: dayWeightIds.has(row.id),
     }))

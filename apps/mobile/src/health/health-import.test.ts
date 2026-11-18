@@ -643,3 +643,40 @@ describe('Quell-Apps', () => {
     expect((await world.health.platform.recentOrigins(30)).map(({ sourceApp }) => sourceApp.id)).not.toContain('com.fitbit.FitbitMobile');
   });
 });
+
+describe('Korrekturen der Person überdauern Änderungen in der Quelle (#186)', () => {
+  it('Szenario `korrekturen`: ein ausgeblendeter und ein umbenannter Import, danach ein Upsert aus der Quelle', async () => {
+    const world = await healthWorld();
+    await applyHealthScenario(world.fake, 'korrekturen', world.clock);
+    await connected(world);
+    const sportId = (key: string) => importedSportEntryId(philipp, 'apple_health', key);
+    const scale = importedWeightEntryId(philipp, 'apple_health', 'gewicht-korrektur');
+    expect(byKey(imports(world).sports, 'training-fehlaufnahme')).toMatchObject({ activityType: 'gehen', durationMinutes: 12 });
+    expect(byKey(imports(world).sports, 'training-falsch-erkannt')).toMatchObject({ activityType: 'radfahren', durationMinutes: 45 });
+
+    world.trackers.expire(world.trackers.hideImported(sportId('training-fehlaufnahme')).undoToken);
+    world.trackers.expire(world.trackers.overrideActivityType(sportId('training-falsch-erkannt'), 'krafttraining').undoToken);
+    world.trackers.expire(world.trackers.hideImported(scale).undoToken);
+
+    world.clock.advanceBy(3_600_000);
+    await applyHealthScenario(world.fake, 'korrekturen_quelle', world.clock);
+    await world.health.importNow();
+
+    const { sports, weights } = imports(world);
+    expect(byKey(sports, 'training-fehlaufnahme')).toMatchObject({ durationMinutes: 14, hiddenAt: noon, deletedAt: null });
+    expect(byKey(sports, 'training-falsch-erkannt')).toMatchObject({ durationMinutes: 48, activityType: 'laufen', overrideActivityType: 'krafttraining', hiddenAt: null });
+    expect(byKey(weights, 'gewicht-korrektur')).toMatchObject({ weightG: 82_512, hiddenAt: noon, deletedAt: null });
+    expect(world.errors).toEqual([]);
+
+    // Gezählt und gezeigt wird nur das umbenannte Training, mit der überschriebenen Art.
+    const planReader = fakeAreaPorts({ planReader: fakePlanReader({ goals: [], weeklyPlans: [] }) }).planReader;
+    let week: unknown;
+    const stop = world.trackers.sportWeek(planReader, () => () => {}, null).subscribe((state) => (week = state));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(week).toMatchObject({
+      type: 'ready',
+      week: { weekMinutes: 48, days: [{ entries: [{ id: sportId('training-falsch-erkannt'), activityType: 'krafttraining', recognizedActivityType: 'laufen' }] }] },
+    });
+    stop();
+  });
+});
