@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { localDateAfter } from '@abnehm/contracts/base';
 
@@ -54,12 +54,14 @@ export function SportWeekContent({ week, trackers, onWeek }: SportWeekContentPro
       )}
       <Sheet visible={editing !== null} onClose={() => setEditing(null)} height="full">
         {editing !== null ? (
-          <View style={styles.sheet}>
+          // Das Formular ist höher als das Sheet auf dem iPhone SE; das Sheet selbst scrollt nicht.
+          // Tipps erreichen „Speichern“ auch bei offener Tastatur (wie `ScreenFrame`).
+          <ScrollView testID="sheet-scroll" contentContainerStyle={styles.sheet} keyboardShouldPersistTaps="handled">
             <Text variant="title" accessibilityRole="header">
               {sportTexts.editTitle}
             </Text>
             <SportEntryForm key={editing.id} trackers={trackers} entry={editing} onSaved={() => setEditing(null)} />
-          </View>
+          </ScrollView>
         ) : null}
       </Sheet>
     </>
@@ -124,5 +126,5 @@ const styles = StyleSheet.create({
   switch: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   title: { flex: 1, textAlign: 'center' },
   day: { gap: space[2] },
-  sheet: { gap: space[4] },
+  sheet: { gap: space[4], paddingBottom: space[6] },
 });

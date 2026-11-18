@@ -207,6 +207,18 @@ describe('Bearbeitungs-Sheet', () => {
     expect(world.sports().find((row) => row.startedAt === '2026-10-14T09:00:00.000Z')).toMatchObject({ durationMinutes: 30 });
   });
 
+  test('scrollt, weil das Formular höher ist als das Sheet auf dem iPhone SE (Gerätelauf)', async () => {
+    await open();
+
+    await user.press(runRow());
+
+    const scroll = within(screen.getByTestId('sheet')).getByTestId('sheet-scroll');
+    // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
+    expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
+    expect(within(scroll).getByRole('button', { name: 'Speichern' })).toBeOnTheScreen();
+    expect(within(scroll).getByRole('button', { name: 'Löschen' })).toBeOnTheScreen();
+  });
+
   test('„Löschen“ löscht ohne Bestätigungsdialog; „Rückgängig“ legt die Einheit neu an', async () => {
     const world = await open();
 
