@@ -453,7 +453,7 @@ function ConversionStep({
             {snapshot.name}
           </Text>
         </View>
-        <IconButton icon="close" accessibilityLabel={texts.back} onPress={onBack} />
+        <IconButton icon="back" accessibilityLabel={texts.back} onPress={onBack} />
       </View>
       {missing.length > 1 ? (
         <View style={styles.units}>

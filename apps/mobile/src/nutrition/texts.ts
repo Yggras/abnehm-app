@@ -178,6 +178,9 @@ export const nutritionTexts = {
     protein: 'Eiweiß',
     carbs: 'Kohlenhydrate',
     fat: 'Fett',
+    macros: 'Eiweiß, Kohlenhydrate und Fett',
+    /** Satz über „Speichern“, wenn Felder Probleme haben, etwa „Prüfe die markierten Felder: Energie, Fett.“ */
+    checkFields: (labels: readonly string[]) => `Prüfe ${labels.length === 1 ? 'das markierte Feld' : 'die markierten Felder'}: ${labels.join(', ')}.`,
     conversions: 'Stück und Portion',
     conversionsHint: 'Optional. Trag nur ein, was du weißt; die App schätzt nichts.',
     conversionAmount: (unit: 'stueck' | 'portion') => `${conversionNames[unit]} hat`,

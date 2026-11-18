@@ -322,11 +322,14 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
       expect(within(form()).getByText(problem, { includeHiddenElements: true })).toBeOnTheScreen();
     }
     expect(within(form()).getByLabelText('Name')).toHaveProp('accessibilityHint', 'Fehler: Gib einen Namen ein, etwa „Bircher-Müsli“.');
+    // „Speichern“ liegt unter den Feldern: Ein Satz darüber nennt die betroffenen Felder.
+    expect(within(form()).getByText('Prüfe die markierten Felder: Name, Energie, Kohlenhydrate.')).toBeOnTheScreen();
     expect(ownFoods()).toEqual([expect.objectContaining({ name: 'Bircher-Müsli, selbst gemacht' }), expect.objectContaining({ name: 'Apfel roh' })]);
 
     await fill('Kohlenhydrate', '0');
     await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
     expect(within(form()).getByText(/wiegen zusammen mehr als die Menge, für die die Werte gelten/)).toBeOnTheScreen();
+    expect(within(form()).getByText('Prüfe die markierten Felder: Name, Energie, Eiweiß, Kohlenhydrate und Fett.')).toBeOnTheScreen();
 
     await fill('Name', 'Linsen-Dal');
     await fill('Energie', '120');
