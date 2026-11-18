@@ -54,3 +54,10 @@ name: Rollenwahl annehmen, Momo schlüpft
     id: tab-momo
 - assertVisible: "Momos Insel, Level 1, 0 eigene Objekte"
 - assertNotVisible: "So wächst Momo"
+- takeScreenshot: schluepfen-4-insel-nach-tabwechsel
+
+# Zweiter Einstieg: Der Levelbalken öffnet „So wächst Momo“ erneut (Impeccable-Kritik zu #184).
+- tapOn: "So wächst Momo"
+- assertVisible: "Tagesziele bringen Energie."
+- takeScreenshot: schluepfen-5-levelbalken-erklaerung
+- tapOn: "Verstanden"
