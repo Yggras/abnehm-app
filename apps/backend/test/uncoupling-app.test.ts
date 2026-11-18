@@ -99,7 +99,7 @@ describe('Gemeinsame Aktionen und Entkoppeln App ↔ Backend', () => {
       ['Anna', 'archiviert'],
       ['Philipp', 'archiviert'],
     ]);
-    expect(archived.partner).toEqual({ dailyGoalStatus: null, summaries: [] });
+    expect(archived.partner).toEqual({ partner: null, dailyGoalStatus: null, summaries: [] });
 
     expect(await coupleByInvitation(backend, philipp.device, anna.device)).toEqual({ couplingId, reactivated: true });
     await philippsPhone.sync();

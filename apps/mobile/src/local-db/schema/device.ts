@@ -47,6 +47,11 @@ export const syncCursor = sqliteTable('sync_cursor', {
   cursor: text('cursor'),
   pageToken: text('page_token'),
   updatedAt: instant('updated_at').notNull(),
+  /**
+   * Zeitpunkt des letzten vollständigen Pulls, mit der letzten Seite geschrieben. Daran misst „Wir“, ob der
+   * Partnerstand veraltet ist (Spezifikation 5, Abschnitt 2; #121).
+   */
+  pulledAt: instant('pulled_at'),
 });
 
 /**

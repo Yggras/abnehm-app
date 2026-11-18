@@ -1,12 +1,13 @@
 import { AppState } from 'react-native';
 
 import { testCapabilities } from '../build-capabilities';
+import type { Refresh } from './followed-source';
 
 /**
  * Anstoß für Beiträge zu „Heute“, die ohne Datenbankänderung neu lesen, damit „heute“ zum nächsten
  * Tag wechselt: im Minutentakt und bei Rückkehr in den Vordergrund. Die Rückgabe beendet ihn.
  */
-export function todayRefresh(update: () => void): () => void {
+export const todayRefresh: Refresh = (update) => {
   const interval = setInterval(update, 60_000);
   const appState = AppState.addEventListener('change', (state) => {
     if (state === 'active') update();
@@ -15,7 +16,7 @@ export function todayRefresh(update: () => void): () => void {
     clearInterval(interval);
     appState.remove();
   };
-}
+};
 
 /**
  * Wie `todayRefresh`, in Test-Artefakten zusätzlich bei jedem Sprung der Testuhr (#114). Bereiche, die

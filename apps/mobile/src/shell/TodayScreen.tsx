@@ -13,6 +13,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useClock } from '../clock/clock-context';
 import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
+import { dataAgeOf, partnerHeadline, partnerTexts, standText } from '../partner';
+import { PartnerAvatar } from '../partner/PartnerAvatar';
+import { PartnerStage } from '../partner/PartnerStage';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
@@ -177,16 +180,35 @@ function Tracker({ label, value, of, status, detail, quick, quickLabel, progress
   </View>;
 }
 
-function Partner({ data }: { data: PartnerCardReady }) {
-  return <Card><Text variant="headline" accessibilityRole="header">Wir</Text>
-    {data.type === 'solo' ? <>
-      <Text>Momo wartet im Ei. Lade deinen Partner ein, wenn ihr gemeinsam starten möchtet.</Text>
-      <Button label="Partner einladen" variant="secondary" onPress={() => action(data.inviteAction)} />
-      <Button label="Code eingeben" variant="text" onPress={() => action(data.redeemAction)} />
-    </> : <>
-      <Text>{data.partnerDisplayName} · {({ noch_nichts: 'Startet heute', unterwegs: 'Ist unterwegs', fast_geschafft: 'Fast geschafft', geschafft: 'Heute geschafft' } as const)[data.dailyGoalStage]}</Text>
-      <Button label="Anfeuern" variant="secondary" onPress={() => action(data.encourageAction)} />
-    </>}
+/**
+ * Partner-Karte (Spezifikation 5, Abschnitt 3): gekoppelt nur Name, grober Tageszielstand und dessen Stand,
+ * nie Zusammenfassungen; veraltet neutral „Offline · letzter Stand …“ statt des allgemeinen Stale-Hinweises.
+ */
+function PartnerSlot({ registry }: { registry: TodayRegistry }) {
+  const state = useContribution(registry, 'partner');
+  if (state?.type === 'stale' && state.data.type === 'coupled') return <Partner data={state.data} stale />;
+  return <StateView state={state} slot="partner">{(data) => <Partner data={data as PartnerCardReady} stale={false} />}</StateView>;
+}
+
+/** Der Beitrag meldet sich im Minutentakt neu; so liest die Karte das Alter ihres Stands mit der aktuellen Uhr. */
+function Partner({ data, stale }: { data: PartnerCardReady; stale: boolean }) {
+  const clock = useClock();
+  if (data.type === 'solo') return <Card><Text variant="headline" accessibilityRole="header">{partnerTexts.title}</Text>
+    <Text>{partnerTexts.soloToday}</Text>
+    <Button label={partnerTexts.invite} variant="secondary" onPress={() => action(data.inviteAction)} />
+    <Button label={partnerTexts.redeem} variant="text" onPress={() => action(data.redeemAction)} />
+  </Card>;
+  const stand = standText(dataAgeOf(data.dataAsOf, clock.read()), stale);
+  return <Card><Text variant="headline" accessibilityRole="header">{partnerTexts.title}</Text>
+    <View accessible accessibilityLabel={partnerHeadline(data.partnerDisplayName, data.dailyGoalStage, stand)} style={styles.partner}>
+      <PartnerAvatar displayName={data.partnerDisplayName} />
+      <View style={styles.flex}>
+        <Text variant="bodyStrong">{data.partnerDisplayName}</Text>
+        <PartnerStage stage={data.dailyGoalStage} />
+        <Text variant="caption" tone="inkMuted">{stand.shown}</Text>
+      </View>
+    </View>
+    <Button label={partnerTexts.encourage} variant="secondary" onPress={() => action(data.encourageAction)} />
   </Card>;
 }
 
@@ -228,7 +250,7 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.sport">{(value) => { const d = value as TrackerSportReady; return <Tracker label="Sport" value={`${d.weekMinutes} min`} of={`von ${d.weeklyTargetMinutes} min diese Woche`} progress={{ label: 'Sport diese Woche', value: d.weekMinutes, target: d.weeklyTargetMinutes }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+ Einheit" />; }}</State></View>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.weight">{(value) => { const d = value as TrackerWeightReady; return <Tracker label="Gewicht" value={d.value ? `${thousandthsWithOneDecimal(d.value.weightG)} kg` : 'Noch kein Gewicht'} of={d.value?.type === 'trend' ? 'Trend' : undefined} status={weighDayText(d.status, clock.read().localDate)} detail={d.detailAction} quick={d.quickAction} quickLabel="Eintragen" />; }}</State></View>
     </View>
-    <View testID="today-slot-partner"><State registry={registry} slot="partner">{(data) => <Partner data={data as PartnerCardReady} />}</State></View>
+    <View testID="today-slot-partner"><PartnerSlot registry={registry} /></View>
   </View>;
 }
 
@@ -251,6 +273,7 @@ function CardPair<A extends TodaySlot, B extends TodaySlot>({ registry, first, s
 
 const styles = StyleSheet.create({
   content: { gap: space[4] }, header: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  partner: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   encouragement: { minHeight: size.touchMin, flexDirection: 'row', alignItems: 'center', gap: space[2], paddingHorizontal: space[3], paddingVertical: space[2], borderRadius: radius.md, backgroundColor: color.partnerSoft },
   flex: { flex: 1 }, row: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   momo: { flexDirection: 'row', gap: space[4], alignItems: 'center' },

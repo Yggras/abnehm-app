@@ -77,7 +77,9 @@ describe('Szenario gekoppelt', () => {
     const philipp = phones['philipp-iphone']!;
     const anna = phones['anna-android']!;
 
+    // Den Partnernamen liefert nur das Kopplungsmitglied (#121).
     expect(philipp.partner()).toEqual({
+      partner: { personId: anna.personId, displayName: 'Anna' },
       dailyGoalStatus: expect.objectContaining({ ownerPersonId: anna.personId, stage: 'fast_geschafft' }),
       summaries: [
         expect.objectContaining({ type: 'wasser', ownerPersonId: anna.personId, content: { progressPercent: 100 } }),
@@ -86,6 +88,7 @@ describe('Szenario gekoppelt', () => {
       ],
     });
     expect(anna.partner()).toEqual({
+      partner: { personId: philipp.personId, displayName: 'Philipp' },
       dailyGoalStatus: expect.objectContaining({ ownerPersonId: philipp.personId, stage: 'unterwegs' }),
       summaries: [
         expect.objectContaining({ type: 'ernaehrung', ownerPersonId: philipp.personId, content: { recordedMealCategories: 2 } }),
@@ -208,7 +211,7 @@ describe('Szenario nach_entkopplung', () => {
       expect(server[table]?.every(({ deleted_at }) => deleted_at !== null)).toBe(true);
     }
     for (const { database, partner } of Object.values(world.phones)) {
-      expect(partner()).toEqual({ dailyGoalStatus: null, summaries: [] });
+      expect(partner()).toEqual({ partner: null, dailyGoalStatus: null, summaries: [] });
       const members = database.read((tx) => sqliteOf(tx).select({ name: localMember.displayName, status: localMember.couplingStatus }).from(localMember).all());
       expect(members.sort((a, b) => a.name.localeCompare(b.name))).toEqual([
         { name: 'Anna', status: 'archiviert' },

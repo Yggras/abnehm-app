@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 
-import { AreaKey, LocalDate, type EntityId } from '@abnehm/contracts/base';
+import { AreaKey, DisplayName, EntityId, LocalDate } from '@abnehm/contracts/base';
 import {
   PartnerDailyGoalStatus,
   partnerSummaryBounds,
@@ -10,7 +10,8 @@ import {
 } from '@abnehm/contracts/partner';
 
 import type { ReadContext, TransactionContext } from '../local-db';
-import { coupling, partnerDailyGoalStatus, partnerSummary } from '../local-db/schema';
+import { readOwnPerson } from '../local-db/person-header';
+import { coupling, couplingMember, partnerDailyGoalStatus, partnerSummary } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { CanonicalEntity, SyncEntityAdapter } from '../sync/registry';
 
@@ -131,6 +132,11 @@ const revocationNoticeEntity: SyncEntityAdapter = {
 export const partnerCacheEntities: readonly SyncEntityAdapter[] = [summaryEntity, statusEntity, revocationNoticeEntity];
 
 export type PartnerCache = Readonly<{
+  /**
+   * Der Partner der aktiven Kopplung; `null` ohne aktive Kopplung (solo). Der Anzeigename kommt ausschließlich
+   * vom Kopplungsmitglied, das der Server pflegt (Spezifikation 0, Abschnitt 8).
+   */
+  partner: Readonly<{ personId: EntityId; displayName: DisplayName }> | null;
   /** Grober Tageszielstand des Partners; bei jeder aktiven Kopplung, ohne Bereichsfreigabe. */
   dailyGoalStatus: PartnerDailyGoalStatus | null;
   /** Je freigegebenem Bereich die aktuelle Zusammenfassung, in der Reihenfolge Ernährung, Wasser, Sport, Gewicht. */
@@ -141,6 +147,12 @@ export type PartnerCache = Readonly<{
 export function readPartnerCache(tx: ReadContext): PartnerCache {
   const db = sqliteOf(tx);
   const active = db.select({ id: coupling.id }).from(coupling).where(eq(coupling.status, 'aktiv'));
+  const own = readOwnPerson(tx);
+  const member = own === undefined ? undefined : db
+    .select({ personId: couplingMember.personId, displayName: couplingMember.displayName })
+    .from(couplingMember)
+    .where(and(inArray(couplingMember.couplingId, active), ne(couplingMember.personId, own.id), isNull(couplingMember.deletedAt)))
+    .get();
   const status = db
     .select()
     .from(partnerDailyGoalStatus)
@@ -157,6 +169,7 @@ export function readPartnerCache(tx: ReadContext): PartnerCache {
   // Je Bereich der jüngste Zeitraum; ältere verschwinden spätestens mit der nächsten Pull-Seite.
   const newest = new Map(rows.map((row) => [row.area, row]));
   return {
+    partner: member === undefined ? null : { personId: EntityId.parse(member.personId), displayName: DisplayName.parse(member.displayName) },
     dailyGoalStatus: status === undefined ? null : PartnerDailyGoalStatus.parse({
       id: status.id,
       ownerPersonId: status.ownerPersonId,

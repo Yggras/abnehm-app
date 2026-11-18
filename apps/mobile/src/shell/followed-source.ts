@@ -1,3 +1,9 @@
+/**
+ * Stößt erneutes Lesen ohne Datenbankänderung an, etwa im Minutentakt (`appTodayRefresh`); die Rückgabe
+ * beendet den Anstoß. Geteilt von den Tracker-Beiträgen und dem Partnerbereich.
+ */
+export type Refresh = (update: () => void) => () => void;
+
 /** Eine beobachtbare Quelle: meldet sofort den aktuellen Stand und jeden Wechsel; liefert die Abmeldung. */
 export type Source<T> = Readonly<{ subscribe(listener: (state: T) => void): () => void }>;
 

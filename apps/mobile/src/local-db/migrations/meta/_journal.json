@@ -36,6 +36,13 @@
       "when": 1794985224548,
       "tag": "0004_own_food_search",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794999427598,
+      "tag": "0005_sync_cursor_pulled_at",
+      "breakpoints": true
     }
   ]
 }
