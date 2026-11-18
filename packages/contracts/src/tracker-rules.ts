@@ -59,6 +59,7 @@ export const activityTypes = ['gehen', 'laufen', 'radfahren', 'schwimmen', 'kraf
 
 /** Herkunft eines importierten Eintrags (Spezifikation 3, Abschnitt 6). */
 export const importOrigins = ['apple_health', 'health_connect'] as const;
+export type ImportOrigin = (typeof importOrigins)[number];
 
 /** Dauer eines Sporteintrags laut Schema in ganzen Minuten; Importe außerhalb werden nicht übernommen. */
 export const sportEntryMinutes = { min: 1, max: 1440 } as const;
@@ -156,7 +157,7 @@ type ActivityTypeKey = (typeof activityTypes)[number];
  *
  * Nicht genannte Codes werden `sonstiges`. Die Zuordnung selbst ist eine Designentscheidung von #183.
  */
-const platformActivityTypes: Readonly<Record<(typeof importOrigins)[number], Readonly<Partial<Record<ActivityTypeKey, readonly number[]>>>>> = {
+const platformActivityTypes: Readonly<Record<ImportOrigin, Readonly<Partial<Record<ActivityTypeKey, readonly number[]>>>>> = {
   apple_health: {
     // walking, hiking, wheelchairWalkPace
     gehen: [52, 24, 70],
@@ -194,18 +195,10 @@ const platformActivityTypes: Readonly<Record<(typeof importOrigins)[number], Rea
 };
 
 /** Aktivitätsart zum Plattformcode einer Herkunft; Unbekanntes und fehlende Arten werden `sonstiges`. */
-export function activityTypeOfPlatform(origin: (typeof importOrigins)[number], code: number | null): ActivityTypeKey {
+export function activityTypeOfPlatform(origin: ImportOrigin, code: number | null): ActivityTypeKey {
   if (code === null) return 'sonstiges';
   for (const type of activityTypes) if (platformActivityTypes[origin][type]?.includes(code)) return type;
   return 'sonstiges';
-}
-
-/**
- * Lokaler Tag eines Zeitpunkts bei einem festen Offset zu UTC in Minuten, etwa dem Offset, den ein
- * Health-Datensatz mitliefert (Spezifikation 3, Abschnitt 6). Reine Kalenderrechnung; liest keine Uhr.
- */
-export function localDateAtOffset(instant: string, utcOffsetMinutes: number): string {
-  return new Date(Date.parse(instant) + utcOffsetMinutes * 60_000).toISOString().slice(0, 10);
 }
 
 /** Montag und Sonntag der Woche eines lokalen Tags (Spezifikation 3, Abschnitt 3: Montag bis Sonntag). */

@@ -9,7 +9,7 @@ import { quickCommandHandler, type QuickCommandHandlers } from '../shell/quick-c
 import type { TodaySource } from '../shell/today-registry';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
-import { applyHealthImport, type HealthImportBatch, type HealthImportResult } from './health-import';
+import { applyHealthImport, type HealthImportBatch } from './health-import';
 import { lastSportOf, recordSportEntry, undoSport, type LastSport, type SportInput } from './sport';
 import { sportTodaySource } from './sport-today';
 import type { Refresh } from './today-source';
@@ -72,7 +72,7 @@ export type Trackers = Readonly<{
    * Abschnitt 6): Upserts, Löschungen, Abgleich, `reevaluateDailyGoals` für alle betroffenen Tage und
    * `alongside`, in dem der Dienst seinen Cursor speichert. Scheitert ein Teil, bleibt nichts davon.
    */
-  importHealth(batch: HealthImportBatch, alongside: (tx: TransactionContext) => void): HealthImportResult;
+  importHealth(batch: HealthImportBatch, alongside: (tx: TransactionContext) => void): void;
   /** Handler für die Quick-Command-Registry der Shell (`water.quick_add`). */
   quickCommands: QuickCommandHandlers;
   /**
@@ -124,9 +124,8 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     expire: (undoToken) => tokens.expire(undoToken),
     importHealth: (batch, alongside) =>
       database.transaction((tx) => {
-        const result = applyHealthImport(tx, dependencies, batch);
+        applyHealthImport(tx, dependencies, batch);
         alongside(tx);
-        return result;
       }),
     quickCommands: {
       'water.quick_add': quickCommandHandler<'water.quick_add', WaterUndo>({

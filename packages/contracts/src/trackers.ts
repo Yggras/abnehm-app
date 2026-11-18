@@ -14,6 +14,7 @@ import {
   sportEntryMinutes,
   waterAmountMl,
   waterOrigin,
+  type ImportOrigin,
 } from './tracker-rules.ts';
 
 // Wasser, Sport und Gewicht (Spezifikation 3): Transport-Schemas der Einträge und Ergebnisse der
@@ -96,7 +97,7 @@ const ManualSportEntryUpsert = z.strictObject({
  * Nur er hat externen Schlüssel, Quell-App, Ausblendestatus und die überschriebene Aktivitätsart, die
  * spätere Quelländerungen überdauert (Spezifikation 3, Abschnitt 6).
  */
-const ImportedSportEntryUpsert = z.strictObject({
+export const ImportedSportEntryUpsert = z.strictObject({
   ...sportEntryFields,
   overrideActivityType: ActivityType.nullable(),
   durationMinutes: z.int().min(sportEntryMinutes.min).max(sportEntryMinutes.max),
@@ -107,6 +108,7 @@ const ImportedSportEntryUpsert = z.strictObject({
   sourceAppName: z.string().min(1).max(200).nullable(),
   hiddenAt: Instant.nullable(),
 });
+export type ImportedSportEntryUpsert = z.infer<typeof ImportedSportEntryUpsert>;
 
 /**
  * Vollständige Nutzlast eines Sporteintrags im Sync, je Herkunft mit genau ihren Feldern (Spezifikation 0,
@@ -150,7 +152,7 @@ const ManualWeightEntryUpsert = z.strictObject({ ...weightEntryFields, weightG: 
  * Importierter Gewichtseintrag aus Apple Health bzw. Health Connect: genaue Gramm im Bereich 20–350 kg,
  * externer Schlüssel, Quell-App und Ausblendestatus (Spezifikation 3, Abschnitte 3 und 6; #183).
  */
-const ImportedWeightEntryUpsert = z.strictObject({
+export const ImportedWeightEntryUpsert = z.strictObject({
   ...weightEntryFields,
   weightG: z.int().min(importedWeightG.min).max(importedWeightG.max),
   origin: z.enum(importOrigins),
@@ -159,6 +161,7 @@ const ImportedWeightEntryUpsert = z.strictObject({
   sourceAppName: z.string().min(1).max(200).nullable(),
   hiddenAt: Instant.nullable(),
 });
+export type ImportedWeightEntryUpsert = z.infer<typeof ImportedWeightEntryUpsert>;
 
 /**
  * Vollständige Nutzlast eines Gewichtseintrags im Sync, je Herkunft mit genau ihren Feldern, ohne
@@ -173,7 +176,7 @@ export const WeightEntryRecord = z.discriminatedUnion('origin', [ManualWeightEnt
 export type WeightEntryRecord = z.infer<typeof WeightEntryRecord>;
 
 /** Herkunft eines importierten Eintrags. */
-export type ImportOrigin = (typeof importOrigins)[number];
+export type { ImportOrigin };
 
 const importedSportNamespace = '6d0c2a4e-8f1b-4c7d-9e3a-2b5f7c9d1e40';
 const importedWeightNamespace = '6d0c2a4e-8f1b-4c7d-9e3a-2b5f7c9d1e41';

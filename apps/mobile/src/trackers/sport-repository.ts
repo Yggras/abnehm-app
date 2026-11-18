@@ -2,11 +2,12 @@ import { and, asc, between, eq, inArray, isNotNull, isNull, or } from 'drizzle-o
 
 import { EntityId, LocalDate, TimeZone, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { weekOf, type SportEntryFacts } from '@abnehm/contracts/tracker-rules';
-import { SportEntryUpsert, type ImportOrigin } from '@abnehm/contracts/trackers';
+import { ImportedSportEntryUpsert, type ImportOrigin, type SportEntryUpsert } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { sportEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
+import type { StoredImport } from './stored-import';
 
 // Repository der Sporteinträge: neben dem Sync-Adapter `sport-entity.ts` die einzige Stelle des
 // Tracker-Moduls, die Drizzle und die Tabelle `sport_entry` sieht. Andere Bereiche lesen sie nie
@@ -129,17 +130,11 @@ export function sportEntriesOfWeek(tx: ReadContext, personId: EntityId, localDat
     .all();
 }
 
-/** Nutzlast eines importierten Sporteintrags. */
-export type ImportedSportUpsert = Extract<SportEntryUpsert, { origin: ImportOrigin }>;
-
-/** Ein gespeicherter Import samt Löschmarkierung und Serverversion, wie ihn der Health-Import abgleicht. */
-export type StoredImport<P> = Readonly<{ payload: P; deletedAt: Instant | null; serverVersion: ServerVersion | null }>;
-
 /** Der importierte Sporteintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
-export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredImport<ImportedSportUpsert> | undefined {
+export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredImport<ImportedSportEntryUpsert> | undefined {
   const row = sqliteOf(tx).select().from(sportEntry).where(eq(sportEntry.id, entityId)).get();
   if (row === undefined || row.origin === 'manuell') return undefined;
-  const payload = SportEntryUpsert.parse({
+  const payload = ImportedSportEntryUpsert.parse({
     activityType: row.activityType,
     overrideActivityType: row.overrideActivityType,
     startedAt: row.startedAt,
@@ -153,7 +148,7 @@ export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredIm
     localDate: row.localDate,
     timeZone: row.timeZone,
     utcOffsetMinutes: row.utcOffsetMinutes,
-  }) as ImportedSportUpsert;
+  });
   return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
 }
 

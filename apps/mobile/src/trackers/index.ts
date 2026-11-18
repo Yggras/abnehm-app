@@ -8,7 +8,7 @@
 export { appTrackers, useAppTrackers } from './app-trackers';
 export { createTrackers, type TrackerDependencies, type Trackers } from './trackers';
 export { InvalidTrackerInputError } from './invalid-input';
-export type { HealthImportBatch, HealthImportResult } from './health-import';
+export type { HealthImportBatch } from './health-import';
 export { sportEntryEntity } from './sport-entity';
 export { waterEntryEntity } from './water-entity';
 export { weightEntryEntity } from './weight-entity';

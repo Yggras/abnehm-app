@@ -1,16 +1,23 @@
-import { readingOf, type ClockReading } from '@abnehm/clock';
-import { EntityId, type TimeZone, UtcOffsetMinutes, type Instant, type LocalDate } from '@abnehm/contracts/base';
-import { activityTypeOfPlatform, importedSportMinutes, isValidImportedWeight, localDateAtOffset } from '@abnehm/contracts/tracker-rules';
-import { importedSportEntryId, importedWeightEntryId, SportEntryUpsert, WeightEntryUpsert, type ImportOrigin } from '@abnehm/contracts/trackers';
+import { localDateAtOffset, readingOf, type ClockReading } from '@abnehm/clock';
+import { EntityId, UtcOffsetMinutes, type Instant, type LocalDate } from '@abnehm/contracts/base';
+import { activityTypeOfPlatform, importedSportMinutes, isValidImportedWeight } from '@abnehm/contracts/tracker-rules';
+import {
+  ImportedSportEntryUpsert,
+  importedSportEntryId,
+  ImportedWeightEntryUpsert,
+  importedWeightEntryId,
+  type ImportOrigin,
+} from '@abnehm/contracts/trackers';
 
 import type { HealthDataType, HealthRecordOf, HealthWeightRecord, HealthWorkoutRecord } from '../health/platform';
 import type { TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { sportEntryEntity } from './sport-entity';
-import { importedSportKeys, readImportedSport, tombstoneSportEntry, writeSportEntry, type ImportedSportUpsert, type StoredImport } from './sport-repository';
+import { importedSportKeys, readImportedSport, tombstoneSportEntry, writeSportEntry } from './sport-repository';
+import type { StoredImport } from './stored-import';
 import type { TrackerDependencies } from './trackers';
 import { weightEntryEntity } from './weight-entity';
-import { importedWeightKeys, readImportedWeight, tombstoneWeightEntry, writeWeightEntry, type ImportedWeightUpsert } from './weight-repository';
+import { importedWeightKeys, readImportedWeight, tombstoneWeightEntry, writeWeightEntry } from './weight-repository';
 
 // Interner Importbefehl des Tracker-Moduls (Spezifikation 3, Abschnitte 2, 3 und 6; #183). Der
 // Health-Import-Dienst schreibt ausschließlich hierüber, eine Transaktion je Stapel. Ein Stapel ist das
@@ -37,9 +44,6 @@ export type HealthImportBatch<T extends HealthDataType = HealthDataType> = Reado
   notBefore: Instant;
 }>;
 
-/** Was ein Stapel bewirkt hat; die betroffenen lokalen Tage gingen an `reevaluateDailyGoals`. */
-export type HealthImportResult = Readonly<{ upserted: number; deleted: number; skipped: number; localDates: readonly LocalDate[] }>;
-
 type Dependencies = Pick<TrackerDependencies, 'clock' | 'writer' | 'persistence'>;
 
 /** Was der Stapel je Typ über die Einträge wissen muss. */
@@ -62,13 +66,12 @@ type ImportKind<R, P extends { localDate: LocalDate }> = Readonly<{
  *   lokalen Tag; `hidden_at` und eine überschriebene Aktivitätsart bleiben. Ein gelöschter Eintrag bleibt
  *   gelöscht, weil Löschen gewinnt (Spezifikation 0). Unveränderte Datensätze schreiben nichts.
  * - Wird ein bekannter Datensatz nach den Tracker-Regeln nicht mehr übernommen, etwa weil seine Dauer unter
- *   60 Sekunden gefallen ist, wird der Import gelöscht, damit kein veralteter Wert zählt.
+ *   60 Sekunden gefallen ist, wird der Import gelöscht, damit kein veralteter Wert zählt (Entscheidung in #183).
  * - Eine Löschung in der Quelle löscht den Import.
  */
-export function applyHealthImport(tx: TransactionContext, dependencies: Dependencies, batch: HealthImportBatch): HealthImportResult {
-  return batch.type === 'workout'
-    ? applyBatch(tx, dependencies, batch as HealthImportBatch<'workout'>, workoutKind)
-    : applyBatch(tx, dependencies, batch as HealthImportBatch<'weight'>, weightKind);
+export function applyHealthImport(tx: TransactionContext, dependencies: Dependencies, batch: HealthImportBatch): void {
+  if (batch.type === 'workout') applyBatch(tx, dependencies, batch as HealthImportBatch<'workout'>, workoutKind);
+  else applyBatch(tx, dependencies, batch as HealthImportBatch<'weight'>, weightKind);
 }
 
 function applyBatch<T extends HealthDataType, P extends { localDate: LocalDate }>(
@@ -76,13 +79,10 @@ function applyBatch<T extends HealthDataType, P extends { localDate: LocalDate }
   { clock, writer, persistence }: Dependencies,
   batch: HealthImportBatch<T>,
   kind: ImportKind<HealthRecordOf<T>, P>,
-): HealthImportResult {
+): void {
   const now = clock.read();
   const personId = EntityId.parse(requireOwnPerson(tx).id);
   const days = new Set<LocalDate>();
-  let upserted = 0;
-  let deleted = 0;
-  let skipped = 0;
 
   const remove = (id: EntityId) => {
     const stored = kind.read(tx, id);
@@ -90,25 +90,17 @@ function applyBatch<T extends HealthDataType, P extends { localDate: LocalDate }
     kind.tombstone(tx, id, now.instant);
     writer.delete(tx, { entityType: kind.entityType, entityId: id, knownServerVersion: stored.serverVersion });
     days.add(stored.payload.localDate);
-    deleted += 1;
   };
 
   const seen = new Set<string>();
   for (const record of batch.upserts) {
     seen.add(record.externalKey);
-    if (Date.parse(kind.at(record)) < Date.parse(batch.notBefore)) {
-      skipped += 1;
-      continue;
-    }
+    if (Date.parse(kind.at(record)) < Date.parse(batch.notBefore)) continue;
     const id = kind.idOf(personId, batch.origin, record.externalKey);
     const stored = kind.read(tx, id);
-    if (stored?.deletedAt != null) {
-      skipped += 1;
-      continue;
-    }
+    if (stored !== undefined && stored.deletedAt !== null) continue;
     const payload = kind.payloadOf(record, batch.origin, stored?.payload, now);
     if (payload === null) {
-      skipped += 1;
       remove(id);
       continue;
     }
@@ -117,7 +109,6 @@ function applyBatch<T extends HealthDataType, P extends { localDate: LocalDate }
     writer.upsert(tx, { entityType: kind.entityType, entityId: id, payload, knownServerVersion: stored?.serverVersion ?? null });
     if (stored !== undefined) days.add(stored.payload.localDate);
     days.add(payload.localDate);
-    upserted += 1;
   }
 
   for (const key of batch.deletedKeys) remove(kind.idOf(personId, batch.origin, key));
@@ -131,19 +122,16 @@ function applyBatch<T extends HealthDataType, P extends { localDate: LocalDate }
 
   const localDates = [...days].sort();
   if (localDates.length > 0) persistence.reevaluateDailyGoals(tx, personId, localDates, 'health_import');
-  return { upserted, deleted, skipped, localDates };
 }
 
 /**
- * Lokaler Tag, Zone und Offset eines Imports (Spezifikation 3, Abschnitt 6): Offset ist der mitgelieferte,
- * sonst der der Zone zum Zeitpunkt; Zone ist die IANA-Zone des Geräts beim Import. Ein bekannter Eintrag
- * behält seine Zone, wie bei Korrekturen (Abschnitt 4).
+ * Lokaler Tag, Zone und Offset eines Imports (Spezifikation 3, Abschnitt 6): Zone ist die IANA-Zone des
+ * Geräts beim Import, Offset der mitgelieferte, sonst der dieser Zone zum Zeitpunkt.
  */
-function dayOf(at: Instant, utcOffsetMinutes: number | null, stored: { timeZone: TimeZone } | undefined, now: ClockReading) {
-  const timeZone = stored?.timeZone ?? now.timeZone;
+function dayOf(at: Instant, utcOffsetMinutes: number | null, now: ClockReading) {
   const supplied = UtcOffsetMinutes.safeParse(utcOffsetMinutes);
-  const offset = supplied.success ? supplied.data : readingOf(at, timeZone).utcOffsetMinutes;
-  return { localDate: localDateAtOffset(at, offset), timeZone, utcOffsetMinutes: offset };
+  const offset = supplied.success ? supplied.data : readingOf(at, now.timeZone).utcOffsetMinutes;
+  return { localDate: localDateAtOffset(at, offset), timeZone: now.timeZone, utcOffsetMinutes: offset };
 }
 
 /** Aktive Kalorien sind nur Anzeige: ganze, nicht negative `milli_kcal`, sonst keine Angabe. */
@@ -151,7 +139,7 @@ function milliKcalOf(value: number | null): number | null {
   return value !== null && Number.isFinite(value) && value >= 0 ? Math.round(value) : null;
 }
 
-const workoutKind: ImportKind<HealthWorkoutRecord, ImportedSportUpsert> = {
+const workoutKind: ImportKind<HealthWorkoutRecord, ImportedSportEntryUpsert> = {
   entityType: sportEntryEntity.entityType,
   idOf: importedSportEntryId,
   read: readImportedSport,
@@ -159,7 +147,7 @@ const workoutKind: ImportKind<HealthWorkoutRecord, ImportedSportUpsert> = {
   payloadOf(record, origin, stored, now) {
     const durationMinutes = importedSportMinutes(record.durationSeconds);
     if (durationMinutes === null) return null;
-    const parsed = SportEntryUpsert.safeParse({
+    const parsed = ImportedSportEntryUpsert.safeParse({
       activityType: activityTypeOfPlatform(origin, record.platformActivityType),
       overrideActivityType: stored?.overrideActivityType ?? null,
       startedAt: record.startedAt,
@@ -170,23 +158,23 @@ const workoutKind: ImportKind<HealthWorkoutRecord, ImportedSportUpsert> = {
       sourceAppId: record.sourceApp.id,
       sourceAppName: record.sourceApp.name,
       hiddenAt: stored?.hiddenAt ?? null,
-      ...dayOf(record.startedAt, record.utcOffsetMinutes, stored, now),
+      ...dayOf(record.startedAt, record.utcOffsetMinutes, now),
     });
-    return parsed.success ? (parsed.data as ImportedSportUpsert) : null;
+    return parsed.data ?? null;
   },
   write: writeSportEntry,
   tombstone: tombstoneSportEntry,
   keys: importedSportKeys,
 };
 
-const weightKind: ImportKind<HealthWeightRecord, ImportedWeightUpsert> = {
+const weightKind: ImportKind<HealthWeightRecord, ImportedWeightEntryUpsert> = {
   entityType: weightEntryEntity.entityType,
   idOf: importedWeightEntryId,
   read: readImportedWeight,
   at: (record) => record.measuredAt,
   payloadOf(record, origin, stored, now) {
     if (!isValidImportedWeight(record.weightG)) return null;
-    const parsed = WeightEntryUpsert.safeParse({
+    const parsed = ImportedWeightEntryUpsert.safeParse({
       weightG: record.weightG,
       measuredAt: record.measuredAt,
       origin,
@@ -194,26 +182,20 @@ const weightKind: ImportKind<HealthWeightRecord, ImportedWeightUpsert> = {
       sourceAppId: record.sourceApp.id,
       sourceAppName: record.sourceApp.name,
       hiddenAt: stored?.hiddenAt ?? null,
-      ...dayOf(record.measuredAt, record.utcOffsetMinutes, stored, now),
+      ...dayOf(record.measuredAt, record.utcOffsetMinutes, now),
     });
-    return parsed.success ? (parsed.data as ImportedWeightUpsert) : null;
+    return parsed.data ?? null;
   },
   write: writeWeightEntry,
   tombstone: tombstoneWeightEntry,
   keys: importedWeightKeys,
 };
 
-/** Gleiche fachliche Werte; Zeitpunkte vergleicht es als Zeitpunkte, damit Schreibweisen nicht stören. */
-function sameValues(stored: object, next: object): boolean {
-  const a = stored as Record<string, unknown>;
-  const b = next as Record<string, unknown>;
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  for (const key of keys) {
-    const left = a[key];
-    const right = b[key];
-    if (left === right) continue;
-    if (typeof left === 'string' && typeof right === 'string' && /At$/.test(key) && Date.parse(left) === Date.parse(right)) continue;
-    return false;
-  }
-  return true;
+/**
+ * Gleiche fachliche Werte zweier Nutzlasten desselben strikten Schemas. Verglichen wird Feld für Feld genau;
+ * die gespeicherte Nutzlast stammt aus demselben Adapter, also aus derselben Schreibweise.
+ */
+function sameValues<P extends object>(stored: P, next: P): boolean {
+  const keys = Object.keys(next) as (keyof P)[];
+  return keys.length === Object.keys(stored).length && keys.every((key) => stored[key] === next[key]);
 }

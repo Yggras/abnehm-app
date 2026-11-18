@@ -1,4 +1,4 @@
-import { Instant, TimeZone, type LocalDate } from '@abnehm/contracts/base';
+import { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 
 import { readingAt } from './reading.ts';
 
@@ -38,6 +38,28 @@ export interface Clock {
  */
 export function readingOf(instant: Instant, timeZone: TimeZone): ClockReading {
   return readingAt(Date.parse(Instant.parse(instant)), timeZone);
+}
+
+/**
+ * Lokaler Tag eines gegebenen Zeitpunkts bei einem festen Offset zu UTC, etwa dem Offset, den ein
+ * Health-Datensatz mitliefert (Spezifikation 3, Abschnitt 6; #183). Liest keine Uhr und keine Zone.
+ */
+export function localDateAtOffset(instant: Instant, utcOffsetMinutes: number): LocalDate {
+  return LocalDate.parse(new Date(Date.parse(Instant.parse(instant)) + utcOffsetMinutes * 60_000).toISOString().slice(0, 10));
+}
+
+/**
+ * Erster Zeitpunkt eines lokalen Tags in einer Zone, etwa der Beginn des Verbindungstags des
+ * Health-Imports (#183): Mitternacht der Wanduhr, zurückgerechnet mit dem Offset der Zone. Der zweite
+ * Schritt nimmt den Offset zum gefundenen Zeitpunkt, falls er sich zwischen UTC-Mitternacht und lokaler
+ * Mitternacht ändert. Fällt Mitternacht durch eine Umstellung aus, ist es der erste Zeitpunkt danach.
+ */
+export function startOfLocalDay(localDate: LocalDate, timeZone: TimeZone): Instant {
+  const wallMidnight = Date.parse(`${LocalDate.parse(localDate)}T00:00:00.000Z`);
+  const first = wallMidnight - readingAt(wallMidnight, timeZone).utcOffsetMinutes * 60_000;
+  const start = wallMidnight - readingAt(first, timeZone).utcOffsetMinutes * 60_000;
+  // Ausgefallene Mitternacht: Der Zeitpunkt liegt noch im Vortag; der Tag beginnt mit der Umstellung danach.
+  return readingAt(start, timeZone).localDate === localDate ? Instant.parse(new Date(start).toISOString()) : Instant.parse(new Date(first).toISOString());
 }
 
 /**

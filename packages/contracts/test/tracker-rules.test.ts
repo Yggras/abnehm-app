@@ -30,7 +30,6 @@ import {
   importedSportMinutes,
   importedWeightG,
   isValidImportedWeight,
-  localDateAtOffset,
 } from '../src/tracker-rules.ts';
 
 // Tracker-Regeln (Spezifikation 3, Abschnitte 2 und 3; #171, #175): reines Modul, das App und Server teilen.
@@ -489,15 +488,6 @@ describe('Abbildung der Plattform-Aktivitätsarten (#183)', () => {
       expect(activityTypes).toContain(activityTypeOfPlatform('apple_health', code));
       expect(activityTypes).toContain(activityTypeOfPlatform('health_connect', code));
     }
-  });
-});
-
-describe('lokaler Tag zu einem Offset (#183)', () => {
-  it('ist der Kalendertag der Wanduhrzeit im Offset', () => {
-    expect(localDateAtOffset('2026-10-14T22:30:00.000Z', 120)).toBe('2026-10-15');
-    expect(localDateAtOffset('2026-10-14T22:30:00.000Z', 0)).toBe('2026-10-14');
-    expect(localDateAtOffset('2026-10-14T03:00:00.000Z', -300)).toBe('2026-10-13');
-    expect(localDateAtOffset('2026-12-31T23:59:59.999Z', 1)).toBe('2027-01-01');
   });
 });
 

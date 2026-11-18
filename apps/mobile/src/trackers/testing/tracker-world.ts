@@ -48,10 +48,12 @@ export type TrackerWorld = Readonly<{
  * fehlt die eigene Person wie vor dem ersten Pull. `bausteine` registriert Evaluatoren beim
  * Persistenzdienst, etwa um Tageszielerfüllungen zu prüfen.
  */
-export async function createTrackerWorld(
-  clock: Clock,
-  { person = true, bausteine = [] }: { person?: boolean; bausteine?: Parameters<typeof createDailyGoalRegistry>[0]['bausteine'] } = {},
-): Promise<TrackerWorld> {
+export type TrackerWorldOptions = Readonly<{
+  person?: boolean;
+  bausteine?: Parameters<typeof createDailyGoalRegistry>[0]['bausteine'];
+}>;
+
+export async function createTrackerWorld(clock: Clock, { person = true, bausteine = [] }: TrackerWorldOptions = {}): Promise<TrackerWorld> {
   let failing = false;
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });

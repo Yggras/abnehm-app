@@ -24,6 +24,9 @@ export function createTestHealth(clock: Clock): TestHealth {
   return {
     platform(inner) {
       const own = createFakeHealthPlatform({ origin: inner.origin, clock });
+      // Bis die Hintergrund-Tickets (#197, #199) einen Handler anmelden, löst eine Weckung der Attrappe den
+      // Import des geöffneten Kontos aus; so serialisiert auch `zwei_weckungen` im Development- und E2E-Build.
+      own.registerBackground(() => appHealthImport.current()?.importNow() ?? Promise.resolve());
       fake = own;
       const current = () => (active ? own : inner);
       return {

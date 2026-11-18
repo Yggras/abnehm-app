@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-import { readingOf, type Clock } from '@abnehm/clock';
-import { Instant, LocalDate, type TimeZone } from '@abnehm/contracts/base';
+import { startOfLocalDay, type Clock } from '@abnehm/clock';
+import { Instant, LocalDate } from '@abnehm/contracts/base';
 
 import type { LocalDatabase } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
@@ -95,7 +95,7 @@ export function createHealthImport({ database, platform, trackers, clock, onErro
     let reconcileSince: Instant | null = null;
     if (changes.cursorExpired) {
       // Abgleich der letzten 30 Tage, nie vor dem Beginn des Imports (Spezifikation 3, Abschnitt 6).
-      reconcileSince = later(notBefore, instantOf(Date.parse(now.instant) - windowDays * dayMs));
+      reconcileSince = later(notBefore, windowStart(now.instant));
       changes = await platform.readChanges(type, null, reconcileSince);
       if (changes.cursorExpired) return;
     }
@@ -159,7 +159,7 @@ export function createHealthImport({ database, platform, trackers, clock, onErro
               connectedAt: now.instant,
               connectedOn: now.localDate,
               workoutsSince: startOfLocalDay(now.localDate, now.timeZone),
-              weightsSince: instantOf(Date.parse(now.instant) - windowDays * dayMs),
+              weightsSince: windowStart(now.instant),
               lastImportAt: null,
             } satisfies HealthConnection,
             now.instant,
@@ -185,21 +185,11 @@ export function createHealthImport({ database, platform, trackers, clock, onErro
   };
 }
 
-function instantOf(epochMilliseconds: number): Instant {
-  return Instant.parse(new Date(epochMilliseconds).toISOString());
+/** Beginn der letzten 30 Tage vor einem Zeitpunkt: Gewicht beim Erstimport und Abgleich nach verfallenem Token. */
+function windowStart(at: Instant): Instant {
+  return Instant.parse(new Date(Date.parse(at) - windowDays * dayMs).toISOString());
 }
 
 function later(a: Instant, b: Instant): Instant {
   return Date.parse(a) >= Date.parse(b) ? a : b;
-}
-
-/**
- * Beginn eines lokalen Tags in einer Zone: Mitternacht der Wanduhr, zurückgerechnet mit dem Offset der Zone.
- * Der zweite Schritt nimmt den Offset zum gefundenen Zeitpunkt, falls er sich zwischen UTC-Mitternacht und
- * lokaler Mitternacht ändert.
- */
-export function startOfLocalDay(localDate: LocalDate, timeZone: TimeZone): Instant {
-  const wallMidnight = Date.parse(`${localDate}T00:00:00.000Z`);
-  const first = wallMidnight - readingOf(instantOf(wallMidnight), timeZone).utcOffsetMinutes * 60_000;
-  return instantOf(wallMidnight - readingOf(instantOf(first), timeZone).utcOffsetMinutes * 60_000);
 }

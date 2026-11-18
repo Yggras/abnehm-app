@@ -2,13 +2,12 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, LocalDate, TimeZone, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import type { WeightEntryFacts } from '@abnehm/contracts/tracker-rules';
-import { WeightEntryUpsert, type ImportOrigin } from '@abnehm/contracts/trackers';
-
-import type { StoredImport } from './sport-repository';
+import { ImportedWeightEntryUpsert, type ImportOrigin, type WeightEntryUpsert } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { weightEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
+import type { StoredImport } from './stored-import';
 
 // Repository der Gewichtseinträge: neben dem Sync-Adapter `weight-entity.ts` die einzige Stelle des
 // Tracker-Moduls, die Drizzle und die Tabelle `weight_entry` sieht. Andere Bereiche lesen sie nie
@@ -88,14 +87,11 @@ export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightEntr
     .all();
 }
 
-/** Nutzlast eines importierten Gewichtseintrags. */
-export type ImportedWeightUpsert = Extract<WeightEntryUpsert, { origin: ImportOrigin }>;
-
 /** Der importierte Gewichtseintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
-export function readImportedWeight(tx: ReadContext, entityId: EntityId): StoredImport<ImportedWeightUpsert> | undefined {
+export function readImportedWeight(tx: ReadContext, entityId: EntityId): StoredImport<ImportedWeightEntryUpsert> | undefined {
   const row = sqliteOf(tx).select().from(weightEntry).where(eq(weightEntry.id, entityId)).get();
   if (row === undefined || row.origin === 'manuell') return undefined;
-  const payload = WeightEntryUpsert.parse({
+  const payload = ImportedWeightEntryUpsert.parse({
     weightG: row.weightG,
     measuredAt: row.measuredAt,
     origin: row.origin,
@@ -106,7 +102,7 @@ export function readImportedWeight(tx: ReadContext, entityId: EntityId): StoredI
     localDate: row.localDate,
     timeZone: row.timeZone,
     utcOffsetMinutes: row.utcOffsetMinutes,
-  }) as ImportedWeightUpsert;
+  });
   return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
 }
 

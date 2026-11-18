@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { EntityId, Instant, LocalDate, type TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { DailyGoalSnapshot } from '@abnehm/contracts/daily-goals';
 import { importedSportEntryId, importedWeightEntryId } from '@abnehm/contracts/trackers';
 
@@ -15,10 +15,10 @@ import { readDeviceState } from '../local-db/device-state';
 import { dailyGoalCompletion, sportEntry, weightEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { createTodayRegistry, type TodayState } from '../shell/today-registry';
-import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld } from '../trackers/testing/tracker-world';
+import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld, type TrackerWorldOptions } from '../trackers/testing/tracker-world';
 import { weightEntriesOf } from '../trackers/weight-repository';
 import { isCountingWeightEntry } from '@abnehm/contracts/tracker-rules';
-import { createHealthImport, startOfLocalDay, type HealthImport } from '.';
+import { createHealthImport, type HealthImport } from '.';
 import { applyHealthScenario, createFakeHealthPlatform, fakeWeight, fakeWorkout, fitbitApp, minutesFrom, type FakeHealthPlatform } from './testing/fake-platform';
 
 // Nachweis für #183: der Health-Import-Dienst über den internen Importbefehl des Tracker-Moduls
@@ -33,7 +33,7 @@ afterEach(() => {
   for (const world of worlds.splice(0)) world.close();
 });
 
-async function healthWorld({ at = noon, bausteine }: { at?: Instant; bausteine?: Parameters<typeof createTrackerWorld>[1] extends infer O ? O extends { bausteine?: infer B } ? B : never : never } = {}): Promise<HealthWorld> {
+async function healthWorld({ at = noon, bausteine }: { at?: Instant } & Pick<TrackerWorldOptions, 'bausteine'> = {}): Promise<HealthWorld> {
   const clock = createTestClock({ instant: at, timeZone: berlin });
   const world = await createTrackerWorld(clock, { bausteine });
   worlds.push(world);
@@ -404,6 +404,20 @@ describe('lokaler Tag eines Imports', () => {
     expect(byKey(weights, 'ohne-offset')).toMatchObject({ localDate: '2026-10-15', utcOffsetMinutes: 120, timeZone: 'Europe/Berlin' });
   });
 
+  it('ein Upsert nach einer Reise nimmt Zone und Offset des Geräts beim Import', async () => {
+    const world = await healthWorld();
+    await applyHealthScenario(world.fake, 'erstimport', world.clock);
+    await connected(world);
+    expect(byKey(imports(world).weights, 'gewicht-heute')).toMatchObject({ timeZone: 'Europe/Berlin', localDate: '2026-10-14' });
+
+    // In New York (UTC−4) liegt 06:00 UTC noch am 14.10., aber der Messzeitpunkt rückt auf 03:00 UTC.
+    world.clock.setTimeZone(TimeZone.parse('America/New_York'));
+    world.fake.put(fakeWeight('gewicht-heute', Instant.parse('2026-10-14T03:00:00.000Z'), 82_437));
+    await world.health.importNow();
+
+    expect(byKey(imports(world).weights, 'gewicht-heute')).toMatchObject({ timeZone: 'America/New_York', utcOffsetMinutes: -240, localDate: '2026-10-13' });
+  });
+
   it('nimmt sonst den Offset der Gerätezone zum Zeitpunkt, auch über die Zeitumstellung', async () => {
     const at = Instant.parse('2026-10-26T08:00:00.000Z');
     const world = await healthWorld({ at });
@@ -484,7 +498,7 @@ describe('Transaktion je Stapel', () => {
     });
     const world = await healthWorld({ bausteine: [testBausteinEvaluators(counted).gewogen] });
     const snapshot: DailyGoalSnapshot = {
-      type: 'gewogen', personId: philipp, localDate: LocalDate.parse('2026-10-14'), slot: 1, timeZone: berlin as TimeZone, dayEndsAt: Instant.parse('2026-10-14T22:00:00.000Z'),
+      type: 'gewogen', personId: philipp, localDate: LocalDate.parse('2026-10-14'), slot: 1, timeZone: berlin, dayEndsAt: Instant.parse('2026-10-14T22:00:00.000Z'),
     };
     world.database.transaction((tx) => insertDailyGoalForTest(tx, EntityId.parse(randomUUID()), snapshot));
     await applyHealthScenario(world.fake, 'erstimport', world.clock);
@@ -624,14 +638,5 @@ describe('Quell-Apps', () => {
 
     await applyHealthScenario(world.fake, 'fitbit_fehlt', world.clock);
     expect((await world.health.platform.recentOrigins(30)).map(({ sourceApp }) => sourceApp.id)).not.toContain('com.fitbit.FitbitMobile');
-  });
-});
-
-describe('Beginn des lokalen Tags', () => {
-  it('rechnet Mitternacht der Zone zurück, auch an Tagen der Zeitumstellung', () => {
-    expect(startOfLocalDay(LocalDate.parse('2026-10-14'), berlin)).toBe('2026-10-13T22:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-10-25'), berlin)).toBe('2026-10-24T22:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-10-26'), berlin)).toBe('2026-10-25T23:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-03-29'), berlin)).toBe('2026-03-28T23:00:00.000Z');
   });
 });

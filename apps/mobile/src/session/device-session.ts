@@ -119,7 +119,7 @@ function deviceState() {
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
       // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
-      const health = createHealthImport({ database, platform: healthPlatform, trackers, clock: appClock, onError: (error) => console.warn('[health]', error) });
+      const health = createHealthImport({ database, platform: healthPlatform, trackers, clock: appClock, onError });
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,

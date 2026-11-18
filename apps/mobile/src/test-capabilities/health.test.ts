@@ -35,6 +35,19 @@ describe('Health-Attrappe in Test-Artefakten', () => {
     release();
   });
 
+  it('`zwei_weckungen` weckt zweimal den Import des geöffneten Kontos', async () => {
+    const health = createTestHealth(clock);
+    health.platform(unavailableHealthPlatform('apple_health'));
+    const importNow = jest.fn(() => Promise.resolve());
+    const connect = jest.fn(() => Promise.resolve({ type: 'verbunden', access: 'erteilt' } as const));
+    const release = appHealthImport.opened({ connect, importNow } as unknown as HealthImport);
+
+    await health.apply('zwei_weckungen');
+
+    expect(importNow).toHaveBeenCalledTimes(2);
+    release();
+  });
+
   it('ohne angeschlossene Plattform ist das Szenario ein Fehler', async () => {
     await expect(createTestHealth(clock).apply('erstimport')).rejects.toThrow('nicht angeschlossen');
   });
