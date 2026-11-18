@@ -27,6 +27,7 @@ import { dumpServer } from '../dev/seed/server-seed.ts';
 import { createDevelopmentTestBackend, testBaseUrl, type DevelopmentTestBackend } from './support/app.ts';
 import { newDevice } from './support/auth-client.ts';
 import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
+import { encouragementEntity } from '../../mobile/src/partner/encouragement.ts';
 
 // Tracer Bullet für #112: Der Seed-Deep-Link der App seedet über die Seed-Route des echten
 // Development-Backends Postgres, stellt die Testuhr, meldet das Testkonto über das echte Auth-Modul
@@ -199,7 +200,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.initial.devices['philipp-iphone']!));
 
     const registry = createSyncRegistry([
-      ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity,
+      ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
     ]);
     const installationId = InstallationId.parse(manifest.installations[0]!.installationId);
     const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });

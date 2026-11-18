@@ -157,6 +157,8 @@ export const seedIds = {
   },
   /** Tageszielstand je Eigentümer, also an den jeweils anderen Partner. */
   partnerDailyGoalStatus: { philipp: id('0051', 1), anna: id('0051', 2) },
+  /** Philipps drei Anfeuerungen an Anna von heute in `gekoppelt` (#123). */
+  encouragement: { philippHeute: [id('0055', 1), id('0055', 2), id('0055', 3)] },
 } as const;
 
 /** Dokumentiertes Testpasswort aller Seed-Konten; nur in Development- und Testartefakten. */

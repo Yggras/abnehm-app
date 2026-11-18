@@ -35,6 +35,7 @@ import { dumpServer, seedServer } from '../dev/seed/server-seed.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { signIn } from './support/auth-client.ts';
 import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
+import { encouragementEntity } from '../../mobile/src/partner/encouragement.ts';
 
 // Nachweis für #180: die Szenarien `solo-energie` und `rollenwahl-offen` (Spezifikation 4, Abschnitt 13)
 // auf Postgres und den Geräten, deren Engine, Adapter und Spieldienst auf echtem SQLite (better-sqlite3)
@@ -49,7 +50,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
 type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; sync(): Promise<void> }>;

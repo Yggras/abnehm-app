@@ -15,7 +15,7 @@ import { soloParts } from '../seeds/solo.ts';
 import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
-import { PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
+import { EncouragementKey, PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
 import { CreateGoalVersion } from '../src/plan.ts';
 import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, weekMinutes, weightChange, weightForecast, weightTrend } from '../src/tracker-rules.ts';
 
@@ -426,6 +426,15 @@ describe('Szenario gekoppelt', () => {
     expect(gekoppelt.target).toEqual(gekoppelt.initial);
   });
 
+  it('Philipp hat Anna heute dreimal angefeuert; beide Geräte haben die Anfeuerungen (#123)', () => {
+    const sent = server.encouragement ?? [];
+    expect(sent.map((row) => [row.id, row.sender_person_id, row.recipient_person_id, row.local_date, row.push_status])).toEqual(
+      seedIds.encouragement.philippHeute.map((id) => [id, philipp, anna, seedDays.heute, 'zugestellt']),
+    );
+    expect(EncouragementKey.array().parse(sent.map((row) => row.message_key))).toHaveLength(3);
+    for (const device of Object.values(gekoppelt.initial.devices)) expect(device.rows.encouragement).toEqual(sent);
+  });
+
   it('fertiges Onboarding, Ziel- und Wochenplanversionen und je drei Tagesziele von heute', () => {
     const today = (row: { local_date?: unknown }) => row.local_date === seedDays.heute;
     expect(server.person?.map(({ display_name, onboarding_status }) => [display_name, onboarding_status])).toEqual([
@@ -510,7 +519,8 @@ describe('Szenario gekoppelt', () => {
       for (const [table, tableRows] of Object.entries(rows)) {
         // Kopplungsinhalte mit Personenspalte: Mitglieder, Inselfelder und Inselobjekte sehen beide
         // (Spezifikation 4, Abschnitt 7: Felder und Objekte des Partners sind sichtbar, nur nicht bebaubar; #184, #191).
-        if (['coupling_member', 'island_field', 'island_object', 'partner_summary', 'partner_daily_goal_status'].includes(table)) continue;
+        // Anfeuerungen lesen beide aktiven Mitglieder (Spezifikation 5, Abschnitt 11; #123).
+        if (['coupling_member', 'island_field', 'island_object', 'partner_summary', 'partner_daily_goal_status', 'encouragement'].includes(table)) continue;
         for (const row of tableRows) {
           for (const column of ownerColumns) if (column in row) expect(row[column], `${key}: ${table}.${column}`).toBe(own);
         }

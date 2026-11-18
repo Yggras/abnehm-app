@@ -19,7 +19,7 @@ import { MessageHostProvider } from '../shell/MessageHost';
 import { screenScrollId } from '../shell/ScreenFrame';
 import { createTodayRegistry } from '../shell/today-registry';
 import { TodayContent } from '../shell/TodayScreen';
-import { createSyncEngine, createSyncRegistry, foundationSyncEntities, type SyncTransport } from '../sync';
+import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport } from '../sync';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner } from '.';
 
@@ -63,11 +63,13 @@ async function openPhilipp(scenario: 'solo' | 'gekoppelt') {
       return { type: 'ok', body: { changes: pages.shift() ?? [], next: { type: 'complete', cursor: String(version) as SyncCursor } } };
     },
   };
-  const engine = createSyncEngine({ database, registry: createSyncRegistry(foundationSyncEntities), transport, clock, installationId: EntityId.parse(randomUUID()) });
+  const registry = createSyncRegistry(foundationSyncEntities);
+  const newId = () => EntityId.parse(randomUUID());
+  const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId() });
   const online = new Set<(online: boolean) => void>();
   const ticks = new Set<() => void>();
   const partner = createPartner({
-    database, clock, sync: () => engine.sync(),
+    database, clock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock, newId }), newId,
     observeOnline: (listener) => { online.add(listener); return () => online.delete(listener); },
     refresh: (update) => { ticks.add(update); return () => ticks.delete(update); },
   });
