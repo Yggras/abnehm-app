@@ -118,18 +118,15 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
         <Text variant="label" importantForAccessibility="no">
           {texts.birthDate}
         </Text>
-        {/* Linksbündig gehalten: Ohne Hülle rückte die iOS-Pille nach „Zurück“ ein (Impeccable-critique). */}
-        <View style={styles.picker}>
-          <DateTimePicker
-            label={texts.birthDate}
-            mode="date"
-            value={startOfLocalDate(birthDate, now.timeZone)}
-            onChange={(instant) => change({ birthDate: readingOf(instant, now.timeZone).localDate }, ['birth_date_missing'])}
-            timeZone={now.timeZone}
-            minimum={startOfLocalDate(earliestBirthDate, now.timeZone)}
-            maximum={now.instant}
-          />
-        </View>
+        <DateTimePicker
+          label={texts.birthDate}
+          mode="date"
+          value={startOfLocalDate(birthDate, now.timeZone)}
+          onChange={(instant) => change({ birthDate: readingOf(instant, now.timeZone).localDate }, ['birth_date_missing'])}
+          timeZone={now.timeZone}
+          minimum={startOfLocalDate(earliestBirthDate, now.timeZone)}
+          maximum={now.instant}
+        />
         {birthDateProblem !== undefined ? (
           <ProblemMessage text={birthDateProblem} />
         ) : draft.birthDate === undefined ? (
@@ -174,5 +171,4 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
 const styles = StyleSheet.create({
   group: { gap: space[1] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], paddingTop: space[1] },
-  picker: { flexDirection: 'row', justifyContent: 'flex-start' },
 });
