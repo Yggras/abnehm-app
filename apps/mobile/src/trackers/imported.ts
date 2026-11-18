@@ -89,11 +89,11 @@ export function hideImportedEntry(tx: TransactionContext, dependencies: Dependen
   requireVisible(imported.stored, entryId);
   if (imported.type === 'training') {
     const { stored } = imported;
-    rewrite(tx, dependencies, sportKind, entryId, stored, { ...stored.payload, hiddenAt }, 'eingabe');
+    rewrite(tx, dependencies, sportKind, entryId, stored, { ...stored.payload, hiddenAt }, hiddenAt, 'eingabe');
     return { messageKey: 'sport.ausgeblendet', values: sportValues(stored.payload), undo };
   }
   const { stored } = imported;
-  rewrite(tx, dependencies, weightKind, entryId, stored, { ...stored.payload, hiddenAt }, 'eingabe');
+  rewrite(tx, dependencies, weightKind, entryId, stored, { ...stored.payload, hiddenAt }, hiddenAt, 'eingabe');
   return { messageKey: 'gewicht.ausgeblendet', values: { weightG: stored.payload.weightG }, undo };
 }
 
@@ -113,7 +113,7 @@ export function overrideImportedActivityType(
   const sport = readImportedSport(tx, entryId);
   if (sport === undefined) throw new InvalidTrackerInputError(`Eintrag ${entryId} ist kein importiertes Training`);
   requireVisible(sport, entryId);
-  rewrite(tx, dependencies, sportKind, entryId, sport, { ...sport.payload, overrideActivityType: activityType }, 'eingabe');
+  rewrite(tx, dependencies, sportKind, entryId, sport, { ...sport.payload, overrideActivityType: activityType }, dependencies.clock.read().instant, 'eingabe');
   return {
     messageKey: 'sport.art_geaendert',
     values: { activityType, previousActivityType: sportValues(sport.payload).activityType },
@@ -134,21 +134,21 @@ export function undoImported(tx: TransactionContext, dependencies: Dependencies,
     const { stored } = imported;
     if (undo.type === 'activity_type_overridden') {
       if (stored.payload.overrideActivityType !== undo.previous) {
-        rewrite(tx, dependencies, sportKind, undo.entryId, stored, { ...stored.payload, overrideActivityType: undo.previous }, 'rueckgaengig');
+        rewrite(tx, dependencies, sportKind, undo.entryId, stored, { ...stored.payload, overrideActivityType: undo.previous }, dependencies.clock.read().instant, 'rueckgaengig');
       }
     } else if (stored.payload.hiddenAt !== null) {
-      rewrite(tx, dependencies, sportKind, undo.entryId, stored, { ...stored.payload, hiddenAt: null }, 'rueckgaengig');
+      rewrite(tx, dependencies, sportKind, undo.entryId, stored, { ...stored.payload, hiddenAt: null }, dependencies.clock.read().instant, 'rueckgaengig');
     }
     return;
   }
   const { stored } = imported;
   if (undo.type === 'import_hidden' && stored.payload.hiddenAt !== null) {
-    rewrite(tx, dependencies, weightKind, undo.entryId, stored, { ...stored.payload, hiddenAt: null }, 'rueckgaengig');
+    rewrite(tx, dependencies, weightKind, undo.entryId, stored, { ...stored.payload, hiddenAt: null }, dependencies.clock.read().instant, 'rueckgaengig');
   }
 }
 
 /** Ein nicht gelöschter, nicht ausgeblendeter Import; sonst `InvalidTrackerInputError`. */
-function requireVisible(stored: StoredImport<{ hiddenAt: string | null }>, entryId: EntityId): void {
+function requireVisible(stored: StoredImport<{ hiddenAt: Instant | null }>, entryId: EntityId): void {
   if (stored.deletedAt !== null) throw new InvalidTrackerInputError(`Import ${entryId} ist gelöscht`);
   if (stored.payload.hiddenAt !== null) throw new InvalidTrackerInputError(`Import ${entryId} ist schon ausgeblendet`);
 }
@@ -159,19 +159,20 @@ function sportValues({ overrideActivityType, activityType, durationMinutes }: Im
 }
 
 /**
- * Schreibt die volle Import-Nutzlast samt Outbox-Operation und meldet die berührten Tage. Die Tage ersetzter
+ * Schreibt die volle Import-Nutzlast zum Zeitpunkt `at` samt Outbox-Operation und meldet die berührten Tage. Die Tage ersetzter
  * Einträge liest es nach dem Schreiben; der Verweis „ersetzt durch“ ändert sich dabei nicht.
  */
 function rewrite<P extends { localDate: LocalDate }>(
   tx: TransactionContext,
-  { clock, writer, persistence }: Dependencies,
+  { writer, persistence }: Pick<Dependencies, 'writer' | 'persistence'>,
   kind: ImportKind<P>,
   entryId: EntityId,
   stored: StoredImport<P>,
   payload: P,
+  at: Instant,
   cause: DailyGoalCause,
 ): void {
-  kind.write(tx, entryId, stored.personId, payload, clock.read().instant);
+  kind.write(tx, entryId, stored.personId, payload, at);
   writer.upsert(tx, { entityType: kind.entityType, entityId: entryId, payload, knownServerVersion: stored.serverVersion });
   persistence.reevaluateDailyGoals(tx, stored.personId, kind.days(tx, entryId, payload), cause);
 }

@@ -36,8 +36,8 @@ export function timeText(instant: Instant, timeZone: TimeZone): string {
 /**
  * Anzeigenamen bekannter Quell-Apps nach ihrer Kennung (Spezifikation 3, Abschnitt 6): Google Health schreibt
  * auf dem iPhone unter `com.fitbit.FitbitMobile` mit dem Namen „Google Health“
- * (`spikes/health-hintergrund/RESULTS.md`, „Quellen erkennen“). Der feste Name nennt zusätzlich Fitbit, weil
- * die Person ihre Uhr unter diesem Namen kennt; das ist ein Designwert, nicht belegt.
+ * (`spikes/health-hintergrund/RESULTS.md`, „Quellen erkennen“). Den Anzeigenamen „Google Health (Fitbit)“ legt
+ * Spezifikation 3, Abschnitt 6 fest (https://github.com/Yggras/abnehm-app/issues/86, „Prüfung der Quell-Apps“).
  */
 const knownSourceApps: Readonly<Record<string, string>> = { 'com.fitbit.FitbitMobile': 'Google Health (Fitbit)' };
 

@@ -21,7 +21,7 @@ import type { TodaySource } from '../shell/today-registry';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { applyHealthImport, type HealthImportBatch } from './health-import';
-import { hideImportedEntry, overrideImportedActivityType, undoImported } from './imported';
+import { hideImportedEntry, overrideImportedActivityType, undoImported, type ImportedUndo } from './imported';
 import { deleteSportEntry, lastSportOf, recordSportEntry, undoSport, updateSportEntry, type LastSport, type SportChanged, type SportInput } from './sport';
 import { sportWeekSource, type SportWeekState } from './sport-week';
 import { sportTodaySource } from './sport-today';
@@ -203,6 +203,8 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     values,
     undoToken: tokens.issue(database, (tx) => undoSport(tx, dependencies, undo)),
   });
+  /** Undo-Token eines Befehls für importierte Einträge. */
+  const importedUndoToken = (undo: ImportedUndo) => tokens.issue(database, (tx) => undoImported(tx, dependencies, undo));
 
   return {
     addWater({ ml }) {
@@ -218,11 +220,11 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     deleteSport: (entryId) => sportOutcome(database.transaction((tx) => deleteSportEntry(tx, dependencies, entryId))),
     hideImported(entryId) {
       const { undo, ...message } = database.transaction((tx) => hideImportedEntry(tx, dependencies, entryId));
-      return { ...message, undoToken: tokens.issue(database, (tx) => undoImported(tx, dependencies, undo)) };
+      return { ...message, undoToken: importedUndoToken(undo) };
     },
     overrideActivityType(entryId, activityType) {
       const { undo, ...message } = database.transaction((tx) => overrideImportedActivityType(tx, dependencies, entryId, activityType));
-      return { ...message, undoToken: tokens.issue(database, (tx) => undoImported(tx, dependencies, undo)) };
+      return { ...message, undoToken: importedUndoToken(undo) };
     },
     lastSport: () => database.read((tx) => lastSportOf(tx)),
     undo: (undoToken) => tokens.undo(undoToken),
