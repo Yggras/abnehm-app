@@ -337,7 +337,7 @@ function offlinePlace(state: SeedState, { installation, n, operationId, at }: (t
 
 /** Ein Inselobjekt, wie der Server es mit seiner Uhr neu schreibt; die Serverversion vergibt `changedOnServer`. */
 function serverPlaced(state: SeedState, n: number, fieldId: string | null): SeedEntity {
-  const { server_version: _, ...row } = rowOf(state.server, 'island_object', seedIds.islandObject(n));
+  const row = Object.fromEntries(Object.entries(rowOf(state.server, 'island_object', seedIds.islandObject(n))).filter(([column]) => column !== 'server_version'));
   return { table: 'island_object', entityType: 'island_object', couplingId, row: { ...row, field_id: fieldId, updated_at: now } };
 }
 
