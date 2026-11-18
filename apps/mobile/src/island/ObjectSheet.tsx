@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { Button, EnergySymbol, space, Text } from '../design';
-import type { ObjectSheet as ObjectSheetContent } from './object-options';
+import type { ObjectSheetContent } from './object-options';
 import { ObjectPreview } from './ObjectPreview';
 import { objectTexts } from './texts';
 
@@ -63,7 +63,7 @@ export function ObjectSheet({ sheet, onUpgrade, onMove, onStore }: ObjectSheetPr
 
 function subtitleOf(sheet: ObjectSheetContent): string {
   if (sheet.type === 'partner') return sheet.origin === 'gebaut' ? objectTexts.builtBy(sheet.partnerName, sheet.level) : objectTexts.dekoFrom(sheet.partnerName);
-  return sheet.upgrade.type === 'keine_stufen' ? objectTexts.deko : objectTexts.level(sheet.level);
+  return sheet.origin === 'gebaut' ? objectTexts.level(sheet.level) : objectTexts.kind.deko;
 }
 
 const styles = StyleSheet.create({

@@ -1,8 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { energyBookingId, summarizeEnergy } from '@abnehm/contracts/energy';
-import { BuildObject, buildObjectKey, IslandRole } from '@abnehm/contracts/island';
+import { BuildObject, buildObjectKey } from '@abnehm/contracts/island';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import { decideBuild } from '@abnehm/game-rules/building';
 import { indexCatalog } from '@abnehm/game-rules/catalog';
@@ -10,13 +10,14 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 
 import { policies } from '../authorization/authorization.ts';
 import { changeWriter } from '../coupling/change-writer.ts';
-import { blueprintUnlock, couplingMember, island, islandField, islandObject } from '../db/schema/index.ts';
+import { blueprintUnlock, islandField, islandObject } from '../db/schema/index.ts';
 import { insertBooking, readBookings } from '../energy/bookings.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
 import { vacateField } from './field-occupancy.ts';
 import { gameRejection } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
+import { playingRole } from './playing-role.ts';
 import { progressChange } from './progress-change.ts';
 
 // Bauen auf dem Server (Spezifikation 4, Abschnitte 2.5, 3, 7 und 11; Spezifikation 0, Abschnitt 4): Objekt,
@@ -49,20 +50,15 @@ export const buildObjectCommand: ServerCommand<BuildObject> = {
     const [field] = await tx.select().from(islandField).where(eq(islandField.id, payload.fieldId));
     if (field === undefined) throw new Error('Inselfeld fehlt trotz Autorisierung');
     const islandId = EntityId.parse(field.islandId);
-    const [current] = await tx.select({ state: island.state }).from(island).where(eq(island.id, islandId));
-    if (current?.state !== 'aktiv') throw new CommandRejection('conflict');
-    const [member] = await tx
-      .select({ role: couplingMember.role })
-      .from(couplingMember)
-      .where(and(eq(couplingMember.couplingId, couplingId), eq(couplingMember.personId, actor.personId)));
-    if (member?.role == null) throw new CommandRejection('conflict');
+    const role = await playingRole(tx, { islandId, couplingId, personId: actor.personId });
+    if (role === null) throw new CommandRejection('conflict');
     const unlocked = await tx.select({ key: blueprintUnlock.catalogKey }).from(blueprintUnlock).where(eq(blueprintUnlock.islandId, islandId));
     const bookings = (await readBookings(tx, [actor.personId])).get(actor.personId)!;
 
     const decision = decideBuild(catalog, {
       blueprintKey: payload.blueprintKey,
       field: { key: field.fieldKey, ownerPersonId: field.ownerPersonId },
-      person: { personId: actor.personId, role: IslandRole.parse(member.role) },
+      person: { personId: actor.personId, role },
       unlockedBlueprints: new Set(unlocked.map((row) => row.key)),
       balance: summarizeEnergy(bookings).balance,
       checkedBy: 'server',

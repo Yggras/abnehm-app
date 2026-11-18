@@ -1,8 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { energyBookingId, summarizeEnergy } from '@abnehm/contracts/energy';
-import { IslandRole, PlaceObject, placeObjectKey, UpgradeObject, upgradeObjectKey } from '@abnehm/contracts/island';
+import { PlaceObject, placeObjectKey, UpgradeObject, upgradeObjectKey } from '@abnehm/contracts/island';
 import { IslandObjectOrigin } from '@abnehm/contracts/island-records';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import { decidePlacement, decideUpgrade } from '@abnehm/game-rules/building';
@@ -12,13 +12,14 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { policies } from '../authorization/authorization.ts';
 import { changeWriter, updated } from '../coupling/change-writer.ts';
 import type { DbExecutor } from '../database.ts';
-import { couplingMember, island, islandField, islandObject } from '../db/schema/index.ts';
+import { islandField, islandObject } from '../db/schema/index.ts';
 import { insertBooking, readBookings } from '../energy/bookings.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
 import { vacateField } from './field-occupancy.ts';
 import { gameRejection, type GameRefusal } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
+import { playingRole } from './playing-role.ts';
 import { progressChange } from './progress-change.ts';
 
 // Aufwerten und Platzieren auf dem Server (Spezifikation 4, Abschnitte 2.5, 3, 7 und 11; Spezifikation 0,
@@ -34,13 +35,16 @@ import { progressChange } from './progress-change.ts';
 
 const catalog = indexCatalog(gameCatalog);
 
-/** Das Objekt samt Insel, gelesen nach erfolgreicher Autorisierung; die Insel muss geschlüpft und aktiv sein. */
-async function activeObject(tx: DbExecutor, islandObjectId: EntityId) {
+/**
+ * Das Objekt samt Rolle der Person, gelesen nach erfolgreicher Autorisierung; die Insel muss geschlüpft
+ * und aktiv sein.
+ */
+async function activeObject(tx: DbExecutor, islandObjectId: EntityId, personId: EntityId) {
   const [object] = await tx.select().from(islandObject).where(eq(islandObject.id, islandObjectId));
   if (object === undefined) throw new Error('Inselobjekt fehlt trotz Autorisierung');
-  const [current] = await tx.select({ state: island.state }).from(island).where(eq(island.id, object.islandId));
-  if (current?.state !== 'aktiv') throw new CommandRejection('conflict', await canonicalAfterWrite(tx, islandObjectEntity, islandObjectId));
-  return { ...object, origin: IslandObjectOrigin.parse(object.origin) };
+  const role = await playingRole(tx, { islandId: object.islandId, couplingId: EntityId.parse(object.couplingId), personId });
+  if (role === null) throw new CommandRejection('conflict', await canonicalAfterWrite(tx, islandObjectEntity, islandObjectId));
+  return { object: { ...object, origin: IslandObjectOrigin.parse(object.origin) }, role };
 }
 
 /** Lehnt nach den Spielregeln ab und nennt dabei den kanonischen Zustand des Objekts. */
@@ -60,7 +64,7 @@ export const upgradeObjectCommand: ServerCommand<UpgradeObject> = {
   async execute(tx, { actor, resource, payload, businessKey, at }) {
     if (businessKey !== upgradeObjectKey(payload.commandId)) throw new CommandRejection('invalid_payload');
     const couplingId = EntityId.parse(resource.couplingId);
-    const object = await activeObject(tx, payload.islandObjectId);
+    const { object } = await activeObject(tx, payload.islandObjectId, actor.personId);
     const bookings = (await readBookings(tx, [actor.personId])).get(actor.personId)!;
     const decision = decideUpgrade(catalog, {
       object: { catalogKey: object.catalogKey, origin: object.origin, level: object.level },
@@ -108,21 +112,15 @@ export const placeObjectCommand: ServerCommand<PlaceObject> = {
   async execute(tx, { actor, resource, payload, businessKey, at }) {
     if (businessKey !== placeObjectKey(payload.commandId)) throw new CommandRejection('invalid_payload');
     const couplingId = EntityId.parse(resource.couplingId);
-    const object = await activeObject(tx, payload.islandObjectId);
+    const { object, role } = await activeObject(tx, payload.islandObjectId, actor.personId);
     const fieldId = payload.target.type === 'feld' ? payload.target.fieldId : null;
     if (fieldId !== null) {
       const [field] = await tx.select().from(islandField).where(eq(islandField.id, fieldId));
       if (field === undefined) throw new Error('Inselfeld fehlt trotz Autorisierung');
-      const [member] = await tx
-        .select({ role: couplingMember.role })
-        .from(couplingMember)
-        .where(and(eq(couplingMember.couplingId, couplingId), eq(couplingMember.personId, actor.personId)));
-      // Ohne Rolle ist die Insel nicht geschlüpft; `activeObject` schließt das schon aus.
-      if (member?.role == null) throw new CommandRejection('conflict', await canonicalAfterWrite(tx, islandObjectEntity, payload.islandObjectId));
       const decision = decidePlacement(catalog, {
         object: { catalogKey: object.catalogKey, origin: object.origin },
         field: { key: field.fieldKey, ownerPersonId: field.ownerPersonId },
-        person: { personId: actor.personId, role: IslandRole.parse(member.role) },
+        person: { personId: actor.personId, role },
       });
       if (decision.type === 'verboten') return refuse(tx, payload.islandObjectId, decision);
     }

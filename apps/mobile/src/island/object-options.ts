@@ -33,8 +33,8 @@ export type UpgradeOption =
   | Readonly<{ type: 'keine_stufen' }>;
 
 /** Inhalt des Objekt-Sheets: ein eigenes Objekt mit seinen Aktionen, eines des Partners nur mit Infos. */
-export type ObjectSheet =
-  | Readonly<{ type: 'eigen'; id: EntityId; name: string; art: ArtKey; level: number; upgrade: UpgradeOption; canMove: boolean }>
+export type ObjectSheetContent =
+  | Readonly<{ type: 'eigen'; id: EntityId; name: string; art: ArtKey; level: number; origin: IslandObjectOrigin; upgrade: UpgradeOption; canMove: boolean }>
   | Readonly<{ type: 'partner'; id: EntityId; name: string; art: ArtKey; level: number; origin: IslandObjectOrigin; partnerName: string }>;
 
 /** Art eines Stücks im Lager; Gebautes mit Stufe, ein Geschenk mit dem Namen des Partners. */
@@ -48,7 +48,7 @@ export type StorageItem = Readonly<{ id: EntityId; name: string; art: ArtKey; ki
 
 export type ObjectOptions = Readonly<{
   /** Das Objekt-Sheet für das Objekt auf dem Feld; `null` auf einem leeren Feld. */
-  sheetAt(fieldKey: string): ObjectSheet | null;
+  sheetAt(fieldKey: string): ObjectSheetContent | null;
   /** Freie eigene Felder, auf die das eigene Objekt darf; sie leuchten beim Umstellen und Platzieren. */
   placeFields(objectId: string): ReadonlySet<string>;
   /** Das eigene Lager in der Reihenfolge des Lesemodells. */
@@ -97,7 +97,7 @@ export function objectOptions(catalog: CatalogIndex, situation: ObjectSituation)
       if (object === undefined) return null;
       const base = { id: object.id, name: nameOf(object.catalogKey), art: object.art, level: object.level };
       if (object.ownerPersonId !== viewerPersonId) return { type: 'partner', ...base, origin: object.origin, partnerName: partnerDisplayName };
-      return { type: 'eigen', ...base, upgrade: upgradeOf(object), canMove: placeFields(object.id).size > 0 };
+      return { type: 'eigen', ...base, origin: object.origin, upgrade: upgradeOf(object), canMove: placeFields(object.id).size > 0 };
     },
     placeFields,
     storage: storage.map((object) => ({ id: object.id, name: nameOf(object.catalogKey), art: object.art, kind: kindOf(object), canPlace: placeFields(object.id).size > 0 })),

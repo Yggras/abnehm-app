@@ -55,7 +55,7 @@ export type HatchedIslandScreenProps = Readonly<{
   upgrade(islandObjectId: EntityId): UpgradeOutcome;
   /** Platziert über den Spieldienst (`GameService.place`). */
   place(islandObjectId: EntityId, target: PlacementTarget): PlaceOutcome;
-  onOpen(view: Exclude<IslandEntry, 'bauen' | 'lager'>): void;
+  onOpen(view: Exclude<IslandEntry, SheetView>): void;
   /**
    * Ansicht aus der Route `momo`; `bauen` öffnet das Bau-Sheet, `lager` das Lager-Sheet, danach meldet
    * `onViewHandled` sie als erledigt.
@@ -78,15 +78,19 @@ type Placing =
   | Readonly<{ type: 'umstellen'; objectId: EntityId; name: string; from: 'insel' | 'lager' }>;
 
 /** Routen-Ansichten und Einstiege der Leiste, die dieser Bildschirm selbst als Sheet öffnet. */
-const sheetForView: Readonly<Partial<Record<NonNullable<TargetOf<'momo'>['view']>, SheetContent>>> = {
+const sheetForView = {
   bauen: { type: 'bauen', field: null },
   lager: { type: 'lager' },
-};
+} as const satisfies Partial<Record<NonNullable<TargetOf<'momo'>['view']>, SheetContent>>;
+
+type SheetView = keyof typeof sheetForView;
+
+const isSheetView = (view: string): view is SheetView => Object.hasOwn(sheetForView, view);
 
 /** Titel der Leiste im Modus mit leuchtenden Feldern. */
 function placingTitleOf(placing: Placing): string {
   if (placing.type === 'bauen') return buildTexts.placing(placing.option.name);
-  return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placingFromStorage(placing.name);
+  return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placing(placing.name);
 }
 
 export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, onOpen, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
@@ -130,11 +134,10 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
   const [arrivedView, setArrivedView] = useState<TargetOf<'momo'>['view']>(undefined);
   if (requestedView !== arrivedView) {
     setArrivedView(requestedView);
-    const content = requestedView === undefined ? undefined : sheetForView[requestedView];
-    if (content !== undefined) openSheet(content);
+    if (requestedView !== undefined && isSheetView(requestedView)) openSheet(sheetForView[requestedView]);
   }
   useEffect(() => {
-    if (requestedView !== undefined && sheetForView[requestedView] !== undefined) onViewHandled?.();
+    if (requestedView !== undefined && isSheetView(requestedView)) onViewHandled?.();
   }, [requestedView, onViewHandled]);
 
   const options = useMemo(() => buildOptions(island), [island]);
@@ -213,9 +216,8 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
         partnerName={island.partnerDisplayName}
         energy={island.energy}
         onOpen={(view) => {
-          const content = sheetForView[view];
-          if (content !== undefined) openSheet(content);
-          else if (view !== 'bauen' && view !== 'lager') onOpen(view);
+          if (isSheetView(view)) openSheet(sheetForView[view]);
+          else onOpen(view);
         }}
         onFieldPress={onFieldPress}
         onMomoPress={() => {

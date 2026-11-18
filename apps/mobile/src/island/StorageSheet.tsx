@@ -36,7 +36,7 @@ export function StorageSheet({ items, onPlace }: StorageSheetProps) {
                 </Text>
               </View>
               {item.canPlace ? (
-                <Button compact variant="secondary" label={objectTexts.place} accessibilityLabel={objectTexts.placeItem(item.name)} onPress={() => onPlace(item)} />
+                <Button compact variant="secondary" label={objectTexts.place} accessibilityLabel={objectTexts.placing(item.name)} onPress={() => onPlace(item)} />
               ) : (
                 <Text variant="label" tone="inkMuted" style={styles.noField}>
                   {objectTexts.noFieldForItem}

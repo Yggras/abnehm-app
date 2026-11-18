@@ -101,22 +101,20 @@ export const buildTexts = {
  */
 export const objectTexts = {
   level: (level: number) => `Stufe ${level}`,
-  deko: 'Deko',
   builtBy: (partner: string, level: number) => `von ${partner} gebaut · Stufe ${level}`,
   dekoFrom: (partner: string) => `Deko von ${partner}`,
   upgrade: (toLevel: number, price: number) => `Auf Stufe ${toLevel} aufwerten · ${price} Energie`,
   upgradeTooExpensive: (toLevel: number, price: number, missing: number) => `Stufe ${toLevel} kostet ${price} Energie. ${buildTexts.missing(missing)}`,
   highestLevel: 'Höchste Stufe erreicht',
   move: 'Umstellen',
-  noFreeField: 'Gerade ist keines deiner Felder frei.',
+  noFreeField: 'Gerade ist kein passendes Feld frei.',
   store: 'Einlagern',
   moving: (name: string) => `${name} umstellen`,
-  placingFromStorage: (name: string) => `${name} platzieren`,
   storageTitle: 'Lager',
   storageEmpty: 'Dein Lager ist leer. Was du einlagerst oder geschenkt bekommst, wartet hier.',
   place: 'Platzieren',
-  /** Zugänglicher Name von „Platzieren“ in einer Lager-Zeile. */
-  placeItem: (name: string) => `${name} platzieren`,
+  /** Titel des Platzier-Modus und zugänglicher Name von „Platzieren“ in einer Lager-Zeile. */
+  placing: (name: string) => `${name} platzieren`,
   noFieldForItem: 'Kein passendes Feld frei',
   kind: {
     gebaut: (level: number) => `Gebaut · Stufe ${level}`,

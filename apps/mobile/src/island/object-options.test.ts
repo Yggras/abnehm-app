@@ -65,6 +65,7 @@ describe('Objekt-Sheet', () => {
       name: 'Laterne',
       art: 'laterne_1',
       level: 1,
+      origin: 'gebaut',
       upgrade: { type: 'moeglich', toLevel: 2, price: 6 },
       canMove: true,
     });
@@ -83,7 +84,7 @@ describe('Objekt-Sheet', () => {
 
   test('Deko hat keine Stufen', () => {
     const deko: PlacedObject = { ...placed(1, 'grundinsel:0:0', 'muschelkette'), origin: 'challenge', art: 'muschelkette' };
-    expect(objectOptions(catalog, situation({ objects: [deko] })).sheetAt('grundinsel:0:0')).toMatchObject({ upgrade: { type: 'keine_stufen' } });
+    expect(objectOptions(catalog, situation({ objects: [deko] })).sheetAt('grundinsel:0:0')).toMatchObject({ origin: 'challenge', upgrade: { type: 'keine_stufen' } });
   });
 
   test('ohne freies passendes eigenes Feld lässt es sich nicht umstellen, aber einlagern', () => {
