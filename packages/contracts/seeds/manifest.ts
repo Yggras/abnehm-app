@@ -30,7 +30,9 @@ export const seedFormatVersion = 1;
  * `offline_sync` die Mehrgeräte- und Sync-Szenarien (#116). `solo-energie` (Laichkugel solo mit
  * gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
  * `tage_ohne_app_oeffnung` und `zeitzonen_reisen` sind „Tage ohne App-Öffnung“ und „Zeitzonen“ aus
- * Spezifikation 1, Abschnitt 12 (#131).
+ * Spezifikation 1, Abschnitt 12 (#131). `solo-haltemodus-*` (je Sicherheitsgrund), `solo-budget-angehoben`
+ * und `solo-ziele-ab-morgen` sind „erzwungener Haltemodus“, „Budget angehoben“ und „bevorstehende Fassung
+ * ‚ab morgen‘“ aus Spezifikation 1, Abschnitt 12, für die Einstellungsseite „Ziele“ (#147).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -43,6 +45,11 @@ export const SeedScenarioKey = z.enum([
   'solo-gewicht-steigend',
   'solo-gewicht-ohne-14-tage',
   'solo-haltemodus',
+  'solo-haltemodus-schwanger',
+  'solo-haltemodus-essstoerung',
+  'solo-haltemodus-untergewicht',
+  'solo-budget-angehoben',
+  'solo-ziele-ab-morgen',
   'gekoppelt',
   'nach_entkopplung',
   'frisches_konto',

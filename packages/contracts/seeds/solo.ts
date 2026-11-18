@@ -1,4 +1,4 @@
-import { buildSeedState, type SeedPart } from './build.ts';
+import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
 import {
@@ -14,6 +14,7 @@ import {
   type SeedWeeklyPlan,
 } from './rows.ts';
 import type { BausteinKey } from '../src/base.ts';
+import { goalSettingsVariants, type GoalSettingsVariant } from './ziele-einstellungen.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat
@@ -25,8 +26,8 @@ import type { BausteinKey } from '../src/base.ts';
 
 const philipp = seedIds.person.philipp;
 
-/** Fundament: die fertige Person ohne Kopplung. */
-export const soloFundament: SeedPart = {
+/** Fundament: die fertige Person ohne Kopplung; Varianten ändern einzelne Angaben (#147). */
+const soloFundamentWith = (person: GoalSettingsVariant['person'] = {}): SeedPart => ({
   area: 'fundament',
   entities: [
     {
@@ -52,10 +53,13 @@ export const soloFundament: SeedPart = {
         created_at: '2026-10-01T07:00:00.000Z',
         updated_at: '2026-10-01T07:05:00.000Z',
         deleted_at: null,
+        ...person,
       },
     },
   ],
-};
+});
+
+export const soloFundament: SeedPart = soloFundamentWith();
 
 /** Wochenplan mit dem Tag von heute (Mittwoch), aus dem die drei Tagesziele von heute entstehen. */
 export type SoloWeeklyPlan = SeedWeeklyPlan & Readonly<{ mittwoch: readonly [BausteinKey, BausteinKey, BausteinKey] }>;
@@ -270,14 +274,34 @@ const weighings = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, readonly SeedWeighing[]>>;
 
-/** Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche, Wochenplan, Messungen und Tempo. */
-type SoloVariant = Readonly<{ water: WaterToday; sport: readonly SportUnit[]; plan: SoloWeeklyPlan; weights?: readonly SeedWeighing[]; goal?: SoloGoal }>;
+/**
+ * Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche, Wochenplan, Messungen und Tempo;
+ * die Varianten der Einstellungsseite „Ziele“ (#147) bringen Personenangaben, Zielversionen und Messungen mit.
+ */
+type SoloVariant = Readonly<{
+  water: WaterToday;
+  sport: readonly SportUnit[];
+  plan: SoloWeeklyPlan;
+  weights?: readonly SeedWeighing[];
+  goal?: SoloGoal;
+  goalSettings?: GoalSettingsVariant;
+}>;
+
+/** Eine Variante der Einstellungsseite „Ziele“ (#147) über `solo`. */
+const goalSettingsVariant = (variant: GoalSettingsVariant): SoloVariant => ({
+  water: waterToday.solo,
+  sport: sportWeek.solo,
+  plan: soloWeeklyPlan,
+  weights: variant.weights,
+  goalSettings: variant,
+});
 
 /**
  * `solo` und seine Varianten: `solo-wasser-*` zeigen die übrigen Status des Wasser-Mini-Trackers
  * (#171), `solo-sport-*` die des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` den
  * Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175), `solo-gewicht-*` und `solo-haltemodus` die
- * Randzustände des Gewichtstrends (#176).
+ * Randzustände des Gewichtstrends (#176). Die Varianten der Einstellungsseite „Ziele“ (#147) stehen in
+ * `ziele-einstellungen.ts`.
  */
 const soloVariants = {
   solo: { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan },
@@ -290,6 +314,10 @@ const soloVariants = {
   'solo-gewicht-steigend': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-steigend'] },
   'solo-gewicht-ohne-14-tage': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-ohne-14-tage'] },
   'solo-haltemodus': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-haltemodus'], goal: 'haltemodus' },
+  ...Object.fromEntries(Object.entries(goalSettingsVariants).map(([key, variant]) => [key, goalSettingsVariant(variant)])) as Record<
+    keyof typeof goalSettingsVariants,
+    SoloVariant
+  >,
 } as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
 
 type SoloScenario = keyof typeof soloVariants;
@@ -369,17 +397,22 @@ export const soloEigeneLebensmittel: SeedPart = {
 };
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = ({ water, sport, plan, weights, goal }: SoloVariant): readonly SeedPart[] => [
-  soloFundament,
-  soloZieleOf(plan, goal),
+const soloPartsWith = ({ water, sport, plan, weights, goal, goalSettings }: SoloVariant): readonly SeedPart[] => [
+  goalSettings === undefined ? soloFundament : soloFundamentWith(goalSettings.person),
+  goalSettings === undefined ? soloZieleOf(plan, goal) : withGoalVersions(soloZieleOf(plan), goalSettings.goals),
   soloTrackerOf(water, sport, weights),
   soloErnaehrung,
 ];
 
+/** Die Ziele von `solo` mit anderen Zielversionen; Wochenplan und Tagesziele von heute bleiben. */
+function withGoalVersions(part: SeedPart, goals: readonly SeedEntity[]): SeedPart {
+  return { area: part.area, entities: [...goals, ...part.entities.filter((entity) => entity.table !== 'goal_version')] };
+}
+
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(soloVariants.solo);
 
-/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute, in der Sportwoche oder im Wochenplan. */
+/** `solo` oder eine seiner Varianten (`SoloVariant`). */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
     parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, sportVorwoche],
@@ -408,7 +441,7 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   });
 }
 
-/** `solo` und seine Varianten (#171, #173, #175, #176). */
+/** `solo` und seine Varianten (#171, #173, #175, #176, #147). */
 export const soloManifests = Object.fromEntries(
   (Object.keys(soloVariants) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
 ) as Readonly<Record<SoloScenario, SeedManifest>>;
