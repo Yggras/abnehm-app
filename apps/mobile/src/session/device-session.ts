@@ -23,6 +23,7 @@ import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
 import { createDeviceInvitationFlows } from '../online';
+import { appPartner, createPartner } from '../partner';
 import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
@@ -62,6 +63,8 @@ const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', '
 const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.sport');
 /** Momo auf „Heute“ (Spezifikation 4): Laichkugel und Rollenwahl (#180), nach dem Schlüpfen Momo mit Level (#184). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
+/** Partner-Karte `partner` auf „Heute“ (Spezifikation 5, #121): solo Einladen, gekoppelt Name und grober Stand. */
+const partnerTodayOpened = followTodayContribution(appTodayRegistry, 'partner', 'partner');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 /**
  * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183). Bis HealthKit (#193) und Health Connect
@@ -93,6 +96,22 @@ let sessionChecked = false;
 function observeDeviceNetwork(listener: (online: boolean) => void) {
   const subscription = Network.addNetworkStateListener((state) => listener(state.isInternetReachable === true));
   return () => subscription.remove();
+}
+
+/**
+ * Ob das Gerät Internet hat: zuerst der aktuelle Stand, danach jede Änderung. Ohne bekannten Stand meldet
+ * es nichts (https://docs.expo.dev/versions/v58.0.0/sdk/network/).
+ */
+function observeDeviceOnline(listener: (online: boolean) => void) {
+  let active = true;
+  void Network.getNetworkStateAsync().then((state) => {
+    if (active && typeof state.isInternetReachable === 'boolean') listener(state.isInternetReachable);
+  }, onError);
+  const stop = observeDeviceNetwork(listener);
+  return () => {
+    active = false;
+    stop();
+  };
 }
 
 /** Sitzung und Weiche des Geräts; beim ersten Aufruf angelegt. */
@@ -137,6 +156,13 @@ function deviceState() {
         commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, confirmPhotoDraftCommand({ persistence })] }),
       });
       activeEngine = engine;
+      // Partnerbereich (Spezifikation 5): „Wir“ und die Partner-Karte lesen nur den widerrufbaren Partnercache.
+      // Veraltet ist der Partnerstand offline oder 10 Minuten nach dem letzten vollständigen Pull (#121).
+      const partner = createPartner({
+        database, clock: appClock, refresh: appTodayRefresh, sync: () => engine.sync(),
+        // In Test-Artefakten überlagert vom Transport-Fehlermodus wie die Sync-Auslöser (#114).
+        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline,
+      });
       void dispatcher.deliver();
       const stops = [
         todayPersonOpened(database), timeZone.opened(database), gate?.opened(database), onboarding?.opened(database), ownDisplayName.opened(database),
@@ -149,6 +175,7 @@ function deviceState() {
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
+        appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
         followDailyGoalTriggers({
           ensure: plan.ensureDailyGoals,

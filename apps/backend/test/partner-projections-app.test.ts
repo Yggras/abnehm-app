@@ -151,6 +151,8 @@ describe('Partnercache App ↔ Backend', () => {
     await philippsPhone.sync();
 
     expect(philippsPhone.rows()).toMatchObject({ summaries: [], statuses: [] });
-    expect(philippsPhone.partner()).toEqual({ dailyGoalStatus: null, summaries: [] });
+    // Die Kopplung archiviert dieser Test direkt in der Datenbank; dass danach auch der Partner fehlt, belegt
+    // uncoupling-app.test.ts über den echten Entkopplungsablauf.
+    expect(philippsPhone.partner()).toMatchObject({ dailyGoalStatus: null, summaries: [] });
   });
 });

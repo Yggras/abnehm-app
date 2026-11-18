@@ -31,8 +31,12 @@ function record(entityType: string, entityId: string, data: object): CanonicalCh
   return { type: 'record', entityType, entityId: EntityId.parse(entityId), serverVersion: next(), data: data as Record<string, unknown> };
 }
 
-const couplingRecord = () =>
-  record('coupling', COUPLING, { personLowId: ANNA, personHighId: PHILIPP, status: 'aktiv', startedAt: at, endedAt: null, reactivatedAt: null, createdAt: at, updatedAt: at });
+const couplingRecord = (status: 'aktiv' | 'archiviert' = 'aktiv') =>
+  record('coupling', COUPLING, { personLowId: ANNA, personHighId: PHILIPP, status, startedAt: at, endedAt: status === 'aktiv' ? null : at, reactivatedAt: null, createdAt: at, updatedAt: at });
+
+const member = (id: string, personId: EntityId, displayName: string) =>
+  record('coupling_member', id, { couplingId: COUPLING, personId, role: null, displayName, createdAt: at, updatedAt: at });
+const members = () => [member(PHILIPP_MEMBER, PHILIPP, 'Philipp'), member(ANNA_MEMBER, ANNA, 'Anna')];
 
 function summary(id: string, overrides: Partial<PartnerSummaryEnvelope> = {}): CanonicalChange {
   const serverVersion = next();
@@ -90,6 +94,8 @@ afterEach(() => context.cleanup());
 const WATER = '00000000-0000-4000-8000-0000000000d1';
 const SPORT = '00000000-0000-4000-8000-0000000000d2';
 const STATUS = '00000000-0000-4000-8000-0000000000e1';
+const PHILIPP_MEMBER = '00000000-0000-4000-8000-0000000000f1';
+const ANNA_MEMBER = '00000000-0000-4000-8000-0000000000f2';
 
 describe('Partnercache', () => {
   it('liefert Tageszielstand und Zusammenfassungen in der Reihenfolge der Bereiche', async () => {
@@ -140,7 +146,26 @@ describe('Partnercache', () => {
 
     await context.pull([notice({ type: 'kopplung' }, 'entkopplung')]);
 
-    expect(context.cache()).toEqual({ dailyGoalStatus: null, summaries: [] });
+    expect(context.cache()).toEqual({ partner: null, dailyGoalStatus: null, summaries: [] });
     expect(context.stored()).toEqual([]);
+  });
+
+  it('nennt den Partner der aktiven Kopplung mit dem Anzeigenamen seines Kopplungsmitglieds (#121)', async () => {
+    expect(context.cache().partner).toBeNull();
+
+    await context.pull([couplingRecord(), ...members()]);
+    expect(context.cache().partner).toEqual({ personId: ANNA, displayName: 'Anna' });
+
+    // Der Server zieht den Namen nach; der Cache folgt ihm.
+    await context.pull([member(ANNA_MEMBER, ANNA, 'Anna B.')]);
+    expect(context.cache().partner).toEqual({ personId: ANNA, displayName: 'Anna B.' });
+  });
+
+  it('kennt nach der Entkopplung keinen Partner mehr, obwohl die Mitglieder lokal bleiben (#121)', async () => {
+    await context.pull([couplingRecord(), ...members(), status(STATUS, 'unterwegs')]);
+
+    await context.pull([notice({ type: 'kopplung' }, 'entkopplung'), couplingRecord('archiviert')]);
+
+    expect(context.cache()).toEqual({ partner: null, dailyGoalStatus: null, summaries: [] });
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `sync_cursor` ADD `pulled_at` text;

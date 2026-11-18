@@ -10,7 +10,7 @@ import { EntityId, Instant, ServerVersion, TimeZone } from '@abnehm/contracts/ba
 import type { TestWaterRecord, TestWaterUpsert } from '@abnehm/contracts/fixtures';
 import type { CanonicalChange, PullRequest, PullResponse, PushRequest, PushResponse, PushResult } from '@abnehm/contracts/sync';
 
-import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport, type TransportReply } from '.';
+import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, readLastPullAt, restoreSyncState, type SyncTransport, type TransportReply } from '.';
 import type { LocalDatabase, TransactionContext } from '../local-db';
 import { createLocalDatabases } from '../local-db/local-databases';
 import { outbox, person, syncCursor } from '../local-db/schema';
@@ -495,6 +495,37 @@ describe('Sync der App', () => {
     expect(database.read((tx) => repository.visible(tx)).map((row) => row.id)).toEqual([b]);
     expect(database.read((tx) => repository.row(tx, a))).toMatchObject({ deletedAt: start.instant, serverVersion: '5' });
     expect(cursorRow(database)).toMatchObject({ cursor: '5', pageToken: null });
+  });
+
+  it('merkt sich den Zeitpunkt des letzten vollständigen Pulls; Zwischenseiten und Fehler zählen nicht (#121)', async () => {
+    const { database, transport, engine, setHook } = context;
+    const clock = createTestClock(start);
+    const lastPull = () => database.read((tx) => readLastPullAt(tx));
+    expect(lastPull()).toBeNull();
+
+    transport.onPull = (request) =>
+      request.pageToken === null
+        ? { type: 'ok', body: { changes: [], next: { type: 'page', pageToken: 'v1.seite.2' } } }
+        : { type: 'ok', body: { changes: [record(randomUUID(), 100, '3')], next: { type: 'complete', cursor: '3' as never } } };
+    setHook(() => { throw new Error('Seite scheitert'); });
+    await expect(engine.sync()).rejects.toThrow('Seite scheitert');
+    // Seite 1 ist übernommen, der Pull aber nicht vollständig.
+    expect(lastPull()).toBeNull();
+
+    setHook(() => undefined);
+    expect(await engine.sync()).toEqual({ push: 'nothing_to_do', pull: 'done' });
+    expect(lastPull()).toBe(clock.read().instant);
+
+    transport.onPull = () => ({ type: 'unavailable' });
+    expect(await engine.sync()).toEqual({ push: 'nothing_to_do', pull: 'unavailable' });
+    expect(lastPull()).toBe(clock.read().instant);
+  });
+
+  it('stellt mit dem Cursor eines Seeds auch den Zeitpunkt des letzten Pulls her (#121)', async () => {
+    const { database } = context;
+    const at = Instant.parse('2026-10-14T11:00:00.000Z');
+    database.transaction((tx) => restoreSyncState(tx, { cursor: '7' as never, outbox: [] }, at));
+    expect(database.read((tx) => readLastPullAt(tx))).toBe(at);
   });
 
   it('ignoriert einen älteren kanonischen Stand und zieht nach full_resync_required vollständig neu', async () => {

@@ -11,6 +11,7 @@ import { partnerSharingEntity, photoSharingEntity } from './sharing-entities';
 // wie ihre Fachänderung. Den Ablauf startet `SyncEngine.sync()`; Auslöser und Status liefert #102.
 export {
   createSyncEngine,
+  readLastPullAt,
   readSyncState,
   restoreSyncState,
   type CanonicalChangeApplied,

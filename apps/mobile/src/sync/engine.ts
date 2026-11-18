@@ -217,12 +217,11 @@ export function createSyncEngine({ database, registry, transport, clock, install
           if (hasPending(tx, change.entityType, change.entityId)) continue;
           changes.push(apply(tx, change));
         }
-        // Den endgültigen Cursor speichert erst die letzte Seite; davor nur das Seitentoken.
-        writeCursor(
-          tx,
-          page.next.type === 'complete' ? { cursor: page.next.cursor, pageToken: null } : { cursor: state.cursor, pageToken: page.next.pageToken },
-          Instant.parse(clock.read().instant),
-        );
+        // Den endgültigen Cursor speichert erst die letzte Seite, zusammen mit dem Zeitpunkt des vollständigen
+        // Pulls; davor nur das Seitentoken.
+        const at = Instant.parse(clock.read().instant);
+        if (page.next.type === 'complete') writeCursor(tx, { cursor: page.next.cursor, pageToken: null }, at, at);
+        else writeCursor(tx, { cursor: state.cursor, pageToken: page.next.pageToken }, at);
         finish(tx, changes);
       });
       if (page.next.type === 'complete') return 'done';
@@ -300,7 +299,8 @@ export type SyncState = Readonly<{ cursor: SyncCursor | null; outbox: readonly O
  * die Operationen gelten als geprüft und noch nie versucht.
  */
 export function restoreSyncState(tx: TransactionContext, state: SyncState, at: Instant): void {
-  if (state.cursor !== null) writeCursor(tx, { cursor: state.cursor, pageToken: null }, at);
+  // Ein Seed mit Cursor ist auf dem Stand des Servers zur Uhr des Manifests, als wäre gerade gepullt worden.
+  if (state.cursor !== null) writeCursor(tx, { cursor: state.cursor, pageToken: null }, at, at);
   for (const operation of state.outbox) appendOperation(tx, operation);
 }
 
@@ -319,10 +319,18 @@ function readCursor(tx: ReadContext): CursorState {
   };
 }
 
-function writeCursor(tx: TransactionContext, state: CursorState, updatedAt: Instant) {
+/** Zeitpunkt des letzten vollständigen Pulls der Kontodatenbank; `null`, solange es keinen gab. */
+export function readLastPullAt(tx: ReadContext): Instant | null {
+  const row = sqliteOf(tx).select({ pulledAt: syncCursor.pulledAt }).from(syncCursor).where(eq(syncCursor.scope, syncCursorScope)).get();
+  return row?.pulledAt == null ? null : Instant.parse(row.pulledAt);
+}
+
+/** Schreibt Cursor und Seitentoken; `pulledAt` nur, wenn ein Pull damit vollständig ist, sonst bleibt er. */
+function writeCursor(tx: TransactionContext, state: CursorState, updatedAt: Instant, pulledAt?: Instant) {
+  const set = { ...state, updatedAt, ...(pulledAt === undefined ? {} : { pulledAt }) };
   sqliteOf(tx)
     .insert(syncCursor)
-    .values({ scope: syncCursorScope, ...state, updatedAt })
-    .onConflictDoUpdate({ target: syncCursor.scope, set: { ...state, updatedAt } })
+    .values({ scope: syncCursorScope, ...set })
+    .onConflictDoUpdate({ target: syncCursor.scope, set })
     .run();
 }
