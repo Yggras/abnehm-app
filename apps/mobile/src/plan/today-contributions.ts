@@ -2,13 +2,15 @@ import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, type BausteinKey } from '@abnehm/contracts/base';
 import { DailyGoalSnapshot } from '@abnehm/contracts/daily-goals';
 import type { ContractErrorCode } from '@abnehm/contracts/errors';
+import { kcalOfMilliKcal } from '@abnehm/contracts/plan';
 import type { RouteTarget, UiActionIntent } from '@abnehm/contracts/routes';
 import type { MomoDailyGoalsReady, NutritionBudgetReady } from '@abnehm/contracts/today';
 
 import type { DailyGoalRegistry } from '../daily-goals';
-import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext } from '../local-db';
+import type { LocalDatabase, ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { Refresh } from '../shell/followed-source';
+import { observeWithRefresh } from '../shell/observed-reading';
 import type { TodaySlot, TodaySource, TodayState } from '../shell/today-registry';
 import { dailyGoalSnapshotsOn } from './daily-goal-repository';
 import { readEffectivePlan } from './plan-repository';
@@ -31,22 +33,17 @@ export type BudgetNoticeReader<T extends BudgetNotice['type']> = (
 /**
  * Die beiden Hinweise der Ernährungskarte. Höchstens einer erscheint, „Zielgewicht erreicht“ geht vor.
  * Ihre Leser liefern die Tickets „Zielgewicht erreicht“ (#152) und „Budgetvorschlag: Prüfung und
- * Hinweis“ (#150); bis dahin gibt es keinen Hinweis.
+ * Hinweis“ (#150) hier im Plan-Modul; bis dahin gibt es keinen Hinweis.
  */
 export type BudgetNoticeReaders = Readonly<{
   goalWeightReached: BudgetNoticeReader<'goal_weight_reached'>;
   budgetSuggestion: BudgetNoticeReader<'budget_suggestion'>;
 }>;
 
-const noBudgetNotices: BudgetNoticeReaders = { goalWeightReached: () => null, budgetSuggestion: () => null };
+export const noBudgetNotices: BudgetNoticeReaders = { goalWeightReached: () => null, budgetSuggestion: () => null };
 
-export type PlanTodayDependencies = Readonly<{
-  database: Pick<LocalDatabase, 'observe' | 'read'>;
-  /** Lokaler Tag und Auswertungszeitpunkt. */
-  clock: Clock;
-  /** Baustein-Auswertung des Fundaments; dieselbe Registry wie im Persistenzdienst der Tagesziele. */
-  dailyGoals: Pick<DailyGoalRegistry, 'evaluateDailyGoal'>;
-}>;
+/** Baustein-Auswertung des Fundaments; dieselbe Registry wie im Persistenzdienst der Tagesziele. */
+export type DailyGoalEvaluator = Pick<DailyGoalRegistry, 'evaluateDailyGoal'>;
 
 export type PlanToday = Readonly<{
   /** Beitrag `momo.daily_goals`. */
@@ -70,27 +67,33 @@ const areaOf: Readonly<Record<BausteinKey, RouteTarget>> = {
 /** Leer-Grund ohne gültige Ziel- und Wochenplanversion, wie bei den Mini-Trackern (Spezifikation 3, Abschnitt 7). */
 const withoutPlan = { type: 'empty', reasonKey: 'ohne_zielversion' } as const;
 
-/** Die „Heute“-Beiträge über der Datenbank eines Kontos; `notices` ergänzen #150 und #152. */
-export function createPlanToday({ database, clock, dailyGoals }: PlanTodayDependencies, notices: BudgetNoticeReaders = noBudgetNotices): PlanToday {
+type Day = Readonly<{ personId: EntityId; localDate: LocalDate; at: Instant }>;
+/** Die geprüften Snapshots des Tags nach Platz, leer vor der Materialisierung, oder ein Vertragsfehler. */
+type StoredSnapshots = { ok: true; snapshots: DailyGoalSnapshot[] } | { ok: false };
+
+/** Die „Heute“-Beiträge über der Datenbank eines Kontos; `Plan.today` gibt sie mit den Hinweisen des Moduls heraus. */
+export function createPlanToday(
+  { database, clock, dailyGoals }: Readonly<{ database: Pick<LocalDatabase, 'observe' | 'read'>; clock: Clock; dailyGoals: DailyGoalEvaluator }>,
+  notices: BudgetNoticeReaders = noBudgetNotices,
+): PlanToday {
   return {
     dailyGoals: (refresh) => observedToday(database, refresh, (tx) => {
       const day = ownDay(tx, clock);
       if (day === null) return { type: 'loading' };
-      const stored = dailyGoalSnapshotsOn(tx, day.personId, day.localDate);
+      const stored = storedSnapshots(tx, day);
+      if (!stored.ok) return failed('invalid_snapshot');
       // Ohne gültigen Plan entsteht der Tag nie; mit Plan legt ihn der nächste Auslöser an.
-      if (stored.length === 0) {
+      if (stored.snapshots.length === 0) {
         const plan = readEffectivePlan(tx, day.personId, day.localDate);
         if (!plan.success) return failed('invalid_payload');
         return plan.data.type === 'leer' ? withoutPlan : { type: 'loading' };
       }
-      const snapshots = stored.map((snapshot) => DailyGoalSnapshot.safeParse(snapshot));
-      if (snapshots.length !== 3) return failed('invalid_payload');
+      if (stored.snapshots.length !== 3) return failed('invalid_payload');
       const goals = [];
-      for (const snapshot of snapshots) {
-        if (!snapshot.success) return failed('invalid_snapshot');
-        const evaluation = dailyGoals.evaluateDailyGoal(tx, snapshot.data, day.at);
+      for (const snapshot of stored.snapshots) {
+        const evaluation = dailyGoals.evaluateDailyGoal(tx, snapshot, day.at);
         if (evaluation.type === 'contract_error') return failed(evaluation.error.code);
-        goals.push({ slot: snapshot.data.slot, evaluation, action: { actionId: 'tagesziel.open_area', target: areaOf[snapshot.data.type] } });
+        goals.push({ slot: snapshot.slot, evaluation, action: { actionId: 'tagesziel.open_area', target: areaOf[snapshot.type] } });
       }
       return { type: 'ready', data: goals as MomoDailyGoalsReady };
     }),
@@ -100,14 +103,13 @@ export function createPlanToday({ database, clock, dailyGoals }: PlanTodayDepend
       if (day === null) return { type: 'loading' };
       const plan = readEffectivePlan(tx, day.personId, day.localDate);
       if (!plan.success) return failed('invalid_payload');
-      const snapshot = dailyGoalSnapshotsOn(tx, day.personId, day.localDate)
-        .map((stored) => DailyGoalSnapshot.safeParse(stored))
-        .find((parsed) => parsed.success && parsed.data.type === 'im_kalorienbudget');
-      if (snapshot?.success === false) return failed('invalid_snapshot');
-      const fromSnapshot = snapshot?.data.type === 'im_kalorienbudget' ? snapshot.data.budgetKcal : null;
-      if (plan.data.type === 'leer' && fromSnapshot === null) return withoutPlan;
-      // Wie der Snapshot (`dailyGoalSnapshotsOf`): ganze kcal, abgerundet.
-      const budgetKcal = fromSnapshot ?? (plan.data.type === 'gueltig' ? Math.floor(plan.data.goal.calorieBudgetMilliKcal / 1_000) : 0);
+      const stored = storedSnapshots(tx, day);
+      if (!stored.ok) return failed('invalid_snapshot');
+      const snapshot = stored.snapshots.find((candidate) => candidate.type === 'im_kalorienbudget');
+      const budgetKcal = snapshot?.type === 'im_kalorienbudget'
+        ? snapshot.budgetKcal
+        : plan.data.type === 'gueltig' ? kcalOfMilliKcal(plan.data.goal.calorieBudgetMilliKcal) : null;
+      if (budgetKcal === null) return withoutPlan;
       const notice = notices.goalWeightReached(tx, day.personId, day.localDate) ?? notices.budgetSuggestion(tx, day.personId, day.localDate);
       return {
         type: 'ready',
@@ -122,41 +124,32 @@ export function createPlanToday({ database, clock, dailyGoals }: PlanTodayDepend
 }
 
 /** Eigene Person, lokaler Tag und Zeitpunkt aus einer Ablesung der Uhr; `null` ohne eigene Person. */
-function ownDay(tx: ReadContext, clock: Clock): { personId: EntityId; localDate: LocalDate; at: Instant } | null {
+function ownDay(tx: ReadContext, clock: Clock): Day | null {
   const own = readOwnPerson(tx);
   if (own === undefined) return null;
   const reading = clock.read();
   return { personId: EntityId.parse(own.id), localDate: LocalDate.parse(reading.localDate), at: Instant.parse(reading.instant) };
 }
 
+/** Liest die Snapshots des Tags und prüft jeden gegen den Vertrag; ein ungültiger macht den Tag ungültig. */
+function storedSnapshots(tx: ReadContext, day: Day): StoredSnapshots {
+  const snapshots: DailyGoalSnapshot[] = [];
+  for (const stored of dailyGoalSnapshotsOn(tx, day.personId, day.localDate)) {
+    const parsed = DailyGoalSnapshot.safeParse(stored);
+    if (!parsed.success) return { ok: false };
+    snapshots.push(parsed.data);
+  }
+  return { ok: true, snapshots };
+}
+
 function failed(code: ContractErrorCode) {
   return { type: 'error', code, retryAction } as const;
 }
 
-/** Liest in einer Lesetransaktion sofort, nach jedem Commit und auf Anstoß von `refresh` neu. */
 function observedToday<K extends TodaySlot>(
   database: Pick<LocalDatabase, 'observe' | 'read'>,
   refresh: Refresh,
   read: (tx: ReadContext) => TodayState<K>,
 ): TodaySource<K> {
-  return {
-    subscribe(listener) {
-      const stopObserving = database.observe(read, listener);
-      const stopRefresh = refresh(() => {
-        let state: TodayState<K>;
-        try {
-          state = database.read(read);
-        } catch (error) {
-          // Das Konto wurde gesperrt; die App-Sitzung löst den Beitrag gleich.
-          if (error instanceof LocalDatabaseClosedError) return;
-          throw error;
-        }
-        listener(state);
-      });
-      return () => {
-        stopObserving();
-        stopRefresh();
-      };
-    },
-  };
+  return { subscribe: (listener) => observeWithRefresh(database, refresh, read, listener) };
 }

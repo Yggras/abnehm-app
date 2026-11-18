@@ -25,7 +25,7 @@ import { createNotifications, NotificationsStep, type AppNotifications } from '.
 import { expoNotificationPort } from '../notifications/expo-port';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner } from '../partner';
-import { createPlan, createPlanToday, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
@@ -154,7 +154,7 @@ function deviceState() {
       const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
       persistence.registerMissingDaysHook(plan.materializeMissingDays);
       // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
-      const planToday = createPlanToday({ database, clock: appClock, dailyGoals: dailyGoalRegistry });
+      const planToday = plan.today(dailyGoalRegistry);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,

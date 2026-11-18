@@ -12,16 +12,17 @@ import { createLocalDatabases } from '../../local-db/local-databases';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createTodayRegistry, type TodayRegistry } from '../../shell/today-registry';
 import { createSyncRegistry, createSyncWriter, personEntity } from '../../sync';
-import { createPlan, createPlanToday, goalVersionEntity, weeklyPlanVersionEntity, type BudgetNoticeReaders, type InitialPlanDraft, type Plan } from '..';
+import { createPlan, goalVersionEntity, weeklyPlanVersionEntity, type InitialPlanDraft, type Plan } from '..';
+import { createPlanToday, type BudgetNoticeReaders } from '../today-contributions';
 
 // Testaufbau der „Heute“-Beiträge des Plan-Moduls (#136): echte SQLite-Datei mit den Migrationen der App,
-// die Uhr des Tests, echtes Plan-Modul samt Persistenzdienst der Tagesziele und die Test-Evaluatoren aus #104, deren
-// Fakten der Test setzt. Die Beiträge hängen an einer eigenen „Heute“-Registry; `refresh` stößt sie an
+// die Uhr des Tests, echtes Plan-Modul samt Persistenzdienst der Tagesziele und die Test-Evaluatoren aus
+// #104, deren Fakten der Test setzt. Die Beiträge hängen an einer eigenen „Heute“-Registry; `refresh` stößt sie an
 // wie im Betrieb der Minutentakt.
 
 export const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
 export const berlin = TimeZone.parse('Europe/Berlin');
-/** Mittwoch, 14.10.2026, 12:00 in Berlin (Sommerzeit, UTC+2): Startzeit der Testuhr: Plätze Ernährung erfasst, Wasserziel, Im Kalorienbudget. */
+/** Startzeit der Testuhr: Mittwoch, 14.10.2026, 12:00 in Berlin (UTC+2); Plätze Ernährung erfasst, Wasserziel, Im Kalorienbudget. */
 export const wednesdayNoon = Instant.parse('2026-10-14T10:00:00.000Z');
 export const wednesday = LocalDate.parse('2026-10-14');
 
@@ -49,6 +50,7 @@ export type PlanTodayWorldOptions = Readonly<{
   person?: boolean;
   /** Registry der Beiträge; ohne Angabe dieselbe wie im Persistenzdienst. */
   evaluator?: (registry: DailyGoalRegistry) => Pick<DailyGoalRegistry, 'evaluateDailyGoal'>;
+  /** Hinweis-Leser, bis #150 und #152 sie im Plan-Modul liefern; ohne Angabe die des Moduls über `Plan.today`. */
   notices?: BudgetNoticeReaders;
 }>;
 
@@ -104,7 +106,9 @@ export async function createPlanTodayWorld(
     updates.add(update);
     return () => updates.delete(update);
   };
-  const today = createPlanToday({ database, clock, dailyGoals: evaluator(dailyGoals) }, notices);
+  const today = notices === undefined
+    ? plan.today(evaluator(dailyGoals))
+    : createPlanToday({ database, clock, dailyGoals: evaluator(dailyGoals) }, notices);
   const registry = createTodayRegistry();
   registry.register('ziele', 'momo.daily_goals', today.dailyGoals(refresh));
   registry.register('ziele', 'nutrition.budget', today.budget(refresh));

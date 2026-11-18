@@ -29,19 +29,21 @@ const stateNames: Readonly<Record<DailyGoalState, string>> = {
   tagesende: 'am Tagesende',
 };
 
+// Wie die Fortschrittsfelder in `DailyGoalProgress` (Spezifikation 0, Abschnitt 3): Schwellen positiv, Zählungen ab 0.
 const count = z.int().nonnegative();
+const positive = z.int().positive();
 const kcal = (value: number) => value.toLocaleString('de-DE');
 
 type Entry = Readonly<{ values: z.ZodType; detail: (values: never) => string }>;
 const entry = <S extends z.ZodType>(values: S, detail: (values: z.output<S>) => string): Entry => ({ values, detail: detail as Entry['detail'] });
 
-const meals = entry(z.strictObject({ recordedMealCategories: count, minimumMealCategories: count }), (v) =>
+const meals = entry(z.strictObject({ recordedMealCategories: count, minimumMealCategories: positive }), (v) =>
   `${v.recordedMealCategories} von ${v.minimumMealCategories} ${v.minimumMealCategories === 1 ? 'Mahlzeit' : 'Mahlzeiten'}`);
-const budget = z.strictObject({ intakeKcal: count, budgetKcal: count, lowerBoundKcal: count });
+const budget = z.strictObject({ intakeKcal: count, budgetKcal: positive, lowerBoundKcal: positive });
 const decidedBudget = entry(budget, (v) => `${kcal(v.intakeKcal)} von ${kcal(v.budgetKcal)} kcal`);
-const water = entry(z.strictObject({ countedMl: count, targetMl: count }), (v) =>
+const water = entry(z.strictObject({ countedMl: count, targetMl: positive }), (v) =>
   `${thousandthsWithOneDecimal(v.countedMl)} von ${thousandthsWithOneDecimal(v.targetMl)} l`);
-const sport = entry(z.strictObject({ longestSessionMinutes: count, minimumSingleSessionMinutes: count }), (v) =>
+const sport = entry(z.strictObject({ longestSessionMinutes: count, minimumSingleSessionMinutes: positive }), (v) =>
   `${v.longestSessionMinutes} von ${v.minimumSingleSessionMinutes} min`);
 const weighed = z.strictObject({ weightEntryCount: count });
 

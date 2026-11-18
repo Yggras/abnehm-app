@@ -30,13 +30,15 @@ const encouragement: Record<EncouragementKey, string> = {
   du_schaffst_das: 'Du schaffst das! 💪', ich_denk_an_dich: 'Ich denk an dich ❤️',
   stark_heute: 'Stark heute! 🎉', gemeinsam_fuer_momo: 'Gemeinsam für Momo 🐣', stolz_auf_dich: 'Bin stolz auf dich 🌟',
 };
-const names: Record<TodaySlot, string> = {
-  header: 'Kopfbereich', top_notice: 'Anfeuerung', 'momo.character': 'Momo', 'momo.daily_goals': 'Tagesziele',
-  'nutrition.budget': 'Kalorienbudget', 'nutrition.log': 'Ernährung', 'trackers.water': 'Wasser',
-  'trackers.sport': 'Sport', 'trackers.weight': 'Gewicht', partner: 'Partner',
+/** Name je Steckplatz samt Verbformen für „… lädt“ und „… ist gerade nicht verfügbar“. */
+type SlotName = Readonly<{ name: string; loads: string; is: string }>;
+const singular = (name: string): SlotName => ({ name, loads: 'lädt', is: 'ist' });
+const names: Record<TodaySlot, SlotName> = {
+  header: singular('Kopfbereich'), top_notice: singular('Anfeuerung'), 'momo.character': singular('Momo'),
+  'momo.daily_goals': { name: 'Tagesziele', loads: 'laden', is: 'sind' },
+  'nutrition.budget': singular('Kalorienbudget'), 'nutrition.log': singular('Ernährung'), 'trackers.water': singular('Wasser'),
+  'trackers.sport': singular('Sport'), 'trackers.weight': singular('Gewicht'), partner: singular('Partner'),
 };
-/** Beiträge mit Namen in der Mehrzahl, für „… laden“ bzw. „… sind gerade nicht verfügbar“. */
-const pluralNames: ReadonlySet<TodaySlot> = new Set(['momo.daily_goals']);
 function action(intent: UiActionIntent) { openTarget(intent.target); }
 /** Texte der festgelegten Leer-Gründe; ein anderer Grund zeigt den allgemeinen Satz. */
 const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason | 'noch_keine_eintraege', string>> = {
@@ -86,17 +88,17 @@ function retryWith(intent: UiActionIntent, retry?: () => void) {
 function StateView<K extends TodaySlot>({ state, slot, retry, children }: {
   state: TodayState<K> | null; slot: K; retry?: () => void; children: (data: Data<TodayState<K>>) => ReactNode;
 }) {
-  const plural = pluralNames.has(slot);
-  if (!state) return <Text tone="inkMuted">{isTestArtifact() ? `Beitrag für ${names[slot]} fehlt` : 'Lädt …'}</Text>;
+  const { name, loads, is } = names[slot];
+  if (!state) return <Text tone="inkMuted">{isTestArtifact() ? `Beitrag für ${name} fehlt` : 'Lädt …'}</Text>;
   switch (state.type) {
-    case 'loading': return <View style={styles.group}><Text tone="inkMuted">{names[slot]} {plural ? 'laden' : 'lädt'} …</Text><Skeleton width="100%" height={48} /></View>;
+    case 'loading': return <View style={styles.group}><Text tone="inkMuted">{name} {loads} …</Text><Skeleton width="100%" height={48} /></View>;
     case 'ready': return <>{children(state.data as Data<TodayState<K>>)}</>;
     case 'stale': return <View style={styles.group}><Text tone="inkMuted">{staleLabel(state.dataAsOf)}</Text>{children(state.data as Data<TodayState<K>>)}</View>;
     case 'empty': return <View style={styles.group}>
       <Text>{emptyTextOf(state.reasonKey)}</Text>
       {state.action ? <Button variant="secondary" label="Jetzt öffnen" onPress={() => action(state.action!)} /> : null}
     </View>;
-    case 'error': return <View style={styles.group}><Text>{names[slot]} {plural ? 'sind' : 'ist'} gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => retryWith(state.retryAction!, retry)} /> : null}</View>;
+    case 'error': return <View style={styles.group}><Text>{name} {is} gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => retryWith(state.retryAction!, retry)} /> : null}</View>;
   }
 }
 
@@ -346,9 +348,10 @@ const styles = StyleSheet.create({
   group: { gap: space[2] }, trackers: { flexDirection: 'row', gap: space[2] }, stack: { flexDirection: 'column' },
   trackerColumn: { flex: 1, minWidth: 0 },
   goals: { gap: space[2] },
-  goal: { minHeight: size.rowMin, minWidth: size.touchMin, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[2], borderRadius: radius.md, backgroundColor: color.surfaceSunken },
+  goal: { minHeight: size.rowMin, minWidth: size.touchMin, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[2], borderRadius: radius.md },
   goalDone: { backgroundColor: color.successSoft },
-  goalPressed: { opacity: 0.85 },
+  // Gedrückt wie eine Listenzeile (`ListRow`): Fläche einen Ton dunkler.
+  goalPressed: { backgroundColor: color.surfaceSunken },
   levelbar: { flexDirection: 'row', height: size.levelbarHeight, borderRadius: size.levelbarHeight / 2, overflow: 'hidden', backgroundColor: color.surfaceSunken },
   levelHalf: { flex: 1 }, ownFill: { height: '100%', backgroundColor: color.self }, partnerFill: { height: '100%', alignSelf: 'flex-end', backgroundColor: color.partner },
   tracker: { gap: space[2], padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceCard, boxShadow: boxShadow.card },

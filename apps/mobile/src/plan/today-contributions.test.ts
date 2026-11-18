@@ -6,7 +6,7 @@ import { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { dailyGoalId } from '@abnehm/contracts/daily-goals';
 
 import { createDailyGoalRegistry } from '../daily-goals';
-import { goalVersion } from '../local-db/schema';
+import { dailyGoal, goalVersion } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { TodaySlot, TodayState } from '../shell/today-registry';
 import type { Plan } from '.';
@@ -219,6 +219,20 @@ describe('nutrition.budget', () => {
     expect(noticeNow()).toEqual(goalReached);
     shown.budgetSuggestion = false;
     expect(noticeNow()).toEqual(goalReached);
+  });
+
+  it('ergibt wie die Tagesziele error, wenn ein gespeicherter Snapshot den Vertrag verletzt', async () => {
+    const { budget, goals, database, saveInitialPlan } = await setup();
+    await saveInitialPlan();
+
+    // Ein Kalorienbudget unter der Untergrenze lässt die Spalte zu, `DailyGoalSnapshot` aber nicht.
+    database.transaction((tx) => {
+      const db = sqliteOf(tx);
+      const stored = db.select().from(dailyGoal).where(eq(dailyGoal.baustein, 'im_kalorienbudget')).get()!;
+      db.update(dailyGoal).set({ snapshot: { ...stored.snapshot, budgetKcal: 1 } as typeof stored.snapshot }).where(eq(dailyGoal.id, stored.id)).run();
+    });
+    expect(budget.latest()).toEqual({ type: 'error', code: 'invalid_snapshot', retryAction: retry });
+    expect(goals.latest()).toEqual({ type: 'error', code: 'invalid_snapshot', retryAction: retry });
   });
 
   it('ergibt bei einem Vertragsfehler der Zielversion error mit Wiederholen', async () => {
