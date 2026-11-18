@@ -608,7 +608,7 @@ describe('zählen nach den Tracker-Regeln', () => {
     ) as FakeWeeklyPlanVersion['days'],
   };
 
-  it('importierte Trainings zählen in den Wochenminuten, importierte Gewichte als Tagesgewicht und „gewogen“', async () => {
+  it('importierte Trainings zählen in den Wochenminuten, importierte Gewichte als Tagesgewicht, im Trend und für „gewogen“', async () => {
     const world = await healthWorld();
     await applyHealthScenario(world.fake, 'erstimport', world.clock);
     await connected(world);
@@ -623,7 +623,10 @@ describe('zählen nach den Tracker-Regeln', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(sport).toMatchObject({ type: 'ready', data: { weekMinutes: 33 } });
-    expect(weight).toMatchObject({ type: 'ready', data: { value: { type: 'tagesgewicht', weightG: 82_437 }, status: { type: 'gewogen' } } });
+    // Drei importierte Tagesgewichte (das vor 40 Tagen liegt außerhalb der 30 Tage): Der Mini-Tracker zeigt
+    // den Trend (#176). 83 650 → nach 27 Tagen 83 650 + (1 − 0,9^27) × (82 840 − 83 650) = 82 887,1 → nach
+    // 2 Tagen 82 887,1 + 0,19 × (82 437 − 82 887,1) = 82 801,6.
+    expect(weight).toMatchObject({ type: 'ready', data: { value: { type: 'trend', weightG: 82_802 }, status: { type: 'gewogen' } } });
     expect(world.trackers.lastWeights()).toEqual({ weightG: 82_437, dayWeight: { localDate: '2026-10-14', weightG: 82_437 } });
     for (const stop of stops) stop();
   });
