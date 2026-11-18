@@ -1,8 +1,10 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, LocalDate, TimeZone, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import type { WeightEntryFacts } from '@abnehm/contracts/tracker-rules';
-import type { WeightEntryUpsert } from '@abnehm/contracts/trackers';
+import { WeightEntryUpsert, type ImportOrigin } from '@abnehm/contracts/trackers';
+
+import type { StoredImport } from './sport-repository';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { weightEntry } from '../local-db/schema';
@@ -23,9 +25,18 @@ export type StoredWeightEntry = Readonly<{
   serverVersion: ServerVersion | null;
 }>;
 
+/**
+ * Alle fachlichen Spalten zur Nutzlast: Die Felder der jeweils anderen Herkunft sind leer, wie es die
+ * `CHECK`-Constraints der Tabelle verlangen.
+ */
+export function weightColumns(payload: WeightEntryUpsert) {
+  if (payload.origin === 'manuell') return { ...payload, externalKey: null, sourceAppId: null, sourceAppName: null, hiddenAt: null };
+  return payload;
+}
+
 /** Legt den Eintrag an oder überschreibt seine fachlichen Felder (Last-Write-Wins). */
 export function writeWeightEntry(tx: TransactionContext, entityId: EntityId, personId: EntityId, payload: WeightEntryUpsert, at: Instant): void {
-  const fields = { ...payload, updatedAt: at };
+  const fields = { ...weightColumns(payload), updatedAt: at };
   sqliteOf(tx)
     .insert(weightEntry)
     .values({ ...fields, id: entityId, personId, createdAt: at })
@@ -75,4 +86,36 @@ export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightEntr
     .where(eq(weightEntry.personId, personId))
     .orderBy(asc(weightEntry.measuredAt), asc(weightEntry.id))
     .all();
+}
+
+/** Nutzlast eines importierten Gewichtseintrags. */
+export type ImportedWeightUpsert = Extract<WeightEntryUpsert, { origin: ImportOrigin }>;
+
+/** Der importierte Gewichtseintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
+export function readImportedWeight(tx: ReadContext, entityId: EntityId): StoredImport<ImportedWeightUpsert> | undefined {
+  const row = sqliteOf(tx).select().from(weightEntry).where(eq(weightEntry.id, entityId)).get();
+  if (row === undefined || row.origin === 'manuell') return undefined;
+  const payload = WeightEntryUpsert.parse({
+    weightG: row.weightG,
+    measuredAt: row.measuredAt,
+    origin: row.origin,
+    externalKey: row.externalKey,
+    sourceAppId: row.sourceAppId,
+    sourceAppName: row.sourceAppName,
+    hiddenAt: row.hiddenAt,
+    localDate: row.localDate,
+    timeZone: row.timeZone,
+    utcOffsetMinutes: row.utcOffsetMinutes,
+  }) as ImportedWeightUpsert;
+  return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
+}
+
+/** Nicht gelöschte Importe einer Person aus einer Herkunft: externer Schlüssel und Messzeitpunkt. */
+export function importedWeightKeys(tx: ReadContext, personId: EntityId, origin: ImportOrigin): { externalKey: string; at: string }[] {
+  return sqliteOf(tx)
+    .select({ externalKey: weightEntry.externalKey, at: weightEntry.measuredAt })
+    .from(weightEntry)
+    .where(and(eq(weightEntry.personId, personId), eq(weightEntry.origin, origin), isNull(weightEntry.deletedAt)))
+    .all()
+    .flatMap(({ externalKey, at }) => (externalKey === null ? [] : [{ externalKey, at }]));
 }
