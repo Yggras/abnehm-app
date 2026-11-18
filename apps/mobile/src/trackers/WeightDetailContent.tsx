@@ -53,11 +53,12 @@ export function WeightDetailContent({ detail, trackers }: WeightDetailContentPro
           </View>
         ) : null}
       </Sheet>
-      <Sheet visible={viewing !== null} onClose={() => setViewing(null)} height="full">
-        {viewing !== null ? (
-          <ImportedEntrySheet key={viewing.id} imported={{ type: 'gewicht', entry: viewing }} today={detail.today} trackers={trackers} onDone={() => setViewing(null)} />
-        ) : null}
-      </Sheet>
+      <ImportedEntrySheet
+        imported={viewing === null ? null : { type: 'gewicht', entry: viewing }}
+        today={detail.today}
+        trackers={trackers}
+        onClose={() => setViewing(null)}
+      />
     </>
   );
 }

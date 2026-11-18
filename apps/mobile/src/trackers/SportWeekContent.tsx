@@ -48,17 +48,12 @@ export function SportWeekContent({ week, trackers, onWeek }: SportWeekContentPro
           <SportEntryForm key={editing.id} trackers={trackers} entry={editing} title={sportTexts.editTitle} onSaved={() => setEditing(null)} />
         ) : null}
       </Sheet>
-      <Sheet visible={viewing !== null} onClose={() => setViewing(null)} height="full">
-        {viewing !== null ? (
-          <ImportedEntrySheet
-            key={viewing.id}
-            imported={{ type: 'training', entry: viewing }}
-            today={week.today}
-            trackers={trackers}
-            onDone={() => setViewing(null)}
-          />
-        ) : null}
-      </Sheet>
+      <ImportedEntrySheet
+        imported={viewing === null ? null : { type: 'training', entry: viewing }}
+        today={week.today}
+        trackers={trackers}
+        onClose={() => setViewing(null)}
+      />
     </>
   );
 }

@@ -3,6 +3,7 @@ import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import { activityTypes } from '@abnehm/contracts/tracker-rules';
 import type {
   ActivityType,
+  ActivityTypeOverriddenValues,
   ImportedSportEntryUpsert,
   ImportedSportMessageValues,
   ImportedWeightEntryUpsert,
@@ -38,7 +39,7 @@ export type ImportHidden = Readonly<
 >;
 
 /** Ergebnis von `overrideImportedActivityType` in der Transaktion. */
-export type ActivityTypeOverridden = Readonly<{ messageKey: 'sport.art_geaendert'; values: ImportedSportMessageValues; undo: ImportedUndo }>;
+export type ActivityTypeOverridden = Readonly<{ messageKey: 'sport.art_geaendert'; values: ActivityTypeOverriddenValues; undo: ImportedUndo }>;
 
 type Dependencies = Pick<TrackerDependencies, 'clock' | 'writer' | 'persistence'>;
 
@@ -85,7 +86,7 @@ export function overrideImportedActivityType(
   rewriteSport(tx, dependencies, entryId, sport, payload, 'eingabe');
   return {
     messageKey: 'sport.art_geaendert',
-    values: sportValues(payload),
+    values: { activityType, previousActivityType: sportValues(sport.payload).activityType },
     undo: { type: 'activity_type_overridden', entryId, previous: sport.payload.overrideActivityType },
   };
 }

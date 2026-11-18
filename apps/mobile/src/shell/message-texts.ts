@@ -1,7 +1,7 @@
 import { BausteinKey, DisplayName, type MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
-import { ImportedSportMessageValues, ImportedWeightMessageValues, SportMessageValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
+import { ActivityTypeOverriddenValues, ImportedSportMessageValues, ImportedWeightMessageValues, SportMessageValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
@@ -71,9 +71,12 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'sport.ausgeblendet': messageText(ImportedSportMessageValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} ausgeblendet`,
   })),
-  /** Spezifikation 3: Aktivitätsart eines importierten Trainings geändert („52 min Krafttraining gespeichert · Rückgängig“; #186). */
-  'sport.art_geaendert': messageText(ImportedSportMessageValues, ({ activityType, durationMinutes }) => ({
-    text: `${durationMinutes} min ${activityNames[activityType]} gespeichert`,
+  /**
+   * Spezifikation 3: Aktivitätsart eines importierten Trainings geändert („Jetzt Krafttraining statt Radfahren ·
+   * Rückgängig“; #186). Der Wortlaut ist ein Designwert aus der Impeccable-Kritik, nicht belegt.
+   */
+  'sport.art_geaendert': messageText(ActivityTypeOverriddenValues, ({ activityType, previousActivityType }) => ({
+    text: `Jetzt ${activityNames[activityType]} statt ${activityNames[previousActivityType]}`,
   })),
   /** Spezifikation 3: importiertes Gewicht ohne Bestätigungsdialog ausgeblendet („82,4 kg ausgeblendet · Rückgängig“; #186). */
   'gewicht.ausgeblendet': messageText(ImportedWeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg ausgeblendet` })),

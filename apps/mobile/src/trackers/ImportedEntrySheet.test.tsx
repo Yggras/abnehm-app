@@ -161,9 +161,13 @@ describe('Training', () => {
       expect(shown.getByText(label)).toBeOnTheScreen();
       expect(shown.getByText(value)).toBeOnTheScreen();
     }
+    // Kalorien zählen nirgends (#38), wie im Formular einer manuellen Einheit.
+    expect(shown.getByText('wird nur angezeigt')).toBeOnTheScreen();
     expect(shown.getByText('Werte änderst du in der Quell-App.')).toBeOnTheScreen();
     expect(shown.queryByRole('textbox')).not.toBeOnTheScreen();
     expect(shown.queryByRole('adjustable')).not.toBeOnTheScreen();
+    // Die Liste der acht Arten braucht Platz: volle Höhe, Werte scrollen über dem festen Fuß.
+    expect(sheet().props.nativeID).toBe('sheet-full');
     // Nur die beiden Aktionen; die Wertzeilen sind keine Schaltflächen.
     expect(shown.getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual(['Aktivitätsart ändern', '52 min Radfahren ausblenden']);
   });
@@ -204,7 +208,7 @@ describe('Training', () => {
     await settle();
 
     expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
-    expect(screen.getByText('52 min Krafttraining gespeichert')).toBeOnTheScreen();
+    expect(screen.getByText('Jetzt Krafttraining statt Radfahren')).toBeOnTheScreen();
     expect(world.sports()[0]).toMatchObject({ activityType: 'radfahren', overrideActivityType: 'krafttraining' });
     await user.press(trainingRow('Krafttraining'));
     expect(within(sheet()).getByText('Krafttraining')).toBeOnTheScreen();
@@ -257,6 +261,9 @@ describe('Gewicht', () => {
     expect(shown.getByText('Werte änderst du in der Quell-App.')).toBeOnTheScreen();
     expect(shown.queryByRole('textbox')).not.toBeOnTheScreen();
     expect(shown.getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual(['82,4 kg ausblenden']);
+    // Wenige Zeilen: Das Sheet nimmt die Höhe seines Inhalts, „Ausblenden“ steht direkt darunter (Impeccable-Kritik).
+    expect(sheet().props.nativeID).toBe('sheet-content');
+    expect(shown.queryByTestId('sheet-scroll')).not.toBeOnTheScreen();
   });
 
   test('„Ausblenden“ eines Tagesgewichts leert die Messliste; „Rückgängig“ holt es zurück', async () => {

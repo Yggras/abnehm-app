@@ -4,7 +4,7 @@ import type { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { activityTypes, type ImportOrigin } from '@abnehm/contracts/tracker-rules';
 import type { ActivityType } from '@abnehm/contracts/trackers';
 
-import { Button, ListGroup, ListRow, Notice } from '../design';
+import { Button, ListGroup, ListRow, Notice, Sheet } from '../design';
 import { activityNames } from '../shell/texts';
 import { useUndoableMessage, type UndoableOutcome } from '../shell/use-undoable-message';
 import { activityIcons } from './activity-icons';
@@ -21,8 +21,10 @@ import { kgText, weightTexts } from './weight-texts';
 // Herkunft (Apple Health bzw. Health Connect) und Quell-App, dazu den Hinweis, dass die Werte in der
 // Quell-App geändert werden. Bearbeiten lässt sich nichts; die Aktionen sind „Aktivitätsart ändern“ (nur
 // Training) und „Ausblenden“. Beide schließen das Sheet ohne Bestätigungsdialog, und der Meldungs-Host zeigt
-// „52 min Radfahren ausgeblendet · Rückgängig“ bzw. „52 min Krafttraining gespeichert · Rückgängig“. Die
-// Auswahl der Art steht im selben Sheet, weil Sheets nicht in Sheets stehen (Design-System).
+// „52 min Radfahren ausgeblendet · Rückgängig“ bzw. „Jetzt Krafttraining statt Radfahren · Rückgängig“. Die
+// Auswahl der Art steht im selben Sheet, weil Sheets nicht in Sheets stehen (Design-System). Das Sheet eines
+// Gewichts hat nur wenige Zeilen und nimmt die Höhe seines Inhalts; das eines Trainings mit der Liste der
+// acht Arten die volle Höhe (Impeccable-Kritik, #186).
 
 /** Ein importierter Eintrag aus der Wochenübersicht des Sports oder der Messliste des Gewichts. */
 export type ImportedEntry = Readonly<{ type: 'training'; entry: SportListEntry }> | Readonly<{ type: 'gewicht'; entry: WeightHistoryEntry }>;
@@ -30,12 +32,13 @@ export type ImportedEntry = Readonly<{ type: 'training'; entry: SportListEntry }
 export type ImportedSheetTrackers = Pick<Trackers, 'hideImported' | 'overrideActivityType' | 'undo' | 'expire'>;
 
 export type ImportedEntrySheetProps = {
-  imported: ImportedEntry;
+  /** Der gezeigte Import; `null` schließt das Sheet. */
+  imported: ImportedEntry | null;
   /** Heute; der Tag des Eintrags steht relativ dazu, etwa „heute“ oder „gestern“. */
   today: LocalDate;
   trackers: ImportedSheetTrackers;
-  /** Ausgeblendet oder umbenannt; der Aufrufer schließt das Sheet. */
-  onDone: () => void;
+  /** Weggewischt, ausgeblendet oder umbenannt; der Aufrufer setzt `imported` auf `null`. */
+  onClose: () => void;
 };
 
 export const importedTexts = {
@@ -47,6 +50,7 @@ export const importedTexts = {
   duration: 'Dauer',
   start: 'Beginn',
   calories: 'Kalorien',
+  caloriesHint: 'wird nur angezeigt',
   weight: 'Gewicht',
   measured: 'Gemessen',
   origin: 'Herkunft',
@@ -62,7 +66,17 @@ export const importedTexts = {
       : `${kgText(imported.entry.weightG)} ausblenden`,
 } as const;
 
-export function ImportedEntrySheet({ imported, today, trackers, onDone }: ImportedEntrySheetProps) {
+export function ImportedEntrySheet({ imported, today, trackers, onClose }: ImportedEntrySheetProps) {
+  return (
+    <Sheet visible={imported !== null} onClose={onClose} height={imported?.type === 'gewicht' ? 'content' : 'full'}>
+      {imported !== null ? <ImportedEntryContent key={imported.entry.id} imported={imported} today={today} trackers={trackers} onDone={onClose} /> : null}
+    </Sheet>
+  );
+}
+
+type ImportedEntryContentProps = Omit<ImportedEntrySheetProps, 'imported' | 'onClose'> & Readonly<{ imported: ImportedEntry; onDone: () => void }>;
+
+function ImportedEntryContent({ imported, today, trackers, onDone }: ImportedEntryContentProps) {
   const message = useUndoableMessage();
   const [choosing, setChoosing] = useState(false);
 
@@ -122,7 +136,7 @@ export function ImportedEntrySheet({ imported, today, trackers, onDone }: Import
   );
   const sourceApp = sourceAppText(imported.entry.sourceAppId, imported.entry.sourceAppName);
   return (
-    <SheetLayout title={importedTexts.title(imported)} actions={actions}>
+    <SheetLayout title={importedTexts.title(imported)} actions={actions} fit={imported.type === 'gewicht'}>
       <ListGroup>{imported.type === 'training' ? <TrainingValues entry={imported.entry} today={today} /> : <WeightValues entry={imported.entry} today={today} />}</ListGroup>
       <ListGroup>
         <ListRow title={importedTexts.origin} value={originNames[imported.entry.origin as ImportOrigin]} />
@@ -148,8 +162,9 @@ function TrainingValues({ entry, today }: { entry: SportListEntry; today: LocalD
       {entry.activeMilliKcal !== null ? (
         <ListRow
           title={importedTexts.calories}
+          subtitle={importedTexts.caloriesHint}
           value={kcalText(entry.activeMilliKcal, false)}
-          accessibilityLabel={`${importedTexts.calories}, ${kcalText(entry.activeMilliKcal, true)}`}
+          accessibilityLabel={`${importedTexts.calories}, ${kcalText(entry.activeMilliKcal, true)}, ${importedTexts.caloriesHint}`}
         />
       ) : null}
     </>

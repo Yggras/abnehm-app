@@ -271,11 +271,15 @@ export const ImportHiddenOutcome = z.discriminatedUnion('messageKey', [
 export type ImportHiddenOutcome = z.infer<typeof ImportHiddenOutcome>;
 
 /**
- * Ergebnis von `overrideActivityType` (#186), etwa „45 min Radfahren gespeichert · Rückgängig“: die neue,
- * überschriebene Art und die Dauer des Trainings.
+ * Werte der Meldung nach dem Ändern der Aktivitätsart, etwa „Jetzt Krafttraining statt Radfahren · Rückgängig“:
+ * die neue und die vorher angezeigte Art (#186, Ergebnis der Impeccable-Kritik).
  */
+export const ActivityTypeOverriddenValues = z.strictObject({ activityType: ActivityType, previousActivityType: ActivityType });
+export type ActivityTypeOverriddenValues = z.infer<typeof ActivityTypeOverriddenValues>;
+
+/** Ergebnis von `overrideActivityType` (#186) samt flüchtigem Undo-Token für „Rückgängig“. */
 export const ActivityTypeOverriddenOutcome = QuickCommandOutcome.extend({
   messageKey: z.literal('sport.art_geaendert'),
-  values: ImportedSportMessageValues,
+  values: ActivityTypeOverriddenValues,
 });
 export type ActivityTypeOverriddenOutcome = z.infer<typeof ActivityTypeOverriddenOutcome>;

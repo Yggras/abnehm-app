@@ -1,6 +1,7 @@
 import {
   ActivityType,
   ActivityTypeOverriddenOutcome,
+  ActivityTypeOverriddenValues,
   ImportedSportEntryUpsert,
   ImportedSportMessageValues,
   ImportedWeightEntryUpsert,
@@ -266,14 +267,22 @@ export const trackerFixtures = {
       'Meldung des Löschens': { messageKey: 'sport.geloescht', values: { activityType: 'radfahren', durationMinutes: 52 }, undoToken: 'undo-7f3e' },
     },
   }),
-  ActivityTypeOverriddenOutcome: fixtures(ActivityTypeOverriddenOutcome, {
-    valid: { 'Art geändert': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', durationMinutes: 52 }, undoToken: 'undo-7f3f' } },
+  ActivityTypeOverriddenValues: fixtures(ActivityTypeOverriddenValues, {
+    valid: { 'Krafttraining statt Radfahren': { activityType: 'krafttraining', previousActivityType: 'radfahren' } },
     invalid: {
-      'ohne Rückgängig': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', durationMinutes: 52 } },
-      'mit vorheriger Art': {
-        messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', durationMinutes: 52, previousActivityType: 'radfahren' }, undoToken: 'undo-7f3f',
-      },
-      'unbekannte Art': { messageKey: 'sport.art_geaendert', values: { activityType: 'tanzen', durationMinutes: 52 }, undoToken: 'undo-7f3f' },
+      'ohne vorherige Art': { activityType: 'krafttraining' },
+      'Plattformart': { activityType: 'krafttraining', previousActivityType: 13 },
+      'mit Dauer': { activityType: 'krafttraining', previousActivityType: 'radfahren', durationMinutes: 52 },
+    },
+  }),
+  ActivityTypeOverriddenOutcome: fixtures(ActivityTypeOverriddenOutcome, {
+    valid: {
+      'Art geändert': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', previousActivityType: 'radfahren' }, undoToken: 'undo-7f3f' },
+    },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', previousActivityType: 'radfahren' } },
+      'Werte eines ausgeblendeten Trainings': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', durationMinutes: 52 }, undoToken: 'undo-7f3f' },
+      'unbekannte Art': { messageKey: 'sport.art_geaendert', values: { activityType: 'tanzen', previousActivityType: 'radfahren' }, undoToken: 'undo-7f3f' },
     },
   }),
 };

@@ -312,7 +312,7 @@ describe('overrideActivityType', () => {
 
     expect(ActivityTypeOverriddenOutcome.parse(outcome)).toEqual({
       messageKey: 'sport.art_geaendert',
-      values: { activityType: 'krafttraining', durationMinutes: 52 },
+      values: { activityType: 'krafttraining', previousActivityType: 'radfahren' },
       undoToken: expect.any(String),
     });
     expect(sports().find((row) => row.id === id)).toMatchObject({ activityType: 'radfahren', overrideActivityType: 'krafttraining' });
@@ -331,6 +331,8 @@ describe('overrideActivityType', () => {
     const id = importedSportId(created, 'training');
     const first = trackers.overrideActivityType(id, 'krafttraining');
     const second = trackers.overrideActivityType(id, 'yoga_dehnen');
+    // Die Meldung nennt die bis dahin angezeigte Art, also die zuerst überschriebene.
+    expect(second.values).toEqual({ activityType: 'yoga_dehnen', previousActivityType: 'krafttraining' });
     reports.length = 0;
 
     trackers.undo(second.undoToken);
