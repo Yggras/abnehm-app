@@ -9,8 +9,16 @@
 # Installationen beim Beenden verloren. So kam nach jedem Neustart ein veralteter Development Build zurück.
 # `-no-snapshot` lädt und speichert keinen Snapshot; installierte Apps bleiben in `userdata-qemu.img`.
 # Quelle: https://developer.android.com/studio/run/emulator-commandline (Quick Boot, `-snapshot`, Daten-Image).
-# Ohne `--device` nimmt `expo run:android` das erste laufende Gerät und startet sonst selbst ein AVD mit Quick
-# Boot (@expo/cli 58: getDevices.js, emulator.js); deshalb startet `npm run android` den Emulator vorher hier.
+# Ohne `--device` nimmt `expo run:android` das erste laufende Gerät und startet sonst selbst `emulator @<avd>`
+# ohne Snapshot-Option, also mit Quick Boot (@expo/cli 58.1.11:
+# https://unpkg.com/@expo/cli@58.1.11/build/src/start/platforms/android/getDevices.js und
+# https://unpkg.com/@expo/cli@58.1.11/build/src/start/platforms/android/emulator.js); deshalb startet
+# `npm run android` den Emulator vorher hier. Für diesen Weg und für Android Studio stellt das Skript außerdem
+# die Boot-Option des AVD auf „Cold boot“ (https://developer.android.com/studio/run/managing-avds, Tabelle 1):
+# `fastboot.forceColdBoot=yes` in seiner config.ini. Dass dieser Schlüssel die Option ist, sagt die Doku nicht.
+# Beobachtet am 18.11.2026 (#294, Emulator `medium_phone`): Mit `forceColdBoot=no` lud `emulator @medium_phone`
+# einen älteren Snapshot und verwarf den neueren Stand; mit `yes` startete es mit dem aktuellen Stand und
+# speichert beim Beenden per `adb emu kill` keinen Snapshot mehr.
 # Die Gerätesperre (scripts/geraete-slot) nimmt der Aufrufer.
 set -euo pipefail
 
@@ -30,6 +38,16 @@ adb_bin() {
   if command -v adb >/dev/null; then command -v adb; else echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"; fi
 }
 adb="$(adb_bin)"
+avd="${E2E_ANDROID_AVD:-medium_phone}"
+
+# Boot-Option des AVD auf Kaltstart; AVD-Verzeichnis wie in https://developer.android.com/tools/variables.
+config="${ANDROID_AVD_HOME:-${ANDROID_USER_HOME:-$HOME/.android}/avd}/$avd.avd/config.ini"
+if [[ -f "$config" ]]; then
+  sed -i.bak -e '/^fastboot\.forceColdBoot=/d' -e '/^fastboot\.forceFastBoot=/d' "$config" && rm -f "$config.bak"
+  printf 'fastboot.forceColdBoot=yes\nfastboot.forceFastBoot=no\n' >>"$config"
+else
+  echo "Warnung: $config fehlt; Boot-Option des AVD nicht gesetzt." >&2
+fi
 
 if [[ "$only_without_device" == true ]]; then
   # Läuft irgendein Gerät, wählt Expo es selbst; dann gibt es nichts zu starten.
@@ -38,7 +56,6 @@ fi
 
 serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
 if [[ -z "$serial" ]]; then
-  avd="${E2E_ANDROID_AVD:-medium_phone}"
   echo "Starte den Emulator „${avd}“ ohne Snapshot …" >&2
   "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" -avd "$avd" -no-snapshot -no-boot-anim >/dev/null 2>&1 &
   # Mit einem weiteren angeschlossenen Gerät braucht jeder adb-Aufruf die Seriennummer des Emulators.

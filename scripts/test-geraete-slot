@@ -20,7 +20,8 @@ printf '%s\n' '#!/bin/sh' \
   '[ "$1" = devices ] && printf "List of devices attached\nemulator-5554\tdevice\nR58W123\tdevice\n"' \
   'exit 0' > "$tmp/bin/adb"
 chmod +x "$tmp/bin/"*
-export PATH="$tmp/bin:$PATH" ABNEHM_GERAETE_SLOT_INTERVALL=1
+# Hermetisch: Keine echte Agent-Session (etwa Claude Code, das diesen Test ausführt) bekommt einen Erneuerer.
+export PATH="$tmp/bin:$PATH" ABNEHM_GERAETE_SLOT_INTERVALL=1 ABNEHM_GERAETE_SLOT_AGENTEN=kein-agent-im-test
 fail() { echo "FEHLER: $*" >&2; exit 1; }
 in_dir() { dir=$1; shift; (cd "$dir" && "$slot" "$@"); }
 
@@ -75,19 +76,30 @@ printf '%s\n' '#!/bin/sh' '"$@"' 'while :; do sleep 1; done' > "$tmp/bin/testage
 chmod +x "$tmp/bin/testagent"
 export ABNEHM_GERAETE_SLOT_AGENTEN=testagent ABNEHM_GERAETE_SLOT_SEKUNDEN=3 ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
 state="$(git -C "$tmp/main" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-geraete-slot"
-renewer() { sed -n 's/^erneuerer=//p' "$state"; }
+renewer() { sed -n 's/^erneuerer_pid=//p' "$state"; }
+bound_to() { sed -n 's/^sitzung_pid=//p' "$state"; }
 alive() { kill -0 "$1" 2>/dev/null; }
 gone_within() { n=0; while alive "$1"; do n=$((n + 1)); [ "$n" -le 30 ] || return 1; sleep 0.2; done; }
 agent_takes() { # $1 Worktree; startet eine Agent-Session, die die Sperre nimmt und weiterläuft
   "$tmp/bin/testagent" sh -c "cd '$1' && '$slot' nehmen > '$tmp/agent' 2>/dev/null" &
   agent=$!
-  n=0; until [ -s "$tmp/agent" ] && [ -n "$(renewer 2>/dev/null)" ]; do n=$((n + 1)); [ "$n" -le 50 ] || fail 'Agent hat die Sperre nicht genommen'; sleep 0.2; done
+  n=0; until [ -s "$tmp/agent" ] && [ "$(bound_to 2>/dev/null)" = "$agent" ]; do n=$((n + 1)); [ "$n" -le 50 ] || fail 'Agent hat die Sperre nicht genommen'; sleep 0.2; done
 }
 
 # Ohne Agent unter den Vorfahren bleibt es beim bisherigen Verhalten: kein Erneuerer.
 in_dir "$tmp/main" nehmen > /dev/null 2>&1
 [ -z "$(renewer)" ] || fail 'Erneuerer ohne Agent-Session gestartet'
 in_dir "$tmp/main" freigeben 2>/dev/null
+
+# Ruft dieselbe Session zweimal `nehmen` auf, läuft für sie genau ein Erneuerer.
+"$tmp/bin/testagent" sh -c "cd '$tmp/work2' && '$slot' nehmen > /dev/null 2>&1 && '$slot' nehmen > '$tmp/agent2' 2>/dev/null" &
+twice=$!
+n=0; until [ -s "$tmp/agent2" ]; do n=$((n + 1)); [ "$n" -le 50 ] || fail 'zweites nehmen'; sleep 0.2; done
+[ "$(cat "$tmp/agent2")" = erneuert ] || fail 'zweites nehmen'
+[ "$(bound_to)" = "$twice" ] || fail 'Erneuerer hängt nicht an der aufrufenden Session'
+[ "$(pgrep -f "geraete-slot __erneuerer $twice " | wc -l | tr -d ' ')" = 1 ] || fail 'mehr als ein Erneuerer für dieselbe Session'
+kill "$twice"; wait "$twice" 2>/dev/null || true
+in_dir "$tmp/work2" freigeben 2>/dev/null
 
 # Die lebende Session behält die Sperre über die Frist hinaus.
 agent_takes "$tmp/work2"
@@ -98,17 +110,30 @@ sleep 5
 status=0; in_dir "$tmp/main" nehmen > /dev/null 2>&1 || status=$?
 [ "$status" = 3 ] || fail "lebende Session nach Ablauf der Frist verdrängt (Exit $status)"
 
-# Ein weiteres `nehmen` im selben Worktree startet keinen zweiten Erneuerer.
-"$tmp/bin/testagent" sh -c "cd '$tmp/work2' && '$slot' nehmen > '$tmp/agent2' 2>/dev/null; kill \$PPID" 2>/dev/null || true
-[ "$(cat "$tmp/agent2")" = erneuert ] || fail 'zweites nehmen derselben Session'
-[ "$(renewer)" = "$first" ] || fail 'zweiter Erneuerer gestartet'
-
 # Endet die Session, verfällt die Sperre nach der Frist, und der Erneuerer endet.
 kill "$agent"; wait "$agent" 2>/dev/null || true
 gone_within "$first" || fail 'Erneuerer läuft nach Ende der Session weiter'
 sleep 4
 [ "$(in_dir "$tmp/main" nehmen 2>/dev/null)" = genommen ] || fail 'Sperre der beendeten Session nicht verfallen'
 in_dir "$tmp/main" freigeben 2>/dev/null
+
+# Eine neue Session im selben Worktree (etwa nach einem Neustart) bekommt einen eigenen Erneuerer, auch wenn
+# der ihrer beendeten Vorgängerin noch nicht abgelaufen ist (Takt hier 30 s).
+ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=30
+agent_takes "$tmp/work2"
+old=$(renewer)
+kill "$agent"; wait "$agent" 2>/dev/null || true
+ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
+: > "$tmp/agent"
+agent_takes "$tmp/work2"
+[ "$(cat "$tmp/agent")" = erneuert ] || fail 'neue Session: nehmen'
+[ "$(bound_to)" = "$agent" ] || fail 'Erneuerer hängt nicht an der neuen Session'
+gone_within "$old" || fail 'Erneuerer der beendeten Session läuft weiter'
+sleep 5
+status=0; in_dir "$tmp/main" nehmen > /dev/null 2>&1 || status=$?
+[ "$status" = 3 ] || fail "neue Session nach Ablauf der Frist verdrängt (Exit $status)"
+kill "$agent"; wait "$agent" 2>/dev/null || true
+in_dir "$tmp/work2" freigeben 2>/dev/null
 
 # Freigeben beendet die Erneuerung sofort, nicht erst beim nächsten Takt (hier 30 s).
 ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=30

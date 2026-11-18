@@ -78,11 +78,6 @@ adb_bin() {
   if command -v adb >/dev/null; then command -v adb; else echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"; fi
 }
 
-# Startet den Emulator ohne Quick-Boot-Snapshot (#294), falls noch keiner läuft.
-android_device() {
-  "$repo_root/scripts/emulator-starten"
-}
-
 # Läufe ---------------------------------------------------------------------------------------------
 failed=0
 for platform in "${platforms[@]}"; do
@@ -107,7 +102,7 @@ for platform in "${platforms[@]}"; do
     xcrun simctl install "$id" "$binary"
   else
     adb="$(adb_bin)"
-    id="${device:-$(android_device)}"
+    id="${device:-$("$repo_root/scripts/emulator-starten")}"  # Emulator ohne Quick-Boot-Snapshot (#294)
     "$adb" -s "$id" install -r "$binary" >&2
     # Ein echtes Gerät erreicht das Backend über localhost des Rechners
     # (https://developer.android.com/tools/adb#forwardports); der Emulator über 10.0.2.2.
