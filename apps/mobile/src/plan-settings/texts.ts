@@ -71,7 +71,11 @@ export const goalTexts = {
   sportStep: (minutes: number) => `${minutes} min`,
   sportHint: 'Aktive Minuten pro Woche',
   maintenance: 'Haltemodus',
-  maintenanceStates: { off: 'aus', gewaehlt: 'an, selbst gewählt', sicherheits_check: 'an, wegen deiner Angaben im Sicherheits-Check' },
+  maintenanceStates: { off: 'aus', on: 'an' },
+  /** Grund des Haltemodus als Unterzeile. */
+  maintenanceReasons: { gewaehlt: 'selbst gewählt', sicherheits_check: 'wegen deiner Angaben im Sicherheits-Check' },
+  /** Kurzform für „ab morgen“, wo der Grund als Wert neben „bisher“ steht. */
+  maintenanceShort: { off: 'aus', gewaehlt: 'an (selbst gewählt)', sicherheits_check: 'an (Sicherheits-Check)' },
   /** Erklärung des erzwungenen Haltemodus; ohne bekannten Anlass allgemein. */
   maintenanceForced: (triggers: readonly SafetyTrigger[]) =>
     triggers.length > 0

@@ -22,29 +22,30 @@ export type StepperProps = {
 /**
  * Stepper aus den Tokens und `IconButton` des Design-Systems. `research/design-system.md` kennt keinen
  * Stepper; Aufbau und Verhalten sind Designwerte ohne Beleg (#147). Beschriftung, daneben, bei großer
- * Schrift darunter, die Bedienung aus „−“, Wert und „+“ als runde 48-dp-Buttons. An einer Grenze ist
+ * Schrift darunter, die Bedienung aus „−“, Wert und „+“ als runde 48-dp-Buttons; ein Hinweis steht darunter. An einer Grenze ist
  * die Richtung gesperrt, statt den Wert zu beschneiden. Die Buttons heißen „<Beschriftung> verringern“ und „<Beschriftung> erhöhen“; der Wert
  * trägt Beschriftung und Wert als Namen.
  */
 export function Stepper({ label, value, valueText, min, max, step, onChange, hint }: StepperProps) {
   const large = useLargeTextLayout();
   return (
-    <View style={[styles.row, large && styles.stacked]}>
-      <View style={styles.main}>
-        <Text>{label}</Text>
-        {hint ? (
-          <Text variant="label" tone="inkMuted">
-            {hint}
+    <View style={styles.container}>
+      <View style={[styles.row, large && styles.stacked]}>
+        <Text style={styles.label}>{label}</Text>
+        <View style={styles.controls}>
+          <IconButton icon="minus" accessibilityLabel={`${label} verringern`} disabled={value - step < min} onPress={() => onChange(value - step)} />
+          <Text variant="bodyStrong" style={styles.value} accessibilityLabel={`${label}: ${valueText}`} accessibilityLiveRegion="polite">
+            {valueText}
           </Text>
-        ) : null}
+          <IconButton icon="plus" accessibilityLabel={`${label} erhöhen`} disabled={value + step > max} onPress={() => onChange(value + step)} />
+        </View>
       </View>
-      <View style={styles.controls}>
-        <IconButton icon="minus" accessibilityLabel={`${label} verringern`} disabled={value - step < min} onPress={() => onChange(value - step)} />
-        <Text variant="bodyStrong" style={styles.value} accessibilityLabel={`${label}: ${valueText}`} accessibilityLiveRegion="polite">
-          {valueText}
+      {/* Der Hinweis steht unter der ganzen Zeile; neben den Buttons bräche er auf schmalen Geräten vielfach um (iPhone SE, #147). */}
+      {hint ? (
+        <Text variant="label" tone="inkMuted">
+          {hint}
         </Text>
-        <IconButton icon="plus" accessibilityLabel={`${label} erhöhen`} disabled={value + step > max} onPress={() => onChange(value + step)} />
-      </View>
+      ) : null}
     </View>
   );
 }
@@ -53,17 +54,10 @@ export function Stepper({ label, value, valueText, min, max, step, onChange, hin
 const valueMinWidth = 88;
 
 const styles = StyleSheet.create({
-  row: {
-    minHeight: size.rowMin,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space[3],
-    paddingVertical: space[2],
-    paddingHorizontal: space[4],
-    backgroundColor: color.surfaceCard,
-  },
+  container: { gap: space[1], paddingVertical: space[2], paddingHorizontal: space[4], backgroundColor: color.surfaceCard },
+  row: { minHeight: size.rowMin, flexDirection: 'row', alignItems: 'center', gap: space[3] },
   stacked: { flexDirection: 'column', alignItems: 'stretch' },
-  main: { flex: 1, gap: space[1] },
+  label: { flex: 1 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: space[2] },
   value: { minWidth: valueMinWidth, textAlign: 'center' },
 });

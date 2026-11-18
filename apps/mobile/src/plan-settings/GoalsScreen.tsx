@@ -78,7 +78,7 @@ const shownFields: readonly ShownField[] = [
 ];
 
 function maintenanceText(reason: GoalVersionView['values']['maintenanceReason']): string {
-  return reason === null ? texts.maintenanceStates.off : texts.maintenanceStates[reason];
+  return reason === null ? texts.maintenanceShort.off : texts.maintenanceShort[reason];
 }
 
 function Upcoming({ current, upcoming }: { current: GoalVersionView; upcoming: GoalVersionView }) {
@@ -144,7 +144,6 @@ function BudgetDerivation({ view }: { view: GoalVersionView }) {
 function Goals({ view }: { view: GoalVersionView }) {
   const { values, forecast } = view;
   const forecastText = forecast === null ? undefined : `${texts.forecast(forecast.year, forecast.month)} · ${texts.estimate}`;
-  const maintenance = maintenanceText(values.maintenanceReason);
   return (
     <View style={styles.section}>
       <SectionTitle>{texts.sections.goals}</SectionTitle>
@@ -158,7 +157,11 @@ function Goals({ view }: { view: GoalVersionView }) {
         {values.pace === null ? null : <ValueRow title={texts.pace} value={paceNames[values.pace]} subtitle={paceRates[values.pace]} />}
         <ValueRow title={texts.water} value={texts.waterPerDay(values.waterTargetMl)} />
         <ValueRow title={texts.sport} value={texts.sportPerWeek(values.weeklySportTargetMinutes)} />
-        <ValueRow title={texts.maintenance} value={maintenance} />
+        <ValueRow
+          title={texts.maintenance}
+          value={values.maintenanceReason === null ? texts.maintenanceStates.off : texts.maintenanceStates.on}
+          subtitle={values.maintenanceReason === null ? undefined : texts.maintenanceReasons[values.maintenanceReason]}
+        />
       </ListGroup>
       {forecast === null ? null : (
         <Text variant="label" tone="inkMuted">

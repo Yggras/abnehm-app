@@ -221,7 +221,7 @@ describe('Haltemodus', () => {
 
     expect(world.goalVersions()[1]).toMatchObject({ validFrom: '2026-10-15', maintenanceReason: 'gewaehlt', pace: null, calorieBudgetMilliKcal: 2_120_000, budgetSource: 'berechnet' });
     expect(row('Tempo: Gewicht halten, bisher entspannt')).toBeOnTheScreen();
-    expect(row('Haltemodus: an, selbst gewählt, bisher aus')).toBeOnTheScreen();
+    expect(row('Haltemodus: an (selbst gewählt), bisher aus')).toBeOnTheScreen();
   });
 
   test('freiwillig ausschalten verlangt ein Tempo', async () => {
