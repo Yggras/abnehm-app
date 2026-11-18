@@ -1,3 +1,5 @@
+import { router } from 'expo-router';
+
 import { Skeleton, Text } from '../design';
 import { openTarget, type RouteScreenProps } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
@@ -12,9 +14,10 @@ import { islandTexts } from './texts';
  * Tab „Momo“ (Spezifikation 4, Abschnitt 7). Ohne Kopplung wartet Momo als Laichkugel, vor dem Schlüpfen
  * zeigt der Tab in jeder Ansicht die Rollenwahl (#180). Nach dem Schlüpfen zeigt er die echte Insel aus
  * den lokalen Daten (#184). Die Leiste öffnet ihre Ansichten über die Route `momo` mit `view`, denselben
- * Weg wie Aktionen auf „Wir“; die Ansichten selbst liefern spätere Tickets.
+ * Weg wie Aktionen auf „Wir“; die Ansichten selbst liefern spätere Tickets. „Bauen“ öffnet das Bau-Sheet
+ * direkt, auch über die Route mit `view: 'bauen'` (#192).
  */
-export function MomoTab(_: RouteScreenProps<'momo'>) {
+export function MomoTab({ target }: RouteScreenProps<'momo'>) {
   const game = useGameService();
   const stage = useIslandStage(game);
   const bottomInset = useTabBarOverlap();
@@ -38,10 +41,18 @@ export function MomoTab(_: RouteScreenProps<'momo'>) {
     <HatchedIslandScreen
       island={stage.island}
       takeGrowthIntro={game.takeGrowthIntro}
+      build={game.build}
       onOpen={(view) => openTarget({ type: 'momo', view })}
+      requestedView={target.view}
+      onViewHandled={clearView}
       bottomInset={bottomInset}
     />
   );
+}
+
+/** Eine erledigte Ansicht verlässt die Route, damit derselbe Link sie erneut öffnen kann. */
+function clearView() {
+  router.setParams({ view: undefined });
 }
 
 function Loading() {

@@ -1,7 +1,10 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { boxShadow } from './elevation';
 import { Icon } from './Icon';
+import { useMotion } from './motion';
 import { Text } from './Text';
 import { color, radius, size, space } from './tokens';
 
@@ -24,7 +27,8 @@ const badgeSize = 32;
  * Levelbalken 50/50 (Design-System, Komponente „Levelbalken“): links die eigene Hälfte „Du“ in
  * `self`, rechts die des Partners in `partner`, beide füllen sich von außen zur Mitte, das Level steht
  * als Abzeichen in der Mitte. Keine Prozentzahlen nebeneinander, keine Rückstandsanzeige; den
- * eigenen Stand hören Screenreader.
+ * eigenen Stand hören Screenreader. Ändert sich eine Hälfte, füllt sie sich in `duration-slow`
+ * (Design-System › Bewegung), etwa die eigene nach einem Bau (#192).
  */
 export function LevelBar({ level, ownPercent, partnerPercent, partnerName, action }: LevelBarProps) {
   const Root = action === undefined ? View : Pressable;
@@ -45,13 +49,13 @@ export function LevelBar({ level, ownPercent, partnerPercent, partnerName, actio
     >
       <View style={styles.track}>
         <View style={styles.half}>
-          <View testID="levelbar-eigen" style={[styles.fill, styles.own, { width: `${ownPercent}%` }]} />
+          <Fill testID="levelbar-eigen" percent={ownPercent} style={styles.own} />
         </View>
         <View style={styles.badge}>
           <Text variant="headline">{level}</Text>
         </View>
         <View style={styles.half}>
-          <View testID="levelbar-partner" style={[styles.fill, styles.partner, { width: `${partnerPercent}%` }]} />
+          <Fill testID="levelbar-partner" percent={partnerPercent} style={styles.partner} />
         </View>
       </View>
       <View style={styles.names}>
@@ -70,6 +74,28 @@ export function LevelBar({ level, ownPercent, partnerPercent, partnerName, actio
       </View>
     </Root>
   );
+}
+
+/**
+ * Gezeichneter Stand einer Hälfte in Prozent. Beim ersten Zeichnen steht er auf `percent`; danach füllt
+ * er sich mit `fill`, bei „Bewegung reduzieren“ springt er ohne Bewegung auf den neuen Stand.
+ */
+export function useFilledPercent(percent: number): SharedValue<number> {
+  const motion = useMotion('fill');
+  const filled = useSharedValue(percent);
+  useEffect(() => {
+    filled.value =
+      motion.type === 'timing' ? withTiming(percent, { duration: motion.duration, easing: Easing.bezier(...motion.easing) }) : percent;
+    // Die Bewegung gilt dem neuen Stand; ein späterer Wechsel der Einstellung bewegt nichts neu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [percent]);
+  return filled;
+}
+
+function Fill({ testID, percent, style }: { testID: string; percent: number; style: ViewStyle }) {
+  const filled = useFilledPercent(percent);
+  const animated = useAnimatedStyle(() => ({ width: `${filled.value}%` }));
+  return <Animated.View testID={testID} style={[styles.fill, style, animated]} />;
 }
 
 const styles = StyleSheet.create({

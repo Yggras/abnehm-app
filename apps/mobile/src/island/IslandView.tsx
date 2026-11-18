@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useClock } from '../clock/clock-context';
 import { color, space } from '../design';
 import type { IslandHalves } from './halves';
-import { IslandBar, type IslandEntry } from './IslandBar';
+import { BuildModeBar, IslandBar, type IslandEntry } from './IslandBar';
 import { IslandCanvas } from './IslandCanvas';
 import { IslandHud } from './IslandHud';
 import { islandScene, type IslandSceneInput, type LocalTime, type SceneHit } from './scene-model';
@@ -29,21 +29,52 @@ export type IslandViewProps = {
   onLevelPress?: () => void;
   /** Wie weit Leisten des Rahmens unten über der Insel liegen, etwa die Tab-Leiste. */
   bottomInset?: number;
+  /** Bau-Modus (#192): der gewählte Bauplan und die Felder, die leuchten; die Leiste bietet „Abbrechen“. */
+  building?: Readonly<{ name: string; fields: ReadonlySet<string> }> | null;
+  onCancelBuild?: () => void;
+  /** Das eben gebaute Objekt; es erscheint mit Feder. */
+  appearing?: string | null;
 };
 
 /**
  * Inselansicht des Tabs „Momo“ (Spezifikation 4, Abschnitt 7): bildschirmfüllender Canvas, oben das
  * HUD, unten die Leiste. Die Szene folgt der lokalen Uhrzeit der betrachtenden Person und dem
- * Schalter „Bereiche“.
+ * Schalter „Bereiche“. Im Bau-Modus leuchten die gültigen Felder, und die Leiste wird zur Bau-Leiste mit
+ * „Abbrechen“ (#192).
  */
-export function IslandView({ island, halves, viewerPersonId, partnerName, energy, onOpen, onFieldPress, onMomoPress, onLevelPress, bottomInset = 0 }: IslandViewProps) {
+export function IslandView({
+  island,
+  halves,
+  viewerPersonId,
+  partnerName,
+  energy,
+  onOpen,
+  onFieldPress,
+  onMomoPress,
+  onLevelPress,
+  bottomInset = 0,
+  building = null,
+  onCancelBuild,
+  appearing = null,
+}: IslandViewProps) {
   const localTime = useLocalTime(useClock());
   const [areas, setAreas] = useState(false);
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
+  const buildable = building?.fields ?? null;
   const scene = useMemo(
-    () => islandScene({ island, viewerPersonId, mode: areas ? 'bereiche' : 'ansehen', localTime, zoom: 1, selectedField }),
-    [island, viewerPersonId, areas, localTime, selectedField],
+    () =>
+      islandScene({
+        island,
+        viewerPersonId,
+        mode: buildable !== null ? { type: 'bauen', fields: buildable } : areas ? 'bereiche' : 'ansehen',
+        localTime,
+        zoom: 1,
+        // Im Bau-Modus leuchten die gültigen Felder; eine Auswahl darüber verwischte sie.
+        selectedField: buildable !== null ? null : selectedField,
+        appearing,
+      }),
+    [island, viewerPersonId, buildable, areas, localTime, selectedField, appearing],
   );
   const ownObjects = island.objects.filter((object) => object.ownerPersonId === viewerPersonId).length;
 
@@ -58,7 +89,7 @@ export function IslandView({ island, halves, viewerPersonId, partnerName, energy
             onMomoPress?.();
             return;
           }
-          setSelectedField(hit?.type === 'feld' ? hit.field : null);
+          if (buildable === null) setSelectedField(hit?.type === 'feld' ? hit.field : null);
           if (hit !== null) onFieldPress?.(hit);
         }}
       />
@@ -75,7 +106,7 @@ export function IslandView({ island, halves, viewerPersonId, partnerName, energy
         />
       </View>
       <View style={[styles.bottom, { paddingBottom: bottomInset + space[3] }]} pointerEvents="box-none">
-        <IslandBar onOpen={onOpen} />
+        {building !== null ? <BuildModeBar name={building.name} onCancel={() => onCancelBuild?.()} /> : <IslandBar onOpen={onOpen} />}
       </View>
     </View>
   );

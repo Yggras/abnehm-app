@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { cancelAnimation, Easing, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { motionFor } from '../design';
+import { motion, motionFor } from '../design';
 
 /**
  * Takt der dauerhaften Bewegung auf der Insel: Wellen, Ruheatmung und Partikel. Er läuft endlos
@@ -26,4 +26,27 @@ export function useLoop(reduceMotion: boolean): SharedValue<number> {
   }, [duration, progress]);
 
   return progress;
+}
+
+/**
+ * Pulsieren der gültigen Felder im Bau-Modus: hin und zurück zwischen 0 und 1, je Richtung `duration-slow`
+ * (Design-System › Insel: „pulsierend mit duration-slow“). Bei „Bewegung reduzieren“ steht es auf 1 still,
+ * die Felder leuchten dann ruhig.
+ */
+export function usePulse(reduceMotion: boolean): SharedValue<number> {
+  const pulse = useSharedValue(1);
+  const still = motionFor('loop', { reduceMotion }).type === 'still';
+
+  useEffect(() => {
+    if (still) {
+      cancelAnimation(pulse);
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = 0;
+    pulse.value = withRepeat(withTiming(1, { duration: motion.duration.slow, easing: Easing.inOut(Easing.ease) }), -1, true);
+    return () => cancelAnimation(pulse);
+  }, [still, pulse]);
+
+  return pulse;
 }
