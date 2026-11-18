@@ -13,6 +13,7 @@
     "./unlocks": "./src/unlocks.ts",
     "./projects": "./src/projects.ts",
     "./hatching": "./src/hatching.ts",
+    "./building": "./src/building.ts",
     "./content": "./content/index.ts",
     "./fixtures": "./fixtures/index.ts"
   },

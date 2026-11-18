@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, pgTable, unique, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { ChallengeStatus, CommonStage, IslandEventKind, IslandRole, IslandState } from '@abnehm/contracts/island';
+import { IslandObjectOrigin } from '@abnehm/contracts/island-records';
 import { SharedEventType } from '@abnehm/contracts/wir';
 
 import { coupling, person } from './accounts.ts';
@@ -12,7 +13,7 @@ import { dailyGoalCompletion } from './plan.ts';
 // Inseldaten gehören der Kopplung (`coupling_id`), Energiebuchungen und Einzahlungen der Person.
 // Fremdschlüssel unveränderlicher Ereignisse und Buchungen verwenden `ON DELETE RESTRICT`.
 
-export const objectOrigins = ['gebaut', 'besucher', 'entdeckung', 'jahreszeit', 'challenge'] as const;
+export const objectOrigins = IslandObjectOrigin.options;
 export const eventStatuses = ['offen', 'erfuellbar', 'abgeschlossen'] as const;
 export const bookingTypes = [
   'daily_goal_credit',

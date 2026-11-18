@@ -40,6 +40,28 @@ export const IslandFieldRecord = z.strictObject({
 });
 export type IslandFieldRecord = z.infer<typeof IslandFieldRecord>;
 
+/** Herkunft eines Inselobjekts: mit Energie gebaut oder als Deko aus Besuch, Entdeckung, Jahreszeit oder Challenge. */
+export const IslandObjectOrigin = z.enum(['gebaut', 'besucher', 'entdeckung', 'jahreszeit', 'challenge']);
+export type IslandObjectOrigin = z.infer<typeof IslandObjectOrigin>;
+
+/**
+ * Inselobjekt: gebauter Bauplan oder Deko einer Person, Stufe 1–3. Es belegt höchstens ein Feld; ohne
+ * Feld liegt es im Lager seines Besitzers (Spezifikation 0, Abschnitt 8). Die zugehörige Energiebuchung
+ * verweist auf das Objekt, nicht umgekehrt; sie liest nur ihr Eigentümer.
+ */
+export const IslandObjectRecord = z.strictObject({
+  ...owned,
+  ownerPersonId: EntityId,
+  catalogKey: CatalogKey,
+  origin: IslandObjectOrigin,
+  level: z.int().min(1).max(3),
+  /** Belegtes Inselfeld; `null` im Lager. */
+  fieldId: EntityId.nullable(),
+  createdAt: Instant,
+  updatedAt: Instant,
+});
+export type IslandObjectRecord = z.infer<typeof IslandObjectRecord>;
+
 /** Gemeinschaftsprojekt mit festgeschriebenem Bedarf je Anteil; fertig genau mit Abschlusszeitpunkt. */
 export const CommunityProjectRecord = z
   .strictObject({
