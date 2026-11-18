@@ -529,7 +529,7 @@ Momo und die Insel werden mit Skia gezeichnet ([#41](https://github.com/Yggras/a
 | --- | --- | --- |
 | zufrieden | Standard | offene Augen, kleines Lächeln |
 | freut sich | ein Tagesziel erfüllt | Lachaugen, offener Mund, Ärmchen hoch (Formen ohne Arme: Kiemenwedel hoch, Schwanz schwingt), kurzer Hüpfer (`spring-bouncy`) |
-| begeistert | alle drei Tagesziele (Tagesbonus), Levelaufstieg | großes Lachen, Sprung, drei Energie-Funken (`duration-celebrate`) |
+| begeistert | alle drei Tagesziele (Tagesbonus), Levelaufstieg | großes Lachen, Sprung, drei Energie-Funken: Sie leuchten über `duration-celebrate` auf und bleiben danach funkelnd stehen, damit „begeistert“ auf einen Blick von „freut sich“ zu unterscheiden ist (Nutzerentscheidung in [#187](https://github.com/Yggras/abnehm-app/issues/187) nach der Impeccable-Prüfung) |
 | neugierig | ein Insel-Ereignis wartet | große Augen, Brauen hoch, Fragezeichen in `hint` |
 | döst | Pause, länger nichts erfasst | geschlossene Augen, „z z“ in `ink-muted` – neutral, nie traurig |
 | schläft | Abend auf der Insel | geschlossene Augen, kleiner Mond |

@@ -8,7 +8,9 @@ import type { JointName } from './types';
 // Reanimated bewegt (`use-momo-motion.ts`):
 // - `phase` läuft im Takt der Stimmung endlos von 0 bis 1 (Atmen, Wippen, Dösen);
 // - `lift` hebt die Figur beim Hüpfer bzw. Sprung an und fällt mit `spring-bouncy` zurück;
-// - `burst` lässt die Funken des Sprungs einmal aufleuchten und verglühen.
+// - `burst` lässt die Funken mit dem Sprung aufleuchten; danach bleiben sie als Zeichen von
+//   „begeistert“ stehen und funkeln im Takt (Nutzerentscheidung in #187 nach der Impeccable-Prüfung:
+//   sonst gliche „begeistert“ nach 1,2 s fast „freut sich“).
 // Bei „Bewegung reduzieren“ stehen die Antriebe auf der Schlüsselpose der Stimmung: klar erkennbar,
 // ohne räumliche Bewegung. Ausschläge sind Designwerte aus #187, nicht belegt.
 
@@ -43,10 +45,10 @@ export function hops(mood: RigMood): boolean {
 
 /**
  * Antriebe der Schlüsselpose: mitten im Takt, am Boden, Funken in voller Leuchtkraft. Dort steht jede
- * Stimmung klar: Wedel hoch, Kopf geneigt, „z z“ und Mond sichtbar, die Laichkugel aufrecht.
+ * Stimmung klar: Wedel hoch, Kopf geneigt, Funken, „z z“ und Mond sichtbar, die Laichkugel aufrecht.
  */
 export function keyMotion(mood: RigMood): MotionInput {
-  return { phase: 0.5, lift: 0, burst: mood === 'begeistert' ? 0.5 : 0 };
+  return { phase: 0.5, lift: 0, burst: mood === 'begeistert' ? 1 : 0 };
 }
 
 /** Antriebe zu Beginn einer Stimmung; mit reduzierter Bewegung bleibt es bei der Schlüsselpose. */
@@ -93,7 +95,7 @@ export function poseOf(mood: RigMood, target: PoseTarget, { phase, lift, burst }
     case 'effekt': {
       switch (mood) {
         case 'begeistert':
-          return { ...still, y: -10 * burst, scale: 0.6 + 0.4 * Math.sin(burst * Math.PI), opacity: Math.sin(burst * Math.PI) };
+          return { ...still, y: -6 * burst, scale: (0.6 + 0.4 * burst) * (1 + 0.12 * wave), opacity: burst };
         case 'neugierig':
           return { ...still, y: 1.5 * wave };
         case 'doest':

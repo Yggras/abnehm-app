@@ -122,11 +122,16 @@ describe('Clips', () => {
     expect(jump).toBeLessThan(hop);
   });
 
-  test('die Funken des Sprungs leuchten auf und verglühen', () => {
-    const at = (burst: number) => poseOf('begeistert', 'effekt', { phase: 0, lift: 0, burst }, 1).opacity;
-    expect(at(0)).toBeCloseTo(0);
-    expect(at(0.5)).toBeCloseTo(1);
-    expect(at(1)).toBeCloseTo(0);
+  test('die Funken leuchten mit dem Sprung auf und bleiben danach als Zeichen von „begeistert“ stehen', () => {
+    const at = (burst: number, phase = 0) => poseOf('begeistert', 'effekt', { phase, lift: 0, burst }, 1);
+    expect(at(0).opacity).toBeCloseTo(0);
+    expect(at(1).opacity).toBeCloseTo(1);
+    expect(at(1, 0.25).opacity).toBeCloseTo(1);
+    expect(at(1, 0.25).scale).not.toBeCloseTo(at(1, 0.75).scale);
+  });
+
+  test('die Schlüsselpose von „begeistert“ zeigt die Funken in voller Leuchtkraft', () => {
+    expect(poseOf('begeistert', 'effekt', keyMotion('begeistert'), 1)).toMatchObject({ opacity: 1, scale: 1 });
   });
 
   test('die Laichkugel wippt um ihren Bodenpunkt', () => {

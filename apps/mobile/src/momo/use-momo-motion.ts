@@ -9,8 +9,8 @@ export type MomoDrive = Readonly<{ phase: SharedValue<number>; lift: SharedValue
 
 /**
  * Bewegt Momo in einer Stimmung: der Takt der Stimmung endlos, zu Beginn von „freut sich“ ein Hüpfer
- * und von „begeistert“ ein Sprung, die mit `spring-bouncy` landen, beim Sprung leuchten die Funken
- * über `duration-celebrate` (Design-System › Momo und › Bewegung). Bei „Bewegung reduzieren“ läuft
+ * und von „begeistert“ ein Sprung, die mit `spring-bouncy` landen; beim Sprung leuchten die Funken
+ * über `duration-celebrate` auf und bleiben danach stehen (Design-System › Momo und › Bewegung). Bei „Bewegung reduzieren“ läuft
  * nichts, und es gibt keine Antriebe: Das Rig zeichnet die Schlüsselpose der Stimmung.
  */
 export function useMomoMotion(mood: RigMood, reduceMotion: boolean): MomoDrive | null {
@@ -33,7 +33,7 @@ export function useMomoMotion(mood: RigMood, reduceMotion: boolean): MomoDrive |
     if (hops(mood) && bounce.type === 'spring') {
       lift.value = withSequence(withTiming(1, { duration: motion.duration.fast, easing: Easing.out(Easing.quad) }), withSpring(0, bounce.config));
     }
-    if (mood === 'begeistert') burst.value = withTiming(1, { duration: motion.duration.celebrate, easing: Easing.linear });
+    if (mood === 'begeistert') burst.value = withTiming(1, { duration: motion.duration.celebrate, easing: Easing.out(Easing.quad) });
     return () => {
       for (const drive of drives) cancelAnimation(drive);
     };
