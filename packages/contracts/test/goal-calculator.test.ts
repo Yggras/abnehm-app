@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { LocalDate } from '../src/base.ts';
 import {
   ageOn,
+  bodyDataErrors,
+  bodyInputLimits,
   calculateGoals,
   sportSessionThreshold,
   type GoalCalculation,
@@ -244,6 +246,19 @@ describe('Eingabegrenzen', () => {
     ['Größe und Gewicht zugleich', { heightCm: 100, weightG: 400_000 }, ['height_out_of_range', 'weight_out_of_range']],
   ] as const)('%s ergibt einen typisierten Fehlerschlüssel statt einer Ausnahme', (_, changes, errors) => {
     expect(fehler(changes)).toEqual(errors);
+  });
+
+  it('`bodyDataErrors` prüft Körperdaten allein, wie der Onboarding-Schritt „Körperdaten“ es vor den Zielen braucht', () => {
+    expect(bodyDataErrors({ heightCm: 168, weightG: 80_000, ageYears: 18 })).toEqual([]);
+    expect(bodyDataErrors({ heightCm: 119, weightG: 80_050, ageYears: 17 })).toEqual(['height_out_of_range', 'weight_not_on_step', 'underage']);
+  });
+
+  it('`bodyInputLimits` nennt die Grenzen aus Abschnitt 3 der Spezifikation 1 für Hinweistexte', () => {
+    expect(bodyInputLimits).toEqual({
+      heightCm: { min: 120, max: 230, step: 1 },
+      weightG: { min: 30_000, max: 300_000, step: 100 },
+      minimumAgeYears: 18,
+    });
   });
 
   it('meldet mehrere Verstöße der Ziele zugleich', () => {

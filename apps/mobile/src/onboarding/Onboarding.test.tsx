@@ -1,12 +1,13 @@
 /// <reference types="expo-router/build/ts-declarations/expect" />
-import { act, fireEvent, screen, userEvent, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, userEvent, waitFor, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type * as React from 'react';
 
+import { startOfLocalDate } from '@abnehm/clock';
 import { createTestClock } from '@abnehm/clock/testing';
-import { DisplayName, Instant, TimeZone } from '@abnehm/contracts/base';
+import { DisplayName, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 
 import { hitArea } from '../design/testing/hit-area';
 import { textScale } from '../design/tokens';
@@ -31,9 +32,16 @@ jest.mock('../session/use-session-gate', () => ({
 jest.mock('../session/device-session', () => ({
   ...jest.requireActual<typeof DeviceSession>('../session/device-session'),
   deviceOnboarding: () => mockDevice.onboarding,
+  deviceAccount: () => mockDevice.account,
+  // Bildschirme und Onboarding-Modul lesen dieselbe Testuhr, wie auf dem Gerät dieselbe Uhr.
+  appClock: mockClock,
 }));
+// Jest zeichnet `@expo/ui` nicht: das Geburtsdatum als Textfeld mit dem Zeitpunkt, Sheets inline.
+jest.mock('../design/native/DateTimePicker', () => jest.requireActual('../design/testing/text-date-time-picker'));
+jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
 
-const clock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
+const mockClock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
+const clock = mockClock;
 const anna = { email: 'anna@example.test', password: 'momo-insel-testpasswort', displayName: 'Anna' };
 const user = userEvent.setup();
 
@@ -296,14 +304,257 @@ describe('Route „onboarding“ mit Konto', () => {
   });
 });
 
+/** Konto samt Person auf dem Gerät, Hinweis bestätigt: Die App öffnet bei Schritt 3. */
+async function openStepThree() {
+  await mockDevice.onboarding.register({ ...anna, displayName: DisplayName.parse(anna.displayName), disclaimerAcceptedAt: clock.read().instant });
+  await mockDevice.onboarding.setUpAccount();
+  await renderRouter(appDir, { initialUrl: '/' });
+  await expectStepThree();
+}
+
+/** Geburtsdatum als Beginn des lokalen Tags in Europe/Berlin, wie es der native Picker liefert. */
+const birthDate = (localDate: string) => startOfLocalDate(LocalDate.parse(localDate), clock.read().timeZone);
+
+async function fillBody({ sex = 'weiblich', born = '1991-04-02', height = '168', weight = '80,0' } = {}) {
+  await user.press(screen.getByRole('radio', { name: sex }));
+  fireEvent.changeText(screen.getByLabelText('Geburtsdatum'), birthDate(born));
+  await user.type(screen.getByLabelText('Größe'), height);
+  await user.type(screen.getByLabelText('Aktuelles Gewicht'), weight);
+}
+
+async function next() {
+  await user.press(screen.getByRole('button', { name: 'Weiter' }));
+}
+
+const progressOf = () => screen.getByRole('progressbar', { name: 'Fortschritt der Einrichtung' });
+
+describe('Schritt 3 „Körperdaten“', () => {
+  it('fragt Berechnungsgeschlecht mit Erklärung, Geburtsdatum, Größe und Gewicht ab und legt sie samt `entryId` im Entwurf ab', async () => {
+    await openStepThree();
+    expect(screen.getByText('Die Formel für deinen Grundumsatz kennt nur zwei Werte: weiblich und männlich. Wähle den, mit dem gerechnet werden soll.')).toBeOnTheScreen();
+
+    await fillBody();
+    expect(screen.getByRole('radio', { name: 'weiblich' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'männlich' })).not.toBeChecked();
+    await next();
+
+    expect(await screen.findByRole('header', { name: 'Sicherheits-Check' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 4 von 11' });
+    expect(mockDevice.onboarding.readDraft()).toEqual({
+      calculationSex: 'weiblich', birthDate: '1991-04-02', heightCm: 168, weightG: 80_000, startWeightEntryId: expect.any(String),
+    });
+  });
+
+  it('prüft die Eingabegrenzen des Zielrechners und nennt fehlende Angaben, ohne weiterzugehen', async () => {
+    await openStepThree();
+    await next();
+
+    expect(screen.getByText('Bitte wähle einen Wert für die Berechnung.')).toBeOnTheScreen();
+    expect(screen.getByText('Tippe auf das Datum und wähle dein Geburtsdatum.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Größe')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib deine Größe ein.');
+    expect(screen.getByLabelText('Aktuelles Gewicht')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib dein aktuelles Gewicht ein.');
+
+    await fillBody({ height: '119', weight: '300,1' });
+    await next();
+    expect(screen.getByLabelText('Größe')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib deine Größe in ganzen Zentimetern von 120 bis 230 ein.');
+    expect(screen.getByLabelText('Aktuelles Gewicht')).toHaveProp(
+      'accessibilityHint',
+      'Fehler: Bitte gib dein Gewicht von 30,0 bis 300,0 kg mit höchstens einer Nachkommastelle ein.',
+    );
+    expect(screen.getByRole('header', { name: 'Körperdaten' })).toBeOnTheScreen();
+
+    // Eine 0 ist eine Eingabe außerhalb der Grenzen, kein fehlender Wert.
+    await user.clear(screen.getByLabelText('Größe'));
+    await user.type(screen.getByLabelText('Größe'), '0');
+    await user.clear(screen.getByLabelText('Aktuelles Gewicht'));
+    await user.type(screen.getByLabelText('Aktuelles Gewicht'), '0,0');
+    await next();
+    expect(screen.getByLabelText('Größe')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib deine Größe in ganzen Zentimetern von 120 bis 230 ein.');
+    expect(screen.getByLabelText('Aktuelles Gewicht')).toHaveProp(
+      'accessibilityHint',
+      'Fehler: Bitte gib dein Gewicht von 30,0 bis 300,0 kg mit höchstens einer Nachkommastelle ein.',
+    );
+
+    await user.clear(screen.getByLabelText('Größe'));
+    await user.type(screen.getByLabelText('Größe'), '120');
+    await user.clear(screen.getByLabelText('Aktuelles Gewicht'));
+    await user.type(screen.getByLabelText('Aktuelles Gewicht'), '300');
+    await next();
+    expect(await screen.findByRole('header', { name: 'Sicherheits-Check' })).toBeOnTheScreen();
+  });
+
+  it('funktioniert offline: Schritte 3 und 4 rufen keinen Server auf', async () => {
+    await openStepThree();
+    mockDevice.faults.set({ transport: 'offline' });
+    const calls = mockDevice.server.calls().length;
+
+    await fillBody();
+    await next();
+    await screen.findByRole('header', { name: 'Sicherheits-Check' });
+    await user.press(screen.getByRole('radio', { name: 'Schwanger oder stillend: Nein' }));
+    await user.press(screen.getByRole('radio', { name: 'Bekannte Essstörung: Nein' }));
+    await next();
+
+    expect(await screen.findByRole('header', { name: 'Aktivitätsstufe' })).toBeOnTheScreen();
+    expect(mockDevice.server.calls()).toHaveLength(calls);
+  });
+});
+
+describe('Sperre unter 18', () => {
+  it('der 18. Geburtstag heute gilt als volljährig, einen Tag später zeigt die App den Sperrbildschirm', async () => {
+    await openStepThree();
+    await fillBody({ born: '2008-10-15' });
+    await next();
+
+    expect(await screen.findByRole('header', { name: 'Diese App ist für Erwachsene' })).toBeOnTheScreen();
+    expect(screen.queryByRole('header', { name: 'Sicherheits-Check' })).toBeNull();
+    expect(mockDevice.onboarding.readDraft().startWeightEntryId).toBeUndefined();
+
+    await user.press(screen.getByRole('button', { name: 'Datum korrigieren' }));
+    expect(await screen.findByRole('header', { name: 'Körperdaten' })).toBeOnTheScreen();
+    expect(screen.getByLabelText('Größe')).toHaveProp('value', '168');
+    fireEvent.changeText(screen.getByLabelText('Geburtsdatum'), birthDate('2008-10-14'));
+    await next();
+
+    expect(await screen.findByRole('header', { name: 'Sicherheits-Check' })).toBeOnTheScreen();
+  });
+
+  it('bleibt nach einem Neustart bestehen, solange das Datum unter 18 ergibt', async () => {
+    await openStepThree();
+    await fillBody({ born: '2010-01-01' });
+    await next();
+    await screen.findByRole('header', { name: 'Diese App ist für Erwachsene' });
+
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    expect(await screen.findByRole('header', { name: 'Diese App ist für Erwachsene' })).toBeOnTheScreen();
+  });
+
+  it('„Abmelden“ meldet über das Abmeldemodul ab und führt zurück zum Willkommen', async () => {
+    await openStepThree();
+    await fillBody({ born: '2010-01-01' });
+    await next();
+    await screen.findByRole('header', { name: 'Diese App ist für Erwachsene' });
+
+    await user.press(screen.getByRole('button', { name: 'Abmelden' }));
+    // Die Bestätigung aus Schritt 1 liegt noch ungesichert in der Outbox.
+    await user.press(await screen.findByRole('button', { name: 'Trotzdem abmelden' }));
+
+    expect(await screen.findByRole('header', { name: 'Willkommen bei Gemeinsam leichter' })).toBeOnTheScreen();
+    expect(screen).toHavePathname('/sitzung');
+    expect(mockDevice.server.calls()).toContain('POST /v1/session/logout');
+  });
+});
+
+describe('Schritt 4 „Sicherheits-Check“', () => {
+  const forced = /ohne Kaloriendefizit: Dein Kalorienbudget entspricht deinem Gesamtumsatz, also deinem geschätzten täglichen Energieverbrauch \(Haltemodus\)\..*ärztlich begleiten/;
+  const chronic = 'Hast du eine chronische Erkrankung? Dann sprich vor dem Abnehmen mit deiner Ärztin oder deinem Arzt.';
+
+  async function openStepFour(body: Parameters<typeof fillBody>[0] = {}) {
+    await openStepThree();
+    await fillBody(body);
+    await next();
+    await screen.findByRole('header', { name: 'Sicherheits-Check' });
+  }
+
+  async function answer(pregnant: 'Ja' | 'Nein', eatingDisorder: 'Ja' | 'Nein') {
+    await user.press(screen.getByRole('radio', { name: `Schwanger oder stillend: ${pregnant}` }));
+    await user.press(screen.getByRole('radio', { name: `Bekannte Essstörung: ${eatingDisorder}` }));
+  }
+
+  it('zeigt den BMI und geht erst weiter, wenn beide Fragen beantwortet sind', async () => {
+    await openStepFour();
+    // 80 kg bei 168 cm: 80 / 1,68² = 28,34…
+    expect(screen.getByText('28,3')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+    expect(screen.getByText('Beantworte beide Fragen, um weiterzumachen.')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('radio', { name: 'Schwanger oder stillend: Nein' }));
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+    await user.press(screen.getByRole('radio', { name: 'Bekannte Essstörung: Nein' }));
+
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeEnabled();
+    expect(mockDevice.onboarding.readDraft()).toEqual(expect.objectContaining({ pregnantOrBreastfeeding: false, knownEatingDisorder: false }));
+  });
+
+  it.each([
+    ['Schwangerschaft oder Stillzeit', { pregnant: 'Ja', eatingDisorder: 'Nein' }, 'Wegen Schwangerschaft oder Stillzeit'],
+    ['bekannte Essstörung', { pregnant: 'Nein', eatingDisorder: 'Ja' }, 'Wegen einer bekannten Essstörung'],
+    ['beide Gründe', { pregnant: 'Ja', eatingDisorder: 'Ja' }, 'Wegen Schwangerschaft oder Stillzeit und einer bekannten Essstörung'],
+  ] as const)('%s: Hinweis auf ärztliche Begleitung und erzwungener Haltemodus', async (_, answers, reason) => {
+    await openStepFour();
+    await answer(answers.pregnant, answers.eatingDisorder);
+
+    const notice = screen.getByText(forced);
+    expect(notice).toHaveTextContent(new RegExp(`^${reason} rechnet die App`));
+    await next();
+    expect(await screen.findByRole('header', { name: 'Aktivitätsstufe' })).toBeOnTheScreen();
+  });
+
+  it('Untergewicht: BMI unter 18,5 erzwingt den Haltemodus, genau 18,5 nicht', async () => {
+    // 200 cm: BMI 18,5 bei genau 74,0 kg.
+    await openStepFour({ height: '200', weight: '73,9' });
+    await answer('Nein', 'Nein');
+    expect(screen.getByText('18,4')).toBeOnTheScreen();
+    expect(screen.getByText(forced)).toHaveTextContent(/^Wegen eines BMI unter 18,5 rechnet die App/);
+    await answer('Ja', 'Ja');
+    expect(screen.getByText(forced)).toHaveTextContent(
+      /^Wegen Schwangerschaft oder Stillzeit, einer bekannten Essstörung und eines BMI unter 18,5 rechnet die App/,
+    );
+    await answer('Nein', 'Nein');
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    await user.clear(await screen.findByLabelText('Aktuelles Gewicht'));
+    await user.type(screen.getByLabelText('Aktuelles Gewicht'), '74,0');
+    await next();
+
+    expect(await screen.findByText('18,5')).toBeOnTheScreen();
+    expect(screen.queryByText(forced)).toBeNull();
+  });
+
+  it('chronische Erkrankung: nur ein Hinweistext, ohne Sperre und ohne Haltemodus', async () => {
+    await openStepFour();
+    expect(screen.getByText(chronic)).toBeOnTheScreen();
+    await answer('Nein', 'Nein');
+
+    expect(screen.queryByText(forced)).toBeNull();
+    await next();
+    expect(await screen.findByRole('header', { name: 'Aktivitätsstufe' })).toBeOnTheScreen();
+  });
+
+  it('„Zurück“ behält alle Eingaben der Schritte 3 und 4', async () => {
+    await openStepFour({ sex: 'männlich', height: '182', weight: '91,8' });
+    await answer('Nein', 'Ja');
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('header', { name: 'Körperdaten' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 3 von 11' });
+    expect(screen.getByRole('radio', { name: 'männlich' })).toBeChecked();
+    expect(screen.getByLabelText('Geburtsdatum')).toHaveProp('value', birthDate('1991-04-02'));
+    expect(screen.getByLabelText('Größe')).toHaveProp('value', '182');
+    expect(screen.getByLabelText('Aktuelles Gewicht')).toHaveProp('value', '91,8');
+
+    await next();
+    expect(await screen.findByRole('header', { name: 'Sicherheits-Check' })).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'Schwanger oder stillend: Nein' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Bekannte Essstörung: Ja' })).toBeChecked();
+
+    await next();
+    await screen.findByRole('header', { name: 'Aktivitätsstufe' });
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('header', { name: 'Sicherheits-Check' })).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'Bekannte Essstörung: Ja' })).toBeChecked();
+  });
+});
+
 describe('Zugänglichkeit', () => {
-  const interactiveRoles = ['button', 'checkbox'];
+  const interactiveRoles = ['button', 'checkbox', 'radio'];
 
   async function expectAccessible() {
     const controls = interactiveRoles.flatMap((role) => screen.queryAllByRole(role));
     expect(controls.length).toBeGreaterThan(0);
     expect(controls.map((control) => ({ name: control.props.accessibilityLabel as string, ...hitArea(control) })).filter(({ width, height }) => width < 48 || height < 48)).toEqual([]);
-    for (const label of ['E-Mail-Adresse', 'Passwort', 'Anzeigename']) {
+    for (const label of ['E-Mail-Adresse', 'Passwort', 'Anzeigename', 'Größe', 'Aktuelles Gewicht']) {
       const input = screen.queryByLabelText(label);
       if (input !== null) expect(hitArea(input).height).toBeGreaterThanOrEqual(48);
     }
@@ -327,6 +578,38 @@ describe('Zugänglichkeit', () => {
     await expectAccessible();
 
     await user.press(screen.getByRole('button', { name: 'Ich habe schon ein Konto' }));
+    await expectAccessible();
+  });
+
+  it('Schritte 3 und 4 und Sperre unter 18: deutsche Namen, 48-dp-Aktionen, Schrift bis Faktor 2,0, Bedeutung nicht nur über Farbe', async () => {
+    await openStepThree();
+    expect(screen.getByText('Geschlecht für die Berechnung')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Geburtsdatum')).toBeOnTheScreen();
+    await expectAccessible();
+
+    // Fehler stehen als Satz am Feld, nicht nur als Rahmenfarbe.
+    await next();
+    expect(screen.getByText('Bitte wähle einen Wert für die Berechnung.')).toBeOnTheScreen();
+    await expectAccessible();
+
+    await fillBody({ born: '2010-01-01' });
+    await next();
+    await screen.findByRole('header', { name: 'Diese App ist für Erwachsene' });
+    expect(screen.getByRole('button', { name: 'Datum korrigieren' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Abmelden' })).toBeOnTheScreen();
+    await expectAccessible();
+
+    await user.press(screen.getByRole('button', { name: 'Datum korrigieren' }));
+    fireEvent.changeText(await screen.findByLabelText('Geburtsdatum'), birthDate('1991-04-02'));
+    await next();
+    await screen.findByRole('header', { name: 'Sicherheits-Check' });
+    expect(screen.getByText('Bist du schwanger oder stillst du?')).toBeOnTheScreen();
+    expect(screen.getByText('Hast du eine bekannte Essstörung?')).toBeOnTheScreen();
+    await user.press(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' }));
+    // Ausgewählt heißt Zustand und Häkchen, der Haltemodus ein Satz mit Symbol (#95).
+    expect(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' })).toBeChecked();
+    expect(within(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' })).getByTestId('icon-check', { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.getByText(/\(Haltemodus\)/)).toBeOnTheScreen();
     await expectAccessible();
   });
 });

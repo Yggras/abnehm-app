@@ -167,6 +167,27 @@ const limits = {
 
 const minimumAgeYears = 18;
 
+/**
+ * Eingabegrenzen der Körperdaten (Designwerte), etwa für die Hinweistexte des Onboarding-Schritts
+ * „Körperdaten“. Ein 18. Geburtstag am Berechnungstag gilt als volljährig (`ageOn`).
+ */
+export const bodyInputLimits = { heightCm: limits.heightCm, weightG: limits.weightG, minimumAgeYears } as const;
+
+/** Verletzte Grenze der Körperdaten; dieselben Schlüssel meldet `calculateGoals`. */
+export type BodyDataError = `${'height' | 'weight'}_${'out_of_range' | 'not_on_step'}` | 'underage';
+
+/**
+ * Prüft die Körperdaten allein, bevor es Ziele gibt: Größe, Gewicht und Alter am Berechnungstag
+ * (`ageOn`). `calculateGoals` prüft sie mit derselben Funktion zuerst.
+ */
+export function bodyDataErrors(input: Pick<GoalCalculatorInput, 'heightCm' | 'weightG' | 'ageYears'>): BodyDataError[] {
+  return [
+    ...checkLimit(input.heightCm, limits.heightCm, 'height'),
+    ...checkLimit(input.weightG, limits.weightG, 'weight'),
+    ...(input.ageYears < minimumAgeYears ? ['underage' as const] : []),
+  ];
+}
+
 /** Gerundete DGE-Richtwerte für Getränke; 18-Jährige erhalten ebenfalls 1.500 ml (Designwert). */
 const suggestedWaterMl = (ageYears: number) => (ageYears <= 50 ? 1_500 : 1_250);
 
@@ -185,7 +206,7 @@ const roundToTenUnits = (units: number) => Math.floor((units + kcalUnits(5)) / k
 /** Das kleinste Vielfache von 10 kcal, das nicht unter dem Wert liegt. */
 const ceilToTenUnits = (units: number) => Math.ceil(units / kcalUnits(10)) * kcalUnits(10);
 
-function checkLimit(value: number, limit: StepRange, input: LimitedInput): GoalInputError[] {
+function checkLimit<I extends LimitedInput>(value: number, limit: StepRange, input: I): (`${I}_out_of_range` | `${I}_not_on_step`)[] {
   if (value < limit.min || value > limit.max) return [`${input}_out_of_range`];
   return Number.isInteger(value / limit.step) ? [] : [`${input}_not_on_step`];
 }
@@ -245,11 +266,7 @@ export function ageOn(birthDate: LocalDate, calculationDate: LocalDate): number 
  * Körperdaten und Alter geprüft, danach die Ziele gegen die daraus folgenden Grenzen.
  */
 export function calculateGoals(input: GoalCalculatorInput): GoalCalculatorResult {
-  const bodyErrors: GoalInputError[] = [
-    ...checkLimit(input.heightCm, limits.heightCm, 'height'),
-    ...checkLimit(input.weightG, limits.weightG, 'weight'),
-    ...(input.ageYears < minimumAgeYears ? ['underage' as const] : []),
-  ];
+  const bodyErrors = bodyDataErrors(input);
   if (bodyErrors.length > 0) return { type: 'ungueltig', errors: bodyErrors };
 
   const goalWeight = goalWeightOf(input);
