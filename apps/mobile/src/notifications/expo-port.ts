@@ -11,6 +11,15 @@ import type { NotificationData, NotificationPort, NotificationResponse } from '.
 
 const dataOf = (data: unknown): NotificationData => (typeof data === 'object' && data !== null ? (data as NotificationData) : {});
 
+/**
+ * Erlaubnis aus Sicht der Person: `undetermined`, solange das System den Dialog noch zeigen würde.
+ * Ab Android 13 meldet Expo vor der ersten Frage schon `denied` (`areNotificationsEnabled()` ist falsch,
+ * `getPermissionsWithPromiseImplApi33` in expo-notifications 58.1.9), unterscheidbar nur über
+ * `canAskAgain`. Auf iOS ist `canAskAgain` bei `denied` immer falsch (`EXPermissionsService.m`).
+ */
+const permissionOf = ({ status, canAskAgain }: Notifications.NotificationPermissionsStatus) =>
+  status === 'denied' && canAskAgain ? 'undetermined' : status;
+
 const responseOf = (response: Notifications.NotificationResponse): NotificationResponse => ({
   notificationId: response.notification.request.identifier,
   data: dataOf(response.notification.request.content.data),
@@ -18,12 +27,12 @@ const responseOf = (response: Notifications.NotificationResponse): NotificationR
 
 export const expoNotificationPort: NotificationPort = {
   async permission() {
-    return (await Notifications.getPermissionsAsync()).status;
+    return permissionOf(await Notifications.getPermissionsAsync());
   },
   async requestPermission() {
     // Ausdrücklich ohne `allowProvisional`: Eine vorläufige Erlaubnis legte Check-ins nur still in die
     // Mitteilungszentrale (Spezifikation 5, Abschnitt 8). Badges nutzt die App nicht.
-    return (await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true } })).status;
+    return permissionOf(await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true } }));
   },
   openSettings: () => Linking.openSettings(),
   async createChannels(channels) {

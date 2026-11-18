@@ -15,8 +15,8 @@ jest.unmock('./expo-port');
 jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 5 },
   SchedulableTriggerInputTypes: { DATE: 'date' },
-  getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined' })),
-  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined', canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', canAskAgain: true })),
   setNotificationChannelAsync: jest.fn(async () => null),
   scheduleNotificationAsync: jest.fn(async () => 'id'),
   cancelScheduledNotificationAsync: jest.fn(async () => {}),
@@ -35,6 +35,20 @@ test('liest die Erlaubnis und fragt auf iOS ohne vorläufige Erlaubnis (provisio
   const [request] = jest.mocked(Notifications.requestPermissionsAsync).mock.calls[0]!;
   expect(request?.ios?.allowProvisional).toBeUndefined();
   expect(request?.ios?.allowAlert).toBe(true);
+});
+
+test.each([
+  ['undetermined', true, 'undetermined'],
+  ['granted', true, 'granted'],
+  // Android 13+ vor der ersten Frage und nach dem ersten „Nicht zulassen“: Das System würde noch fragen.
+  ['denied', true, 'undetermined'],
+  // iOS nach „Nicht erlauben“, Android nach dem zweiten „Nicht zulassen“ oder abgeschaltet in den Einstellungen.
+  ['denied', false, 'denied'],
+] as const)('Expo-Status %s mit canAskAgain %s ist die Erlaubnis %s', async (status, canAskAgain, expected) => {
+  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce({ status, canAskAgain } as Notifications.NotificationPermissionsStatus);
+  jest.mocked(Notifications.requestPermissionsAsync).mockResolvedValueOnce({ status, canAskAgain } as Notifications.NotificationPermissionsStatus);
+  expect(await expoNotificationPort.permission()).toBe(expected);
+  expect(await expoNotificationPort.requestPermission()).toBe(expected);
 });
 
 test('legt jeden Kanal mit Standard-Wichtigkeit an', async () => {

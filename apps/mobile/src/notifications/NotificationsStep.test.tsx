@@ -46,6 +46,15 @@ test.each([
   expect(onComplete).toHaveBeenCalledWith({ type: outcome });
 });
 
+test('Android nach dem ersten „Nicht zulassen“: Das System dürfte noch einmal fragen, der Schritt meldet trotzdem `notifications_denied`', async () => {
+  const port = createFakeNotificationPort({ permission: 'undetermined' });
+  const { onComplete } = await renderStep({ ...port, requestPermission: async () => 'undetermined' } as FakeNotificationPort);
+
+  await user.press(screen.getByRole('button', { name: 'Erlauben' }));
+
+  expect(onComplete).toHaveBeenCalledWith({ type: 'notifications_denied' });
+});
+
 test('scheitert der Systemdialog, ist nichts entschieden: der Schritt meldet `skipped`', async () => {
   const port = createFakeNotificationPort({ permission: 'undetermined' });
   port.fail('requestPermission');

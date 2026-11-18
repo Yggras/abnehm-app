@@ -10,11 +10,16 @@ import { useNotificationPermission, useNotifications } from './NotificationsProv
 import type { NotificationPermission } from './port';
 import { notificationTexts } from './texts';
 
-/** Ergebnis zu einer Erlaubnis; ohne Entscheidung (etwa nach einem Fehler) gilt der Schritt als übersprungen. */
-function outcomeOf(permission: NotificationPermission | null): Extract<OnboardingStepOutcome, { type: 'notifications_granted' | 'notifications_denied' | 'skipped' }> {
-  if (permission === 'granted') return { type: 'notifications_granted' };
-  if (permission === 'denied') return { type: 'notifications_denied' };
-  return { type: 'skipped' };
+type Outcome = Extract<OnboardingStepOutcome, { type: 'notifications_granted' | 'notifications_denied' | 'skipped' }>;
+
+/**
+ * Ergebnis nach dem Systemdialog: Nicht erteilt ist `notifications_denied`, auch wenn Android noch einmal
+ * fragen dürfte (dann ist die Erlaubnis wieder `undetermined`). Scheitert die Anfrage, hat die Person
+ * nichts entschieden, und der Schritt gilt als übersprungen.
+ */
+function answerOutcome(answer: NotificationPermission | null): Outcome {
+  if (answer === null) return { type: 'skipped' };
+  return answer === 'granted' ? { type: 'notifications_granted' } : { type: 'notifications_denied' };
 }
 
 /**
@@ -31,7 +36,7 @@ export function NotificationsStep({ complete }: OnboardingStepProps<'notificatio
   const allow = async () => {
     setAsking(true);
     const answer = await notifications.request().finally(() => setAsking(false));
-    complete(outcomeOf(answer));
+    complete(answerOutcome(answer));
   };
 
   return (
@@ -40,7 +45,7 @@ export function NotificationsStep({ complete }: OnboardingStepProps<'notificatio
       {permission === 'granted' || permission === 'denied' ? (
         <>
           <PermissionState permission={permission} />
-          <Button label={notificationTexts.next} variant="primary" block onPress={() => complete(outcomeOf(permission))} />
+          <Button label={notificationTexts.next} variant="primary" block onPress={() => complete(answerOutcome(permission))} />
         </>
       ) : (
         <Button label={notificationTexts.allow} variant="primary" block loading={asking || permission === null} onPress={() => void allow()} />

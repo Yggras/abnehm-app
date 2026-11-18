@@ -98,11 +98,12 @@ describe('Erlaubnis', () => {
     expect(port.systemDialogs()).toBe(0);
   });
 
-  test('scheitert die Anfrage, bleibt der gelesene Stand und der Fehler geht an onError', async () => {
+  test('scheitert die Anfrage, liefert sie `null`, der gelesene Stand bleibt und der Fehler geht an onError', async () => {
     port.fail('requestPermission');
     const { notifications, errors } = start(port);
 
-    expect(await notifications.request()).toBe('undetermined');
+    expect(await notifications.request()).toBeNull();
+    expect(notifications.permission()).toBe('undetermined');
     expect(errors).toHaveLength(1);
   });
 

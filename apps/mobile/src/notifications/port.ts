@@ -36,9 +36,12 @@ export type NotificationResponse = Readonly<{ notificationId: string; data: Noti
 export type ReceivedNotification = Readonly<{ notificationId: string; data: NotificationData }>;
 
 export type NotificationPort = Readonly<{
-  /** Erlaubnis lesen, ohne zu fragen. */
+  /**
+   * Erlaubnis lesen, ohne zu fragen. `undetermined` heißt: Das System würde den Dialog noch zeigen. Auf
+   * Android gilt das auch nach dem ersten „Nicht zulassen“; erst danach ist sie `denied`.
+   */
   permission(): Promise<NotificationPermission>;
-  /** Öffnet den Systemdialog, sofern das System noch fragen darf, und liefert die Antwort. iOS ohne vorläufige Erlaubnis. */
+  /** Öffnet den Systemdialog, sofern das System noch fragen darf, und liefert die Erlaubnis danach. iOS ohne vorläufige Erlaubnis. */
   requestPermission(): Promise<NotificationPermission>;
   /** Öffnet die Seite dieser App in den System-Einstellungen. */
   openSettings(): Promise<void>;

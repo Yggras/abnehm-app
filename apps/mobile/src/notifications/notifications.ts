@@ -18,7 +18,7 @@ export type Notifications = Readonly<{
   subscribe(listener: () => void): () => void;
   /** Liest die Erlaubnis neu, etwa bei der Rückkehr aus den System-Einstellungen. */
   refresh(): Promise<void>;
-  /** Öffnet den Systemdialog; nur nach „Erlauben“ der Person. Ein Fehler zählt als unverändert. */
+  /** Öffnet den Systemdialog; nur nach „Erlauben“ der Person. Liefert die Erlaubnis danach, `null`, wenn die Anfrage scheiterte. */
   request(): Promise<NotificationPermission | null>;
   /** App-Einstellungen des Systems. */
   openSettings(): Promise<void>;
@@ -63,12 +63,14 @@ export function createNotifications({ port, onForegroundNotification = () => {},
     async request() {
       await channelsReady;
       try {
-        publish(await port.requestPermission());
+        const answer = await port.requestPermission();
+        publish(answer);
+        return answer;
       } catch (error) {
         onError(error);
         await refresh();
+        return null;
       }
-      return permission;
     },
     async openSettings() {
       try {
