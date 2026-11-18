@@ -8,6 +8,7 @@ import type { PartnerSharingLevel } from '@abnehm/contracts/coupling';
 import { canonicalRows, uncouplingRequestOf, withoutDerivedColumns, type SeedKey, type SeedManifest, type SeedState, type SeedStep } from '@abnehm/contracts/seeds';
 import { InstallationId, PushResult, type OutboxOperation } from '@abnehm/contracts/sync';
 
+import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
 import { createDailyGoalPersistence, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
@@ -47,7 +48,7 @@ import { uncoupleAs } from './shared-actions.ts';
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity,
 ]);
 
 export type SeedPhone = Readonly<{

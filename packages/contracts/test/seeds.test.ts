@@ -423,7 +423,9 @@ describe('Szenario gekoppelt', () => {
     for (const [key, own] of [['philipp-iphone', philipp], ['anna-android', anna]] as const) {
       const { rows } = gekoppelt.initial.devices[key]!;
       for (const [table, tableRows] of Object.entries(rows)) {
-        if (['coupling_member', 'partner_summary', 'partner_daily_goal_status'].includes(table)) continue;
+        // Kopplungsinhalte mit Personenspalte: Mitglieder und Inselfelder sehen beide (Spezifikation 4,
+        // Abschnitt 7: Felder des Partners sind sichtbar, nur nicht bebaubar; #184).
+        if (['coupling_member', 'island_field', 'partner_summary', 'partner_daily_goal_status'].includes(table)) continue;
         for (const row of tableRows) {
           for (const column of ownerColumns) if (column in row) expect(row[column], `${key}: ${table}.${column}`).toBe(own);
         }

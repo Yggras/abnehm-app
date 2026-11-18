@@ -23,7 +23,8 @@ async function roleChoiceOpen() {
   return { ...world, actionId: proposalOn(world.philippsPhone).actionId };
 }
 
-describe('Schlüpfen App ↔ Backend', () => {
+// Zwei Geräte mit vollständigem Pull der Grundinsel: unter Parallellast länger als die üblichen 5 s.
+describe('Schlüpfen App ↔ Backend', { timeout: 20_000 }, () => {
   it('Tracer Bullet: annehmen ist vorgemerkt bis zum Sync, danach zeigen beide Geräte die geschlüpfte Insel, Momo auf „Heute“ und das Ereignis auf „Wir“', async () => {
     const { philipp, anna, philippsPhone, annasPhone, actionId } = await roleChoiceOpen();
 

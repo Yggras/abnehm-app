@@ -42,7 +42,8 @@ async function roleChoiceOpen(proposerRole: IslandRole = 'natur') {
 
 const values = <T>(records: Record<string, T>) => Object.values(records);
 
-describe('Schlüpfen', () => {
+// Zwei Geräte mit vollständigem Pull der Grundinsel: unter Parallellast länger als die üblichen 5 s.
+describe('Schlüpfen', { timeout: 20_000 }, () => {
   it('Tracer Bullet: Anna schlägt Natur vor, Philipp nimmt an; beide sehen danach dieselbe geschlüpfte Insel', async () => {
     const { backend, philipp, anna, couplingId, islandId, accept } = await roleChoiceOpen('natur');
 
@@ -134,7 +135,7 @@ describe('Schlüpfen', () => {
   });
 });
 
-describe('Projector Inselfortschritt', () => {
+describe('Projector Inselfortschritt', { timeout: 20_000 }, () => {
   it('rechnet Level und Hälften aus den Buchungen beider Personen; die Projektion enthält weder Energiemengen noch exakte Anteile', async () => {
     const { backend, philipp, anna, couplingId, islandId, accept } = await roleChoiceOpen();
     await push(backend, philipp.device, [accept]);

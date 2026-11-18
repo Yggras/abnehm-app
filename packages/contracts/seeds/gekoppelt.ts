@@ -16,6 +16,7 @@ import {
   seedWeeklyPlan,
   type SeedWeeklyPlan,
 } from './rows.ts';
+import { geschluepftePart } from './geschluepft.ts';
 import { soloParts } from './solo.ts';
 
 // Szenario `gekoppelt` (Spezifikation 0, Abschnitt 12; #117): Philipp (iPhone, Rolle Bauen) und Anna
@@ -474,11 +475,13 @@ const projektionenOf = (annas: AnnasProjections): SeedPart => ({
 
 /**
  * Beiträge beider Partner in Reihenfolge; Philipps Daten sind die aus `solo`. Vor dem Schlüpfen
- * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine. `annas` legt den
+ * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine. Geschlüpft kommen
+ * zuletzt die Inhalte der Insel (#184), damit die Positionen davor gleich bleiben. `annas` legt den
  * Stand von Annas Projektionen fest (#113).
  */
 const partnerParts = ({ hatched, annas }: Readonly<{ hatched: boolean; annas: AnnasProjections }>): readonly SeedPart[] => [
   ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched }), projektionenOf(annas),
+  ...(hatched ? [geschluepftePart(hatchedAt)] : []),
 ];
 
 /** Beiträge des Szenarios, Annas Projektionen zu einem früheren Stand (#113). */
@@ -525,12 +528,13 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 7: Inhalte der geschlüpften Insel seit #184 (Felder, Start-Baupläne, Projekt 1, Ereignis, Fortschritt).
   // Revision 6: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
   // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, dazu Philipps Sportwoche aus `solo`.
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 6,
+  revision: 7,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,
