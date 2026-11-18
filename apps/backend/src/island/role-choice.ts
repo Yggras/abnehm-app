@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
+import { notificationIntentId } from '@abnehm/contracts/notifications';
 
 import type { SharedActionKind } from '../coupling/shared-actions.ts';
 import { couplingMember, island } from '../db/schema/index.ts';
@@ -31,7 +32,7 @@ export const roleChoiceKind: SharedActionKind<'rollenwahl'> = {
       .where(and(eq(couplingMember.couplingId, action.couplingId), eq(couplingMember.personId, action.requesterPersonId)));
     if (requester === undefined) throw new Error('Antragsteller ist kein Mitglied der Kopplung');
     await insertNotificationIntent(tx, {
-      intentId: `${action.id}:${partnerPersonId}:rollen_anfrage`,
+      intentId: notificationIntentId({ sourceEventId: action.id, recipientPersonId: partnerPersonId, type: 'rollen_anfrage' }),
       sourceEventId: action.id,
       recipientPersonId: partnerPersonId,
       type: 'rollen_anfrage',

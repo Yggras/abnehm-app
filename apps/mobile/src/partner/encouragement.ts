@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, count, eq, isNull, ne } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, type DisplayName, type LocalDate } from '@abnehm/contracts/base';
@@ -64,11 +64,12 @@ function activePartner(tx: ReadContext): ActivePartner | null {
 
 /** Eigene Anfeuerungen eines lokalen Absendertags, wie sie auch der Server zählt. */
 function sentOn(tx: ReadContext, personId: EntityId, localDate: LocalDate): number {
-  return sqliteOf(tx)
-    .select({ id: encouragement.id })
+  const row = sqliteOf(tx)
+    .select({ total: count() })
     .from(encouragement)
     .where(and(eq(encouragement.senderPersonId, personId), eq(encouragement.localDate, localDate)))
-    .all().length;
+    .get();
+  return row?.total ?? 0;
 }
 
 /**

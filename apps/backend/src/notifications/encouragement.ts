@@ -1,6 +1,7 @@
 import { and, count, eq } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
+import { notificationIntentId } from '@abnehm/contracts/notifications';
 import {
   EncouragementKey,
   EncouragementRecord,
@@ -96,7 +97,7 @@ export const sendEncouragementCommand: ServerCommand<SendEncouragement> = {
     });
     if (pushStatus === 'ausstehend') {
       await insertNotificationIntent(tx, {
-        intentId: `${payload.encouragementId}:${recipientPersonId}:anfeuern`,
+        intentId: notificationIntentId({ sourceEventId: payload.encouragementId, recipientPersonId, type: 'anfeuern' }),
         sourceEventId: payload.encouragementId,
         recipientPersonId,
         type: 'anfeuern',

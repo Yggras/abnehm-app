@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { encouragementMessages } from '@abnehm/contracts/notification-texts';
@@ -9,7 +9,7 @@ import { closeRoute, type RouteScreenProps } from '../navigation';
 import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
-import { usePartner } from './app-partner';
+import { useEncourageView, usePartner } from './app-partner';
 import type { EncourageView, Partner } from './partner';
 import { partnerTexts } from './texts';
 
@@ -63,13 +63,6 @@ function Messages({ partner, view }: { partner: Partner; view: Extract<Encourage
       </Text>
     </>
   );
-}
-
-/** Sheet-Zustand des geöffneten Kontos; ohne Konto und bis zur ersten Lesung lädt er. */
-function useEncourageView(partner: Partner | null): EncourageView {
-  const [snapshot, setSnapshot] = useState<{ partner: Partner; value: EncourageView } | null>(null);
-  useEffect(() => partner?.encourageSheet.subscribe((value) => setSnapshot({ partner, value })), [partner]);
-  return snapshot !== null && snapshot.partner === partner ? snapshot.value : { type: 'loading' };
 }
 
 const styles = StyleSheet.create({

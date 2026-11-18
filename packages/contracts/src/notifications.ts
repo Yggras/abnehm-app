@@ -39,6 +39,15 @@ const payloads = {
 
 type IntentType = keyof typeof payloads;
 
+/** ID eines Intents: `<sourceEventId>:<recipientPersonId>:<type>`, damit jedes Ereignis je Empfänger höchstens einen Intent erzeugt. */
+export function notificationIntentId({ sourceEventId, recipientPersonId, type }: Readonly<{
+  sourceEventId: EntityId;
+  recipientPersonId: EntityId;
+  type: IntentType;
+}>): string {
+  return `${sourceEventId}:${recipientPersonId}:${type}`;
+}
+
 function intent<T extends IntentType>(type: T) {
   return z
     .strictObject({
@@ -51,7 +60,7 @@ function intent<T extends IntentType>(type: T) {
       createdAt: Instant,
       payload: payloads[type],
     })
-    .refine((value) => value.intentId === `${value.sourceEventId}:${value.recipientPersonId}:${value.type}`, {
+    .refine((value) => value.intentId === notificationIntentId(value), {
       message: 'intentId muss <sourceEventId>:<recipientPersonId>:<type> sein',
       path: ['intentId'],
     });
