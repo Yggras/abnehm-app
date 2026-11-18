@@ -94,10 +94,8 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
     <OnboardingFrame step="koerperdaten" title={stepTitles.koerperdaten} primary={{ label: onboardingTexts.next, onPress: next }}>
       <Text>{texts.intro}</Text>
 
-      <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel={texts.sex}>
-        <Text variant="label" importantForAccessibility="no">
-          {texts.sex}
-        </Text>
+      <View style={styles.group}>
+        <Text variant="label">{texts.sex}</Text>
         <Text variant="caption" tone="inkMuted">
           {texts.sexExplanation}
         </Text>

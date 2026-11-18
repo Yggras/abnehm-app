@@ -94,6 +94,18 @@ export const bodyDataTexts = {
   } satisfies Record<BodyDataProblem, string>,
 } as const;
 
+/** Anlässe des erzwungenen Haltemodus im Genitiv, für „Wegen …“. */
+const safetyReasons: Record<SafetyTrigger, string> = {
+  schwanger_oder_stillend: 'Schwangerschaft oder Stillzeit',
+  essstoerung: 'einer bekannten Essstörung',
+  untergewicht: 'eines BMI unter 18,5',
+};
+
+/** „A“, „A und B“, „A, B und C“. */
+function germanList(items: readonly string[]): string {
+  return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} und ${items.at(-1)}`;
+}
+
 /**
  * Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9; User Stories 9–13). Der
  * erzwungene Haltemodus rechnet ohne Defizit, das Budget ist dann der Gesamtumsatz (Abschnitt 3).
@@ -107,13 +119,8 @@ export const safetyCheckTexts = {
   no: 'Nein',
   bmi: 'Dein BMI',
   bmiSource: 'Aus deiner Größe und deinem aktuellen Gewicht',
-  reasons: {
-    schwanger_oder_stillend: 'Schwangerschaft oder Stillzeit',
-    essstoerung: 'einer bekannten Essstörung',
-    untergewicht: 'eines BMI unter 18,5',
-  } satisfies Record<SafetyTrigger, string>,
-  maintenanceForced: (reasons: string) =>
-    `Wegen ${reasons} rechnet die App für dich ohne Kaloriendefizit: im Haltemodus, mit einem Kalorienbudget in Höhe deines Gesamtumsatzes. Wenn du abnehmen möchtest, lass dich bitte ärztlich begleiten.`,
+  maintenanceForced: (triggers: readonly SafetyTrigger[]) =>
+    `Wegen ${germanList(triggers.map((trigger) => safetyReasons[trigger]))} rechnet die App für dich ohne Kaloriendefizit: im Haltemodus, mit einem Kalorienbudget in Höhe deines Gesamtumsatzes. Wenn du abnehmen möchtest, lass dich bitte ärztlich begleiten.`,
   chronicIllness: 'Hast du eine chronische Erkrankung? Dann sprich vor dem Abnehmen mit deiner Ärztin oder deinem Arzt.',
   answerRequired: 'Beantworte beide Fragen, um weiterzumachen.',
 } as const;

@@ -46,10 +46,8 @@ export function SafetyCheckStep({ onBack, onNext }: SafetyCheckStepProps) {
       <Text>{texts.intro}</Text>
 
       {questions.map(({ key, text }) => (
-        <View key={key} style={styles.group} accessibilityRole="radiogroup" accessibilityLabel={text.question}>
-          <Text variant="label" importantForAccessibility="no">
-            {text.question}
-          </Text>
+        <View key={key} style={styles.group}>
+          <Text variant="label">{text.question}</Text>
           <View style={styles.chips}>
             {[true, false].map((value) => {
               const label = value ? texts.yes : texts.no;
@@ -79,7 +77,7 @@ export function SafetyCheckStep({ onBack, onNext }: SafetyCheckStepProps) {
       )}
 
       {check === null || check.triggers.length === 0 ? null : (
-        <Notice tone="hint" icon="info" text={texts.maintenanceForced(check.triggers.map((trigger) => texts.reasons[trigger]).join(' und '))} />
+        <Notice tone="hint" icon="info" text={texts.maintenanceForced(check.triggers)} />
       )}
 
       <Notice tone="neutral" icon="info" text={texts.chronicIllness} />
