@@ -32,7 +32,7 @@ export type ObjectFacts = Readonly<{ catalogKey: string; origin: IslandObjectOri
  * Ein Objekt auf seinem Feld mit der Grafik seiner Stufe, in der Form, die das Szenenmodell zeichnet
  * (`SceneObject`). Das Lesemodell importiert das Szenenmodell nicht, weil es Design-Tokens zieht.
  */
-export type PlacedObject = ObjectFacts & Readonly<{ id: string; fieldKey: string; art: ArtKey; ownerPersonId: string }>;
+export type PlacedObject = ObjectFacts & Readonly<{ id: EntityId; fieldKey: string; art: ArtKey; ownerPersonId: string }>;
 
 /**
  * Ein Objekt im eigenen Lager (#194): eingelagert oder verdrängt, Deko und Challenge-Deko. Ein Geschenk
@@ -125,7 +125,7 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .where(and(eq(islandObject.islandId, islandId), isNotNull(islandObject.fieldId), isNull(islandObject.deletedAt)))
       .orderBy(asc(islandField.fieldKey))
       .all()
-      .map(({ origin, ...object }) => ({ ...object, origin: IslandObjectOrigin.parse(origin), art: artOf(object.catalogKey, object.level) })),
+      .map(({ id, origin, ...object }) => ({ ...object, id: EntityId.parse(id), origin: IslandObjectOrigin.parse(origin), art: artOf(object.catalogKey, object.level) })),
     storage: readStorage(tx, { islandId, couplingId, personId, partnerPersonId: partner.personId, partnerDisplayName: partner.displayName }),
     unlockedAreas: db
       .select({ key: areaUnlock.areaKey })

@@ -1,9 +1,9 @@
+import type { EntityId } from '@abnehm/contracts/base';
 import type { IslandRole } from '@abnehm/contracts/island';
 import type { IslandObjectOrigin } from '@abnehm/contracts/island-records';
-import { decidePlacement, decideUpgrade } from '@abnehm/game-rules/building';
+import { decidePlacement, decideUpgrade, nextStage } from '@abnehm/game-rules/building';
 import type { ArtKey, CatalogIndex } from '@abnehm/game-rules/catalog';
 import type { IslandFieldOwner } from '@abnehm/game-rules/hatching';
-import { upgradePrice } from '@abnehm/game-rules/prices';
 
 import type { ObjectFacts, PlacedObject, StoredObject } from './hatched-island';
 
@@ -34,8 +34,8 @@ export type UpgradeOption =
 
 /** Inhalt des Objekt-Sheets: ein eigenes Objekt mit seinen Aktionen, eines des Partners nur mit Infos. */
 export type ObjectSheet =
-  | Readonly<{ type: 'eigen'; id: string; name: string; art: ArtKey; level: number; upgrade: UpgradeOption; canMove: boolean }>
-  | Readonly<{ type: 'partner'; id: string; name: string; art: ArtKey; level: number; origin: IslandObjectOrigin; partnerName: string }>;
+  | Readonly<{ type: 'eigen'; id: EntityId; name: string; art: ArtKey; level: number; upgrade: UpgradeOption; canMove: boolean }>
+  | Readonly<{ type: 'partner'; id: EntityId; name: string; art: ArtKey; level: number; origin: IslandObjectOrigin; partnerName: string }>;
 
 /** Art eines Stücks im Lager; Gebautes mit Stufe, ein Geschenk mit dem Namen des Partners. */
 export type StorageKind =
@@ -44,7 +44,7 @@ export type StorageKind =
   | Readonly<{ type: 'challenge' }>
   | Readonly<{ type: 'deko' }>;
 
-export type StorageItem = Readonly<{ id: string; name: string; art: ArtKey; kind: StorageKind; canPlace: boolean }>;
+export type StorageItem = Readonly<{ id: EntityId; name: string; art: ArtKey; kind: StorageKind; canPlace: boolean }>;
 
 export type ObjectOptions = Readonly<{
   /** Das Objekt-Sheet für das Objekt auf dem Feld; `null` auf einem leeren Feld. */
@@ -78,13 +78,12 @@ export function objectOptions(catalog: CatalogIndex, situation: ObjectSituation)
   };
   const upgradeOf = (object: ObjectFacts): UpgradeOption => {
     if (object.origin !== 'gebaut') return { type: 'keine_stufen' };
-    if (object.level >= 3) return { type: 'hoechste_stufe' };
-    const toLevel = (object.level + 1) as 2 | 3;
+    const toLevel = nextStage(object.level);
+    if (toLevel === null) return { type: 'hoechste_stufe' };
     const decision = decideUpgrade(catalog, { object, toLevel, balance: energy, checkedBy: 'geraet' });
     if (decision.type === 'erlaubt') return { type: 'moeglich', toLevel, price: decision.price };
-    const blueprint = catalog.find('bauplan', object.catalogKey);
-    if (decision.reason !== 'zu_wenig_energie' || blueprint.type !== 'found') return { type: 'keine_stufen' };
-    return { type: 'zu_teuer', toLevel, price: upgradePrice(blueprint.entry, toLevel), missing: decision.missing };
+    if (decision.reason !== 'zu_wenig_energie') return { type: 'keine_stufen' };
+    return { type: 'zu_teuer', toLevel, price: decision.price, missing: decision.missing };
   };
   const kindOf = (object: StoredObject): StorageKind => {
     if (object.giftFrom !== null) return { type: 'geschenk', from: object.giftFrom };

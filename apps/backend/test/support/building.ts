@@ -37,15 +37,25 @@ export function buildOp(
     localDate: LocalDate.parse(worldToday),
     ...build,
   };
+  return commandOp('buildObject', overrides.businessKey ?? buildObjectKey(payload.commandId), payload, overrides);
+}
+
+/** Umschlag einer Push-Operation für einen Spielbefehl, wie ihn der Sync-Writer der App schreibt. */
+function commandOp<T extends 'buildObject' | 'upgradeObject' | 'placeObject', P extends BuildObject | UpgradeObject | PlaceObject>(
+  type: T,
+  businessKey: string,
+  payload: P,
+  { operationId }: { operationId?: string } = {},
+): CommandOperation & { payload: P } {
   return {
-    type: 'buildObject',
-    operationId: EntityId.parse(overrides.operationId ?? randomUUID()),
-    businessKey: overrides.businessKey ?? buildObjectKey(payload.commandId),
+    type,
+    operationId: EntityId.parse(operationId ?? randomUUID()),
+    businessKey,
     payload,
     knownServerVersion: null,
     schemaVersion: currentSyncSchemaVersion,
     createdAt: Instant.parse('2026-10-14T12:00:00.000Z'),
-  };
+  } as CommandOperation & { payload: P };
 }
 
 /** Koppelt zwei Personen über die echte Einladung und lässt Momo schlüpfen: Anna wählt Natur, Philipp nimmt an. */
@@ -127,28 +137,17 @@ export const buildObjectCommandScenario = {
 
 export function upgradeOp(upgrade: Partial<UpgradeObject> & Pick<UpgradeObject, 'islandObjectId'>, overrides: { operationId?: string } = {}): CommandOperation & { payload: UpgradeObject } {
   const payload: UpgradeObject = { commandId: EntityId.parse(randomUUID()), toLevel: 2, localDate: LocalDate.parse(worldToday), ...upgrade };
-  return {
-    type: 'upgradeObject',
-    operationId: EntityId.parse(overrides.operationId ?? randomUUID()),
-    businessKey: upgradeObjectKey(payload.commandId),
-    payload,
-    knownServerVersion: null,
-    schemaVersion: currentSyncSchemaVersion,
-    createdAt: Instant.parse('2026-10-14T12:00:00.000Z'),
-  };
+  return commandOp('upgradeObject', upgradeObjectKey(payload.commandId), payload, overrides);
 }
 
-export function placeOp(islandObjectId: EntityId, target: PlacementTarget, overrides: { operationId?: string } = {}): CommandOperation & { payload: PlaceObject } {
-  const payload: PlaceObject = { commandId: EntityId.parse(randomUUID()), islandObjectId, target };
-  return {
-    type: 'placeObject',
-    operationId: EntityId.parse(overrides.operationId ?? randomUUID()),
-    businessKey: placeObjectKey(payload.commandId),
-    payload,
-    knownServerVersion: null,
-    schemaVersion: currentSyncSchemaVersion,
-    createdAt: Instant.parse('2026-10-14T12:00:00.000Z'),
-  };
+/** `fromFieldId` nutzt nur die lokale Bereinigung der App; der Server entscheidet nicht danach. */
+export function placeOp(
+  islandObjectId: EntityId,
+  target: PlacementTarget,
+  { fromFieldId = null, ...overrides }: { operationId?: string; fromFieldId?: EntityId | null } = {},
+): CommandOperation & { payload: PlaceObject } {
+  const payload: PlaceObject = { commandId: EntityId.parse(randomUUID()), islandObjectId, fromFieldId, target };
+  return commandOp('placeObject', placeObjectKey(payload.commandId), payload, overrides);
 }
 
 /** Ziel einer Platzierung auf ein Feld. */

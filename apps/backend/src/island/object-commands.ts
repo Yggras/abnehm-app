@@ -17,6 +17,7 @@ import { insertBooking, readBookings } from '../energy/bookings.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
 import { vacateField } from './field-occupancy.ts';
+import { gameRejection, type GameRefusal } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
 import { progressChange } from './progress-change.ts';
 
@@ -42,9 +43,9 @@ async function activeObject(tx: DbExecutor, islandObjectId: EntityId) {
   return { ...object, origin: IslandObjectOrigin.parse(object.origin) };
 }
 
-/** Lehnt fachlich ab und nennt dabei den kanonischen Zustand des Objekts. */
-async function refuse(tx: DbExecutor, islandObjectId: EntityId, reason: string): Promise<never> {
-  throw new CommandRejection(reason === 'unbekannter_schluessel' ? 'unknown_catalog_key' : 'conflict', await canonicalAfterWrite(tx, islandObjectEntity, islandObjectId));
+/** Lehnt nach den Spielregeln ab und nennt dabei den kanonischen Zustand des Objekts. */
+async function refuse(tx: DbExecutor, islandObjectId: EntityId, refusal: GameRefusal): Promise<never> {
+  throw gameRejection(refusal, await canonicalAfterWrite(tx, islandObjectEntity, islandObjectId));
 }
 
 export const upgradeObjectCommand: ServerCommand<UpgradeObject> = {
@@ -67,7 +68,7 @@ export const upgradeObjectCommand: ServerCommand<UpgradeObject> = {
       balance: summarizeEnergy(bookings).balance,
       checkedBy: 'server',
     });
-    if (decision.type === 'verboten') return refuse(tx, payload.islandObjectId, decision.reason);
+    if (decision.type === 'verboten') return refuse(tx, payload.islandObjectId, decision);
 
     await changeWriter(tx, at)({ entityType: 'island_object', couplingId }, async (stamp) => {
       await tx.update(islandObject).set({ level: payload.toLevel, ...updated(stamp) }).where(eq(islandObject.id, payload.islandObjectId));
@@ -87,7 +88,7 @@ export const upgradeObjectCommand: ServerCommand<UpgradeObject> = {
         trigger: { commandId: payload.commandId, islandObjectId: payload.islandObjectId, toLevel: payload.toLevel },
       }),
     );
-    changes.push(await progressChange(tx, object.islandId as EntityId, at));
+    changes.push(await progressChange(tx, EntityId.parse(object.islandId), at));
     return { changes, idMappings: [] };
   },
 };
@@ -116,13 +117,14 @@ export const placeObjectCommand: ServerCommand<PlaceObject> = {
         .select({ role: couplingMember.role })
         .from(couplingMember)
         .where(and(eq(couplingMember.couplingId, couplingId), eq(couplingMember.personId, actor.personId)));
-      if (member?.role == null) return refuse(tx, payload.islandObjectId, 'keine_rolle');
+      // Ohne Rolle ist die Insel nicht geschlüpft; `activeObject` schließt das schon aus.
+      if (member?.role == null) throw new CommandRejection('conflict', await canonicalAfterWrite(tx, islandObjectEntity, payload.islandObjectId));
       const decision = decidePlacement(catalog, {
         object: { catalogKey: object.catalogKey, origin: object.origin },
         field: { key: field.fieldKey, ownerPersonId: field.ownerPersonId },
         person: { personId: actor.personId, role: IslandRole.parse(member.role) },
       });
-      if (decision.type === 'verboten') return refuse(tx, payload.islandObjectId, decision.reason);
+      if (decision.type === 'verboten') return refuse(tx, payload.islandObjectId, decision);
     }
     // Steht das Objekt schon dort, ändert sich nichts; die Antwort nennt seinen Zustand.
     if (object.fieldId === fieldId) return { changes: [await canonicalAfterWrite(tx, islandObjectEntity, payload.islandObjectId)], idMappings: [] };

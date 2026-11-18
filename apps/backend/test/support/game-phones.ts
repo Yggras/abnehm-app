@@ -36,9 +36,8 @@ import { pendingOperations } from '../../../mobile/src/sync/outbox.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { personWithSession } from './authorization.ts';
-import { worldStart } from './coupled-world.ts';
+import { coupleByInvitation, worldStart } from './coupled-world.ts';
 import { earnEnergy } from './building.ts';
-import { coupleByInvitation } from './coupled-world.ts';
 import { snapshotOf, type ServerDailyGoal } from './daily-goals.ts';
 
 // Geräte mit dem Spieldienst der App (#180, #184, #191): Engine, Outbox und Adapter auf echtem SQLite

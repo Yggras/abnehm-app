@@ -224,6 +224,12 @@ export type PlacementTarget = z.infer<typeof PlacementTarget>;
 export const PlaceObject = z.strictObject({
   commandId: EntityId,
   islandObjectId: EntityId,
+  /**
+   * Feld des Objekts vor der Platzierung, wie das Gerät es kannte; `null` im Lager. Nur für die lokale
+   * Bereinigung einer Ablehnung ohne kanonischen Datensatz (Spezifikation 4, Abschnitt 11); der Server
+   * entscheidet nicht danach.
+   */
+  fromFieldId: EntityId.nullable(),
   target: PlacementTarget,
 });
 export type PlaceObject = z.infer<typeof PlaceObject>;

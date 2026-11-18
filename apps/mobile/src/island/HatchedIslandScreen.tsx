@@ -1,4 +1,4 @@
-import { EntityId } from '@abnehm/contracts/base';
+import type { EntityId } from '@abnehm/contracts/base';
 import type { MomoAppearance, PlacementTarget } from '@abnehm/contracts/island';
 import { indexCatalog } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
@@ -77,8 +77,17 @@ type Placing =
   | Readonly<{ type: 'bauen'; option: BlueprintOption }>
   | Readonly<{ type: 'umstellen'; objectId: EntityId; name: string; from: 'insel' | 'lager' }>;
 
-/** Routen-Ansichten, die dieser Bildschirm selbst öffnet. */
-const ownViews: ReadonlySet<TargetOf<'momo'>['view']> = new Set(['bauen', 'lager']);
+/** Routen-Ansichten und Einstiege der Leiste, die dieser Bildschirm selbst als Sheet öffnet. */
+const sheetForView: Readonly<Partial<Record<NonNullable<TargetOf<'momo'>['view']>, SheetContent>>> = {
+  bauen: { type: 'bauen', field: null },
+  lager: { type: 'lager' },
+};
+
+/** Titel der Leiste im Modus mit leuchtenden Feldern. */
+function placingTitleOf(placing: Placing): string {
+  if (placing.type === 'bauen') return buildTexts.placing(placing.option.name);
+  return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placingFromStorage(placing.name);
+}
 
 export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, onOpen, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
   const [sheet, setSheet] = useState<SheetContent | null>(null);
@@ -121,11 +130,11 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
   const [arrivedView, setArrivedView] = useState<TargetOf<'momo'>['view']>(undefined);
   if (requestedView !== arrivedView) {
     setArrivedView(requestedView);
-    if (requestedView === 'bauen') openSheet({ type: 'bauen', field: null });
-    if (requestedView === 'lager') openSheet({ type: 'lager' });
+    const content = requestedView === undefined ? undefined : sheetForView[requestedView];
+    if (content !== undefined) openSheet(content);
   }
   useEffect(() => {
-    if (ownViews.has(requestedView)) onViewHandled?.();
+    if (requestedView !== undefined && sheetForView[requestedView] !== undefined) onViewHandled?.();
   }, [requestedView, onViewHandled]);
 
   const options = useMemo(() => buildOptions(island), [island]);
@@ -190,17 +199,10 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
 
   const placeFromStorage = (item: StorageItem) => {
     setSheet(null);
-    setPlacing({ type: 'umstellen', objectId: EntityId.parse(item.id), name: item.name, from: 'lager' });
+    setPlacing({ type: 'umstellen', objectId: item.id, name: item.name, from: 'lager' });
   };
 
-  const placingTitle =
-    placing === null
-      ? null
-      : placing.type === 'bauen'
-        ? buildTexts.placing(placing.option.name)
-        : placing.from === 'insel'
-          ? objectTexts.moving(placing.name)
-          : objectTexts.placingFromStorage(placing.name);
+  const placingTitle = placing === null ? null : placingTitleOf(placing);
 
   return (
     <>
@@ -210,7 +212,11 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
         viewerPersonId={island.viewerPersonId}
         partnerName={island.partnerDisplayName}
         energy={island.energy}
-        onOpen={(view) => (view === 'bauen' ? openSheet({ type: 'bauen', field: null }) : view === 'lager' ? openSheet({ type: 'lager' }) : onOpen(view))}
+        onOpen={(view) => {
+          const content = sheetForView[view];
+          if (content !== undefined) openSheet(content);
+          else if (view !== 'bauen' && view !== 'lager') onOpen(view);
+        }}
         onFieldPress={onFieldPress}
         onMomoPress={() => {
           if (placing === null) setSheet({ type: 'momo' });
@@ -231,14 +237,14 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
           objectSheet !== null && (
             <ObjectSheet
               sheet={objectSheet}
-              onUpgrade={() => upgradeObject(EntityId.parse(objectSheet.id))}
+              onUpgrade={() => upgradeObject(objectSheet.id)}
               onMove={() => {
                 setSheet(null);
-                setPlacing({ type: 'umstellen', objectId: EntityId.parse(objectSheet.id), name: objectSheet.name, from: 'insel' });
+                setPlacing({ type: 'umstellen', objectId: objectSheet.id, name: objectSheet.name, from: 'insel' });
               }}
               onStore={() => {
                 setSheet(null);
-                placeAt(EntityId.parse(objectSheet.id), { type: 'lager' });
+                placeAt(objectSheet.id, { type: 'lager' });
               }}
             />
           )

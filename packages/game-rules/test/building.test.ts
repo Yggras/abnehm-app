@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { gameCatalog } from '../content/index.ts';
-import { decideBuild, decidePlacement, decideUpgrade, serverDebtLimit, type BuildRequest, type PlaceRequest, type UpgradeRequest } from '../src/building.ts';
+import { decideBuild, decidePlacement, decideUpgrade, nextStage, serverDebtLimit, type BuildRequest, type PlaceRequest, type UpgradeRequest } from '../src/building.ts';
 import { indexCatalog } from '../src/catalog.ts';
 
 // Nachweis für #191: Was App und Server vor einem Bau prüfen (Spezifikation 4, Abschnitte 3, 4 und 11).
@@ -50,10 +50,10 @@ describe('Bauen prüfen', () => {
   describe('auf dem Gerät nur bei ausreichendem Bestand', () => {
     it.each([
       [3, { type: 'erlaubt', price: 3 }],
-      [2, { type: 'verboten', reason: 'zu_wenig_energie', missing: 1 }],
-      [0, { type: 'verboten', reason: 'zu_wenig_energie', missing: 3 }],
+      [2, { type: 'verboten', reason: 'zu_wenig_energie', price: 3, missing: 1 }],
+      [0, { type: 'verboten', reason: 'zu_wenig_energie', price: 3, missing: 3 }],
       // Ein negativer Zwischenstand zählt wie angezeigt als 0.
-      [-4, { type: 'verboten', reason: 'zu_wenig_energie', missing: 3 }],
+      [-4, { type: 'verboten', reason: 'zu_wenig_energie', price: 3, missing: 3 }],
     ])('Bestand %i', (balance, decision) => {
       expect(decideBuild(catalog, request({ balance }))).toEqual(decision);
     });
@@ -86,6 +86,10 @@ const withDeko = indexCatalog({ ...gameCatalog, deko: [{ key: 'muschelkette', na
 const upgrade = (overrides: Partial<UpgradeRequest> = {}): UpgradeRequest => ({ object: laterne, toLevel: 2, balance: 10, checkedBy: 'geraet', ...overrides });
 
 describe('Aufwerten prüfen', () => {
+  it('die nächste Stufe: 1 → 2 → 3, danach keine', () => {
+    expect([1, 2, 3].map(nextStage)).toEqual([2, 3, null]);
+  });
+
   it('kostet auf Stufe 2 das 2-Fache und auf Stufe 3 das 3-Fache des Grundpreises', () => {
     expect(decideUpgrade(catalog, upgrade())).toEqual({ type: 'erlaubt', price: 6 });
     expect(decideUpgrade(catalog, upgrade({ object: { ...laterne, level: 2 }, toLevel: 3 }))).toEqual({ type: 'erlaubt', price: 9 });
@@ -114,9 +118,9 @@ describe('Aufwerten prüfen', () => {
 
   it.each([
     [6, 'geraet', { type: 'erlaubt', price: 6 }],
-    [5, 'geraet', { type: 'verboten', reason: 'zu_wenig_energie', missing: 1 }],
+    [5, 'geraet', { type: 'verboten', reason: 'zu_wenig_energie', price: 6, missing: 1 }],
     // Ein negativer Zwischenstand zählt wie angezeigt als 0.
-    [-3, 'geraet', { type: 'verboten', reason: 'zu_wenig_energie', missing: 6 }],
+    [-3, 'geraet', { type: 'verboten', reason: 'zu_wenig_energie', price: 6, missing: 6 }],
     [-24, 'server', { type: 'erlaubt', price: 6 }],
     [-25, 'server', { type: 'verboten', reason: 'schutzgrenze' }],
   ] as const)('Bestand %i (%s): das Gerät nur bei ausreichendem Bestand, der Server bis −30', (balance, checkedBy, decision) => {

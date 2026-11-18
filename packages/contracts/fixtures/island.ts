@@ -193,13 +193,15 @@ export const islandFixtures = {
   }),
   PlaceObject: fixtures(PlaceObject, {
     valid: {
-      'Laterne umstellen': { commandId: command, islandObjectId: islandObject, target: { type: 'feld', fieldId: islandField } },
-      'Laterne einlagern': { commandId: command, islandObjectId: islandObject, target: { type: 'lager' } },
+      'Laterne umstellen': { commandId: command, islandObjectId: islandObject, fromFieldId: islandField, target: { type: 'feld', fieldId: islandField } },
+      'Laterne aus dem Lager platzieren': { commandId: command, islandObjectId: islandObject, fromFieldId: null, target: { type: 'feld', fieldId: islandField } },
+      'Laterne einlagern': { commandId: command, islandObjectId: islandObject, fromFieldId: islandField, target: { type: 'lager' } },
     },
     invalid: {
-      'Besitzer aus dem Client': { commandId: command, islandObjectId: islandObject, target: { type: 'lager' }, ownerPersonId: anna },
-      'Feld statt Ziel': { commandId: command, islandObjectId: islandObject, fieldId: islandField },
-      'ohne Objekt': { commandId: command, target: { type: 'lager' } },
+      'Besitzer aus dem Client': { commandId: command, islandObjectId: islandObject, fromFieldId: null, target: { type: 'lager' }, ownerPersonId: anna },
+      'Feld statt Ziel': { commandId: command, islandObjectId: islandObject, fromFieldId: null, fieldId: islandField },
+      'ohne Objekt': { commandId: command, fromFieldId: null, target: { type: 'lager' } },
+      'ohne früheres Feld': { commandId: command, islandObjectId: islandObject, target: { type: 'lager' } },
     },
   }),
   MomoForm: fixtures(MomoForm, {

@@ -5,7 +5,7 @@ import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import { IslandRole, PlaceObject, placeObjectKey, UpgradeObject, upgradeObjectKey, type PlacementTarget } from '@abnehm/contracts/island';
 import { IslandObjectOrigin } from '@abnehm/contracts/island-records';
-import { decidePlacement, decideUpgrade, type PlaceDecision, type UpgradeRefusal } from '@abnehm/game-rules/building';
+import { decidePlacement, decideUpgrade, nextStage, type PlaceDecision, type UpgradeRefusal } from '@abnehm/game-rules/building';
 import { indexCatalog } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 
@@ -65,8 +65,8 @@ export function upgradeObject(tx: TransactionContext, { writer, newId, clock }: 
   const found = ownObject(tx, request.islandObjectId);
   if (found === null) return noOwnObject;
   const { object, personId } = found;
-  if (object.level >= 3) return { type: 'verboten', reason: 'falsche_stufe' };
-  const toLevel = (object.level + 1) as 2 | 3;
+  const toLevel = nextStage(object.level);
+  if (toLevel === null) return { type: 'verboten', reason: 'falsche_stufe' };
   const decision = decideUpgrade(catalog, { object, toLevel, balance: readEnergy(tx, personId).balance, checkedBy: 'geraet' });
   if (decision.type === 'verboten') return decision;
 
@@ -118,7 +118,7 @@ export function placeObject(tx: TransactionContext, { writer, newId, clock }: Ob
     if (decision.type === 'verboten') return decision;
   }
 
-  const payload = PlaceObject.parse({ commandId: newId(), islandObjectId: object.id, target: request.target });
+  const payload = PlaceObject.parse({ commandId: newId(), islandObjectId: object.id, fromFieldId: object.fieldId, target: request.target });
   db.update(islandObject).set({ fieldId, updatedAt: clock.read().instant }).where(eq(islandObject.id, object.id)).run();
   writer.command(tx, {
     type: 'placeObject',
@@ -161,9 +161,23 @@ export const placeObjectCommand: LocalCommand<PlaceObject> = {
   apply() {
     throw new Error('placeObject entsteht nur im Spieldienst');
   },
-  // Die Nutzlast kennt das frühere Feld nicht. Fachliche Ablehnungen nennen das Objekt kanonisch, und die
-  // Engine übernimmt diesen Stand; mehr gibt es lokal nicht zu bereinigen.
-  reconcileRejected() {},
+  // Das Objekt kehrt auf sein früheres Feld bzw. ins Lager zurück, sofern es noch am Ziel steht und das
+  // frühere Feld frei ist (sonst ins Lager). Nennt die Ablehnung das Objekt kanonisch, übernimmt die Engine
+  // danach diesen Stand; ohne ihn, etwa bei `forbidden`, bleibt dieser Rückfall (Spezifikation 4, Abschnitt 11).
+  reconcileRejected(tx, operation) {
+    const { islandObjectId, fromFieldId, target } = PlaceObject.parse(operation.payload);
+    const db = sqliteOf(tx);
+    const object = db.select({ fieldId: islandObject.fieldId }).from(islandObject).where(eq(islandObject.id, islandObjectId)).get();
+    if (object === undefined || object.fieldId !== (target.type === 'feld' ? target.fieldId : null)) return;
+    const taken =
+      fromFieldId !== null &&
+      db
+        .select({ id: islandObject.id })
+        .from(islandObject)
+        .where(and(eq(islandObject.fieldId, fromFieldId), isNull(islandObject.deletedAt), ne(islandObject.id, islandObjectId)))
+        .get() !== undefined;
+    db.update(islandObject).set({ fieldId: taken ? null : fromFieldId }).where(eq(islandObject.id, islandObjectId)).run();
+  },
 };
 
 /** Alle Fachbefehle auf Inselobjekten für die lokale Befehls-Registry: Bauen (#191), Aufwerten und Platzieren. */

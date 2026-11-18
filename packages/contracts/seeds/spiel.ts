@@ -320,7 +320,7 @@ function rowOf(rows: Readonly<Record<string, readonly SeedRow[]>>, table: string
 /** Eine Offline-Platzierung, wie der Spieldienst sie schreibt: neues Feld und Änderungszeit, die Serverversion bleibt, dazu `placeObject`. */
 function offlinePlace(state: SeedState, { installation, n, operationId, at }: (typeof konfliktZuege)[number]): OfflineChange {
   const row = rowOf(state.devices[installation]!.rows, 'island_object', seedIds.islandObject(n));
-  const payload = PlaceObject.parse({ commandId: seedIds.placeCommand(n), islandObjectId: row.id, target: { type: 'feld', fieldId: konfliktFeld } });
+  const payload = PlaceObject.parse({ commandId: seedIds.placeCommand(n), islandObjectId: row.id, fromFieldId: row.field_id, target: { type: 'feld', fieldId: konfliktFeld } });
   return {
     rows: [{ table: 'island_object', row: { ...row, field_id: konfliktFeld, updated_at: at } }],
     operation: OutboxOperation.parse({

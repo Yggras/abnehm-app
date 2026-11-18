@@ -3,10 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { EntityId } from '@abnehm/contracts/base';
 import { summarizeEnergy } from '@abnehm/contracts/energy';
 
+import { eq } from 'drizzle-orm';
+
+import { islandObject as localObject } from '../../mobile/src/local-db/schema/index.ts';
+import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
+import { coupling } from '../src/db/schema/index.ts';
 import { readBookings } from '../src/energy/bookings.ts';
 import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { worldToday } from './support/coupled-world.ts';
 import { energize, fieldOn, gamePhone, hatchedPhones, islandOf, type GamePhone } from './support/game-phones.ts';
+import { uncoupleAs } from './support/shared-actions.ts';
 
 // Nachweis für #194 auf echten Geräten: Aufwerten, Umstellen, Einlagern und Platzieren im Spieldienst der App
 // (Engine, Outbox und Adapter auf echtem SQLite) gegen die echte Hono-App mit Postgres (Spezifikation 4,
@@ -82,7 +88,7 @@ describe('Aufwerten und Platzieren App ↔ Backend', { timeout: 30_000 }, () => 
     await philippsPhone.sync();
 
     // 4 − 3 − 1 = 0; Stufe 2 kostet 6.
-    expect(philippsPhone.game.upgrade(laterne)).toEqual({ type: 'verboten', reason: 'zu_wenig_energie', missing: 6 });
+    expect(philippsPhone.game.upgrade(laterne)).toEqual({ type: 'verboten', reason: 'zu_wenig_energie', price: 6, missing: 6 });
     expect(philippsPhone.game.place(laterne, onField(philippsPhone, 'grundinsel:1:0'))).toEqual({ type: 'verboten', reason: 'feld_belegt' });
     expect(philippsPhone.game.place(laterne, onField(philippsPhone, 'grundinsel:12:1'))).toEqual({ type: 'verboten', reason: 'fremdes_feld' });
     expect(philippsPhone.game.place(laterne, onField(philippsPhone, 'grundinsel:6:0'))).toEqual({ type: 'verboten', reason: 'gemeinsamer_bereich' });
@@ -165,5 +171,27 @@ describe('Aufwerten und Platzieren App ↔ Backend', { timeout: 30_000 }, () => 
       expect(placedAt(phone)).toEqual([{ id: laterne, fieldKey: 'grundinsel:0:0', art: 'laterne_2' }]);
       expect(phone.outbox()).toEqual([]);
     }
+  });
+
+  it('eine Platzierung, die der Server ohne kanonischen Datensatz ablehnt, setzt das Objekt lokal zurück', async () => {
+    const world = await hatchedPhones();
+    const { backend, anna, philippsPhone } = world;
+    await energize(world, [worldToday]);
+    const laterne = built(philippsPhone, 'grundinsel:0:0', 'laterne');
+    await philippsPhone.sync();
+    const fieldOf = () => philippsPhone.database.read((tx) => sqliteOf(tx).select({ fieldId: localObject.fieldId }).from(localObject).where(eq(localObject.id, laterne)).get()?.fieldId);
+    const before = fieldOf();
+
+    philippsPhone.offline();
+    expect(philippsPhone.game.place(laterne, lager)).toEqual({ type: 'platziert' });
+    expect(fieldOf()).toBeNull();
+    // Anna entkoppelt, bevor Philipps Platzierung ankommt: Die archivierte Kopplung ist `forbidden`, ohne Datensatz.
+    const [current] = await backend.database.db.select({ id: coupling.id }).from(coupling);
+    await uncoupleAs(backend, { couplingId: current!.id, requesterPersonId: anna.personId });
+    philippsPhone.online();
+    await philippsPhone.sync();
+
+    expect(philippsPhone.outbox()).toEqual([]);
+    expect(fieldOf()).toBe(before);
   });
 });

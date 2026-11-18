@@ -15,6 +15,7 @@ import { insertBooking, readBookings } from '../energy/bookings.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
 import { vacateField } from './field-occupancy.ts';
+import { gameRejection } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
 import { progressChange } from './progress-change.ts';
 
@@ -66,7 +67,7 @@ export const buildObjectCommand: ServerCommand<BuildObject> = {
       balance: summarizeEnergy(bookings).balance,
       checkedBy: 'server',
     });
-    if (decision.type === 'verboten') throw new CommandRejection(decision.reason === 'unbekannter_schluessel' ? 'unknown_catalog_key' : 'conflict');
+    if (decision.type === 'verboten') throw gameRejection(decision);
 
     const changes: CanonicalChange[] = await vacateField(tx, { fieldId: EntityId.parse(field.id), couplingId, incoming: payload.islandObjectId, at });
     await changeWriter(tx, at)({ entityType: 'island_object', couplingId }, async (stamp) => {

@@ -69,7 +69,7 @@ describe('Bauen App ↔ Backend', { timeout: 30_000 }, () => {
     await energize(world, [worldToday]);
 
     expect(build(philippsPhone, 'grundinsel:0:0', 'laterne')).toMatchObject({ type: 'gebaut' });
-    expect(build(philippsPhone, 'grundinsel:1:0', 'sitzbank')).toEqual({ type: 'verboten', reason: 'zu_wenig_energie', missing: 1 });
+    expect(build(philippsPhone, 'grundinsel:1:0', 'sitzbank')).toEqual({ type: 'verboten', reason: 'zu_wenig_energie', price: 2, missing: 1 });
     expect(build(philippsPhone, 'grundinsel:0:0', 'holzweg')).toEqual({ type: 'verboten', reason: 'feld_belegt' });
     expect(build(philippsPhone, 'grundinsel:12:0', 'holzweg')).toEqual({ type: 'verboten', reason: 'fremdes_feld' });
     expect(build(philippsPhone, 'grundinsel:4:0', 'blumenwiese')).toEqual({ type: 'verboten', reason: 'falsche_rolle' });

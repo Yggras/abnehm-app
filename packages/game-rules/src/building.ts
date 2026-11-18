@@ -43,8 +43,8 @@ type PlacementRefusal = Readonly<{ type: 'verboten'; reason: Extract<PlacementDe
 /** Ausgabe abgelehnt: auf dem Server die Schutzgrenze, auf dem Gerät mit dem, was zum Preis fehlt. */
 type SpendingRefusal =
   | Readonly<{ type: 'verboten'; reason: 'schutzgrenze' }>
-  /** Wie viel Energie zum Preis fehlt; die Oberfläche zeigt neutral „Noch ‹n› Energie“. */
-  | Readonly<{ type: 'verboten'; reason: 'zu_wenig_energie'; missing: number }>;
+  /** Preis und was dazu fehlt; die Oberfläche zeigt neutral „Noch ‹n› Energie“. */
+  | Readonly<{ type: 'verboten'; reason: 'zu_wenig_energie'; price: number; missing: number }>;
 
 type Spending = Readonly<{ type: 'erlaubt'; price: number }> | SpendingRefusal;
 
@@ -63,6 +63,11 @@ export function decideBuild(catalog: CatalogIndex, { blueprintKey, field, person
   const placed = placement({ field: kind, person, object: { type: 'bauplan', role: blueprint.entry.role } });
   if (placed.type === 'verboten') return placed;
   return spend(basePrice(blueprint.entry), balance, checkedBy);
+}
+
+/** Die Stufe nach `level`, auf die sich aufwerten lässt; `null` ab Stufe 3. */
+export function nextStage(level: number): Exclude<Stage, 1> | null {
+  return level === 1 ? 2 : level === 2 ? 3 : null;
 }
 
 /** Ein Inselobjekt, wie Gerät und Server es führen: Katalogschlüssel und Herkunft, beim Aufwerten mit Stufe. */
@@ -93,7 +98,7 @@ export function decideUpgrade(catalog: CatalogIndex, { object, toLevel, balance,
   if (object.origin !== 'gebaut') return { type: 'verboten', reason: 'nicht_aufwertbar' };
   const blueprint = catalog.find('bauplan', object.catalogKey);
   if (blueprint.type !== 'found') return { type: 'verboten', reason: 'unbekannter_schluessel' };
-  if (object.level !== toLevel - 1) return { type: 'verboten', reason: 'falsche_stufe' };
+  if (nextStage(object.level) !== toLevel) return { type: 'verboten', reason: 'falsche_stufe' };
   return spend(upgradePrice(blueprint.entry, toLevel), balance, checkedBy);
 }
 
@@ -137,5 +142,5 @@ function spend(price: number, balance: number, checkedBy: Checker): Spending {
   if (checkedBy === 'server') return balance - price < serverDebtLimit ? { type: 'verboten', reason: 'schutzgrenze' } : { type: 'erlaubt', price };
   // Ein negativer Zwischenstand zählt wie angezeigt als 0 (Spezifikation 0, Abschnitt 4).
   const available = shownEnergy(balance);
-  return available < price ? { type: 'verboten', reason: 'zu_wenig_energie', missing: price - available } : { type: 'erlaubt', price };
+  return available < price ? { type: 'verboten', reason: 'zu_wenig_energie', price, missing: price - available } : { type: 'erlaubt', price };
 }
