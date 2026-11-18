@@ -8,6 +8,7 @@ import type { SchemaFixtures } from './define.ts';
 import { energyFixtures } from './energy.ts';
 import { errorFixtures } from './errors.ts';
 import { islandFixtures } from './island.ts';
+import { islandRecordFixtures } from './island-records.ts';
 import { notificationFixtures } from './notifications.ts';
 import { nutritionFixtures } from './nutrition.ts';
 import { onboardingFixtures } from './onboarding.ts';
@@ -45,6 +46,7 @@ export const contractFixtures: Readonly<Record<string, Readonly<Record<string, S
   energy: energyFixtures,
   partner: partnerFixtures,
   island: islandFixtures,
+  'island-records': islandRecordFixtures,
   wir: wirFixtures,
   notifications: notificationFixtures,
   ports: portFixtures,

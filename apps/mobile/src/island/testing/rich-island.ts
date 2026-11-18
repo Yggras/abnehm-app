@@ -2,19 +2,20 @@ import { EntityId } from '@abnehm/contracts/base';
 import { IslandProgress, MomoAppearance } from '@abnehm/contracts/island';
 import { seedClock, seedIds } from '@abnehm/contracts/seeds';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { hatching } from '@abnehm/game-rules/hatching';
 import { islandProgress } from '@abnehm/game-rules/progress';
 
-import type { IslandViewProps } from '../island/IslandView';
-import { islandLayout } from '../island/layout';
+import type { IslandViewProps } from '../IslandView';
+import { islandLayout } from '../layout';
 
-// Fixture-Insel der Test-Artefakte (#182). Bis „Schlüpfen“ (#184) die echte Insel aus den lokalen Daten
-// anschließt, zeigt der Tab „Momo“ im Development- und im E2E-Build diese Insel: die Grundinsel des
-// ausgelieferten Spielkatalogs mit Philipp auf Seite a und Anna auf Seite b (Personen aus den
-// Seed-Manifesten), Objekte der Start-Baupläne, Level 6 mit 23 Energie wie das Szenario „gekoppelt“
-// (Spezifikation 4, Abschnitt 13) und eine Vorschau eines gesperrten Gebiets unter Nebel. Alle Werte
-// sind synthetisch; Objekte, Hälften und das Gebiet sind Designwerte für die Sichtprüfung.
+// Volle Insel für Tests der Inselansicht (#182; bis #184 die Fixture-Insel der Test-Artefakte): die
+// Grundinsel des ausgelieferten Spielkatalogs, wie sie das Schlüpfen materialisiert, mit Philipp (Bauen,
+// Seite a) und Anna (Natur, Seite b) aus den Seed-Manifesten, Objekte der Start-Baupläne, Level 6 mit
+// 23 Energie wie das Szenario „gekoppelt“ (Spezifikation 4, Abschnitt 13) und eine Vorschau eines
+// gesperrten Gebiets unter Nebel. Alle Werte sind synthetisch; Objekte, Hälften und das Gebiet sind
+// Designwerte für den Lastrahmen.
 
-export type FixtureIsland = Omit<IslandViewProps, 'onOpen' | 'onFieldPress' | 'bottomInset'>;
+export type FixtureIsland = Omit<IslandViewProps, 'onOpen' | 'onFieldPress' | 'onMomoPress' | 'bottomInset'>;
 
 const philipp = EntityId.parse(seedIds.person.philipp);
 const anna = EntityId.parse(seedIds.person.anna);
@@ -51,7 +52,10 @@ export function fixtureIsland(): FixtureIsland {
   const { level, levelNeed, halves } = islandProgress(spent);
   return {
     island: {
-      ...islandLayout(gameCatalog, { sides: { a: philipp, b: anna }, unlockedAreas: [] }),
+      ...islandLayout(gameCatalog, {
+        fields: hatching(gameCatalog, { proposerPersonId: philipp, proposerRole: 'bauen', partnerPersonId: anna }).fields,
+        unlockedAreas: [],
+      }),
       fog: [lockedPreview],
       objects: placed.map(([fieldKey, art, ownerPersonId], index) => ({ id: fixtureId(index + 1), fieldKey, art, ownerPersonId })),
       momo: MomoAppearance.parse({ stage: 'geschluepft', formKey: 'huepfer', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } }),

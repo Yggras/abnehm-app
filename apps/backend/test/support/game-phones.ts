@@ -1,0 +1,117 @@
+import { randomUUID } from 'node:crypto';
+
+import { afterEach, expect } from 'vitest';
+
+import { createTestClock } from '@abnehm/clock/testing';
+import { EntityId } from '@abnehm/contracts/base';
+import type { ContributionState } from '@abnehm/contracts/contribution';
+import { MomoCharacterState } from '@abnehm/contracts/today';
+import { WirContributionsState, type WirContribution } from '@abnehm/contracts/wir';
+
+import { createGameService, type GameService } from '../../../mobile/src/island/game-service.ts';
+import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
+import type { IslandStage } from '../../../mobile/src/island/role-choice.ts';
+import { sharedActionCommands } from '../../../mobile/src/island/shared-action-commands.ts';
+import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
+import { sharedAction as localAction } from '../../../mobile/src/local-db/schema/index.ts';
+import { sqliteOf } from '../../../mobile/src/local-db/sqlite.ts';
+import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
+import type { TodayState } from '../../../mobile/src/shell/today-registry.ts';
+import {
+  createHttpSyncTransport,
+  createLocalCommandRegistry,
+  createSyncEngine,
+  createSyncRegistry,
+  createSyncWriter,
+  foundationLocalCommands,
+  foundationSyncEntities,
+} from '../../../mobile/src/sync/index.ts';
+import { pendingOperations } from '../../../mobile/src/sync/outbox.ts';
+import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
+import type { Device } from './auth-client.ts';
+import { personWithSession } from './authorization.ts';
+import { worldStart } from './coupled-world.ts';
+
+// Geräte mit dem Spieldienst der App (#180, #184): Engine, Outbox und Adapter auf echtem SQLite
+// (better-sqlite3) gegen die echte Hono-App mit Postgres, wie im Composition Root
+// (`src/session/device-session.ts`) mit den Inselinhalten im Sync. „Heute“ und „Wir“ folgen den lokalen Daten.
+
+const cleanups: (() => void)[] = [];
+afterEach(() => {
+  for (const cleanup of cleanups.splice(0)) cleanup();
+});
+
+export type GamePhone = Awaited<ReturnType<typeof gamePhone>>;
+
+export async function gamePhone(backend: TestBackend, accountId: string, device: Device) {
+  const files = createBetterSqliteFiles();
+  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
+  cleanups.push(() => {
+    databases.lock();
+    files.remove();
+  });
+  const database = await databases.open(accountId);
+  const clock = createTestClock(worldStart);
+  const newId = () => EntityId.parse(randomUUID());
+  const registry = createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities]);
+  const writer = createSyncWriter({ registry, clock, newId });
+  let online = true;
+  const engine = createSyncEngine({
+    database,
+    registry,
+    transport: createHttpSyncTransport({
+      baseUrl: testBaseUrl,
+      fetch: async (input, init) => {
+        if (!online) throw new TypeError('Netzwerk nicht erreichbar');
+        const headers = new Headers(init?.headers);
+        headers.set('authorization', `Bearer ${device.token ?? ''}`);
+        headers.set('x-forwarded-for', device.ip);
+        return backend.app.request(String(input), { ...init, headers });
+      },
+    }),
+    clock,
+    installationId: newId(),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands] }),
+  });
+  const game: GameService = createGameService({ database, writer, clock, newId });
+  const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
+    let value: T | undefined;
+    cleanups.push(subscribe((next) => (value = next)));
+    return () => value as T;
+  };
+  return {
+    game,
+    database,
+    clock,
+    stage: latest<IslandStage>((listener) => game.observeStage(listener)),
+    character: latest<TodayState<'momo.character'>>((listener) => game.momoCharacter.subscribe((state) => listener(MomoCharacterState.parse(state)))),
+    wir: latest<ContributionState<WirContribution[]>>((listener) => game.wirContributions.subscribe((state) => listener(WirContributionsState.parse(state)))),
+    offline: () => (online = false),
+    online: () => (online = true),
+    async sync() {
+      expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
+    },
+    outbox: () => database.read((tx) => pendingOperations(tx, 100)),
+    openRoleChoices: () =>
+      database.read((tx) => sqliteOf(tx).select().from(localAction).all().filter((row) => row.kind === 'rollenwahl' && row.status === 'offen')),
+  };
+}
+
+/** Der offene Vorschlag, den ein Gerät gerade zeigt. */
+export function proposalOn(phone: GamePhone) {
+  const stage = phone.stage();
+  if (stage.type !== 'rollenwahl' || stage.proposal === null) throw new Error(`Kein offener Vorschlag: ${JSON.stringify(stage)}`);
+  return stage.proposal;
+}
+
+/** Philipp und Anna mit je einem Gerät, noch ungekoppelt und auf dem Stand des Servers. */
+export async function gamePhones() {
+  const backend = await createTestBackend({ clock: createTestClock(worldStart) });
+  const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
+  const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
+  const philippsPhone = await gamePhone(backend, philipp.accountId, philipp.device);
+  const annasPhone = await gamePhone(backend, anna.accountId, anna.device);
+  await philippsPhone.sync();
+  await annasPhone.sync();
+  return { backend, philipp, anna, philippsPhone, annasPhone };
+}

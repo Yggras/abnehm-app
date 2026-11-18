@@ -5,15 +5,15 @@ import { render, screen } from '@testing-library/react-native';
 import { createTestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 
-import { IslandView } from '../island/IslandView';
-import { IslandHost } from '../island/testing/island-host';
-import type * as mockSkia from '../island/testing/skia-mock';
-import { fixtureIsland } from './fixture-island';
+import { IslandView } from './IslandView';
+import { IslandHost } from './testing/island-host';
+import { fixtureIsland } from './testing/rich-island';
+import type * as mockSkia from './testing/skia-mock';
 
 // Lastrahmen (Spezifikation 4, Abschnitt 7): Die Produktgrafik bleibt unter dem Lastprofil des Spikes,
 // 1.382 gezeichnete Elemente und 157 Animationen (spikes/insel-rendering/RESULTS.md). Gezählt wird die
-// Fixture-Insel mit dem echten Skia-Code; die Leistung auf den Geräten misst #221.
-jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('../island/testing/skia-mock').skiaWithCanvasKit());
+// volle Fixture-Insel mit dem echten Skia-Code; die Leistung auf den Geräten misst #221.
+jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('./testing/skia-mock').skiaWithCanvasKit());
 
 const clock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
 

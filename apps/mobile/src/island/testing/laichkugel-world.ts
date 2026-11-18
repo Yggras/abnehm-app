@@ -1,16 +1,20 @@
 import { randomUUID } from 'node:crypto';
 
+import { eq } from 'drizzle-orm';
+
 import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import type { IslandRole } from '@abnehm/contracts/island';
+import { gameCatalog } from '@abnehm/game-rules/content';
+import { hatching } from '@abnehm/game-rules/hatching';
 
 import { insertCompletionForTest, insertDailyGoalForTest, insertPersonForTest } from '../../daily-goals/testing/persisted';
 import { appendBooking } from '../../energy';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { coupling, couplingMember, island, sharedAction } from '../../local-db/schema';
+import { blueprintUnlock, communityProject, coupling, couplingMember, island, islandEvent, islandField, islandProgress, sharedAction } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../sync';
@@ -18,19 +22,27 @@ import { pendingOperations } from '../../sync/outbox';
 import { createGameService, type GameService } from '../game-service';
 import { anna, philipp } from './persons';
 
-// Testaufbau für Laichkugel und Rollenwahl (#180): echte SQLite-Datei mit denselben Migrationen wie die
-// App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung, Insel, Vorschläge und
-// Energie legt der Test an, wie sie der Pull ablegen würde. Die Uhr gibt der Test hinein.
+// Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
+// Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
+// Insel, Vorschläge, die geschlüpfte Insel und Energie legt der Test an, wie sie der Pull ablegen würde.
+// Die Uhr gibt der Test hinein.
 
 const at = '2026-10-14T12:00:00.000Z';
 const synced = { createdAt: at, updatedAt: at, serverVersion: '1' };
 export const couplingId = EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c01');
+export const islandId = EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c02');
 
 export type LaichkugelWorld = Readonly<{
   database: LocalDatabase;
   game: GameService;
   /** Philipp und Anna gekoppelt; die Insel wartet auf die Rollen. */
   couple(): void;
+  /**
+   * Momo ist geschlüpft, wie es der Pull nach der Annahme ablegt: Philipp Bauen, Anna Natur, Grundinsel,
+   * Start-Baupläne, Projekt 1, das Ereignis und der Inselfortschritt auf Level 1. Setzt `couple()` voraus;
+   * `progress: false` lässt den Inselfortschritt weg, als stünde er erst auf der nächsten Pull-Seite.
+   */
+  hatch(options?: Readonly<{ progress?: boolean }>): void;
   /** Ein vom Server bestätigter offener Vorschlag. */
   proposeOnServer(by: 'philipp' | 'anna', proposerRole: IslandRole): EntityId;
   /** Gutschriften für erfüllte Tagesziele, wie sie der Pull ablegt. */
@@ -57,7 +69,38 @@ export async function createLaichkugelWorld(clock: Clock): Promise<LaichkugelWor
         for (const [person, displayName] of [[philipp, 'Philipp'], [anna, 'Anna']] as const) {
           db.insert(couplingMember).values({ id: newId(), couplingId, couplingStatus: 'aktiv', personId: person, displayName, ...synced }).run();
         }
-        db.insert(island).values({ id: newId(), couplingId, state: 'wartet_auf_rollen', ...synced }).run();
+        db.insert(island).values({ id: islandId, couplingId, state: 'wartet_auf_rollen', ...synced }).run();
+      });
+    },
+    hatch({ progress = true } = {}) {
+      const plan = hatching(gameCatalog, { proposerPersonId: anna, proposerRole: 'natur', partnerPersonId: philipp });
+      const owned = { islandId, couplingId };
+      const projectId = newId();
+      database.transaction((tx) => {
+        const db = sqliteOf(tx);
+        for (const [role, personId] of Object.entries(plan.roles)) {
+          db.update(couplingMember).set({ role }).where(eq(couplingMember.personId, personId)).run();
+        }
+        db.update(island).set({ state: 'aktiv', hatchedAt: at, timeZone: 'Europe/Berlin' }).where(eq(island.id, islandId)).run();
+        for (const field of plan.fields) {
+          db.insert(islandField).values({ id: newId(), ...owned, fieldKey: field.key, ownerPersonId: field.ownerPersonId, createdAt: at, serverVersion: '1' }).run();
+        }
+        for (const blueprint of plan.blueprints) {
+          db.insert(blueprintUnlock).values({ id: newId(), ...owned, catalogKey: blueprint.key, reason: blueprint.reason, unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+        }
+        db.insert(communityProject).values({ id: projectId, ...owned, ...plan.project, status: 'aktiv', ...synced }).run();
+        db.insert(islandEvent).values({ id: newId(), ...owned, type: 'momo_geschluepft', occasionKey: 'geschluepft', status: 'abgeschlossen', occurredAt: at, ...synced }).run();
+        if (!progress) return;
+        const half = { halfPercent: 0, halfFull: false };
+        db.insert(islandProgress)
+          .values({
+            id: newId(), ...owned, level: 1, levelNeed: 11, dataAsOf: at, ...synced,
+            content: {
+              members: [anna, philipp].sort().map((personId) => ({ personId, ...half })),
+              activeProject: { projectId, templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
+            },
+          })
+          .run();
       });
     },
     proposeOnServer(by, proposerRole) {

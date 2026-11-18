@@ -1,105 +1,15 @@
-import { randomUUID } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
 
-import { afterEach, describe, expect, it } from 'vitest';
-
-import { createTestClock } from '@abnehm/clock/testing';
-import { EntityId } from '@abnehm/contracts/base';
-import type { ContributionState } from '@abnehm/contracts/contribution';
-import { MomoCharacterState } from '@abnehm/contracts/today';
-import { WirContributionsState, type WirContribution } from '@abnehm/contracts/wir';
-
-import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
-import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
-import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
-import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
-import { sharedAction as localAction } from '../../mobile/src/local-db/schema/index.ts';
-import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
-import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import {
-  createHttpSyncTransport,
-  createLocalCommandRegistry,
-  createSyncEngine,
-  createSyncRegistry,
-  createSyncWriter,
-  foundationLocalCommands,
-  foundationSyncEntities,
-} from '../../mobile/src/sync/index.ts';
-import { pendingOperations } from '../../mobile/src/sync/outbox.ts';
-import type { TodayState } from '../../mobile/src/shell/today-registry.ts';
-import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
-import type { Device } from './support/auth-client.ts';
-import { personWithSession } from './support/authorization.ts';
 import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
+import { gamePhones, proposalOn } from './support/game-phones.ts';
 import { uncoupleAs } from './support/shared-actions.ts';
 
 // Nachweis für #180 auf zwei Geräten: der Spieldienst der App (Laichkugel und Rollenwahl) mit Engine,
 // Outbox und Adaptern auf echtem SQLite (better-sqlite3) gegen die echte Hono-App mit Postgres.
 // Gemeinsame Aktionen sind offline nur vorgemerkt; „Heute“ und „Wir“ folgen den lokalen Daten.
 
-const cleanups: (() => void)[] = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
-});
-
-type Phone = Awaited<ReturnType<typeof phone>>;
-
-async function phone(backend: TestBackend, accountId: string, device: Device) {
-  const files = createBetterSqliteFiles();
-  const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
-  cleanups.push(() => {
-    databases.lock();
-    files.remove();
-  });
-  const database = await databases.open(accountId);
-  const clock = createTestClock(worldStart);
-  const newId = () => EntityId.parse(randomUUID());
-  const registry = createSyncRegistry(foundationSyncEntities);
-  const writer = createSyncWriter({ registry, clock, newId });
-  let online = true;
-  const engine = createSyncEngine({
-    database,
-    registry,
-    transport: createHttpSyncTransport({
-      baseUrl: testBaseUrl,
-      fetch: async (input, init) => {
-        if (!online) throw new TypeError('Netzwerk nicht erreichbar');
-        const headers = new Headers(init?.headers);
-        headers.set('authorization', `Bearer ${device.token ?? ''}`);
-        headers.set('x-forwarded-for', device.ip);
-        return backend.app.request(String(input), { ...init, headers });
-      },
-    }),
-    clock,
-    installationId: newId(),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands] }),
-  });
-  const game: GameService = createGameService({ database, writer, clock, newId });
-  const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
-    let value: T | undefined;
-    cleanups.push(subscribe((next) => (value = next)));
-    return () => value as T;
-  };
-  return {
-    game,
-    stage: latest<IslandStage>((listener) => game.observeStage(listener)),
-    character: latest<TodayState<'momo.character'>>((listener) => game.momoCharacter.subscribe((state) => listener(MomoCharacterState.parse(state)))),
-    wir: latest<ContributionState<WirContribution[]>>((listener) => game.wirContributions.subscribe((state) => listener(WirContributionsState.parse(state)))),
-    offline: () => (online = false),
-    online: () => (online = true),
-    async sync() {
-      expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
-    },
-    outbox: () => database.read((tx) => pendingOperations(tx, 100)),
-    openRoleChoices: () =>
-      database.read((tx) => sqliteOf(tx).select().from(localAction).all().filter((row) => row.kind === 'rollenwahl' && row.status === 'offen')),
-  };
-}
-
-const proposal = (phone: Phone) => {
-  const stage = phone.stage();
-  if (stage.type !== 'rollenwahl' || stage.proposal === null) throw new Error(`Kein offener Vorschlag: ${JSON.stringify(stage)}`);
-  return stage.proposal;
-};
+const proposal = proposalOn;
+const couple = gamePhones;
 
 const pendingCard = (actionId: string, requesterDisplayName: string) => ({
   type: 'ready',
@@ -117,18 +27,6 @@ const pendingCard = (actionId: string, requesterDisplayName: string) => ({
 });
 
 const roleChoice = { actionId: 'momo.open_role_choice', target: { type: 'momo', view: 'rollenwahl' } };
-
-/** Philipp und Anna mit je einem Gerät, noch ungekoppelt und auf dem Stand des Servers. */
-async function couple() {
-  const backend = await createTestBackend({ clock: createTestClock(worldStart) });
-  const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
-  const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
-  const philippsPhone = await phone(backend, philipp.accountId, philipp.device);
-  const annasPhone = await phone(backend, anna.accountId, anna.device);
-  await philippsPhone.sync();
-  await annasPhone.sync();
-  return { backend, philipp, anna, philippsPhone, annasPhone };
-}
 
 describe('Laichkugel und Rollenwahl App ↔ Backend', () => {
   it('Tracer Bullet: Laichkugel solo; nach der Kopplung schlägt Philipp vor, Anna lehnt ab und schlägt selbst vor', async () => {

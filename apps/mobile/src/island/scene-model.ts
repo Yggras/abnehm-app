@@ -84,6 +84,8 @@ export type SceneItem =
 
 /** Was ein Tipp trifft; `owner` aus Sicht der betrachtenden Person. */
 export type SceneHit =
+  /** Momo selbst; das Antippen öffnet das Momo-Sheet (#184). */
+  | Readonly<{ type: 'momo' }>
   | Readonly<{ type: 'feld'; field: string; kind: FieldKind; owner: Owner }>
   | Readonly<{ type: 'nebel'; area: string }>;
 
@@ -232,6 +234,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     bounds,
     items: [...water, ...sides, ...fieldItems, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...selection],
     hitAt(point) {
+      if (place !== null && project.onMomo(place.field, point)) return { type: 'momo' };
       const cell = groundByCell.get(cellKey(project.cellAt(point)));
       if (cell === undefined) return null;
       if (cell.field === null) return { type: 'nebel', area: cell.fogArea! };
@@ -239,6 +242,9 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     },
   };
 }
+
+/** Momos Kopf über der Feldmitte in halben Feldhöhen: 28 von 16 dp bei Zoom 1 (Vorzeichnung in `IslandArt.tsx`). */
+const momoHeadHeight = 28 / 16;
 
 /** Isometrische Projektion 2:1: Feld `island-tile` breit und halb so hoch, jeweils mal Zoom. */
 function projection(zoom: number) {
@@ -250,6 +256,16 @@ function projection(zoom: number) {
     depth: halfHeight,
     /** Punkt der Inselebene zu Rasterkoordinaten, auch zwischen den Feldern. */
     point: top,
+    /**
+     * Ob ein Punkt Momo auf seinem Feld trifft: ein Rechteck, so breit wie eine halbe Raute, von Momos
+     * Kopf (28 dp über der Feldmitte bei Zoom 1, wie die Vorzeichnung in `IslandArt.tsx`) bis eine viertel
+     * Feldhöhe unter die Mitte. So zählt auch der Kopf über der Raute (Designwert aus #184, nicht belegt).
+     */
+    onMomo(cell: Cell, point: Point): boolean {
+      const { x, y } = top(cell);
+      const middle = { x, y: y + halfHeight };
+      return Math.abs(point.x - middle.x) <= halfWidth / 2 && point.y >= middle.y - momoHeadHeight * halfHeight && point.y <= middle.y + halfHeight / 2;
+    },
     /** Raute eines Felds im Uhrzeigersinn ab der oberen Ecke. */
     diamond(cell: Cell): Polygon {
       const { x, y } = top(cell);

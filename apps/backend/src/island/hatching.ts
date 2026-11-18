@@ -7,7 +7,7 @@ import type { IslandRole } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { hatching } from '@abnehm/game-rules/hatching';
 
-import { changeWriter, updated } from '../coupling/change-writer.ts';
+import { batchChangeWriter, changeWriter, updated } from '../coupling/change-writer.ts';
 import type { DbExecutor } from '../database.ts';
 import { blueprintUnlock, communityProject, couplingMember, island, islandEvent, islandField } from '../db/schema/index.ts';
 import { CommandRejection } from '../sync/commands.ts';
@@ -58,20 +58,24 @@ export async function hatch(tx: DbExecutor, { couplingId, proposerPersonId, prop
     await tx.update(island).set({ state: 'aktiv', hatchedAt: at, timeZone, ...updated(stamp) }).where(eq(island.id, islandId));
     return islandId;
   });
-  for (const field of plan.fields) {
-    await write({ entityType: 'island_field', couplingId }, async ({ createdAt, serverVersion }) => {
-      const id = randomUUID();
-      await tx.insert(islandField).values({ id, ...owned, fieldKey: field.key, ownerPersonId: field.ownerPersonId, createdAt, serverVersion });
-      return id;
-    });
-  }
-  for (const blueprint of plan.blueprints) {
-    await write({ entityType: 'blueprint_unlock', couplingId }, async ({ createdAt, serverVersion }) => {
-      const id = randomUUID();
-      await tx.insert(blueprintUnlock).values({ id, ...owned, catalogKey: blueprint.key, reason: blueprint.reason, unlockedAt: at, createdAt, serverVersion });
-      return id;
-    });
-  }
+  // Rund 200 Felder: gebündelt, sonst kostete jede Zeile eigene Runden für Serverversion und Protokoll.
+  const writeAll = batchChangeWriter(tx, at);
+  const fields = plan.fields.map((field) => ({ id: randomUUID(), ...field }));
+  await writeAll({ entityType: 'island_field', couplingId }, fields.map(({ id }) => id), async (stamped) => {
+    await tx.insert(islandField).values(
+      stamped.map(({ id, createdAt, serverVersion }, index) => ({
+        id, ...owned, fieldKey: fields[index]!.key, ownerPersonId: fields[index]!.ownerPersonId, createdAt, serverVersion,
+      })),
+    );
+  });
+  const blueprints = plan.blueprints.map((blueprint) => ({ id: randomUUID(), ...blueprint }));
+  await writeAll({ entityType: 'blueprint_unlock', couplingId }, blueprints.map(({ id }) => id), async (stamped) => {
+    await tx.insert(blueprintUnlock).values(
+      stamped.map(({ id, createdAt, serverVersion }, index) => ({
+        id, ...owned, catalogKey: blueprints[index]!.key, reason: blueprints[index]!.reason, unlockedAt: at, createdAt, serverVersion,
+      })),
+    );
+  });
   await write({ entityType: 'community_project', couplingId }, async (stamp) => {
     const id = randomUUID();
     await tx.insert(communityProject).values({ id, ...owned, ...plan.project, status: 'aktiv', ...stamp });
