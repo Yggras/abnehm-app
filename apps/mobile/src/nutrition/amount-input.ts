@@ -32,16 +32,24 @@ export type AmountCheck =
   | { type: 'problem'; problem: AmountInputProblem };
 
 /** Höchstens sieben Vor- und drei Nachkommastellen: Tausendstel sind die feinste Anzeigemenge. */
-const amountPattern = /^(\d{0,7})(?:[.,](\d{1,3}))?$/;
+const decimalPattern = /^(\d{0,7})(?:[.,](\d{1,3}))?$/;
 
-export function checkAmountInput(snapshot: NutritionSnapshot, displayUnit: DisplayUnit, input: string): AmountCheck {
+/** Eine eingetippte deutsche Dezimalzahl in Tausendsteln, etwa „0,5“ → 500; sonst warum nicht. */
+export type DecimalInput = { type: 'zahl'; milli: number } | { type: 'problem'; problem: 'leer' | 'format' | 'tausenderpunkt' };
+
+export function parseDecimalMilli(input: string): DecimalInput {
   const text = input.trim();
   if (text === '') return { type: 'problem', problem: 'leer' };
-  const match = amountPattern.exec(text);
+  const match = decimalPattern.exec(text);
   if (match === null || (match[1] === '' && match[2] === undefined)) return { type: 'problem', problem: 'format' };
   if (text.includes('.') && match[1] !== '' && match[2]?.length === 3) return { type: 'problem', problem: 'tausenderpunkt' };
-  const displayAmountMilli = Number(match[1] || '0') * 1_000 + Number((match[2] ?? '').padEnd(3, '0'));
-  const amount = entryAmount(snapshot, displayUnit, displayAmountMilli);
+  return { type: 'zahl', milli: Number(match[1] || '0') * 1_000 + Number((match[2] ?? '').padEnd(3, '0')) };
+}
+
+export function checkAmountInput(snapshot: NutritionSnapshot, displayUnit: DisplayUnit, input: string): AmountCheck {
+  const parsed = parseDecimalMilli(input);
+  if (parsed.type === 'problem') return parsed;
+  const amount = entryAmount(snapshot, displayUnit, parsed.milli);
   if (amount.type === 'problem') return { type: 'problem', problem: amount.problem };
   return { type: 'menge', amount: amount.amount, totals: entryTotals(snapshot, amount.amount) };
 }

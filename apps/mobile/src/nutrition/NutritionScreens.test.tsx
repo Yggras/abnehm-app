@@ -10,19 +10,20 @@ import { seedClock, seedDays, seedIds, seedManifests } from '@abnehm/contracts/s
 import { testCapabilities } from '../build-capabilities';
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
 import { createLocalDatabases } from '../local-db/local-databases';
-import { nutritionEntry } from '../local-db/schema';
+import { nutritionEntry, ownFood } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
-import { appNutrition, createNutrition, nutritionEntryEntity } from '.';
+import { appNutrition, createNutrition, nutritionEntryEntity, ownFoodEntity } from '.';
 import type * as TestCatalogModule from './testing/test-catalog';
 
-// Nachweis für #155 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem echten
-// Verzeichnis `src/app`, dem echten Ernährungsmodul über einer mit `solo` geseedeten SQLite-Datei und
-// einem kleinen BLS-Testkatalog. Ein Eintrag aus der Suche landet im Protokoll; „Rückgängig“ entfernt
-// ihn wieder.
+// Nachweis für #155 und #157 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
+// echten Verzeichnis `src/app`, dem echten Ernährungsmodul über einer mit `solo` geseedeten SQLite-Datei
+// und einem kleinen BLS-Testkatalog. Ein Eintrag aus der Suche landet im Protokoll; „Rückgängig“ entfernt
+// ihn wieder. Eigene Lebensmittel entstehen im Formular, aus einer Korrektur oder einer fehlenden
+// Umrechnung und werden in Stück oder Portion erfasst.
 
 jest.setTimeout(30_000);
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
@@ -62,7 +63,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
   const newId = () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
   const nutrition = createNutrition({
     database, clock, newId,
-    writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity]), clock, newId }),
+    writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity]), clock, newId }),
     persistence: { reevaluateDailyGoals() {} },
   });
   const release = appNutrition.opened(nutrition);
@@ -75,6 +76,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
   return {
     nutrition,
     entries: () => database.read((tx) => sqliteOf(tx).select().from(nutritionEntry).all()).filter((row) => row.deletedAt === null),
+    ownFoods: () => database.read((tx) => sqliteOf(tx).select().from(ownFood).all()),
     operations: () => database.read((tx) => pendingOperations(tx, 100)).map(({ type }) => type),
   };
 }
@@ -278,5 +280,185 @@ describe('Hinzufügen und Mengenprüfung', () => {
     expect(operations()).toEqual(['upsert_entity', 'delete_entity']);
     expect(within(meal('snacks')).getByText('Noch nichts eingetragen.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Erfasst heute: 296 kcal')).toBeOnTheScreen();
+  });
+});
+
+describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
+  async function openCapture() {
+    const account = await openAccount();
+    await renderRouter(appDir, { initialUrl: '/capture/food?meal=fruehstueck&localDate=2026-10-14' });
+    await screen.findByLabelText('Lebensmittel suchen');
+    return account;
+  }
+  const search = async (query: string) => {
+    await user.clear(screen.getByLabelText('Lebensmittel suchen'));
+    await user.type(screen.getByLabelText('Lebensmittel suchen'), query);
+  };
+  const form = () => screen.getByTestId('eigenes-lebensmittel');
+  const fill = async (label: string, value: string) => {
+    const field = within(form()).getByLabelText(label);
+    await user.clear(field);
+    if (value !== '') await user.type(field, value);
+  };
+  const sheet = () => screen.getByTestId('sheet');
+
+  it('legt ein fehlendes Lebensmittel als letzten Platz an, prüft die Eingaben mit Lösungsweg und erfasst es in Portionen', async () => {
+    const { entries, ownFoods, operations } = await openCapture();
+
+    await user.press(within(screen.getByTestId('platz-eigenes_lebensmittel')).getByRole('button', { name: 'Eigenes Lebensmittel anlegen' }));
+    expect(within(form()).getByRole('header', { name: 'Eigenes Lebensmittel anlegen' })).toBeOnTheScreen();
+    expect(within(form()).getByLabelText('Werte gelten für')).toHaveDisplayValue('100');
+
+    await fill('Fett', '60');
+    await fill('Eiweiß', '50');
+    await fill('Kohlenhydrate', 'viel');
+    await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
+
+    for (const problem of [
+      'Gib einen Namen ein, etwa „Bircher-Müsli“.',
+      'Gib die kcal von der Packung ein, etwa 150.',
+      'Gib eine Zahl ein, etwa 4,5.',
+    ]) {
+      expect(within(form()).getByText(problem, { includeHiddenElements: true })).toBeOnTheScreen();
+    }
+    expect(within(form()).getByLabelText('Name')).toHaveProp('accessibilityHint', 'Fehler: Gib einen Namen ein, etwa „Bircher-Müsli“.');
+    expect(ownFoods()).toEqual([expect.objectContaining({ name: 'Bircher-Müsli, selbst gemacht' }), expect.objectContaining({ name: 'Apfel roh' })]);
+
+    await fill('Kohlenhydrate', '0');
+    await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
+    expect(within(form()).getByText(/wiegen zusammen mehr als die Menge, für die die Werte gelten/)).toBeOnTheScreen();
+
+    await fill('Name', 'Linsen-Dal');
+    await fill('Energie', '120');
+    await fill('Eiweiß', '6,5');
+    await fill('Kohlenhydrate', '15');
+    await fill('Fett', '3');
+    await fill('1 Portion hat', '300');
+    await fill('Bezeichnung für Portion', '1 Schüssel');
+    await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
+
+    expect(ownFoods()).toHaveLength(3);
+    expect(ownFoods()[2]).toMatchObject({ name: 'Linsen-Dal', milliKcal: 120_000, proteinMg: 6_500, portions: [{ unit: 'portion', label: '1 Schüssel', baseAmount: 300_000 }], originType: null });
+    // Danach direkt in die Mengenprüfung: vorbelegt ist die bekannte Portion.
+    expect(within(sheet()).getByRole('header', { name: 'Linsen-Dal' })).toBeOnTheScreen();
+    expect(within(sheet()).getByText('Eigenes Lebensmittel')).toBeOnTheScreen();
+    expect(within(sheet()).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual(['g', '1 Schüssel']);
+    expect(within(sheet()).getByRole('radio', { name: '1 Schüssel' })).toBeChecked();
+    expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('1');
+    expect(within(sheet()).getByText('360 kcal')).toBeOnTheScreen();
+
+    await user.clear(within(sheet()).getByLabelText('Menge'));
+    await user.type(within(sheet()).getByLabelText('Menge'), '0,5');
+    expect(within(sheet()).getByText('180 kcal')).toBeOnTheScreen();
+    await user.press(within(sheet()).getByRole('button', { name: 'Hinzufügen' }));
+
+    expect(screen).toHavePathname('/log');
+    expect(entries()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ captureMethod: 'eigenes_lebensmittel', foodRefType: 'eigen', displayUnit: 'portion', displayAmountMilli: 500, baseAmount: 150_000, totalMilliKcal: 180_000 }),
+    ]));
+    expect(operations()).toEqual(['upsert_entity', 'upsert_entity']);
+    expect(await within(meal('fruehstueck')).findByLabelText('Frühstück: Linsen-Dal, 0,5 Portionen, 180 kcal')).toBeOnTheScreen();
+  });
+
+  it('bietet ohne Suchtreffer „Eigenes Lebensmittel anlegen“ mit vorausgefülltem Namen an', async () => {
+    await openCapture();
+
+    await search('Zimtschnecke ');
+
+    expect(screen.getByText('Keine Treffer für „Zimtschnecke“.')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: '„Zimtschnecke“ als eigenes Lebensmittel anlegen' }));
+    expect(within(form()).getByLabelText('Name')).toHaveDisplayValue('Zimtschnecke');
+
+    await user.press(within(form()).getByRole('button', { name: 'Abbrechen' }));
+    expect(screen.getByLabelText('Lebensmittel suchen')).toHaveDisplayValue('Zimtschnecke ');
+  });
+
+  it('zeigt Stück und Portion nur bei bekannter Umrechnung', async () => {
+    await openCapture();
+
+    await search('Bircher');
+    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Eigen' }));
+    expect(within(sheet()).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual(['g', '1 Glas']);
+    expect(within(sheet()).getByRole('button', { name: 'Stück eintragen' })).toBeOnTheScreen();
+    await user.press(within(sheet()).getByRole('button', { name: 'Schließen' }));
+
+    await search('Haferflocken');
+    await user.press(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, BLS' }));
+    expect(within(sheet()).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual(['g']);
+    expect(within(sheet()).getByRole('button', { name: 'Stück oder Portion eintragen' })).toBeOnTheScreen();
+  });
+
+  it('trägt eine fehlende Umrechnung eines BLS-Lebensmittels ein: Daraus entsteht ein eigenes Lebensmittel', async () => {
+    const { ownFoods } = await openCapture();
+    await search('Haferflocken');
+    await user.press(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, BLS' }));
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Stück oder Portion eintragen' }));
+    expect(within(sheet()).getByRole('header', { name: 'Umrechnung eintragen' })).toBeOnTheScreen();
+    await user.press(within(sheet()).getByRole('radio', { name: 'Portion' }));
+    await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
+    expect(within(sheet()).getByText('Gib ein, wie viel g 1 Portion hat, etwa 250.', { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(ownFoods()).toHaveLength(2);
+
+    await user.type(within(sheet()).getByLabelText('1 Portion hat'), '40');
+    await user.type(within(sheet()).getByLabelText('Bezeichnung für Portion'), '1 Schale');
+    await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
+
+    expect(ownFoods()[2]).toMatchObject({ name: 'Hafer Flocken', milliKcal: 348_000, portions: [{ unit: 'portion', label: '1 Schale', baseAmount: 40_000 }], originType: 'bls', originKey: 'C133000' });
+    expect(within(sheet()).getByRole('radio', { name: '1 Schale' })).toBeChecked();
+    expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('1');
+    // 348 kcal je 100 g × 0,4 = 139,2 kcal.
+    expect(within(sheet()).getByText('139 kcal')).toBeOnTheScreen();
+    expect(within(sheet()).getByText('Eigenes Lebensmittel')).toBeOnTheScreen();
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Schließen' }));
+    // Die Quelle erscheint nur noch einmal, als eigenes Lebensmittel.
+    expect(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, Eigen' })).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, BLS' })).not.toBeOnTheScreen();
+  });
+
+  it('korrigiert die Werte eines BLS-Lebensmittels; gespeicherte Einträge behalten ihre Werte', async () => {
+    const { entries, ownFoods } = await openCapture();
+    await search('Haferflocken');
+    await user.press(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, BLS' }));
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Werte korrigieren' }));
+    expect(within(form()).getByRole('header', { name: 'Werte korrigieren' })).toBeOnTheScreen();
+    expect(within(form()).getByText('Die BLS-Daten bleiben unverändert. Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.')).toBeOnTheScreen();
+    expect(within(form()).getByLabelText('Name')).toHaveDisplayValue('Hafer Flocken');
+    expect(within(form()).getByLabelText('Energie')).toHaveDisplayValue('348');
+    expect(within(form()).getByLabelText('Eiweiß')).toHaveDisplayValue('13,22');
+    await fill('Energie', '372');
+    await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
+
+    expect(ownFoods()[2]).toMatchObject({ name: 'Hafer Flocken', milliKcal: 372_000, originType: 'bls', originKey: 'C133000' });
+    // Die Vorbelegung gilt je Referenz: Die Korrektur hat noch keine Einträge und beginnt bei 100 g.
+    expect(within(sheet()).getByText('372 kcal')).toBeOnTheScreen();
+    expect(entries().find((entry) => entry.snapshotName === 'Hafer Flocken')).toMatchObject({ snapshotMilliKcal: 348_000, totalMilliKcal: 208_800 });
+  });
+
+  it('ändert und löscht ein eigenes Lebensmittel nach Rückfrage', async () => {
+    const { ownFoods, operations } = await openCapture();
+    await search('Bircher');
+    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Eigen' }));
+    await user.press(within(sheet()).getByRole('button', { name: 'Bearbeiten' }));
+    expect(within(form()).getByRole('header', { name: 'Eigenes Lebensmittel bearbeiten' })).toBeOnTheScreen();
+    expect(within(form()).getByLabelText('1 Portion hat')).toHaveDisplayValue('250');
+
+    await fill('Energie', '160');
+    await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
+    expect(ownFoods()[0]).toMatchObject({ id: seedIds.ownFood.philippBircher, milliKcal: 160_000 });
+    await user.press(within(sheet()).getByRole('button', { name: 'Bearbeiten' }));
+
+    await user.press(within(form()).getByRole('button', { name: 'Löschen' }));
+    expect(within(form()).getByText('„Bircher-Müsli, selbst gemacht“ löschen? Einträge damit behalten ihre Werte.')).toBeOnTheScreen();
+    await user.press(within(form()).getByRole('button', { name: 'Endgültig löschen' }));
+
+    expect(ownFoods()[0]).toMatchObject({ id: seedIds.ownFood.philippBircher, deletedAt: expect.any(String) });
+    expect(operations()).toEqual(['upsert_entity', 'delete_entity']);
+    // Zurück in der Suche: Das eigene Lebensmittel ist weg, der BLS-Treffer bleibt.
+    expect(screen.getByLabelText('Lebensmittel suchen')).toHaveDisplayValue('Bircher');
+    expect(screen.queryByText('Bircher-Müsli, selbst gemacht')).not.toBeOnTheScreen();
+    expect(screen.getByText('Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt')).toBeOnTheScreen();
   });
 });
