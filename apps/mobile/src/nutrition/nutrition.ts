@@ -10,7 +10,7 @@ import {
 } from '@abnehm/contracts/nutrition';
 
 import type { DailyGoalPersistence } from '../daily-goals';
-import type { LocalDatabase } from '../local-db';
+import type { CatalogDatabase, LocalDatabase } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
@@ -18,7 +18,10 @@ import { defaultAmountMilli } from './amount-input';
 import { readDayLog, type DayLog } from './day-log';
 import { addEntry, removeEntry, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
+import { createFoodSearch, type FoodSearch } from './food-search';
 import { confirmPhotoDraft, type PhotoDraftConfirmation } from './meal-photos';
+import { overlaidOrigins, searchOwnFoods, type OwnFoodChoice } from './own-food-repository';
+import { deleteOwnFood, saveOwnFood, type OwnFoodBase, type OwnFoodValues } from './own-foods';
 
 export type NutritionDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl ist genau eine Transaktion darin. */
@@ -64,6 +67,21 @@ export type Nutrition = Readonly<{
    * Lebensmittels aus den eigenen Einträgen, sonst eine bekannte Portion, sonst 100 g bzw. 100 ml.
    */
   prefillAmount(foodRef: FoodRef, snapshot: NutritionSnapshot): AmountPrefill;
+  /**
+   * Speichert ein eigenes Lebensmittel (Spezifikation 2, Abschnitt 3) in einer eigenen lokalen
+   * Transaktion samt Outbox-Operation. `base` ist `null` für ein neues, ein eigenes Lebensmittel für
+   * genau dieses oder ein BLS-Lebensmittel, aus dem ein eigenes mit dieser Herkunft wird; die externen
+   * Daten bleiben unverändert. Liefert Referenz und neue Fassung für künftige Einträge; gespeicherte
+   * Einträge behalten ihren Snapshot. Wirft `InvalidNutritionInputError`, ohne etwas zu schreiben.
+   */
+  saveOwnFood(base: OwnFoodBase, values: OwnFoodValues): OwnFoodChoice;
+  /** Löscht ein eigenes Lebensmittel (Tombstone); Einträge bleiben über ihren Snapshot nutzbar. */
+  deleteOwnFood(id: EntityId): void;
+  /**
+   * Die lokale Lebensmittelsuche (Spezifikation 2, Abschnitt 4) über den geöffneten BLS-Katalog und
+   * die eigenen Lebensmittel dieses Kontos. Jede Suche liest den aktuellen Stand.
+   */
+  foodSearch(catalog: CatalogDatabase): FoodSearch;
 }>;
 
 /**
@@ -91,5 +109,15 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
       const displayUnit = portion?.unit ?? snapshot.baseUnit;
       return { displayUnit, displayAmountMilli: defaultAmountMilli(snapshot, displayUnit) };
     },
+    saveOwnFood: (base, values) => database.transaction((tx) => saveOwnFood(tx, dependencies, base, values)),
+    deleteOwnFood: (id) => database.transaction((tx) => deleteOwnFood(tx, dependencies, id)),
+    foodSearch: (catalog) =>
+      createFoodSearch({
+        catalog,
+        ownFoods: {
+          search: (query, limit) => database.read((tx) => searchOwnFoods(tx, query, limit)),
+          overlaidOrigins: () => database.read(overlaidOrigins),
+        },
+      }),
   };
 }

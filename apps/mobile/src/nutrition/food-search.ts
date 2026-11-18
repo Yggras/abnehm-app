@@ -2,13 +2,15 @@ import { entryAmount, entryTotals, roundKcal, type FoodRef, type NutritionSnapsh
 
 import type { CatalogDatabase } from '../local-db';
 import { createBlsCatalog } from './bls-catalog';
+import type { OwnFoodChoice } from './own-food-repository';
 import { searchQuery, type SearchQuery } from './search-text';
 
 // Lokale Lebensmittelsuche des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 4). Sie läuft bei jeder
 // Eingabe ab zwei Buchstaben oder Ziffern, ohne Netz. Die Treffer kommen in Gruppen in fester Rangfolge: Favoriten,
-// „Zuletzt verwendet“, eigene Lebensmittel, gescannte Produkte, BLS. Bisher gibt es nur die Gruppe
-// BLS; spätere Tickets (#157, #158, #160) ergänzen ihre Gruppe in `groups`, ohne die Schnittstelle zu
-// ändern.
+// „Zuletzt verwendet“, eigene Lebensmittel, gescannte Produkte, BLS. Bisher gibt es die Gruppen eigene
+// Lebensmittel (#157) und BLS; spätere Tickets (#158, #160) ergänzen ihre Gruppe in `groups`, ohne die
+// Schnittstelle zu ändern. Ein eigenes Lebensmittel mit Herkunft überdeckt seine Quelle: Sie erscheint
+// nur einmal, als eigenes Lebensmittel (Spezifikation 2, Abschnitt 3).
 
 /** Quellenmarke eines Treffers: Favorit, Zuletzt, Eigen, Produkt oder BLS. */
 export type SearchMark = 'favorit' | 'zuletzt' | 'eigen' | 'produkt' | 'bls';
@@ -35,10 +37,28 @@ const maxHits = 50;
 /** Eine Gruppe liefert ihre Treffer in Rangfolge, höchstens `limit`. */
 type SearchGroup = (query: SearchQuery, limit: number) => FoodSearchHit[];
 
-export function createFoodSearch(sources: { catalog: CatalogDatabase }): FoodSearch {
+/** Die eigenen Lebensmittel der Kontodatenbank, wie die Suche sie braucht. */
+export type OwnFoodLookup = Readonly<{
+  /** Nicht gelöschte eigene Lebensmittel zur Anfrage, in Rangfolge, höchstens `limit`. */
+  search(query: SearchQuery, limit: number): OwnFoodChoice[];
+  /** Überdeckte Quellen als `typ:schlüssel`, etwa `bls:F110100`. */
+  overlaidOrigins(): ReadonlySet<string>;
+}>;
+
+export function createFoodSearch(sources: { catalog: CatalogDatabase; ownFoods: OwnFoodLookup }): FoodSearch {
   const bls = createBlsCatalog(sources.catalog);
+  const { ownFoods } = sources;
   const groups: readonly SearchGroup[] = [
-    (query, limit) => bls.search(query, limit).map(({ key, snapshot }) => hit('bls', { type: 'bls', key }, snapshot)),
+    (query, limit) => ownFoods.search(query, limit).map(({ ref, snapshot }) => hit('eigen', ref, snapshot)),
+    (query, limit) => {
+      // Überdeckte BLS-Lebensmittel fallen heraus; so viele mehr werden gelesen, damit `limit` reicht.
+      const overlaid = ownFoods.overlaidOrigins();
+      return bls
+        .search(query, limit + overlaid.size)
+        .filter(({ key }) => !overlaid.has(`bls:${key}`))
+        .slice(0, limit)
+        .map(({ key, snapshot }) => hit('bls', { type: 'bls', key }, snapshot));
+    },
   ];
 
   return {

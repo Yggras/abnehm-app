@@ -78,7 +78,7 @@ function AddFood({ meal, localDate, today }: { meal: MealKey; localDate: LocalDa
 }
 
 function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: MealKey; localDate: LocalDate }) {
-  const search = useFoodSearch();
+  const search = useFoodSearch(nutrition);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<FoodSearchHit | null>(null);
   const result = useMemo(() => search.search(query), [search, query]);
