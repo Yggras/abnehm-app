@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { color, opacity, size, useMotion, type ColorToken } from '../design';
-import { artOf, type ArtPrimitive } from './art';
+import { artOf, shadow, type ArtPrimitive } from './art';
 import type { Point, Polygon } from './scene-model';
 
 // Skia-Zeichnungen der Inselansicht. Flächig ohne Konturen und Verläufe, zweitönig mit Licht von
@@ -52,10 +52,6 @@ export function fogPath(cells: readonly Polygon[]): string {
       return `${polygonPath(cell)} ${circlePath(center.x, center.y - radius * 0.6, radius)}`;
     })
     .join(' ');
-}
-
-function CastShadow({ at, width }: { at: Point; width: number }) {
-  return <Oval x={at.x - width / 2 + 4} y={at.y - 2} width={width} height={width / 2.4} color={shade} opacity={opacity.castShadow} />;
 }
 
 /**
@@ -166,7 +162,7 @@ export function MomoOnIsland({ at, appearance, progress }: { at: Point; appearan
   if (appearance.stage === 'laichkugel') {
     return (
       <Group transform={breath}>
-        <CastShadow at={{ x: 0, y: 0 }} width={tile * 0.45} />
+        <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
         <Circle cx={0} cy={-14} r={14} color={color.momoBelly} />
         <Oval x={-6} y={-19} width={12} height={9} color={color.momoBody} />
       </Group>
@@ -174,7 +170,7 @@ export function MomoOnIsland({ at, appearance, progress }: { at: Point; appearan
   }
   return (
     <Group transform={breath}>
-      <CastShadow at={{ x: 0, y: 0 }} width={tile * 0.45} />
+      <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
       <Oval x={6} y={-12} width={14} height={8} color={color.momoBody} />
       {[-1, 1].map((side) => (
         <Group key={side}>

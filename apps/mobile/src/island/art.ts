@@ -31,7 +31,8 @@ const tile = size.islandTile;
 
 // --- Bausteine ---------------------------------------------------------------------------------------
 
-function shadow(width: number): ArtPrimitive {
+/** Schlagschatten nach rechts unten um die Feldmitte; auch Momo steht darauf (`IslandArt.tsx`). */
+export function shadow(width: number): ArtPrimitive {
   return { type: 'oval', x: -width / 2 + 4, y: -2, width, height: width / 2.4, tone: 'ink', opacity: opacity.castShadow };
 }
 

@@ -1,7 +1,5 @@
-import { router } from 'expo-router';
-
 import { Skeleton, Text } from '../design';
-import { openTarget, type RouteScreenProps } from '../navigation';
+import { openTarget, setTargetParams, type RouteScreenProps } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
 import { useGameService, useIslandStage } from './app-game-service';
@@ -52,7 +50,7 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
 
 /** Eine erledigte Ansicht verlässt die Route, damit derselbe Link sie erneut öffnen kann. */
 function clearView() {
-  router.setParams({ view: undefined });
+  setTargetParams('momo', { view: undefined });
 }
 
 function Loading() {

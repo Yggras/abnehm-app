@@ -46,26 +46,37 @@ export function buildOptions({ viewerPersonId, ownRole, energy, unlockedBlueprin
   const unlocked = new Set(unlockedBlueprints);
   const person = { personId: viewerPersonId, role: ownRole };
 
-  /** Ob der Bauplan auf das Feld darf; fehlende Energie zählt hier nicht, sie zeigt das Sheet. */
-  const fits = (blueprintKey: string, field: IslandFieldOwner) => {
+  /**
+   * Was fehlt, damit der Bauplan auf das Feld kommt: `null`, wenn er dort nicht darf, sonst die fehlende
+   * Energie (0, wenn sie reicht). Fehlende Energie lässt das Feld gültig; sie zeigt das Sheet.
+   */
+  const missingOn = (blueprintKey: string, field: IslandFieldOwner): number | null => {
     const decision = decideBuild(catalog, { blueprintKey, field, person, unlockedBlueprints: unlocked, balance: energy, checkedBy: 'geraet' });
-    return decision.type === 'erlaubt' || decision.reason === 'zu_wenig_energie';
+    if (decision.type === 'erlaubt') return 0;
+    return decision.reason === 'zu_wenig_energie' ? decision.missing : null;
   };
-  const fieldsFor = (blueprintKey: string) => new Set(freeOwn.filter((field) => fits(blueprintKey, field)).map((field) => field.key));
+  const fieldsFor = (blueprintKey: string) => new Set(freeOwn.filter((field) => missingOn(blueprintKey, field) !== null).map((field) => field.key));
 
-  const options = gameCatalog.blueprints
-    .filter((blueprint) => unlocked.has(blueprint.key))
-    .map((blueprint): BlueprintOption => {
-      const price = basePrice(blueprint);
-      return { key: blueprint.key, name: blueprint.name, role: blueprint.role, price, missing: Math.max(0, price - energy), art: blueprint.art[0] };
-    })
-    .sort((a, b) => Number(a.role !== ownRole) - Number(b.role !== ownRole) || a.price - b.price || a.name.localeCompare(b.name, 'de'));
+  const unlockedBlueprintList = gameCatalog.blueprints.filter((blueprint) => unlocked.has(blueprint.key));
+  /** Die Baupläne, die auf mindestens eines der Felder dürfen, mit dem, was auf dem ersten davon fehlt. */
+  const optionsOn = (candidates: readonly IslandFieldOwner[]): BlueprintOption[] =>
+    unlockedBlueprintList
+      .flatMap((blueprint): BlueprintOption[] => {
+        for (const field of candidates) {
+          const missing = missingOn(blueprint.key, field);
+          if (missing !== null) {
+            return [{ key: blueprint.key, name: blueprint.name, role: blueprint.role, price: basePrice(blueprint), missing, art: blueprint.art[0] }];
+          }
+        }
+        return [];
+      })
+      .sort((a, b) => Number(a.role !== ownRole) - Number(b.role !== ownRole) || a.price - b.price || a.name.localeCompare(b.name, 'de'));
 
   return {
     blueprints(fieldKey) {
-      if (fieldKey === null) return options.filter((option) => fieldsFor(option.key).size > 0);
+      if (fieldKey === null) return optionsOn(freeOwn);
       const field = freeOwn.find((candidate) => candidate.key === fieldKey);
-      return field === undefined ? [] : options.filter((option) => fits(option.key, field));
+      return field === undefined ? [] : optionsOn([field]);
     },
     fields: fieldsFor,
     opensSheet: (fieldKey) => freeOwnKeys.has(fieldKey),

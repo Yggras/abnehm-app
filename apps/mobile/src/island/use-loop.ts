@@ -44,7 +44,7 @@ export function usePulse(reduceMotion: boolean): SharedValue<number> {
       return;
     }
     pulse.value = 0;
-    pulse.value = withRepeat(withTiming(1, { duration: motion.duration.slow, easing: Easing.inOut(Easing.ease) }), -1, true);
+    pulse.value = withRepeat(withTiming(1, { duration: motion.duration.slow, easing: Easing.bezier(...motion.easing.standard) }), -1, true);
     return () => cancelAnimation(pulse);
   }, [still, pulse]);
 

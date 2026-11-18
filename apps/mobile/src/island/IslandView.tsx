@@ -12,6 +12,9 @@ import { IslandHud } from './IslandHud';
 import { islandScene, type IslandSceneInput, type LocalTime, type SceneHit } from './scene-model';
 import { islandTexts } from './texts';
 
+/** Bau-Modus der Inselansicht: was gebaut wird, wohin es darf und wie man abbricht. */
+export type BuildMode = Readonly<{ name: string; fields: ReadonlySet<string>; onCancel: () => void }>;
+
 export type IslandViewProps = {
   island: IslandSceneInput;
   /** Levelbalken; die eigene Hälfte ist lokal sofort wirksam (#191). */
@@ -29,9 +32,8 @@ export type IslandViewProps = {
   onLevelPress?: () => void;
   /** Wie weit Leisten des Rahmens unten über der Insel liegen, etwa die Tab-Leiste. */
   bottomInset?: number;
-  /** Bau-Modus (#192): der gewählte Bauplan und die Felder, die leuchten; die Leiste bietet „Abbrechen“. */
-  building?: Readonly<{ name: string; fields: ReadonlySet<string> }> | null;
-  onCancelBuild?: () => void;
+  /** Bau-Modus (#192): der gewählte Bauplan, die Felder, die leuchten, und „Abbrechen“ in der Leiste. */
+  building?: BuildMode | null;
   /** Das eben gebaute Objekt; es erscheint mit Feder. */
   appearing?: string | null;
 };
@@ -54,7 +56,6 @@ export function IslandView({
   onLevelPress,
   bottomInset = 0,
   building = null,
-  onCancelBuild,
   appearing = null,
 }: IslandViewProps) {
   const localTime = useLocalTime(useClock());
@@ -106,7 +107,7 @@ export function IslandView({
         />
       </View>
       <View style={[styles.bottom, { paddingBottom: bottomInset + space[3] }]} pointerEvents="box-none">
-        {building !== null ? <BuildModeBar name={building.name} onCancel={() => onCancelBuild?.()} /> : <IslandBar onOpen={onOpen} />}
+        {building !== null ? <BuildModeBar name={building.name} onCancel={building.onCancel} /> : <IslandBar onOpen={onOpen} />}
       </View>
     </View>
   );

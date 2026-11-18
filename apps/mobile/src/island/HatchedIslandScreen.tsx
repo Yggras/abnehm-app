@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
 import { Button, Sheet, space, Text } from '../design';
+import type { TargetOf } from '../navigation';
 import { useMessageHost } from '../shell/MessageHost';
 import { MomoAppearanceProvider, MomoFigure } from '../shell/MomoFigure';
 import type { BuildOutcome } from './build-object';
@@ -39,7 +40,7 @@ export type HatchedIslandScreenProps = Readonly<{
   build(request: Readonly<{ fieldId: EntityId; blueprintKey: string }>): BuildOutcome;
   onOpen(view: Exclude<IslandEntry, 'bauen'>): void;
   /** Ansicht aus der Route `momo`; `bauen` öffnet das Bau-Sheet, danach meldet `onViewHandled` sie als erledigt. */
-  requestedView?: string;
+  requestedView?: TargetOf<'momo'>['view'];
   onViewHandled?(): void;
   bottomInset: number;
 }>;
@@ -84,7 +85,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, onOpen, re
   // Die Route `momo` mit `view: 'bauen'` öffnet das Bau-Sheet, sobald sie ankommt; danach verlässt die
   // Ansicht die Route, damit derselbe Link sie erneut öffnen kann
   // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
-  const [arrivedView, setArrivedView] = useState<string | undefined>(undefined);
+  const [arrivedView, setArrivedView] = useState<TargetOf<'momo'>['view']>(undefined);
   if (requestedView !== arrivedView) {
     setArrivedView(requestedView);
     if (requestedView === 'bauen') startBuilding();
@@ -103,7 +104,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, onOpen, re
     }),
     [island.fields, island.unlockedAreas, island.objects, island.appearance],
   );
-  const building = useMemo(() => (placing === null ? null : { name: placing.name, fields: options.fields(placing.key) }), [placing, options]);
+  const placingFields = useMemo(() => (placing === null ? null : options.fields(placing.key)), [placing, options]);
 
   const buildOn = (fieldKey: string, blueprintKey: string) => {
     setPlacing(null);
@@ -116,8 +117,8 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, onOpen, re
 
   const onFieldPress = (hit: Exclude<SceneHit, { type: 'momo' }>) => {
     if (hit.type !== 'feld') return;
-    if (building !== null) {
-      if (building.fields.has(hit.field)) buildOn(hit.field, placing!.key);
+    if (placing !== null) {
+      if (placingFields?.has(hit.field)) buildOn(hit.field, placing.key);
       return;
     }
     if (options.opensSheet(hit.field)) setSheet({ type: 'bauen', field: hit.field });
@@ -145,8 +146,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, onOpen, re
         }}
         onLevelPress={() => setSheet({ type: 'wachstum' })}
         bottomInset={bottomInset}
-        building={building}
-        onCancelBuild={() => setPlacing(null)}
+        building={placing === null || placingFields === null ? null : { name: placing.name, fields: placingFields, onCancel: () => setPlacing(null) }}
         appearing={appearing}
       />
       <Sheet visible={sheet !== null} onClose={() => setSheet(null)}>
