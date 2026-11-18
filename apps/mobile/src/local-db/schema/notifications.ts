@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, sqliteTable, unique } from 'drizzle-orm/sqlite-core';
 
-import { EncouragementKey } from '@abnehm/contracts/partner';
+import { EncouragementKey, EncouragementPushStatus } from '@abnehm/contracts/partner';
 
 import { coupling, person } from './accounts';
 import { day, flag, id, instant, mutable, oneOf, ref, text } from './columns';
@@ -9,8 +9,6 @@ import { day, flag, id, instant, mutable, oneOf, ref, text } from './columns';
 // Benachrichtigungseinstellung und Anfeuern (Spezifikation 0, Abschnitt 8; Spezifikation 5,
 // Abschnitte 4 und 10). Push-Installation, Intents und Zustellversuche gibt es nur auf dem Server;
 // geplante Tages-Check-ins und das Einmal-Flag sind Gerätezustand (`device_state`).
-
-export const pushStatuses = ['ohne_push', 'ausstehend', 'zugestellt', 'unterdrueckt', 'fehlgeschlagen'] as const;
 
 /** Lokale Wanduhrzeit `HH:MM`. */
 const wallClock = (column: unknown) => sql`(${column} glob '[0-2][0-9]:[0-5][0-9]' and ${column} <= '23:59')`;
@@ -58,7 +56,7 @@ export const encouragement = sqliteTable(
   },
   (t) => [
     check('encouragement_message_key_check', oneOf(t.messageKey, EncouragementKey.options)),
-    check('encouragement_push_status_check', oneOf(t.pushStatus, pushStatuses)),
+    check('encouragement_push_status_check', oneOf(t.pushStatus, EncouragementPushStatus.options)),
     check('encouragement_recipient_check', sql`${t.senderPersonId} <> ${t.recipientPersonId}`),
   ],
 );

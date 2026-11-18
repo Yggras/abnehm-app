@@ -28,7 +28,7 @@ import { appNotificationSettings } from '../notifications/app-notification-setti
 import { createNotificationSettings } from '../notifications/notification-setting';
 import { notificationSettingEntity } from '../notifications/notification-setting-entity';
 import { createDeviceInvitationFlows } from '../online';
-import { appPartner, createPartner } from '../partner';
+import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
 import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
@@ -58,7 +58,7 @@ const newId = () => EntityId.parse(uuid.v4());
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
   ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
-  weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity,
+  weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity, encouragementEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
@@ -166,13 +166,14 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, buildObjectCommand, confirmPhotoDraftCommand({ persistence })] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, buildObjectCommand, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
       });
       activeEngine = engine;
       // Partnerbereich (Spezifikation 5): „Wir“ und die Partner-Karte lesen nur den widerrufbaren Partnercache.
       // Veraltet ist der Partnerstand offline oder 10 Minuten nach dem letzten vollständigen Pull (#121).
+      // Anfeuern schreibt die Anfeuerung samt Outbox-Operation (#123).
       const partner = createPartner({
-        database, clock: appClock, refresh: appTodayRefresh, sync: () => engine.sync(),
+        database, clock: appClock, refresh: appTodayRefresh, sync: () => engine.sync(), writer: syncWriter, newId,
         // In Test-Artefakten überlagert vom Transport-Fehlermodus wie die Sync-Auslöser (#114).
         observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline,
       });

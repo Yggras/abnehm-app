@@ -4,7 +4,7 @@ import type { DailyGoalSlot } from '../src/daily-goals.ts';
 import { defaultNotificationSetting, notificationSettingId } from '../src/notifications.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
 import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
-import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedImageKeys, seedInstallations } from './ids.ts';
+import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedImageKeys, seedInstallations, seedUtcOffsetMinutes } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow } from './manifest.ts';
 import {
   seedCompletion,
@@ -539,8 +539,45 @@ const benachrichtigungen: SeedPart = {
   ],
 };
 
-/** Beiträge des Szenarios `gekoppelt`; die Benachrichtigungseinstellung zuletzt, damit die Positionen davor gleich bleiben. */
-export const gekoppeltParts: readonly SeedPart[] = [...gekoppeltPartsWith(annasProjectionsNow), benachrichtigungen];
+/**
+ * Partner & Benachrichtigungen (#123): Philipp hat Anna heute schon dreimal angefeuert, jede mit Push. Im
+ * Sheet steht deshalb „Weitere Anfeuerungen sieht Anna in der App, ohne Push.“ Die Pushes sind zugestellt;
+ * Intents und Zustellversuche sind reine Servertechnik und gehören nicht in den Seed.
+ */
+const anfeuerungen: SeedPart = {
+  area: 'partner',
+  entities: (
+    [
+      ['du_schaffst_das', '2026-10-14T06:15:00.000Z'],
+      ['ich_denk_an_dich', '2026-10-14T08:40:00.000Z'],
+      ['stark_heute', '2026-10-14T11:05:00.000Z'],
+    ] as const
+  ).map(([messageKey, at], index) => ({
+    table: 'encouragement',
+    entityType: 'encouragement',
+    couplingId,
+    row: {
+      id: seedIds.encouragement.philippHeute[index]!,
+      coupling_id: couplingId,
+      sender_person_id: philipp,
+      recipient_person_id: anna,
+      message_key: messageKey,
+      sent_at: at,
+      local_date: seedDays.heute,
+      time_zone: seedClock.timeZone,
+      utc_offset_minutes: seedUtcOffsetMinutes,
+      push_status: 'zugestellt',
+      thanked_at: null,
+      ...created(at),
+    },
+  })),
+};
+
+/**
+ * Beiträge des Szenarios `gekoppelt`; Benachrichtigungseinstellung und Anfeuerungen zuletzt, damit die
+ * Positionen davor gleich bleiben.
+ */
+export const gekoppeltParts: readonly SeedPart[] = [...gekoppeltPartsWith(annasProjectionsNow), benachrichtigungen, anfeuerungen];
 
 /** Dieselben Beiträge vor dem Schlüpfen; Spezifikation 4 ergänzt darauf die offene Rollenwahl (`rollenwahl-offen`). */
 export const vorDemSchluepfenParts = partnerParts({ hatched: false, annas: annasProjectionsNow });
@@ -580,6 +617,7 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 10: Philipps drei Anfeuerungen an Anna von heute (#123).
   // Revision 9: Philipps Benachrichtigungseinstellung ohne Gewicht (#132).
   // Revision 8: Energieverlauf seit dem Zielstart und Bauten (#191): Level 3, Philipp mit 23 Energie.
   // Revision 7: Inhalte der geschlüpften Insel seit #184 (Felder, Start-Baupläne, Projekt 1, Ereignis, Fortschritt).
@@ -588,7 +626,7 @@ export const gekoppeltManifest = SeedManifest.parse({
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 9,
+  revision: 10,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

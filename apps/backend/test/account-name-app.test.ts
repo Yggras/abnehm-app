@@ -36,6 +36,7 @@ import { couplingMember, person } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { signIn } from './support/auth-client.ts';
 import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
+import { encouragementEntity } from '../../mobile/src/partner/encouragement.ts';
 
 // Anzeigename unter „Konto“ (#119) mit dem Szenario `gekoppelt` (#117): Philipp ändert seinen Namen über
 // das Modul der Einstellungen (`followOwnDisplayName`, Person-Upsert mit Outbox), auf echtem SQLite gegen die
@@ -52,7 +53,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
 /**

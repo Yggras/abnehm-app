@@ -33,3 +33,4 @@ export const operation = 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e02';
 export const operation2 = 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e03';
 export const account = 'c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e04';
 export const waterEntry = '1f3e5d7c-9b8a-4c6e-8f2d-1e3c5a7b9d02';
+export const encouragement = '1f3e5d7c-9b8a-4c6e-8f2d-1e3c5a7b9d03';

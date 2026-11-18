@@ -142,7 +142,8 @@ describe('Fachbefehle', () => {
   it('prüft einen angemeldeten Fachbefehl mit seiner Regel, auch in der Transaktion des Aufrufers', async () => {
     const world = await coupledWorld();
     const { authorization, database } = world.backend;
-    authorization.registerCommand('sendEncouragement', policies.resource('encouragement_send', 'befehl'));
+    // `createBackend` meldet `sendEncouragement` selbst an (#123).
+    expect(authorization.registeredCommands().get('sendEncouragement')).toEqual(policies.resource('encouragement_send', 'befehl'));
     const anna = await actorOf(world, world.anna);
 
     const decision = await database.db.transaction((tx) => authorization.authorizeCommand(tx, anna, 'sendEncouragement', anyResource()));

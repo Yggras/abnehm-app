@@ -1,4 +1,4 @@
-import { BausteinKey, type MealKey } from '@abnehm/contracts/base';
+import { BausteinKey, DisplayName, type MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
 import { SportMessageValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
@@ -105,6 +105,12 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   ),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
+  /** Spezifikation 5, Abschnitt 4: Anfeuerung gesendet (#123); ohne „Rückgängig“ und ohne Haptik. */
+  'anfeuern.gesendet': messageText(z.strictObject({ partnerDisplayName: DisplayName }), ({ partnerDisplayName }) => ({
+    text: `Anfeuerung an ${partnerDisplayName} gesendet`,
+  })),
+  /** Spezifikation 5, Abschnitt 4: offline vorgemerkt; die Outbox sendet sie beim nächsten Push (#123). */
+  'anfeuern.vorgemerkt': messageText(z.strictObject({}), () => ({ text: 'Wird gesendet, sobald du online bist' })),
   /** Spezifikation 1: „Ziele ändern“ hat eine Zielversion ab morgen angelegt (#147). */
   'ziele.ab_morgen_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Ziele gespeichert · gelten ab morgen' })),
   /** Spezifikation 5: Benachrichtigungseinstellung gespeichert (#132). */

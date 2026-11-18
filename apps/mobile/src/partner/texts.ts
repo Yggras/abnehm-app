@@ -23,6 +23,14 @@ export const partnerTexts = {
   redeem: titleOf({ type: 'partner.redeem' }),
   encourage: titleOf({ type: 'partner.encourage' }),
   encourageBody: (name: string) => `Schick ${name} eine kurze Ermutigung.`,
+  /** Titel des Sheets `partner.encourage` (Spezifikation 5, Abschnitt 4). */
+  encourageTitle: (name: string) => `${name} anfeuern`,
+  /** Unter den Botschaften, solange heute noch Anfeuerungen mit Push ankommen. */
+  remainingPushes: (count: number) => `Noch ${count} ${count === 1 ? 'Anfeuerung' : 'Anfeuerungen'} mit Push heute`,
+  /** Nach drei Anfeuerungen mit Push am lokalen Tag. */
+  withoutPush: (name: string) => `Weitere Anfeuerungen sieht ${name} in der App, ohne Push.`,
+  /** Sheet ohne aktive Kopplung, etwa über einen veralteten Link (Designwert, nicht belegt). */
+  encourageSolo: 'Anfeuern geht, sobald ihr gekoppelt seid.',
   loading: 'Partner lädt …',
   /** Veraltet, aber noch ohne Datenstand, etwa zwischen zwei Pull-Seiten direkt nach dem Koppeln. */
   offline: 'Offline',
