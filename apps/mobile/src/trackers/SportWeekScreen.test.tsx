@@ -9,7 +9,7 @@ import type { PlanReader } from '@abnehm/contracts/ports';
 
 import { fakePlanReader, type FakeGoalVersion, type FakeWeeklyPlanVersion } from '../area-ports/testing/fakes';
 import { ClockProvider } from '../clock/clock-context';
-import { textScale } from '../design';
+import { textScale, type as typeTokens } from '../design';
 import { hitArea } from '../design/testing/hit-area';
 import { routeScreen } from '../navigation';
 import { MessageHostProvider } from '../shell/MessageHost';
@@ -91,7 +91,10 @@ test('zeigt den Wochenbalken „X von Wochenziel min“ als Fortschrittsanzeige 
   expect(screen.getByRole('header', { name: 'Diese Woche, Woche vom 12.10. bis 18.10.' })).toBeOnTheScreen();
   const bar = screen.getByRole('progressbar', { name: 'Sport in dieser Woche' });
   expect(bar.props.accessibilityValue).toEqual({ min: 0, max: 150, now: 90, text: '90 von 150 min' });
-  expect(screen.getByText('90 von 150 min')).toBeOnTheScreen();
+  // Die Wochensumme steht groß wie auf dem Mini-Tracker (Impeccable-Kritik).
+  expect(StyleSheet.flatten(screen.getByText('90 min').props.style as TextStyle)).toMatchObject({ fontSize: typeTokens.numberXl.fontSize });
+  expect(screen.getByText('von 150 min')).toBeOnTheScreen();
+  expect(screen.queryByText('erreicht')).not.toBeOnTheScreen();
 
   const headers = screen.getAllByRole('header').map((header) => header.props.children);
   expect(headers).toEqual(expect.arrayContaining(['Heute', 'Mo, 12.10.']));
@@ -150,6 +153,8 @@ test('blättert in die Vergangenheit und zurück, aber nicht über die laufende 
   expect(screen.getByRole('header', { name: 'Letzte Woche, Woche vom 05.10. bis 11.10.' })).toBeOnTheScreen();
   expect(screen.getByRole('progressbar', { name: 'Sport in dieser Woche' }).props.accessibilityValue).toMatchObject({ now: 50 });
   expect(screen.getByText('Schwimmen')).toBeOnTheScreen();
+  // Eine neue Einheit beginnt „jetzt“; in vergangenen Wochen gibt es „+ Einheit“ deshalb nicht.
+  expect(screen.queryByRole('button', { name: '+ Einheit' })).not.toBeOnTheScreen();
 
   await user.press(screen.getByRole('button', { name: 'Vorige Woche' }));
   await settle();
@@ -178,7 +183,8 @@ test('„+ Einheit“ öffnet das Formular aus #173', async () => {
 test('ohne gültige Zielversion zeigt sie die Minuten ohne Balken', async () => {
   await open({ planReader: fakePlanReader({ goals: [], weeklyPlans: [] }) });
 
-  expect(screen.getByText('90 min in dieser Woche')).toBeOnTheScreen();
+  expect(screen.getByText('90 min')).toBeOnTheScreen();
+  expect(screen.getByText('in dieser Woche')).toBeOnTheScreen();
   expect(screen.queryByRole('progressbar')).not.toBeOnTheScreen();
 });
 
@@ -207,16 +213,21 @@ describe('Bearbeitungs-Sheet', () => {
     expect(world.sports().find((row) => row.startedAt === '2026-10-14T09:00:00.000Z')).toMatchObject({ durationMinutes: 30 });
   });
 
-  test('scrollt, weil das Formular höher ist als das Sheet auf dem iPhone SE (Gerätelauf)', async () => {
+  test('Titel und Felder scrollen, „Speichern“ und „Löschen“ stehen fest darunter (iPhone SE, Impeccable-Kritik)', async () => {
     await open();
 
     await user.press(runRow());
 
-    const scroll = within(screen.getByTestId('sheet')).getByTestId('sheet-scroll');
+    const sheet = screen.getByTestId('sheet');
+    const scroll = within(sheet).getByTestId('sheet-scroll');
     // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
     expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
-    expect(within(scroll).getByRole('button', { name: 'Speichern' })).toBeOnTheScreen();
-    expect(within(scroll).getByRole('button', { name: 'Löschen' })).toBeOnTheScreen();
+    expect(within(scroll).getByRole('header', { name: 'Einheit bearbeiten' })).toBeOnTheScreen();
+    expect(within(scroll).getByLabelText('Dauer')).toBeOnTheScreen();
+    for (const name of ['Speichern', 'Löschen']) {
+      expect(within(sheet).getByRole('button', { name })).toBeOnTheScreen();
+      expect(within(scroll).queryByRole('button', { name })).not.toBeOnTheScreen();
+    }
   });
 
   test('„Löschen“ löscht ohne Bestätigungsdialog; „Rückgängig“ legt die Einheit neu an', async () => {
@@ -265,8 +276,9 @@ describe('Schriftfaktor 2,0', () => {
     const world = await open();
 
     for (const text of screen.queryAllByText(/[\s\S]+/, { includeHiddenElements: true })) {
+      const big = (StyleSheet.flatten(text.props.style as TextStyle) ?? {}).fontSize === typeTokens.numberXl.fontSize;
       expect(text.props.allowFontScaling).not.toBe(false);
-      expect(text.props.maxFontSizeMultiplier).toBeGreaterThanOrEqual(textScale.max);
+      expect(text.props.maxFontSizeMultiplier).toBeGreaterThanOrEqual(big ? textScale.limit.numberXl : textScale.max);
     }
     expect(StyleSheet.flatten(screen.getByText('Diese Woche').props.style as TextStyle)).toMatchObject({ flex: 1 });
     await user.press(runRow());

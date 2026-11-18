@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { localDateAfter } from '@abnehm/contracts/base';
 
-import { Button, Card, IconButton, ListGroup, ListRow, ProgressBar, Sheet, space, Text } from '../design';
+import { Button, Card, Icon, IconButton, ListGroup, ListRow, ProgressBar, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
 import { activityNames } from '../shell/texts';
 import { activityIcons } from './activity-icons';
@@ -32,19 +32,7 @@ export function SportWeekContent({ week, trackers, onWeek }: SportWeekContentPro
   return (
     <>
       <WeekSwitch week={week} onWeek={onWeek} />
-      <Card>
-        {week.weeklyTargetMinutes === null ? (
-          <Text variant="bodyStrong">{sportTexts.withoutTarget(week.weekMinutes)}</Text>
-        ) : (
-          <ProgressBar
-            label={sportTexts.barLabel}
-            value={week.weekMinutes}
-            target={week.weeklyTargetMinutes}
-            valueText={sportTexts.progress(week.weekMinutes, week.weeklyTargetMinutes)}
-          />
-        )}
-      </Card>
-      <Button variant="secondary" label={sportTexts.add} block onPress={() => openTarget(addTarget)} />
+      <WeekSummary week={week} />
       {week.days.length === 0 ? (
         <Card variant="empty">
           <Text>{sportTexts.empty(week.isCurrent)}</Text>
@@ -54,17 +42,46 @@ export function SportWeekContent({ week, trackers, onWeek }: SportWeekContentPro
       )}
       <Sheet visible={editing !== null} onClose={() => setEditing(null)} height="full">
         {editing !== null ? (
-          // Das Formular ist höher als das Sheet auf dem iPhone SE; das Sheet selbst scrollt nicht.
-          // Tipps erreichen „Speichern“ auch bei offener Tastatur (wie `ScreenFrame`).
-          <ScrollView testID="sheet-scroll" contentContainerStyle={styles.sheet} keyboardShouldPersistTaps="handled">
-            <Text variant="title" accessibilityRole="header">
-              {sportTexts.editTitle}
-            </Text>
-            <SportEntryForm key={editing.id} trackers={trackers} entry={editing} onSaved={() => setEditing(null)} />
-          </ScrollView>
+          <SportEntryForm key={editing.id} trackers={trackers} entry={editing} title={sportTexts.editTitle} onSaved={() => setEditing(null)} />
         ) : null}
       </Sheet>
     </>
+  );
+}
+
+/**
+ * Wochenstand: die Minuten groß wie auf dem Mini-Tracker, darunter der Balken bis zum Sportwochenziel
+ * (Impeccable-Kritik, #174). „+ Einheit“ gehört zur laufenden Woche; in vergangenen Wochen fehlt es, weil
+ * eine neue Einheit mit „jetzt“ beginnt.
+ */
+function WeekSummary({ week }: { week: SportWeek }) {
+  const target = week.weeklyTargetMinutes;
+  const reached = target !== null && target > 0 && week.weekMinutes >= target;
+  return (
+    <Card>
+      <View style={styles.summary}>
+        <View style={styles.total}>
+          <Text variant="numberXl">{sportTexts.minutes(week.weekMinutes)}</Text>
+          <Text tone="inkMuted">{target === null ? sportTexts.thisWeek : sportTexts.ofTarget(target)}</Text>
+          {reached ? (
+            <View style={styles.reached}>
+              <Icon name="check" size="sm" tone="success" />
+              <Text variant="label" tone="success">
+                {sportTexts.reached}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        {target !== null ? (
+          <ProgressBar label={sportTexts.barLabel} value={week.weekMinutes} target={target} valueText={sportTexts.progress(week.weekMinutes, target)} legend={false} />
+        ) : null}
+        {week.isCurrent ? (
+          <View style={styles.add}>
+            <Button compact variant="secondary" label={sportTexts.add} onPress={() => openTarget(addTarget)} />
+          </View>
+        ) : null}
+      </View>
+    </Card>
   );
 }
 
@@ -126,5 +143,8 @@ const styles = StyleSheet.create({
   switch: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   title: { flex: 1, textAlign: 'center' },
   day: { gap: space[2] },
-  sheet: { gap: space[4], paddingBottom: space[6] },
+  summary: { gap: space[3] },
+  total: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: space[2] },
+  reached: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
+  add: { alignItems: 'flex-end' },
 });

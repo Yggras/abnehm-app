@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Instant, type EntityId, type TimeZone } from '@abnehm/contracts/base';
 import {
@@ -30,7 +30,9 @@ import type { Trackers } from './trackers';
 //
 // Mit `entry` bearbeitet es eine manuelle Einheit (#174): Art, Dauer, Beginn und Kalorien sind
 // vorausgefüllt, „Speichern“ ändert sie, „Löschen“ löscht sie ohne Bestätigungsdialog; die Meldung bietet
-// „Rückgängig“. Die zuletzt genutzte Einheit bleibt dabei, wie sie ist.
+// „Rückgängig“. Die zuletzt genutzte Einheit bleibt dabei, wie sie ist. Mit `title` steht es in einem
+// Sheet: Titel und Felder scrollen, „Speichern“ und „Löschen“ bleiben als fester Fuß sichtbar, weil das
+// Sheet auf dem iPhone SE niedriger ist als das Formular (Impeccable-Kritik, #174).
 
 /** Schnellwahl der Dauer in Minuten (#38). */
 const quickMinutes = [15, 30, 45, 60] as const;
@@ -80,11 +82,13 @@ export type SportEntryFormProps = {
   trackers: SportFormTrackers;
   /** Bearbeitet diese manuelle Einheit, statt eine neue einzutragen. */
   entry?: EditedSport;
+  /** Überschrift im Sheet; damit scrollen die Felder und die Aktionen stehen fest darunter. */
+  title?: string;
   /** Gespeichert oder gelöscht; der Aufrufer schließt das Formular. */
   onSaved: () => void;
 };
 
-export function SportEntryForm({ trackers, entry, onSaved }: SportEntryFormProps) {
+export function SportEntryForm({ trackers, entry, title, onSaved }: SportEntryFormProps) {
   const clock = useClock();
   const message = useUndoableMessage();
   // Vorbelegung und Reihenfolge bleiben, solange das Formular offen ist, damit die Liste beim Wählen nicht springt.
@@ -141,8 +145,14 @@ export function SportEntryForm({ trackers, entry, onSaved }: SportEntryFormProps
     message.show(outcome, { run: () => trackers.undo(undoToken), expire: () => trackers.expire(undoToken) });
   };
 
-  return (
-    <View style={styles.form}>
+  const actions = (
+    <>
+      <Button label="Speichern" block onPress={save} />
+      {entry !== undefined ? <Button variant="text" label="Löschen" block onPress={() => run(() => trackers.deleteSport(entry.id))} /> : null}
+    </>
+  );
+  const fields = (
+    <>
       <View style={styles.group}>
         <Text variant="label" accessibilityRole="header">Art</Text>
         <ListGroup>
@@ -209,8 +219,31 @@ export function SportEntryForm({ trackers, entry, onSaved }: SportEntryFormProps
         hint="wird nur angezeigt"
         problem={problems.has('invalidKcal') ? texts.invalidKcal : undefined}
       />
-      <Button label="Speichern" block onPress={save} />
-      {entry !== undefined ? <Button variant="text" label="Löschen" block onPress={() => run(() => trackers.deleteSport(entry.id))} /> : null}
+    </>
+  );
+  return title === undefined ? (
+    <View style={styles.form}>
+      {fields}
+      {actions}
+    </View>
+  ) : (
+    <SheetLayout title={title} actions={actions}>
+      {fields}
+    </SheetLayout>
+  );
+}
+
+/** Titel und Felder scrollen; die Aktionen stehen als Fuß darunter. Tipps erreichen sie auch bei offener Tastatur. */
+function SheetLayout({ title, actions, children }: { title: string; actions: ReactNode; children: ReactNode }) {
+  return (
+    <View style={styles.sheet}>
+      <ScrollView testID="sheet-scroll" style={styles.sheetScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <Text variant="title" accessibilityRole="header">
+          {title}
+        </Text>
+        {children}
+      </ScrollView>
+      <View style={styles.footer}>{actions}</View>
     </View>
   );
 }
@@ -219,4 +252,7 @@ const styles = StyleSheet.create({
   form: { gap: space[4] },
   group: { gap: space[2] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  sheet: { flex: 1 },
+  sheetScroll: { flex: 1 },
+  footer: { gap: space[2], paddingTop: space[3] },
 });

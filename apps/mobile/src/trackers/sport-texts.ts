@@ -34,8 +34,10 @@ export const sportTexts = {
   weekSpoken: ({ monday, sunday }: Pick<SportWeek, 'monday' | 'sunday'>) => `Woche vom ${shortDate(monday)} bis ${shortDate(sunday)}`,
   /** Wert des Wochenbalkens, etwa „75 von 150 min“. */
   progress: (weekMinutes: number, targetMinutes: number) => `${weekMinutes} von ${targetMinutes} min`,
-  /** Ohne gültige Zielversion nur die Minuten. */
-  withoutTarget: (weekMinutes: number) => `${weekMinutes} min in dieser Woche`,
+  /** Neben der großen Wochensumme, etwa „von 150 min“; ohne gültige Zielversion „in dieser Woche“. */
+  ofTarget: (targetMinutes: number) => `von ${targetMinutes} min`,
+  thisWeek: 'in dieser Woche',
+  reached: 'erreicht',
   empty: (isCurrent: boolean) => (isCurrent ? 'Noch keine Einheit in dieser Woche.' : 'In dieser Woche gab es keine Einheit.'),
   /** Überschrift eines Tags, etwa „Heute“ oder „Mo, 12.10.“. */
   day(localDate: LocalDate, today: LocalDate): string {
