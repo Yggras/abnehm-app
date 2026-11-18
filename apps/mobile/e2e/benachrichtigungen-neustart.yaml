@@ -4,9 +4,8 @@
 #
 # Die Schalter tragen Rolle `switch` und ihren Zustand (`design/native/Switch.tsx`); Maestro wählt sie
 # über `checked` aus (https://docs.maestro.dev/reference/selectors/state-selectors), damit die gleichnamige
-# Zeilenbeschriftung nicht passt. Die Uhrzeit ändert der Ablauf nicht: Den nativen Picker bedient Maestro
-# nicht verlässlich; Uhrzeit-Validierung und Speichern der Uhrzeit belegen die Komponententests
-# (`src/settings/NotificationsScreen.test.tsx`).
+# Zeilenbeschriftung nicht passt. Die Uhrzeit ändert der Ablauf nicht; Uhrzeit-Validierung und Speichern
+# der Uhrzeit belegen die Komponententests (`src/settings/NotificationsScreen.test.tsx`).
 appId: ${APP_ID}
 name: Benachrichtigungseinstellungen nach Neustart
 ---
