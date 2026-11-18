@@ -17,9 +17,52 @@ function inboxWith(options: Partial<TestInboxOptions> = {}) {
     faults: createFaultController(),
     clock: createAppTestClock(deviceClock),
     deviceSuite: async (phase) => passed(phase),
+    health: { apply: () => Promise.resolve(null) },
     ...options,
   });
 }
+
+describe('Link `health` (#183)', () => {
+  it('nennt ein Szenario der Health-Attrappe; unbekannte Szenarien und fehlende Parameter sind ungültig', () => {
+    expect(parseTestLink('abnehmapp-dev://health?szenario=erstimport')).toEqual({ type: 'health', scenario: 'erstimport' });
+    expect(parseTestLink('abnehmapp-e2e://health?szenario=token_verfallen')).toEqual({ type: 'health', scenario: 'token_verfallen' });
+    expect(parseTestLink('abnehmapp-dev://health?szenario=zufall')).toEqual({ type: 'ungueltig', capability: 'health' });
+    expect(parseTestLink('abnehmapp-dev://health')).toEqual({ type: 'ungueltig', capability: 'health' });
+  });
+
+  it('der Eingang stellt das Szenario und meldet das Ergebnis des Verbindens', async () => {
+    const applied: string[] = [];
+    const inbox = inboxWith({
+      health: {
+        apply: (scenario) => {
+          applied.push(scenario);
+          return Promise.resolve(scenario === 'nicht_verfuegbar' ? { type: 'nicht_verfuegbar' } : { type: 'verbunden', access: 'erteilt' });
+        },
+      },
+    });
+
+    inbox.receive(parseTestLink('abnehmapp-dev://health?szenario=erstimport')!);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(inbox.status()).toEqual({ type: 'health_gestellt', scenario: 'erstimport', outcome: 'verbunden' });
+
+    inbox.receive(parseTestLink('abnehmapp-dev://health?szenario=nicht_verfuegbar')!);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(inbox.status()).toEqual({ type: 'health_gestellt', scenario: 'nicht_verfuegbar', outcome: 'nicht_verfuegbar' });
+    expect(applied).toEqual(['erstimport', 'nicht_verfuegbar']);
+  });
+
+  it('ohne geöffnetes Konto und bei einem Fehler meldet er das ebenfalls', async () => {
+    const inbox = inboxWith({ health: { apply: () => Promise.resolve(null) } });
+    inbox.receive(parseTestLink('abnehmapp-dev://health?szenario=keine_daten')!);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(inbox.status()).toEqual({ type: 'health_gestellt', scenario: 'keine_daten', outcome: 'ohne_konto' });
+
+    const failing = inboxWith({ health: { apply: () => Promise.reject(new Error('kaputt')) } });
+    failing.receive(parseTestLink('abnehmapp-dev://health?szenario=keine_daten')!);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(failing.status()).toEqual({ type: 'health_gestellt', scenario: 'keine_daten', outcome: 'fehlgeschlagen' });
+  });
+});
 
 describe('Deep Links der Testfähigkeiten', () => {
   it('Seed-Link mit Szenario, optionaler Installation und Ziel', () => {

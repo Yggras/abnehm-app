@@ -65,6 +65,14 @@ export function startOfLocalDate(localDate: LocalDate, timeZone: TimeZone): Inst
 }
 
 /**
+ * Lokaler Tag eines gegebenen Zeitpunkts bei einem festen Offset zu UTC, etwa dem Offset, den ein
+ * Health-Datensatz mitliefert (Spezifikation 3, Abschnitt 6; #183). Liest keine Uhr und keine Zone.
+ */
+export function localDateAtOffset(instant: Instant, utcOffsetMinutes: number): LocalDate {
+  return LocalDate.parse(new Date(Date.parse(Instant.parse(instant)) + utcOffsetMinutes * 60_000).toISOString().slice(0, 10));
+}
+
+/**
  * Produktionsuhr: Systemzeit plus eine Zonenquelle. Die Quelle wird bei jedem
  * Ablesen neu gefragt, damit ein Zonenwechsel (Reise) sofort wirkt.
  */

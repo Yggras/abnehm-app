@@ -1,6 +1,6 @@
 // Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112, #114). Sie führt jede
 // Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Serveruhr,
-// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
+// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite, Health-Attrappe und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
 // Development Build und der E2E-Build (`APP_VARIANT=e2e`, ein Release-Binary für Maestro).
 // `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit, dass weder das
 // Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält (Gegenprobe: die
@@ -128,6 +128,16 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/backend/dev/meal-vision/'],
     entries: { backendRoutes: ['POST /dev/fotoanalyse'] },
     markers: ['fake_fotoanalyse'],
+  },
+  {
+    // #183: Attrappe des Health-Plattform-Adapters mit den Szenarien aus Spezifikation 3, Abschnitt 9. Die
+    // Integrationstests nutzen sie direkt, Development- und E2E-Build per Link `health`; im Produktionsbuild
+    // gilt der Adapter der Plattform.
+    key: 'health-attrappe',
+    description: 'Deterministisch steuerbare Health-Attrappe (Plattform-Adapter) mit Szenarien, gestellt per Link `health?szenario=<name>`',
+    modules: ['apps/mobile/src/health/testing/', 'apps/mobile/src/test-capabilities/health.ts'],
+    entries: { deepLinks: ['health'] },
+    markers: ['health_attrappe'],
   },
   {
     key: 'testgeruest',

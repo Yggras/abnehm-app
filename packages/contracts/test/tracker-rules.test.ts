@@ -25,6 +25,11 @@ import {
   trackerStatus,
   waterAmountMl,
   waterOrigin,
+  activityMappingVersion,
+  activityTypeOfPlatform,
+  importedSportMinutes,
+  importedWeightG,
+  isValidImportedWeight,
 } from '../src/tracker-rules.ts';
 
 // Tracker-Regeln (Spezifikation 3, Abschnitte 2 und 3; #171, #175): reines Modul, das App und Server teilen.
@@ -377,6 +382,112 @@ describe('Status eines Mini-Trackers', () => {
     [1501, 1500, 'ueber_ziel'],
   ] as const)('%s von %s ist %s', (value, target, status) => {
     expect(trackerStatus(value, target)).toBe(status);
+  });
+});
+
+describe('Annahme importierter Trainings (#183)', () => {
+  it('unter 60 Sekunden wird ein Training nicht importiert, auch nicht mit 0 Sekunden', () => {
+    expect(importedSportMinutes(0)).toBeNull();
+    expect(importedSportMinutes(59)).toBeNull();
+    expect(importedSportMinutes(59.9)).toBeNull();
+  });
+
+  it('ab 60 Sekunden wird auf ganze Minuten gerundet, halbe Minuten aufwärts', () => {
+    expect(importedSportMinutes(60)).toBe(1);
+    expect(importedSportMinutes(89)).toBe(1);
+    expect(importedSportMinutes(89.9)).toBe(1);
+    expect(importedSportMinutes(90)).toBe(2);
+    expect(importedSportMinutes(2_700)).toBe(45);
+  });
+
+  it('Trainings außerhalb der Schemagrenzen von 1–1440 Minuten werden nicht übernommen', () => {
+    expect(importedSportMinutes(1_440 * 60)).toBe(sportEntryMinutes.max);
+    expect(importedSportMinutes(1_440 * 60 + 29)).toBe(1_440);
+    expect(importedSportMinutes(1_440 * 60 + 30)).toBeNull();
+    expect(importedSportMinutes(Number.NaN)).toBeNull();
+    expect(importedSportMinutes(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(importedSportMinutes(-120)).toBeNull();
+  });
+});
+
+describe('Annahme importierter Gewichte (#183)', () => {
+  it('gilt im Bereich 20–350 kg und behält die genauen Gramm', () => {
+    expect(importedWeightG).toEqual({ min: 20_000, max: 350_000 });
+    expect(isValidImportedWeight(20_000)).toBe(true);
+    expect(isValidImportedWeight(82_437)).toBe(true);
+    expect(isValidImportedWeight(350_000)).toBe(true);
+  });
+
+  it('nimmt Gewichte außerhalb des Bereichs und Bruchteile von Gramm nicht an', () => {
+    expect(isValidImportedWeight(19_999)).toBe(false);
+    expect(isValidImportedWeight(350_001)).toBe(false);
+    expect(isValidImportedWeight(82_437.5)).toBe(false);
+    expect(isValidImportedWeight(Number.NaN)).toBe(false);
+  });
+});
+
+describe('Abbildung der Plattform-Aktivitätsarten (#183)', () => {
+  it('ist versioniert', () => {
+    expect(activityMappingVersion).toBe(1);
+  });
+
+  // HealthKit: `HKWorkoutActivityType` aus `HKWorkoutActivityType.h` des iOS SDK (Xcode 27.0).
+  it.each([
+    [52, 'gehen'],
+    [24, 'gehen'],
+    [37, 'laufen'],
+    [13, 'radfahren'],
+    [46, 'schwimmen'],
+    [50, 'krafttraining'],
+    [20, 'krafttraining'],
+    [57, 'yoga_dehnen'],
+    [62, 'yoga_dehnen'],
+    [66, 'yoga_dehnen'],
+    [41, 'mannschaftssport'],
+    [6, 'mannschaftssport'],
+    [3000, 'sonstiges'],
+    [16, 'sonstiges'],
+  ] as const)('Apple Health %i → %s', (code, type) => {
+    expect(activityTypeOfPlatform('apple_health', code)).toBe(type);
+  });
+
+  // Health Connect: Konstanten `EXERCISE_TYPE_*` von `ExerciseSessionRecord`.
+  it.each([
+    [79, 'gehen'],
+    [37, 'gehen'],
+    [56, 'laufen'],
+    [57, 'laufen'],
+    [8, 'radfahren'],
+    [9, 'radfahren'],
+    [73, 'schwimmen'],
+    [74, 'schwimmen'],
+    [70, 'krafttraining'],
+    [81, 'krafttraining'],
+    [83, 'yoga_dehnen'],
+    [71, 'yoga_dehnen'],
+    [48, 'yoga_dehnen'],
+    [64, 'mannschaftssport'],
+    [5, 'mannschaftssport'],
+    [0, 'sonstiges'],
+    [25, 'sonstiges'],
+  ] as const)('Health Connect %i → %s', (code, type) => {
+    expect(activityTypeOfPlatform('health_connect', code)).toBe(type);
+  });
+
+  it('macht Unbekanntes zu `sonstiges`, auch Codes der jeweils anderen Plattform und ohne Art', () => {
+    expect(activityTypeOfPlatform('apple_health', 9_999)).toBe('sonstiges');
+    // 56 ist bei Health Connect Laufen, bei HealthKit Ringen.
+    expect(activityTypeOfPlatform('apple_health', 56)).toBe('sonstiges');
+    // 24 ist bei HealthKit Wandern, bei Health Connect nicht vergeben.
+    expect(activityTypeOfPlatform('health_connect', 24)).toBe('sonstiges');
+    expect(activityTypeOfPlatform('health_connect', null)).toBe('sonstiges');
+  });
+
+  it('bildet nur auf die acht Arten ab', () => {
+    for (const code of Array.from({ length: 100 }, (_, index) => index)) {
+      expect(activityTypes).toContain(activityTypeOfPlatform('apple_health', code));
+      expect(activityTypes).toContain(activityTypeOfPlatform('health_connect', code));
+    }
   });
 });
 

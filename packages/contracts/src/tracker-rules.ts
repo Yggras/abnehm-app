@@ -59,6 +59,7 @@ export const activityTypes = ['gehen', 'laufen', 'radfahren', 'schwimmen', 'kraf
 
 /** Herkunft eines importierten Eintrags (Spezifikation 3, Abschnitt 6). */
 export const importOrigins = ['apple_health', 'health_connect'] as const;
+export type ImportOrigin = (typeof importOrigins)[number];
 
 /** Dauer eines Sporteintrags laut Schema in ganzen Minuten; Importe außerhalb werden nicht übernommen. */
 export const sportEntryMinutes = { min: 1, max: 1440 } as const;
@@ -115,6 +116,89 @@ export function countingSportEntries<T extends SportEntryFacts>(entries: readonl
 
 function isCountingImport(entry: SportEntryFacts): boolean {
   return entry.deletedAt === null && entry.hiddenAt === null;
+}
+
+/**
+ * Dauer eines importierten Trainings in ganzen Minuten oder `null`, wenn es nicht übernommen wird
+ * (Spezifikation 3, Abschnitt 3; #183). Unter 60 Sekunden wird nicht importiert, weil der Spike ein
+ * übertragenes Training mit 0 Minuten gezeigt hat. Darüber wird auf ganze Minuten gerundet, halbe Minuten
+ * aufwärts (89 s → 1 min, 90 s → 2 min). Liegt das Ergebnis außerhalb der Schemagrenzen von 1–1440
+ * Minuten, wird das Training nicht übernommen.
+ */
+export function importedSportMinutes(durationSeconds: number): number | null {
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 60) return null;
+  const minutes = Math.floor(durationSeconds / 60 + 0.5);
+  return minutes >= sportEntryMinutes.min && minutes <= sportEntryMinutes.max ? minutes : null;
+}
+
+/** Gültiges importiertes Gewicht in g: 20–350 kg wie bei der manuellen Eingabe, aber in genauen Gramm. */
+export const importedWeightG = { min: manualWeightG.min, max: manualWeightG.max } as const;
+
+/** Ob ein importiertes Gewicht übernommen wird: ganze g im Bereich 20–350 kg; die genauen Gramm bleiben. */
+export function isValidImportedWeight(weightG: number): boolean {
+  return Number.isInteger(weightG) && weightG >= importedWeightG.min && weightG <= importedWeightG.max;
+}
+
+/**
+ * Version der Abbildungstabelle der Plattform-Aktivitätsarten. Die Tabelle ist reine Darstellung und
+ * beeinflusst keine Zählung (Spezifikation 3, Abschnitt 3); eine geänderte Zuordnung erhöht die Version.
+ */
+export const activityMappingVersion = 1;
+
+type ActivityTypeKey = (typeof activityTypes)[number];
+
+/**
+ * Abbildung, Version 1. Codes je Herkunft:
+ * - `apple_health`: Rohwerte von `HKWorkoutActivityType` laut `HKWorkoutActivityType.h` des iOS SDK
+ *   (https://developer.apple.com/documentation/healthkit/hkworkoutactivitytype). Die Werte ab 58 stehen dort
+ *   ohne ausdrückliche Zahl und folgen fortlaufend auf `HKWorkoutActivityTypeYoga = 57`.
+ * - `health_connect`: Konstanten `EXERCISE_TYPE_*` von `ExerciseSessionRecord`
+ *   (https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/ExerciseSessionRecord).
+ *
+ * Nicht genannte Codes werden `sonstiges`. Die Zuordnung selbst ist eine Designentscheidung von #183.
+ */
+const platformActivityTypes: Readonly<Record<ImportOrigin, Readonly<Partial<Record<ActivityTypeKey, readonly number[]>>>>> = {
+  apple_health: {
+    // walking, hiking, wheelchairWalkPace
+    gehen: [52, 24, 70],
+    // running, wheelchairRunPace
+    laufen: [37, 71],
+    // cycling, handCycling
+    radfahren: [13, 74],
+    // swimming
+    schwimmen: [46],
+    // traditionalStrengthTraining, functionalStrengthTraining, coreTraining
+    krafttraining: [50, 20, 59],
+    // yoga, mindAndBody, flexibility, pilates, taiChi
+    yoga_dehnen: [57, 29, 62, 66, 72],
+    // americanFootball, australianFootball, baseball, basketball, cricket, handball, hockey, lacrosse, rugby,
+    // soccer, softball, volleyball, waterPolo
+    mannschaftssport: [1, 3, 5, 6, 10, 23, 25, 27, 36, 41, 42, 51, 54],
+  },
+  health_connect: {
+    // WALKING, HIKING, WHEELCHAIR
+    gehen: [79, 37, 82],
+    // RUNNING, RUNNING_TREADMILL
+    laufen: [56, 57],
+    // BIKING, BIKING_STATIONARY
+    radfahren: [8, 9],
+    // SWIMMING_OPEN_WATER, SWIMMING_POOL
+    schwimmen: [73, 74],
+    // STRENGTH_TRAINING, WEIGHTLIFTING, CALISTHENICS
+    krafttraining: [70, 81, 13],
+    // YOGA, STRETCHING, PILATES
+    yoga_dehnen: [83, 71, 48],
+    // BASEBALL, BASKETBALL, CRICKET, FOOTBALL_AMERICAN, FOOTBALL_AUSTRALIAN, HANDBALL, ICE_HOCKEY,
+    // ROLLER_HOCKEY, RUGBY, SOCCER, SOFTBALL, VOLLEYBALL, WATER_POLO
+    mannschaftssport: [4, 5, 14, 28, 29, 35, 38, 52, 55, 64, 65, 78, 80],
+  },
+};
+
+/** Aktivitätsart zum Plattformcode einer Herkunft; Unbekanntes und fehlende Arten werden `sonstiges`. */
+export function activityTypeOfPlatform(origin: ImportOrigin, code: number | null): ActivityTypeKey {
+  if (code === null) return 'sonstiges';
+  for (const type of activityTypes) if (platformActivityTypes[origin][type]?.includes(code)) return type;
+  return 'sonstiges';
 }
 
 /** Montag und Sonntag der Woche eines lokalen Tags (Spezifikation 3, Abschnitt 3: Montag bis Sonntag). */

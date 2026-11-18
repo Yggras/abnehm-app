@@ -1,6 +1,6 @@
 import { uuid } from 'expo';
 import * as Network from 'expo-network';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { Clock } from '@abnehm/clock';
 import { EntityId, type Instant } from '@abnehm/contracts/base';
 
@@ -10,6 +10,8 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
+import { createHealthImport, unavailableHealthPlatform } from '../health';
+import { appHealthImport } from '../health/app-health';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
 import { sharedActionCommands } from '../island/shared-action-commands';
@@ -57,6 +59,18 @@ const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 't
 /** Momo auf „Heute“ (Spezifikation 4): bisher Laichkugel und Rollenwahl (#180). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
+/**
+ * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183). Bis HealthKit (#193) und Health Connect
+ * (#195) ihre Adapter liefern, ist Health nicht verfügbar; in Test-Artefakten übernimmt ab dem Link `health`
+ * die Attrappe.
+ */
+const devicePlatform = unavailableHealthPlatform(Platform.OS === 'ios' ? 'apple_health' : 'health_connect');
+const healthPlatform = testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform;
+/** Ob die App im Vordergrund ist, laut React Native; meldet jede Änderung. */
+function observeAppForeground(listener: (active: boolean) => void) {
+  const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
+  return () => subscription.remove();
+}
 /** Der eigene Anzeigename für die Einstellungen (Spezifikation 5); folgt der geöffneten Kontodatenbank. */
 const ownDisplayName = followOwnDisplayName({ writer: syncWriter, clock: appClock });
 let activeEngine: SyncEngine | null = null;
@@ -103,6 +117,9 @@ function deviceState() {
       // Schreib-Port `weightRecorder` gibt der Composition Root an `composeAreaPorts` weiter, sobald alle
       // Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
+      // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
+      const health = createHealthImport({ database, platform: healthPlatform, trackers, clock: appClock, onError });
       // Plan-Modul (Spezifikation 1): Seine Materialisierung legt fehlende Tage im Nachholfenster an, bevor
       // der Persistenzdienst auswertet (#131). Das Startgewicht des Erstplans läuft über den `WeightRecorder`
       // des Tracker-Moduls.
@@ -122,6 +139,8 @@ function deviceState() {
         appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
         appTrackers.opened(trackers),
+        appHealthImport.opened(health),
+        health.startForegroundTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground }),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
@@ -150,10 +169,7 @@ function deviceState() {
       const triggers = startSyncTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active',
         sync: () => engine.sync(),
         observePending: (listener) => observePendingSignature(database, listener),
-        observeForeground(listener) {
-          const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
-          return () => subscription.remove();
-        },
+        observeForeground: observeAppForeground,
         // In Test-Artefakten überlagert vom Transport-Fehlermodus, dem iOS-Ersatz für den Flugmodus (#114).
         observeNetwork: adapters?.network(observeDeviceNetwork) ?? observeDeviceNetwork,
       });
