@@ -21,6 +21,7 @@ import { createLogout } from './logout/logout.ts';
 import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 import { createMealPhotos } from './nutrition/meal-photos.ts';
+import { encouragementEntity, sendEncouragementCommand } from './notifications/encouragement.ts';
 import { notificationSettingEntity } from './notifications/notification-setting-entity.ts';
 import { ownFoodEntity } from './nutrition/own-food-entity.ts';
 import { createPhotoDrafts } from './nutrition/photo-drafts.ts';
@@ -117,8 +118,10 @@ export function createBackend({
   const partnerProjections = createPartnerProjections({ clock });
   for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);
   sync.registerPrePullStep('partner_projections', partnerProjections.prePullStep);
-  // Partner & Benachrichtigungen (Spezifikation 5): die Benachrichtigungseinstellung je Person (#132).
+  // Partner & Benachrichtigungen (Spezifikation 5): die Benachrichtigungseinstellung je Person (#132) und Anfeuern (#123).
   sync.registerEntity(notificationSettingEntity);
+  sync.registerEntity(encouragementEntity);
+  sync.registerCommand(sendEncouragementCommand);
   const invitations = invitationRoutes({
     database,
     clock,
