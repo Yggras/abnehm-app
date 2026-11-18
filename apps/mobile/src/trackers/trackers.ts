@@ -1,7 +1,7 @@
 import type { Clock } from '@abnehm/clock';
-import type { EntityId } from '@abnehm/contracts/base';
+import type { EntityId, LocalDate } from '@abnehm/contracts/base';
 import type { PlanReader, WeightRecorder, WeightTrendReader } from '@abnehm/contracts/ports';
-import type { SportRecordedOutcome, WaterAddedOutcome, WeightDeletedOutcome, WeightRecordedOutcome, WeightUpdatedOutcome } from '@abnehm/contracts/trackers';
+import type { SportDeletedOutcome, SportRecordedOutcome, SportUpdatedOutcome, WaterAddedOutcome, WeightDeletedOutcome, WeightRecordedOutcome, WeightUpdatedOutcome } from '@abnehm/contracts/trackers';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { LocalDatabase, TransactionContext } from '../local-db';
@@ -10,7 +10,8 @@ import type { TodaySource } from '../shell/today-registry';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { applyHealthImport, type HealthImportBatch } from './health-import';
-import { lastSportOf, recordSportEntry, undoSport, type LastSport, type SportInput } from './sport';
+import { deleteSportEntry, lastSportOf, recordSportEntry, undoSport, updateSportEntry, type LastSport, type SportChanged, type SportInput } from './sport';
+import { sportWeekSource, type SportWeekState } from './sport-week';
 import { sportTodaySource } from './sport-today';
 import type { Source } from '../shell/followed-source';
 import type { Refresh } from './observed-source';
@@ -77,6 +78,19 @@ export type Trackers = Readonly<{
    * einen Beginn in der Zukunft, ohne etwas zu schreiben.
    */
   recordSport(input: SportInput): SportRecordedOutcome;
+  /**
+   * Ändert Art, Dauer, Beginn und Kalorien einer manuellen Einheit, in einer eigenen lokalen Transaktion,
+   * und meldet den alten und den neuen Tag. Zone und Offset bleiben die der Anlage. „Rückgängig“ schreibt
+   * die vorherigen Werte zurück. Wirft `InvalidTrackerInputError` wie `recordSport` und für einen
+   * unbekannten, gelöschten oder importierten Eintrag, ohne etwas zu schreiben.
+   */
+  updateSport(entryId: EntityId, input: SportInput): SportUpdatedOutcome;
+  /**
+   * Löscht eine manuelle Einheit ohne Bestätigungsdialog, in einer eigenen lokalen Transaktion. „Rückgängig“
+   * legt einen neuen Eintrag mit neuer ID und denselben fachlichen Werten an. Wirft
+   * `InvalidTrackerInputError` für einen unbekannten, schon gelöschten oder importierten Eintrag.
+   */
+  deleteSport(entryId: EntityId): SportDeletedOutcome;
   /** Zuletzt genutzte Art und Dauer dieses Geräts (Vorbelegung des Formulars); `null` vor der ersten Einheit. */
   lastSport(): LastSport | null;
   /**
@@ -87,7 +101,8 @@ export type Trackers = Readonly<{
   lastWeights(except?: EntityId): LastWeights | null;
   /**
    * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
-   * Tokens aus `addWater`, `recordWeight`, `updateWeight`, `deleteWeight` und `recordSport`; Buchungen über
+   * Tokens aus `addWater`, `recordWeight`, `updateWeight`, `deleteWeight`, `recordSport`, `updateSport` und
+   * `deleteSport`; Buchungen über
    * `water.quick_add` nimmt die Quick-Command-Registry mit ihren eigenen Tokens zurück.
    */
   undo(undoToken: string): UndoOutcome;
@@ -133,6 +148,12 @@ export type Trackers = Readonly<{
    * `PlanReader`. `refresh` stößt das erneute Lesen ohne Datenbankänderung an, etwa am Wochenwechsel.
    */
   sportToday(planReader: PlanReader, refresh: Refresh): TodaySource<'trackers.sport'>;
+  /**
+   * Lesemodell des Sport-Detailbildschirms für eine Woche (Montag bis Sonntag): Wochenminuten, Sportwochenziel
+   * aus dem `PlanReader` und die Einträge nach Tag. `week` ist ein Tag der Woche, `null` die laufende Woche
+   * der Uhr. `refresh` stößt das erneute Lesen ohne Datenbankänderung an, etwa am Wochenwechsel.
+   */
+  sportWeek(planReader: PlanReader, refresh: Refresh, week: LocalDate | null): Source<SportWeekState>;
 }>;
 
 /**
@@ -148,6 +169,12 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     values,
     undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)),
   });
+  /** Ergebnis eines Sportbefehls nach seiner Transaktion: Meldung und Werte samt Undo-Token. */
+  const sportOutcome = <K extends string>({ messageKey, values, undo }: SportChanged<K>) => ({
+    messageKey,
+    values,
+    undoToken: tokens.issue(database, (tx) => undoSport(tx, dependencies, undo)),
+  });
 
   return {
     addWater({ ml }) {
@@ -158,10 +185,9 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     updateWeight: (entryId, input) => weightOutcome(database.transaction((tx) => updateWeightEntry(tx, dependencies, entryId, input))),
     deleteWeight: (entryId) => weightOutcome(database.transaction((tx) => deleteWeightEntry(tx, dependencies, entryId))),
     lastWeights: (except) => database.read((tx) => lastWeightsOf(tx, except)),
-    recordSport(input) {
-      const { messageKey, values, undo } = database.transaction((tx) => recordSportEntry(tx, dependencies, dependencies.newId(), input));
-      return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoSport(tx, dependencies, undo)) };
-    },
+    recordSport: (input) => sportOutcome(database.transaction((tx) => recordSportEntry(tx, dependencies, dependencies.newId(), input))),
+    updateSport: (entryId, input) => sportOutcome(database.transaction((tx) => updateSportEntry(tx, dependencies, entryId, input))),
+    deleteSport: (entryId) => sportOutcome(database.transaction((tx) => deleteSportEntry(tx, dependencies, entryId))),
     lastSport: () => database.read((tx) => lastSportOf(tx)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
@@ -185,5 +211,6 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     waterToday: (planReader, refresh) => waterTodaySource(dependencies, planReader, refresh),
     weightToday: (planReader, refresh) => weightTodaySource(dependencies, planReader, refresh),
     sportToday: (planReader, refresh) => sportTodaySource(dependencies, planReader, refresh),
+    sportWeek: (planReader, refresh, week) => sportWeekSource(dependencies, planReader, refresh, week),
   };
 }

@@ -74,3 +74,22 @@ export const momoSheetTexts = {
   ],
   understood: 'Verstanden',
 };
+
+/**
+ * Texte von Bau-Sheet und Bau-Modus (#192). „Noch ‹n› Energie“ steht in Spezifikation 4, Abschnitt 7; die
+ * übrigen Sätze sind Designwerte dieses Tickets (nicht belegt).
+ */
+export const buildTexts = {
+  title: 'Bauen',
+  titleOnField: 'Auf dieses Feld bauen',
+  energy: (energy: number) => `Du hast ${energy} Energie`,
+  price: (price: number) => `${price} Energie`,
+  missing: (missing: number) => `Noch ${missing} Energie`,
+  /** Zugänglicher Name einer Bauplan-Zeile. */
+  option: (name: string, price: number, missing: number) =>
+    missing > 0 ? `${name}, ${buildTexts.price(price)}, ${buildTexts.missing(missing)}` : `${name}, ${buildTexts.price(price)}`,
+  noFreeField: 'Gerade ist keines deiner Felder frei.',
+  placing: (name: string) => `${name} bauen`,
+  placingHint: 'Tippe auf ein leuchtendes Feld.',
+  cancel: 'Abbrechen',
+};

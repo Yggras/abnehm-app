@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { Instant } from '@abnehm/contracts/base';
+import { Instant, type EntityId, type TimeZone } from '@abnehm/contracts/base';
 import {
   activityTypes,
   isInFuture,
@@ -15,7 +15,7 @@ import type { ActivityType } from '@abnehm/contracts/trackers';
 import { useClock } from '../clock/clock-context';
 import { Button, Chip, DateTimePicker, ListGroup, ListRow, ProblemMessage, space, Text, TextField } from '../design';
 import { activityNames } from '../shell/texts';
-import { useUndoableMessage } from '../shell/use-undoable-message';
+import { useUndoableMessage, type UndoableOutcome } from '../shell/use-undoable-message';
 import { activityIcons } from './activity-icons';
 import type { Trackers } from './trackers';
 
@@ -27,6 +27,12 @@ import type { Trackers } from './trackers';
 // Beginns sind änderbar; danach folgt der Beginn der Dauer nicht mehr. Kalorien sind optional und werden
 // nur angezeigt. Es gibt keine Intensität. Nach dem Speichern zeigt der Meldungs-Host
 // „30 min Laufen eingetragen · Rückgängig“.
+//
+// Mit `entry` bearbeitet es eine manuelle Einheit (#174): Art, Dauer, Beginn und Kalorien sind
+// vorausgefüllt, „Speichern“ ändert sie, „Löschen“ löscht sie ohne Bestätigungsdialog; die Meldung bietet
+// „Rückgängig“. Die zuletzt genutzte Einheit bleibt dabei, wie sie ist. Mit `title` steht es in einem
+// Sheet: Titel und Felder scrollen, „Speichern“ und „Löschen“ bleiben als fester Fuß sichtbar, weil das
+// Sheet auf dem iPhone SE niedriger ist als das Formular (Impeccable-Kritik, #174).
 
 /** Schnellwahl der Dauer in Minuten (#38). */
 const quickMinutes = [15, 30, 45, 60] as const;
@@ -59,25 +65,43 @@ function minutesBefore(instant: Instant, minutes: number): Instant {
   return Instant.parse(new Date(Date.parse(instant) - minutes * 60_000).toISOString());
 }
 
+/** Eine manuelle Einheit, die das Formular bearbeitet; Uhrzeiten zeigt es in der Zone ihrer Anlage. */
+export type EditedSport = Readonly<{
+  id: EntityId;
+  activityType: ActivityType;
+  durationMinutes: number;
+  startedAt: Instant;
+  activeMilliKcal: number | null;
+  timeZone: TimeZone;
+}>;
+
+/** Was das Formular vom Tracker-Modul braucht. */
+export type SportFormTrackers = Pick<Trackers, 'recordSport' | 'updateSport' | 'deleteSport' | 'lastSport' | 'undo' | 'expire'>;
+
 export type SportEntryFormProps = {
-  trackers: Pick<Trackers, 'recordSport' | 'lastSport' | 'undo' | 'expire'>;
-  /** Gespeichert; der Aufrufer schließt das Formular. */
+  trackers: SportFormTrackers;
+  /** Bearbeitet diese manuelle Einheit, statt eine neue einzutragen. */
+  entry?: EditedSport;
+  /** Überschrift im Sheet; damit scrollen die Felder und die Aktionen stehen fest darunter. */
+  title?: string;
+  /** Gespeichert oder gelöscht; der Aufrufer schließt das Formular. */
   onSaved: () => void;
 };
 
-export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
+export function SportEntryForm({ trackers, entry, title, onSaved }: SportEntryFormProps) {
   const clock = useClock();
   const message = useUndoableMessage();
   // Vorbelegung und Reihenfolge bleiben, solange das Formular offen ist, damit die Liste beim Wählen nicht springt.
-  const [last] = useState(() => trackers.lastSport());
+  // Beim Bearbeiten belegt die Einheit selbst vor, sonst die zuletzt genutzte.
+  const [last] = useState(() => entry ?? trackers.lastSport());
   const [order] = useState<readonly ActivityType[]>(() => (last === null ? activityTypes : [last.activityType, ...activityTypes.filter((type) => type !== last.activityType)]));
   const [activity, setActivity] = useState<ActivityType | null>(last?.activityType ?? null);
   /** Alle Arten sichtbar; mit Vorbelegung zunächst nur die gewählte. */
   const [allKinds, setAllKinds] = useState(last === null);
   const [minutesText, setMinutesText] = useState(last === null ? '' : String(last.durationMinutes));
-  /** Selbst gewählter Beginn; `null`, solange er „jetzt − Dauer“ folgt. */
-  const [chosenStart, setChosenStart] = useState<Instant | null>(null);
-  const [kcalText, setKcalText] = useState('');
+  /** Selbst gewählter Beginn; `null`, solange er „jetzt − Dauer“ folgt. Beim Bearbeiten der gespeicherte. */
+  const [chosenStart, setChosenStart] = useState<Instant | null>(entry?.startedAt ?? null);
+  const [kcalText, setKcalText] = useState(entry?.activeMilliKcal == null ? '' : String(kcal(entry.activeMilliKcal)));
   const [problems, setProblems] = useState<ReadonlySet<Problem>>(new Set());
   const now = clock.read();
   const minutes = wholeNumber(minutesText);
@@ -102,11 +126,18 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
     if (isInFuture(startedAt, instant)) found.add('futureStart');
     setProblems(found);
     if (found.size > 0 || activity === null || minutes === null || activeMilliKcal === undefined) return;
+    const input = { activityType: activity, durationMinutes: minutes, startedAt, activeMilliKcal };
+    run(() => (entry === undefined ? trackers.recordSport(input) : trackers.updateSport(entry.id, input)));
+  };
+
+  /** Führt den Befehl aus, schließt und zeigt die Meldung mit „Rückgängig“. */
+  const run = (command: () => UndoableOutcome & Readonly<{ undoToken: string }>) => {
     let outcome;
     try {
-      outcome = trackers.recordSport({ activityType: activity, durationMinutes: minutes, startedAt, activeMilliKcal });
+      outcome = command();
     } catch (error) {
-      // Die Eingaben sind vorher geprüft; scheitert der Befehl trotzdem an ihnen, ist das ein Fehler.
+      // Die Eingaben sind vorher geprüft; scheitert der Befehl trotzdem, etwa weil die Einheit inzwischen
+      // gelöscht ist, sieht die Person „Das hat nicht geklappt …“.
       return message.failed(error);
     }
     const { undoToken } = outcome;
@@ -114,8 +145,14 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
     message.show(outcome, { run: () => trackers.undo(undoToken), expire: () => trackers.expire(undoToken) });
   };
 
-  return (
-    <View style={styles.form}>
+  const actions = (
+    <>
+      <Button label="Speichern" block onPress={save} />
+      {entry !== undefined ? <Button variant="text" label="Löschen" block onPress={() => run(() => trackers.deleteSport(entry.id))} /> : null}
+    </>
+  );
+  const fields = (
+    <>
       <View style={styles.group}>
         <Text variant="label" accessibilityRole="header">Art</Text>
         <ListGroup>
@@ -165,7 +202,7 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
             setChosenStart(next);
             solve('futureStart');
           }}
-          timeZone={now.timeZone}
+          timeZone={entry?.timeZone ?? now.timeZone}
           maximum={now.instant}
         />
         {problems.has('futureStart') ? <ProblemMessage text={texts.futureStart} /> : null}
@@ -182,7 +219,31 @@ export function SportEntryForm({ trackers, onSaved }: SportEntryFormProps) {
         hint="wird nur angezeigt"
         problem={problems.has('invalidKcal') ? texts.invalidKcal : undefined}
       />
-      <Button label="Speichern" block onPress={save} />
+    </>
+  );
+  return title === undefined ? (
+    <View style={styles.form}>
+      {fields}
+      {actions}
+    </View>
+  ) : (
+    <SheetLayout title={title} actions={actions}>
+      {fields}
+    </SheetLayout>
+  );
+}
+
+/** Titel und Felder scrollen; die Aktionen stehen als Fuß darunter. Tipps erreichen sie auch bei offener Tastatur. */
+function SheetLayout({ title, actions, children }: { title: string; actions: ReactNode; children: ReactNode }) {
+  return (
+    <View style={styles.sheet}>
+      <ScrollView testID="sheet-scroll" style={styles.sheetScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+        <Text variant="title" accessibilityRole="header">
+          {title}
+        </Text>
+        {children}
+      </ScrollView>
+      <View style={styles.footer}>{actions}</View>
     </View>
   );
 }
@@ -191,4 +252,7 @@ const styles = StyleSheet.create({
   form: { gap: space[4] },
   group: { gap: space[2] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  sheet: { flex: 1 },
+  sheetScroll: { flex: 1 },
+  footer: { gap: space[2], paddingTop: space[3] },
 });

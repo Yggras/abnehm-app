@@ -3,7 +3,7 @@ import { act, fireEvent, screen, userEvent, within } from '@testing-library/reac
 import { renderRouter, testRouter } from 'expo-router/testing-library';
 import type * as ZodModule from 'zod';
 
-import { EntityId } from '@abnehm/contracts/base';
+import { EntityId, type BausteinKey } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 
 import { withDeviceConfig } from '../design/testing/device-config';
@@ -201,7 +201,7 @@ describe('Quick-Commands und Meldungen', () => {
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
     expect(screen.getByRole('image', { name: 'Momo, zufrieden' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: /Anna feuert dich an: Stark heute!/ })).toBeOnTheScreen();
-    for (const name of ['1. Ernährung erfasst · Unterwegs', '2. Wasserziel · Unterwegs', '3. Sporteinheit · Noch offen']) {
+    for (const name of ['Ernährung erfasst · 2 von 2 Mahlzeiten, erfüllt. Öffnen', 'Wasserziel · 0,8 von 1,5 l, teilweise. Öffnen', 'Im Kalorienbudget · am Tagesende. Öffnen']) {
       expect(screen.getByRole('button', { name })).toBeOnTheScreen();
     }
     await user.press(screen.getByRole('button', { name: 'Wasser: +250 ml' }));
@@ -301,6 +301,28 @@ describe('Quick-Commands und Meldungen', () => {
     expect(screen.getByText('+250 ml Wasser')).toBeOnTheScreen();
     await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  const today = (goals: readonly BausteinKey[], bonus = false) => ({ goals, bonus, energy: goals.length + (bonus ? 1 : 0) });
+  test.each([
+    [{ yesterday: null, today: today(['wasserziel']) }, ['Wasserziel erfüllt · +1 Energie']],
+    [{ yesterday: null, today: today([], true) }, ['Alle drei geschafft · +1 Energie']],
+    // Mehreres aus einem Commit: eine Meldung mit der Summe der Energie.
+    [{ yesterday: null, today: today(['sporteinheit'], true) }, ['Alle drei geschafft · +2 Energie']],
+    [{ yesterday: null, today: today(['wasserziel', 'gewogen']) }, ['Wasserziel und Gewogen erfüllt · +2 Energie']],
+    [{ yesterday: null, today: today(['ernaehrung_erfasst', 'wasserziel', 'gewogen']) }, ['Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie']],
+    [{ yesterday: { bonus: false, energy: 1 }, today: null }, ['Gestern im Kalorienbudget · +1 Energie']],
+    [{ yesterday: { bonus: true, energy: 2 }, today: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie']],
+    // Gestern und heute zusammen: zwei Zeilen derselben Meldung, je mit eigenem Betrag.
+    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']) }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie', 'Sporteinheit erfüllt · +1 Energie']],
+  ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188)', async (reaction, lines) => {
+    closeIsland();
+    closeIsland = appGameService.opened(fakeGameService(hatchedStage(), [reaction]));
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    const slot = await screen.findByTestId('message-slot');
+    for (const line of lines) expect(within(slot).getByText(line)).toBeOnTheScreen();
+    expect(within(slot).queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
   });
 
   test('im Release ist ein fehlender Handler ein Integrationsfehler', async () => {

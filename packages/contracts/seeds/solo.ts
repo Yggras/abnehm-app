@@ -190,7 +190,7 @@ const waterToday = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
 
-/** Ein manueller Sporteintrag dieser Woche (Montag bis Sonntag), ohne Importe. */
+/** Ein manueller Sporteintrag, ohne Importe. */
 type SportUnit = Readonly<{ id: string; activity: string; startedAt: string; minutes: number; localDate: string; createdAt: string }>;
 
 /** Montag: Spaziergang am Abend; Dienstag: Radtour am Abend. */
@@ -220,6 +220,20 @@ const sportWeek = {
     { id: seedIds.sportEntry.philippWoche[2], activity: 'yoga_dehnen', startedAt: '2026-10-13T18:30:00.000Z', minutes: 20, localDate: seedDays.gestern, createdAt: '2026-10-13T18:55:00.000Z' },
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, readonly SportUnit[]>>;
+
+/**
+ * Philipps Vorwoche (5. bis 11.10.) in `solo` und seinen Varianten, für den Wochenwechsel des
+ * Sport-Detailbildschirms (#174): Montag ein Lauf, Donnerstag zwei Einheiten (Krafttraining morgens, Yoga
+ * abends), zusammen 80 Minuten. Die laufende Woche und damit Mini-Tracker und Tagesziele bleiben unberührt.
+ */
+const sportVorwoche: SeedPart = {
+  area: 'tracker',
+  entities: [
+    { id: seedIds.sportEntry.philippVorwoche[0], activity: 'laufen', startedAt: '2026-10-05T16:00:00.000Z', minutes: 30, localDate: '2026-10-05', createdAt: '2026-10-05T16:35:00.000Z' },
+    { id: seedIds.sportEntry.philippVorwoche[1], activity: 'krafttraining', startedAt: '2026-10-08T05:00:00.000Z', minutes: 30, localDate: '2026-10-08', createdAt: '2026-10-08T05:35:00.000Z' },
+    { id: seedIds.sportEntry.philippVorwoche[2], activity: 'yoga_dehnen', startedAt: '2026-10-08T17:30:00.000Z', minutes: 20, localDate: '2026-10-08', createdAt: '2026-10-08T17:55:00.000Z' },
+  ].map(({ id, activity, startedAt, minutes, localDate, createdAt }) => seedSportEntry({ id, personId: philipp, activity, startedAt, minutes, createdAt, localDate })),
+};
 
 /** Eine manuelle Messung: ID, Gewicht in g, Zeitpunkt und lokaler Tag in Berlin. */
 type SeedWeighing = Readonly<{ id: string; weight: number; at: string; localDate: string }>;
@@ -368,19 +382,20 @@ export const soloParts = soloPartsWith(soloVariants.solo);
 /** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute, in der Sportwoche oder im Wochenplan. */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
-    parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel],
+    parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, sportVorwoche],
     createdAt: seedClock.instant,
     devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
   });
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 8: Sporteinträge der Vorwoche samt einem Tag mit zwei Einheiten seit #174.
     // Revision 7: unentschiedene Erlaubnis für Mitteilungen auf dem iPhone seit #125.
     // Revision 6: eigene Lebensmittel seit #157 (ein eigenes mit Portion, eine BLS-Korrektur).
     // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 7,
+    revision: 8,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,

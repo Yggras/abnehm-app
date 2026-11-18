@@ -14,6 +14,7 @@
     "./projects": "./src/projects.ts",
     "./hatching": "./src/hatching.ts",
     "./building": "./src/building.ts",
+    "./mood": "./src/mood.ts",
     "./content": "./content/index.ts",
     "./fixtures": "./fixtures/index.ts"
   },

@@ -30,7 +30,8 @@ test('komponiert feste Reihenfolge mit Ernährung, drei Zielen und Mini-Trackern
   const slots = screen.getAllByTestId(/^today-slot-/).map((node) => node.props.testID);
   expect(slots).toEqual(['today-slot-header', 'today-slot-top_notice', 'today-slot-momo', 'today-slot-nutrition', 'today-slot-trackers', 'today-slot-partner']);
   expect(screen.getByText(/Philipp/)).toBeOnTheScreen();
-  expect(screen.getByText(/Budgetvorschlag/)).toBeOnTheScreen();
+  expect(screen.getByText(/Vorschlag für dein Kalorienbudget/)).toBeOnTheScreen();
+  expect(screen.getAllByRole('button', { name: 'Wasserziel · 0,8 von 1,5 l, teilweise. Öffnen' })).toHaveLength(3);
   expect(screen.getByRole('progressbar', { name: 'Wasser heute' })).toHaveAccessibilityValue({ min: 0, max: 1500, now: 750, text: '0,8 l von 1,5 l' });
 });
 

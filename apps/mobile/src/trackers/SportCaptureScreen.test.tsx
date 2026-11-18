@@ -67,11 +67,13 @@ test('Tipps erreichen „Speichern“ auch bei offener Tastatur, statt sie nur z
   expect(screen.getByTestId('screen-scroll').props.keyboardShouldPersistTaps).toBe('handled');
 });
 
-test('ohne newEntry zeigt die Route bis zur Wochenübersicht (#174) den Platzhalter des Bereichs', async () => {
+test('ohne newEntry zeigt die Route die Wochenübersicht (#174); ohne ihr Lesemodell lädt sie', async () => {
   await open();
   await act(() => router.push('/capture/sport'));
 
-  expect(screen.getByText('Kommt mit: Wasser, Sport, Gewicht & Health')).toBeOnTheScreen();
+  expect(screen.queryByText(/Kommt mit/)).not.toBeOnTheScreen();
+  expect(screen.queryByLabelText('Dauer')).not.toBeOnTheScreen();
+  expect(screen.getByText('Sport lädt …')).toBeOnTheScreen();
 });
 
 test('lädt, solange kein Konto geöffnet ist', async () => {

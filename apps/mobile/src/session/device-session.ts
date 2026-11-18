@@ -12,6 +12,7 @@ import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedD
 import { energyBookingEntity } from '../energy';
 import { createHealthImport, unavailableHealthPlatform } from '../health';
 import { appHealthImport } from '../health/app-health';
+import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
 import { buildObjectCommand } from '../island/build-object';
@@ -38,7 +39,7 @@ import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { appTrackers, appWeightDetail, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
+import { appSportWeeks, appTrackers, appWeightDetail, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -67,6 +68,10 @@ const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', '
 const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.sport');
 /** Momo auf „Heute“ (Spezifikation 4): Laichkugel und Rollenwahl (#180), nach dem Schlüpfen Momo mit Level (#184). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
+/** Die drei Tagesziele im Momo-Bereich auf „Heute“ (Spezifikation 1, #136). */
+const dailyGoalsTodayOpened = followTodayContribution(appTodayRegistry, 'ziele', 'momo.daily_goals');
+/** Kalorienbudget, Haltemodus und Hinweis der Ernährungskarte auf „Heute“ (Spezifikation 1, #136). */
+const budgetTodayOpened = followTodayContribution(appTodayRegistry, 'ziele', 'nutrition.budget');
 /** Partner-Karte `partner` auf „Heute“ (Spezifikation 5, #121): solo Einladen, gekoppelt Name und grober Stand. */
 const partnerTodayOpened = followTodayContribution(appTodayRegistry, 'partner', 'partner');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
@@ -134,15 +139,16 @@ function deviceState() {
     // Kontobezogene Beobachter an der geöffneten Datenbank; beim Sperren lösen sie sich wieder.
     onAccountOpened(database) {
       const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError });
-      const persistence = createDailyGoalPersistence({
-        registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock: appClock, writer: syncWriter, dispatcher,
-      });
+      // Baustein-Auswertung (Spezifikation 0, Abschnitt 3); die Evaluatoren registrieren die Spezifikationen 2 und 3.
+      const dailyGoalRegistry = createDailyGoalRegistry({ bausteine: [], checkIns: [] });
+      const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
-      // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und das Lesemodell
-      // des Gewicht-Detailbildschirms (`appWeightDetail`). Die Ports `weightRecorder` und `weightTrendReader`
-      // gibt der Composition Root an `composeAreaPorts` weiter, sobald alle Pflichtports angemeldet sind.
+      // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
+      // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`). Die Ports
+      // `weightRecorder` und `weightTrendReader` gibt der Composition Root an `composeAreaPorts` weiter,
+      // sobald alle Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
       // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
@@ -152,8 +158,11 @@ function deviceState() {
       // des Tracker-Moduls.
       const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
       persistence.registerMissingDaysHook(plan.materializeMissingDays);
+      // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
+      const planToday = plan.today(dailyGoalRegistry);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
-      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
+      // Stimmungen folgen der Uhr im Takt von „Heute“; die Erfolgshaptik löst nur dieser Dienst aus (#188).
+      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh });
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
@@ -178,9 +187,11 @@ function deviceState() {
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
         appWeightDetail.opened(trackers.weightDetail(planReaderOf(database), appTodayRefresh)),
+        appSportWeeks.opened((week) => trackers.sportWeek(planReaderOf(database), appTodayRefresh, week)),
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
+        dailyGoalsTodayOpened(planToday.dailyGoals(appTodayRefresh)), budgetTodayOpened(planToday.budget(appTodayRefresh)),
         // Benachrichtigungseinstellung (Spezifikation 5, #132): die Seite „Benachrichtigungen“ spricht nur mit diesem Modul.
         appNotificationSettings.opened(createNotificationSettings({ database, writer: syncWriter, clock: appClock })),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).

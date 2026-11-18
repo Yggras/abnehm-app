@@ -254,6 +254,14 @@ export type DailyGoalTargets = Readonly<{
 }>;
 
 /**
+ * Kalorien einer Zielversion in ganzen kcal, wie im Tagesziel-Snapshot: Ein Rest wird abgeschnitten. Auch
+ * „Heute“ zeigt das Kalorienbudget eines Tags ohne Snapshot so (Spezifikation 1, Abschnitt 6).
+ */
+export function kcalOfMilliKcal(milliKcal: number): number {
+  return Math.floor(milliKcal / 1_000);
+}
+
+/**
  * Die drei Snapshots eines Tags nach Platz (Spezifikation 1, Abschnitt 5): Bausteine aus dem Wochentag
  * der gültigen Wochenplanversion, Schwellen aus der gültigen Zielversion, die Schwelle der Sporteinheit
  * aus dem Sportwochenziel und den Sporttagen dieser Wochenplanversion. Kalorien stehen im Snapshot in
@@ -288,8 +296,8 @@ export function dailyGoalSnapshotsOf({
         return DailyGoalSnapshot.parse({
           type: baustein,
           ...base,
-          budgetKcal: Math.floor(goal.calorieBudgetMilliKcal / 1_000),
-          lowerBoundKcal: Math.floor(goal.lowerBoundMilliKcal / 1_000),
+          budgetKcal: kcalOfMilliKcal(goal.calorieBudgetMilliKcal),
+          lowerBoundKcal: kcalOfMilliKcal(goal.lowerBoundMilliKcal),
         });
       case 'wasserziel':
         return DailyGoalSnapshot.parse({ type: baustein, ...base, targetMl: goal.waterTargetMl });

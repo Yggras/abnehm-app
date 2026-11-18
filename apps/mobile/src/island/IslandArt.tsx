@@ -1,18 +1,19 @@
 import type { MomoAppearance } from '@abnehm/contracts/island';
 import type { ArtKey } from '@abnehm/game-rules/catalog';
 import { Circle, Group, Oval, Path } from '@shopify/react-native-skia';
-import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { useEffect, type ReactNode } from 'react';
+import { useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
-import { color, opacity, size, type ColorToken } from '../design';
-import { artOf, type ArtShape } from './art';
+import { color, opacity, size, useMotion, type ColorToken } from '../design';
+import { artOf, shadow, type ArtPrimitive } from './art';
 import type { Point, Polygon } from './scene-model';
 
 // Skia-Zeichnungen der Inselansicht. Flächig ohne Konturen und Verläufe, zweitönig mit Licht von
 // links oben: rechte Hälften `opacity-shade-right`, linke Flächen `opacity-shade-left`, Schlagschatten
 // nach rechts unten (`opacity-cast-shadow`; Design-System › Insel). Abgedunkelt wird mit `ink`, der
-// dunkelsten Farbe der Tokens. Maße in dp bei Zoom 1; ein Feld ist `island-tile` breit. Objekte und
-// Momo sind Vorzeichnungen: Die endgültigen Grafiken der Start-Baupläne kommen mit dem Bau-Modus
-// (#192), Momo als Skia-Rig mit #187.
+// dunkelsten Farbe der Tokens. Maße in dp bei Zoom 1; ein Feld ist `island-tile` breit. Die Objekte
+// zeichnen ihre Grundformen aus `art.ts` (#192); Momo ist eine Vorzeichnung, bis das Skia-Rig aus #187
+// sie ersetzt.
 
 const tile = size.islandTile;
 const shade = color.ink;
@@ -53,120 +54,65 @@ export function fogPath(cells: readonly Polygon[]): string {
     .join(' ');
 }
 
-/** Quader auf dem Boden, Grundriss eine Raute mit halber Breite `a`, Höhe `h`. */
-function Box({ at, a, h, top, side }: { at: Point; a: number; h: number; top: ColorToken; side: ColorToken }) {
-  const b = a / 2;
-  const { x, y } = at;
-  const left = polygonPath([{ x: x - a, y: y - h }, { x, y: y - h + b }, { x, y: y + b }, { x: x - a, y }]);
-  const right = polygonPath([{ x, y: y - h + b }, { x: x + a, y: y - h }, { x: x + a, y }, { x, y: y + b }]);
+/**
+ * Ein Inselobjekt aus seinen Grundformen (`art.ts`) auf der Feldmitte `at`. Ein eben gebautes Objekt
+ * (`appearing`) erscheint mit Feder (`spring-bouncy`), bei „Bewegung reduzieren“ als Überblendung in
+ * `duration-fast` (Spezifikation 4, Abschnitt 7; Design-System › Bewegung).
+ */
+export function ObjectArt({ at, art, foliage, appearing = false }: { at: Point; art: ArtKey; foliage: ColorToken; appearing?: boolean }) {
+  const { drawing } = artOf(art);
+  const shapes = drawing.map((primitive, index) => <Primitive key={index} primitive={primitive} foliage={foliage} />);
+  if (!appearing) return <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>{shapes}</Group>;
   return (
-    <Group>
-      <Path path={left} color={color[side]} />
-      <Path path={left} color={shade} opacity={opacity.shadeLeft} />
-      <Path path={right} color={color[side]} />
-      <Path path={right} color={shade} opacity={opacity.shadeRight} />
-      <Path path={polygonPath([{ x, y: y - h - b }, { x: x + a, y: y - h }, { x, y: y - h + b }, { x: x - a, y: y - h }])} color={color[top]} />
+    <Appear at={at}>
+      {shapes}
+    </Appear>
+  );
+}
+
+/** Erscheinen eines eben gebauten Objekts: wächst federnd aus dem Feld oder blendet über. */
+function Appear({ at, children }: { at: Point; children: ReactNode }) {
+  const motion = useMotion('bounce');
+  const grown = useSharedValue(0);
+  useEffect(() => {
+    grown.value = motion.type === 'spring' ? withSpring(1, motion.config) : withTiming(1, { duration: motion.type === 'crossfade' ? motion.duration : 0 });
+    // Das Erscheinen gilt dem Einbau; ein späterer Wechsel der Einstellung animiert nichts neu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const springs = motion.type === 'spring';
+  const transform = useDerivedValue(() => [
+    { translateX: at.x },
+    { translateY: at.y },
+    { scale: springs ? Math.max(grown.value, 0) : 1 },
+  ]);
+  const fade = useDerivedValue(() => (springs ? 1 : grown.value));
+  return (
+    <Group transform={transform} opacity={fade}>
+      {children}
     </Group>
   );
 }
 
-function CastShadow({ at, width }: { at: Point; width: number }) {
-  return <Oval x={at.x - width / 2 + 4} y={at.y - 2} width={width} height={width / 2.4} color={shade} opacity={opacity.castShadow} />;
-}
-
-/** Wie hoch über der Feldmitte eine Laterne leuchtet. */
-export const lampHeight = tile * 0.5;
-
-/** Blüten der Blumenwiese, flach auf dem Feld. */
-const flowers: readonly Readonly<{ x: number; y: number; tone: ColorToken }>[] = [
-  { x: -10, y: 0, tone: 'islandLamp' },
-  { x: -3, y: -4, tone: 'islandRoof' },
-  { x: 5, y: -1, tone: 'surfaceCard' },
-  { x: 11, y: 2, tone: 'islandLamp' },
-  { x: 0, y: 4, tone: 'islandRoof' },
-];
-
-/** Ein Inselobjekt; jede Stufe ist etwas größer (Design-System › Insel). */
-export function ObjectArt({ at, art, foliage }: { at: Point; art: ArtKey; foliage: ColorToken }) {
-  const { shape, stage } = artOf(art);
-  const scale = 1 + (stage - 1) * 0.15;
-  return (
-    <Group transform={[{ translateX: at.x }, { translateY: at.y }, { scale }]}>
-      <Shape shape={shape} foliage={foliage} />
-    </Group>
-  );
-}
-
-/** Zeichnungen um den Ursprung, die Feldmitte. */
-function Shape({ shape, foliage }: { shape: ArtShape; foliage: ColorToken }) {
-  const origin = { x: 0, y: 0 };
-  switch (shape) {
-    case 'baum':
-      return (
-        <Group>
-          <CastShadow at={origin} width={tile * 0.45} />
-          <Path path={polygonPath([{ x: -2, y: -18 }, { x: 2, y: -18 }, { x: 2, y: 0 }, { x: -2, y: 0 }])} color={color.islandEarth} />
-          <Circle cx={0} cy={-26} r={12} color={color[foliage]} />
-          <Path path={rightHalf(0, -26, 12)} color={shade} opacity={opacity.shadeRight} />
-          <Circle cx={-4} cy={-28} r={2} color={color.islandRoof} />
-          <Circle cx={5} cy={-23} r={2} color={color.islandRoof} />
-        </Group>
-      );
-    case 'busch':
-      return (
-        <Group>
-          <CastShadow at={origin} width={tile * 0.4} />
-          <Circle cx={-4} cy={-7} r={8} color={color[foliage]} />
-          <Circle cx={5} cy={-6} r={7} color={color[foliage]} />
-          <Path path={rightHalf(5, -6, 7)} color={shade} opacity={opacity.shadeRight} />
-          <Circle cx={-6} cy={-9} r={1.8} color={color.islandRoofAlt} />
-          <Circle cx={-1} cy={-5} r={1.8} color={color.islandRoofAlt} />
-          <Circle cx={6} cy={-8} r={1.8} color={color.islandRoofAlt} />
-        </Group>
-      );
-    case 'blumen':
-      return (
-        <Group>
-          {flowers.map(({ x, y, tone }) => (
-            <Circle key={`${x}:${y}`} cx={x} cy={y} r={2.5} color={color[tone]} />
-          ))}
-        </Group>
-      );
-    case 'weg':
-      // Flach auf dem Feld: eine Holzfläche ohne Seiten, damit sie nicht wie ein Körper wirkt.
-      return <Path path={polygonPath([{ x: 0, y: -11 }, { x: 22, y: 0 }, { x: 0, y: 11 }, { x: -22, y: 0 }])} color={color.islandWood} />;
-    case 'bank':
-      return (
-        <Group>
-          <CastShadow at={origin} width={tile * 0.4} />
-          <Box at={{ x: 0, y: 2 }} a={11} h={6} top="islandWood" side="islandWood" />
-          <Box at={{ x: -3, y: -2 }} a={9} h={12} top="islandWood" side="islandWood" />
-        </Group>
-      );
-    case 'laterne':
-      return (
-        <Group>
-          <CastShadow at={origin} width={tile * 0.25} />
-          <Path path={polygonPath([{ x: -1.5, y: -lampHeight + 4 }, { x: 1.5, y: -lampHeight + 4 }, { x: 1.5, y: 0 }, { x: -1.5, y: 0 }])} color={color.islandWood} />
-          <Box at={{ x: 0, y: -lampHeight + 5 }} a={5} h={8} top="islandRoofAlt" side="islandLamp" />
-        </Group>
-      );
-    case 'block':
-      return (
-        <Group>
-          <CastShadow at={origin} width={tile * 0.6} />
-          <Box at={{ x: 0, y: 0 }} a={tile * 0.28} h={18} top="islandRoof" side="islandSand" />
-        </Group>
-      );
+function Primitive({ primitive, foliage }: { primitive: ArtPrimitive; foliage: ColorToken }) {
+  const fill = color[primitive.tone === 'laub' ? foliage : primitive.tone];
+  switch (primitive.type) {
+    case 'flaeche':
+      return <Path path={polygonPath(primitive.points)} color={fill} opacity={primitive.opacity} />;
+    case 'kreis':
+      return <Circle cx={primitive.x} cy={primitive.y} r={primitive.r} color={fill} opacity={primitive.opacity} />;
+    case 'halbkreis':
+      return <Path path={rightHalf(primitive.x, primitive.y, primitive.r)} color={fill} opacity={primitive.opacity} />;
+    case 'oval':
+      return <Oval x={primitive.x} y={primitive.y} width={primitive.width} height={primitive.height} color={fill} opacity={primitive.opacity} />;
   }
 }
 
-/** Abends: Schein einer Laterne über der Abend-Überlagerung. */
+/** Abends: Schein einer Laterne über der Abend-Überlagerung; `at` ist das Licht ihrer Grafik. */
 export function LampGlow({ at }: { at: Point }) {
   return (
     <Group>
-      <Circle cx={at.x} cy={at.y - lampHeight + 1} r={12} color={color.islandLamp} opacity={lampGlowOpacity} />
-      <Circle cx={at.x} cy={at.y - lampHeight + 1} r={4} color={color.islandLamp} />
+      <Circle cx={at.x} cy={at.y} r={12} color={color.islandLamp} opacity={lampGlowOpacity} />
+      <Circle cx={at.x} cy={at.y} r={4} color={color.islandLamp} />
     </Group>
   );
 }
@@ -216,7 +162,7 @@ export function MomoOnIsland({ at, appearance, progress }: { at: Point; appearan
   if (appearance.stage === 'laichkugel') {
     return (
       <Group transform={breath}>
-        <CastShadow at={{ x: 0, y: 0 }} width={tile * 0.45} />
+        <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
         <Circle cx={0} cy={-14} r={14} color={color.momoBelly} />
         <Oval x={-6} y={-19} width={12} height={9} color={color.momoBody} />
       </Group>
@@ -224,7 +170,7 @@ export function MomoOnIsland({ at, appearance, progress }: { at: Point; appearan
   }
   return (
     <Group transform={breath}>
-      <CastShadow at={{ x: 0, y: 0 }} width={tile * 0.45} />
+      <Primitive primitive={shadow(tile * 0.45)} foliage="islandFoliage" />
       <Oval x={6} y={-12} width={14} height={8} color={color.momoBody} />
       {[-1, 1].map((side) => (
         <Group key={side}>
