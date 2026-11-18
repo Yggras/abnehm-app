@@ -261,9 +261,9 @@ describe('Gewicht', () => {
     expect(shown.getByText('Werte änderst du in der Quell-App.')).toBeOnTheScreen();
     expect(shown.queryByRole('textbox')).not.toBeOnTheScreen();
     expect(shown.getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual(['82,4 kg ausblenden']);
-    // Wenige Zeilen: Das Sheet nimmt die Höhe seines Inhalts, „Ausblenden“ steht direkt darunter (Impeccable-Kritik).
-    expect(sheet().props.nativeID).toBe('sheet-content');
-    expect(shown.queryByTestId('sheet-scroll')).not.toBeOnTheScreen();
+    // Volle Höhe, der Inhalt scrollt: Nach Inhaltshöhe öffnete das Sheet auf Android halb ausgefahren.
+    expect(sheet().props.nativeID).toBe('sheet-full');
+    expect(shown.getByTestId('sheet-scroll')).toBeOnTheScreen();
   });
 
   test('„Ausblenden“ eines Tagesgewichts leert die Messliste; „Rückgängig“ holt es zurück', async () => {

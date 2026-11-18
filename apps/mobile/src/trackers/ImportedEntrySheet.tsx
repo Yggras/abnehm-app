@@ -22,9 +22,11 @@ import { kgText, weightTexts } from './weight-texts';
 // Quell-App geändert werden. Bearbeiten lässt sich nichts; die Aktionen sind „Aktivitätsart ändern“ (nur
 // Training) und „Ausblenden“. Beide schließen das Sheet ohne Bestätigungsdialog, und der Meldungs-Host zeigt
 // „52 min Radfahren ausgeblendet · Rückgängig“ bzw. „Jetzt Krafttraining statt Radfahren · Rückgängig“. Die
-// Auswahl der Art steht im selben Sheet, weil Sheets nicht in Sheets stehen (Design-System). Das Sheet eines
-// Gewichts hat nur wenige Zeilen und nimmt die Höhe seines Inhalts; das eines Trainings mit der Liste der
-// acht Arten die volle Höhe (Impeccable-Kritik, #186).
+// Auswahl der Art steht im selben Sheet, weil Sheets nicht in Sheets stehen (Design-System). Das Sheet hat
+// volle Höhe, der Inhalt scrollt und die Aktionen stehen unten. Ein Sheet nach Inhaltshöhe öffnet auf Android
+// halb ausgefahren, sobald der Inhalt höher als der halbe Bildschirm ist (Material 3 ohne Snap-Punkte,
+// `shouldSkipPartiallyExpanded` in `@expo/ui` 58); beim Gewicht lag „Ausblenden“ im Emulator `medium_phone`
+// dann verdeckt darunter (Gerätelauf am 19.11.2026, wie beim Bau-Sheet in `island/BuildSheet.tsx`).
 
 /** Ein importierter Eintrag aus der Wochenübersicht des Sports oder der Messliste des Gewichts. */
 export type ImportedEntry = Readonly<{ type: 'training'; entry: SportListEntry }> | Readonly<{ type: 'gewicht'; entry: WeightHistoryEntry }>;
@@ -68,7 +70,7 @@ export const importedTexts = {
 
 export function ImportedEntrySheet({ imported, today, trackers, onClose }: ImportedEntrySheetProps) {
   return (
-    <Sheet visible={imported !== null} onClose={onClose} height={imported?.type === 'gewicht' ? 'content' : 'full'}>
+    <Sheet visible={imported !== null} onClose={onClose} height="full">
       {imported !== null ? <ImportedEntryContent key={imported.entry.id} imported={imported} today={today} trackers={trackers} onDone={onClose} /> : null}
     </Sheet>
   );
@@ -136,7 +138,7 @@ function ImportedEntryContent({ imported, today, trackers, onDone }: ImportedEnt
   );
   const sourceApp = sourceAppText(imported.entry.sourceAppId, imported.entry.sourceAppName);
   return (
-    <SheetLayout title={importedTexts.title(imported)} actions={actions} fit={imported.type === 'gewicht'}>
+    <SheetLayout title={importedTexts.title(imported)} actions={actions}>
       <ListGroup>{imported.type === 'training' ? <TrainingValues entry={imported.entry} today={today} /> : <WeightValues entry={imported.entry} today={today} />}</ListGroup>
       <ListGroup>
         <ListRow title={importedTexts.origin} value={originNames[imported.entry.origin as ImportOrigin]} />
