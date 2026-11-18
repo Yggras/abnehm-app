@@ -1,18 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
 import { standardWeekDays } from '../fixtures/plan.ts';
-import { EntityId, LocalDate } from '../src/base.ts';
+import { EntityId, Instant, LocalDate, TimeZone } from '../src/base.ts';
+import { dailyGoalId, dailyGoalsKey } from '../src/daily-goals.ts';
 import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from '../src/goal-calculator.ts';
 import {
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
+  dailyGoalSnapshotsOf,
   effectivePlanOf,
   goalVersionId,
   goalVersionOf,
+  MaterializeDailyGoals,
   planVersionKey,
   planVersionOfKey,
   weeklyPlanDaysOf,
   weeklyPlanVersionId,
+  type WeeklyPlanDays,
 } from '../src/plan.ts';
 
 // Nachweis für #128: Ziel- und Wochenplanversion im Vertragsmodul (Spezifikation 1, Abschnitte 4 und
@@ -233,5 +237,56 @@ describe('Abbildung gelesener Zeilen (PlanReader in SQLite und Postgres)', () =>
     expect(weeklyPlanDaysOf(weekdays.map((weekday) => row(weekday, 'gewogen')))).toMatchObject({ sonntag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'] });
     expect(() => weeklyPlanDaysOf(weekdays.slice(0, 6).map((weekday) => row(weekday, 'gewogen')))).toThrow();
     expect(() => weeklyPlanDaysOf(weekdays.map((weekday) => row(weekday, 'wasserziel')))).toThrow();
+  });
+});
+
+// Nachweis für #131: Snapshots, IDs und Nutzlast der Tagesziele (Spezifikation 1, Abschnitt 5). App und
+// Server bilden die Snapshots mit derselben Funktion.
+describe('Snapshots der Tagesziele', () => {
+  const berlin = TimeZone.parse('Europe/Berlin');
+  const endsAt = Instant.parse('2026-10-14T22:00:00.000Z');
+  const standard = standardWeekDays as WeeklyPlanDays;
+  const targets = { calorieBudgetMilliKcal: 1_620_000, lowerBoundMilliKcal: 1_514_000, waterTargetMl: 1_750, weeklySportTargetMinutes: 150 };
+  const snapshots = (localDate: string, days: WeeklyPlanDays = standard, goal = targets) =>
+    dailyGoalSnapshotsOf({ personId: philipp, localDate: day(localDate), timeZone: berlin, dayEndsAt: endsAt, goal, days });
+
+  it('folgen dem Wochentag und schreiben die Schwelle jedes Bausteins fest', () => {
+    // Mittwoch: Ernährung erfasst, Wasserziel, Im Kalorienbudget.
+    expect(snapshots('2026-10-14')).toEqual([
+      { type: 'ernaehrung_erfasst', personId: philipp, localDate: '2026-10-14', slot: 1, timeZone: berlin, dayEndsAt: endsAt, minimumMealCategories: 2 },
+      { type: 'wasserziel', personId: philipp, localDate: '2026-10-14', slot: 2, timeZone: berlin, dayEndsAt: endsAt, targetMl: 1_750 },
+      { type: 'im_kalorienbudget', personId: philipp, localDate: '2026-10-14', slot: 3, timeZone: berlin, dayEndsAt: endsAt, budgetKcal: 1_620, lowerBoundKcal: 1_514 },
+    ]);
+    // Montag ist Wiegetag: Gewogen ohne Schwelle.
+    expect(snapshots('2026-10-12')[2]).toEqual({ type: 'gewogen', personId: philipp, localDate: '2026-10-12', slot: 3, timeZone: berlin, dayEndsAt: endsAt });
+  });
+
+  it('teilen das Sportwochenziel auf die Sporttage der Wochenplanversion auf und runden auf', () => {
+    // Drei Sporttage: 150 ÷ 3 = 50 Minuten.
+    expect(snapshots('2026-10-13')[2]).toMatchObject({ type: 'sporteinheit', minimumSingleSessionMinutes: 50 });
+    // Vier Sporttage: 150 ÷ 4 = 37,5, aufgerundet 38 Minuten.
+    const fourSportDays: WeeklyPlanDays = { ...standard, mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'] };
+    expect(snapshots('2026-10-13', fourSportDays)[2]).toMatchObject({ minimumSingleSessionMinutes: 38 });
+  });
+
+  it('schneiden einen Rest unter einer kcal bei Budget und Untergrenze gleich ab', () => {
+    const fractional = { ...targets, calorieBudgetMilliKcal: 2_417_875, lowerBoundMilliKcal: 1_882_500 };
+    expect(snapshots('2026-10-14', standard, fractional)[2]).toMatchObject({ budgetKcal: 2_417, lowerBoundKcal: 1_882 });
+    const equal = { ...targets, calorieBudgetMilliKcal: 1_882_500, lowerBoundMilliKcal: 1_882_500 };
+    expect(snapshots('2026-10-14', standard, equal)[2]).toMatchObject({ budgetKcal: 1_882, lowerBoundKcal: 1_882 });
+  });
+
+  it('tragen IDs aus Person, Tag und Platz, die die Nutzlast von materializeDailyGoals verlangt', () => {
+    const goals = snapshots('2026-10-14').map((snapshot) => ({ id: dailyGoalId(philipp, day('2026-10-14'), snapshot.slot), snapshot }));
+    expect(MaterializeDailyGoals.safeParse({ localDate: '2026-10-14', goals }).success).toBe(true);
+    expect(dailyGoalId(philipp, day('2026-10-14'), 1)).toBe(dailyGoalId(philipp, day('2026-10-14'), 1));
+    const ids = [
+      dailyGoalId(philipp, day('2026-10-14'), 1),
+      dailyGoalId(philipp, day('2026-10-14'), 2),
+      dailyGoalId(philipp, day('2026-10-15'), 1),
+      dailyGoalId(anna, day('2026-10-14'), 1),
+    ];
+    expect(new Set(ids).size).toBe(4);
+    expect(dailyGoalsKey(philipp, day('2026-10-14'))).toBe(`tagesziele:${philipp}:2026-10-14`);
   });
 });
