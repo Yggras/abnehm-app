@@ -1,5 +1,7 @@
 import {
   ActivityType,
+  ImportedSportEntryUpsert,
+  ImportedWeightEntryUpsert,
   ManualSportMinutes,
   ManualWeightG,
   SportEntryRecord,
@@ -131,6 +133,14 @@ export const trackerFixtures = {
       'unbekannte Herkunft': { ...imported, origin: 'fitbit' },
       'mit Eigentümer': { ...sport, personId: philipp },
     },
+  }),
+  ImportedSportEntryUpsert: fixtures(ImportedSportEntryUpsert, {
+    valid: { 'Import über Apple Health': imported, 'Import über 600 Minuten': { ...imported, durationMinutes: 1440 } },
+    invalid: { 'manuell': sport, 'Import über 1440 Minuten': { ...imported, durationMinutes: 1441 }, 'ohne externen Schlüssel': without(imported, 'externalKey') },
+  }),
+  ImportedWeightEntryUpsert: fixtures(ImportedWeightEntryUpsert, {
+    valid: { 'Import mit genauen Gramm': importedWeight, 'Import an den Grenzen': { ...importedWeight, weightG: 350_000 } },
+    invalid: { 'manuell': weight, 'Import unter 20 kg': { ...importedWeight, weightG: 19_999 }, 'ohne externen Schlüssel': without(importedWeight, 'externalKey') },
   }),
   SportEntryRecord: fixtures(SportEntryRecord, {
     valid: { 'manuell kanonisch': { ...sport, ...owned }, 'Import kanonisch': { ...imported, ...owned } },
