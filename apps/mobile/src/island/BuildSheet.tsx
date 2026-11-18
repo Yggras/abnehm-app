@@ -1,5 +1,5 @@
 import { Canvas } from '@shopify/react-native-skia';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { color, EnergySymbol, pressedEdge, radius, size, space, Text, boxShadow } from '../design';
 import type { BlueprintOption } from './build-options';
@@ -8,7 +8,9 @@ import { buildTexts } from './texts';
 
 // Inhalt des Bau-Sheets (Spezifikation 4, Abschnitt 7; #192): die passenden Baupläne mit Vorschau und
 // Preis. Ist ein Bauplan zu teuer, steht dort neutral „Noch ‹n› Energie“, und er lässt sich nicht wählen.
-// Der Container ist das gemeinsame Sheet des Tabs „Momo“ (`HatchedIslandScreen`).
+// Der Container ist das gemeinsame Sheet des Tabs „Momo“ (`HatchedIslandScreen`) in voller Höhe; die Liste
+// scrollt. Ein Sheet nach Inhaltshöhe öffnet auf Android halb hoch (Material 3 ohne Snap-Punkte, `@expo/ui`
+// 58: `shouldSkipPartiallyExpanded`), dort lagen im Emulator die letzten Baupläne verdeckt darunter.
 
 export type BuildSheetProps = Readonly<{
   /** Nach Tipp auf ein freies eigenes Feld; sonst über „Bauen“. */
@@ -36,11 +38,11 @@ export function BuildSheet({ onField, energy, options, onChoose }: BuildSheetPro
       {options.length === 0 ? (
         <Text tone="inkMuted">{buildTexts.noFreeField}</Text>
       ) : (
-        <View style={styles.list}>
+        <ScrollView testID="bauplaene" style={styles.scroll} contentContainerStyle={styles.list}>
           {options.map((option) => (
             <BlueprintRow key={option.key} option={option} onPress={() => onChoose(option)} />
           ))}
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -84,10 +86,12 @@ function BlueprintRow({ option, onPress }: { option: BlueprintOption; onPress():
 }
 
 const styles = StyleSheet.create({
-  sheet: { gap: space[4] },
+  sheet: { flex: 1, gap: space[4] },
   header: { gap: space[1] },
   energy: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
-  list: { gap: space[2] },
+  scroll: { flex: 1 },
+  // Platz unten für die Sockelkante der letzten Zeile (`boxShadow` zählt nicht zur Höhe).
+  list: { gap: space[2], paddingBottom: size.plinthDepth },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

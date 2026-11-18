@@ -1,7 +1,7 @@
 /**
  * @jest-environment ./jest/skia-environment.js
  */
-import { act, fireEvent, screen, userEvent } from '@testing-library/react-native';
+import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native';
 import { router, Slot } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 import './testing/real-reanimated';
@@ -116,6 +116,17 @@ test('Tracer Bullet: über „Bauen“ eine Laterne wählen, ein leuchtendes Fel
   expect(screen.getByLabelText('0 Energie')).toBeOnTheScreen();
   // Bedarf(1) = 11: 3 von 11 sind 27 Prozent, abgerundet.
   expect(ownHalf()).toBe('Deine Hälfte zu 27 Prozent gefüllt');
+});
+
+test('die Baupläne stehen in einer scrollenden Liste, damit auf kleinen Bildschirmen und bei großer Schrift keiner verdeckt ist', async () => {
+  await openIsland(3);
+  await user.press(screen.getByRole('button', { name: 'Bauen' }));
+
+  // Im Emulator `medium_phone` öffnete das Sheet halb hoch, Beerenstrauch und Apfelbaum lagen darunter
+  // (Gerätelauf zu #192); die Liste scrollt deshalb in einem Sheet in voller Höhe.
+  const list = screen.getByTestId('bauplaene');
+  expect(list.type).toBe('RCTScrollView');
+  expect(within(list).getByRole('button', { name: 'Apfelbaum, 3 Energie' })).toBeOnTheScreen();
 });
 
 test('ein Bauplan der anderen Rolle leuchtet nur in der eigenen Ecke; Tipps auf andere Felder bauen nicht', async () => {

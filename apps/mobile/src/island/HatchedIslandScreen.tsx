@@ -149,7 +149,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, onOpen, re
         building={placing === null || placingFields === null ? null : { name: placing.name, fields: placingFields, onCancel: () => setPlacing(null) }}
         appearing={appearing}
       />
-      <Sheet visible={sheet !== null} onClose={() => setSheet(null)}>
+      <Sheet visible={sheet !== null} onClose={() => setSheet(null)} height={sheet?.type === 'bauen' ? 'full' : 'content'}>
         {sheet?.type === 'momo' ? (
           <MomoSheet appearance={island.appearance} level={island.progress.level} onGrowth={() => setSheet({ type: 'wachstum' })} />
         ) : sheet?.type === 'bauen' ? (
