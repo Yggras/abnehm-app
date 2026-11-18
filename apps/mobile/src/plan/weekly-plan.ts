@@ -1,9 +1,9 @@
 import { Weekday, type BausteinKey } from '@abnehm/contracts/base';
-import type { WeeklyPlanDays } from '@abnehm/contracts/plan';
+import { WeeklyPlanDays } from '@abnehm/contracts/plan';
 
 // Standard-Wochenplan aus dem Onboarding (Spezifikation 1, Abschnitt 4; #14): Die Person wählt nur
 // Sporttage und Wiegetag. Daraus entstehen die drei Momo-Plätze je Wochentag. Frei belegen lassen sich
-// die Plätze erst in den Einstellungen.
+// die Plätze erst in den Einstellungen (`freeWeeklyPlan`, #134).
 
 /** Wahl in Onboarding-Schritt 8: 0–6 Sporttage und genau ein Wiegetag, der kein Sporttag ist. */
 export type WeekChoice = Readonly<{ sportDays: readonly Weekday[]; weighDay: Weekday }>;
@@ -30,5 +30,26 @@ export function standardWeeklyPlan(
   return {
     type: 'gueltig',
     days: Object.fromEntries(Weekday.options.map((weekday) => [weekday, ['ernaehrung_erfasst', 'wasserziel', third(weekday)]])) as WeeklyPlanDays,
+  };
+}
+
+/** Die drei Plätze je Wochentag, wie sie der Wochenplan-Editor hält; geprüft wird erst `freeWeeklyPlan`. */
+export type WeeklyPlanInput = Readonly<Record<Weekday, readonly [BausteinKey, BausteinKey, BausteinKey]>>;
+
+/** Ein Wochentag, dessen drei Plätze nicht drei verschiedene Bausteine tragen. */
+export type WeeklyPlanDayError = Readonly<{ weekday: Weekday; error: 'bausteine_not_distinct' }>;
+
+/**
+ * Wochenplan aus den Einstellungen (Spezifikation 1, Abschnitt 4): jeder Wochentag frei mit drei
+ * verschiedenen Bausteinen, mehrere oder keine Wiegetage. Die Regel prüft das Vertragsschema
+ * `WeeklyPlanDays`; jeder Wochentag, den es beanstandet, wird ein Fehler.
+ */
+export function freeWeeklyPlan(days: WeeklyPlanInput): { type: 'gueltig'; days: WeeklyPlanDays } | { type: 'ungueltig'; errors: WeeklyPlanDayError[] } {
+  const parsed = WeeklyPlanDays.safeParse(days);
+  if (parsed.success) return { type: 'gueltig', days: parsed.data };
+  const rejected = new Set(parsed.error.issues.map((issue) => issue.path[0]));
+  return {
+    type: 'ungueltig',
+    errors: Weekday.options.filter((weekday) => rejected.has(weekday)).map((weekday) => ({ weekday, error: 'bausteine_not_distinct' })),
   };
 }

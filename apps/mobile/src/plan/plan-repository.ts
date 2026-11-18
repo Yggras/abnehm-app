@@ -45,15 +45,18 @@ export function readGoalVersion(tx: ReadContext, id: EntityId): StoredGoalVersio
 
 /** Die an einem Tag gültige Zielversion der Person: die mit dem größten `valid_from` ≤ Tag. */
 export function readGoalVersionOn(tx: ReadContext, personId: EntityId, localDate: LocalDate): StoredGoalVersion | undefined {
-  return storedGoalVersion(
-    sqliteOf(tx)
-      .select()
-      .from(goalVersion)
-      .where(and(eq(goalVersion.personId, personId), lte(goalVersion.validFrom, localDate), isNull(goalVersion.deletedAt)))
-      .orderBy(desc(goalVersion.validFrom))
-      .limit(1)
-      .get(),
-  );
+  return storedGoalVersion(goalVersionRowOn(tx, personId, localDate));
+}
+
+/** Die Zeile der Zielversion mit dem größten `valid_from` ≤ Tag; die eine Stelle dieser Regel in SQLite. */
+function goalVersionRowOn(tx: ReadContext, personId: EntityId, localDate: LocalDate) {
+  return sqliteOf(tx)
+    .select()
+    .from(goalVersion)
+    .where(and(eq(goalVersion.personId, personId), lte(goalVersion.validFrom, localDate), isNull(goalVersion.deletedAt)))
+    .orderBy(desc(goalVersion.validFrom))
+    .limit(1)
+    .get();
 }
 
 function storedGoalVersion(row: typeof goalVersion.$inferSelect | undefined): StoredGoalVersion | undefined {
@@ -121,16 +124,18 @@ export function readWeeklyPlan(tx: ReadContext, id: EntityId): StoredWeeklyPlan 
 
 /** Die an einem Tag gültige Wochenplanversion der Person samt ihrer sieben Tage. */
 export function readWeeklyPlanOn(tx: ReadContext, personId: EntityId, localDate: LocalDate): StoredWeeklyPlan | undefined {
-  return storedWeeklyPlan(
-    tx,
-    sqliteOf(tx)
-      .select(weeklyPlanColumns)
-      .from(weeklyPlanVersion)
-      .where(and(eq(weeklyPlanVersion.personId, personId), lte(weeklyPlanVersion.validFrom, localDate), isNull(weeklyPlanVersion.deletedAt)))
-      .orderBy(desc(weeklyPlanVersion.validFrom))
-      .limit(1)
-      .get(),
-  );
+  return storedWeeklyPlan(tx, weeklyPlanRowOn(tx, personId, localDate));
+}
+
+/** Die Zeile der Wochenplanversion mit dem größten `valid_from` ≤ Tag, ohne ihre Tage. */
+function weeklyPlanRowOn(tx: ReadContext, personId: EntityId, localDate: LocalDate) {
+  return sqliteOf(tx)
+    .select(weeklyPlanColumns)
+    .from(weeklyPlanVersion)
+    .where(and(eq(weeklyPlanVersion.personId, personId), lte(weeklyPlanVersion.validFrom, localDate), isNull(weeklyPlanVersion.deletedAt)))
+    .orderBy(desc(weeklyPlanVersion.validFrom))
+    .limit(1)
+    .get();
 }
 
 function storedWeeklyPlan(tx: ReadContext, version: { id: string; validFrom: string; serverVersion: string | null } | undefined): StoredWeeklyPlan | undefined {
@@ -163,24 +168,11 @@ export function removeUnconfirmedWeeklyPlan(tx: TransactionContext, id: EntityId
 
 /** Gültiger Plan eines Tags aus SQLite samt Vertragsprüfung; die Abbildung teilt die App mit dem `PlanReader` des Servers. */
 export function readEffectivePlan(tx: ReadContext, personId: EntityId, localDate: LocalDate): ReturnType<typeof effectivePlanOf> {
-  const db = sqliteOf(tx);
-  const goal = db
-    .select()
-    .from(goalVersion)
-    .where(and(eq(goalVersion.personId, personId), lte(goalVersion.validFrom, localDate), isNull(goalVersion.deletedAt)))
-    .orderBy(desc(goalVersion.validFrom))
-    .limit(1)
-    .get();
-  const weeklyPlan = db
-    .select({ id: weeklyPlanVersion.id, validFrom: weeklyPlanVersion.validFrom })
-    .from(weeklyPlanVersion)
-    .where(and(eq(weeklyPlanVersion.personId, personId), lte(weeklyPlanVersion.validFrom, localDate), isNull(weeklyPlanVersion.deletedAt)))
-    .orderBy(desc(weeklyPlanVersion.validFrom))
-    .limit(1)
-    .get();
+  const goal = goalVersionRowOn(tx, personId, localDate);
+  const weeklyPlan = weeklyPlanRowOn(tx, personId, localDate);
   const day = weeklyPlan === undefined
     ? undefined
-    : db.select().from(weeklyPlanDay)
+    : sqliteOf(tx).select().from(weeklyPlanDay)
       .where(and(eq(weeklyPlanDay.weeklyPlanVersionId, weeklyPlan.id), eq(weeklyPlanDay.weekday, weekdayOf(localDate))))
       .get();
   return effectivePlanOf(localDate, { goal, weeklyPlan, day });

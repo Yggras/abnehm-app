@@ -1,5 +1,5 @@
 import type { Clock } from '@abnehm/clock';
-import { EntityId, Instant, LocalDate, localDateAfter, Weekday, type BausteinKey } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, localDateAfter, Weekday } from '@abnehm/contracts/base';
 import { planChangeDays } from '@abnehm/contracts/daily-goals';
 import type { ContractError } from '@abnehm/contracts/errors';
 import { ageOn, calculateGoals, type GoalCalculatorInput, type GoalCalculatorResult, type GoalInputError } from '@abnehm/contracts/goal-calculator';
@@ -22,7 +22,7 @@ import { updateOwnPerson, type SyncWriter } from '../sync';
 import { createDailyGoalMaterialization } from './daily-goals';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
-import { standardWeeklyPlan, type WeekChoice, type WeekChoiceError } from './weekly-plan';
+import { freeWeeklyPlan, standardWeeklyPlan, type WeekChoice, type WeekChoiceError, type WeeklyPlanDayError, type WeeklyPlanInput } from './weekly-plan';
 
 export type PlanDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl schreibt in genau einer Transaktion darin. */
@@ -80,12 +80,6 @@ export type GoalChangeResult =
   | Readonly<{ type: 'unveraendert'; validFrom: LocalDate }>
   /** Der Entwurf verletzt eine Eingabegrenze; geschrieben wurde nichts. */
   | Readonly<{ type: 'ungueltig'; errors: GoalInputError[] }>;
-
-/** Die drei Plätze je Wochentag, wie sie der Wochenplan-Editor hält; geprüft wird erst im Befehl. */
-export type WeeklyPlanInput = Readonly<Record<Weekday, readonly [BausteinKey, BausteinKey, BausteinKey]>>;
-
-/** Ein Wochentag, dessen drei Plätze nicht drei verschiedene Bausteine tragen. */
-export type WeeklyPlanDayError = Readonly<{ weekday: Weekday; error: 'bausteine_not_distinct' }>;
 
 export type WeeklyPlanChangeResult =
   | Readonly<{ type: 'gespeichert'; validFrom: LocalDate; weeklyPlanVersionId: EntityId }>
@@ -165,17 +159,17 @@ export function createPlan(dependencies: PlanDependencies): Plan {
   const dailyGoals = createDailyGoalMaterialization({ clock, writer, persistence });
 
   return {
-    preview: (draft) => calculateGoals(calculatorInput(draft, moment().today)),
+    preview: (draft) => calculateGoals(calculatorInput(draft, readClock().today)),
 
     async saveInitialPlan(draft) {
       // Eine Ablesung für Messzeitpunkt, Tag und Zeitstempel, damit alles zum selben Moment gehört.
-      const { today, tomorrow, at } = moment();
-      const { personId, validFrom, base } = database.read((tx) => {
+      const { today, tomorrow, at } = readClock();
+      const { personId, validFrom, inForce } = database.read((tx) => {
         const own = EntityId.parse(requireOwnPerson(tx).id);
         const from = hasPlanOn(tx, own, today) ? tomorrow : today;
-        return { personId: own, validFrom: from, base: readGoalVersionOn(tx, own, from) };
+        return { personId: own, validFrom: from, inForce: readGoalVersionOn(tx, own, from) };
       });
-      const goal = goalVersionFor(draft, validFrom, base);
+      const goal = goalVersionFor(draft, validFrom, inForce);
       const week = standardWeeklyPlan(draft);
       const errors = [...(goal.type === 'ungueltig' ? goal.errors : []), ...(week.type === 'ungueltig' ? week.errors : [])];
       if (goal.type === 'ungueltig' || week.type === 'ungueltig') return { type: 'ungueltig', errors };
@@ -211,7 +205,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     },
 
     changeGoals(draft) {
-      const { today, tomorrow, at } = moment();
+      const { today, tomorrow, at } = readClock();
       return database.transaction((tx): GoalChangeResult => {
         const personId = EntityId.parse(requireOwnPerson(tx).id);
         const goal = goalVersionFor(draft, tomorrow, readGoalVersionOn(tx, personId, tomorrow));
@@ -223,12 +217,10 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     },
 
     changeWeeklyPlan(days) {
-      const { today, tomorrow, at } = moment();
-      const errors = Weekday.options
-        .filter((weekday) => new Set(days[weekday]).size !== 3)
-        .map((weekday): WeeklyPlanDayError => ({ weekday, error: 'bausteine_not_distinct' }));
-      if (errors.length > 0) return { type: 'ungueltig', errors };
-      const weeklyPlan = CreateWeeklyPlanVersion.parse({ validFrom: tomorrow, days });
+      const { today, tomorrow, at } = readClock();
+      const week = freeWeeklyPlan(days);
+      if (week.type === 'ungueltig') return week;
+      const weeklyPlan = CreateWeeklyPlanVersion.parse({ validFrom: tomorrow, days: week.days });
       return database.transaction((tx): WeeklyPlanChangeResult => {
         const personId = EntityId.parse(requireOwnPerson(tx).id);
         if (!saveWeeklyPlan(tx, personId, weeklyPlan, at)) return { type: 'unveraendert', validFrom: tomorrow };
@@ -238,7 +230,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     },
 
     settings() {
-      const { today, tomorrow } = moment();
+      const { today, tomorrow } = readClock();
       return database.read((tx) => {
         const personId = EntityId.parse(requireOwnPerson(tx).id);
         const currentGoal = readGoalVersionOn(tx, personId, today)?.values ?? null;
@@ -271,14 +263,14 @@ export function createPlan(dependencies: PlanDependencies): Plan {
   };
 
   /** Heute, morgen und der Zeitpunkt aus einer Ablesung der Uhr. */
-  function moment() {
+  function readClock() {
     const reading = clock.read();
     const today = LocalDate.parse(reading.localDate);
     return { today, tomorrow: localDateAfter(today, 1), at: Instant.parse(reading.instant) };
   }
 
   /**
-   * Die vollständige Zielversion ab `validFrom` zu einem Entwurf. `base` ist die an diesem Tag ohne die
+   * Die vollständige Zielversion ab `validFrom` zu einem Entwurf. `inForce` ist die an diesem Tag ohne die
    * Änderung gültige Fassung: Trägt sie ein Budget aus einem angenommenen Budgetvorschlag und nennt der
    * Entwurf genau dieses als manuelles Budget, bleibt es samt Herkunft erhalten, auch außerhalb des
    * 10-kcal-Rasters. Der Server bindet die Herkunft ebenso an die vorige Fassung.
@@ -286,10 +278,10 @@ export function createPlan(dependencies: PlanDependencies): Plan {
   function goalVersionFor(
     draft: GoalDraft,
     validFrom: LocalDate,
-    base: StoredGoalVersion | undefined,
+    inForce: StoredGoalVersion | undefined,
   ): { type: 'gueltig'; version: CreateGoalVersion } | { type: 'ungueltig'; errors: GoalInputError[] } {
-    const suggestedBudget = base?.values.budgetSource === 'budgetvorschlag' && draft.manualBudgetKcal !== null &&
-      draft.manualBudgetKcal * 1_000 === base.values.calorieBudgetMilliKcal ? base.values.calorieBudgetMilliKcal : null;
+    const suggestedBudget = inForce?.values.budgetSource === 'budgetvorschlag' && draft.manualBudgetKcal !== null &&
+      draft.manualBudgetKcal * 1_000 === inForce.values.calorieBudgetMilliKcal ? inForce.values.calorieBudgetMilliKcal : null;
     const input = calculatorInput({ ...draft, manualBudgetKcal: suggestedBudget === null ? draft.manualBudgetKcal : null }, validFrom);
     const calculation = calculateGoals(input);
     if (calculation.type === 'ungueltig') return calculation;
@@ -305,15 +297,15 @@ export function createPlan(dependencies: PlanDependencies): Plan {
    * gültigen Fassung, entsteht nichts, und das Ergebnis ist `false`.
    */
   function saveGoalVersion(tx: TransactionContext, personId: EntityId, goal: CreateGoalVersion, at: Instant): boolean {
-    const base = readGoalVersionOn(tx, personId, goal.validFrom);
-    if (base !== undefined && sameValues({ ...base.values, validFrom: goal.validFrom }, goal)) return false;
+    const inForce = readGoalVersionOn(tx, personId, goal.validFrom);
+    if (inForce !== undefined && sameValues({ ...inForce.values, validFrom: goal.validFrom }, goal)) return false;
     const id = goalVersionId(personId, goal.validFrom);
     writeGoalVersion(tx, id, personId, goal, at);
     writer.command(tx, {
       type: 'createGoalVersion',
       businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),
       payload: goal,
-      knownServerVersion: base?.values.validFrom === goal.validFrom ? base.serverVersion : null,
+      knownServerVersion: inForce?.values.validFrom === goal.validFrom ? inForce.serverVersion : null,
       affectedRefs: [{ entityType: goalVersionEntity.entityType, entityId: id }],
       referencePaths: [],
     });
@@ -322,15 +314,15 @@ export function createPlan(dependencies: PlanDependencies): Plan {
 
   /** Wie `saveGoalVersion` für die Wochenplanversion samt ihrer sieben Tage. */
   function saveWeeklyPlan(tx: TransactionContext, personId: EntityId, weeklyPlan: CreateWeeklyPlanVersion, at: Instant): boolean {
-    const base = readWeeklyPlanOn(tx, personId, weeklyPlan.validFrom);
-    if (base !== undefined && sameValues(base.days, weeklyPlan.days)) return false;
+    const inForce = readWeeklyPlanOn(tx, personId, weeklyPlan.validFrom);
+    if (inForce !== undefined && sameValues(inForce.days, weeklyPlan.days)) return false;
     const id = weeklyPlanVersionId(personId, weeklyPlan.validFrom);
     writeWeeklyPlan(tx, id, personId, weeklyPlan, at);
     writer.command(tx, {
       type: 'createWeeklyPlanVersion',
       businessKey: planVersionKey('wochenplan', personId, weeklyPlan.validFrom, newId()),
       payload: weeklyPlan,
-      knownServerVersion: base?.validFrom === weeklyPlan.validFrom ? base.serverVersion : null,
+      knownServerVersion: inForce?.validFrom === weeklyPlan.validFrom ? inForce.serverVersion : null,
       affectedRefs: [{ entityType: weeklyPlanVersionEntity.entityType, entityId: id }],
       referencePaths: [],
     });

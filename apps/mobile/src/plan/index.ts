@@ -10,8 +10,6 @@ export {
   type GoalVersionField,
   type PlanSettings,
   type WeeklyPlanChangeResult,
-  type WeeklyPlanDayError,
-  type WeeklyPlanInput,
   type InitialPlanDraft,
   type InitialPlanResult,
   type Plan,
@@ -20,4 +18,11 @@ export {
 export { followDailyGoalTriggers } from './daily-goal-triggers';
 export { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from './plan-entities';
 export { planReaderOf } from './plan-reader';
-export { preselectedWeekChoice, standardWeeklyPlan, type WeekChoice, type WeekChoiceError } from './weekly-plan';
+export {
+  preselectedWeekChoice,
+  standardWeeklyPlan,
+  type WeekChoice,
+  type WeekChoiceError,
+  type WeeklyPlanDayError,
+  type WeeklyPlanInput,
+} from './weekly-plan';
