@@ -24,9 +24,10 @@ const questions: readonly { key: Question; text: { question: string; name: strin
 ];
 
 /**
- * Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9): zwei Fragen und der BMI aus
- * Schritt 3. Bei „ja“ oder BMI < 18,5 zeigt die Vorschau des Zielrechners den erzwungenen Haltemodus
- * mit Hinweis auf ärztliche Begleitung; chronische Erkrankungen erhalten nur einen Hinweis ohne Sperre.
+ * Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9): der BMI aus Schritt 3 und zwei
+ * Fragen. Bei „ja“ oder BMI < 18,5 zeigt die Vorschau des Zielrechners den erzwungenen Haltemodus mit
+ * Hinweis auf ärztliche Begleitung direkt unter den Fragen, damit er auf dem iPhone SE beim Antworten im
+ * Bild ist (Impeccable-critique); chronische Erkrankungen erhalten nur einen Hinweis ohne Sperre.
  * Die Antworten liegen sofort im lokalen Entwurf. Ohne Netz.
  */
 export function SafetyCheckStep({ onBack, onNext }: SafetyCheckStepProps) {
@@ -44,6 +45,16 @@ export function SafetyCheckStep({ onBack, onNext }: SafetyCheckStepProps) {
       primary={{ label: onboardingTexts.next, onPress: () => (answered ? onNext() : undefined), disabled: !answered }}
     >
       <Text>{texts.intro}</Text>
+
+      {check === null ? null : (
+        <View style={styles.group}>
+          <Text variant="label">{texts.bmi}</Text>
+          <Text variant="title">{bmiText(check.bmi)}</Text>
+          <Text variant="caption" tone="inkMuted">
+            {texts.bmiSource}
+          </Text>
+        </View>
+      )}
 
       {questions.map(({ key, text }) => (
         <View key={key} style={styles.group}>
@@ -65,16 +76,6 @@ export function SafetyCheckStep({ onBack, onNext }: SafetyCheckStepProps) {
           </View>
         </View>
       ))}
-
-      {check === null ? null : (
-        <View style={styles.group}>
-          <Text variant="label">{texts.bmi}</Text>
-          <Text variant="title">{bmiText(check.bmi)}</Text>
-          <Text variant="caption" tone="inkMuted">
-            {texts.bmiSource}
-          </Text>
-        </View>
-      )}
 
       {check === null || check.triggers.length === 0 ? null : (
         <Notice tone="hint" icon="info" text={texts.maintenanceForced(check.triggers)} />

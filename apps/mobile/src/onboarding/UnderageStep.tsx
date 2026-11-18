@@ -1,7 +1,13 @@
-import { Text } from '../design';
+import { StyleSheet, View } from 'react-native';
+
+import { space, Text } from '../design';
 import { LogoutArea } from '../settings';
+import { MomoFigure } from '../shell/MomoFigure';
 import { OnboardingFrame } from './OnboardingFrame';
 import { underageTexts as texts } from './texts';
+
+/** Größe von Momo auf dem Sperrbildschirm; Designwert ohne Beleg, kleiner als im Willkommen (160). */
+const momoSize = 120;
 
 export type UnderageStepProps = {
   /** Zurück zu Schritt 3, um das Geburtsdatum zu korrigieren. */
@@ -21,9 +27,17 @@ export function UnderageStep({ onCorrectDate }: UnderageStepProps) {
       onBack={onCorrectDate}
       primary={{ label: texts.correctDate, onPress: onCorrectDate }}
     >
+      {/* Momo macht die Sperre freundlich statt abweisend (Impeccable-critique). */}
+      <View style={styles.momo}>
+        <MomoFigure mood="zufrieden" size={momoSize} />
+      </View>
       <Text>{texts.text}</Text>
       <Text>{texts.typo}</Text>
       <LogoutArea />
     </OnboardingFrame>
   );
 }
+
+const styles = StyleSheet.create({
+  momo: { alignItems: 'center', paddingVertical: space[2] },
+});

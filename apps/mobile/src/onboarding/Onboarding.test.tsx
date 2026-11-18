@@ -350,7 +350,7 @@ describe('Schritt 3 „Körperdaten“', () => {
     await next();
 
     expect(screen.getByText('Bitte wähle einen Wert für die Berechnung.')).toBeOnTheScreen();
-    expect(screen.getByText('Bitte wähle dein Geburtsdatum.')).toBeOnTheScreen();
+    expect(screen.getByText('Tippe auf das Datum und wähle dein Geburtsdatum.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Größe')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib deine Größe ein.');
     expect(screen.getByLabelText('Aktuelles Gewicht')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib dein aktuelles Gewicht ein.');
 
@@ -435,7 +435,7 @@ describe('Sperre unter 18', () => {
 });
 
 describe('Schritt 4 „Sicherheits-Check“', () => {
-  const forced = /ohne Kaloriendefizit: im Haltemodus.*ärztlich begleiten/;
+  const forced = /ohne Kaloriendefizit: Dein Kalorienbudget deckt deinen geschätzten Tagesbedarf \(Haltemodus\)\..*ärztlich begleiten/;
   const chronic = 'Hast du eine chronische Erkrankung? Dann sprich vor dem Abnehmen mit deiner Ärztin oder deinem Arzt.';
 
   async function openStepFour(body: Parameters<typeof fillBody>[0] = {}) {
@@ -597,7 +597,7 @@ describe('Zugänglichkeit', () => {
     // Ausgewählt heißt Zustand und Häkchen, der Haltemodus ein Satz mit Symbol (#95).
     expect(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' })).toBeChecked();
     expect(within(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' })).getByTestId('icon-check', { includeHiddenElements: true })).toBeOnTheScreen();
-    expect(screen.getByText(/im Haltemodus/)).toBeOnTheScreen();
+    expect(screen.getByText(/\(Haltemodus\)/)).toBeOnTheScreen();
     await expectAccessible();
   });
 });

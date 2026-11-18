@@ -6,7 +6,7 @@ import { LocalDate } from '@abnehm/contracts/base';
 import { CalculationSex } from '@abnehm/contracts/person';
 
 import { useClock } from '../clock/clock-context';
-import { Chip, DateTimePicker, space, Text, TextField, type TextFieldHandle } from '../design';
+import { Chip, DateTimePicker, ProblemMessage, space, Text, TextField, type TextFieldHandle } from '../design';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { gramsOfKgText } from '../trackers/kg-text';
 import type { BodyDataProblem } from './body-data';
@@ -110,11 +110,7 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
             />
           ))}
         </View>
-        {sexProblem === undefined ? null : (
-          <Text variant="label" tone="problem">
-            {sexProblem}
-          </Text>
-        )}
+        {sexProblem === undefined ? null : <ProblemMessage text={sexProblem} />}
       </View>
 
       <View style={styles.group}>
@@ -122,19 +118,20 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
         <Text variant="label" importantForAccessibility="no">
           {texts.birthDate}
         </Text>
-        <DateTimePicker
-          label={texts.birthDate}
-          mode="date"
-          value={startOfLocalDate(birthDate, now.timeZone)}
-          onChange={(instant) => change({ birthDate: readingOf(instant, now.timeZone).localDate }, ['birth_date_missing'])}
-          timeZone={now.timeZone}
-          minimum={startOfLocalDate(earliestBirthDate, now.timeZone)}
-          maximum={now.instant}
-        />
+        {/* Linksbündig gehalten: Ohne Hülle rückte die iOS-Pille nach „Zurück“ ein (Impeccable-critique). */}
+        <View style={styles.picker}>
+          <DateTimePicker
+            label={texts.birthDate}
+            mode="date"
+            value={startOfLocalDate(birthDate, now.timeZone)}
+            onChange={(instant) => change({ birthDate: readingOf(instant, now.timeZone).localDate }, ['birth_date_missing'])}
+            timeZone={now.timeZone}
+            minimum={startOfLocalDate(earliestBirthDate, now.timeZone)}
+            maximum={now.instant}
+          />
+        </View>
         {birthDateProblem !== undefined ? (
-          <Text variant="label" tone="problem">
-            {birthDateProblem}
-          </Text>
+          <ProblemMessage text={birthDateProblem} />
         ) : draft.birthDate === undefined ? (
           <Text variant="caption" tone="inkMuted">
             {texts.birthDateUnset}
@@ -177,4 +174,5 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
 const styles = StyleSheet.create({
   group: { gap: space[1] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], paddingTop: space[1] },
+  picker: { flexDirection: 'row', justifyContent: 'flex-start' },
 });

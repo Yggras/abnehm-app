@@ -74,7 +74,8 @@ export const bodyDataTexts = {
   sexExplanation: 'Die Formel für deinen Grundumsatz kennt nur zwei Werte: weiblich und männlich. Wähle den, mit dem gerechnet werden soll.',
   sexValues: { weiblich: 'weiblich', maennlich: 'männlich' },
   birthDate: 'Geburtsdatum',
-  birthDateUnset: 'Noch nicht gewählt',
+  /** Der Picker zeigt eine Vorauswahl, die nicht als Eingabe zählt; der Satz nennt deshalb die Handlung (Impeccable-critique). */
+  birthDateUnset: 'Tippe auf das Datum und wähle dein Geburtsdatum.',
   height: 'Größe',
   heightHint: `${heightCm.min} bis ${heightCm.max} cm`,
   weight: 'Aktuelles Gewicht',
@@ -84,7 +85,7 @@ export const bodyDataTexts = {
   weightInvalid,
   problems: {
     calculation_sex_missing: 'Bitte wähle einen Wert für die Berechnung.',
-    birth_date_missing: 'Bitte wähle dein Geburtsdatum.',
+    birth_date_missing: 'Tippe auf das Datum und wähle dein Geburtsdatum.',
     height_missing: 'Bitte gib deine Größe ein.',
     weight_missing: 'Bitte gib dein aktuelles Gewicht ein.',
     height_out_of_range: heightInvalid,
@@ -108,7 +109,8 @@ function germanList(items: readonly string[]): string {
 
 /**
  * Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9; User Stories 9–13). Der
- * erzwungene Haltemodus rechnet ohne Defizit, das Budget ist dann der Gesamtumsatz (Abschnitt 3).
+ * erzwungene Haltemodus rechnet ohne Defizit, das Budget ist dann der Gesamtumsatz (Abschnitt 3); der Text
+ * sagt „geschätzter Tagesbedarf“, weil die App „Gesamtumsatz“ erst in Schritt 7 erklärt.
  * Hinweise sind neutral und nie in `problem`-Farbe (Abschnitt 6).
  */
 export const safetyCheckTexts = {
@@ -120,7 +122,7 @@ export const safetyCheckTexts = {
   bmi: 'Dein BMI',
   bmiSource: 'Aus deiner Größe und deinem aktuellen Gewicht',
   maintenanceForced: (triggers: readonly SafetyTrigger[]) =>
-    `Wegen ${germanList(triggers.map((trigger) => safetyReasons[trigger]))} rechnet die App für dich ohne Kaloriendefizit: im Haltemodus, mit einem Kalorienbudget in Höhe deines Gesamtumsatzes. Wenn du abnehmen möchtest, lass dich bitte ärztlich begleiten.`,
+    `Wegen ${germanList(triggers.map((trigger) => safetyReasons[trigger]))} rechnet die App für dich ohne Kaloriendefizit: Dein Kalorienbudget deckt deinen geschätzten Tagesbedarf (Haltemodus). Wenn du abnehmen möchtest, lass dich bitte ärztlich begleiten.`,
   chronicIllness: 'Hast du eine chronische Erkrankung? Dann sprich vor dem Abnehmen mit deiner Ärztin oder deinem Arzt.',
   answerRequired: 'Beantworte beide Fragen, um weiterzumachen.',
 } as const;
