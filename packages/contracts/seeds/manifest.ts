@@ -26,6 +26,8 @@ export const seedFormatVersion = 1;
  * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113), `zwei_installationen` und
  * `offline_sync` die Mehrgeräte- und Sync-Szenarien (#116). `solo-energie` (Laichkugel solo mit
  * gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
+ * `tage_ohne_app_oeffnung` und `zeitzonen_reisen` sind „Tage ohne App-Öffnung“ und „Zeitzonen“ aus
+ * Spezifikation 1, Abschnitt 12 (#131).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -49,6 +51,8 @@ export const SeedScenarioKey = z.enum([
   'offline_sync',
   'solo-energie',
   'rollenwahl-offen',
+  'tage_ohne_app_oeffnung',
+  'zeitzonen_reisen',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 
@@ -138,6 +142,21 @@ export const SeedStep = z.discriminatedUnion('type', [
     cause: DailyGoalCause.exclude(['pull']),
     operationIds: z.array(EntityId),
     at: Instant.optional(),
+  }),
+  /**
+   * Ein Auslöser von „Tagesziele sicherstellen“ des Plan-Moduls (Spezifikation 1, Abschnitt 5; #131) auf
+   * einer Installation, etwa die App-Öffnung: Er legt heute und die fehlenden Tage der letzten 7 lokalen
+   * Tage an und meldet abgelaufene Tage mit `tagesabschluss`. Die Operations-IDs seiner Fachbefehle
+   * (`materializeDailyGoals`, dazu Erfüllungen und Tagesbonus) vergibt der Sync-Writer der Reihe nach aus
+   * `operationIds`. `at` und `timeZone` stellen die Uhr des Geräts für diesen Auslöser, etwa nach einer
+   * Reise; danach steht das Gerät wieder auf der Uhr und Zone des Manifests.
+   */
+  z.strictObject({
+    type: z.literal('tagesziele_sicherstellen'),
+    installation: SeedKey,
+    operationIds: z.array(EntityId),
+    at: Instant.optional(),
+    timeZone: TimeZone.optional(),
   }),
   /**
    * Ein Mitglied entkoppelt über den Entkopplungs-Kern (#107) in eigener Transaktion, wie es der Befehl
@@ -255,7 +274,7 @@ export const SeedManifest = z
     // Eine Operations-ID gibt es nur einmal: in den Outboxen des Ausgangszustands und in den Schritten.
     const operationIds = [
       ...Object.values(manifest.initial.devices).flatMap((device) => device.outbox.map((operation) => operation.operationId)),
-      ...manifest.steps.flatMap((step) => (step.type === 'tagesziele_auswerten' ? step.operationIds : [])),
+      ...manifest.steps.flatMap((step) => ('operationIds' in step ? step.operationIds : [])),
     ];
     for (const value of duplicates(operationIds)) problem(`Operations-ID doppelt: ${value}`);
 

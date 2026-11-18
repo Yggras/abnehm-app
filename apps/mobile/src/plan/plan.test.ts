@@ -220,6 +220,8 @@ describe('Erstplan speichern', () => {
       ['upsert_entity', 'person'],
       ['createGoalVersion', `zielversion:${philipp}:2026-10-14`],
       ['createWeeklyPlanVersion', `wochenplan:${philipp}:2026-10-14`],
+      // Seit #131 entstehen die heutigen Tagesziele in derselben Transaktion.
+      ['materializeDailyGoals', `tagesziele:${philipp}:2026-10-14`],
     ]);
   });
 
@@ -259,6 +261,7 @@ describe('Erstplan speichern', () => {
     expect(operations().filter((operation) => operation.type !== 'upsert_entity').map((operation) => operation.type)).toEqual([
       'createGoalVersion',
       'createWeeklyPlanVersion',
+      'materializeDailyGoals',
     ]);
   });
 

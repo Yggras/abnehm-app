@@ -1,4 +1,4 @@
-import { Instant, TimeZone, type LocalDate } from '@abnehm/contracts/base';
+import { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 
 import { readingAt } from './reading.ts';
 
@@ -38,6 +38,30 @@ export interface Clock {
  */
 export function readingOf(instant: Instant, timeZone: TimeZone): ClockReading {
   return readingAt(Date.parse(Instant.parse(instant)), timeZone);
+}
+
+const minuteMs = 60_000;
+/** Offsets liegen zwischen UTC−12 und UTC+14; 15 Stunden um UTC-Mitternacht schließen jeden Tagesbeginn ein. */
+const searchWindowMinutes = 15 * 60;
+
+/**
+ * Erster Zeitpunkt eines lokalen Tags in einer Zone, etwa für `dayEndsAt` als Beginn des Folgetags
+ * (#131). Fällt Mitternacht durch eine Umstellung aus, beginnt der Tag mit der ersten Minute, die ihn
+ * abliest. Gesucht wird minutengenau, weil Zonen nur auf ganzen Minuten umstellen. Liest keine Uhr.
+ */
+export function startOfLocalDate(localDate: LocalDate, timeZone: TimeZone): Instant {
+  const target = LocalDate.parse(localDate);
+  const [year, month, day] = target.split('-').map(Number) as [number, number, number];
+  const utcMidnight = Date.UTC(year, month - 1, day) / minuteMs;
+  // Kleinste Minute, deren Ablesung den Tag erreicht hat; lokale Tage ordnen sich als Zeichenfolgen.
+  let low = utcMidnight - searchWindowMinutes;
+  let high = utcMidnight + searchWindowMinutes;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (readingAt(middle * minuteMs, timeZone).localDate >= target) high = middle;
+    else low = middle + 1;
+  }
+  return readingAt(low * minuteMs, timeZone).instant;
 }
 
 /**

@@ -14,10 +14,11 @@ import {
 } from '@abnehm/contracts/plan';
 import type { Pace, WeightRecorder } from '@abnehm/contracts/ports';
 
-import type { DailyGoalPersistence } from '../daily-goals';
+import type { DailyGoalPersistence, MissingDaysHook } from '../daily-goals';
 import type { LocalDatabase, TransactionContext } from '../local-db';
-import { requireOwnPerson } from '../local-db/person-header';
+import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import { updateOwnPerson, type SyncWriter } from '../sync';
+import { createDailyGoalMaterialization } from './daily-goals';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersion, readWeeklyPlan, writeGoalVersion, writeWeeklyPlan } from './plan-repository';
 import { standardWeeklyPlan, type WeekChoice, type WeekChoiceError } from './weekly-plan';
@@ -76,9 +77,25 @@ export type Plan = Readonly<{
    * Erstplan speichern (Onboarding-Schritt 8): erst das Startgewicht über den `WeightRecorder`, dann in
    * einer lokalen Transaktion samt Outbox die Personenfelder, die Zielversion und die Wochenplanversion ab
    * heute sowie die Meldung der Tage bis heute + 13 mit `planaenderung`. Der Onboarding-Stand bleibt
-   * `begonnen`. Erneutes Speichern ersetzt die Fassungen desselben Tags und schreibt nur, was sich geändert hat.
+   * `begonnen`. Erneutes Speichern ersetzt die Fassungen desselben Tags und schreibt nur, was sich geändert hat;
+   * die heutigen Tagesziele behalten die Werte des ersten Speicherns (Widerspruch zu Spezifikation 1,
+   * Abschnitt 4, offen in #134 und #144).
    */
   saveInitialPlan(draft: InitialPlanDraft): Promise<InitialPlanResult>;
+  /**
+   * Tagesziele sicherstellen (Spezifikation 1, Abschnitt 5), bei jedem Auslöser: App-Start, Rückkehr in
+   * den Vordergrund und lokaler Tageswechsel bei geöffneter App. In einer lokalen Transaktion legt es
+   * heute und die fehlenden Tage der letzten 7 lokalen Tage an, nie vor dem ersten `valid_from`, und
+   * meldet jeden materialisierten Tag des Fensters mit abgelaufenem `dayEndsAt` mit `tagesabschluss` an
+   * `reevaluateDailyGoals`. Ohne eigene Person tut es nichts.
+   */
+  ensureDailyGoals(): void;
+  /**
+   * Materialisierung für den Haken fehlender Tage am Persistenzdienst; der Composition Root meldet sie
+   * mit `registerMissingDaysHook` an. Ein Eintrag für einen fehlenden Tag im Nachholfenster legt den Tag
+   * dann in derselben Transaktion an, bevor der Dienst ihn auswertet.
+   */
+  materializeMissingDays: MissingDaysHook;
 }>;
 
 /**
@@ -88,6 +105,7 @@ export type Plan = Readonly<{
  */
 export function createPlan(dependencies: PlanDependencies): Plan {
   const { database, clock, writer, persistence, weightRecorder, newId } = dependencies;
+  const dailyGoals = createDailyGoalMaterialization({ clock, writer, persistence });
 
   const calculatorInput = (draft: GoalDraft, today: LocalDate): GoalCalculatorInput => ({
     calculationDate: today,
@@ -139,6 +157,11 @@ export function createPlan(dependencies: PlanDependencies): Plan {
         }, at);
         saveGoalVersion(tx, personId, goal, at);
         saveWeeklyPlan(tx, personId, weeklyPlan, at);
+        // „Erstplan speichern“ ist ein Auslöser: Die heutigen Tagesziele entstehen mit den Fassungen und
+        // werden sofort ausgewertet, sodass ein Startgewicht am Wiegetag „Gewogen“ erfüllt. Wie jeder
+        // Auslöser holt er fehlende Tage nach und meldet abgelaufene mit `tagesabschluss` (#131). Den
+        // heutigen Tag meldet die Planänderung.
+        dailyGoals.ensure(tx, personId, { reportCreatedOpenDays: false });
         persistence.reevaluateDailyGoals(tx, personId, planChangeDays(today, today), 'planaenderung');
       });
       return {
@@ -148,6 +171,15 @@ export function createPlan(dependencies: PlanDependencies): Plan {
         weeklyPlanVersionId: weeklyPlanVersionId(personId, today),
       };
     },
+
+    ensureDailyGoals() {
+      database.transaction((tx) => {
+        const own = readOwnPerson(tx);
+        if (own !== undefined) dailyGoals.ensure(tx, EntityId.parse(own.id));
+      });
+    },
+
+    materializeMissingDays: dailyGoals.missingDaysHook,
   };
 
   /** Legt die Zielversion an oder ersetzt die desselben Tags; eine unveränderte bleibt ohne neuen Befehl. */
