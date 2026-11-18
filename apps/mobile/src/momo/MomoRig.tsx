@@ -78,7 +78,6 @@ function JointView({ joint }: { joint: Joint }) {
 }
 
 function NodeView({ node }: { node: RigNode }) {
-  const { visual } = useRig();
   switch (node.type) {
     case 'flaeche':
       return <Shape shape={node.shape} />;
