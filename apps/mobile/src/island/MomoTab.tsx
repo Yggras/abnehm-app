@@ -3,7 +3,7 @@ import { openTarget, type RouteScreenProps } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
 import { useGameService, useIslandStage } from './app-game-service';
-import { HatchedIslandScreen } from './HatchedIsland';
+import { HatchedIslandScreen } from './HatchedIslandScreen';
 import { LaichkugelScreen } from './LaichkugelScreen';
 import { RoleChoiceScreen } from './RoleChoiceScreen';
 import { islandTexts } from './texts';

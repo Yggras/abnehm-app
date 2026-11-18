@@ -89,14 +89,13 @@ export async function createLaichkugelWorld(clock: Clock): Promise<LaichkugelWor
           db.insert(blueprintUnlock).values({ id: newId(), ...owned, catalogKey: blueprint.key, reason: blueprint.reason, unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
         }
         db.insert(communityProject).values({ id: projectId, ...owned, ...plan.project, status: 'aktiv', ...synced }).run();
-        db.insert(islandEvent).values({ id: newId(), ...owned, type: 'momo_geschluepft', occasionKey: 'geschluepft', status: 'abgeschlossen', occurredAt: at, ...synced }).run();
+        db.insert(islandEvent).values({ id: newId(), ...owned, ...plan.event, status: 'abgeschlossen', occurredAt: at, ...synced }).run();
         if (!progress) return;
-        const half = { halfPercent: 0, halfFull: false };
         db.insert(islandProgress)
           .values({
-            id: newId(), ...owned, level: 1, levelNeed: 11, dataAsOf: at, ...synced,
+            id: newId(), ...owned, level: plan.progress.level, levelNeed: plan.progress.levelNeed, dataAsOf: at, ...synced,
             content: {
-              members: [anna, philipp].sort().map((personId) => ({ personId, ...half })),
+              members: [anna, philipp].sort().map((personId) => ({ personId, ...plan.progress.halves[personId === plan.roles.bauen ? 0 : 1]! })),
               activeProject: { projectId, templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
             },
           })

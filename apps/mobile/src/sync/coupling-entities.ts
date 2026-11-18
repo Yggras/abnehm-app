@@ -1,46 +1,20 @@
 import { and, eq, ne } from 'drizzle-orm';
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
-import type { z } from 'zod';
 
 import type { EntityId } from '@abnehm/contracts/base';
 import { CouplingMemberRecord, CouplingRecord } from '@abnehm/contracts/coupling';
 import { IslandRecord, SharedAction } from '@abnehm/contracts/island';
-import type { EntityData, SyncEntityType } from '@abnehm/contracts/sync';
+import type { EntityData } from '@abnehm/contracts/sync';
 
-import type { TransactionContext } from '../local-db';
 import { coupling, couplingMember, island, sharedAction } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { SyncEntityAdapter } from './registry';
-import { sqliteEntity } from './sqlite-entity';
+import { serverManagedEntity as serverManaged, sqliteEntity } from './sqlite-entity';
 
 // Kopplung, Mitglieder, Insel und gemeinsame Aktionen im App-Sync (Spezifikation 0, Abschnitte 8–10).
 // Sie entstehen nur auf dem Server und kommen per Pull; ein generisches Upsert oder Löschen gibt es
 // nicht, deshalb auch keine offenen Operationen, die erneut anzuwenden wären. Nach einer Entkopplung
 // kommt nur noch die archivierte Kopplung; Mitglieder samt Anzeigenamen bleiben lokal erhalten. Die
 // Freigaben stehen in `sharing-entities.ts`.
-
-type SyncedTable = Parameters<typeof sqliteEntity>[0]['table'];
-
-/** Nur lesbare Entität: Die Zeile ist der kanonische Datensatz samt ID, ergänzt um gespiegelte Spalten. */
-function serverManaged<T extends SyncedTable & SQLiteTable, R extends EntityData>(options: {
-  entityType: SyncEntityType;
-  /** Feld mit der Eigentumsgrenze; es setzt nur der Server. */
-  ownerField: string;
-  record: z.ZodType<R>;
-  table: T;
-  mirrored?: (data: R, tx: TransactionContext) => Partial<T['$inferInsert']>;
-}): SyncEntityAdapter {
-  return sqliteEntity({
-    entityType: options.entityType,
-    ownerField: options.ownerField,
-    upsert: null,
-    deletable: false,
-    record: options.record,
-    table: options.table,
-    row: (id: EntityId, data: R, tx: TransactionContext) => ({ id, ...data, ...options.mirrored?.(data, tx) }) as T['$inferInsert'],
-    replay: () => undefined,
-  });
-}
 
 /**
  * Die gemeinsame Aktion einer lokalen Zeile, geprüft am Vertrag; die Umkehrung von `row` im Adapter unten.

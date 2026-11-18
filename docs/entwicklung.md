@@ -266,12 +266,12 @@ Nimmt der Partner die Rollenwahl an, schlüpft Momo (Abschnitte 2.1, 2.4, 5 und 
 - **App:** `readHatchedIsland` (`src/island/hatched-island.ts`) liest Rollen, Felder, Gebiete, Fortschritt, Momo und die gemeinsamen Ereignisse. Momo hat die Form zum Level (`formAt`), ist bis #188 zufrieden und trägt bis #206 nichts.
   - `momo.character` ist `ready` mit angezeigter Energie, Level und beiden Balkenanteilen aus dem Fortschritt. `waitingForPartner` bleibt `false`, `islandNotice` fehlt; beides füllen #191 und #203.
   - „Wir“ bekommt je gemeinsamem Ereignis einen `shared_event` mit `messageKey` `neu_bei_euch.‹typ›`, Objekt-ID der Insel und Aktion `momo`, bisher „Momo geschlüpft“. Den Text rendert Spezifikation 5.
-- **Tab „Momo“** (`HatchedIsland.tsx`): die Inselansicht aus den lokalen Daten. Ein Tipp auf Momo öffnet das Momo-Sheet mit Form und Level. Beim ersten Öffnen nach dem Schlüpfen erscheint einmalig „So wächst Momo“ mit den drei Sätzen aus Abschnitt 7; das Momo-Sheet öffnet die Erklärung erneut. Beide teilen ein `Sheet`, weil es keine Sheets in Sheets gibt. Gemerkt wird das Erscheinen als Gerätezustand `momo_so_waechst_momo` (`growth-intro.ts`), ohne Sync. Den Schrank ergänzt #206.
+- **Tab „Momo“** (`HatchedIslandScreen.tsx`): die Inselansicht aus den lokalen Daten. Ein Tipp auf Momo öffnet das Momo-Sheet mit Form und Level. Beim ersten Öffnen nach dem Schlüpfen erscheint einmalig „So wächst Momo“ mit den drei Sätzen aus Abschnitt 7; das Momo-Sheet öffnet die Erklärung erneut. Beide teilen ein `Sheet`, weil es keine Sheets in Sheets gibt. Gemerkt wird das Erscheinen als Gerätezustand `momo_so_waechst_momo` (`growth-intro.ts`), ohne Sync. Den Schrank ergänzt #206.
 - **Seeds:** Im Szenario `gekoppelt` (Revision 7) ist die Insel geschlüpft, mit denselben Zeilen, die das Schlüpfen anlegt (`packages/contracts/seeds/geschluepft.ts`, als letzter Beitrag). `rollenwahl-offen` bleibt vor dem Schlüpfen.
 - **Tests:**
   - `packages/game-rules/test/hatching.test.ts` prüft die Spielregel, `apps/backend/test/hatching.test.ts` Schlüpfen und Projector über Push und Pull: Tracer, genau ein Ereignis bei Wiederholung, Rollback bei Fehler und eine Projektion ohne Energiemengen.
   - `hatching-app.test.ts` lässt den Spieldienst zweier Geräte gegen die Hono-App laufen (`test/support/game-phones.ts`, auch für `role-choice-app.test.ts`).
-  - `src/island/HatchedIsland.test.tsx` prüft Tab, Momo-Sheet und Einmal-Flag mit echtem Skia-Code und Gesten, `MomoTab.test.tsx` Annehmen und die Beiträge.
+  - `src/island/HatchedIslandScreen.test.tsx` prüft Tab, Momo-Sheet und Einmal-Flag mit echtem Skia-Code und Gesten, `MomoTab.test.tsx` Annehmen und die Beiträge.
   - Maestro: `apps/mobile/e2e/schluepfen.yaml` (Seed `rollenwahl-offen` → Annehmen → „So wächst Momo“ → Insel auf Level 1 → „Momo · Level 1“ auf „Heute“).
 
 ### Ports zwischen Bereichen

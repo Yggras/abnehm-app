@@ -47,10 +47,10 @@ export function geschluepftePart(hatchedAt: string): SeedPart {
       entity('island_event', {
         id: seedIds.islandEvent.geschluepft,
         ...owned,
-        type: 'momo_geschluepft',
+        type: plan.event.type,
         template_key: null,
         responsible_person_id: null,
-        occasion_key: 'geschluepft',
+        occasion_key: plan.event.occasionKey,
         status: 'abgeschlossen',
         reward: null,
         occurred_at: hatchedAt,
@@ -62,10 +62,11 @@ export function geschluepftePart(hatchedAt: string): SeedPart {
       entity('island_progress', {
         id: seedIds.islandProgress.philippAnna,
         ...owned,
-        level: 1,
-        level_need: 11,
+        level: plan.progress.level,
+        level_need: plan.progress.levelNeed,
         content: {
-          members: [philipp, anna].sort().map((personId) => ({ personId, halfPercent: 0, halfFull: false })),
+          // Mitglieder nach Person sortiert wie im Projector; die Hälften der Spielregel stehen in der Reihenfolge Bauen, Natur.
+          members: [philipp, anna].sort().map((personId) => ({ personId, ...plan.progress.halves[personId === plan.roles.bauen ? 0 : 1]! })),
           activeProject: { projectId, templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
         },
         data_as_of: hatchedAt,

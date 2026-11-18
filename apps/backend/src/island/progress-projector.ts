@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, sum } from 'drizzle-orm';
 
 import { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
-import { IslandProgress } from '@abnehm/contracts/island';
+import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
 import { islandProgress as levelProgress, spentOnIsland } from '@abnehm/game-rules/progress';
 import { commonStage } from '@abnehm/game-rules/projects';
 
@@ -85,7 +85,7 @@ async function activeProject(tx: DbExecutor, islandId: EntityId) {
     .from(projectContribution)
     .where(eq(projectContribution.communityProjectId, project.id))
     .groupBy(projectContribution.role);
-  const paidBy = (role: string) => paid.find((share) => share.role === role)?.amount ?? 0;
+  const paidBy = (role: IslandRole) => paid.find((share) => share.role === role)?.amount ?? 0;
   return {
     projectId: project.id,
     templateKey: project.templateKey,

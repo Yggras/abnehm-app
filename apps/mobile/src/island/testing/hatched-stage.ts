@@ -15,7 +15,6 @@ const at = Instant.parse('2026-10-14T12:00:00.000Z');
 
 export function hatchedStage(): Extract<IslandStage, { type: 'geschluepft' }> {
   const plan = hatching(gameCatalog, { proposerPersonId: anna, proposerRole: 'natur', partnerPersonId: philipp });
-  const half = { halfPercent: 0, halfFull: false };
   return {
     type: 'geschluepft',
     island: {
@@ -28,17 +27,17 @@ export function hatchedStage(): Extract<IslandStage, { type: 'geschluepft' }> {
       progress: IslandProgress.parse({
         islandId,
         couplingId: '5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c01',
-        level: 1,
-        levelNeed: 11,
-        members: [anna, philipp].sort().map((personId) => ({ personId, ...half })),
+        level: plan.progress.level,
+        levelNeed: plan.progress.levelNeed,
+        members: [anna, philipp].sort().map((personId) => ({ personId, ...plan.progress.halves[personId === plan.roles.bauen ? 0 : 1]! })),
         activeProject: { projectId: '5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c03', templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
         dataAsOf: at,
         serverVersion: '1',
       }),
       fields: plan.fields,
       unlockedAreas: [],
-      appearance: appearanceAt(1),
-      sharedEvents: [{ eventId: EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c04'), type: 'momo_geschluepft', occurredAt: at }],
+      appearance: appearanceAt(plan.progress.level),
+      sharedEvents: [{ eventId: EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c04'), type: plan.event.type, occurredAt: at }],
     },
   };
 }

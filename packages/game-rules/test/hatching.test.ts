@@ -65,6 +65,20 @@ describe('Schlüpfen', () => {
     expect(result.project).toEqual({ sequenceNumber: 1, templateKey: 't_projekt', buildNeed: 20, natureNeed: 20 });
   });
 
+  it('legt das Ereignis „Momo ist geschlüpft“ an und beginnt auf Level 1 mit Bedarf 11 und leeren Hälften', () => {
+    const result = hatching(catalog, { proposerPersonId: vorschlagend, proposerRole: 'bauen', partnerPersonId: annehmend });
+
+    expect(result.event).toEqual({ type: 'momo_geschluepft', occasionKey: 'geschluepft' });
+    expect(result.progress).toEqual({
+      level: 1,
+      levelNeed: 11,
+      halves: [
+        { halfPercent: 0, halfFull: false },
+        { halfPercent: 0, halfFull: false },
+      ],
+    });
+  });
+
   it('lehnt dieselbe Person auf beiden Seiten ab', () => {
     expect(() => hatching(catalog, { proposerPersonId: vorschlagend, proposerRole: 'bauen', partnerPersonId: vorschlagend })).toThrow();
   });

@@ -9,11 +9,14 @@ import type { TransactionContext } from '../local-db';
 import { sqliteOf } from '../local-db/sqlite';
 import type { CanonicalEntity, EntityTombstone, PendingChange, SyncEntityAdapter } from './registry';
 
-/** Sync-Spalten jeder synchronisierten lokalen Tabelle (Spezifikation 0, Abschnitt 8). */
+/**
+ * Sync-Spalten jeder synchronisierten lokalen Tabelle (Spezifikation 0, Abschnitt 8). Unveränderliche
+ * Entitäten haben kein `deleted_at`; eine Löschmarkierung für sie ist ein Integrationsfehler.
+ */
 type SyncedColumns = {
   id: AnySQLiteColumn<{ data: string }>;
   serverVersion: AnySQLiteColumn<{ data: string | null }>;
-  deletedAt: AnySQLiteColumn<{ data: string | null }>;
+  deletedAt?: AnySQLiteColumn<{ data: string | null }>;
 };
 
 /**
@@ -38,6 +41,7 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
   replay(tx: TransactionContext, entityId: EntityId, change: PendingChange<U>): void;
 }): SyncEntityAdapter<U, R> {
   const { table } = options;
+  const mutable = 'deletedAt' in table;
 
   function localVersion(tx: TransactionContext, entityId: EntityId) {
     return sqliteOf(tx).select({ serverVersion: table.serverVersion }).from(table as SQLiteTable).where(eq(table.id, entityId)).get() as
@@ -48,7 +52,7 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
   function applyCanonical(tx: TransactionContext, record: CanonicalEntity<R>) {
     const local = localVersion(tx, record.entityId)?.serverVersion;
     if (local != null && BigInt(local) > BigInt(record.serverVersion)) return;
-    const row = { ...options.row(record.entityId, record.data, tx), serverVersion: record.serverVersion, deletedAt: null };
+    const row = { ...options.row(record.entityId, record.data, tx), serverVersion: record.serverVersion, ...(mutable && { deletedAt: null }) };
     sqliteOf(tx)
       .insert(table)
       .values(row as never)
@@ -57,6 +61,7 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
   }
 
   function applyTombstone(tx: TransactionContext, tombstone: EntityTombstone) {
+    if (!mutable) throw new Error(`${options.entityType} ist unveränderlich und wird nie gelöscht`);
     sqliteOf(tx)
       .update(table)
       .set({ deletedAt: tombstone.deletedAt, serverVersion: tombstone.serverVersion } as never)
@@ -82,4 +87,29 @@ export function sqliteEntity<T extends SQLiteTable & SyncedColumns, U extends En
       for (const change of rejection.pending) options.replay(tx, rejection.entityId, change);
     },
   };
+}
+
+/**
+ * Nur lesbare Entität, die allein der Server schreibt, etwa Kopplung, Insel und ihre Inhalte: Die Zeile ist
+ * der kanonische Datensatz samt ID, ergänzt um lokal gespiegelte Spalten. Ein generisches Upsert oder
+ * Löschen gibt es nicht, deshalb auch keine offenen Operationen, die erneut anzuwenden wären.
+ */
+export function serverManagedEntity<T extends SQLiteTable & SyncedColumns, R extends EntityData>(options: {
+  entityType: SyncEntityType;
+  /** Feld mit der Eigentumsgrenze; es setzt nur der Server. */
+  ownerField: string;
+  record: z.ZodType<R>;
+  table: T;
+  mirrored?: (data: R, tx: TransactionContext) => Partial<T['$inferInsert']>;
+}): SyncEntityAdapter<EntityData, R> {
+  return sqliteEntity({
+    entityType: options.entityType,
+    ownerField: options.ownerField,
+    upsert: null,
+    deletable: false,
+    record: options.record,
+    table: options.table,
+    row: (id: EntityId, data: R, tx: TransactionContext) => ({ id, ...data, ...options.mirrored?.(data, tx) }) as T['$inferInsert'],
+    replay: () => undefined,
+  });
 }

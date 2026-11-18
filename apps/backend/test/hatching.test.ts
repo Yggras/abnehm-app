@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant } from '@abnehm/contracts/base';
+import { EnergyBooking } from '@abnehm/contracts/energy';
 import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
 
@@ -15,7 +16,7 @@ import { createTestBackend } from './support/app.ts';
 import { personWithSession } from './support/authorization.ts';
 import { coupleByInvitation, worldStart } from './support/coupled-world.ts';
 import { actionIdOf, decideOp, recordsOf, requestOp } from './support/shared-actions.ts';
-import { pullAll, push } from './support/sync.ts';
+import { installationB, pullAll, push } from './support/sync.ts';
 
 // Nachweis für #184: Die Annahme der Rollenwahl ist das Schlüpfen (Spezifikation 4, Abschnitte 2.1, 2.4,
 // 5 und 7), über Push und Pull der echten Hono-App mit isoliertem Postgres und Testuhr. Die erwarteten
@@ -101,6 +102,21 @@ describe('Schlüpfen', { timeout: 20_000 }, () => {
     expect(await backend.database.db.select().from(islandField).where(eq(islandField.islandId, islandId))).toHaveLength(16 * 12);
   });
 
+  it('zwei Installationen: nimmt Philipps zweites Gerät mit eigener Operation ebenfalls an, schlüpft Momo nur einmal', async () => {
+    const { backend, philipp, actionId, islandId, accept } = await roleChoiceOpen();
+    await push(backend, philipp.device, [accept]);
+
+    // Dieselbe Entscheidung derselben Person, aber eine andere Operation von einer anderen Installation.
+    const fromIpad = decideOp(actionId, 'annehmen', { timeZone: acceptingZone });
+    const [result] = await push(backend, philipp.device, [fromIpad], installationB);
+
+    expect(result?.type).not.toBe('applied');
+    const db = backend.database.db;
+    expect((await db.select().from(islandEvent).where(eq(islandEvent.islandId, islandId))).map((event) => event.type)).toEqual(['momo_geschluepft']);
+    expect(await db.select().from(islandField).where(eq(islandField.islandId, islandId))).toHaveLength(16 * 12);
+    expect(await db.select().from(communityProject).where(eq(communityProject.islandId, islandId))).toHaveLength(1);
+  });
+
   it('atomar: scheitert ein Teil, bleibt nichts zurück, und der Vorschlag bleibt offen', async () => {
     const { backend, philipp, anna, couplingId, islandId, actionId, accept } = await roleChoiceOpen();
     // Eine schon vorhandene Freischaltung lässt das Schlüpfen mitten in der Materialisierung scheitern.
@@ -147,11 +163,15 @@ describe('Projector Inselfortschritt', { timeout: 20_000 }, () => {
         id: objectId, islandId, couplingId, ownerPersonId: personId, catalogKey, origin: 'gebaut', level: 1, fieldId: null,
         createdAt: hatchedAt, updatedAt: hatchedAt, serverVersion: 1n,
       });
-      const commandId = randomUUID();
-      await insertBooking(db, {
-        type: 'build_debit', id: EntityId.parse(randomUUID()), personId: EntityId.parse(personId), amount: -amount, localDate: '2026-10-14' as never,
-        bookingKey: commandId, createdAt: Instant.parse(hatchedAt.toISOString()), trigger: { commandId, islandObjectId: objectId },
-      } as never);
+      // Der Buchungsschlüssel eines Spielbefehls ist seine Befehls-ID (Vertrag `EnergyBooking`).
+      const commandId = EntityId.parse(randomUUID());
+      await insertBooking(
+        db,
+        EnergyBooking.parse({
+          type: 'build_debit', id: EntityId.parse(randomUUID()), personId, amount: -amount, localDate: '2026-10-14',
+          bookingKey: commandId, createdAt: hatchedAt.toISOString(), trigger: { commandId, islandObjectId: objectId },
+        }),
+      );
     };
     await spend(philipp.personId, 'laterne', 3);
     await spend(philipp.personId, 'holzweg', 4);

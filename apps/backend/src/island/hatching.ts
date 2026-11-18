@@ -21,10 +21,8 @@ import { projectIslandProgress } from './progress-projector.ts';
 // Teil, rollt der Savepoint alles zurück, und der Vorschlag bleibt offen. Jede Zeile bekommt eine
 // Serverversion und kommt per Pull zu beiden Mitgliedern.
 
-/** Anlassschlüssel des Ereignisses; eindeutig je Insel, das Ereignis entsteht also höchstens einmal. */
-export const hatchedOccasionKey = 'geschluepft';
-
-export type HatchingRequest = Readonly<{
+/** Was das Schlüpfen aus der angenommenen Rollenwahl braucht. */
+export type HatchCommand = Readonly<{
   couplingId: EntityId;
   proposerPersonId: EntityId;
   proposerRole: IslandRole;
@@ -34,7 +32,7 @@ export type HatchingRequest = Readonly<{
   at: Date;
 }>;
 
-export async function hatch(tx: DbExecutor, { couplingId, proposerPersonId, proposerRole, partnerPersonId, timeZone, at }: HatchingRequest): Promise<void> {
+export async function hatch(tx: DbExecutor, { couplingId, proposerPersonId, proposerRole, partnerPersonId, timeZone, at }: HatchCommand): Promise<void> {
   // Die Sperre ordnet das Schlüpfen hinter einen gleichzeitigen Antrag derselben Insel (`role-choice.ts`).
   const [current] = await tx.select({ id: island.id, state: island.state }).from(island).where(eq(island.couplingId, couplingId)).for('update');
   if (current?.state !== 'wartet_auf_rollen') throw new CommandRejection('conflict');
@@ -84,7 +82,8 @@ export async function hatch(tx: DbExecutor, { couplingId, proposerPersonId, prop
   await write({ entityType: 'island_event', couplingId }, async (stamp) => {
     const id = randomUUID();
     await tx.insert(islandEvent).values({
-      id, ...owned, type: 'momo_geschluepft', occasionKey: hatchedOccasionKey, status: 'abgeschlossen', occurredAt: at, ...stamp,
+      // Der Anlassschlüssel ist eindeutig je Insel; das Ereignis entsteht also höchstens einmal.
+      id, ...owned, type: plan.event.type, occasionKey: plan.event.occasionKey, status: 'abgeschlossen', occurredAt: at, ...stamp,
     });
     return id;
   });

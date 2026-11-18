@@ -1,6 +1,7 @@
 import type { IslandRole } from '@abnehm/contracts/island';
 
 import { baseIslandKey, fieldKey, type FieldSide, type GameCatalog } from './catalog.ts';
+import { islandProgress, type LevelProgress } from './progress.ts';
 import { projectNeed } from './projects.ts';
 import { unlocksAt, type UnlockedBlueprint } from './unlocks.ts';
 
@@ -24,18 +25,24 @@ export type HatchingRequest = Readonly<{
   partnerPersonId: string;
 }>;
 
-/** Ein Feld der Grundinsel mit Besitzer; `null` bei Strand, Lichtung und Gemeinschaftsplatz. */
-export type HatchedField = Readonly<{ key: string; ownerPersonId: string | null }>;
+/** Ein Inselfeld mit Besitzer; `null` bei Strand, Lichtung und Gemeinschaftsplatz. */
+export type IslandFieldOwner = Readonly<{ key: string; ownerPersonId: string | null }>;
+
+/** Das gemeinsame Ereignis „Momo ist geschlüpft“; der Anlassschlüssel ist eindeutig je Insel. */
+export const hatchedEvent = { type: 'momo_geschluepft', occasionKey: 'geschluepft' } as const;
 
 export type Hatching = Readonly<{
   /** Je Rolle die Person. */
   roles: Readonly<Record<IslandRole, string>>;
   /** Die Startfelder beider Personen samt gemeinsamer Bereiche: die Grundinsel. */
-  fields: readonly HatchedField[];
+  fields: readonly IslandFieldOwner[];
   /** Die Start-Baupläne beider Rollen (Level 1). */
   blueprints: readonly UnlockedBlueprint[];
   /** Gemeinschaftsprojekt 1 mit festgeschriebenem Bedarf je Anteil. */
   project: Readonly<{ sequenceNumber: 1; templateKey: string; buildNeed: number; natureNeed: number }>;
+  event: typeof hatchedEvent;
+  /** Fortschritt ohne verbaute Energie: Level 1, beide Hälften leer, in der Reihenfolge Bauen, Natur. */
+  progress: LevelProgress;
 }>;
 
 const sideOfRole: Readonly<Record<IslandRole, FieldSide>> = { bauen: 'a', natur: 'b' };
@@ -55,5 +62,7 @@ export function hatching(catalog: GameCatalog, { proposerPersonId, proposerRole,
     })),
     blueprints: unlocksAt(catalog, 1).blueprints,
     project: { sequenceNumber: 1, templateKey: first.key, buildNeed: need, natureNeed: need },
+    event: hatchedEvent,
+    progress: islandProgress([0, 0]),
   };
 }

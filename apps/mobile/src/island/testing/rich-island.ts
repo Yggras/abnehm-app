@@ -15,7 +15,7 @@ import { islandLayout } from '../layout';
 // gesperrten Gebiets unter Nebel. Alle Werte sind synthetisch; Objekte, Hälften und das Gebiet sind
 // Designwerte für den Lastrahmen.
 
-export type FixtureIsland = Omit<IslandViewProps, 'onOpen' | 'onFieldPress' | 'onMomoPress' | 'bottomInset'>;
+export type RichIsland = Omit<IslandViewProps, 'onOpen' | 'onFieldPress' | 'onMomoPress' | 'bottomInset'>;
 
 const philipp = EntityId.parse(seedIds.person.philipp);
 const anna = EntityId.parse(seedIds.person.anna);
@@ -48,7 +48,7 @@ const lockedPreview = {
  */
 const spent = [74, 78] as const;
 
-export function fixtureIsland(): FixtureIsland {
+export function richIsland(): RichIsland {
   const { level, levelNeed, halves } = islandProgress(spent);
   return {
     island: {

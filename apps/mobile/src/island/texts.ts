@@ -42,6 +42,8 @@ export const laichkugelTexts = {
   proposedBy: (partner: string) => `${partner} schlägt eure Rollen vor`,
   decline: 'Ablehnen',
   accept: 'Annehmen',
+  // „Angenommen“ und sein Hinweis: vorgemerkte Annahme bis zum Sync (Spezifikation 4, Abschnitt 11:
+  // gemeinsame Aktionen sind offline nur vorgemerkt). Designwerte aus #184, nicht belegt.
   accepted: 'Angenommen',
   acceptedHint: 'Momo schlüpft, sobald deine Antwort gesichert ist.',
 };

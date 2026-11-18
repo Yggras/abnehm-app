@@ -1,8 +1,9 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
-import { EntityId, type Instant } from '@abnehm/contracts/base';
+import { EntityId, Instant } from '@abnehm/contracts/base';
 import { IslandRole, MomoAppearance, type IslandProgress } from '@abnehm/contracts/island';
 import { SharedEventType } from '@abnehm/contracts/wir';
+import type { IslandFieldOwner } from '@abnehm/game-rules/hatching';
 import { formAt } from '@abnehm/game-rules/unlocks';
 
 import type { ReadContext } from '../local-db';
@@ -14,9 +15,6 @@ import { islandProgressOf } from './island-entities';
 // Felder mit Besitzer, freigeschaltete Gebiete, Inselfortschritt, Momo und die gemeinsamen Ereignisse für
 // „Wir“. Alles kommt per Pull vom Server; solange ein Teil fehlt, etwa zwischen zwei Seiten desselben
 // Pulls, ist die Insel noch nicht lesbar.
-
-/** Ein Feld der Insel mit Besitzer; `null` bei Strand, Lichtung und Gemeinschaftsplatz. */
-export type IslandFieldOwner = Readonly<{ key: string; ownerPersonId: string | null }>;
 
 /** Ein gemeinsames Ereignis für „Neu bei euch“, etwa „Momo ist geschlüpft“. */
 export type SharedIslandEvent = Readonly<{ eventId: EntityId; type: SharedEventType; occurredAt: Instant }>;
@@ -85,6 +83,6 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.type, SharedEventType.options)))
       .orderBy(asc(islandEvent.occurredAt))
       .all()
-      .map((row) => ({ eventId: EntityId.parse(row.eventId), type: SharedEventType.parse(row.type), occurredAt: row.occurredAt as Instant })),
+      .map((row) => ({ eventId: EntityId.parse(row.eventId), type: SharedEventType.parse(row.type), occurredAt: Instant.parse(row.occurredAt) })),
   };
 }

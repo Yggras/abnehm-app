@@ -1,4 +1,5 @@
 import { fieldKey, fieldPlans, type FieldPlanEntry, type GameCatalog } from '@abnehm/game-rules/catalog';
+import type { IslandFieldOwner } from '@abnehm/game-rules/hatching';
 
 import type { IslandSceneInput, SceneField } from './scene-model';
 
@@ -10,7 +11,7 @@ import type { IslandSceneInput, SceneField } from './scene-model';
 
 export type IslandLayoutRequest = Readonly<{
   /** Die materialisierten Inselfelder mit Besitzer; `null` bei Strand, Lichtung und Gemeinschaftsplatz. */
-  fields: readonly Readonly<{ key: string; ownerPersonId: string | null }>[];
+  fields: readonly IslandFieldOwner[];
   unlockedAreas: readonly string[];
 }>;
 

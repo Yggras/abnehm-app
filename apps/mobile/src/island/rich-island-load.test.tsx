@@ -7,28 +7,28 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 
 import { IslandView } from './IslandView';
 import { IslandHost } from './testing/island-host';
-import { fixtureIsland } from './testing/rich-island';
+import { richIsland } from './testing/rich-island';
 import type * as mockSkia from './testing/skia-mock';
 
 // Lastrahmen (Spezifikation 4, Abschnitt 7): Die Produktgrafik bleibt unter dem Lastprofil des Spikes,
 // 1.382 gezeichnete Elemente und 157 Animationen (spikes/insel-rendering/RESULTS.md). Gezählt wird die
-// volle Fixture-Insel mit dem echten Skia-Code; die Leistung auf den Geräten misst #221.
+// volle Insel mit dem echten Skia-Code; die Leistung auf den Geräten misst #221.
 jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('./testing/skia-mock').skiaWithCanvasKit());
 
 const clock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
 
-test('die Fixture-Insel steht nach den Spielregeln auf Level 6 mit 56 und 81 Prozent', () => {
-  const { progress } = fixtureIsland();
+test('die volle Insel steht nach den Spielregeln auf Level 6 mit 56 und 81 Prozent', () => {
+  const { progress } = richIsland();
 
   expect(progress.level).toBe(6);
   expect(progress.levelNeed).toBe(16);
   expect(progress.members.map(({ halfPercent }) => halfPercent)).toEqual([56, 81]);
 });
 
-test('die Fixture-Insel zeichnet weniger Elemente und Animationen als der Spike', async () => {
+test('die volle Insel zeichnet weniger Elemente und Animationen als der Spike', async () => {
   await render(
     <IslandHost clock={clock}>
-      <IslandView {...fixtureIsland()} onOpen={jest.fn()} />
+      <IslandView {...richIsland()} onOpen={jest.fn()} />
     </IslandHost>,
   );
 
