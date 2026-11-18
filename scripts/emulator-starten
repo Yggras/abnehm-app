@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Startet den festen Emulator `medium_phone` (E2E_ANDROID_AVD) ohne Quick-Boot-Snapshot (#294), wartet auf den
+# Systemstart und gibt seine adb-Seriennummer aus:
+#   scripts/emulator-starten                # für E2E-Läufe: läuft schon ein Emulator, nur dessen Seriennummer
+#   scripts/emulator-starten --ohne-geraet  # für `npm run android`: nur starten, wenn kein Android-Gerät läuft
+#
+# Warum ohne Snapshot: Mit Quick Boot lädt der Emulator beim Start den Snapshot `default_boot`; dabei werden
+# System- und Nutzerdaten mit dem damaligen Stand überschrieben. Mit `-no-snapshot-save` gingen außerdem alle
+# Installationen beim Beenden verloren. So kam nach jedem Neustart ein veralteter Development Build zurück.
+# `-no-snapshot` lädt und speichert keinen Snapshot; installierte Apps bleiben in `userdata-qemu.img`.
+# Quelle: https://developer.android.com/studio/run/emulator-commandline (Quick Boot, `-snapshot`, Daten-Image).
+# Ohne `--device` nimmt `expo run:android` das erste laufende Gerät und startet sonst selbst ein AVD mit Quick
+# Boot (@expo/cli 58: getDevices.js, emulator.js); deshalb startet `npm run android` den Emulator vorher hier.
+# Die Gerätesperre (scripts/geraete-slot) nimmt der Aufrufer.
+set -euo pipefail
+
+usage() {
+  sed -n '2,5p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+only_without_device=false
+case "${1:-}" in
+  "") ;;
+  --ohne-geraet) only_without_device=true ;;
+  *) usage ;;
+esac
+
+adb_bin() {
+  if command -v adb >/dev/null; then command -v adb; else echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"; fi
+}
+adb="$(adb_bin)"
+
+if [[ "$only_without_device" == true ]]; then
+  # Läuft irgendein Gerät, wählt Expo es selbst; dann gibt es nichts zu starten.
+  if "$adb" devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit !found }'; then exit 0; fi
+fi
+
+serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+if [[ -z "$serial" ]]; then
+  avd="${E2E_ANDROID_AVD:-medium_phone}"
+  echo "Starte den Emulator „${avd}“ ohne Snapshot …" >&2
+  "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" -avd "$avd" -no-snapshot -no-boot-anim >/dev/null 2>&1 &
+  # Mit einem weiteren angeschlossenen Gerät braucht jeder adb-Aufruf die Seriennummer des Emulators.
+  until serial="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ { print $1; exit }')" && [[ -n "$serial" ]]; do sleep 2; done
+  "$adb" -s "$serial" wait-for-device
+  until [[ "$("$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do sleep 2; done
+fi
+echo "$serial"

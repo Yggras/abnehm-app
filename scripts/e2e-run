@@ -78,20 +78,9 @@ adb_bin() {
   if command -v adb >/dev/null; then command -v adb; else echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"; fi
 }
 
+# Startet den Emulator ohne Quick-Boot-Snapshot (#294), falls noch keiner läuft.
 android_device() {
-  local adb serial
-  adb="$(adb_bin)"
-  serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
-  if [[ -z "$serial" ]]; then
-    local avd="${E2E_ANDROID_AVD:-medium_phone}"
-    echo "Starte den Emulator „${avd}“ …" >&2
-    "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" -avd "$avd" -no-snapshot-save -no-boot-anim >/dev/null 2>&1 &
-    # Mit einem weiteren angeschlossenen Gerät braucht jeder adb-Aufruf die Seriennummer des Emulators.
-    until serial="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ { print $1; exit }')" && [[ -n "$serial" ]]; do sleep 2; done
-    "$adb" -s "$serial" wait-for-device
-    until [[ "$("$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do sleep 2; done
-  fi
-  echo "$serial"
+  "$repo_root/scripts/emulator-starten"
 }
 
 # Läufe ---------------------------------------------------------------------------------------------

@@ -1,0 +1,49 @@
+#!/bin/sh
+# Hermetischer Test für scripts/emulator-starten: adb und emulator sind gemockt und protokollieren ihre Aufrufe.
+set -eu
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+script="$root/scripts/emulator-starten"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+mkdir -p "$tmp/bin" "$tmp/sdk/emulator"
+# `devices` listet den Inhalt von $tmp/devices; nach dem Start des Emulators steht dort emulator-5554.
+printf '%s\n' '#!/bin/sh' \
+  "echo \"adb \$*\" >> \"$tmp/calls\"" \
+  "case \"\$*\" in" \
+  "  devices) printf 'List of devices attached\n'; cat \"$tmp/devices\" ;;" \
+  "  *getprop*) echo 1 ;;" \
+  'esac' \
+  'exit 0' > "$tmp/bin/adb"
+printf '%s\n' '#!/bin/sh' \
+  "echo \"emulator \$*\" >> \"$tmp/calls\"" \
+  "printf 'emulator-5554\tdevice\n' >> \"$tmp/devices\"" > "$tmp/sdk/emulator/emulator"
+chmod +x "$tmp/bin/adb" "$tmp/sdk/emulator/emulator"
+export PATH="$tmp/bin:$PATH" ANDROID_HOME="$tmp/sdk"
+fail() { echo "FEHLER: $*" >&2; exit 1; }
+reset() { : > "$tmp/calls"; if [ -n "$1" ]; then printf '%s\n' "$1"; fi > "$tmp/devices"; }
+
+# Ohne Emulator: startet medium_phone ohne Quick-Boot-Snapshot und gibt die Seriennummer aus.
+reset ''
+[ "$("$script")" = emulator-5554 ] || fail 'Seriennummer nach dem Start'
+grep -Fx 'emulator -avd medium_phone -no-snapshot -no-boot-anim' "$tmp/calls" >/dev/null || fail 'Emulator nicht ohne Snapshot gestartet'
+grep -F 'no-snapshot-save' "$tmp/calls" >/dev/null && fail 'Snapshot wird noch geladen'
+
+# Läuft schon ein Emulator, startet kein zweiter.
+reset "$(printf 'emulator-5556\tdevice\n')"
+[ "$("$script")" = emulator-5556 ] || fail 'laufender Emulator nicht erkannt'
+grep -F 'emulator -avd' "$tmp/calls" >/dev/null && fail 'zweiter Emulator gestartet'
+
+# Ein echtes Gerät hält den Start für E2E-Läufe nicht auf, wohl aber mit --ohne-geraet (npm run android).
+reset "$(printf 'R58W123\tdevice\n')"
+[ "$("$script")" = emulator-5554 ] || fail 'E2E: Emulator neben echtem Gerät'
+reset "$(printf 'R58W123\tdevice\n')"
+[ -z "$("$script" --ohne-geraet)" ] || fail '--ohne-geraet: Ausgabe trotz Gerät'
+grep -F 'emulator -avd' "$tmp/calls" >/dev/null && fail '--ohne-geraet: Emulator trotz Gerät gestartet'
+reset ''
+[ "$("$script" --ohne-geraet)" = emulator-5554 ] || fail '--ohne-geraet: ohne Gerät nicht gestartet'
+
+# Ein anderes AVD über E2E_ANDROID_AVD.
+reset ''
+E2E_ANDROID_AVD=pixel "$script" > /dev/null
+grep -Fx 'emulator -avd pixel -no-snapshot -no-boot-anim' "$tmp/calls" >/dev/null || fail 'E2E_ANDROID_AVD'
+printf 'emulator-starten: OK\n'
