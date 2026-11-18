@@ -6,6 +6,7 @@ import type { DeviceSuitePhase, DeviceSuiteReport } from './device-suite/suite';
 import { createFaultController } from './faults';
 import { createTestInbox, type TestInboxOptions } from './inbox';
 import { parseTestLink } from './links';
+import { createNotificationTestControl } from './notifications';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
 
 // Nachweis für #112 und #114: Deep Links der Testfähigkeiten und ihr Eingang.
@@ -16,6 +17,7 @@ function inboxWith(options: Partial<TestInboxOptions> = {}) {
   return createTestInbox({
     faults: createFaultController(),
     clock: createAppTestClock(deviceClock),
+    notifications: createNotificationTestControl(),
     deviceSuite: async (phase) => passed(phase),
     health: { apply: () => Promise.resolve(null) },
     ...options,

@@ -3,6 +3,9 @@ import { withAndroidManifest, type ConfigPlugin } from 'expo/config-plugins';
 
 type AppVariant = 'development' | 'e2e' | 'production';
 
+/** Exact-Alarm-Berechtigungen, die die App nie haben darf (Spezifikation 5, Abschnitt 8). */
+export const exactAlarmPermissions = ['android.permission.SCHEDULE_EXACT_ALARM', 'android.permission.USE_EXACT_ALARM'];
+
 /**
  * `APP_VARIANT=development` erzeugt den Development Build (mit expo-dev-client), `APP_VARIANT=e2e`
  * den E2E-Build (#114), alles andere den Produktionsbuild. Der Standard ist bewusst die Produktion:
@@ -96,6 +99,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         monochromeImage: './assets/android-icon-monochrome.png',
       },
       predictiveBackGestureEnabled: false,
+      // Keine exakten Alarme (Spezifikation 5, Abschnitt 8; #125): Bringt ein Paket die Berechtigungen ins
+      // zusammengeführte Manifest, entfernt Expos Plugin sie dort mit `tools:node="remove"`
+      // (`blockedPermissions`, https://docs.expo.dev/versions/v58.0.0/config/app/#blockedpermissions).
+      // Ab Android 14 verweigert das System `SCHEDULE_EXACT_ALARM` neu installierten Apps ohnehin
+      // (https://developer.android.com/about/versions/14/changes/schedule-exact-alarms).
+      // `scripts/app-artefakt-pruefen` prüft das Manifest jeder Produktions-APK.
+      blockedPermissions: exactAlarmPermissions,
     },
     plugins: [
       'expo-router',
@@ -107,6 +117,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // standardmäßig Android-Backup-Regeln für die SecureStore-Einträge (`configureAndroidBackup`,
       // https://docs.expo.dev/versions/v58.0.0/sdk/securestore/).
       ['expo-secure-store', { faceIDPermission: false }],
+      // Lokale Benachrichtigungen (#125). Server-Push und damit das APNs-Entitlement kommen mit dem
+      // Push-Ticket; bis dahin bleibt es aus (`enableRemoteNotifications`,
+      // https://docs.expo.dev/versions/v58.0.0/sdk/notifications/).
+      ['expo-notifications', { enableRemoteNotifications: false }],
     ],
     experiments: {
       reactCompiler: true,

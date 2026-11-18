@@ -12,6 +12,7 @@ import { isSessionScreenGate, sessionScreenPath } from '../shell/session-routes'
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
+import type { NotificationTestControl, NotificationTestMode } from './notifications';
 import { transportFaultModeName } from './network';
 import { runtimeProfiles } from './profiles';
 import { runSeed } from './seed/seed-flow';
@@ -56,9 +57,19 @@ function statusNotice(status: TestStatus) {
     }
     case 'health_gestellt':
       return <Notice tone="neutral" text={`Health-Attrappe „${status.scenario}“: ${healthOutcomeText[status.outcome]}`} />;
+    case 'mitteilungen_gestellt':
+      return <Notice tone="neutral" text={notificationModeText(status.mode)} />;
     case 'ungueltig':
       return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger Link „${status.capability}“ der Testfähigkeiten. Parameter stehen in docs/entwicklung.md.`} />;
   }
+}
+
+const permissionText = { undetermined: 'unentschieden', granted: 'erlaubt', denied: 'verweigert' } as const;
+
+function notificationModeText(mode: NotificationTestMode): string {
+  return mode.type === 'system'
+    ? 'Mitteilungen: echter Port des Systems.'
+    : `Mitteilungen simuliert: ${permissionText[mode.permission]}, Systemdialog antwortet „${permissionText[mode.answer]}“.`;
 }
 
 const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
@@ -74,11 +85,13 @@ const healthOutcomeText: Record<Extract<TestStatus, { type: 'health_gestellt' }>
 export function TestCapabilityHost({
   inbox,
   clock,
+  notifications,
   session,
   gate,
 }: {
   inbox: TestInbox;
   clock: AppTestClock;
+  notifications: NotificationTestControl;
   session: () => AppSession;
   /** Die Sitzungs-Weiche aus dem Wurzel-Layout; ein eigener Import ergäbe einen Zyklus über `device-session`. */
   gate: SessionGate | null;
@@ -93,11 +106,11 @@ export function TestCapabilityHost({
   useEffect(
     () =>
       inbox.handleSeeds(async (run) => {
-        const outcome = await runSeed(run, { session: session(), clock });
+        const outcome = await runSeed(run, { session: session(), clock, notifications });
         if (outcome.type === 'geseedet') setSeeded({ target: outcome.target });
         return outcome;
       }),
-    [inbox, clock, session],
+    [inbox, clock, notifications, session],
   );
 
   // Das Ziel erst öffnen, wenn die Weiche die Fachoberfläche freigibt und der Router die Sitzungsseite

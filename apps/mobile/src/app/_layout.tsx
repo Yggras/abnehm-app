@@ -8,7 +8,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { testCapabilities } from '../build-capabilities';
 import { ClockProvider } from '../clock/clock-context';
 import { color, useDesignFonts } from '../design';
-import { appClock, deviceAccount, deviceInvitationFlows, deviceOnboarding, deviceSession, refreshDeviceSync } from '../session/device-session';
+import { appClock, deviceAccount, deviceInvitationFlows, deviceNotifications, deviceOnboarding, deviceSession, refreshDeviceSync } from '../session/device-session';
+import { NotificationsProvider } from '../notifications';
 import { OnboardingProvider } from '../onboarding/OnboardingContext';
 import { OnlineFlowsProvider } from '../online/OnlineFlowsProvider';
 import { AccountProvider } from '../settings';
@@ -32,6 +33,8 @@ const screen = ({ name, modal }: GatedScreen) => (
 export default function RootLayout() {
   const fontsReady = useDesignFonts();
   const gate = useSessionGate();
+  // Beim Start: Android-Kanäle und Vordergrundverhalten, vor jeder Erlaubnisanfrage (#125).
+  const notifications = deviceNotifications();
   const ready = fontsReady && gate !== null;
 
   useEffect(() => {
@@ -54,6 +57,7 @@ export default function RootLayout() {
           <OnlineFlowsProvider {...deviceInvitationFlows()}>
           <OnboardingProvider onboarding={deviceOnboarding()}>
           <AccountProvider ports={deviceAccount()}>
+          <NotificationsProvider notifications={notifications}>
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.surfaceBase } }}>
             <Stack.Protected guard={gate === 'today'} redirectTo={home}>
@@ -75,6 +79,7 @@ export default function RootLayout() {
             </Stack.Protected>
           </Stack>
           {testCapabilities ? <testCapabilities.Host session={deviceSession} gate={gate} /> : null}
+          </NotificationsProvider>
           </AccountProvider>
           </OnboardingProvider>
           </OnlineFlowsProvider>

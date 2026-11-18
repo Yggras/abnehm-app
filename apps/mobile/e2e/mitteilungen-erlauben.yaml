@@ -1,0 +1,68 @@
+# Mitteilungen erlauben auf Android (#125; Spezifikation 5, Abschnitt 8 und Testing Decisions):
+# Einstellungen › Benachrichtigungen › „Erlauben“ öffnet zuerst den Erklär-Bildschirm, erst dessen
+# „Erlauben“ den Systemdialog. Danach steht der Systemstatus auf „Mitteilungen sind erlaubt“.
+#
+# Maestro erlaubt beim Start standardmäßig alle Berechtigungen; `notifications: unset` lässt die
+# Erlaubnis unentschieden (https://docs.maestro.dev/api-reference/commands/launchapp). Der Seed von
+# `solo` stellt die App auf den Fake-Mitteilungs-Port mit unentschiedener Erlaubnis; der Link
+# `mitteilungen?erlaubnis=system` stellt sie zurück auf den echten Port, damit der Systemdialog erscheint.
+# Auf iOS läuft der Ablauf nicht: Spezifikation 5 verlangt ihn nur für Android.
+appId: ${APP_ID}
+name: Mitteilungen erlauben (Android)
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+      - launchApp:
+          clearState: true
+          permissions:
+            notifications: unset
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: seed?szenario=solo
+      - extendedWaitUntil:
+          visible: "Hallo, Philipp"
+          timeout: 30000
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: mitteilungen?erlaubnis=system
+      - extendedWaitUntil:
+          visible: "Mitteilungen: echter Port des Systems."
+          timeout: 10000
+
+      # Einstellungen › Benachrichtigungen: unentschieden ------------------------------------------
+      - tapOn: "Einstellungen"
+      - tapOn: "Benachrichtigungen.*"
+      - extendedWaitUntil:
+          visible: "Mitteilungen sind noch nicht erlaubt."
+          timeout: 10000
+      - takeScreenshot: mitteilungen-unentschieden
+
+      # Erklär-Bildschirm vor dem Systemdialog -----------------------------------------------------
+      - tapOn: "Erlauben"
+      - extendedWaitUntil:
+          visible: "Momo meldet sich höchstens zweimal am Tag.*"
+          timeout: 10000
+      - assertVisible: "Später"
+      - takeScreenshot: mitteilungen-erklaerung
+      - tapOn: "Erlauben"
+
+      # Systemdialog von Android 13+ (Laufzeitberechtigung POST_NOTIFICATIONS) ---------------------
+      - extendedWaitUntil:
+          visible:
+            id: "com.android.permissioncontroller:id/permission_allow_button"
+          timeout: 10000
+      - takeScreenshot: mitteilungen-systemdialog
+      - tapOn:
+          id: "com.android.permissioncontroller:id/permission_allow_button"
+
+      # Zurück beim Aufrufer ------------------------------------------------------------------------
+      - extendedWaitUntil:
+          visible: "Mitteilungen sind erlaubt"
+          timeout: 10000
+      - assertNotVisible: "Später"
+      - takeScreenshot: mitteilungen-erlaubt

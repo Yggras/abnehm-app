@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, SyncCursor, TimeZone } from '../src/base.ts';
 import { DailyGoalCause } from '../src/daily-goals.ts';
+import { NotificationPermission } from '../src/notifications.ts';
 import { PhotoImageKey } from '../src/nutrition.ts';
 import { InstallationId, OutboxOperation } from '../src/sync.ts';
 
@@ -102,6 +103,13 @@ export const SeedInstallation = z.strictObject({
   installationId: InstallationId,
   account: SeedKey,
   platform: z.enum(['ios', 'android']),
+  /**
+   * Erlaubnis für Mitteilungen auf diesem Gerät (Spezifikation 5, Abschnitt 10; #125). Sie ist
+   * Systemzustand, keine Zeile: In Tests startet der Fake-Mitteilungs-Port damit, in Test-Artefakten
+   * stellt der Seed-Link den Mitteilungs-Port der App darauf (`mitteilungen` in
+   * `test/test-capabilities.ts`). Ohne Angabe bleibt die Erlaubnis, wie sie ist.
+   */
+  notificationPermission: NotificationPermission.optional(),
 });
 export type SeedInstallation = z.infer<typeof SeedInstallation>;
 

@@ -140,6 +140,16 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['health_attrappe'],
   },
   {
+    // #125: speicherbasierter Fake des Mitteilungs-Ports (Spezifikation 5, Abschnitt 8). In Test-Artefakten
+    // schaltet der Link `mitteilungen` bzw. ein Seed mit `notificationPermission` die App auf ihn um.
+    key: 'mitteilungen',
+    description:
+      'Fake-Mitteilungs-Port mit steuerbarer Erlaubnis und steuerbaren Fehlern; in Test-Artefakten per Link `mitteilungen?erlaubnis=…` oder Seed statt des echten Ports',
+    modules: ['apps/mobile/src/test-capabilities/notifications.ts'],
+    entries: { deepLinks: ['mitteilungen'] },
+    markers: ['Fake-Mitteilungs-Port'],
+  },
+  {
     key: 'testgeruest',
     description: 'Gemeinsames Gerüst: Development-Server und -App des Backends, Eingang, Deep Links und Wirt der App-Testfähigkeiten',
     modules: [

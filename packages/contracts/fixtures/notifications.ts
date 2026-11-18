@@ -1,4 +1,4 @@
-import { NotificationIntent, RoleRequestPayload } from '../src/notifications.ts';
+import { NotificationIntent, NotificationPermission, RoleRequestPayload } from '../src/notifications.ts';
 import { fixtures } from './define.ts';
 import { anna, challenge, now, philipp, sharedAction, sharedEvent } from './ids.ts';
 
@@ -17,6 +17,10 @@ const encouragement = {
 } as const;
 
 export const notificationFixtures = {
+  NotificationPermission: fixtures(NotificationPermission, {
+    valid: { 'unentschieden': 'undetermined', 'erlaubt': 'granted', 'verweigert': 'denied' },
+    invalid: { 'vorläufig gibt es nicht (keine provisional-Erlaubnis)': 'provisional', 'leer': '' },
+  }),
   RoleRequestPayload: fixtures(RoleRequestPayload, {
     valid: {
       'Rollenwahl': { actionId: sharedAction, kind: 'rollenwahl', senderDisplayName: 'Anna' },

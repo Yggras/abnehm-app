@@ -9,6 +9,7 @@ import type { AppSession } from '../session/app-session';
 import type { SessionGate } from '../session/session-gate';
 import type { AppTestClock } from './clock';
 import type { TestInbox } from './inbox';
+import { createNotificationTestControl } from './notifications';
 import type { SeedRun } from './seed/seed-flow';
 import { TestCapabilityHost } from './TestCapabilityHost';
 
@@ -52,7 +53,7 @@ function Layout() {
   return (
     <>
       <Slot />
-      <TestCapabilityHost inbox={inbox} clock={{} as AppTestClock} session={() => ({}) as AppSession} gate={current} />
+      <TestCapabilityHost inbox={inbox} clock={{} as AppTestClock} notifications={createNotificationTestControl()} session={() => ({}) as AppSession} gate={current} />
     </>
   );
 }

@@ -18,6 +18,7 @@ import { followSessionGate } from '../../mobile/src/session/session-gate.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
 import { createAppTestClock, type AppTestClock } from '../../mobile/src/test-capabilities/clock.ts';
 import { createFaultController, faultyFetch, type FaultController } from '../../mobile/src/test-capabilities/faults.ts';
+import { createNotificationTestControl, type NotificationTestControl } from '../../mobile/src/test-capabilities/notifications.ts';
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { runSeed } from '../../mobile/src/test-capabilities/seed/seed-flow.ts';
 import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/index.ts';
@@ -52,7 +53,7 @@ function memoryStore(): SessionStore {
   };
 }
 
-type Phone = { session: AppSession; clock: AppTestClock; faults: FaultController; opened: LocalDatabase[] };
+type Phone = { session: AppSession; clock: AppTestClock; faults: FaultController; notifications: NotificationTestControl; opened: LocalDatabase[] };
 
 /** Ein Gerät im Development Build: App-Sitzung mit Testuhr und Fehler-Adaptern, Backend über `app.request`. */
 function phone(backend: DevelopmentTestBackend): Phone {
@@ -90,7 +91,7 @@ function phone(backend: DevelopmentTestBackend): Phone {
       throw error;
     },
   });
-  return { session, clock, faults, opened };
+  return { session, clock, faults, notifications: createNotificationTestControl(), opened };
 }
 
 const today = { scenario: 'solo', installation: null, target: { type: 'today' } } as const;
@@ -114,6 +115,8 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(solo.initial.server));
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(solo.initial.devices['philipp-iphone']!));
     expect(device.clock.read()).toEqual({ instant: '2026-10-14T12:00:00.000Z', timeZone: 'Europe/Berlin', localDate: '2026-10-14', utcOffsetMinutes: 120 });
+    // `solo` hat eine unentschiedene Erlaubnis für Mitteilungen (#125).
+    expect(device.notifications.mode()).toEqual({ type: 'fake', permission: 'undetermined', answer: 'granted' });
     expect(device.session.auth.state()).toEqual({ type: 'angemeldet', accountId: solo.accounts[0]!.accountId });
     // Die kontobezogenen Beobachter (Kopf von „Heute“) hängen an der geseedeten Datenbank.
     expect(device.opened.map(({ accountId }) => accountId)).toEqual([solo.accounts[0]!.accountId]);

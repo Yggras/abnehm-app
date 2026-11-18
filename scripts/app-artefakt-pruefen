@@ -7,7 +7,8 @@
 #   (https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity).
 # - Android: Das Manifest der APK erlaubt keinen Klartext (`usesCleartextTraffic`) und bringt keine
 #   eigene Network Security Config mit; ab API 28 ist Klartext dann verboten
-#   (https://developer.android.com/privacy-and-security/security-config).
+#   (https://developer.android.com/privacy-and-security/security-config). Außerdem fordert es weder
+#   SCHEDULE_EXACT_ALARM noch USE_EXACT_ALARM an (Spezifikation 5, Abschnitt 8; #125).
 # - Beide: Das JS-Bundle enthält die erwartete https-Adresse des Backends und keinen Marker einer
 #   Testfähigkeit (Release-Sperren am freizugebenden Binary, test/release-sperren-artefakt.ts).
 # Gegenprobe: Ein E2E-Binary (Klartext-Ausnahme, Testfähigkeiten) lässt die Prüfung scheitern.
@@ -40,6 +41,11 @@ elif [[ -f "$binary" && "$binary" == *.apk ]]; then
     ok "Manifest ohne usesCleartextTraffic"
   fi
   if grep -q 'networkSecurityConfig' <<<"$manifest"; then fail "Manifest bringt eine eigene networkSecurityConfig mit"; else ok "Manifest ohne networkSecurityConfig"; fi
+  # Keine exakten Alarme (#125): Das Manifest der APK ist das zusammengeführte; `blockedPermissions` in
+  # app.config.ts entfernt die Berechtigungen, falls ein Paket sie mitbringt.
+  for permission in SCHEDULE_EXACT_ALARM USE_EXACT_ALARM; do
+    if grep -q "android.permission.$permission\"" <<<"$manifest"; then fail "Manifest fordert $permission an"; else ok "Manifest ohne $permission"; fi
+  done
   target_sdk="$(sed -n 's/.*targetSdkVersion([^)]*)=\([0-9]*\).*/\1/p' <<<"$manifest" | head -n 1)"
   if [[ -n "$target_sdk" && "$target_sdk" -ge 28 ]]; then ok "targetSdkVersion $target_sdk (Klartext ab 28 standardmäßig aus)"; else fail "targetSdkVersion ${target_sdk:-unbekannt} < 28"; fi
   # Ohne -q: grep liest bis zum Ende, sonst bricht unzip mit SIGPIPE ab und pipefail meldet einen Fehler.
