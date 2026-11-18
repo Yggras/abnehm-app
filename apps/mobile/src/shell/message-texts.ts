@@ -1,7 +1,7 @@
 import { BausteinKey, type MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
-import { SportRecordedValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
+import { SportMessageValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
@@ -56,8 +56,16 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Spezifikation 3: manuelle Messung ohne Bestätigungsdialog gelöscht („82,4 kg gelöscht · Rückgängig“; #176). */
   'gewicht.geloescht': messageText(WeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg gelöscht` })),
   /** Spezifikation 3: manueller Sporteintrag angelegt („30 min Laufen eingetragen · Rückgängig“). */
-  'sport.eingetragen': messageText(SportRecordedValues, ({ activityType, durationMinutes }) => ({
+  'sport.eingetragen': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,
+  })),
+  /** Spezifikation 3: manuelle Einheit bearbeitet („45 min Laufen gespeichert · Rückgängig“; #174). */
+  'sport.geaendert': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
+    text: `${durationMinutes} min ${activityNames[activityType]} gespeichert`,
+  })),
+  /** Spezifikation 3: manuelle Einheit ohne Bestätigungsdialog gelöscht („30 min Laufen gelöscht · Rückgängig“; #174). */
+  'sport.geloescht': messageText(SportMessageValues, ({ activityType, durationMinutes }) => ({
+    text: `${durationMinutes} min ${activityNames[activityType]} gelöscht`,
   })),
   /**
    * Spezifikation 4: Momos Reaktion auf neue eigene Gutschriften eines Commits, als eine Meldung (#188):

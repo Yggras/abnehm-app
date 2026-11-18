@@ -127,16 +127,36 @@ export const SportEntryRecord = z.discriminatedUnion('origin', [
 ]);
 export type SportEntryRecord = z.infer<typeof SportEntryRecord>;
 
-/** Werte der Meldung nach dem Eintragen, etwa „30 min Laufen eingetragen · Rückgängig“. */
-export const SportRecordedValues = z.strictObject({ activityType: ActivityType, durationMinutes: ManualSportMinutes });
-export type SportRecordedValues = z.infer<typeof SportRecordedValues>;
+/**
+ * Werte der Meldungen nach Eintragen, Bearbeiten und Löschen einer manuellen Einheit, etwa
+ * „30 min Laufen eingetragen · Rückgängig“: Art und Dauer der Einheit.
+ */
+export const SportMessageValues = z.strictObject({ activityType: ActivityType, durationMinutes: ManualSportMinutes });
+export type SportMessageValues = z.infer<typeof SportMessageValues>;
 
 /** Ergebnis von `recordSport`: Meldung samt typisierten Werten und flüchtigem, nie synchronisiertem Undo-Token. */
 export const SportRecordedOutcome = QuickCommandOutcome.extend({
   messageKey: z.literal('sport.eingetragen'),
-  values: SportRecordedValues,
+  values: SportMessageValues,
 });
 export type SportRecordedOutcome = z.infer<typeof SportRecordedOutcome>;
+
+/**
+ * Ergebnis von `updateSport` (Art, Dauer, Beginn oder Kalorien einer manuellen Einheit geändert), etwa
+ * „45 min Laufen gespeichert · Rückgängig“; die Werte sind die neuen.
+ */
+export const SportUpdatedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('sport.geaendert'),
+  values: SportMessageValues,
+});
+export type SportUpdatedOutcome = z.infer<typeof SportUpdatedOutcome>;
+
+/** Ergebnis von `deleteSport` ohne Bestätigungsdialog, etwa „30 min Laufen gelöscht · Rückgängig“. */
+export const SportDeletedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('sport.geloescht'),
+  values: SportMessageValues,
+});
+export type SportDeletedOutcome = z.infer<typeof SportDeletedOutcome>;
 
 /** Manuell eingegebenes Körpergewicht in g: 20,0–350,0 kg in 100-g-Schritten (Spezifikation 3, Abschnitt 3). */
 export const ManualWeightG = z.int().min(manualWeightG.min).max(manualWeightG.max).multipleOf(manualWeightG.step);

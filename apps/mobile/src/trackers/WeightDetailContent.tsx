@@ -6,7 +6,8 @@ import { manualOrigin } from '@abnehm/contracts/tracker-rules';
 import { Button, Card, color, ListGroup, ListRow, Notice, radius, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
 import type { WeightDetail, WeightHistoryEntry } from './weight-detail';
-import { changeText, dayText, kgText, originNames, shortDayText, spokenChange, timeText, weightTexts } from './weight-texts';
+import { dayText, originNames, shortDayText, timeText } from './entry-texts';
+import { changeText, kgText, spokenChange, weightTexts } from './weight-texts';
 import { WeightEntryForm, type EditedWeight, type WeightFormTrackers } from './WeightEntryForm';
 
 // Inhalt des Gewicht-Detailbildschirms `capture.weight` (Spezifikation 3, Abschnitt 5; #38), von oben nach

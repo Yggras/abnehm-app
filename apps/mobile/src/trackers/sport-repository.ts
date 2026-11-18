@@ -2,7 +2,7 @@ import { and, asc, between, eq, inArray, isNotNull, isNull, or } from 'drizzle-o
 
 import { EntityId, LocalDate, TimeZone, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { weekOf, type SportEntryFacts } from '@abnehm/contracts/tracker-rules';
-import { ImportedSportEntryUpsert, type ImportOrigin, type SportEntryUpsert } from '@abnehm/contracts/trackers';
+import { ActivityType, ImportedSportEntryUpsert, type ImportOrigin, type SportEntryUpsert } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { sportEntry } from '../local-db/schema';
@@ -16,6 +16,14 @@ import type { StoredImport } from './stored-import';
 /** Was Befehle und Sync von einem gespeicherten Eintrag wissen müssen. */
 export type StoredSportEntry = Readonly<{
   personId: EntityId;
+  origin: SportOrigin;
+  activityType: ActivityType;
+  startedAt: Instant;
+  durationMinutes: number;
+  activeMilliKcal: number | null;
+  /** Nur bei manuellen Einträgen: der ersetzende Import und die Reaktivierung (Spezifikation 3, Abschnitt 3). */
+  replacedByEntryId: EntityId | null;
+  reactivatedAt: Instant | null;
   localDate: LocalDate;
   /** Zone und Offset der Anlage; eine Aktualisierung behält beide (Spezifikation 3, Abschnitt 4). */
   timeZone: TimeZone;
@@ -82,6 +90,13 @@ export function readSportEntry(tx: ReadContext, entityId: EntityId): StoredSport
   const row = sqliteOf(tx)
     .select({
       personId: sportEntry.personId,
+      origin: sportEntry.origin,
+      activityType: sportEntry.activityType,
+      startedAt: sportEntry.startedAt,
+      durationMinutes: sportEntry.durationMinutes,
+      activeMilliKcal: sportEntry.activeMilliKcal,
+      replacedByEntryId: sportEntry.replacedByEntryId,
+      reactivatedAt: sportEntry.reactivatedAt,
       localDate: sportEntry.localDate,
       timeZone: sportEntry.timeZone,
       utcOffsetMinutes: sportEntry.utcOffsetMinutes,
@@ -93,6 +108,13 @@ export function readSportEntry(tx: ReadContext, entityId: EntityId): StoredSport
     .get();
   return row && {
     personId: EntityId.parse(row.personId),
+    origin: row.origin as SportOrigin,
+    activityType: ActivityType.parse(row.activityType),
+    startedAt: row.startedAt as Instant,
+    durationMinutes: row.durationMinutes,
+    activeMilliKcal: row.activeMilliKcal,
+    replacedByEntryId: row.replacedByEntryId === null ? null : EntityId.parse(row.replacedByEntryId),
+    reactivatedAt: row.reactivatedAt as Instant | null,
     localDate: LocalDate.parse(row.localDate),
     timeZone: TimeZone.parse(row.timeZone),
     utcOffsetMinutes: row.utcOffsetMinutes,
@@ -101,11 +123,32 @@ export function readSportEntry(tx: ReadContext, entityId: EntityId): StoredSport
   };
 }
 
-const facts = {
+/** Herkunft eines Sporteintrags: manuell, Apple Health oder Health Connect. */
+export type SportOrigin = SportEntryUpsert['origin'];
+
+/** Ein gelesener Eintrag: was die Zählregel braucht und was die Wochenübersicht zeigt. */
+export type SportRow = SportEntryFacts &
+  Readonly<{
+    origin: SportOrigin;
+    activityType: string;
+    overrideActivityType: string | null;
+    startedAt: string;
+    timeZone: string;
+    activeMilliKcal: number | null;
+    sourceAppName: string | null;
+  }>;
+
+const rowColumns = {
   id: sportEntry.id,
   origin: sportEntry.origin,
+  activityType: sportEntry.activityType,
+  overrideActivityType: sportEntry.overrideActivityType,
+  startedAt: sportEntry.startedAt,
   durationMinutes: sportEntry.durationMinutes,
+  activeMilliKcal: sportEntry.activeMilliKcal,
+  sourceAppName: sportEntry.sourceAppName,
   localDate: sportEntry.localDate,
+  timeZone: sportEntry.timeZone,
   deletedAt: sportEntry.deletedAt,
   hiddenAt: sportEntry.hiddenAt,
   replacedByEntryId: sportEntry.replacedByEntryId,
@@ -114,20 +157,21 @@ const facts = {
 
 /**
  * Alle Einträge einer Person in der Woche (Montag bis Sonntag) eines lokalen Tags, auch gelöschte und
- * ausgeblendete, dazu die ersetzenden Importe dieser Einträge, auch aus Nachbarwochen. Die Zählregel
- * filtert selbst und braucht dafür den ersetzenden Import (Spezifikation 3, Abschnitt 3).
+ * ausgeblendete, dazu die ersetzenden Importe dieser Einträge, auch aus Nachbarwochen; aufsteigend nach
+ * Beginn. Die Zählregel filtert selbst und braucht dafür den ersetzenden Import (Spezifikation 3, Abschnitt 3).
  */
-export function sportEntriesOfWeek(tx: ReadContext, personId: EntityId, localDate: LocalDate): SportEntryFacts[] {
+export function sportEntriesOfWeek(tx: ReadContext, personId: EntityId, localDate: LocalDate): SportRow[] {
   const db = sqliteOf(tx);
   const { monday, sunday } = weekOf(localDate);
   const inWeek = and(eq(sportEntry.personId, personId), between(sportEntry.localDate, monday, sunday));
   const replacing = db.select({ id: sportEntry.replacedByEntryId }).from(sportEntry).where(and(inWeek, isNotNull(sportEntry.replacedByEntryId)));
   return db
-    .select(facts)
+    .select(rowColumns)
     .from(sportEntry)
     .where(or(inWeek, and(eq(sportEntry.personId, personId), inArray(sportEntry.id, replacing))))
     .orderBy(asc(sportEntry.startedAt), asc(sportEntry.id))
-    .all();
+    .all()
+    .map((row) => ({ ...row, origin: row.origin as SportOrigin }));
 }
 
 /** Der importierte Sporteintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */

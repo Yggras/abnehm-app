@@ -6,8 +6,10 @@ import {
   ManualWeightG,
   SportEntryRecord,
   SportEntryUpsert,
+  SportDeletedOutcome,
+  SportMessageValues,
   SportRecordedOutcome,
-  SportRecordedValues,
+  SportUpdatedOutcome,
   WaterAddedOutcome,
   WaterAddedValues,
   WaterEntryRecord,
@@ -151,7 +153,7 @@ export const trackerFixtures = {
       'mit Ersetzungswirkung': { ...sport, ...owned, counting: false },
     },
   }),
-  SportRecordedValues: fixtures(SportRecordedValues, {
+  SportMessageValues: fixtures(SportMessageValues, {
     valid: { '30 min Laufen': { activityType: 'laufen', durationMinutes: 30 } },
     invalid: { 'ohne Art': { durationMinutes: 30 }, 'mit Kalorien': { activityType: 'laufen', durationMinutes: 30, activeMilliKcal: 210_000 } },
   }),
@@ -160,6 +162,21 @@ export const trackerFixtures = {
     invalid: {
       'ohne Rückgängig': { messageKey: 'sport.eingetragen', values: { activityType: 'laufen', durationMinutes: 30 } },
       'fremde Meldung': { messageKey: 'gewicht.eingetragen', values: { activityType: 'laufen', durationMinutes: 30 }, undoToken: 'undo-7f3c' },
+    },
+  }),
+  SportUpdatedOutcome: fixtures(SportUpdatedOutcome, {
+    valid: { 'Einheit gespeichert': { messageKey: 'sport.geaendert', values: { activityType: 'laufen', durationMinutes: 45 }, undoToken: 'undo-7f3c' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'sport.geaendert', values: { activityType: 'laufen', durationMinutes: 45 } },
+      'Meldung des Eintragens': { messageKey: 'sport.eingetragen', values: { activityType: 'laufen', durationMinutes: 45 }, undoToken: 'undo-7f3c' },
+      'mit Beginn': { messageKey: 'sport.geaendert', values: { activityType: 'laufen', durationMinutes: 45, startedAt: now }, undoToken: 'undo-7f3c' },
+    },
+  }),
+  SportDeletedOutcome: fixtures(SportDeletedOutcome, {
+    valid: { 'Einheit gelöscht': { messageKey: 'sport.geloescht', values: { activityType: 'laufen', durationMinutes: 30 }, undoToken: 'undo-7f3c' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'sport.geloescht', values: { activityType: 'laufen', durationMinutes: 30 } },
+      'über 600 Minuten': { messageKey: 'sport.geloescht', values: { activityType: 'laufen', durationMinutes: 601 }, undoToken: 'undo-7f3c' },
     },
   }),
   ManualWeightG: fixtures(ManualWeightG, {
