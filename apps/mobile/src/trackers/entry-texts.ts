@@ -15,11 +15,16 @@ export function dayText(localDate: LocalDate, today: LocalDate): string {
   return `${weekdaysShort[weekdayOf(localDate)]}, ${day}.${month}.`;
 }
 
+/** Datum ohne Wochentag, etwa „12.10.“. */
+export function shortDate(localDate: LocalDate): string {
+  const [, month, day] = localDate.split('-');
+  return `${day}.${month}.`;
+}
+
 /** Kurz für die Messliste: „heute“, „gestern“ oder nur das Datum, etwa „12.10.“, damit die Zeile auf dem iPhone SE einzeilig bleibt. */
 export function shortDayText(localDate: LocalDate, today: LocalDate): string {
   if (localDate === today || localDateAfter(localDate, 1) === today) return dayText(localDate, today);
-  const [, month, day] = localDate.split('-');
-  return `${day}.${month}.`;
+  return shortDate(localDate);
 }
 
 /** Uhrzeit eines Zeitpunkts in einer Zone, etwa „07:30“. */

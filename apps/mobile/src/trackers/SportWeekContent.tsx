@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { localDateAfter } from '@abnehm/contracts/base';
+import { localDateAfter, type LocalDate } from '@abnehm/contracts/base';
 
 import { Button, Card, Icon, IconButton, ListGroup, ListRow, ProgressBar, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
@@ -22,7 +22,7 @@ export type SportWeekContentProps = {
   week: SportWeek;
   trackers: SportFormTrackers;
   /** Blättert zur Woche, die diesen Tag enthält; `null` ist die laufende Woche. */
-  onWeek: (day: SportWeek['monday'] | null) => void;
+  onWeek: (day: LocalDate | null) => void;
 };
 
 const addTarget = { type: 'capture.sport', newEntry: true } as const;

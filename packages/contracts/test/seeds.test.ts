@@ -27,6 +27,12 @@ import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, week
 const solo = seedManifests.solo;
 const philipp = seedIds.person.philipp;
 
+/** Was die Sport-Zählregel von einer Seed-Zeile braucht; Seeds kennen nur manuelle, nie ersetzte Einheiten. */
+const sportFacts = (row: Record<string, unknown>) => ({
+  id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
+  deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
+});
+
 describe('Seed-Manifest', () => {
   it('enthält feste Uhr, Zone, lokale Tage, Katalogversion, Konten, Installationen, Ausgangs- und Sollzustand', () => {
     expect(solo.formatVersion).toBe(1);
@@ -193,10 +199,7 @@ describe('Seed-Manifest', () => {
     const all = server.sport_entry ?? [];
     // Die Vorwoche (#174) zählt nicht zu dieser Woche; sie steht in allen Varianten gleich.
     const rows = all.filter((row) => String(row.local_date) >= seedDays.vorgestern);
-    const entries = all.map((row) => ({
-      id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
-      deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
-    }));
+    const entries = all.map(sportFacts);
     const target = Number(server.goal_version?.[0]?.weekly_sport_target_minutes);
 
     expect(target).toBe(150);
@@ -217,10 +220,7 @@ describe('Seed-Manifest', () => {
   it('solo und seine Varianten: Vorwoche mit 80 Minuten und einem Tag mit zwei Einheiten (#174)', () => {
     for (const scenario of ['solo', 'solo-sport-erreicht', 'solo-wasser-leer'] as const) {
       const rows = seedManifests[scenario].initial.server.sport_entry ?? [];
-      const entries = rows.map((row) => ({
-        id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
-        deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
-      }));
+      const entries = rows.map(sportFacts);
       const previous = rows.filter((row) => String(row.local_date) < seedDays.vorgestern);
 
       expect(weekMinutes(entries, '2026-10-08')).toBe(80);

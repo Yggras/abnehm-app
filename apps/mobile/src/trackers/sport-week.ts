@@ -70,7 +70,7 @@ export function sportWeekSource(
     const today = LocalDate.parse(clock.read().localDate);
     const day = week === null || week > today ? today : week;
     const { monday, sunday } = weekOf(day);
-    return { personId, today, monday: LocalDate.parse(monday), sunday: LocalDate.parse(sunday), rows: sportEntriesOfWeek(tx, personId, LocalDate.parse(day)) };
+    return { personId, today, monday: LocalDate.parse(monday), sunday: LocalDate.parse(sunday), rows: sportEntriesOfWeek(tx, personId, day) };
   };
   return observedSource<SportWeekReading, SportWeekState>(
     database,

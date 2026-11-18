@@ -1,17 +1,11 @@
 import { localDateAfter, type LocalDate } from '@abnehm/contracts/base';
 
 import { activityNames } from '../shell/texts';
-import { dayText, originNames, timeText } from './entry-texts';
+import { dayText, originNames, shortDate, timeText } from './entry-texts';
 import type { SportListEntry, SportWeek } from './sport-week';
 
 // Texte des Sport-Detailbildschirms (Spezifikation 3, Abschnitt 5; #38). Kalorien stehen in `milli_kcal`
 // und werden nur hier auf ganze kcal gerundet; sie sind eine Anzeige und zählen nirgends.
-
-/** Kurzes Datum ohne Wochentag, etwa „12.10.“. */
-function shortDate(localDate: LocalDate): string {
-  const [, month, day] = localDate.split('-');
-  return `${day}.${month}.`;
-}
 
 /** Kalorien einer Einheit als Näherung, etwa „≈ 210 kcal“; gesprochen „etwa 210 kcal“. */
 const kcalText = (milliKcal: number, spoken: boolean) => `${spoken ? 'etwa' : '≈'} ${Math.round(milliKcal / 1000).toLocaleString('de-DE')} kcal`;
@@ -47,9 +41,10 @@ export const sportTexts = {
   minutes: (durationMinutes: number) => `${durationMinutes} min`,
   /** Unterzeile einer Einheit: Uhrzeit, Herkunft bzw. Quell-App und Kalorien, etwa „07:00 · Manuell · ≈ 210 kcal“. */
   details(entry: SportListEntry, spoken = false): string {
-    const source = entry.origin === 'manuell' ? originNames.manuell : entry.sourceAppName;
+    // Manuell steht die Herkunft, bei Importen die Quell-App; die Herkunft zeigt dort das Abzeichen.
+    const originOrApp = entry.origin === 'manuell' ? originNames.manuell : entry.sourceAppName;
     const kcal = entry.activeMilliKcal === null ? null : kcalText(entry.activeMilliKcal, spoken);
-    return [timeText(entry.startedAt, entry.timeZone), source, kcal].filter(Boolean).join(' · ');
+    return [timeText(entry.startedAt, entry.timeZone), originOrApp, kcal].filter(Boolean).join(' · ');
   },
   /** Zugänglicher Name einer Zeile, etwa „Laufen, 30 min, 07:00 · Manuell · etwa 210 kcal“. */
   entrySpoken(entry: SportListEntry): string {
