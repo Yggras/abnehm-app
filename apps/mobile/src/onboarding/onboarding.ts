@@ -1,10 +1,11 @@
 import type { Clock } from '@abnehm/clock';
-import type { DisplayName, Instant } from '@abnehm/contracts/base';
+import type { DisplayName, EntityId, Instant } from '@abnehm/contracts/base';
 
 import type { AppAuth, RegisterResult, SignInResult } from '../auth';
 import type { LocalDatabase } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { updateOwnPerson, type SyncCycleResult, type SyncWriter } from '../sync';
+import { checkBodyData, type BodyDataCheck, type BodyDataProblem } from './body-data';
 import { readOnboardingDraft, updateOnboardingDraft, type OnboardingDraft, type OnboardingDraftChange } from './draft';
 
 // Onboarding-Modul (Spezifikation 1, Abschnitte 1 und 9): der Weg vom Willkommen bis „Heute“. Vor dem
@@ -33,6 +34,14 @@ export type AccountSetupResult =
   /** Die Sitzung wurde abgelehnt; das Auth-Modul sperrt bereits. */
   | Readonly<{ type: 'gesperrt' }>;
 
+/** Ausgang von „Weiter“ in Schritt 3 „Körperdaten“. */
+export type BodyDataResult =
+  /** Vollständig und in den Grenzen; die `entryId` des Startgewichts liegt im Entwurf. */
+  | Readonly<{ type: 'bestaetigt' }>
+  /** Unter 18 Jahren: freundlicher Sperrbildschirm. */
+  | Readonly<{ type: 'minderjaehrig' }>
+  | Readonly<{ type: 'ungueltig'; errors: BodyDataProblem[] }>;
+
 export type Onboarding = {
   /** Schritt 2: legt das Konto samt Person an; die Bestätigung aus Schritt 1 folgt mit der Person. */
   register(input: { email: string; password: string; displayName: DisplayName; disclaimerAcceptedAt: Instant }): Promise<RegisterResult>;
@@ -49,6 +58,14 @@ export type Onboarding = {
   acceptDisclaimer(): void;
   readDraft(): OnboardingDraft;
   updateDraft(change: OnboardingDraftChange): OnboardingDraft;
+  /**
+   * „Weiter“ in Schritt 3: prüft die Körperdaten des Entwurfs mit den Grenzen des Zielrechners und dem
+   * Alter am heutigen Tag. Sind sie gültig, legt es beim ersten Mal die `entryId` für das Startgewicht
+   * im Entwurf ab; mit ihr speichert Schritt 8 es ohne Dublette.
+   */
+  confirmBodyData(): BodyDataResult;
+  /** Stand der Körperdaten im Entwurf am heutigen Tag, etwa für den Sperrbildschirm nach einem Neustart. */
+  bodyData(): BodyDataCheck;
   /** Für `onAccountOpened` der App-Sitzung; die Rückgabe löst die Beobachtung beim Sperren. */
   opened(database: LocalDatabase): () => void;
 };
@@ -60,6 +77,8 @@ export type OnboardingOptions = {
   /** Sync-Zyklus der geöffneten Kontodatenbank; `undefined` ohne geöffnete. */
   sync: () => Promise<SyncCycleResult> | undefined;
   onError: (error: unknown) => void;
+  /** Erzeugt die `entryId` des Startgewichts. */
+  newId: () => EntityId;
 };
 
 /** Was Schritt 2 an die Person des neuen Kontos weitergibt, bis sie angekommen ist. */
@@ -69,7 +88,7 @@ type OwnPerson = { accountId: string; disclaimerAccepted: boolean };
 
 const loading: OnboardingProgress = { type: 'laedt' };
 
-export function createOnboarding({ auth, clock, writer, sync, onError }: OnboardingOptions): Onboarding {
+export function createOnboarding({ auth, clock, writer, sync, onError, newId }: OnboardingOptions): Onboarding {
   let handover: Handover | null = null;
   let current: { database: LocalDatabase; own: OwnPerson | null } | null = null;
   let snapshot: OnboardingProgress = loading;
@@ -154,6 +173,19 @@ export function createOnboarding({ auth, clock, writer, sync, onError }: Onboard
     readDraft: () => requireDatabase().read(readOnboardingDraft),
 
     updateDraft: (change) => requireDatabase().transaction((tx) => updateOnboardingDraft(tx, change, clock.read().instant)),
+
+    bodyData: () => requireDatabase().read((tx) => checkBodyData(readOnboardingDraft(tx), clock.read().localDate)),
+
+    confirmBodyData() {
+      const { instant, localDate } = clock.read();
+      return requireDatabase().transaction((tx): BodyDataResult => {
+        const draft = readOnboardingDraft(tx);
+        const check = checkBodyData(draft, localDate);
+        if (check.type !== 'vollstaendig') return check;
+        if (draft.startWeightEntryId === undefined) updateOnboardingDraft(tx, { startWeightEntryId: newId() }, instant);
+        return { type: 'bestaetigt' };
+      });
+    },
 
     opened(database) {
       const entry: { database: LocalDatabase; own: OwnPerson | null } = { database, own: null };

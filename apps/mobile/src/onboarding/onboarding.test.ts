@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 
 import { createTestClock } from '@abnehm/clock/testing';
-import { DisplayName, EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
+import { DisplayName, EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 
 import { deviceState } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
@@ -203,5 +203,62 @@ describe('Onboarding-Entwurf', () => {
 
   it('ohne geöffnete Kontodatenbank ist der Entwurf ein Aufruffehler', () => {
     expect(() => device.onboarding.readDraft()).toThrow('Onboarding ohne geöffnete Kontodatenbank');
+  });
+});
+
+describe('Schritt 3 „Körperdaten“', () => {
+  // Heute ist laut Testuhr der 14.10.2026 in Europe/Berlin.
+  const body = { calculationSex: 'weiblich', birthDate: LocalDate.parse('1991-04-02'), heightCm: 168, weightG: 80_000 } as const;
+
+  async function registered() {
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+  }
+
+  it('bestätigt vollständige Körperdaten und legt die `entryId` des Startgewichts genau einmal im Entwurf ab', async () => {
+    await registered();
+    const before = device.outbox();
+    device.onboarding.updateDraft(body);
+
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'bestaetigt' });
+    const { startWeightEntryId } = device.onboarding.readDraft();
+    expect(startWeightEntryId).toEqual(expect.any(String));
+
+    device.onboarding.updateDraft({ weightG: 79_500 });
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'bestaetigt' });
+    expect(device.onboarding.readDraft()).toEqual({ ...body, weightG: 79_500, startWeightEntryId });
+    expect(device.outbox()).toEqual(before);
+  });
+
+  it('sperrt unter 18: der 18. Geburtstag heute gilt als volljährig, morgen noch nicht', async () => {
+    await registered();
+
+    device.onboarding.updateDraft({ ...body, birthDate: LocalDate.parse('2008-10-15') });
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'minderjaehrig' });
+    expect(device.onboarding.readDraft().startWeightEntryId).toBeUndefined();
+
+    device.onboarding.updateDraft({ birthDate: LocalDate.parse('2008-10-14') });
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'bestaetigt' });
+  });
+
+  it('meldet fehlende Angaben und die Grenzen des Zielrechners, ohne eine `entryId` zu erzeugen', async () => {
+    await registered();
+
+    expect(device.onboarding.confirmBodyData()).toEqual({
+      type: 'ungueltig',
+      errors: ['calculation_sex_missing', 'birth_date_missing', 'height_missing', 'weight_missing'],
+    });
+    device.onboarding.updateDraft({ ...body, heightCm: 119, weightG: 300_100 });
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'ungueltig', errors: ['height_out_of_range', 'weight_out_of_range'] });
+    expect(device.onboarding.readDraft().startWeightEntryId).toBeUndefined();
+    device.onboarding.updateDraft({ heightCm: 120, weightG: 300_000 });
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'bestaetigt' });
+  });
+
+  it('die Sperre unter 18 geht vor fehlenden Angaben', async () => {
+    await registered();
+    device.onboarding.updateDraft({ birthDate: LocalDate.parse('2012-01-01') });
+
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'minderjaehrig' });
   });
 });

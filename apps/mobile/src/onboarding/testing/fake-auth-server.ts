@@ -2,10 +2,11 @@ import { passwordPolicy, type BootstrapPersonResult } from '@abnehm/contracts/au
 import { EntityId, ServerVersion, TimeZone } from '@abnehm/contracts/base';
 
 // Fake-Server für die Endpunkte, die das Auth-Modul der App (#97) beim Registrieren, Anmelden und
-// Bootstrap anspricht, für Komponenten- und Modultests ohne Backend. Die Antworten folgen dem
-// Verhalten, das `apps/backend/test/` gegen Better Auth prüft: Passwortregeln aus dem Vertrag,
-// `422` für eine vergebene E-Mail, ein gemeinsamer Fehler für falsche E-Mail und falsches Passwort
-// und ein idempotenter Bootstrap. Fehler im Transport (offline) kommen aus dem Fehler-Adapter (#112).
+// Bootstrap anspricht, dazu die Serverabmeldung des Abmeldemoduls (#111), für Komponenten- und
+// Modultests ohne Backend. Die Antworten folgen dem Verhalten, das `apps/backend/test/` gegen Better
+// Auth prüft: Passwortregeln aus dem Vertrag, `422` für eine vergebene E-Mail, ein gemeinsamer Fehler
+// für falsche E-Mail und falsches Passwort, ein idempotenter Bootstrap und eine je `requestId`
+// idempotente Abmeldung. Fehler im Transport (offline) kommen aus dem Fehler-Adapter (#112).
 
 type Account = { id: string; email: string; password: string };
 
@@ -28,6 +29,7 @@ export function createFakeAuthServer(): FakeAuthServer {
   const sessions = new Map<string, string>();
   const persons = new Map<string, BootstrapPersonResult>();
   const received: string[] = [];
+  const logouts = new Map<string, unknown>();
   let bootstrapAvailable = true;
   let next = 0;
   const id = (kind: number) => `fa${kind}00000-0000-4000-8000-${String(++next).padStart(12, '0')}`;
@@ -84,6 +86,17 @@ export function createFakeAuthServer(): FakeAuthServer {
         };
         persons.set(session, person);
         return json(200, person);
+      }
+      case 'POST /v1/session/logout': {
+        const token = new Headers(init?.headers).get('authorization')?.replace('Bearer ', '') ?? '';
+        const key = `${token} ${body.requestId ?? ''}`;
+        const stored = logouts.get(key);
+        if (stored !== undefined) return json(200, stored);
+        if (session === undefined) return json(401, {});
+        sessions.delete(token);
+        const result = { loggedOutAt: '2026-10-14T12:00:00.000Z' };
+        logouts.set(key, result);
+        return json(200, result);
       }
       default:
         return json(404, {});

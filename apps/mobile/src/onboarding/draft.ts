@@ -9,8 +9,8 @@ import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 
 // Lokaler Onboarding-Entwurf (Spezifikation 1, Abschnitt 9): die Eingaben der Schritte 3–8, bis
 // Schritt 8 den Plan speichert. Er ist Gerätezustand der Kontodatenbank (`device_state`) und wird nicht
-// synchronisiert. Die Schritte prüfen ihre Eingaben mit den Grenzen des Zielrechners, bevor sie sie
-// ablegen; der Entwurf prüft nur Form und Einheit.
+// synchronisiert. Er prüft nur Form und Einheit; die Grenzen des Zielrechners prüfen die Schritte bei
+// „Weiter“, etwa `confirmBodyData` in Schritt 3, der jede Eingabe sofort ablegt.
 
 const amount = z.int().positive();
 
