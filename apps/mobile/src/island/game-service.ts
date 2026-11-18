@@ -1,7 +1,7 @@
 import type { Clock } from '@abnehm/clock';
 import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
-import type { IslandRole } from '@abnehm/contracts/island';
+import type { IslandRole, PlacementTarget } from '@abnehm/contracts/island';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
 import { reactionMood } from '@abnehm/game-rules/mood';
 
@@ -16,11 +16,12 @@ import { buildObject, type BuildOutcome } from './build-object';
 import { takeGrowthIntro } from './growth-intro';
 import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
 import { createMoodState, distinct } from './mood-state';
+import { placeObject, upgradeObject, type PlaceOutcome, type UpgradeOutcome } from './object-commands';
 import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceOutcome } from './role-choice';
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
 // der Laichkugel über die Rollenwahl (#180) bis zur geschlüpften Insel (#184), die Befehle der Rollenwahl,
-// das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
+// Bauen (#191), Aufwerten und Platzieren (#194), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
 // (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je
 // geöffneter Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
@@ -61,6 +62,10 @@ export type GameService = Readonly<{
    * Levelaufstieg entsteht erst über den Sync (#191).
    */
   build(request: Readonly<{ fieldId: EntityId; blueprintKey: string }>): BuildOutcome;
+  /** Wertet ein eigenes gebautes Objekt eine Stufe auf; die eigene Hälfte wächst sofort, auch offline (#194). */
+  upgrade(islandObjectId: EntityId): UpgradeOutcome;
+  /** Stellt ein eigenes Objekt kostenlos auf ein freies eigenes Feld oder legt es ins Lager (#194). */
+  place(islandObjectId: EntityId, target: PlacementTarget): PlaceOutcome;
   /**
    * Ob „So wächst Momo“ jetzt erscheinen soll; genau beim ersten Aufruf je Installation `true` und dann
    * gemerkt (Einmal-Flag ohne Sync).
@@ -124,6 +129,8 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     declineRoles: (actionId) => database.transaction((tx) => commands.decline(tx, actionId)),
     withdrawRoles: (actionId) => database.transaction((tx) => commands.withdraw(tx, actionId)),
     build: (request) => database.transaction((tx) => buildObject(tx, { writer, newId, clock }, request)),
+    upgrade: (islandObjectId) => database.transaction((tx) => upgradeObject(tx, { writer, newId, clock }, { islandObjectId })),
+    place: (islandObjectId, target) => database.transaction((tx) => placeObject(tx, { writer, newId, clock }, { islandObjectId, target })),
     momoCharacter: { subscribe: (listener) => mood.observe(database, 'heute', (stage) => listener(momoCharacterOf(stage))) },
     // „Wir“ zeigt Momo nicht; seine Beiträge folgen nur der Datenbank.
     wirContributions: { subscribe: (listener) => database.observe(readIslandStage, distinct((stage) => listener(wirContributionsOf(stage)))) },

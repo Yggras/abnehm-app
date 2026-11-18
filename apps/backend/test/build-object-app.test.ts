@@ -4,14 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { EntityId } from '@abnehm/contracts/base';
 import { summarizeEnergy } from '@abnehm/contracts/energy';
 
-import { energyBooking as localBooking, islandField, islandObject as localObject } from '../../mobile/src/local-db/schema/index.ts';
+import { energyBooking as localBooking, islandObject as localObject } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { readBookings } from '../src/energy/bookings.ts';
 import { islandObject } from '../src/db/schema/index.ts';
 import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
-import { earnEnergy, lockBlueprint } from './support/building.ts';
-import { coupleByInvitation, worldToday } from './support/coupled-world.ts';
-import { gamePhone, gamePhones, proposalOn, type GamePhone } from './support/game-phones.ts';
+import { lockBlueprint } from './support/building.ts';
+import { worldToday } from './support/coupled-world.ts';
+import { energize, fieldOn, gamePhone, hatchedPhones, islandOf, type GamePhone } from './support/game-phones.ts';
 
 // Nachweis für #191 auf zwei Geräten: Bauen im Spieldienst der App (Engine, Outbox und Adapter auf echtem
 // SQLite) gegen die echte Hono-App mit Postgres (Spezifikation 4, Testnaht 3). Die eigene Hälfte wächst
@@ -19,37 +19,6 @@ import { gamePhone, gamePhones, proposalOn, type GamePhone } from './support/gam
 
 const days = ['2026-10-14', '2026-10-13', '2026-10-12'] as const;
 
-/** Anna hat Natur vorgeschlagen, Philipp hat angenommen: Momo ist geschlüpft, beide Geräte sind auf dem Stand. */
-async function hatchedPhones() {
-  const world = await gamePhones();
-  await coupleByInvitation(world.backend, world.philipp.device, world.anna.device);
-  await world.annasPhone.sync();
-  world.annasPhone.game.proposeRoles('natur');
-  await world.annasPhone.sync();
-  await world.philippsPhone.sync();
-  world.philippsPhone.game.acceptRoles(proposalOn(world.philippsPhone).actionId);
-  await world.philippsPhone.sync();
-  await world.annasPhone.sync();
-  return world;
-}
-
-/** Philipp verdient auf dem Server Energie; seine Geräte kennen die Tagesziele und holen die Gutschriften. */
-async function energize(world: Awaited<ReturnType<typeof gamePhones>>, localDates: readonly string[], phones: readonly GamePhone[] = [world.philippsPhone]) {
-  const goals = await earnEnergy(world.backend, world.philipp, localDates);
-  for (const phone of phones) {
-    phone.materialize(goals);
-    await phone.sync();
-  }
-}
-
-function islandOf(phone: GamePhone) {
-  const stage = phone.stage();
-  if (stage.type !== 'geschluepft' || stage.island === null) throw new Error(`Nicht geschlüpft: ${JSON.stringify(stage)}`);
-  return stage.island;
-}
-
-const fieldOn = (phone: GamePhone, key: string) =>
-  EntityId.parse(phone.database.read((tx) => sqliteOf(tx).select().from(islandField).where(eq(islandField.fieldKey, key)).get())!.id);
 const localRows = (phone: GamePhone) =>
   phone.database.read((tx) => ({ objects: sqliteOf(tx).select().from(localObject).all(), builds: sqliteOf(tx).select().from(localBooking).where(eq(localBooking.type, 'build_debit')).all() }));
 const build = (phone: GamePhone, key: string, blueprintKey: string) => phone.game.build({ fieldId: fieldOn(phone, key), blueprintKey });
@@ -69,7 +38,15 @@ describe('Bauen App ↔ Backend', { timeout: 30_000 }, () => {
     // Laterne 3: Bedarf(1) = 11, 3/11 → 27 %. Kein Levelaufstieg ohne Projektion.
     expect(offline).toMatchObject({ energy: 1, halves: { level: 1, own: { halfPercent: 27, halfFull: false }, partner: { halfPercent: 0 }, waitingForPartner: false } });
     expect(offline.progress.members.find((member) => member.personId === philipp.personId)?.halfPercent).toBe(0);
-    expect(offline.objects).toEqual([{ id: built.type === 'gebaut' ? built.islandObjectId : '', fieldKey: 'grundinsel:0:0', art: 'laterne_1', ownerPersonId: philipp.personId }]);
+    expect(offline.objects).toEqual([{
+      id: built.type === 'gebaut' ? built.islandObjectId : '',
+      fieldKey: 'grundinsel:0:0',
+      catalogKey: 'laterne',
+      origin: 'gebaut',
+      level: 1,
+      art: 'laterne_1',
+      ownerPersonId: philipp.personId,
+    }]);
     expect(philippsPhone.character()).toMatchObject({ type: 'ready', data: { energy: 1, level: 1, ownHalfPercent: 27, waitingForPartner: false } });
     expect(philippsPhone.outbox()).toHaveLength(1);
 
@@ -92,7 +69,7 @@ describe('Bauen App ↔ Backend', { timeout: 30_000 }, () => {
     await energize(world, [worldToday]);
 
     expect(build(philippsPhone, 'grundinsel:0:0', 'laterne')).toMatchObject({ type: 'gebaut' });
-    expect(build(philippsPhone, 'grundinsel:1:0', 'sitzbank')).toEqual({ type: 'verboten', reason: 'zu_wenig_energie', missing: 1 });
+    expect(build(philippsPhone, 'grundinsel:1:0', 'sitzbank')).toEqual({ type: 'verboten', reason: 'zu_wenig_energie', price: 2, missing: 1 });
     expect(build(philippsPhone, 'grundinsel:0:0', 'holzweg')).toEqual({ type: 'verboten', reason: 'feld_belegt' });
     expect(build(philippsPhone, 'grundinsel:12:0', 'holzweg')).toEqual({ type: 'verboten', reason: 'fremdes_feld' });
     expect(build(philippsPhone, 'grundinsel:4:0', 'blumenwiese')).toEqual({ type: 'verboten', reason: 'falsche_rolle' });

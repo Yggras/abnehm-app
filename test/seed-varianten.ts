@@ -64,6 +64,7 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('rollenwahl-offen', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('haelfte-voll', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('doppelausgabe', 'apps/backend/test/seed-island-app.test.ts'),
+  manifest('feldkonflikt', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('tage_ohne_app_oeffnung', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   manifest('zeitzonen_reisen', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   profile('uhr-ungesichert-24h'),

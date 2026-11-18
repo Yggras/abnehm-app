@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { eq } from 'drizzle-orm';
 import { afterEach, expect } from 'vitest';
 
 import { createTestClock } from '@abnehm/clock/testing';
@@ -11,14 +12,14 @@ import { WirContributionsState, type WirContribution } from '@abnehm/contracts/w
 import { dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
 import { insertDailyGoalForTest } from '../../../mobile/src/daily-goals/testing/persisted.ts';
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
-import { buildObjectCommand } from '../../../mobile/src/island/build-object.ts';
+import { islandObjectCommands } from '../../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../../mobile/src/island/game-service.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
 import type { IslandStage } from '../../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../../mobile/src/island/shared-action-commands.ts';
 import { quietGameDependencies } from '../../../mobile/src/island/testing/quiet-game.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
-import { sharedAction as localAction } from '../../../mobile/src/local-db/schema/index.ts';
+import { islandField, sharedAction as localAction } from '../../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
 import type { TodayState } from '../../../mobile/src/shell/today-registry.ts';
@@ -35,7 +36,8 @@ import { pendingOperations } from '../../../mobile/src/sync/outbox.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { personWithSession } from './authorization.ts';
-import { worldStart } from './coupled-world.ts';
+import { coupleByInvitation, worldStart } from './coupled-world.ts';
+import { earnEnergy } from './building.ts';
 import { snapshotOf, type ServerDailyGoal } from './daily-goals.ts';
 
 // Geräte mit dem Spieldienst der App (#180, #184, #191): Engine, Outbox und Adapter auf echtem SQLite
@@ -86,7 +88,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     }),
     clock,
     installationId: newId(),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands] }),
   });
   const game: GameService = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
@@ -144,3 +146,35 @@ export async function gamePhones() {
   await annasPhone.sync();
   return { backend, philipp, anna, philippsPhone, annasPhone };
 }
+
+/** Anna hat Natur vorgeschlagen, Philipp hat angenommen: Momo ist geschlüpft, beide Geräte sind auf dem Stand. */
+export async function hatchedPhones() {
+  const world = await gamePhones();
+  await coupleByInvitation(world.backend, world.philipp.device, world.anna.device);
+  await world.annasPhone.sync();
+  world.annasPhone.game.proposeRoles('natur');
+  await world.annasPhone.sync();
+  await world.philippsPhone.sync();
+  world.philippsPhone.game.acceptRoles(proposalOn(world.philippsPhone).actionId);
+  await world.philippsPhone.sync();
+  await world.annasPhone.sync();
+  return world;
+}
+
+/** Philipp verdient auf dem Server Energie; seine Geräte kennen die Tagesziele und holen die Gutschriften. */
+export async function energize(world: Awaited<ReturnType<typeof gamePhones>>, localDates: readonly string[], phones: readonly GamePhone[] = [world.philippsPhone]) {
+  const goals = await earnEnergy(world.backend, world.philipp, localDates);
+  for (const phone of phones) {
+    phone.materialize(goals);
+    await phone.sync();
+  }
+}
+
+export function islandOf(phone: GamePhone) {
+  const stage = phone.stage();
+  if (stage.type !== 'geschluepft' || stage.island === null) throw new Error(`Nicht geschlüpft: ${JSON.stringify(stage)}`);
+  return stage.island;
+}
+
+export const fieldOn = (phone: GamePhone, key: string) =>
+  EntityId.parse(phone.database.read((tx) => sqliteOf(tx).select().from(islandField).where(eq(islandField.fieldKey, key)).get())!.id);

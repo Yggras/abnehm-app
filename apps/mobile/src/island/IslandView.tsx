@@ -12,8 +12,8 @@ import { IslandHud } from './IslandHud';
 import { islandScene, type IslandSceneInput, type LocalTime, type SceneHit } from './scene-model';
 import { islandTexts } from './texts';
 
-/** Bau-Modus der Inselansicht: was gebaut wird, wohin es darf und wie man abbricht. */
-export type BuildMode = Readonly<{ name: string; fields: ReadonlySet<string>; onCancel: () => void }>;
+/** Bau-Modus der Inselansicht: was gebaut oder umgestellt wird (#194), wohin es darf und wie man abbricht. */
+export type BuildMode = Readonly<{ title: string; fields: ReadonlySet<string>; onCancel: () => void }>;
 
 export type IslandViewProps = {
   island: IslandSceneInput;
@@ -32,9 +32,9 @@ export type IslandViewProps = {
   onLevelPress?: () => void;
   /** Wie weit Leisten des Rahmens unten über der Insel liegen, etwa die Tab-Leiste. */
   bottomInset?: number;
-  /** Bau-Modus (#192): der gewählte Bauplan, die Felder, die leuchten, und „Abbrechen“ in der Leiste. */
+  /** Bau-Modus (#192): was gesetzt wird, die Felder, die leuchten, und „Abbrechen“ in der Leiste; auch beim Umstellen (#194). */
   building?: BuildMode | null;
-  /** Das eben gebaute Objekt; es erscheint mit Feder. */
+  /** Das eben gebaute, aufgewertete oder umgestellte Objekt; es erscheint mit Feder. */
   appearing?: string | null;
 };
 
@@ -90,7 +90,8 @@ export function IslandView({
             onMomoPress?.();
             return;
           }
-          if (buildable === null) setSelectedField(hit?.type === 'feld' ? hit.field : null);
+          // Ein Tipp im Bau-Modus setzt oder verschiebt ein Objekt; eine ältere Auswahl markierte danach ein leeres Feld.
+          setSelectedField(buildable === null && hit?.type === 'feld' ? hit.field : null);
           if (hit !== null) onFieldPress?.(hit);
         }}
       />
@@ -107,7 +108,7 @@ export function IslandView({
         />
       </View>
       <View style={[styles.bottom, { paddingBottom: bottomInset + space[3] }]} pointerEvents="box-none">
-        {building !== null ? <BuildModeBar name={building.name} onCancel={building.onCancel} /> : <IslandBar onOpen={onOpen} />}
+        {building !== null ? <BuildModeBar title={building.title} onCancel={building.onCancel} /> : <IslandBar onOpen={onOpen} />}
       </View>
     </View>
   );

@@ -2,24 +2,17 @@
  * @jest-environment ./jest/skia-environment.js
  */
 import { act, fireEvent, screen, userEvent, within } from '@testing-library/react-native';
-import { router, Slot } from 'expo-router';
-import { renderRouter } from 'expo-router/testing-library';
-import './testing/real-reanimated';
+import { router } from 'expo-router';
 import { BackHandler } from 'react-native';
-import { createGestureController } from 'react-native-gesture-handler/jest-utils';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 
-import { color } from '../design';
 import { withDeviceConfig } from '../design/testing/device-config';
 import { hitArea } from '../design/testing/hit-area';
-import { routeScreen } from '../navigation';
-import { MessageHostProvider } from '../shell/MessageHost';
-import { appGameService } from './app-game-service';
-import { MomoTab } from './MomoTab';
-import { IslandHost, testScreen } from './testing/island-host';
-import { createLaichkugelWorld, type LaichkugelWorld } from './testing/laichkugel-world';
+import { testScreen } from './testing/island-host';
+import { fieldOnScreen, glowing, openIslandScreen, tap } from './testing/island-screen';
+import type { LaichkugelWorld } from './testing/laichkugel-world';
 import type * as mockSkia from './testing/skia-mock';
 
 // Nachweis für #192: Bau-Sheet und Bau-Modus im Tab „Momo“ auf echter SQLite mit dem echten Spieldienst
@@ -36,50 +29,14 @@ afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-/**
- * Bildschirmpunkt der Mitte eines Felds der Grundinsel am Start: Feld (0, 0) mit seiner Mitte (0, 16)
- * liegt bei (184, 168); siehe `IslandView.test.tsx`. Die Feldmitte von (x, y) liegt im Szenenraum bei
- * ((x − y) · 32, (x + y) · 16 + 16).
- */
-const fieldOnScreen = (x: number, y: number) => ({ x: (x - y) * 32 + 184, y: (x + y) * 16 + 16 + 152 });
 const ownCorner = fieldOnScreen(2, 2);
 const ownRoleArea = fieldOnScreen(4, 6);
 const clearing = fieldOnScreen(8, 6);
 
-async function openIsland(energy: number) {
-  const world = await createLaichkugelWorld(clock);
-  cleanups.push(() => world.close());
-  world.couple();
-  world.hatch();
-  world.credit(energy);
-  // „So wächst Momo“ hat Philipp schon gesehen.
-  world.game.takeGrowthIntro();
-  cleanups.push(appGameService.opened(world.game));
-  const Layout = () => (
-    <IslandHost clock={clock}>
-      <MessageHostProvider>
-        <Slot />
-      </MessageHostProvider>
-    </IslandHost>
-  );
-  await renderRouter({ _layout: Layout, index: () => null, momo: routeScreen('momo', MomoTab) }, { initialUrl: '/momo' });
-  await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, ...testScreen } } });
-  return world;
-}
-
-async function tap({ x, y }: { x: number; y: number }) {
-  await act(() => {
-    const controller = createGestureController('insel-tippen');
-    controller.begin({ x, y });
-    controller.activate({ x, y });
-    controller.end({ x, y });
-  });
-}
+const openIsland = (energy: number) => openIslandScreen(clock, cleanups, { energy });
 
 const builds = (world: LaichkugelWorld) =>
   world.operations().flatMap((operation) => (operation.type === 'buildObject' ? [operation.payload] : []));
-/** Felder, die im Canvas in `island-buildable` leuchten. */
-const glowing = () => screen.container.queryAll((node) => node.type === 'skPath' && node.props.color === color.islandBuildable);
 const ownHalf = () => screen.getByRole('progressbar', { name: 'Level 1' }).props.accessibilityValue.text;
 const tooSmall = () => screen.getAllByRole('button').map(hitArea).filter((area) => area.width < 48 || area.height < 48);
 
@@ -166,17 +123,19 @@ test('ein freies eigenes Feld antippen: Das Sheet zeigt, was dort passt; zu Teur
   expect(screen.getByRole('image', { name: 'Momos Insel, Level 1, 1 eigene Objekte' })).toBeOnTheScreen();
 });
 
-test('die eigene Ecke bietet alle freigeschalteten Baupläne an; ein bebautes Feld und die Lichtung öffnen kein Bau-Sheet', async () => {
+test('die eigene Ecke bietet alle freigeschalteten Baupläne an; die Lichtung und ein bebautes Feld öffnen kein Bau-Sheet', async () => {
   await openIsland(3);
 
+  await tap(clearing);
+  expect(screen.queryByTestId('sheet')).toBeNull();
   await tap(ownCorner);
   expect(screen.getAllByRole('button', { name: /Energie$/ })).toHaveLength(6);
   await user.press(screen.getByRole('button', { name: 'Holzweg, 1 Energie' }));
 
+  // Ein bebautes Feld öffnet das Objekt-Sheet (#194), keine Baupläne.
   await tap(ownCorner);
-  expect(screen.queryByTestId('sheet')).toBeNull();
-  await tap(clearing);
-  expect(screen.queryByTestId('sheet')).toBeNull();
+  expect(screen.getByRole('header', { name: 'Holzweg' })).toBeOnTheScreen();
+  expect(screen.queryAllByRole('button', { name: /, \d+ Energie$/ })).toEqual([]);
 });
 
 test('Abbrechen geht jederzeit: im Sheet durch Schließen, im Bau-Modus über die Leiste', async () => {

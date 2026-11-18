@@ -68,6 +68,7 @@ export const SeedScenarioKey = z.enum([
   'zeitzonen_reisen',
   'haelfte-voll',
   'doppelausgabe',
+  'feldkonflikt',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

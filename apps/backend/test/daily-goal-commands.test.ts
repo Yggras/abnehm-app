@@ -10,7 +10,7 @@ import { createTestBackend } from './support/app.ts';
 import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession, registeredCommandCases } from './support/authorization.ts';
 import { sendEncouragementScenario } from './support/encouragement.ts';
-import { buildObjectCommandScenario } from './support/building.ts';
+import { buildObjectCommandScenario, placeObjectCommandScenario, upgradeObjectCommandScenario } from './support/building.ts';
 import { bonusOp, completeOp, dailyGoalCommandScenarios, insertDailyGoals } from './support/daily-goals.ts';
 import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
@@ -138,10 +138,11 @@ describe('Gegenbuchung', () => {
 describe('Autorisierung der Fachbefehle', () => {
   it('das Backend meldet genau diese Fachbefehle an; für jeden gibt es ein Szenario', async () => {
     const { backend } = await setup();
-    // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107), die Fassungen (#128), `confirmPhotoDraft` (#162), `buildObject` (#191)
-    // und `sendEncouragement` (#123) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
+    // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107), die Fassungen (#128), `confirmPhotoDraft` (#162), `buildObject` (#191),
+    // `sendEncouragement` (#123) sowie `upgradeObject` und `placeObject` (#194) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
     const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
-      confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+      confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
+      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });
 

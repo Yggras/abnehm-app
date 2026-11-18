@@ -1,9 +1,8 @@
-import { Canvas } from '@shopify/react-native-skia';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { color, EnergySymbol, pressedEdge, radius, size, space, Text, boxShadow } from '../design';
 import type { BlueprintOption } from './build-options';
-import { ObjectArt } from './IslandArt';
+import { ObjectPreview } from './ObjectPreview';
 import { buildTexts } from './texts';
 
 // Inhalt des Bau-Sheets (Spezifikation 4, Abschnitt 7; #192): die passenden Baupläne mit Vorschau und
@@ -48,9 +47,6 @@ export function BuildSheet({ onField, energy, options, onChoose }: BuildSheetPro
   );
 }
 
-/** Seitenlänge der Vorschau: ein Feld breit, damit die Grafik so groß wie auf der Insel bei Zoom 1 erscheint. */
-const preview = size.islandTile;
-
 function BlueprintRow({ option, onPress }: { option: BlueprintOption; onPress(): void }) {
   const affordable = option.missing === 0;
   return (
@@ -62,12 +58,7 @@ function BlueprintRow({ option, onPress }: { option: BlueprintOption; onPress():
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed ? { backgroundColor: color.surfaceSunken, ...pressedEdge('card', 'cardPressed') } : null]}
     >
-      <View style={styles.preview}>
-        <Canvas style={styles.previewCanvas}>
-          {/* Der Fuß der Grafik steht auf der unteren Feldecke, damit auch hohe Objekte ganz zu sehen sind. */}
-          <ObjectArt at={{ x: preview / 2, y: preview - space[3] }} art={option.art} foliage="islandFoliage" />
-        </Canvas>
-      </View>
+      <ObjectPreview art={option.art} />
       <Text variant="bodyStrong" style={styles.name}>
         {option.name}
       </Text>
@@ -105,8 +96,6 @@ const styles = StyleSheet.create({
     backgroundColor: color.surfaceCard,
     boxShadow: boxShadow.card,
   },
-  preview: { width: preview, height: preview, borderRadius: radius.md, backgroundColor: color.islandGrass, overflow: 'hidden' },
-  previewCanvas: { width: preview, height: preview },
   name: { flexGrow: 1, flexShrink: 1 },
   price: { flexDirection: 'row', alignItems: 'center', gap: space[1] },
   missing: { textAlign: 'right' },

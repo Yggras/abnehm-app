@@ -7,6 +7,7 @@ import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import type { IslandRole } from '@abnehm/contracts/island';
+import type { IslandObjectOrigin } from '@abnehm/contracts/island-records';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { hatching } from '@abnehm/game-rules/hatching';
 
@@ -16,7 +17,7 @@ import { appendBooking, energyBookingEntity } from '../../energy';
 import type { Haptics } from '../../haptics/haptics';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { blueprintUnlock, communityProject, coupling, couplingMember, island, islandEvent, islandField, islandProgress, sharedAction } from '../../local-db/schema';
+import { blueprintUnlock, communityProject, coupling, couplingMember, island, islandEvent, islandField, islandObject, islandProgress, sharedAction } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import type { Refresh } from '../../shell/followed-source';
@@ -28,7 +29,8 @@ import { quietGameDependencies } from './quiet-game';
 
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
-// Insel, Vorschläge, die geschlüpfte Insel und Energie legt der Test an, wie sie der Pull ablegen würde.
+// Insel, Vorschläge, die geschlüpfte Insel, Energie und Objekte (#194) legt der Test an, wie sie der Pull
+// ablegen würde.
 // Die Uhr gibt der Test hinein, auf Wunsch auch Haptik und Takt des Spieldienstes (#188).
 
 const at = '2026-10-14T12:00:00.000Z';
@@ -56,6 +58,10 @@ export type LaichkugelWorld = Readonly<{
   proposeOnServer(by: 'philipp' | 'anna', proposerRole: IslandRole): EntityId;
   /** Gutschriften für erfüllte Tagesziele, wie sie der Pull ablegt. */
   credit(amount: number): void;
+  /** ID des materialisierten Inselfelds zum Feldschlüssel (#194). */
+  fieldId(fieldKey: string): EntityId;
+  /** Ein vom Server bestätigtes Inselobjekt, etwa eines des Partners, auf einem Feld oder im Lager (`null`) (#194). */
+  objectOnServer(object: Readonly<{ owner: 'philipp' | 'anna'; fieldKey: string | null; catalogKey: string; level?: number; origin?: IslandObjectOrigin }>): EntityId;
   operations(): ReturnType<typeof pendingOperations>;
   close(): void;
 }>;
@@ -71,6 +77,11 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
   const writer = createSyncWriter({ registry: createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]), clock, newId });
   const gameOf = (opened: LocalDatabase) => createGameService({ database: opened, writer, clock, newId, haptics, refresh });
   let game = gameOf(database);
+  const fieldIdOf = (fieldKey: string) => {
+    const field = database.read((tx) => sqliteOf(tx).select({ id: islandField.id }).from(islandField).where(eq(islandField.fieldKey, fieldKey)).get());
+    if (field === undefined) throw new Error(`Feld ${fieldKey} fehlt`);
+    return EntityId.parse(field.id);
+  };
   return {
     get database() {
       return database;
@@ -150,6 +161,18 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
           });
         }
       });
+    },
+    fieldId: fieldIdOf,
+    objectOnServer({ owner, fieldKey, catalogKey, level = 1, origin = 'gebaut' }) {
+      const id = newId();
+      const fieldId = fieldKey === null ? null : fieldIdOf(fieldKey);
+      database.transaction((tx) =>
+        sqliteOf(tx)
+          .insert(islandObject)
+          .values({ id, islandId, couplingId, ownerPersonId: owner === 'philipp' ? philipp : anna, catalogKey, origin, level, fieldId, ...synced })
+          .run(),
+      );
+      return id;
     },
     operations: () => database.read((tx) => pendingOperations(tx, 100)),
     close() {

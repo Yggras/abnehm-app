@@ -11,10 +11,13 @@ import {
   MomoAppearance,
   MomoForm,
   MomoMood,
+  PlacementTarget,
+  PlaceObject,
   RequestedSharedActionType,
   RequestSharedAction,
   SharedAction,
   SharedActionDecision,
+  UpgradeObject,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
 import { anna, command, coupling, island, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
@@ -170,6 +173,35 @@ export const islandFixtures = {
       },
       'Bauplanschlüssel mit Großbuchstaben': { commandId: command, islandObjectId: islandObject, fieldId: islandField, blueprintKey: 'Laterne', localDate: today },
       'ohne Feld': { commandId: command, islandObjectId: islandObject, blueprintKey: 'laterne', localDate: today },
+    },
+  }),
+  UpgradeObject: fixtures(UpgradeObject, {
+    valid: {
+      'Laterne auf Stufe 2': { commandId: command, islandObjectId: islandObject, toLevel: 2, localDate: today },
+      'auf Stufe 3': { commandId: command, islandObjectId: islandObject, toLevel: 3, localDate: today },
+    },
+    invalid: {
+      'Preis aus dem Client': { commandId: command, islandObjectId: islandObject, toLevel: 2, localDate: today, price: 6 },
+      'über Stufe 3 hinaus': { commandId: command, islandObjectId: islandObject, toLevel: 4, localDate: today },
+      'auf Stufe 1': { commandId: command, islandObjectId: islandObject, toLevel: 1, localDate: today },
+      'ohne Zielstufe': { commandId: command, islandObjectId: islandObject, localDate: today },
+    },
+  }),
+  PlacementTarget: fixtures(PlacementTarget, {
+    valid: { 'eigenes Feld': { type: 'feld', fieldId: islandField }, 'Lager': { type: 'lager' } },
+    invalid: { 'Feld ohne ID': { type: 'feld' }, 'Lager mit Feld': { type: 'lager', fieldId: islandField } },
+  }),
+  PlaceObject: fixtures(PlaceObject, {
+    valid: {
+      'Laterne umstellen': { commandId: command, islandObjectId: islandObject, fromFieldId: islandField, target: { type: 'feld', fieldId: islandField } },
+      'Laterne aus dem Lager platzieren': { commandId: command, islandObjectId: islandObject, fromFieldId: null, target: { type: 'feld', fieldId: islandField } },
+      'Laterne einlagern': { commandId: command, islandObjectId: islandObject, fromFieldId: islandField, target: { type: 'lager' } },
+    },
+    invalid: {
+      'Besitzer aus dem Client': { commandId: command, islandObjectId: islandObject, fromFieldId: null, target: { type: 'lager' }, ownerPersonId: anna },
+      'Feld statt Ziel': { commandId: command, islandObjectId: islandObject, fromFieldId: null, fieldId: islandField },
+      'ohne Objekt': { commandId: command, fromFieldId: null, target: { type: 'lager' } },
+      'ohne früheres Feld': { commandId: command, islandObjectId: islandObject, target: { type: 'lager' } },
     },
   }),
   MomoForm: fixtures(MomoForm, {

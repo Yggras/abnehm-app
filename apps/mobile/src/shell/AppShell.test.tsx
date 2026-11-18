@@ -84,7 +84,7 @@ const targets: RouteTarget[] = [
   { type: 'capture.water' },
   { type: 'capture.sport', newEntry: true },
   { type: 'capture.weight', newEntry: true },
-  { type: 'momo', view: 'lager' },
+  { type: 'momo', view: 'projekt' },
   { type: 'challenge.propose' },
   { type: 'challenge.detail', challengeId: id },
   { type: 'partner', focus: 'received_encouragement' },

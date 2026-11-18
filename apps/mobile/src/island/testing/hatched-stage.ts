@@ -39,6 +39,7 @@ export function hatchedStage(): Extract<IslandStage, { type: 'geschluepft' }> {
       halves: halvesFor(progress, philipp, 0),
       fields: plan.fields.map((field, index) => ({ ...field, id: EntityId.parse(`5d1c7e3a-2b4f-4a8e-b6c1-${String(index).padStart(12, '0')}`) })),
       objects: [],
+      storage: [],
       unlockedAreas: [],
       unlockedBlueprints: plan.blueprints.map((blueprint) => blueprint.key),
       appearance: appearanceAt(plan.progress.level),

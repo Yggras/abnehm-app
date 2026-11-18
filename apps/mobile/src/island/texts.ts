@@ -85,3 +85,33 @@ export const buildTexts = {
   placingHint: 'Tippe auf ein leuchtendes Feld.',
   cancel: 'Abbrechen',
 };
+
+/**
+ * Texte von Objekt-Sheet, Lager und Umstellen (#194). „Aufwerten“, „Umstellen“, „Einlagern“, „Platzieren“,
+ * „Lager“ und „von ‹Name› gebaut“ stehen in Spezifikation 4, Abschnitt 7, „Noch ‹n› Energie“ ebendort
+ * fürs Bauen; die übrigen Sätze sind Designwerte dieses Tickets (nicht belegt).
+ */
+export const objectTexts = {
+  level: (level: number) => `Stufe ${level}`,
+  builtBy: (partner: string, level: number) => `von ${partner} gebaut · Stufe ${level}`,
+  dekoFrom: (partner: string) => `Deko von ${partner}`,
+  upgrade: (toLevel: number, price: number) => `Auf Stufe ${toLevel} aufwerten · ${price} Energie`,
+  upgradeTooExpensive: (toLevel: number, price: number, missing: number) => `Stufe ${toLevel} kostet ${price} Energie. ${buildTexts.missing(missing)}`,
+  highestLevel: 'Höchste Stufe erreicht',
+  move: 'Umstellen',
+  noFreeField: 'Gerade ist kein passendes Feld frei.',
+  store: 'Einlagern',
+  moving: (name: string) => `${name} umstellen`,
+  storageTitle: 'Lager',
+  storageEmpty: 'Dein Lager ist leer. Was du einlagerst oder geschenkt bekommst, wartet hier.',
+  place: 'Platzieren',
+  /** Titel des Platzier-Modus und zugänglicher Name von „Platzieren“ in einer Lager-Zeile. */
+  placing: (name: string) => `${name} platzieren`,
+  noFieldForItem: 'Kein passendes Feld frei',
+  kind: {
+    gebaut: (level: number) => `Gebaut · Stufe ${level}`,
+    geschenk: (from: string) => `Geschenk von ${from}`,
+    challenge: 'Challenge-Deko',
+    deko: 'Deko',
+  },
+};

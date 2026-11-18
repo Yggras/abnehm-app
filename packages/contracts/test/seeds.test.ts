@@ -709,4 +709,29 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
       expect(device.rows.island_object).toHaveLength(28);
     }
   });
+
+  it('feldkonflikt: je Gerät eine offene Platzierung auf dasselbe Feld; danach liegt die zuerst platzierte Laterne im Lager', () => {
+    const manifest = seedManifests.feldkonflikt;
+    const [first, second] = [seedIds.islandObject(1), seedIds.islandObject(2)];
+    const fieldOf = (rows: readonly Record<string, unknown>[] | undefined, id: string) => rows?.find((row) => row.id === id)?.field_id;
+    const iphone = manifest.initial.devices['philipp-iphone']!;
+    const ipad = manifest.initial.devices['philipp-ipad']!;
+    expect(iphone.outbox.map(({ type }) => type)).toEqual(['placeObject']);
+    expect(ipad.outbox.map(({ type }) => type)).toEqual(['placeObject']);
+    // Offline steht auf jedem Gerät die eigene Laterne auf dem Feld.
+    expect(fieldOf(iphone.rows.island_object, first)).toBe(fieldOf(ipad.rows.island_object, second));
+
+    const { server, devices } = manifest.target;
+    const field = fieldOf(ipad.rows.island_object, second);
+    expect(fieldOf(server.island_object, first)).toBeNull();
+    expect(fieldOf(server.island_object, second)).toBe(field);
+    expect(server.processed_operation?.map(({ outcome }) => outcome)).toEqual(['applied', 'applied']);
+    // Keine Energie geht verloren: Platzieren ist kostenlos.
+    expect(balanceOf(server.energy_booking, philipp)).toBe(23);
+    for (const device of Object.values(devices)) {
+      expect(device.outbox).toEqual([]);
+      expect(fieldOf(device.rows.island_object, first)).toBeNull();
+      expect(fieldOf(device.rows.island_object, second)).toBe(field);
+    }
+  });
 });

@@ -10,7 +10,7 @@ import { InstallationId } from '@abnehm/contracts/sync';
 import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
-import { buildObjectCommand } from '../../mobile/src/island/build-object.ts';
+import { islandObjectCommands } from '../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
@@ -85,7 +85,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     }),
     clock,
     installationId: InstallationId.parse(installation.installationId),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands] }),
   });
   const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   let stage: IslandStage | null = null;
@@ -190,6 +190,24 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     for (const phone of [iphone, ipad]) {
       expect(islandOf(phone)).toMatchObject({ energy: 0, halves: { level: 3, own: { halfPercent: 100 } } });
       expect(islandOf(phone).objects).toHaveLength(20 + 8);
+    }
+  });
+
+  it('feldkonflikt: Beide Geräte stellen offline auf dasselbe Feld; nach dem Sync liegt die zuerst platzierte Laterne auf beiden im Lager (#194)', { timeout: 30_000 }, async () => {
+    const world = await seeded(seedManifests.feldkonflikt);
+    const [iphone, ipad] = [world.phones['philipp-iphone']!, world.phones['philipp-ipad']!];
+    const [first, second] = [seedIds.islandObject(1), seedIds.islandObject(2)];
+    const at = (phone: Phone, id: string) => islandOf(phone).objects.find((object) => object.id === id)?.fieldKey;
+    // Offline steht auf jedem Gerät die eigene Laterne auf `grundinsel:2:2`.
+    expect(at(iphone, first)).toBe('grundinsel:2:2');
+    expect(at(ipad, second)).toBe('grundinsel:2:2');
+
+    await runSyncSteps(seedManifests.feldkonflikt, world);
+
+    for (const phone of [iphone, ipad]) {
+      expect(at(phone, second)).toBe('grundinsel:2:2');
+      expect(islandOf(phone).storage.map((object) => object.id)).toEqual([first]);
+      expect(islandOf(phone).energy).toBe(23);
     }
   });
 });

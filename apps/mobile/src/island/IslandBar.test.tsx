@@ -44,7 +44,7 @@ describe('große Schrift (Impeccable-Prüfung, B12)', () => {
 describe('Bau-Leiste im Bau-Modus (#192)', () => {
   test('sagt, was gebaut wird, wie es geht, und bietet „Abbrechen“ mit 48 dp', async () => {
     const onCancel = jest.fn();
-    await render(<BuildModeBar name="Laterne" onCancel={onCancel} />);
+    await render(<BuildModeBar title="Laterne bauen" onCancel={onCancel} />);
 
     expect(screen.getByLabelText('Laterne bauen. Tippe auf ein leuchtendes Feld.')).toBeOnTheScreen();
     const cancel = screen.getByRole('button', { name: 'Abbrechen' });
