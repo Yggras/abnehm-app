@@ -65,6 +65,36 @@ export function startOfLocalDate(localDate: LocalDate, timeZone: TimeZone): Inst
 }
 
 /**
+ * Zeitpunkt einer Wanduhrzeit (Minute des Tages, 0–1439) an einem lokalen Tag in einer Zone, etwa
+ * „19:00“ eines Tages-Check-ins (Spezifikation 5, Abschnitt 7; #132). An Tagen der Zeitumstellung bleibt
+ * die Ortszeit gleich. Gibt es die Wanduhrzeit zweimal, gilt das erste Vorkommen; fällt sie aus, die
+ * erste Minute danach. Liest keine Uhr.
+ */
+export function instantAtWallClock(localDate: LocalDate, minutes: number, timeZone: TimeZone): Instant {
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes >= minutesPerDay) throw new RangeError(`Keine Minute des Tages: ${minutes}`);
+  const target = LocalDate.parse(localDate);
+  /** Wanduhrzeit einer Minute seit lokaler Mitternacht des Zieltags; Nachbartage zählen über ±1440 weiter. */
+  const wall = (minute: number) => {
+    const reading = readingAt(minute * minuteMs, timeZone);
+    const shift = reading.localDate === target ? 0 : reading.localDate > target ? minutesPerDay : -minutesPerDay;
+    return minutesOfDay(reading) + shift;
+  };
+  // So viele Minuten nach dem Tagesbeginn, wie verlangt, und dann um die Abweichung der Wanduhr verschoben.
+  const elapsed = Date.parse(startOfLocalDate(target, timeZone)) / minuteMs + minutes;
+  const corrected = elapsed - (wall(elapsed) - minutes);
+  if (wall(corrected) === minutes) return readingAt(corrected * minuteMs, timeZone).instant;
+  // Ausgefallene Wanduhrzeit: zwischen beiden Kandidaten springt die Uhr vor; gesucht ist die erste Minute danach.
+  let low = Math.min(corrected, elapsed);
+  let high = Math.max(corrected, elapsed);
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (wall(middle) >= minutes) high = middle;
+    else low = middle + 1;
+  }
+  return readingAt(low * minuteMs, timeZone).instant;
+}
+
+/**
  * Lokaler Tag eines gegebenen Zeitpunkts bei einem festen Offset zu UTC, etwa dem Offset, den ein
  * Health-Datensatz mitliefert (Spezifikation 3, Abschnitt 6; #183). Liest keine Uhr und keine Zone.
  */

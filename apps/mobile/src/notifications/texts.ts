@@ -1,7 +1,8 @@
-// Sichtbare Texte und zugängliche Namen rund um die Erlaubnis für Mitteilungen (Spezifikation 5,
-// Abschnitte 6 und 8). Erklärtext, „Erlauben“, „Später“, „Mitteilungen sind erlaubt“, „In den
-// Systemeinstellungen erlauben“ und „Aus“ stehen dort wörtlich; die übrigen Sätze sind eigene
-// Formulierungen im Ton des Design-Systems.
+// Sichtbare Texte und zugängliche Namen rund um die Erlaubnis für Mitteilungen und die Seite
+// „Benachrichtigungen“ (Spezifikation 5, Abschnitte 6 und 8). Erklärtext, „Erlauben“, „Später“,
+// „Mitteilungen sind erlaubt“, „In den Systemeinstellungen erlauben“, „Aus“, „Mittags“, „Abends“, „In
+// Check-ins berücksichtigen“, „Partner-Pushes“ samt Untertitel, der Hinweis zur Reihenfolge und der
+// Infotext stehen dort wörtlich; die übrigen Sätze sind eigene Formulierungen im Ton des Design-Systems.
 
 export const notificationTexts = {
   explanation: 'Momo meldet sich höchstens zweimal am Tag – und nur, wenn noch etwas offen ist. Dein Partner kann dich anfeuern.',
@@ -16,4 +17,22 @@ export const notificationTexts = {
   /** Untertitel der Zeile „Benachrichtigungen“ in der Übersicht, wenn Mitteilungen nicht erlaubt sind. */
   overviewOff: 'Aus',
   systemStatusTitle: 'Mitteilungen',
+
+  /** Seite „Benachrichtigungen“ (#132). */
+  settings: {
+    checkInsTitle: 'Tages-Check-ins',
+    midday: 'Mittags',
+    evening: 'Abends',
+    middayTime: 'Uhrzeit mittags',
+    eveningTime: 'Uhrzeit abends',
+    order: 'Der Abend-Check-in muss nach dem Mittag-Check-in liegen',
+    trackersTitle: 'In Check-ins berücksichtigen',
+    trackers: { ernaehrung: 'Ernährung', wasser: 'Wasser', sport: 'Sport', gewicht: 'Gewicht' },
+    partnerTitle: 'Partner',
+    partnerPushes: 'Partner-Pushes',
+    partnerPushesSubtitle: 'Anfeuern, Challenge-Vorschläge, Insel-Meilensteine und gemeinsame Vorgänge',
+    info: 'Keine Ruhezeiten und keine besonderen Wochenendzeiten.',
+    save: 'Speichern',
+    loading: 'Benachrichtigungen werden geladen',
+  },
 } as const;

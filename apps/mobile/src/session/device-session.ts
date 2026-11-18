@@ -23,7 +23,8 @@ import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, c
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
-import { notificationSettingEntity } from '../notifications/notification-setting';
+import { appNotificationSettings } from '../notifications/app-notification-settings';
+import { createNotificationSettings, notificationSettingEntity } from '../notifications/notification-setting';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner } from '../partner';
 import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
@@ -179,6 +180,8 @@ function deviceState() {
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
+        // Benachrichtigungseinstellung (Spezifikation 5, #132): die Seite „Benachrichtigungen“ spricht nur mit diesem Modul.
+        appNotificationSettings.opened(createNotificationSettings({ database, writer: syncWriter, clock: appClock })),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
         followDailyGoalTriggers({
           ensure: plan.ensureDailyGoals,
