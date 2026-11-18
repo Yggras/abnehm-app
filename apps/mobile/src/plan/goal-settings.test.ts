@@ -1,10 +1,12 @@
 /** @jest-environment node */
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
 import { LocalDate } from '@abnehm/contracts/base';
+import { goalVersionId } from '@abnehm/contracts/plan';
 import type { LatestWeight } from '@abnehm/contracts/ports';
 
 import { fakeWeightTrendReader } from '../area-ports/testing/fakes';
 import type { GoalSettings, GoalSettingsState } from '.';
+import { writeGoalVersion } from './plan-repository';
 import { berlin, createPlanTodayWorld, draft, philipp, wednesdayNoon, type PlanTodayWorld } from './testing/today-world';
 
 // Nachweis für #147: das Lesemodell der Einstellungsseite „Ziele“ (Spezifikation 1, Abschnitt 10) am
@@ -72,6 +74,7 @@ describe('Lesemodell „Ziele“', () => {
         waterTargetMl: 1_500,
         weeklySportTargetMinutes: 150,
       }),
+      activityFactor: 1.4,
       budgetRaisedToLowerBound: false,
       safetyTriggers: [],
       // Ohne Tagesgewicht ist das Basisgewicht das der Berechnung: 4 kg bei 0,5 kg pro Woche, also 8 Wochen.
@@ -152,11 +155,74 @@ describe('Lesemodell „Ziele“', () => {
     await world.saveInitialPlan();
 
     const settings: GoalSettings = await settled();
-    const preview = settings.preview({ ...settings.draft!, pace: 'zuegiger' });
+    const check = settings.check({ ...settings.draft!, pace: 'zuegiger' }, { holding: false });
 
     // 3 kg bei 0,75 kg pro Woche: 4 Wochen ab morgen.
-    expect(preview).toMatchObject({ type: 'berechnet', pace: 'zuegiger', calorieBudget: { kcal: 1_520 }, forecast: { weeks: 4, year: 2026, month: 11 } });
-    expect(settings.preview({ ...settings.draft!, waterTargetMl: 400 })).toEqual({ type: 'ungueltig', errors: ['water_target_out_of_range'] });
+    expect(check.result).toMatchObject({ type: 'berechnet', pace: 'zuegiger', calorieBudget: { kcal: 1_520 }, forecast: { weeks: 4, year: 2026, month: 11 } });
+    expect(check).toMatchObject({ valid: true, forced: false, paceMissing: false, goalWeightNotBelowCurrent: false, goalWeightProblem: null, manualBudgetInvalid: false });
+    expect(settings.check({ ...settings.draft!, waterTargetMl: 400 }, { holding: false })).toMatchObject({
+      result: { type: 'ungueltig', errors: ['water_target_out_of_range'] },
+      valid: false,
+    });
+  });
+
+  describe('Prüfung einer Änderung', () => {
+    async function base(changes: Parameters<PlanTodayWorld['saveInitialPlan']>[0] = {}) {
+      const { settled } = await setup();
+      await world.saveInitialPlan(changes);
+      return settled();
+    }
+
+    it('ein Zielgewicht unter BMI 18,5 nennt die Grenze, bleibt aber in der Referenzrechnung sichtbar', async () => {
+      const settings = await base();
+      const check = settings.check({ ...settings.draft!, goalWeightG: 50_000 }, { holding: false });
+
+      expect(check).toMatchObject({ goalWeightProblem: 'below_limit', valid: false, reference: { goalWeight: { range: { min: 52_300 } } } });
+    });
+
+    it('ein eigenes Budget außerhalb von Untergrenze und Gesamtumsatz ist ungültig, die Grenzen stehen in der Referenz', async () => {
+      const settings = await base();
+      const check = settings.check({ ...settings.draft!, manualBudgetKcal: 2_500 }, { holding: false });
+
+      expect(check).toMatchObject({ manualBudgetInvalid: true, valid: false, reference: { manualBudgetRange: { min: 1_520, max: 2_120 } } });
+    });
+
+    it('den Haltemodus beenden verlangt ein Tempo und ein Zielgewicht unter dem Gewicht', async () => {
+      const settings = await base({ pace: null, goalWeightG: 80_000 });
+
+      expect(settings.check(settings.draft!, { holding: false })).toMatchObject({ paceMissing: true, valid: false });
+      expect(settings.check({ ...settings.draft!, pace: 'entspannt' }, { holding: false })).toMatchObject({ goalWeightNotBelowCurrent: true, valid: false });
+      expect(settings.check({ ...settings.draft!, pace: 'entspannt', goalWeightG: 76_000 }, { holding: false })).toMatchObject({ valid: true });
+      expect(settings.check(settings.draft!, { holding: true })).toMatchObject({ paceMissing: false, goalWeightNotBelowCurrent: false, valid: true });
+    });
+
+    it('im erzwungenen Haltemodus braucht es kein Tempo', async () => {
+      const settings = await base({ knownEatingDisorder: true });
+
+      expect(settings.check(settings.draft!, { holding: false })).toMatchObject({ forced: true, paceMissing: false, valid: true, reference: { safetyTriggers: ['essstoerung'] } });
+    });
+  });
+
+  it('ein Budget aus einem angenommenen Budgetvorschlag bleibt bei anderen Änderungen erhalten, auch außerhalb des Rasters', async () => {
+    const { settled } = await setup();
+    await world.saveInitialPlan();
+    const { current } = await settled();
+    // Wie `acceptBudgetSuggestion` (#151): eine Fassung ab morgen mit dem Budget des Vorschlags.
+    const { validFrom: _validFrom, ...values } = current!.values;
+    const tomorrow = LocalDate.parse('2026-10-15');
+    world.database.transaction((tx) =>
+      writeGoalVersion(tx, goalVersionId(philipp, tomorrow), philipp, { ...values, validFrom: tomorrow, calorieBudgetMilliKcal: 1_773_000, budgetSource: 'budgetvorschlag' }, wednesdayNoon),
+    );
+
+    const settings = await settled();
+    expect(settings.suggestedBudgetKcal).toBe(1_773);
+    expect(settings.draft?.manualBudgetKcal).toBe(1_773);
+    const change = { ...settings.draft!, waterTargetMl: 2_000 };
+    expect(settings.check(change, { holding: false })).toMatchObject({ valid: true, result: { calorieBudget: { kcal: 1_773 } } });
+    expect(settings.check({ ...change, manualBudgetKcal: 1_774 }, { holding: false })).toMatchObject({ manualBudgetInvalid: true, valid: false });
+
+    expect(world.plan.changeGoals(change)).toMatchObject({ type: 'gespeichert' });
+    expect((await settled()).upcoming?.view.values).toMatchObject({ calorieBudgetMilliKcal: 1_773_000, budgetSource: 'budgetvorschlag', waterTargetMl: 2_000 });
   });
 
   it('folgt jeder Änderung der Kontodatenbank und dem Tageswechsel', async () => {

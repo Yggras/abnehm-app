@@ -49,6 +49,45 @@ export function calculatorInput(draft: GoalDraft, calculationDate: LocalDate, we
   };
 }
 
+/**
+ * Eingabe des Zielrechners zu einer gespeicherten Fassung, etwa um nachzurechnen, was sie nicht speichert.
+ * Alter und Körperdaten stammen aus der Fassung, die Sicherheitsangaben von der Person; das Budget ist
+ * das berechnete.
+ */
+export function versionCalculatorInput(
+  version: GoalVersionValues,
+  person: PersonGoalFields,
+  calculationDate: LocalDate,
+  weightTrendG: number | null,
+): GoalCalculatorInput {
+  return {
+    calculationDate,
+    calculationSex: version.calculationSex,
+    ageYears: version.ageYears,
+    heightCm: version.heightCm,
+    weightG: version.weightG,
+    weightTrendG,
+    activityLevel: version.activityLevel,
+    pregnantOrBreastfeeding: person.pregnantOrBreastfeeding ?? false,
+    knownEatingDisorder: person.knownEatingDisorder ?? false,
+    goalWeightG: version.goalWeightG,
+    pace: version.pace,
+    manualBudgetKcal: null,
+    waterTargetMl: version.waterTargetMl,
+    weeklySportTargetMinutes: version.weeklySportTargetMinutes,
+  };
+}
+
+/**
+ * Das Budget eines angenommenen Budgetvorschlags in `milli_kcal`, das ein Entwurf behält: Trägt die an
+ * seinem Tag ohne die Änderung gültige Fassung ein solches Budget und nennt der Entwurf genau dieses als
+ * manuelles Budget, bleibt es samt Herkunft erhalten, auch außerhalb des 10-kcal-Rasters (#134). Sonst `null`.
+ */
+export function keptSuggestedBudget(draft: GoalDraft, inForce: GoalVersionValues | undefined): number | null {
+  if (inForce?.budgetSource !== 'budgetvorschlag' || draft.manualBudgetKcal === null) return null;
+  return draft.manualBudgetKcal * 1_000 === inForce.calorieBudgetMilliKcal ? inForce.calorieBudgetMilliKcal : null;
+}
+
 /** Was „Ziele ändern“ von der eigenen Person braucht: Geburtsdatum und Sicherheitsangaben. */
 export type PersonGoalFields = Readonly<{
   birthDate: string | null;

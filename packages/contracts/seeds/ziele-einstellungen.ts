@@ -4,7 +4,7 @@ import { goalVersionId, goalVersionOf } from '../src/plan.ts';
 import type { SeedEntity } from './build.ts';
 import { seedDays, seedIds } from './ids.ts';
 import type { SeedRow } from './manifest.ts';
-import { seedCreated as created } from './rows.ts';
+import { seedGoalVersion } from './rows.ts';
 
 // Szenarien der Einstellungsseite „Ziele“ aus Spezifikation 1, Abschnitt 12 (#147): „erzwungener
 // Haltemodus“ je Sicherheitsgrund, „Budget angehoben“ (Rechnung unter der Untergrenze) und „bevorstehende
@@ -43,39 +43,17 @@ const soloInputs = {
   weeklySportTargetMinutes: 150,
 } as const satisfies Omit<GoalCalculatorInput, 'calculationDate' | 'ageYears'>;
 
-/** Eine Zielversion aus dem Zielrechner, gültig ab `validFrom`, als Seed-Entität mit der ID aus Person und Tag. */
-function goalVersionEntity(validFrom: LocalDate, createdAt: string, inputs: GoalInputs): SeedEntity {
+/** Eine Zielversion aus dem Zielrechner, gültig ab `validFrom`, mit der ID aus Person und Tag. */
+function calculatedGoalVersion(validFrom: LocalDate, createdAt: string, inputs: GoalInputs): SeedEntity {
   const input: GoalCalculatorInput = { ...soloInputs, ...inputs, calculationDate: validFrom, ageYears: ageOn(birthDate, validFrom) };
   const calculation = calculateGoals(input);
   if (calculation.type === 'ungueltig') throw new Error(`Zielversion ab ${validFrom}: ${calculation.errors.join(', ')}`);
-  const version = goalVersionOf({ validFrom, input, calculation });
-  return {
-    table: 'goal_version',
-    entityType: 'goal_version',
-    ownerPersonId: philipp,
-    row: {
-      id: goalVersionId(EntityId.parse(philipp), validFrom),
-      person_id: philipp,
-      valid_from: version.validFrom,
-      calorie_budget_milli_kcal: version.calorieBudgetMilliKcal,
-      basal_metabolic_rate_milli_kcal: version.basalMetabolicRateMilliKcal,
-      total_energy_expenditure_milli_kcal: version.totalEnergyExpenditureMilliKcal,
-      lower_bound_milli_kcal: version.lowerBoundMilliKcal,
-      deficit_milli_kcal: version.deficitMilliKcal,
-      budget_source: version.budgetSource,
-      calculation_sex: version.calculationSex,
-      age_years: version.ageYears,
-      height_cm: version.heightCm,
-      weight_g: version.weightG,
-      activity_level: version.activityLevel,
-      maintenance_reason: version.maintenanceReason,
-      pace: version.pace,
-      goal_weight_g: version.goalWeightG,
-      water_target_ml: version.waterTargetMl,
-      weekly_sport_target_minutes: version.weeklySportTargetMinutes,
-      ...created(createdAt),
-    },
-  };
+  return seedGoalVersion({
+    id: goalVersionId(EntityId.parse(philipp), validFrom),
+    personId: philipp,
+    createdAt,
+    values: goalVersionOf({ validFrom, input, calculation }),
+  });
 }
 
 /** Eine manuelle Messung wie in `solo`: ID, Gewicht in g, Zeitpunkt und lokaler Tag in Berlin. */
@@ -108,28 +86,28 @@ export type GoalSettingsVariant = Readonly<{
 export const goalSettingsVariants = {
   'solo-haltemodus-schwanger': {
     person: { calculation_sex: 'weiblich', pregnant_or_breastfeeding: true },
-    goals: [goalVersionEntity(zielstart, onboardedAt, { calculationSex: 'weiblich', pregnantOrBreastfeeding: true })],
+    goals: [calculatedGoalVersion(zielstart, onboardedAt, { calculationSex: 'weiblich', pregnantOrBreastfeeding: true })],
   },
   'solo-haltemodus-essstoerung': {
     person: { known_eating_disorder: true },
-    goals: [goalVersionEntity(zielstart, onboardedAt, { knownEatingDisorder: true })],
+    goals: [calculatedGoalVersion(zielstart, onboardedAt, { knownEatingDisorder: true })],
   },
   'solo-haltemodus-untergewicht': {
     person: {},
     // Das Zielgewicht muss mindestens dem Gewicht bei BMI 18,5 entsprechen (61,3 kg).
-    goals: [goalVersionEntity(zielstart, onboardedAt, { weightG: 60_000, goalWeightG: 61_300 })],
+    goals: [calculatedGoalVersion(zielstart, onboardedAt, { weightG: 60_000, goalWeightG: 61_300 })],
     weights: weighingsAround(60_000),
   },
   'solo-budget-angehoben': {
     person: { activity_level: 'wenig_aktiv' },
-    goals: [goalVersionEntity(zielstart, onboardedAt, { weightG: 90_000, goalWeightG: 84_000, activityLevel: 'wenig_aktiv', pace: 'zuegiger' })],
+    goals: [calculatedGoalVersion(zielstart, onboardedAt, { weightG: 90_000, goalWeightG: 84_000, activityLevel: 'wenig_aktiv', pace: 'zuegiger' })],
     weights: weighingsAround(90_000),
   },
   'solo-ziele-ab-morgen': {
     person: {},
     goals: [
-      goalVersionEntity(zielstart, onboardedAt, {}),
-      goalVersionEntity(LocalDate.parse('2026-10-15'), '2026-10-14T11:30:00.000Z', { pace: 'zuegiger', waterTargetMl: 2_750, weeklySportTargetMinutes: 180 }),
+      calculatedGoalVersion(zielstart, onboardedAt, {}),
+      calculatedGoalVersion(LocalDate.parse('2026-10-15'), '2026-10-14T11:30:00.000Z', { pace: 'zuegiger', waterTargetMl: 2_750, weeklySportTargetMinutes: 180 }),
     ],
   },
 } as const satisfies Readonly<Record<string, GoalSettingsVariant>>;

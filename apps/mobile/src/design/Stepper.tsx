@@ -20,7 +20,8 @@ export type StepperProps = {
 };
 
 /**
- * Stepper nach dem Design-System: Beschriftung, darunter bei großer Schrift die Bedienung aus „−“, Wert
+ * Stepper aus den Tokens und `IconButton` des Design-Systems. `research/design-system.md` kennt keinen
+ * Stepper; Aufbau und Verhalten sind Designwerte ohne Beleg (#147). Beschriftung, darunter bei großer Schrift die Bedienung aus „−“, Wert
  * und „+“ als runde 48-dp-Buttons. An einer Grenze ist die Richtung gesperrt, statt den Wert zu
  * beschneiden. Die Buttons heißen „<Beschriftung> verringern“ und „<Beschriftung> erhöhen“; der Wert
  * trägt Beschriftung und Wert als Namen.
@@ -48,7 +49,7 @@ export function Stepper({ label, value, valueText, min, max, step, onChange, hin
   );
 }
 
-/** Platz für den Wert, damit die Buttons beim Zählen nicht springen (Designwert). */
+/** Platz für den Wert, damit die Buttons beim Zählen nicht springen (Designwert, nicht belegt). */
 const valueMinWidth = 88;
 
 const styles = StyleSheet.create({

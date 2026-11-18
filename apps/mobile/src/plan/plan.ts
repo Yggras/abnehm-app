@@ -20,7 +20,7 @@ import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import type { Refresh, Source } from '../shell/followed-source';
 import { updateOwnPerson, type SyncWriter } from '../sync';
 import { createDailyGoalMaterialization } from './daily-goals';
-import { calculatorInput, type GoalDraft } from './goal-draft';
+import { calculatorInput, keptSuggestedBudget, type GoalDraft } from './goal-draft';
 import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
@@ -273,8 +273,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     validFrom: LocalDate,
     inForce: StoredGoalVersion | undefined,
   ): { type: 'gueltig'; version: CreateGoalVersion } | { type: 'ungueltig'; errors: GoalInputError[] } {
-    const suggestedBudget = inForce?.values.budgetSource === 'budgetvorschlag' && draft.manualBudgetKcal !== null &&
-      draft.manualBudgetKcal * 1_000 === inForce.values.calorieBudgetMilliKcal ? inForce.values.calorieBudgetMilliKcal : null;
+    const suggestedBudget = keptSuggestedBudget(draft, inForce?.values);
     const input = calculatorInput({ ...draft, manualBudgetKcal: suggestedBudget === null ? draft.manualBudgetKcal : null }, validFrom);
     const calculation = calculateGoals(input);
     if (calculation.type === 'ungueltig') return calculation;

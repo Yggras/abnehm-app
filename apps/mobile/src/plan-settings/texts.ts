@@ -3,8 +3,12 @@ import type { ActivityLevel } from '@abnehm/contracts/person';
 import type { Pace } from '@abnehm/contracts/ports';
 import type { BudgetSource } from '@abnehm/contracts/plan';
 
+import { kcalText } from '../nutrition/texts';
 import { onboardingTexts, safetyCheckTexts } from '../onboarding/texts';
-import { thousandthsWithOneDecimal } from '../shell/texts';
+import { monthNames, thousandthsWithOneDecimal } from '../shell/texts';
+import { kgText } from '../trackers/weight-texts';
+
+export { kcalText, kgText };
 
 // Sichtbare Texte und zugängliche Namen der Einstellungsseite „Ziele“ (Spezifikation 1, Abschnitte 3 und
 // 10). Den Hinweis „keine medizinische Beratung“ und die Erklärung des erzwungenen Haltemodus teilt die
@@ -12,16 +16,8 @@ import { thousandthsWithOneDecimal } from '../shell/texts';
 // laut Abschnitt 3 eigene Vereinfachungen der DGE-Stufen (Designwert). Hinweise zu Gesundheitswerten sind
 // neutral formuliert und nie in `problem`-Farbe (Abschnitt 6).
 
-/** Ganze kcal mit deutschem Tausenderpunkt, etwa „1.620 kcal“. */
-export const kcalText = (kcal: number) => `${kcal.toLocaleString('de-DE')} kcal`;
-
-/** Gewicht in kg mit einer Nachkommastelle, etwa „76,0 kg“. */
-export const kgText = (weightG: number) => `${thousandthsWithOneDecimal(weightG)} kg`;
-
 /** Liter ohne überflüssige Nullen, etwa „1,5 l“ oder „1,75 l“; das Raster ist 250 ml. */
 export const litreText = (ml: number) => `${(ml / 1_000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} l`;
-
-const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'] as const;
 
 export const activityLevelNames: Readonly<Record<ActivityLevel, string>> = {
   wenig_aktiv: 'wenig aktiv – überwiegend sitzend',
@@ -61,7 +57,7 @@ export const goalTexts = {
   raised: 'Die Rechnung lag unter deiner Untergrenze, deshalb ist dein Budget angehoben. Wenn du schneller abnehmen möchtest, lass dich bitte ärztlich begleiten.',
 
   goalWeight: 'Zielgewicht',
-  forecast: (year: number, month: number) => `etwa ${months[month - 1]} ${year}`,
+  forecast: (year: number, month: number) => `etwa ${monthNames[month - 1]} ${year}`,
   estimate: 'Schätzung',
   slowsDown: 'Nach etwa drei Monaten verlangsamt sich die Abnahme meist.',
   pace: 'Tempo',
@@ -97,6 +93,9 @@ export const goalTexts = {
   goalWeightInvalid: 'Bitte gib dein Zielgewicht in kg mit höchstens einer Nachkommastelle ein.',
   manualBudget: 'Budget selbst festlegen',
   manualBudgetHint: 'Statt der Rechnung gilt dein eigener Wert.',
+  suggestionKept: (kcal: number) => `Es gilt weiter das Budget aus deinem Budgetvorschlag: ${kcalText(kcal)}.`,
+  derivationChanged: 'neu berechnet',
+  derivationBefore: 'bisherige Rechnung',
   manualBudgetField: 'Eigenes Kalorienbudget',
   manualBudgetRange: (min: number, max: number) => `${min.toLocaleString('de-DE')} bis ${kcalText(max)}, in 10er-Schritten`,
   manualBudgetInvalid: (min: number, max: number) => `Bitte gib ein Budget von ${min.toLocaleString('de-DE')} bis ${max.toLocaleString('de-DE')} kcal in 10er-Schritten ein.`,

@@ -1,13 +1,20 @@
 import type { Clock } from '@abnehm/clock';
 import { EntityId, LocalDate, localDateAfter } from '@abnehm/contracts/base';
-import { calculateGoals, type GoalCalculatorResult, type GoalForecast, type SafetyTrigger } from '@abnehm/contracts/goal-calculator';
+import {
+  calculateGoals,
+  type GoalCalculation,
+  type GoalCalculatorResult,
+  type GoalForecast,
+  type GoalInputError,
+  type SafetyTrigger,
+} from '@abnehm/contracts/goal-calculator';
 import type { LatestWeight, WeightTrendReader } from '@abnehm/contracts/ports';
 
 import type { LocalDatabase, ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { Refresh, Source } from '../shell/followed-source';
 import { observeWithRefresh } from '../shell/observed-reading';
-import { calculatorInput, goalDraftOf, type GoalDraft, type PersonGoalFields } from './goal-draft';
+import { calculatorInput, goalDraftOf, keptSuggestedBudget, versionCalculatorInput, type GoalDraft, type PersonGoalFields } from './goal-draft';
 import { readGoalVersionOn, type GoalVersionValues } from './plan-repository';
 
 // Lesemodell der Einstellungsseite „Ziele“ (Spezifikation 1, Abschnitt 10; #147): die heute gültige
@@ -23,6 +30,8 @@ export type GoalVersionField = Exclude<keyof GoalVersionValues, 'validFrom'>;
 /** Eine Zielversion, wie die Seite sie zeigt. */
 export type GoalVersionView = Readonly<{
   values: GoalVersionValues;
+  /** Faktor der Aktivitätsstufe (PAL) für die Herleitung; `null`, wenn sich die Fassung nicht nachrechnen lässt. */
+  activityFactor: number | null;
   /** Die Rechnung lag unter der Untergrenze; nur bei einem berechneten Budget. */
   budgetRaisedToLowerBound: boolean;
   /** Anlässe des erzwungenen Haltemodus; leer ohne ihn. */
@@ -39,8 +48,41 @@ export type GoalSettings = Readonly<{
   upcoming: Readonly<{ view: GoalVersionView; changed: readonly GoalVersionField[] }> | null;
   /** Die ab morgen gültigen Werte als Entwurf für „Ziele ändern“; `null` ohne Plan. */
   draft: GoalDraft | null;
-  /** Reine Vorschau einer Änderung ab morgen, mit der Prognose vom selben Basisgewicht; schreibt nichts. */
-  preview(draft: GoalDraft): GoalCalculatorResult;
+  /**
+   * Das Budget eines angenommenen Budgetvorschlags in der Fassung ab morgen, in kcal; `null` ohne. Der
+   * Ausgangsentwurf nennt es als manuelles Budget, damit „Ziele ändern“ es samt Herkunft behält.
+   */
+  suggestedBudgetKcal: number | null;
+  /** Prüft eine Änderung ab morgen, wie „Ziele ändern“ sie anlegen würde; schreibt nichts. */
+  check(draft: GoalDraft, intent: GoalChangeIntent): GoalChangeCheck;
+}>;
+
+/** Was die Person mit einer Änderung will, über die Werte des Entwurfs hinaus. */
+export type GoalChangeIntent = Readonly<{
+  /** Freiwilliger Haltemodus; ohne ihn braucht der Entwurf ein Tempo und ein Zielgewicht unter dem Gewicht. */
+  holding: boolean;
+}>;
+
+/** Prüfung einer Änderung ab morgen für die Bearbeitung der Seite „Ziele“. */
+export type GoalChangeCheck = Readonly<{
+  /** Vorschau ab morgen mit der Prognose vom Basisgewicht; ein behaltenes Vorschlagsbudget steht darin. */
+  result: GoalCalculatorResult;
+  /**
+   * Rechnung ohne Zielgewicht und eigenes Budget: Grenzen, Vorschlag des Zielgewichts und Sicherheitsgrund
+   * hängen an keinem von beiden und stehen so auch bei ungültigen Eingaben fest; `null` nur bei ungültigen
+   * Körperdaten, Wasser- oder Sportziel.
+   */
+  reference: GoalCalculation | null;
+  /** Der Sicherheits-Check erzwingt den Haltemodus; Tempo und eigenes Budget entfallen. */
+  forced: boolean;
+  goalWeightProblem: 'below_limit' | 'invalid' | null;
+  manualBudgetInvalid: boolean;
+  /** Der Haltemodus soll enden, aber es ist noch kein Tempo gewählt. */
+  paceMissing: boolean;
+  /** Der Haltemodus soll enden, aber das Zielgewicht liegt nicht unter dem Gewicht. */
+  goalWeightNotBelowCurrent: boolean;
+  /** Die Änderung ließe sich so anlegen. */
+  valid: boolean;
 }>;
 
 export type GoalSettingsState =
@@ -118,12 +160,52 @@ async function settingsOf({ personId, today, person, versions }: GoalSettingsRea
   const upcoming = upcomingGoalOf(versions, today);
   const draft = versions.next === null ? null : goalDraftOf(versions.next, person);
   const previewBase = versions.next === null ? null : baseOf(versions.next);
+  const preview = (next: GoalDraft) => previewOf(next, tomorrow, previewBase ?? next.weightG, versions.next ?? undefined);
   return {
     today,
     current: versions.current === null ? null : view(versions.current),
     upcoming: upcoming === null ? null : { view: view(upcoming.version), changed: upcoming.changed },
     draft,
-    preview: (next) => calculateGoals(calculatorInput(next, tomorrow, previewBase ?? next.weightG)),
+    suggestedBudgetKcal: versions.next?.budgetSource === 'budgetvorschlag' ? versions.next.calorieBudgetMilliKcal / 1_000 : null,
+    check: (next, intent) => checkOf(next, intent, preview),
+  };
+}
+
+/**
+ * Vorschau ab morgen wie `changeGoals`: Behält der Entwurf das Budget eines angenommenen Budgetvorschlags,
+ * gilt es statt der Rechnung, solange es zwischen Untergrenze und Gesamtumsatz liegt und der Haltemodus
+ * nicht erzwungen ist.
+ */
+function previewOf(draft: GoalDraft, tomorrow: LocalDate, baseG: number, inForce: GoalVersionValues | undefined): GoalCalculatorResult {
+  const suggested = keptSuggestedBudget(draft, inForce);
+  const result = calculateGoals(calculatorInput({ ...draft, manualBudgetKcal: suggested === null ? draft.manualBudgetKcal : null }, tomorrow, baseG));
+  if (suggested === null || result.type === 'ungueltig') return result;
+  if (result.manualBudgetRange === null) return { type: 'ungueltig', errors: ['manual_budget_in_forced_maintenance'] };
+  if (suggested < result.lowerBound.milliKcal || suggested > result.totalEnergyExpenditure.milliKcal) return { type: 'ungueltig', errors: ['manual_budget_out_of_range'] };
+  return { ...result, calorieBudget: { kcal: suggested / 1_000, milliKcal: suggested }, budgetRaisedToLowerBound: false, hints: result.hints.filter((hint) => hint !== 'budget_raised_to_lower_bound') };
+}
+
+function checkOf(draft: GoalDraft, { holding }: GoalChangeIntent, preview: (draft: GoalDraft) => GoalCalculatorResult): GoalChangeCheck {
+  const result = preview(draft);
+  const referenceResult = preview({ ...draft, goalWeightG: null, manualBudgetKcal: null });
+  const reference = referenceResult.type === 'berechnet' ? referenceResult : null;
+  const forced = reference?.maintenanceReason === 'sicherheits_check';
+  const errors: readonly GoalInputError[] = result.type === 'ungueltig' ? result.errors : [];
+  const goalWeightProblem = errors.includes('goal_weight_below_lower_limit')
+    ? 'below_limit'
+    : errors.some((error) => error.startsWith('goal_weight')) ? 'invalid' : null;
+  const leavesHolding = !forced && !holding;
+  const paceMissing = leavesHolding && draft.pace === null;
+  const goalWeightNotBelowCurrent = leavesHolding && draft.pace !== null && result.type === 'berechnet' && result.hints.includes('goal_weight_not_below_current');
+  return {
+    result,
+    reference,
+    forced,
+    goalWeightProblem,
+    manualBudgetInvalid: errors.some((error) => error.startsWith('manual_budget')),
+    paceMissing,
+    goalWeightNotBelowCurrent,
+    valid: result.type === 'berechnet' && !paceMissing && !goalWeightNotBelowCurrent,
   };
 }
 
@@ -139,25 +221,11 @@ function forecastBaseG(latest: LatestWeight | null): number | null {
  * Person, die Körperdaten aus der Fassung.
  */
 function viewOf(values: GoalVersionValues, person: PersonGoalFields, calculationDate: LocalDate, baseG: number): GoalVersionView {
-  const calculation = calculateGoals({
-    calculationDate,
-    calculationSex: values.calculationSex,
-    ageYears: values.ageYears,
-    heightCm: values.heightCm,
-    weightG: values.weightG,
-    weightTrendG: baseG,
-    activityLevel: values.activityLevel,
-    pregnantOrBreastfeeding: person.pregnantOrBreastfeeding ?? false,
-    knownEatingDisorder: person.knownEatingDisorder ?? false,
-    goalWeightG: values.goalWeightG,
-    pace: values.pace,
-    manualBudgetKcal: null,
-    waterTargetMl: values.waterTargetMl,
-    weeklySportTargetMinutes: values.weeklySportTargetMinutes,
-  });
-  if (calculation.type === 'ungueltig') return { values, budgetRaisedToLowerBound: false, safetyTriggers: [], forecast: null };
+  const calculation = calculateGoals(versionCalculatorInput(values, person, calculationDate, baseG));
+  if (calculation.type === 'ungueltig') return { values, activityFactor: null, budgetRaisedToLowerBound: false, safetyTriggers: [], forecast: null };
   return {
     values,
+    activityFactor: calculation.activityFactor,
     budgetRaisedToLowerBound: values.budgetSource === 'berechnet' && calculation.budgetRaisedToLowerBound,
     safetyTriggers: values.maintenanceReason === 'sicherheits_check' ? calculation.safetyTriggers : [],
     forecast: values.pace === null ? null : calculation.forecast,

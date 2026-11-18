@@ -19,6 +19,61 @@ export const seedManualOrigin = { origin: 'manuell', external_key: null, source_
 
 export type SeedWeeklyPlan = Readonly<Record<string, readonly [BausteinKey, BausteinKey, BausteinKey]>>;
 
+/**
+ * Fachliche Felder einer Zielversion wie in `CreateGoalVersion` (Spezifikation 1, Abschnitt 4). Seeds
+ * dürfen erfundene, nicht nachgerechnete Werte tragen (`solo`, `gekoppelt`); deshalb nur die Feldnamen.
+ */
+export type SeedGoalVersionValues = Readonly<{
+  validFrom: string;
+  calorieBudgetMilliKcal: number;
+  basalMetabolicRateMilliKcal: number;
+  totalEnergyExpenditureMilliKcal: number;
+  lowerBoundMilliKcal: number;
+  deficitMilliKcal: number | null;
+  budgetSource: string;
+  calculationSex: string;
+  ageYears: number;
+  heightCm: number;
+  weightG: number;
+  activityLevel: string;
+  maintenanceReason: string | null;
+  pace: string | null;
+  goalWeightG: number;
+  waterTargetMl: number;
+  weeklySportTargetMinutes: number;
+}>;
+
+/** Zielversion einer Person (Spezifikation 1), seit #128 beim Sync angemeldet und damit im Änderungsprotokoll. */
+export function seedGoalVersion({ id, personId, createdAt, values }: { id: string; personId: string; createdAt: string; values: SeedGoalVersionValues }): SeedEntity {
+  return {
+    table: 'goal_version',
+    entityType: 'goal_version',
+    ownerPersonId: personId,
+    row: {
+      id,
+      person_id: personId,
+      valid_from: values.validFrom,
+      calorie_budget_milli_kcal: values.calorieBudgetMilliKcal,
+      basal_metabolic_rate_milli_kcal: values.basalMetabolicRateMilliKcal,
+      total_energy_expenditure_milli_kcal: values.totalEnergyExpenditureMilliKcal,
+      lower_bound_milli_kcal: values.lowerBoundMilliKcal,
+      deficit_milli_kcal: values.deficitMilliKcal,
+      budget_source: values.budgetSource,
+      calculation_sex: values.calculationSex,
+      age_years: values.ageYears,
+      height_cm: values.heightCm,
+      weight_g: values.weightG,
+      activity_level: values.activityLevel,
+      maintenance_reason: values.maintenanceReason,
+      pace: values.pace,
+      goal_weight_g: values.goalWeightG,
+      water_target_ml: values.waterTargetMl,
+      weekly_sport_target_minutes: values.weeklySportTargetMinutes,
+      ...seedCreated(createdAt),
+    },
+  };
+}
+
 /** Wochenplanversion einer Person samt ihrer sieben Tage (Spezifikation 1). */
 export function seedWeeklyPlan(options: { id: string; personId: string; validFrom: string; createdAt: string; plan: SeedWeeklyPlan }): SeedEntity {
   return {

@@ -2,7 +2,8 @@ import { usePreventRemove } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { GoalCalculation, GoalCalculatorResult, GoalInputError } from '@abnehm/contracts/goal-calculator';
+import { targetInputLimits } from '@abnehm/contracts/goal-calculator';
+import { kcalOfMilliKcal } from '@abnehm/contracts/plan';
 import type { Pace } from '@abnehm/contracts/ports';
 
 import { Button, Chip, ListGroup, ListRow, Notice, Sheet, Skeleton, size, space, Stepper, Switch, Text, TextField } from '../design';
@@ -46,7 +47,7 @@ export function GoalsScreen({ target }: RouteScreenProps<'settings'>) {
   );
 }
 
-const kcalOf = (milliKcal: number) => Math.floor(milliKcal / 1_000);
+const kcalOf = kcalOfMilliKcal;
 
 function Overview({ settings, current, onEdit }: { settings: GoalSettings; current: GoalVersionView; onEdit: () => void }) {
   return (
@@ -73,7 +74,12 @@ const shownFields: readonly ShownField[] = [
   { title: texts.goalWeight, text: ({ values }) => kgText(values.goalWeightG) },
   { title: texts.water, text: ({ values }) => texts.waterPerDay(values.waterTargetMl) },
   { title: texts.sport, text: ({ values }) => texts.sportPerWeek(values.weeklySportTargetMinutes) },
+  { title: texts.maintenance, text: ({ values }) => maintenanceText(values.maintenanceReason) },
 ];
+
+function maintenanceText(reason: GoalVersionView['values']['maintenanceReason']): string {
+  return reason === null ? texts.maintenanceStates.off : texts.maintenanceStates[reason];
+}
 
 function Upcoming({ current, upcoming }: { current: GoalVersionView; upcoming: GoalVersionView }) {
   const rows = shownFields.flatMap((field) => {
@@ -81,7 +87,8 @@ function Upcoming({ current, upcoming }: { current: GoalVersionView; upcoming: G
     const after = field.text(upcoming);
     return before === after ? [] : [{ title: field.title, before, after }];
   });
-  if (rows.length === 0) return null;
+  // Ändert die Fassung nur die Herleitung, etwa das Alter am Geburtstag, nennt sie das statt einer leeren Liste.
+  const shown = rows.length > 0 ? rows : [{ title: texts.budget, before: texts.derivationBefore, after: texts.derivationChanged }];
   return (
     <View style={styles.section}>
       <SectionTitle>{texts.sections.upcoming}</SectionTitle>
@@ -89,7 +96,7 @@ function Upcoming({ current, upcoming }: { current: GoalVersionView; upcoming: G
         {texts.upcomingIntro}
       </Text>
       <ListGroup>
-        {rows.map(({ title, before, after }) => (
+        {shown.map(({ title, before, after }) => (
           <ValueRow key={title} title={title} value={after} subtitle={texts.previously(before)} />
         ))}
       </ListGroup>
@@ -99,19 +106,21 @@ function Upcoming({ current, upcoming }: { current: GoalVersionView; upcoming: G
 
 function BudgetDerivation({ view }: { view: GoalVersionView }) {
   const { values } = view;
-  const factor = activityFactors[values.activityLevel];
+  const factor = view.activityFactor;
   return (
     <View style={styles.section}>
       <SectionTitle>{texts.sections.budget}</SectionTitle>
       <ListGroup>
         <ValueRow title={texts.budget} value={kcalText(kcalOf(values.calorieBudgetMilliKcal))} subtitle={texts.budgetSources[values.budgetSource]} />
         <ValueRow title={texts.basal} value={kcalText(kcalOf(values.basalMetabolicRateMilliKcal))} />
-        <ValueRow
-          title={texts.activity}
-          subtitle={activityLevelNames[values.activityLevel]}
-          value={texts.activityFactor(factor)}
-          label={rowLabel(`${texts.activity} ${activityLevelNames[values.activityLevel]}`, texts.activityFactorSpoken(factor))}
-        />
+        {factor === null ? null : (
+          <ValueRow
+            title={texts.activity}
+            subtitle={activityLevelNames[values.activityLevel]}
+            value={texts.activityFactor(factor)}
+            label={rowLabel(`${texts.activity} ${activityLevelNames[values.activityLevel]}`, texts.activityFactorSpoken(factor))}
+          />
+        )}
         <ValueRow title={texts.total} value={kcalText(kcalOf(values.totalEnergyExpenditureMilliKcal))} />
         {values.deficitMilliKcal === null || values.pace === null ? null : (
           <ValueRow
@@ -132,13 +141,10 @@ function BudgetDerivation({ view }: { view: GoalVersionView }) {
   );
 }
 
-/** PAL der Aktivitätsstufen (DGE), wie sie die Zielversion zur Herleitung nennt. */
-const activityFactors = { wenig_aktiv: 1.4, maessig_aktiv: 1.6, aktiv: 1.8 } as const;
-
 function Goals({ view }: { view: GoalVersionView }) {
   const { values, forecast } = view;
   const forecastText = forecast === null ? undefined : `${texts.forecast(forecast.year, forecast.month)} · ${texts.estimate}`;
-  const maintenance = values.maintenanceReason === null ? texts.maintenanceStates.off : texts.maintenanceStates[values.maintenanceReason];
+  const maintenance = maintenanceText(values.maintenanceReason);
   return (
     <View style={styles.section}>
       <SectionTitle>{texts.sections.goals}</SectionTitle>
@@ -170,17 +176,22 @@ type Form = Readonly<{
   /** Die Person hält ihr Gewicht freiwillig; der erzwungene Haltemodus hängt nicht daran. */
   holding: boolean;
   goalWeightText: string;
+  /** Eigenes Budget der Person; im Haltemodus nie, dort ist das Budget der Gesamtumsatz. */
   manual: boolean;
   manualBudgetText: string;
+  /** Das Budget eines angenommenen Budgetvorschlags gilt weiter, bis die Person ein anderes wählt. */
+  keepsSuggestion: boolean;
 }>;
 
-function formOf(base: GoalDraft): Form {
+function formOf(base: GoalDraft, suggestedBudgetKcal: number | null): Form {
+  const manual = base.manualBudgetKcal !== null && suggestedBudgetKcal === null;
   return {
     draft: base,
     holding: base.pace === null,
     goalWeightText: base.goalWeightG === null ? '' : thousandthsWithOneDecimal(base.goalWeightG),
-    manual: base.manualBudgetKcal !== null,
-    manualBudgetText: base.manualBudgetKcal === null ? '' : String(base.manualBudgetKcal),
+    manual,
+    manualBudgetText: manual ? String(base.manualBudgetKcal) : '',
+    keepsSuggestion: suggestedBudgetKcal !== null,
   };
 }
 
@@ -190,46 +201,42 @@ function kcalOfText(text: string): number | null {
   return /^\d{1,5}$/.test(digits) ? Number(digits) : null;
 }
 
-/** Der Entwurf, den „Ab morgen übernehmen“ anlegen würde, und was ihm fehlt. */
-function candidateOf(form: Form) {
+/** Der Entwurf, den „Ab morgen übernehmen“ anlegen würde, und welche Eingabe sich nicht lesen lässt. */
+function candidateOf(form: Form, suggestedBudgetKcal: number | null) {
   const goalWeightG = gramsOfKgText(form.goalWeightText);
-  const manualBudgetKcal = form.manual ? kcalOfText(form.manualBudgetText) : null;
+  const ownBudget = form.manual && !form.holding;
+  const manualBudgetKcal = ownBudget ? kcalOfText(form.manualBudgetText) : null;
+  const budget = form.holding ? null : ownBudget ? manualBudgetKcal : form.keepsSuggestion ? suggestedBudgetKcal : null;
   const draft: GoalDraft = {
     ...form.draft,
     goalWeightG: goalWeightG ?? form.draft.goalWeightG,
     pace: form.holding ? null : form.draft.pace,
-    manualBudgetKcal: form.manual ? (manualBudgetKcal ?? form.draft.manualBudgetKcal) : null,
+    manualBudgetKcal: budget,
   };
-  return { draft, goalWeightUnreadable: goalWeightG === null, manualBudgetUnreadable: form.manual && manualBudgetKcal === null };
+  return { draft, goalWeightUnreadable: goalWeightG === null, manualBudgetUnreadable: ownBudget && manualBudgetKcal === null };
 }
 
 const sameDraft = (a: GoalDraft, b: GoalDraft) => (Object.keys(a) as (keyof GoalDraft)[]).every((key) => a[key] === b[key]);
 
-const errorsOf = (result: GoalCalculatorResult): readonly GoalInputError[] => (result.type === 'ungueltig' ? result.errors : []);
-
 function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: GoalDraft; onDone: () => void }) {
   const plan = useAppPlan();
   const { showMessage } = useMessageHost();
-  const [form, setForm] = useState(() => formOf(base));
+  const [form, setForm] = useState(() => formOf(base, settings.suggestedBudgetKcal));
   const change = (patch: Partial<Form>) => setForm((current) => ({ ...current, ...patch }));
-  const { draft, goalWeightUnreadable, manualBudgetUnreadable } = candidateOf(form);
-  const result = settings.preview(draft);
-  // Grenzen, Vorschlag und Sicherheitsgrund hängen weder am Zielgewicht noch am eigenen Budget; ohne beide
-  // lassen sie sich auch zeigen, solange eine dieser Eingaben ungültig ist.
-  const reference = settings.preview({ ...draft, goalWeightG: null, manualBudgetKcal: null });
-  const calculation: GoalCalculation | null = reference.type === 'berechnet' ? reference : null;
-  const forced = calculation?.maintenanceReason === 'sicherheits_check';
-  const errors = errorsOf(result);
-  const goalWeightProblem = goalWeightProblemOf(goalWeightUnreadable, errors, calculation);
-  const budgetRange = calculation?.manualBudgetRange ?? null;
-  const budgetProblem =
-    budgetRange !== null && (manualBudgetUnreadable || errors.some((error) => error.startsWith('manual_budget')))
-      ? texts.manualBudgetInvalid(budgetRange.min, budgetRange.max)
-      : undefined;
-  const paceMissing = !forced && !form.holding && draft.pace === null;
-  const goalNotBelow = !forced && !form.holding && draft.pace !== null && result.type === 'berechnet' && result.hints.includes('goal_weight_not_below_current');
+  const { draft, goalWeightUnreadable, manualBudgetUnreadable } = candidateOf(form, settings.suggestedBudgetKcal);
+  // Die fachliche Prüfung liegt im Plan-Modul; hier bleibt nur, was sich als Text nicht lesen lässt.
+  const check = settings.check(draft, { holding: form.holding });
+  const { result, reference, forced } = check;
+  const goalWeightProblem =
+    check.goalWeightProblem === 'below_limit' && reference !== null
+      ? texts.goalWeightBelowLimit(reference.goalWeight.range.min)
+      : goalWeightUnreadable || check.goalWeightProblem !== null ? texts.goalWeightInvalid : undefined;
+  const budgetRange = reference?.manualBudgetRange ?? null;
+  const budgetProblem = budgetRange !== null && (manualBudgetUnreadable || check.manualBudgetInvalid) ? texts.manualBudgetInvalid(budgetRange.min, budgetRange.max) : undefined;
   const changed = !sameDraft(draft, base);
-  const valid = result.type === 'berechnet' && !goalWeightUnreadable && !manualBudgetUnreadable && !paceMissing && !goalNotBelow;
+  const valid = check.valid && !goalWeightUnreadable && !manualBudgetUnreadable;
+  const waterTargetMl = draft.waterTargetMl ?? reference?.water.targetMl ?? targetInputLimits.waterTargetMl.min;
+  const sportMinutes = draft.weeklySportTargetMinutes ?? reference?.sport.weeklyTargetMinutes ?? targetInputLimits.weeklySportTargetMinutes.min;
 
   const [leaving, setLeaving] = useState<Readonly<{ repeat: () => void; confirmed: boolean }> | null>(null);
   usePreventRemove(changed && leaving?.confirmed !== true, ({ repeat }) => setLeaving({ repeat, confirmed: false }));
@@ -250,7 +257,7 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
     <>
       <Text>{texts.editIntro}</Text>
       {forced ? (
-        <Notice tone="hint" text={texts.maintenanceForced(calculation?.safetyTriggers ?? [])} />
+        <Notice tone="hint" text={texts.maintenanceForced(reference?.safetyTriggers ?? [])} />
       ) : (
         <ListGroup>
           <ListRow
@@ -260,7 +267,7 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
               <Switch
                 label={texts.holdSwitch}
                 value={form.holding}
-                onValueChange={(holding) => change({ holding, draft: { ...form.draft, pace: null }, manual: false })}
+                onValueChange={(holding) => change({ holding, draft: { ...form.draft, pace: null }, manual: false, keepsSuggestion: false })}
               />
             }
           />
@@ -274,10 +281,10 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
           unit="kg"
           value={form.goalWeightText}
           onChangeText={(goalWeightText) => change({ goalWeightText })}
-          hint={calculation === null ? undefined : texts.goalWeightHint(calculation.goalWeight.suggestion, calculation.goalWeight.range.min)}
+          hint={reference === null ? undefined : texts.goalWeightHint(reference.goalWeight.suggestion, reference.goalWeight.range.min)}
           problem={goalWeightProblem}
         />
-        {goalNotBelow ? <Notice tone="hint" text={texts.goalNotBelow(draft.weightG)} /> : null}
+        {check.goalWeightNotBelowCurrent ? <Notice tone="hint" text={texts.goalNotBelow(draft.weightG)} /> : null}
       </View>
 
       {forced || form.holding ? null : (
@@ -294,17 +301,17 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
               />
             ))}
           </View>
-          {paceMissing ? <Notice tone="hint" text={texts.choosePace} /> : null}
+          {check.paceMissing ? <Notice tone="hint" text={texts.choosePace} /> : null}
         </View>
       )}
 
-      {forced ? null : (
+      {forced || form.holding ? null : (
         <View style={styles.section}>
           <ListGroup>
             <ListRow
               title={texts.manualBudget}
-              subtitle={texts.manualBudgetHint}
-              accessory={<Switch label={texts.manualBudget} value={form.manual} onValueChange={(manual) => change({ manual })} />}
+              subtitle={form.keepsSuggestion && settings.suggestedBudgetKcal !== null ? texts.suggestionKept(settings.suggestedBudgetKcal) : texts.manualBudgetHint}
+              accessory={<Switch label={texts.manualBudget} value={form.manual} onValueChange={(manual) => change({ manual, keepsSuggestion: false })} />}
             />
           </ListGroup>
           {form.manual ? (
@@ -324,17 +331,17 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
       <ListGroup>
         <Stepper
           label={texts.water}
-          value={draft.waterTargetMl ?? calculation?.water.targetMl ?? 0}
-          valueText={litreText(draft.waterTargetMl ?? calculation?.water.targetMl ?? 0)}
-          {...(calculation?.water.range ?? waterRange)}
+          value={waterTargetMl}
+          valueText={litreText(waterTargetMl)}
+          {...targetInputLimits.waterTargetMl}
           hint={texts.waterHint}
           onChange={(waterTargetMl) => change({ draft: { ...form.draft, waterTargetMl } })}
         />
         <Stepper
           label={texts.sport}
-          value={draft.weeklySportTargetMinutes ?? calculation?.sport.weeklyTargetMinutes ?? 0}
-          valueText={texts.sportStep(draft.weeklySportTargetMinutes ?? calculation?.sport.weeklyTargetMinutes ?? 0)}
-          {...(calculation?.sport.range ?? sportRange)}
+          value={sportMinutes}
+          valueText={texts.sportStep(sportMinutes)}
+          {...targetInputLimits.weeklySportTargetMinutes}
           hint={texts.sportHint}
           onChange={(weeklySportTargetMinutes) => change({ draft: { ...form.draft, weeklySportTargetMinutes } })}
         />
@@ -375,16 +382,6 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
       </Sheet>
     </>
   );
-}
-
-/** Wasser- und Sportgrenzen des Zielrechners (Spezifikation 1, Abschnitt 3; Designwerte), solange die Rechnung fehlt. */
-const waterRange = { min: 500, max: 5_000, step: 250 } as const;
-const sportRange = { min: 30, max: 600, step: 10 } as const;
-
-function goalWeightProblemOf(unreadable: boolean, errors: readonly GoalInputError[], calculation: GoalCalculation | null): string | undefined {
-  if (errors.includes('goal_weight_below_lower_limit') && calculation !== null) return texts.goalWeightBelowLimit(calculation.goalWeight.range.min);
-  if (unreadable || errors.some((error) => error.startsWith('goal_weight'))) return texts.goalWeightInvalid;
-  return undefined;
 }
 
 const styles = StyleSheet.create({

@@ -3,13 +3,16 @@ import { act, fireEvent, screen, userEvent } from '@testing-library/react-native
 import { renderRouter } from 'expo-router/testing-library';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
+import { LocalDate } from '@abnehm/contracts/base';
+import { goalVersionId } from '@abnehm/contracts/plan';
 
 import SettingsGoals from '../app/settings/goals';
 import { Button } from '../design';
 import { hitArea } from '../design/testing/hit-area';
 import { withDeviceConfig } from '../design/testing/device-config';
 import { openTarget } from '../navigation';
-import { berlin, wednesdayNoon } from '../plan/testing/today-world';
+import { writeGoalVersion } from '../plan/plan-repository';
+import { berlin, philipp, wednesdayNoon } from '../plan/testing/today-world';
 import { createGoalsWorld, type GoalsWorld } from './testing/goals-world';
 
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
@@ -180,17 +183,45 @@ describe('Bearbeitung ab morgen', () => {
   });
 });
 
+describe('Budget aus einem angenommenen Budgetvorschlag', () => {
+  test('bleibt bei einer anderen Änderung erhalten und lässt sich durch ein eigenes ersetzen', async () => {
+    await open();
+    // Wie `acceptBudgetSuggestion` (#151): eine Fassung ab morgen mit dem Budget des Vorschlags.
+    const { validFrom: _validFrom, ...values } = world.plan.settings().goal.current!;
+    const tomorrow = LocalDate.parse('2026-10-15');
+    await act(async () => {
+      world.database.transaction((tx) =>
+        writeGoalVersion(tx, goalVersionId(philipp, tomorrow), philipp, { ...values, validFrom: tomorrow, calorieBudgetMilliKcal: 1_773_000, budgetSource: 'budgetvorschlag' }, wednesdayNoon),
+      );
+    });
+    expect(row('Kalorienbudget pro Tag: 1.773 kcal, bisher 1.620 kcal')).toBeOnTheScreen();
+
+    await edit();
+    expect(toggle('Budget selbst festlegen')).not.toBeChecked();
+    expect(screen.getByText('Es gilt weiter das Budget aus deinem Budgetvorschlag: 1.773 kcal.')).toBeOnTheScreen();
+    await user.press(button('Wasserziel erhöhen'));
+    expect(row('Kalorienbudget ab morgen: 1.773 kcal')).toBeOnTheScreen();
+    await user.press(save());
+
+    expect(world.goalVersions()[1]).toMatchObject({ validFrom: '2026-10-15', calorieBudgetMilliKcal: 1_773_000, budgetSource: 'budgetvorschlag', waterTargetMl: 1_750 });
+  });
+});
+
 describe('Haltemodus', () => {
   test('freiwillig einschalten: ohne Tempo, das Budget ist ab morgen der Gesamtumsatz', async () => {
     await open();
     await edit();
 
+    await user.press(toggle('Budget selbst festlegen'));
     await user.press(toggle('Gewicht halten'));
     expect(screen.queryByRole('radio', { name: /^entspannt/ })).toBeNull();
+    // Im Haltemodus ist das Budget der Gesamtumsatz; ein eigenes gibt es dort nicht.
+    expect(screen.queryByRole('switch', { name: 'Budget selbst festlegen' })).toBeNull();
     await user.press(save());
 
-    expect(world.goalVersions()[1]).toMatchObject({ validFrom: '2026-10-15', maintenanceReason: 'gewaehlt', pace: null, calorieBudgetMilliKcal: 2_120_000 });
+    expect(world.goalVersions()[1]).toMatchObject({ validFrom: '2026-10-15', maintenanceReason: 'gewaehlt', pace: null, calorieBudgetMilliKcal: 2_120_000, budgetSource: 'berechnet' });
     expect(row('Tempo: Gewicht halten, bisher entspannt')).toBeOnTheScreen();
+    expect(row('Haltemodus: an, selbst gewählt, bisher aus')).toBeOnTheScreen();
   });
 
   test('freiwillig ausschalten verlangt ein Tempo', async () => {
