@@ -1,24 +1,22 @@
 import { render, screen, userEvent } from '@testing-library/react-native';
-import { contractFixtures } from '@abnehm/contracts/fixtures';
-import { IslandProgress } from '@abnehm/contracts/island';
-
 import { hitArea } from '../design/testing/hit-area';
+import type { IslandHalves } from './halves';
 import { IslandHud, type IslandHudProps } from './IslandHud';
-import { anna, philipp } from './testing/persons';
 
 // HUD des Tabs „Momo“ (Spezifikation 4, Abschnitt 7): Jahreszeit mit Tageszeit, eigene Energie,
-// Levelbalken und Schalter „Bereiche“. Der Fortschritt ist das Vertrags-Fixture „Level 6, eigene
-// Hälfte voll“: Philipp 100 %, Anna 43 %.
+// Levelbalken und Schalter „Bereiche“. Der Levelbalken entspricht dem Vertrags-Fixture „Level 6, eigene
+// Hälfte voll“ aus Philipps Sicht: Philipp 100 %, Anna 43 %, Momo wartet auf Anna.
 
-const progress = IslandProgress.parse(contractFixtures.island!.IslandProgress!.valid['Level 6, eigene Hälfte voll']);
+const half = (halfPercent: number) => ({ halfPercent, halfFull: halfPercent === 100 });
+const philippsSicht: IslandHalves = { level: 6, own: half(100), partner: half(43), waitingForPartner: true };
+const annasSicht: IslandHalves = { level: 6, own: half(43), partner: half(100), waitingForPartner: false };
 
 const hud = (overrides: Partial<IslandHudProps> = {}) => (
   <IslandHud
     season="herbst"
     daytime="tag"
     energy={23}
-    progress={progress}
-    viewerPersonId={philipp}
+    halves={philippsSicht}
     partnerName="Anna"
     areas={false}
     onToggleAreas={jest.fn()}
@@ -66,7 +64,7 @@ test('Levelbalken: Level als Abzeichen, eigene Hälfte „Du“ links, Partner r
 });
 
 test('aus Annas Sicht ist ihre Hälfte die eigene', async () => {
-  await render(hud({ viewerPersonId: anna, partnerName: 'Philipp' }));
+  await render(hud({ halves: annasSicht, partnerName: 'Philipp' }));
 
   expect(screen.getByRole('progressbar', { name: 'Level 6' })).toHaveAccessibilityValue({ now: 43, text: 'Deine Hälfte zu 43 Prozent gefüllt' });
   expect(screen.getByTestId('levelbar-eigen')).toHaveStyle({ width: '43%' });
@@ -108,4 +106,17 @@ test('ohne Handler bleibt der Levelbalken reine Anzeige', async () => {
   await render(hud());
 
   expect(screen.queryByText('So wächst Momo')).not.toBeOnTheScreen();
+});
+
+test('ist die eigene Hälfte voll, wartet Momo neutral auf den Partner, ohne zu sagen, was ihm fehlt (#191)', async () => {
+  await render(hud());
+
+  expect(screen.getByText('Deine Hälfte ist voll – Momo wartet auf Anna')).toBeOnTheScreen();
+  expect(screen.queryByText(/fehlt|noch \d/i)).not.toBeOnTheScreen();
+});
+
+test('ohne volle eigene Hälfte steht kein Wartetext', async () => {
+  await render(hud({ halves: annasSicht, partnerName: 'Philipp' }));
+
+  expect(screen.queryByText(/wartet auf/)).not.toBeOnTheScreen();
 });

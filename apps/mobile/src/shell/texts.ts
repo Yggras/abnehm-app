@@ -23,6 +23,12 @@ export const activityNames: Readonly<Record<ActivityType, string>> = {
   sonstiges: 'Sonstiges',
 };
 
+/**
+ * „Deine Hälfte ist voll – Momo wartet auf ‹Name›“ (Spezifikation 4, Abschnitt 7): neutral auf „Heute“
+ * und auf der Insel, ohne Angabe, was dem Partner fehlt.
+ */
+export const waitingForPartnerText = (partnerDisplayName: string) => `Deine Hälfte ist voll – Momo wartet auf ${partnerDisplayName}`;
+
 type SettingsSection = NonNullable<Extract<RouteTarget, { type: 'settings' }>['section']>;
 
 const routeTitles: Record<RouteName, string> = {

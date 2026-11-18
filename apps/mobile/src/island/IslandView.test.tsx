@@ -10,6 +10,7 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { hatching } from '@abnehm/game-rules/hatching';
 import { createGestureController } from 'react-native-gesture-handler/jest-utils';
 
+import { halvesFor } from './halves';
 import { IslandView, type IslandViewProps } from './IslandView';
 import { islandLayout } from './layout';
 import { IslandHost, testScreen } from './testing/island-host';
@@ -21,6 +22,8 @@ import type * as mockSkia from './testing/skia-mock';
 jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia>('./testing/skia-mock').skiaWithCanvasKit());
 
 const progress = IslandProgress.parse(contractFixtures.island!.IslandProgress!.valid['Level 6, eigene Hälfte voll']);
+/** Philipp hat auf Level 6 so viel verbaut, dass seine Hälfte voll ist: Schwelle(7) = 81. */
+const halves = halvesFor(progress, philipp, 81);
 const momo = MomoAppearance.parse(Object.values(contractFixtures.island!.MomoAppearance!.valid).find((value) => (value as MomoAppearance).stage === 'geschluepft'));
 const fields = hatching(gameCatalog, { proposerPersonId: philipp, proposerRole: 'bauen', partnerPersonId: anna }).fields;
 const island = { ...islandLayout(gameCatalog, { fields, unlockedAreas: [] }), objects: [], momo };
@@ -38,7 +41,7 @@ function tapAt(x: number, y: number) {
 async function renderIsland(overrides: Partial<IslandViewProps> = {}) {
   await render(
     <IslandHost clock={clock}>
-      <IslandView island={island} progress={progress} viewerPersonId={philipp} partnerName="Anna" energy={23} onOpen={jest.fn()} {...overrides} />
+      <IslandView island={island} halves={halves} viewerPersonId={philipp} partnerName="Anna" energy={23} onOpen={jest.fn()} {...overrides} />
     </IslandHost>,
   );
   // Bildschirm 400 × 800: Der Start legt die Mitte der Lichtung in die Mitte des Bildschirms.

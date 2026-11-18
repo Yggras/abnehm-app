@@ -58,7 +58,7 @@ describe('Schlüpfen App ↔ Backend', { timeout: 20_000 }, () => {
 
       expect(phone.character()).toEqual({
         type: 'ready',
-        data: { appearance: kaulquappe, energy: 0, level: 1, ownHalfPercent: 0, partnerHalfPercent: 0, waitingForPartner: false },
+        data: { appearance: kaulquappe, energy: 0, level: 1, ownHalfPercent: 0, partnerHalfPercent: 0, waitingForPartner: false, partnerDisplayName: partnerName },
       });
       expect(phone.wir()).toEqual({
         type: 'ready',

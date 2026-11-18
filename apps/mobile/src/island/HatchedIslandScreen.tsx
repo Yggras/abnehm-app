@@ -17,7 +17,8 @@ import { momoSheetTexts } from './texts';
 // lokalen Daten, das Momo-Sheet nach einem Tipp auf Momo und beim ersten Öffnen einmalig „So wächst
 // Momo“. Beide teilen ein Sheet, denn Sheets in Sheets gibt es nicht (`design/native/Sheet.tsx`); aus
 // dem Momo-Sheet heraus wechselt der Inhalt zur Erklärung. Der Levelbalken öffnet die Erklärung als
-// zweiter Einstieg (Impeccable-Kritik zu #184). Objekte zeigt die Insel mit dem Bauen (#191).
+// zweiter Einstieg (Impeccable-Kritik zu #184). Gebaute Objekte stehen auf ihren Feldern, und die eigene
+// Hälfte wächst mit jedem eigenen Bau sofort (#191).
 
 export type HatchedIslandScreenProps = Readonly<{
   island: HatchedIsland;
@@ -42,17 +43,17 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, onOpen, bottomIns
   const scene = useMemo(
     (): IslandSceneInput => ({
       ...islandLayout(gameCatalog, { fields: island.fields, unlockedAreas: island.unlockedAreas }),
-      objects: [],
+      objects: island.objects,
       momo: island.appearance,
     }),
-    [island.fields, island.unlockedAreas, island.appearance],
+    [island.fields, island.unlockedAreas, island.objects, island.appearance],
   );
 
   return (
     <>
       <IslandView
         island={scene}
-        progress={island.progress}
+        halves={island.halves}
         viewerPersonId={island.viewerPersonId}
         partnerName={island.partnerDisplayName}
         energy={island.energy}

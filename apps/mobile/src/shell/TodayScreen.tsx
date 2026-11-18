@@ -16,7 +16,7 @@ import { openTarget } from '../navigation';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
-import { thousandthsWithOneDecimal } from './texts';
+import { thousandthsWithOneDecimal, waitingForPartnerText } from './texts';
 import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContributionError } from './today-registry';
 
 type Data<S> = S extends ContributionState<infer D, string> ? D : never;
@@ -113,7 +113,7 @@ function MomoArea({ character, goals, large, stale }: { character: MomoCharacter
       {stale ? <Text tone="inkMuted">{staleLabel(stale)}</Text> : null}
       <Text variant="headline" accessibilityRole="header">Momo · Level {character.level}</Text>
       <View style={styles.row}><EnergySymbol /><Text>{character.energy} Energie</Text></View>
-      <Text tone="inkMuted">{character.waitingForPartner ? 'Dein Teil ist voll. Momo wartet auf euch beide.' : 'Euer gemeinsamer Fortschritt'}</Text>
+      <Text tone="inkMuted">{character.waitingForPartner ? waitingForPartnerText(character.partnerDisplayName) : 'Euer gemeinsamer Fortschritt'}</Text>
       <View accessible accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 200, now: character.ownHalfPercent + character.partnerHalfPercent, text: `Dein Anteil ${character.ownHalfPercent} Prozent, Partneranteil ${character.partnerHalfPercent} Prozent` }} accessibilityLabel={`Gemeinsamer Levelbalken, Level ${character.level}`}>
         <View style={styles.levelbar}>
           <View style={styles.levelHalf}><View style={[styles.ownFill, { width: `${character.ownHalfPercent}%` }]} /></View>

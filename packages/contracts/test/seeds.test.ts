@@ -357,6 +357,7 @@ describe('Szenario gekoppelt', () => {
   });
 
   it('fertiges Onboarding, Ziel- und Wochenplanversionen und je drei Tagesziele von heute', () => {
+    const today = (row: { local_date?: unknown }) => row.local_date === seedDays.heute;
     expect(server.person?.map(({ display_name, onboarding_status }) => [display_name, onboarding_status])).toEqual([
       ['Philipp', 'abgeschlossen'],
       ['Anna', 'abgeschlossen'],
@@ -365,7 +366,9 @@ describe('Szenario gekoppelt', () => {
       expect(server.goal_version?.filter((row) => row.person_id === personId)).toHaveLength(1);
       expect(server.weekly_plan_day?.filter((row) => row.person_id === personId)).toHaveLength(7);
       const goals = server.daily_goal?.filter((row) => row.person_id === personId) ?? [];
-      expect(goals.map(({ local_date, slot }) => [local_date, slot])).toEqual([
+      // Dazu die Tage des Energieverlaufs seit dem Zielstart (#191), 13 Tage zu je drei Tageszielen.
+      expect(goals.filter((row) => !today(row))).toHaveLength(13 * 3);
+      expect(goals.filter(today).map(({ local_date, slot }) => [local_date, slot])).toEqual([
         ['2026-10-14', 1],
         ['2026-10-14', 2],
         ['2026-10-14', 3],
@@ -375,7 +378,7 @@ describe('Szenario gekoppelt', () => {
   });
 
   it('teilweise erfüllte Tracker: Philipp eine, Anna zwei Tageszielerfüllungen, jede mit +1-Gutschrift', () => {
-    const completions = (personId: string) => server.daily_goal_completion?.filter((row) => row.person_id === personId) ?? [];
+    const completions = (personId: string) => server.daily_goal_completion?.filter((row) => row.person_id === personId && row.local_date === seedDays.heute) ?? [];
     expect(completions(philipp).map(({ baustein }) => baustein)).toEqual(['sporteinheit']);
     expect(completions(anna).map(({ baustein }) => baustein).sort()).toEqual(['sporteinheit', 'wasserziel']);
     for (const completion of server.daily_goal_completion ?? []) {
@@ -435,9 +438,9 @@ describe('Szenario gekoppelt', () => {
     for (const [key, own] of [['philipp-iphone', philipp], ['anna-android', anna]] as const) {
       const { rows } = gekoppelt.initial.devices[key]!;
       for (const [table, tableRows] of Object.entries(rows)) {
-        // Kopplungsinhalte mit Personenspalte: Mitglieder und Inselfelder sehen beide (Spezifikation 4,
-        // Abschnitt 7: Felder des Partners sind sichtbar, nur nicht bebaubar; #184).
-        if (['coupling_member', 'island_field', 'partner_summary', 'partner_daily_goal_status'].includes(table)) continue;
+        // Kopplungsinhalte mit Personenspalte: Mitglieder, Inselfelder und Inselobjekte sehen beide
+        // (Spezifikation 4, Abschnitt 7: Felder und Objekte des Partners sind sichtbar, nur nicht bebaubar; #184, #191).
+        if (['coupling_member', 'island_field', 'island_object', 'partner_summary', 'partner_daily_goal_status'].includes(table)) continue;
         for (const row of tableRows) {
           for (const column of ownerColumns) if (column in row) expect(row[column], `${key}: ${table}.${column}`).toBe(own);
         }
@@ -573,5 +576,57 @@ describe('Szenario frisches_konto (#138)', () => {
   it('ein Sync ändert nichts: Ausgangs- und Sollzustand sind gleich', () => {
     expect(frischesKonto.steps).toEqual([{ type: 'sync', installation: 'philipp-iphone' }]);
     expect(frischesKonto.target).toEqual(frischesKonto.initial);
+  });
+});
+
+describe('Spielverlauf der Partner-Szenarien (#191)', () => {
+  const balanceOf = (rows: readonly Record<string, unknown>[] = [], personId: string) =>
+    rows.filter((row) => row.person_id === personId).reduce((sum, row) => sum + Number(row.amount), 0);
+  const progressOf = (rows: readonly Record<string, unknown>[] = []) => rows[0] as { level: number; level_need: number; content: { members: { personId: string; halfPercent: number; halfFull: boolean }[] } };
+
+  it('gekoppelt: Level 3, Philipp mit 23 Energie, beide Hälften aus ihren Bauten', () => {
+    const { server } = gekoppelt.initial;
+    expect(balanceOf(server.energy_booking, philipp)).toBe(23);
+    expect(balanceOf(server.energy_booking, anna)).toBe(25);
+    const progress = progressOf(server.island_progress);
+    expect(progress).toMatchObject({ level: 3, level_need: 13 });
+    expect(progress.content.members).toEqual([
+      { personId: philipp, halfPercent: 53, halfFull: false },
+      { personId: anna, halfPercent: 46, halfFull: false },
+    ]);
+    // Jede Ausgabe gehört zu einem Objekt der Insel, auf einem eigenen Feld.
+    const objects = server.island_object ?? [];
+    const fields = new Map((server.island_field ?? []).map((field) => [field.id, field]));
+    for (const debit of (server.energy_booking ?? []).filter((row) => row.type === 'build_debit')) {
+      const object = objects.find((row) => row.id === debit.island_object_id);
+      expect(object?.owner_person_id).toBe(debit.person_id);
+      expect(fields.get(String(object?.field_id))?.owner_person_id).toBe(debit.person_id);
+    }
+    expect(objects).toHaveLength(20);
+  });
+
+  it('haelfte-voll: Philipps Hälfte voll, Annas nicht, Philipp mit 17 Energie', () => {
+    const { server } = seedManifests['haelfte-voll'].initial;
+    expect(balanceOf(server.energy_booking, philipp)).toBe(17);
+    expect(progressOf(server.island_progress).content.members.map(({ halfFull }) => halfFull)).toEqual([true, false]);
+    expect(seedManifests['haelfte-voll'].target).toEqual(seedManifests['haelfte-voll'].initial);
+  });
+
+  it('doppelausgabe: je Gerät vier offene Bauten; danach nimmt der Server alle acht an, und Philipp steht bei −1', () => {
+    const manifest = seedManifests.doppelausgabe;
+    for (const key of ['philipp-iphone', 'philipp-ipad']) {
+      const device = manifest.initial.devices[key]!;
+      expect(device.outbox.map(({ type }) => type)).toEqual(Array(4).fill('buildObject'));
+      expect(balanceOf(device.rows.energy_booking, philipp)).toBe(11);
+    }
+    const { server, devices } = manifest.target;
+    expect(balanceOf(server.energy_booking, philipp)).toBe(-1);
+    expect(server.processed_operation?.map(({ outcome }) => outcome)).toEqual(Array(8).fill('applied'));
+    expect(progressOf(server.island_progress)).toMatchObject({ level: 3 });
+    for (const device of Object.values(devices)) {
+      expect(device.outbox).toEqual([]);
+      expect(balanceOf(device.rows.energy_booking, philipp)).toBe(-1);
+      expect(device.rows.island_object).toHaveLength(28);
+    }
   });
 });

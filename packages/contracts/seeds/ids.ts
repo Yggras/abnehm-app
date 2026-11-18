@@ -53,7 +53,7 @@ const planVersionIds = (idOf: (personId: EntityId, validFrom: LocalDate) => Enti
 export const seedIds = {
   account: { philipp: id('0001', 1), anna: id('0001', 2) },
   person,
-  /** `philippIpad` ist Philipps zweites Gerät, nur im Szenario `zwei_installationen` (#116). */
+  /** `philippIpad` ist Philipps zweites Gerät, nur in den Szenarien `zwei_installationen` (#116) und `doppelausgabe` (#191). */
   installation: { philippIphone: id('0003', 1), annaAndroid: id('0003', 2), philippIpad: id('0003', 3) },
   goalVersion: planVersionIds(goalVersionId),
   weeklyPlanVersion: planVersionIds(weeklyPlanVersionId),
@@ -64,6 +64,8 @@ export const seedIds = {
     philippGestern: [id('0012', 7), id('0012', 8), id('0012', 9)],
     // 0012/10–12: Philipps Tagesziele von vorgestern, nur in `solo-energie` (#180).
     philippVorgestern: [id('0012', 10), id('0012', 11), id('0012', 12)],
+    /** Energieverlauf der Partner-Szenarien (#191): je Person, Tag und Platz eine ID, fortlaufend. */
+    verlauf: (n: number) => id('0013', n),
   },
   // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171) und den Randzuständen (#113);
   // 0020/3–4 gehören Anna (#117).
@@ -115,6 +117,11 @@ export const seedIds = {
     tageOhneAppOeffnung: Array.from({ length: 8 }, (_, index) => id('0090', 18 + index)),
     /** Die vier Schritte `tagesziele_sicherstellen` in `zeitzonen_reisen` (#131), zusammen 16 Materialisierungen. */
     zeitzonenReisen: Array.from({ length: 16 }, (_, index) => id('0090', 26 + index)),
+    /** Offline-Bauten in `doppelausgabe` (#191): je Gerät vier, in Entstehungsreihenfolge. */
+    doppelausgabe: {
+      iphone: Array.from({ length: 4 }, (_, index) => id('0090', 42 + index)),
+      ipad: Array.from({ length: 4 }, (_, index) => id('0090', 46 + index)),
+    },
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */
@@ -130,6 +137,9 @@ export const seedIds = {
   communityProject: { gartenhaeuschen: id('0048', 1) },
   islandEvent: { geschluepft: id('0049', 1) },
   islandProgress: { philippAnna: id('0052', 1) },
+  /** Gebaute Objekte (#191) und die IDs ihrer Spielbefehle, je Bau dieselbe laufende Nummer. */
+  islandObject: (n: number) => id('0053', n),
+  buildCommand: (n: number) => id('0054', n),
   partnerSharing: {
     philipp: { ernaehrung: id('0043', 1), wasser: id('0043', 2), sport: id('0043', 3), gewicht: id('0043', 4) },
     anna: { ernaehrung: id('0043', 5), wasser: id('0043', 6), sport: id('0043', 7), gewicht: id('0043', 8) },

@@ -72,7 +72,7 @@ const wasserziel = ({ slot, at, createdAt }: { slot: DailyGoalSlot; at: string; 
   seedCompletion({ personId: philipp, dailyGoalId: seedIds.dailyGoal.philippHeute[slot - 1]!, localDate: seedDays.heute, slot, baustein: 'wasserziel', at, ...(createdAt && { createdAt }) });
 
 /** Was ein Gerät offline in einer Transaktion geschrieben hat: lokale Zeilen und ihre eine Operation. */
-type OfflineChange = Readonly<{ rows: readonly Readonly<{ table: string; row: SeedRow }>[]; operation: OutboxOperation }>;
+export type OfflineChange = Readonly<{ rows: readonly Readonly<{ table: string; row: SeedRow }>[]; operation: OutboxOperation }>;
 
 /**
  * Eine offline geänderte Zeile: Fachspalten und `updated_at` wie beim Erfassen, die Serverversion bleibt
@@ -118,7 +118,7 @@ function offlineCompletion({ slot, at, operationId }: { slot: DailyGoalSlot; at:
 }
 
 /** Die Geräte haben offline geändert: Zeilen ersetzt oder ergänzt, die Operationen in Reihenfolge in der Outbox. */
-function changedOffline(state: SeedState, installation: SeedKey, changes: readonly OfflineChange[]): SeedState {
+export function changedOffline(state: SeedState, installation: SeedKey, changes: readonly OfflineChange[]): SeedState {
   const device = state.devices[installation];
   if (device === undefined) throw new Error(`Seed: unbekannte Installation ${installation}`);
   const rows: Record<string, SeedRow[]> = { ...device.rows };
@@ -133,7 +133,7 @@ function changedOffline(state: SeedState, installation: SeedKey, changes: readon
 }
 
 /** Ergebnis einer verarbeiteten Operation von Philipp, ohne die abgeleiteten Spalten (`derivedColumns`). */
-function processed(operationId: string, outcome: PushResult['type'], target:
+export function processed(operationId: string, outcome: PushResult['type'], target:
   | Readonly<{ entityType: string; entityId: string }>
   | Readonly<{ command: string; businessKey: string | null }>): SeedRow {
   return {
@@ -149,7 +149,7 @@ function processed(operationId: string, outcome: PushResult['type'], target:
 }
 
 /** Zustand nach den Schritten: Server mit den verarbeiteten Operationen, jedes Gerät auf seinem Stand und ohne offene Operation. */
-function afterSync(state: SeedState, processedOperations: readonly SeedRow[], installations: readonly SeedKey[]): SeedState {
+export function afterSync(state: SeedState, processedOperations: readonly SeedRow[], installations: readonly SeedKey[]): SeedState {
   let result: SeedState = { server: { ...state.server, processed_operation: [...processedOperations] }, devices: state.devices };
   for (const installation of installations) result = pulledBy(result, installation, philipp);
   return { server: result.server, devices: Object.fromEntries(Object.entries(result.devices).map(([key, device]) => [key, { ...device, outbox: [] }])) };
