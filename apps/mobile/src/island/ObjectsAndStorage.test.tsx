@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { createTestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 
-import { fieldOnScreen, glowing, openIslandScreen, tap } from './testing/island-screen';
+import { fieldOnScreen, glowing, openIslandScreen, selected, tap } from './testing/island-screen';
 import type { LaichkugelWorld } from './testing/laichkugel-world';
 import type * as mockSkia from './testing/skia-mock';
 
@@ -155,4 +155,19 @@ test('Abbrechen beim Umstellen lässt das Objekt stehen', async () => {
   expect(glowing()).toHaveLength(0);
   expect(screen.getByRole('button', { name: 'Bauen' })).toBeOnTheScreen();
   expect(commands(world).map(({ type }) => type)).toEqual(['buildObject']);
+});
+
+test('nach dem Platzieren bleibt das frühere Feld nicht hervorgehoben', async () => {
+  await islandWithLantern(3);
+  await tap(ownCorner);
+  expect(selected()).toHaveLength(1);
+  await user.press(screen.getByRole('button', { name: 'Einlagern' }));
+  await user.press(screen.getByRole('button', { name: 'Lager' }));
+  await user.press(screen.getByRole('button', { name: 'Laterne platzieren' }));
+
+  await tap(ownRoleArea);
+
+  // Die Auswahl gehörte zur Laterne; nach dem Platzieren markierte sie ein leeres Feld neben dem Objekt.
+  expect(islandImage(1)).toBeOnTheScreen();
+  expect(selected()).toHaveLength(0);
 });

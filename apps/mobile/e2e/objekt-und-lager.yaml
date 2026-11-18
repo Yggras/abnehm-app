@@ -119,3 +119,12 @@ name: Objekt-Sheet und Lager auf der Insel
     end: "15%,62%"
     duration: 800
 - takeScreenshot: objekt-8-annas-ecke
+# Mitten in Annas Apfelbaumgruppe; die Nachbarfelder tragen ebenfalls ihre Bäume.
+- tapOn:
+    point: "84%,48%"
+- extendedWaitUntil:
+    visible: "von Anna gebaut · Stufe .*"
+    timeout: 10000
+- assertNotVisible: "Umstellen"
+- assertNotVisible: "Einlagern"
+- takeScreenshot: objekt-9-annas-objekt

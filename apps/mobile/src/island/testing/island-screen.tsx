@@ -68,3 +68,6 @@ export async function tap({ x, y }: { x: number; y: number }) {
 
 /** Felder, die im Canvas in `island-buildable` leuchten. */
 export const glowing = () => screen.container.queryAll((node) => node.type === 'skPath' && node.props.color === color.islandBuildable);
+
+/** Das hervorgehobene, zuletzt angetippte Feld (Overlay `auswahl` in `surface-card`). */
+export const selected = () => screen.container.queryAll((node) => node.type === 'skPath' && node.props.color === color.surfaceCard && node.props.opacity === 0.5);

@@ -90,7 +90,8 @@ export function IslandView({
             onMomoPress?.();
             return;
           }
-          if (buildable === null) setSelectedField(hit?.type === 'feld' ? hit.field : null);
+          // Ein Tipp im Bau-Modus setzt oder verschiebt ein Objekt; eine ältere Auswahl markierte danach ein leeres Feld.
+          setSelectedField(buildable === null && hit?.type === 'feld' ? hit.field : null);
           if (hit !== null) onFieldPress?.(hit);
         }}
       />
