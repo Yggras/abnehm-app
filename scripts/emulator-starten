@@ -15,10 +15,11 @@
 # https://unpkg.com/@expo/cli@58.1.11/build/src/start/platforms/android/emulator.js); deshalb startet
 # `npm run android` den Emulator vorher hier. Für diesen Weg und für Android Studio stellt das Skript außerdem
 # die Boot-Option des AVD auf „Cold boot“ (https://developer.android.com/studio/run/managing-avds, Tabelle 1):
-# `fastboot.forceColdBoot=yes` in seiner config.ini. Dass dieser Schlüssel die Option ist, sagt die Doku nicht.
-# Beobachtet am 18.11.2026 (#294, Emulator `medium_phone`): Mit `forceColdBoot=no` lud `emulator @medium_phone`
-# einen älteren Snapshot und verwarf den neueren Stand; mit `yes` startete es mit dem aktuellen Stand und
-# speichert beim Beenden per `adb emu kill` keinen Snapshot mehr.
+# `fastboot.forceColdBoot=yes` und `fastboot.forceFastBoot=no` in seiner config.ini. Dass diese Schlüssel die
+# Option sind, sagt die Doku nicht. Beobachtet am 18.11.2026 (#294, Emulator `medium_phone`): Mit `no`/`yes`
+# (Anlieferung) lud `emulator @medium_phone` einen älteren Snapshot und verwarf den neueren Stand; mit `yes`/`no`
+# startete es mit dem aktuellen Stand und speicherte beim Beenden per `adb emu kill` keinen Snapshot. Ob
+# `forceColdBoot=yes` allein reicht, ist nicht geprüft. Ein Start aus Android Studio ist nicht am Gerät geprüft.
 # Die Gerätesperre (scripts/geraete-slot) nimmt der Aufrufer.
 set -euo pipefail
 
@@ -59,8 +60,12 @@ if [[ -z "$serial" ]]; then
   echo "Starte den Emulator „${avd}“ ohne Snapshot …" >&2
   "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" -avd "$avd" -no-snapshot -no-boot-anim >/dev/null 2>&1 &
   # Mit einem weiteren angeschlossenen Gerät braucht jeder adb-Aufruf die Seriennummer des Emulators.
-  until serial="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ { print $1; exit }')" && [[ -n "$serial" ]]; do sleep 2; done
+  # Frist für Start und Systemstart (ABNEHM_EMULATOR_START_SEKUNDEN, Standard 300), damit etwa ein fehlendes
+  # AVD `npm run android` nicht endlos und stumm warten lässt.
+  deadline=$(( $(date +%s) + ${ABNEHM_EMULATOR_START_SEKUNDEN:-300} ))
+  waited() { (( $(date +%s) < deadline )) || { echo "Fehler: Der Emulator „${avd}“ meldet sich nicht." >&2; exit 1; }; sleep 1; }
+  until serial="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ { print $1; exit }')" && [[ -n "$serial" ]]; do waited; done
   "$adb" -s "$serial" wait-for-device
-  until [[ "$("$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do sleep 2; done
+  until [[ "$("$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do waited; done
 fi
 echo "$serial"

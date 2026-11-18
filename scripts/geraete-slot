@@ -103,6 +103,7 @@ agent_session() {
 # etwa einer beendeten Vorgängerin im selben Worktree, wird ersetzt. Ohne Agent bleibt alles, wie es ist.
 start_renewer() {
   local pid
+  # load_state setzt renewer_* und session_*, agent_session setzt found_pid und found_start (globale Variablen).
   load_state
   agent_session || return 0
   if alive "$renewer_pid" "$renewer_start" && [[ "$session_pid" == "$found_pid" && "$session_start" == "$found_start" ]]; then

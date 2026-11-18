@@ -27,7 +27,7 @@ reset() { : > "$tmp/calls"; if [ -n "$1" ]; then printf '%s\n' "$1"; fi > "$tmp/
 reset ''
 [ "$("$script")" = emulator-5554 ] || fail 'Seriennummer nach dem Start'
 grep -Fx 'emulator -avd medium_phone -no-snapshot -no-boot-anim' "$tmp/calls" >/dev/null || fail 'Emulator nicht ohne Snapshot gestartet'
-grep -F 'no-snapshot-save' "$tmp/calls" >/dev/null && fail 'Snapshot wird noch geladen'
+grep -F 'no-snapshot-save' "$tmp/calls" >/dev/null && fail 'alte Option -no-snapshot-save noch aktiv'
 
 # Das AVD steht danach auf Kaltstart, damit auch Android Studio und `expo run:android` keinen Snapshot laden.
 config="$tmp/avd/medium_phone.avd/config.ini"
@@ -54,4 +54,10 @@ reset ''
 reset ''
 E2E_ANDROID_AVD=pixel "$script" > /dev/null
 grep -Fx 'emulator -avd pixel -no-snapshot -no-boot-anim' "$tmp/calls" >/dev/null || fail 'E2E_ANDROID_AVD'
+# Meldet sich der Emulator nicht, bricht das Skript nach der Frist mit Fehler ab, statt endlos zu warten.
+printf '#!/bin/sh\necho "emulator $*" >> "%s/calls"\n' "$tmp" > "$tmp/sdk/emulator/emulator"
+reset ''
+status=0; ABNEHM_EMULATOR_START_SEKUNDEN=1 "$script" > /dev/null 2> "$tmp/err" || status=$?
+[ "$status" = 1 ] || fail "Emulator meldet sich nicht: Exit $status statt 1"
+grep -F 'meldet sich nicht' "$tmp/err" >/dev/null || fail 'keine Fehlermeldung bei Zeitüberschreitung'
 printf 'emulator-starten: OK\n'
