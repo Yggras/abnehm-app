@@ -186,6 +186,53 @@ export function buildObjectKey(commandId: EntityId): string {
   return `bauen:${commandId}`;
 }
 
+/**
+ * Nutzlast des Fachbefehls `upgradeObject` (Spezifikation 4, Abschnitte 2.5, 3 und 7; #194): ein eigenes
+ * gebautes Objekt genau eine Stufe weiter. Stufe und `upgrade_debit` entstehen in einem Befehl; den Preis
+ * (2- bzw. 3-Facher Grundpreis) berechnen App und Server mit den Spielregeln, nie aus der Nutzlast. Die
+ * Zielstufe steht in der Nutzlast, damit dieselbe Aufwertung auf zwei eigenen Geräten nicht zweimal kostet:
+ * Steht das Objekt schon darauf, lehnt der Server ab.
+ */
+export const UpgradeObject = z.strictObject({
+  /** ID des Spielbefehls; zugleich Buchungsschlüssel der `upgrade_debit` (Spezifikation 0, Abschnitt 4). */
+  commandId: EntityId,
+  islandObjectId: EntityId,
+  toLevel: z.union([z.literal(2), z.literal(3)]),
+  /** Lokaler Tag der Ausgabe auf dem Gerät; Tag der Buchung. */
+  localDate: LocalDate,
+});
+export type UpgradeObject = z.infer<typeof UpgradeObject>;
+
+/** Fachlicher Schlüssel von `upgradeObject`: je Spielbefehl genau eine Aufwertung. */
+export function upgradeObjectKey(commandId: EntityId): string {
+  return `aufwerten:${commandId}`;
+}
+
+/** Ziel einer Platzierung: ein Inselfeld oder das persönliche Lager. */
+export const PlacementTarget = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('feld'), fieldId: EntityId }),
+  z.strictObject({ type: z.literal('lager') }),
+]);
+export type PlacementTarget = z.infer<typeof PlacementTarget>;
+
+/**
+ * Nutzlast des Fachbefehls `placeObject` (Spezifikation 4, Abschnitte 2.5, 7 und 11; #194): ein eigenes
+ * Objekt auf ein eigenes Feld stellen oder ins Lager legen; Einlagern ist Platzieren im Lager. Platzieren
+ * ist kostenlos. Feldbelegung läuft ausschließlich über diesen Befehl; ist das Feld auf dem Server belegt,
+ * wechselt das ältere Objekt atomar ins Lager (Spezifikation 0, Abschnitt 10).
+ */
+export const PlaceObject = z.strictObject({
+  commandId: EntityId,
+  islandObjectId: EntityId,
+  target: PlacementTarget,
+});
+export type PlaceObject = z.infer<typeof PlaceObject>;
+
+/** Fachlicher Schlüssel von `placeObject`: je Spielbefehl genau eine Platzierung. */
+export function placeObjectKey(commandId: EntityId): string {
+  return `platzieren:${commandId}`;
+}
+
 /** Entwicklungsform zum Level (Kaulquappe ab Level 1 … Lagunendrache ab Level 43). */
 export const MomoForm = z.enum([
   'kaulquappe',

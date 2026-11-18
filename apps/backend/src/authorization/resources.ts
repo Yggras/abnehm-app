@@ -98,6 +98,8 @@ export type ResourceTarget = Readonly<{
   claimedOwnerPersonId?: unknown;
   /** Beteiligung, die eine Entscheidung über eine gemeinsame Aktion voraussetzt; die Regel prüft sie. */
   claimedParticipation?: SharedActionParticipation;
+  /** Zielfeld einer Platzierung (#194); die Regel prüft, dass es der handelnden Person gehört. */
+  fieldId?: unknown;
 }>;
 
 /** Wer an einer gemeinsamen Aktion beteiligt ist: wer sie beantragt hat, oder der Partner, der antwortet. */
@@ -487,6 +489,38 @@ const ownFieldRule = byId(
   { onlyOperations: ['befehl'] },
 );
 
+/**
+ * Ein eigenes Inselobjekt aufwerten oder platzieren (`upgradeObject`, `placeObject`; #194): nur der
+ * Besitzer, nur als aktives Mitglied der Kopplung und nur, solange das Objekt nicht gelöscht ist. Nennt
+ * der Befehl ein Zielfeld (`fieldId`), muss es ein eigenes Feld derselben Insel sein. Objekte und Felder
+ * des Partners, gemeinsame Bereiche, fremde Inseln und eine archivierte Kopplung sind damit verboten
+ * (Spezifikation 4, Abschnitt 3; Spezifikation 0, Abschnitt 11).
+ */
+const ownObjectRule = byId(
+  'kopplungsinhalte',
+  islandObject,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await first(
+      context.db
+        .select({ couplingId: islandObject.couplingId, islandId: islandObject.islandId, owner: islandObject.ownerPersonId, deletedAt: islandObject.deletedAt })
+        .from(islandObject)
+        .where(eq(islandObject.id, id)),
+    );
+    if (found === null || found.owner !== personId || found.deletedAt !== null) return denied;
+    if (context.target.fieldId !== undefined) {
+      const fieldId = EntityId.safeParse(context.target.fieldId);
+      const field = fieldId.success
+        ? await first(context.db.select({ islandId: islandField.islandId, owner: islandField.ownerPersonId }).from(islandField).where(eq(islandField.id, fieldId.data)))
+        : null;
+      if (field === null || field.owner !== personId || field.islandId !== found.islandId) return denied;
+    }
+    const membership = await activeMembership(context.db, found.couplingId, personId);
+    return membership === null ? denied : allowed({ ownerPersonId: personId, couplingId: found.couplingId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
 /** Revocation-Notice: nur der ehemals bezeichnete Empfänger, auch nach Rechteentzug. */
 const revocationNoticeRule = byId('widerrufshinweis', revocationNotice, async (context, id) => {
   const found = await first(
@@ -548,6 +582,7 @@ export const resourceEntities = {
   island_field: coupled('kopplungsinhalte', islandField, inCoupling(islandField)),
   island_field_build: ownFieldRule,
   island_object: coupled('kopplungsinhalte', islandObject, inCoupling(islandObject)),
+  island_object_own: ownObjectRule,
   community_project: coupled('kopplungsinhalte', communityProject, inCoupling(communityProject)),
   island_event: coupled('kopplungsinhalte', islandEvent, inCoupling(islandEvent)),
   momo_accessory: coupled('kopplungsinhalte', momoAccessory, inCoupling(momoAccessory)),

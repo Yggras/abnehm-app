@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { energyBookingId, summarizeEnergy } from '@abnehm/contracts/energy';
@@ -9,11 +9,12 @@ import { indexCatalog } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 
 import { policies } from '../authorization/authorization.ts';
-import { changeWriter, updated } from '../coupling/change-writer.ts';
+import { changeWriter } from '../coupling/change-writer.ts';
 import { blueprintUnlock, couplingMember, island, islandField, islandObject } from '../db/schema/index.ts';
 import { insertBooking, readBookings } from '../energy/bookings.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
+import { vacateField } from './field-occupancy.ts';
 import { islandObjectEntity } from './island-entities.ts';
 import { progressChange } from './progress-change.ts';
 
@@ -24,9 +25,8 @@ import { progressChange } from './progress-change.ts';
 // (`decideBuild`). Den Preis rechnet der Server selbst; die Nutzlast nennt keinen.
 //
 // Ist das Feld auf dem Server schon belegt, weil ein anderes eigenes Gerät offline darauf gebaut hat,
-// gilt die Server-Eingangsreihenfolge wie bei `placeObject`: Das ältere Objekt wechselt atomar ins Lager.
-// Keine Energie geht verloren, und Ausgaben werden nie zurückgedreht (Spezifikation 0, Abschnitt 10;
-// Spezifikation 4, Abschnitt 11). Festlegung in #191, weil die Spezifikation den Feldkonflikt nur für
+// gilt die Server-Eingangsreihenfolge wie bei `placeObject` (`field-occupancy.ts`): Das ältere Objekt
+// wechselt atomar ins Lager. Festlegung in #191, weil die Spezifikation den Feldkonflikt nur für
 // `placeObject` nennt.
 //
 // Levelaufstieg samt Freischaltungen, Ereignis und Intents im selben Befehl liefert #200.
@@ -68,20 +68,8 @@ export const buildObjectCommand: ServerCommand<BuildObject> = {
     });
     if (decision.type === 'verboten') throw new CommandRejection(decision.reason === 'unbekannter_schluessel' ? 'unknown_catalog_key' : 'conflict');
 
-    const write = changeWriter(tx, at);
-    const changes: CanonicalChange[] = [];
-    const [occupant] = await tx
-      .select({ id: islandObject.id })
-      .from(islandObject)
-      .where(and(eq(islandObject.fieldId, field.id), isNull(islandObject.deletedAt)));
-    if (occupant !== undefined) {
-      await write({ entityType: 'island_object', couplingId }, async (stamp) => {
-        await tx.update(islandObject).set({ fieldId: null, ...updated(stamp) }).where(eq(islandObject.id, occupant.id));
-        return occupant.id;
-      });
-      changes.push(await canonicalAfterWrite(tx, islandObjectEntity, EntityId.parse(occupant.id)));
-    }
-    await write({ entityType: 'island_object', couplingId }, async (stamp) => {
+    const changes: CanonicalChange[] = await vacateField(tx, { fieldId: EntityId.parse(field.id), couplingId, incoming: payload.islandObjectId, at });
+    await changeWriter(tx, at)({ entityType: 'island_object', couplingId }, async (stamp) => {
       await tx.insert(islandObject).values({
         id: payload.islandObjectId,
         islandId,

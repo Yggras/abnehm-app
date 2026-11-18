@@ -10,7 +10,7 @@ import { insertNotificationIntent } from '../src/sync/notification-intents.ts';
 import { CommandRejection } from '../src/sync/commands.ts';
 import { createTestBackend, type TestBackend } from './support/app.ts';
 import { authorizationCases, personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
-import { buildObjectCommandScenario } from './support/building.ts';
+import { buildObjectCommandScenario, placeObjectCommandScenario, upgradeObjectCommandScenario } from './support/building.ts';
 import { dailyGoalCommandScenarios } from './support/daily-goals.ts';
 import { sendEncouragementScenario } from './support/encouragement.ts';
 import type { Device } from './support/auth-client.ts';
@@ -104,7 +104,8 @@ describe('Fachbefehl über Push', () => {
     const { backend } = await setup();
     // Die Welten der echten Fachbefehle sind andere; deren Fälle laufen in ihren eigenen Tests.
     const real = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
-      confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+      confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
+      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(() => registeredCommandCases(backend, real)).toThrow('saveMealFavorite');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),
