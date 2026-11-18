@@ -12,6 +12,7 @@
     "./fields": "./src/fields.ts",
     "./unlocks": "./src/unlocks.ts",
     "./projects": "./src/projects.ts",
+    "./hatching": "./src/hatching.ts",
     "./content": "./content/index.ts",
     "./fixtures": "./fixtures/index.ts"
   },

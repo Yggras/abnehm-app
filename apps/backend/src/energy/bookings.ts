@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 
-import { Instant, ServerVersion, type EntityId } from '@abnehm/contracts/base';
+import { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
 import { bookingReferences, counterBookingKey, EnergyBooking, energyBookingId } from '@abnehm/contracts/energy';
 import type { CanonicalRecord } from '@abnehm/contracts/sync';
 
@@ -78,6 +78,15 @@ export async function bookCounterBooking(tx: DbExecutor, { originalBookingId, at
     createdAt: Instant.parse(at.toISOString()),
     trigger: { originalBookingId: original.id, originalType: original.type, originalAmount: original.amount },
   });
+}
+
+/** Alle Buchungen der Personen, etwa für den Inselfortschritt; je Person in der Reihenfolge ihrer Entstehung. */
+export async function readBookings(tx: DbExecutor, personIds: readonly EntityId[]): Promise<Map<EntityId, EnergyBooking[]>> {
+  const byPerson = new Map(personIds.map((personId) => [personId, [] as EnergyBooking[]]));
+  if (personIds.length === 0) return byPerson;
+  const rows = await tx.select().from(energyBooking).where(inArray(energyBooking.personId, [...personIds])).orderBy(energyBooking.serverVersion);
+  for (const row of rows) byPerson.get(EntityId.parse(row.personId))?.push(bookingOf(row));
+  return byPerson;
 }
 
 function bookingOf(row: typeof energyBooking.$inferSelect): EnergyBooking {

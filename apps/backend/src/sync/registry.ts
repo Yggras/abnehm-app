@@ -124,3 +124,38 @@ export function ownedEntity<T extends PgTable & OwnedColumns, U extends EntityDa
     },
   };
 }
+
+/**
+ * Nur lesbare Entität einer Tabelle, die allein der Server schreibt, etwa Kopplung, Insel und ihre
+ * Inhalte: kein generisches Upsert, kein Löschen. Unveränderliche Tabellen ohne `deleted_at` liefern
+ * nie eine Löschmarkierung.
+ */
+export function serverManaged<T extends PgTable & { id: AnyPgColumn<{ data: string }> }>(options: {
+  entityType: SyncEntityType;
+  resource: ResourceEntity;
+  table: T;
+  record(row: T['$inferSelect']): EntityData;
+  archiveStatus?: boolean;
+}): ServerSyncEntity {
+  return {
+    entityType: options.entityType,
+    resource: options.resource,
+    upsert: null,
+    deletable: false,
+    archiveStatus: options.archiveStatus ?? false,
+    async read(tx, ids) {
+      if (ids.length === 0) return new Map();
+      const rows = (await tx
+        .select()
+        .from(options.table as PgTable)
+        .where(inArray(options.table.id, [...ids]))) as (T['$inferSelect'] & { id: string; serverVersion: bigint; deletedAt?: Date | null })[];
+      return new Map(rows.map((row) => [row.id, { serverVersion: row.serverVersion, deletedAt: row.deletedAt ?? null, data: options.record(row) }]));
+    },
+    async write() {
+      throw new Error(`${options.entityType} entsteht nur serverseitig`);
+    },
+    async remove() {
+      throw new Error(`${options.entityType} wird nicht über den Sync gelöscht`);
+    },
+  };
+}

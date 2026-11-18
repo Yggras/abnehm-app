@@ -18,6 +18,7 @@
     "./ids": "./src/ids.ts",
     "./partner": "./src/partner.ts",
     "./island": "./src/island.ts",
+    "./island-records": "./src/island-records.ts",
     "./wir": "./src/wir.ts",
     "./notifications": "./src/notifications.ts",
     "./notification-texts": "./src/notification-texts.ts",
