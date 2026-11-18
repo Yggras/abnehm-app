@@ -117,23 +117,21 @@ const notificationSettingFields = {
  * Abend nach Mittag, auch wenn einer der beiden aus ist, wie der `CHECK` beider Datenbanken. `HH:MM`
  * ordnet sich als Zeichenfolge wie die Uhrzeit.
  */
-const eveningAfterMidday = [
-  (value: { middayTime: string; eveningTime: string }) => value.eveningTime > value.middayTime,
-  { message: 'Der Abend-Check-in muss nach dem Mittag-Check-in liegen', path: ['eveningTime'] },
-] as const;
+const eveningAfterMidday = (value: { middayTime: string; eveningTime: string }) => value.eveningTime > value.middayTime;
+const eveningAfterMiddayIssue = { message: 'Der Abend-Check-in muss nach dem Mittag-Check-in liegen', path: ['eveningTime'] };
 
 /**
  * Generisches Upsert der Benachrichtigungseinstellung (Spezifikation 5, Abschnitte 6 und 10): eine je
  * Person mit der ID aus `notificationSettingId`, Last-Write-Wins, nur die Eigentümerin liest und
  * schreibt. Die Uhrzeiten sind lokale Wanduhrzeiten der jeweils aktuellen Gerätezone.
  */
-export const NotificationSettingUpsert = z.strictObject(notificationSettingFields).refine(...eveningAfterMidday);
+export const NotificationSettingUpsert = z.strictObject(notificationSettingFields).refine(eveningAfterMidday, eveningAfterMiddayIssue);
 export type NotificationSettingUpsert = z.infer<typeof NotificationSettingUpsert>;
 
 /** Kanonischer Datensatz der Benachrichtigungseinstellung (`notification_setting`); nur die Eigentümerin erhält ihn. */
 export const NotificationSettingRecord = z
   .strictObject({ personId: EntityId, ...notificationSettingFields, createdAt: Instant, updatedAt: Instant })
-  .refine(...eveningAfterMidday);
+  .refine(eveningAfterMidday, eveningAfterMiddayIssue);
 export type NotificationSettingRecord = z.infer<typeof NotificationSettingRecord>;
 
 /**

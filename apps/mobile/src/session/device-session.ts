@@ -23,6 +23,7 @@ import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, c
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
+import { notificationSettingEntity } from '../notifications/notification-setting';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner } from '../partner';
 import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
@@ -54,7 +55,7 @@ const newId = () => EntityId.parse(uuid.v4());
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
   ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
-  weightEntryEntity, sportEntryEntity, ...islandSyncEntities,
+  weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');

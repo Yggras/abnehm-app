@@ -1,6 +1,7 @@
-import { AreaKey, LocalDate, type BausteinKey } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, type BausteinKey } from '../src/base.ts';
 import type { PartnerSharingLevel } from '../src/coupling.ts';
 import type { DailyGoalSlot } from '../src/daily-goals.ts';
+import { defaultNotificationSetting, notificationSettingId } from '../src/notifications.ts';
 import { partnerSummaryBounds, partnerSummaryPeriod, type PartnerDailyGoalStage } from '../src/partner.ts';
 import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedImageKeys, seedInstallations } from './ids.ts';
@@ -508,8 +509,41 @@ export const gekoppeltPartsWith = (annas: AnnasProjections): readonly SeedPart[]
 /** Beiträge von `gekoppelt` mit anderen Bauten auf der Insel, etwa `haelfte-voll` (#191). */
 export const gekoppeltPartsBuilt = (builds: readonly SeedBuild[]): readonly SeedPart[] => partnerParts({ hatched: true, annas: annasProjectionsNow, builds });
 
-/** Beiträge des Szenarios `gekoppelt`. */
-export const gekoppeltParts: readonly SeedPart[] = gekoppeltPartsWith(annasProjectionsNow);
+/** Philipp hat die Benachrichtigungseinstellung nach der Kopplung gespeichert. */
+const notificationSettingSavedAt = '2026-10-01T18:50:00.000Z';
+
+/**
+ * Partner & Benachrichtigungen (#132): Philipps Benachrichtigungseinstellung ohne Gewicht in den
+ * Check-ins, sonst der Standard. Heute ist sein Wiegetag; der Check-in-Planer erinnert ihn trotzdem
+ * nicht daran. Anna hat nichts gespeichert, für sie gilt der Standard.
+ */
+const benachrichtigungen: SeedPart = {
+  area: 'partner',
+  entities: [
+    {
+      table: 'notification_setting',
+      entityType: 'notification_setting',
+      ownerPersonId: philipp,
+      row: {
+        id: notificationSettingId(EntityId.parse(philipp)),
+        person_id: philipp,
+        midday_enabled: defaultNotificationSetting.middayEnabled,
+        midday_time: defaultNotificationSetting.middayTime,
+        evening_enabled: defaultNotificationSetting.eveningEnabled,
+        evening_time: defaultNotificationSetting.eveningTime,
+        tracker_ernaehrung: true,
+        tracker_wasser: true,
+        tracker_sport: true,
+        tracker_gewicht: false,
+        partner_push_enabled: defaultNotificationSetting.partnerPushEnabled,
+        ...created(notificationSettingSavedAt),
+      },
+    },
+  ],
+};
+
+/** Beiträge des Szenarios `gekoppelt`; die Benachrichtigungseinstellung zuletzt, damit die Positionen davor gleich bleiben. */
+export const gekoppeltParts: readonly SeedPart[] = [...gekoppeltPartsWith(annasProjectionsNow), benachrichtigungen];
 
 /** Dieselben Beiträge vor dem Schlüpfen; Spezifikation 4 ergänzt darauf die offene Rollenwahl (`rollenwahl-offen`). */
 export const vorDemSchluepfenParts = partnerParts({ hatched: false, annas: annasProjectionsNow });
@@ -549,6 +583,7 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 9: Philipps Benachrichtigungseinstellung ohne Gewicht (#132).
   // Revision 8: Energieverlauf seit dem Zielstart und Bauten (#191): Level 3, Philipp mit 23 Energie.
   // Revision 7: Inhalte der geschlüpften Insel seit #184 (Felder, Start-Baupläne, Projekt 1, Ereignis, Fortschritt).
   // Revision 6: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
@@ -556,7 +591,7 @@ export const gekoppeltManifest = SeedManifest.parse({
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 8,
+  revision: 9,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,
