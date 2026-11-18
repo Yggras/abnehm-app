@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { BausteinKey, EntityId, Instant, LocalDate, TimeZone, Weekday, weekdayOf } from './base.ts';
+import { BausteinKey, EntityId, Instant, LocalDate, type TimeZone, Weekday, weekdayOf } from './base.ts';
 import { dailyGoalId, DailyGoalSnapshot } from './daily-goals.ts';
 import { calculateGoals, sportSessionThreshold, type GoalCalculation, type GoalCalculatorInput } from './goal-calculator.ts';
 import { uuidV5 } from './ids.ts';

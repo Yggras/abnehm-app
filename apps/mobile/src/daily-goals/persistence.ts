@@ -193,6 +193,21 @@ export const dailyGoalCommands: readonly LocalCommand[] = [
   },
 ];
 
+/**
+ * Entfernt, was der Persistenzdienst für einen Tag angelegt hat und der Server nie bestätigt hat:
+ * Tagesbonus, Gutschriften und Tageszielerfüllungen der drei Plätze. Spezifikation 1 ruft das auf, wenn
+ * der Server die Materialisierung des Tags dauerhaft ablehnt; ohne Tagesziele gibt es diese Ableitungen
+ * nicht (Spezifikation 0, Abschnitt 10). Bestätigte Zeilen bleiben.
+ */
+export function removeUnconfirmedDayCredits(tx: TransactionContext, personId: EntityId, localDate: LocalDate): void {
+  removeUnconfirmedBooking(tx, energyBookingId(dailyBonusKey(personId, localDate)));
+  for (const slot of [1, 2, 3] as const) {
+    const key = dailyGoalKey(personId, localDate, slot);
+    removeUnconfirmedBooking(tx, energyBookingId(key));
+    removeUnconfirmedCompletion(tx, dailyGoalCompletionId(key));
+  }
+}
+
 /** Sync-Entität der Tageszielerfüllung; die Energiebuchung meldet `energyBookingEntity` aus `../energy` an. */
 export { dailyGoalCompletionEntity };
 

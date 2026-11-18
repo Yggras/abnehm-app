@@ -3,12 +3,14 @@ import {
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   GoalVersionRecord,
+  MaterializeDailyGoals,
   planVersionOfKey,
   type PlanVersionKind,
   WeeklyPlanVersionRecord,
 } from '@abnehm/contracts/plan';
 import type { EntityData } from '@abnehm/contracts/sync';
 
+import { removeUnconfirmedDayCredits } from '../daily-goals';
 import type { ReadContext } from '../local-db';
 import { goalVersion } from '../local-db/schema';
 import { sqliteEntity, type AffectedDay, type LocalCommand, type SyncEntityAdapter } from '../sync';
@@ -19,6 +21,7 @@ import {
   removeUnconfirmedWeeklyPlan,
   tombstoneWeeklyPlan,
 } from './plan-repository';
+import { removeUnconfirmedDailyGoals } from './daily-goal-repository';
 
 // Ziel- und Wochenplanversion im App-Sync (Spezifikation 0, Abschnitt 10; Spezifikation 1, Abschnitt
 // 11). Beide entstehen nur über die Fachbefehle `createGoalVersion` und `createWeeklyPlanVersion`, ohne
@@ -67,8 +70,8 @@ export const weeklyPlanVersionEntity: SyncEntityAdapter<EntityData, WeeklyPlanVe
 
 /**
  * Die Fachbefehle für die lokale Befehls-Registry. Erzeugen darf sie nur das Plan-Modul, zusammen mit
- * Person und Tagesmeldung in einer Transaktion. Lehnt der Server eine Fassung dauerhaft ab, verschwindet
- * sie lokal, sofern er sie nie bestätigt hat.
+ * Person und Tagesmeldung in einer Transaktion. Lehnt der Server eine Fassung oder eine Materialisierung
+ * dauerhaft ab, verschwindet sie lokal, sofern er sie nie bestätigt hat.
  */
 export const planCommands: readonly LocalCommand[] = [
   {
@@ -89,6 +92,23 @@ export const planCommands: readonly LocalCommand[] = [
     reconcileRejected(tx, operation) {
       const version = planVersionOfKey('wochenplan', operation.businessKey);
       if (version !== null) removeUnconfirmedWeeklyPlan(tx, version.id);
+    },
+  },
+  {
+    type: 'materializeDailyGoals',
+    payload: MaterializeDailyGoals,
+    referencePaths: [],
+    apply: onlyThePlanModule('materializeDailyGoals'),
+    /**
+     * Ohne angenommene Materialisierung gibt es den Tag auf dem Server nicht. Lokal verschwinden dann
+     * seine unbestätigten Tagesziele samt Erfüllungen, Gutschriften und Tagesbonus (Spezifikation 0,
+     * Abschnitt 10); der nächste Auslöser im Nachholfenster legt ihn neu an. Den Ersatz durch die
+     * kanonische Fassung eines anderen Geräts liefert „Tagesziele auf dem Server“ (#133).
+     */
+    reconcileRejected(tx, operation) {
+      const { localDate, goals } = MaterializeDailyGoals.parse(operation.payload);
+      removeUnconfirmedDayCredits(tx, goals[0].snapshot.personId, localDate);
+      removeUnconfirmedDailyGoals(tx, goals.map(({ id }) => id));
     },
   },
 ];
