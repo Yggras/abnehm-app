@@ -87,7 +87,11 @@ export type VisitorTemplate = Readonly<{
   rewards: Readonly<{ blueprints: readonly string[]; deko: readonly string[] }>;
 }>;
 
-/** Lage, Drehung (Grad) und Größe eines Accessoires an einer Entwicklungsform. */
+/**
+ * Lage, Drehung (Grad) und Größe eines Accessoires an einer Entwicklungsform, relativ zum Steckplatz
+ * der Form im Momo-Rig: Verschiebung in Rig-Einheiten (ein Hundertstel der Figurhöhe), Drehung im
+ * Uhrzeigersinn, Größe als Faktor.
+ */
 export type AccessoryFit = Readonly<{ x: number; y: number; rotation: number; scale: number }>;
 
 export type Accessory = Readonly<{

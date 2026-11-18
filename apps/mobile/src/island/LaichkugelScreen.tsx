@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button, color, EnergySymbol, space, Text } from '../design';
 import { openTarget } from '../navigation';
-import { MomoAppearanceProvider, MomoFigure } from '../shell/MomoFigure';
+import { MomoAppearanceProvider, MomoFigure } from '../momo';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
 import { laichkugelTexts, islandTexts } from './texts';

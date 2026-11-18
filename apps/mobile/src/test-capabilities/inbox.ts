@@ -7,6 +7,7 @@ import type { HealthScenario } from '../health/testing/fake-platform';
 import type { FaultController, FaultPlan } from './faults';
 import type { TestHealth } from './health';
 import type { TestLink, TestLinkPath } from './links';
+import type { MomoGalleryView } from './momo-gallery/views';
 import type { NotificationTestControl, NotificationTestMode } from './notifications';
 import { applyRuntimeProfile, type RuntimeProfileKey } from './profiles';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
@@ -29,6 +30,7 @@ export type TestStatus =
   /** `outcome` ist das Ergebnis des Verbindens, `ohne_konto` ohne geöffnetes Konto. */
   | Readonly<{ type: 'health_gestellt'; scenario: HealthScenario; outcome: HealthConnectOutcome['type'] | 'ohne_konto' | 'fehlgeschlagen' }>
   | Readonly<{ type: 'mitteilungen_gestellt'; mode: NotificationTestMode }>
+  | Readonly<{ type: 'momo_galerie'; view: MomoGalleryView }>
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 export type SeedHandler = (run: SeedRun) => Promise<SeedOutcome>;
@@ -121,6 +123,8 @@ export function createTestInbox({ faults, clock, notifications, deviceSuite, hea
         case 'mitteilungen':
           notifications.simulate(link.permission, link.answer);
           return setStatus({ type: 'mitteilungen_gestellt', mode: notifications.mode() });
+        case 'momo-galerie':
+          return setStatus({ type: 'momo_galerie', view: link.view });
         case 'seed':
           queue.push({ scenario: link.scenario, installation: link.installation, target: link.target });
           void drain();

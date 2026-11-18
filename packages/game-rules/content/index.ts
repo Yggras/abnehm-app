@@ -1,4 +1,5 @@
 import type { GameCatalog } from '../src/catalog.ts';
+import { accessories } from './accessories.ts';
 import { baseIsland } from './base-island.ts';
 import { firstProject, startBlueprints } from './start.ts';
 
@@ -6,7 +7,7 @@ import { firstProject, startBlueprints } from './start.ts';
 // legt mit `npm run catalog:snapshot --workspace @abnehm/game-rules` den Schnappschuss dazu an.
 
 export const gameCatalog: GameCatalog = {
-  version: 1,
+  version: 2,
   blueprints: [...startBlueprints],
   levelUnlocks: [],
   baseIsland,
@@ -14,7 +15,7 @@ export const gameCatalog: GameCatalog = {
   landscapeTemplates: [],
   deko: [],
   visitorTemplates: [],
-  accessories: [],
+  accessories: [...accessories],
   projects: [firstProject],
   challengeTemplates: [],
 };

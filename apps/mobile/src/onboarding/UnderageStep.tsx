@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { space, Text } from '../design';
 import { LogoutArea } from '../settings';
-import { MomoFigure } from '../shell/MomoFigure';
+import { MomoFigure } from '../momo';
 import { OnboardingFrame } from './OnboardingFrame';
 import { underageTexts as texts } from './texts';
 

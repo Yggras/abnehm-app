@@ -12,6 +12,7 @@ import { isSessionScreenGate, sessionScreenPath } from '../shell/session-routes'
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
+import { MomoGallery } from './momo-gallery/MomoGallery';
 import { permissionNames, type NotificationTestControl, type NotificationTestMode } from './notifications';
 import { transportFaultModeName } from './network';
 import { runtimeProfiles } from './profiles';
@@ -59,6 +60,8 @@ function statusNotice(status: TestStatus) {
       return <Notice tone="neutral" text={`Health-Attrappe „${status.scenario}“: ${healthOutcomeText[status.outcome]}`} />;
     case 'mitteilungen_gestellt':
       return <Notice tone="neutral" text={notificationModeText(status.mode)} />;
+    case 'momo_galerie':
+      return null;
     case 'ungueltig':
       return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger Link „${status.capability}“ der Testfähigkeiten. Parameter stehen in docs/entwicklung.md.`} />;
   }
@@ -132,6 +135,12 @@ export function TestCapabilityHost({
     const timer = setTimeout(() => setExpiredStatus(status), notificationNoticeMs);
     return () => clearTimeout(timer);
   }, [status]);
+
+  // Die Momo-Galerie (#187) liegt über der ganzen App, bis „Schließen“ sie für diesen Link schließt.
+  const [closedGallery, setClosedGallery] = useState<TestStatus | null>(null);
+  if (status.type === 'momo_galerie' && closedGallery !== status) {
+    return <MomoGallery view={status.view} onClose={() => setClosedGallery(status)} />;
+  }
 
   const notice = expiredStatus === status ? null : statusNotice(status);
   if (notice === null) return null;

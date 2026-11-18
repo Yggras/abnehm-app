@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button, Card, color, Icon, Notice, size, Skeleton, space, Text, useLargeTextLayout, type IconName } from '../design';
 import { openTarget } from '../navigation';
-import { MomoFigure } from '../shell/MomoFigure';
+import { MomoFigure } from '../momo';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner } from './app-partner';
 import { PartnerAvatar } from './PartnerAvatar';
