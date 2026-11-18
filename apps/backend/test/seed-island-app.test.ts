@@ -10,7 +10,7 @@ import { InstallationId } from '@abnehm/contracts/sync';
 import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
-import { buildObjectCommand } from '../../mobile/src/island/build-object.ts';
+import { islandObjectCommands } from '../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
@@ -85,7 +85,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     }),
     clock,
     installationId: InstallationId.parse(installation.installationId),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands] }),
   });
   const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   let stage: IslandStage | null = null;

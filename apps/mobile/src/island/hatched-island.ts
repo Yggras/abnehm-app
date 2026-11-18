@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { IslandRole, MomoAppearance, type IslandProgress } from '@abnehm/contracts/island';
+import { IslandObjectOrigin } from '@abnehm/contracts/island-records';
 import { SharedEventType } from '@abnehm/contracts/wir';
 import { indexCatalog, type ArtKey } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
@@ -11,24 +12,33 @@ import { formAt } from '@abnehm/game-rules/unlocks';
 
 import { bookingsOf } from '../energy';
 import type { ReadContext } from '../local-db';
-import { areaUnlock, blueprintUnlock, communityProject, couplingMember, island, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
+import { areaUnlock, blueprintUnlock, communityProject, couplingMember, island, islandEvent, islandField, islandObject, islandProgress, sharedAction } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { halvesFor, type IslandHalves } from './halves';
 import { islandProgressOf } from './island-entities';
 
 // Die geschlüpfte Insel aus den lokalen Daten (Spezifikation 4, Abschnitte 2.1, 6, 7 und 11; #184, #191):
-// Rollen, Felder mit Besitzer, Objekte auf den Feldern, freigeschaltete Gebiete, Inselfortschritt samt
+// Rollen, Felder mit Besitzer, Objekte auf den Feldern, das eigene Lager (#194), freigeschaltete Gebiete, Inselfortschritt samt
 // Levelbalken, Momo und die gemeinsamen Ereignisse für „Wir“. Fast alles kommt per Pull vom Server; nur
 // eigene Bauten und damit die eigene Hälfte sind lokal sofort wirksam. Solange ein Teil fehlt, etwa
 // zwischen zwei Seiten desselben Pulls, ist die Insel noch nicht lesbar.
 
 const catalog = indexCatalog(gameCatalog);
 
+/** Was ein Inselobjekt ist: Katalogschlüssel, Herkunft und Stufe (#194). */
+export type ObjectFacts = Readonly<{ catalogKey: string; origin: IslandObjectOrigin; level: number }>;
+
 /**
  * Ein Objekt auf seinem Feld mit der Grafik seiner Stufe, in der Form, die das Szenenmodell zeichnet
  * (`SceneObject`). Das Lesemodell importiert das Szenenmodell nicht, weil es Design-Tokens zieht.
  */
-export type PlacedObject = Readonly<{ id: string; fieldKey: string; art: ArtKey; ownerPersonId: string }>;
+export type PlacedObject = ObjectFacts & Readonly<{ id: string; fieldKey: string; art: ArtKey; ownerPersonId: string }>;
+
+/**
+ * Ein Objekt im eigenen Lager (#194): eingelagert oder verdrängt, Deko und Challenge-Deko. Ein Geschenk
+ * nennt, wer es geschenkt hat; das ist ein angenommenes `deko_schenken` des Partners für dieses Stück (#198).
+ */
+export type StoredObject = ObjectFacts & Readonly<{ id: EntityId; art: ArtKey; giftFrom: string | null }>;
 
 /** Ein materialisiertes Inselfeld; über seine ID baut der Spieldienst darauf. */
 export type IslandField = IslandFieldOwner & Readonly<{ id: EntityId }>;
@@ -50,6 +60,8 @@ export type HatchedIsland = Readonly<{
   fields: readonly IslandField[];
   /** Objekte auf Feldern; was im Lager liegt, steht nicht auf der Insel. */
   objects: readonly PlacedObject[];
+  /** Das eigene Lager, älteste Objekte zuerst (#194). */
+  storage: readonly StoredObject[];
   unlockedAreas: readonly string[];
   /** Schlüssel der Baupläne, die die Insel freigeschaltet hat (#192). */
   unlockedBlueprints: readonly string[];
@@ -100,13 +112,21 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .all()
       .map((field) => ({ ...field, id: EntityId.parse(field.id) })),
     objects: db
-      .select({ id: islandObject.id, fieldKey: islandField.fieldKey, catalogKey: islandObject.catalogKey, level: islandObject.level, ownerPersonId: islandObject.ownerPersonId })
+      .select({
+        id: islandObject.id,
+        fieldKey: islandField.fieldKey,
+        catalogKey: islandObject.catalogKey,
+        origin: islandObject.origin,
+        level: islandObject.level,
+        ownerPersonId: islandObject.ownerPersonId,
+      })
       .from(islandObject)
       .innerJoin(islandField, eq(islandField.id, islandObject.fieldId))
       .where(and(eq(islandObject.islandId, islandId), isNotNull(islandObject.fieldId), isNull(islandObject.deletedAt)))
       .orderBy(asc(islandField.fieldKey))
       .all()
-      .map(({ id, fieldKey, catalogKey, level, ownerPersonId }) => ({ id, fieldKey, art: artOf(catalogKey, level), ownerPersonId })),
+      .map(({ origin, ...object }) => ({ ...object, origin: IslandObjectOrigin.parse(origin), art: artOf(object.catalogKey, object.level) })),
+    storage: readStorage(tx, { islandId, couplingId, personId, partnerPersonId: partner.personId, partnerDisplayName: partner.displayName }),
     unlockedAreas: db
       .select({ key: areaUnlock.areaKey })
       .from(areaUnlock)
@@ -130,6 +150,37 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .all()
       .map((row) => ({ eventId: EntityId.parse(row.eventId), type: SharedEventType.parse(row.type), occurredAt: Instant.parse(row.occurredAt) })),
   };
+}
+
+/** Das eigene Lager: eigene, nicht gelöschte Objekte ohne Feld, Geschenke mit dem Namen des Partners. */
+function readStorage(
+  tx: ReadContext,
+  { islandId, couplingId, personId, partnerPersonId, partnerDisplayName }: Readonly<{ islandId: EntityId; couplingId: EntityId; personId: EntityId; partnerPersonId: string; partnerDisplayName: string }>,
+): StoredObject[] {
+  const db = sqliteOf(tx);
+  const gifts = new Set(
+    db
+      .select({ requester: sharedAction.requesterPersonId, payload: sharedAction.payload })
+      .from(sharedAction)
+      .where(and(eq(sharedAction.couplingId, couplingId), eq(sharedAction.kind, 'deko_schenken'), eq(sharedAction.status, 'angenommen')))
+      .all()
+      .filter((action) => action.requester === partnerPersonId)
+      .map((action) => action.payload.islandObjectId),
+  );
+  return db
+    .select({ id: islandObject.id, catalogKey: islandObject.catalogKey, origin: islandObject.origin, level: islandObject.level })
+    .from(islandObject)
+    .where(and(eq(islandObject.islandId, islandId), eq(islandObject.ownerPersonId, personId), isNull(islandObject.fieldId), isNull(islandObject.deletedAt)))
+    .orderBy(asc(islandObject.createdAt), asc(islandObject.id))
+    .all()
+    .map(({ id, catalogKey, origin, level }) => ({
+      id: EntityId.parse(id),
+      catalogKey,
+      origin: IslandObjectOrigin.parse(origin),
+      level,
+      art: artOf(catalogKey, level),
+      giftFrom: gifts.has(id) ? partnerDisplayName : null,
+    }));
 }
 
 /** Grafik eines Objekts: die Stufe eines Bauplans oder die Deko; einen unbekannten Schlüssel zeichnet die Insel neutral. */

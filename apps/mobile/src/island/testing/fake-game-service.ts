@@ -26,6 +26,8 @@ export function fakeGameService(stage: IslandStage, reactions: readonly MomoReac
     declineRoles: refuse,
     withdrawRoles: refuse,
     build: refuse,
+    upgrade: refuse,
+    place: refuse,
     momoCharacter: {
       subscribe(listener) {
         listener(momoCharacterOf(stage));

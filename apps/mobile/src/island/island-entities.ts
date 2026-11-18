@@ -1,3 +1,5 @@
+import { and, eq, ne } from 'drizzle-orm';
+
 import { IslandProgress } from '@abnehm/contracts/island';
 import {
   AreaUnlockRecord,
@@ -9,6 +11,7 @@ import {
 } from '@abnehm/contracts/island-records';
 
 import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
+import { sqliteOf } from '../local-db/sqlite';
 import { serverManagedEntity, sqliteEntity, type SyncEntityAdapter } from '../sync';
 
 // Inselinhalte im App-Sync (Spezifikation 0, Abschnitte 8 und 10; Spezifikation 4, Abschnitt 11): Felder,
@@ -19,9 +22,33 @@ import { serverManagedEntity, sqliteEntity, type SyncEntityAdapter } from '../sy
 
 const coupled = { ownerField: 'couplingId' } as const;
 
+const objectEntity = serverManagedEntity({ entityType: 'island_object', ...coupled, record: IslandObjectRecord, table: islandObject });
+
+/**
+ * Inselobjekte mit derselben Feldregel wie auf dem Server (`field-occupancy.ts` im Backend, #194): Ein Feld
+ * trägt höchstens ein Objekt. Kommt ein Objekt auf ein Feld, auf dem lokal noch ein anderes steht, wechselt
+ * dieses ins Lager. Sonst bräche der Unique-Index der Feldbelegung, etwa wenn ein Pull das Objekt eines
+ * anderen eigenen Geräts bringt, bevor die eigene Änderung des älteren Objekts gesichert ist. Der Server
+ * entscheidet in Eingangsreihenfolge genauso; sein kanonischer Stand folgt mit dem nächsten Sync.
+ */
+const islandObjectEntity: typeof objectEntity = {
+  ...objectEntity,
+  applyCanonical(tx, record) {
+    const { fieldId } = record.data;
+    if (fieldId !== null) {
+      sqliteOf(tx)
+        .update(islandObject)
+        .set({ fieldId: null })
+        .where(and(eq(islandObject.fieldId, fieldId), ne(islandObject.id, record.entityId)))
+        .run();
+    }
+    objectEntity.applyCanonical(tx, record);
+  },
+};
+
 export const islandSyncEntities: readonly SyncEntityAdapter[] = [
   serverManagedEntity({ entityType: 'island_field', ...coupled, record: IslandFieldRecord, table: islandField }),
-  serverManagedEntity({ entityType: 'island_object', ...coupled, record: IslandObjectRecord, table: islandObject }),
+  islandObjectEntity,
   serverManagedEntity({ entityType: 'blueprint_unlock', ...coupled, record: BlueprintUnlockRecord, table: blueprintUnlock }),
   serverManagedEntity({ entityType: 'area_unlock', ...coupled, record: AreaUnlockRecord, table: areaUnlock }),
   serverManagedEntity({ entityType: 'community_project', ...coupled, record: CommunityProjectRecord, table: communityProject }),
