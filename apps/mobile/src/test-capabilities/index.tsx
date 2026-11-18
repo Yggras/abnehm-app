@@ -3,12 +3,14 @@ import type { ComponentType } from 'react';
 import type { SessionStore } from '../auth/app-auth';
 import { deviceClock } from '../clock/device-clock';
 import { openExpoSqlite, removeExpoSqlite } from '../local-db/expo-connection';
+import type { HealthPlatformAdapter } from '../health';
 import type { AppSession } from '../session/app-session';
 import type { SessionGate } from '../session/session-gate';
 import type { ObserveNetwork } from '../sync/triggers';
 import { createAppTestClock, type AppTestClock } from './clock';
 import { runDeviceSuite } from './device-suite/suite';
 import { createFaultController, faultyFetch, faultySessionStore } from './faults';
+import { createTestHealth } from './health';
 import { createTestInbox } from './inbox';
 import { parseTestLink } from './links';
 import { faultyNetwork } from './network';
@@ -17,7 +19,7 @@ import { TestCapabilityHost } from './TestCapabilityHost';
 
 // Testfähigkeiten der App (Spezifikation 0, Abschnitt 12; #112, #114, #271): Seed-Deep-Link,
 // Testuhr samt Serveruhr des Development-Backends, Fehler-Adapter für Transport, Server, Auth und
-// Storage samt Transport-Fehlermodus und die On-Device-Suite. App-Code erreicht
+// Storage samt Transport-Fehlermodus, die On-Device-Suite und die Health-Attrappe (#183). App-Code erreicht
 // diesen Ordner nur über `src/build-capabilities.ts`; im Produktions-Bundle fehlt er ganz. Jede Datei hier gehört zu einer
 // Testfähigkeit der zentralen Registry (`test/test-capabilities.ts`).
 
@@ -30,6 +32,8 @@ export type TestCapabilities = Readonly<{
     sessionStore(inner: SessionStore): SessionStore;
     /** Netzstatus für die Sync-Auslöser, überlagert vom Transport-Fehlermodus. */
     network(inner: ObserveNetwork): ObserveNetwork;
+    /** Health-Plattform; ab dem ersten Link `health` antwortet die Attrappe (#183). Einmal je Prozess. */
+    healthPlatform(inner: HealthPlatformAdapter): HealthPlatformAdapter;
   }>;
   /** Für `+native-intent`: nimmt Links der Testfähigkeiten an und öffnet dann „Heute“; andere bleiben unverändert. */
   redirectSystemPath(path: string): string;
@@ -44,10 +48,12 @@ const clock = createAppTestClock(deviceClock);
 const faults = createFaultController();
 /** Kennzeichnet diesen Prozess; so erkennt die On-Device-Suite einen echten Neustart. */
 const runtime = deviceClock.read().instant;
+const health = createTestHealth(clock);
 const inbox = createTestInbox({
   faults,
   clock,
   deviceSuite: (phase) => runDeviceSuite(phase, { openSqlite: openExpoSqlite, remove: removeExpoSqlite }, runtime),
+  health,
 });
 
 function Host({ session, gate }: { session: () => AppSession; gate: SessionGate | null }) {
@@ -60,6 +66,7 @@ export const testCapabilities: TestCapabilities = {
     fetch: (inner, baseUrl) => faultyFetch(fetchFollowingServerClock(inner, { clock, baseUrl }), faults),
     sessionStore: (inner) => faultySessionStore(inner, faults),
     network: (inner) => faultyNetwork(inner, faults),
+    healthPlatform: (inner) => health.platform(inner),
   },
   redirectSystemPath(path) {
     const link = parseTestLink(path);

@@ -112,6 +112,9 @@ const schemaTables = (Object.values(schema) as unknown[])
   .map((table) => getTableName(table))
   .sort();
 
+/** Lokale FTS5-Indizes außerhalb der Drizzle-Schemas: die eigenen Lebensmittel (Migration `0004_own_food_search`, #157). */
+const localSearchIndexes = ['own_food_search'];
+
 /** Löscht eine Datei der Suite und prüft, dass sie danach leer ist. */
 function clearFile(files: DeviceSuiteFiles, fileName: string) {
   files.remove(fileName);
@@ -168,11 +171,19 @@ const migrationFresh: Case = {
   run: (files) =>
     withSuiteDatabase(files, accounts.frisch, (database) => {
       equal(appliedMigrations(database), bundledMigrations.journal.entries.length, 'angewandte Migrationen');
-      const tables = database
-        .read((tx) => sqliteOf(tx).all<{ name: string }>(sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != '__drizzle_migrations'`))
+      const all = database.read((tx) =>
+        sqliteOf(tx).all<{ name: string; virtual: number }>(
+          sql`select name, sql like 'CREATE VIRTUAL TABLE%' as virtual from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != '__drizzle_migrations'`,
+        ),
+      );
+      const virtual = all.filter((table) => table.virtual === 1).map(({ name }) => name).sort();
+      // FTS5 legt zu jeder virtuellen Tabelle eigene Schattentabellen `<name>_data` usw. an (https://www.sqlite.org/fts5.html).
+      const tables = all
+        .filter((table) => table.virtual !== 1 && !virtual.some((name) => table.name.startsWith(`${name}_`)))
         .map(({ name }) => name)
         .sort();
       equal(tables, schemaTables, 'Tabellen');
+      equal(virtual, localSearchIndexes, 'lokale Suchindizes');
       equal(database.read((tx) => sqliteOf(tx).all<{ foreign_keys: number }>(sql`pragma foreign_keys`))[0]?.foreign_keys, 1, 'Fremdschlüssel eingeschaltet');
     }),
 };

@@ -1,8 +1,9 @@
 import { weekdayOf, type LocalDate, type MealKey } from '@abnehm/contracts/base';
-import { maxBaseAmount, roundMacroGrams, type BaseUnit, type DisplayUnit, type EntryTotals, type NutritionSnapshot, type SnapshotSource } from '@abnehm/contracts/nutrition';
+import { foodNameMaxLength, maxBaseAmount, portionLabelMaxLength, roundMacroGrams, type BaseUnit, type DisplayUnit, type EntryTotals, type NutritionSnapshot, type SnapshotSource } from '@abnehm/contracts/nutrition';
 
 import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
+import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
 
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
 // („1.210 kcal“, „0,5 Stück“), Einheiten mit Leerzeichen, ohne Schuld- und Verlust-Framing.
@@ -90,6 +91,54 @@ export function amountProblemText(problem: AmountInputProblem, baseUnit: BaseUni
   }
 }
 
+/** Texte je Umrechnungseinheit: Name, „1 …“, Beispiel der Bezeichnung und ein Beispielgewicht für den Lösungsweg. */
+const conversionTexts: Readonly<Record<ConversionUnit, Readonly<{ name: string; one: string; placeholder: string; example: number }>>> = {
+  stueck: { name: 'Stück', one: '1 Stück', placeholder: 'etwa 1 mittelgroßer', example: 180 },
+  portion: { name: 'Portion', one: '1 Portion', placeholder: 'etwa 1 Glas', example: 250 },
+};
+
+/** Satz mit Lösungsweg zu einem Feld des Formulars „Eigenes Lebensmittel“ (`problem` im Design-System). */
+export function ownFoodProblemText(field: OwnFoodField, problem: OwnFoodProblem, baseUnit: BaseUnit): string {
+  const max = `${kilo(maxBaseAmount[baseUnit] / baseAmountPerUnit[baseUnit])} ${baseUnit}`;
+  switch (problem) {
+    case 'zu_lang':
+      return field === 'name' ? `Kürze den Namen auf höchstens ${foodNameMaxLength} Zeichen.` : `Kürze die Bezeichnung auf höchstens ${portionLabelMaxLength} Zeichen.`;
+    case 'makros_zu_schwer':
+      return `Eiweiß, Kohlenhydrate und Fett wiegen zusammen mehr als die Menge, für die die Werte gelten. Prüfe die Werte auf der Packung.`;
+    case 'format':
+      return 'Gib eine Zahl ein, etwa 4,5.';
+    case 'tausenderpunkt':
+      return 'Gib die Zahl ohne Tausenderpunkt ein, etwa 1500 oder 1,5.';
+    case 'ganze_ml':
+      return 'Gib ganze ml ein, etwa 250.';
+    case 'null':
+      return `Gib eine Menge über 0 ${baseUnit} ein, etwa 100.`;
+    case 'zu_gross':
+      return field === 'referenceAmount' ? `Höchstens ${max}. Gib die Werte etwa je 100 ${baseUnit} ein.` : `Höchstens ${max}.`;
+    case 'gewicht_fehlt': {
+      return `Gib ein, wie viel ${baseUnit} ${conversionTexts[conversionUnitOf(field) ?? 'portion'].one} hat, oder lösche die Bezeichnung.`;
+    }
+    case 'leer':
+      switch (field) {
+        case 'name':
+          return 'Gib einen Namen ein, etwa „Bircher-Müsli“.';
+        case 'referenceAmount':
+          return `Gib die Menge ein, für die die Werte gelten, etwa 100 ${baseUnit}.`;
+        case 'kcal':
+          return 'Gib die kcal von der Packung ein, etwa 150.';
+        default:
+          return 'Gib den Wert von der Packung ein, oder 0, wenn nichts angegeben ist.';
+      }
+  }
+}
+
+/** Satz mit Lösungsweg zur fehlenden Umrechnung in der Mengenprüfung. */
+export function conversionProblemText(unit: ConversionUnit, problem: OwnFoodProblem, baseUnit: BaseUnit): string {
+  const { one, example } = conversionTexts[unit];
+  if (problem === 'gewicht_fehlt') return `Gib ein, wie viel ${baseUnit} ${one} hat, etwa ${example}.`;
+  return ownFoodProblemText(conversionFields[unit].amount, problem, baseUnit);
+}
+
 export const nutritionTexts = {
   log: 'Protokoll',
   capture: 'Essen',
@@ -119,4 +168,42 @@ export const nutritionTexts = {
     eigenes_lebensmittel: 'Eigenes Lebensmittel anlegen',
   },
   slotInWork: 'Kommt noch',
+  /** Ohne Suchtreffer: das eigene Lebensmittel mit dem Suchtext als Namen anlegen. */
+  createNamed: (name: string) => `„${name.trim()}“ als eigenes Lebensmittel anlegen`,
+  ownFood: {
+    create: 'Eigenes Lebensmittel anlegen',
+    edit: 'Eigenes Lebensmittel bearbeiten',
+    correct: 'Werte korrigieren',
+    correctHint: 'Die BLS-Daten bleiben unverändert. Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.',
+    name: 'Name',
+    unit: 'Einheit',
+    referenceAmount: 'Werte gelten für',
+    kcal: 'Energie',
+    protein: 'Eiweiß',
+    carbs: 'Kohlenhydrate',
+    fat: 'Fett',
+    macros: 'Eiweiß, Kohlenhydrate und Fett',
+    /** Satz über „Speichern“, wenn Felder Probleme haben, etwa „Prüfe die markierten Felder: Energie, Fett.“ */
+    checkFields: (labels: readonly string[]) => `Prüfe ${labels.length === 1 ? 'das markierte Feld' : 'die markierten Felder'}: ${labels.join(', ')}.`,
+    conversions: 'Stück und Portion',
+    conversionsHint: 'Optional. Trag nur ein, was du weißt; die App schätzt nichts.',
+    conversionAmount: (unit: ConversionUnit) => `${conversionTexts[unit].one} hat`,
+    conversionLabel: (unit: ConversionUnit) => `Bezeichnung für ${conversionTexts[unit].name}`,
+    conversionPlaceholder: (unit: ConversionUnit) => conversionTexts[unit].placeholder,
+    save: 'Speichern',
+    cancel: 'Abbrechen',
+    delete: 'Löschen',
+    deleteQuestion: (name: string) => `„${name}“ löschen? Einträge damit behalten ihre Werte.`,
+    confirmDelete: 'Endgültig löschen',
+  },
+  /** Aktionen der Mengenprüfung zum Lebensmittel selbst. */
+  editFood: 'Bearbeiten',
+  addConversion: (missing: readonly ConversionUnit[]) => `${missing.map((unit) => conversionTexts[unit].name).join(' oder ')} eintragen`,
+  conversion: {
+    title: 'Umrechnung eintragen',
+    hint: (eigen: boolean) =>
+      eigen ? 'Die Umrechnung wird an deinem eigenen Lebensmittel gespeichert.' : 'Daraus entsteht ein eigenes Lebensmittel; die BLS-Daten bleiben unverändert.',
+    unitName: (unit: ConversionUnit) => conversionTexts[unit].name,
+    back: 'Zurück',
+  },
 } as const;

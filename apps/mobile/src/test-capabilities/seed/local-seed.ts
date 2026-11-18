@@ -6,13 +6,15 @@ import { canonicalRows, dependencyOrder, type SeedDeviceState, type SeedKey, typ
 
 import type { LocalDatabase } from '../../local-db';
 import * as schema from '../../local-db/schema';
+import { rebuildOwnFoodIndex } from '../../nutrition';
 import { sqliteOf } from '../../local-db/sqlite';
 import { readSyncState, restoreSyncState } from '../../sync';
 
 // Seeder für die lokale Kontodatenbank (Spezifikation 0, Abschnitt 12; #112). Er setzt die
 // Datenbank einer Installation in einer Transaktion auf den Ausgangszustand des Manifests zurück:
-// alle Tabellen leeren, Fachzeilen einfügen, Pull-Cursor und offene Operationen herstellen. So
-// ergibt wiederholtes Seeden exakt denselben kanonischen Stand. Nur im Development Build und in Tests.
+// alle Tabellen leeren, Fachzeilen einfügen, lokale Suchindizes neu aufbauen, Pull-Cursor und offene
+// Operationen herstellen. So ergibt wiederholtes Seeden exakt denselben kanonischen Stand. Nur im
+// Development Build und in Tests.
 
 const tables = (Object.values(schema) as unknown[]).filter((value): value is SQLiteTable => is(value, SQLiteTable));
 const byName = new Map(tables.map((table) => [getTableConfig(table).name, table]));
@@ -40,6 +42,8 @@ export function seedLocalDatabase(database: LocalDatabase, manifest: SeedManifes
       const table = byName.get(name)!;
       for (const row of state.rows[name] ?? []) db.insert(table).values(toDatabase(table, row)).run();
     }
+    // Lokale Suchindizes sind keine Tabellen des Schemas; ihr Bereich baut sie aus den Zeilen neu auf.
+    rebuildOwnFoodIndex(tx);
     restoreSyncState(tx, { cursor: state.cursor, outbox: state.outbox }, Instant.parse(manifest.clock.instant));
   });
 }

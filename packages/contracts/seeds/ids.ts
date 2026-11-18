@@ -77,6 +77,8 @@ export const seedIds = {
     philippIpadOffline: id('0020', 11),
     /** Offline gebucht und noch nicht gesichert, nur in `offline_sync` (#116). */
     philippUngesichert: id('0020', 12),
+    /** In `tage_ohne_app_oeffnung` (#131): am 07.10. außerhalb, am 10.10. innerhalb des Nachholfensters. */
+    philippOhneAppOeffnung: [id('0020', 13), id('0020', 14)],
   },
   weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
@@ -94,8 +96,8 @@ export const seedIds = {
     philippGestern: [id('0031', 5), id('0031', 6), id('0031', 7)],
   },
   /**
-   * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten`
-   * nacheinander vergibt (#113); so steht auch die Outbox des Sollzustands fest.
+   * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten` (#113)
+   * oder `tagesziele_sicherstellen` (#131) nacheinander vergibt; so steht auch die Outbox des Sollzustands fest.
    */
   operation: {
     erfuellt: [id('0090', 1)],
@@ -109,8 +111,14 @@ export const seedIds = {
     offlineSync: {
       gewicht: id('0090', 12), tippfehler: id('0090', 13), erfuellung: id('0090', 17), korrektur: id('0090', 14), gegenLoeschung: id('0090', 15), ungesichert: id('0090', 16),
     },
+    /** Schritt `tagesziele_sicherstellen` in `tage_ohne_app_oeffnung` (#131): sieben Materialisierungen, eine Erfüllung. */
+    tageOhneAppOeffnung: Array.from({ length: 8 }, (_, index) => id('0090', 18 + index)),
+    /** Die vier Schritte `tagesziele_sicherstellen` in `zeitzonen_reisen` (#131), zusammen 16 Materialisierungen. */
+    zeitzonenReisen: Array.from({ length: 16 }, (_, index) => id('0090', 26 + index)),
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
+  /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */
+  ownFood: { philippBircher: id('0034', 1), philippApfel: id('0034', 2) },
   /** Server-only; ein abgelaufener Fotoentwurf als Randzustand (#162). */
   photoDraft: { philippAbgelaufen: id('0033', 1) },
   coupling: { philippAnna: id('0040', 1) },

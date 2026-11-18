@@ -1,6 +1,6 @@
 import { uuid } from 'expo';
 import * as Network from 'expo-network';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import type { Clock } from '@abnehm/clock';
 import { EntityId, type Instant } from '@abnehm/contracts/base';
 
@@ -10,16 +10,18 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
+import { createHealthImport, unavailableHealthPlatform } from '../health';
+import { appHealthImport } from '../health/app-health';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand } from '../nutrition';
+import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createDeviceInvitationFlows } from '../online';
-import { goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
@@ -46,8 +48,8 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, waterEntryEntity, weightEntryEntity,
-  sportEntryEntity, ...islandSyncEntities,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
+  weightEntryEntity, sportEntryEntity, ...islandSyncEntities,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
@@ -58,6 +60,18 @@ const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 't
 /** Momo auf „Heute“ (Spezifikation 4): Laichkugel und Rollenwahl (#180), nach dem Schlüpfen Momo mit Level (#184). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
+/**
+ * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183). Bis HealthKit (#193) und Health Connect
+ * (#195) ihre Adapter liefern, ist Health nicht verfügbar; in Test-Artefakten übernimmt ab dem Link `health`
+ * die Attrappe.
+ */
+const devicePlatform = unavailableHealthPlatform(Platform.OS === 'ios' ? 'apple_health' : 'health_connect');
+const healthPlatform = testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform;
+/** Ob die App im Vordergrund ist, laut React Native; meldet jede Änderung. */
+function observeAppForeground(listener: (active: boolean) => void) {
+  const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
+  return () => subscription.remove();
+}
 /** Der eigene Anzeigename für die Einstellungen (Spezifikation 5); folgt der geöffneten Kontodatenbank. */
 const ownDisplayName = followOwnDisplayName({ writer: syncWriter, clock: appClock });
 let activeEngine: SyncEngine | null = null;
@@ -104,6 +118,14 @@ function deviceState() {
       // Schreib-Port `weightRecorder` gibt der Composition Root an `composeAreaPorts` weiter, sobald alle
       // Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
+      // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
+      const health = createHealthImport({ database, platform: healthPlatform, trackers, clock: appClock, onError });
+      // Plan-Modul (Spezifikation 1): Seine Materialisierung legt fehlende Tage im Nachholfenster an, bevor
+      // der Persistenzdienst auswertet (#131). Das Startgewicht des Erstplans läuft über den `WeightRecorder`
+      // des Tracker-Moduls.
+      const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
+      persistence.registerMissingDaysHook(plan.materializeMissingDays);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId });
       const engine = createSyncEngine({ database, registry: syncRegistry,
@@ -118,10 +140,27 @@ function deviceState() {
         appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
         appTrackers.opened(trackers),
+        appHealthImport.opened(health),
+        health.startForegroundTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground }),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
+        // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
+        followDailyGoalTriggers({
+          ensure: plan.ensureDailyGoals,
+          today: () => appClock.read().localDate,
+          observeForeground(listener) {
+            const subscription = AppState.addEventListener('change', (state) => {
+              if (state === 'active') listener();
+            });
+            return () => subscription.remove();
+          },
+          // Derselbe Takt wie für „Heute“: im Minutentakt, im Vordergrund und in Test-Artefakten bei jedem
+          // Sprung der Testuhr (#114); er löst nur aus, wenn sich der lokale Tag geändert hat.
+          observeTicks: appTodayRefresh,
+          onError,
+        }),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);
@@ -131,10 +170,7 @@ function deviceState() {
       const triggers = startSyncTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active',
         sync: () => engine.sync(),
         observePending: (listener) => observePendingSignature(database, listener),
-        observeForeground(listener) {
-          const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
-          return () => subscription.remove();
-        },
+        observeForeground: observeAppForeground,
         // In Test-Artefakten überlagert vom Transport-Fehlermodus, dem iOS-Ersatz für den Flugmodus (#114).
         observeNetwork: adapters?.network(observeDeviceNetwork) ?? observeDeviceNetwork,
       });

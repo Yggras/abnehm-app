@@ -20,6 +20,7 @@ import { createLogout } from './logout/logout.ts';
 import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 import { createMealPhotos } from './nutrition/meal-photos.ts';
+import { ownFoodEntity } from './nutrition/own-food-entity.ts';
 import { createPhotoDrafts } from './nutrition/photo-drafts.ts';
 import { createPhotoStorage } from './nutrition/photo-storage.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
@@ -96,9 +97,10 @@ export function createBackend({
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
-  // Ernährung (Spezifikation 2): Einträge, Fotoentwürfe und Mahlzeitenfotos samt Fotoablage.
+  // Ernährung (Spezifikation 2): Einträge, eigene Lebensmittel, Fotoentwürfe und Mahlzeitenfotos samt Fotoablage.
   const nutritionEntries = nutritionEntryEntity({ clock });
   sync.registerEntity(nutritionEntries);
+  sync.registerEntity(ownFoodEntity);
   const photoStorage = createPhotoStorage({ directory: photoStorageDirectory });
   const photoDrafts = createPhotoDrafts({ database, clock, analyzer: mealVisionAnalyzer, storage: photoStorage });
   const mealPhotos = createMealPhotos({ database, storage: photoStorage, entries: nutritionEntries });

@@ -14,9 +14,9 @@ import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
-import { mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand } from '../../../mobile/src/nutrition/index.ts';
+import { mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../../mobile/src/partner-cache/index.ts';
-import { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
+import { createPlan, goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
 import {
   createHttpSyncTransport,
   createLocalCommandRegistry,
@@ -29,7 +29,7 @@ import {
   type PushNowResult,
 } from '../../../mobile/src/sync/index.ts';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from '../../../mobile/src/test-capabilities/seed/local-seed.ts';
-import { sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
+import { createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../../../mobile/src/trackers/index.ts';
 import { seedPhotoFiles } from '../../dev/seed/photo-seed.ts';
 import { dumpServer, seedServer } from '../../dev/seed/server-seed.ts';
 import { processedOperation } from '../../src/db/schema/index.ts';
@@ -48,7 +48,7 @@ import { uncoupleAs } from './shared-actions.ts';
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
 ]);
 
 export type SeedPhone = Readonly<{
@@ -61,6 +61,8 @@ export type SeedPhone = Readonly<{
   pushOnce(): Promise<PushNowResult>;
   /** Schritt `tagesziele_auswerten`; der Writer vergibt dabei genau die Operations-IDs des Schritts. */
   evaluate(step: Extract<SeedStep, { type: 'tagesziele_auswerten' }>): Promise<void>;
+  /** Schritt `tagesziele_sicherstellen` über das Plan-Modul; der Writer vergibt genau die Operations-IDs des Schritts. */
+  ensureDailyGoals(step: Extract<SeedStep, { type: 'tagesziele_sicherstellen' }>): Promise<void>;
   partner(): ReturnType<typeof readPartnerCache>;
   setSharing(area: AreaKey, level: PartnerSharingLevel): void;
   /** Alle gesendeten Operationen, in Reihenfolge; ein Retry sendet dieselbe noch einmal. */
@@ -90,6 +92,12 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
   const writer = createSyncWriter({ registry, clock, newId });
   const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
   const persistence = createDailyGoalPersistence({ registry: seedDailyGoalRegistry(), clock, writer, dispatcher });
+  // Plan-Modul wie im Composition Root, für den Schritt `tagesziele_sicherstellen` (#131). Seinen Haken für
+  // fehlende Tage meldet die Seed-Welt bewusst nicht an: Die Szenarien vor #131 beschreiben Pull und
+  // Auswertung ohne Nachholen, und bis „Tagesziele auf dem Server“ (#133) lehnt der Server jede
+  // Materialisierung ab. Den Haken belegt `apps/mobile/src/plan/daily-goals.test.ts`.
+  const plan = createPlan({ database, clock, writer, persistence, newId,
+    weightRecorder: createTrackers({ database, clock, writer, persistence, newId }).weightRecorder });
   const http = createHttpSyncTransport({
     baseUrl: testBaseUrl,
     fetch: async (input, init) => {
@@ -142,6 +150,20 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
       expect(unused, 'Der Schritt legt weniger Fachbefehle an, als er Operations-IDs nennt').toEqual([]);
       await dispatcher.deliver();
     },
+    async ensureDailyGoals(step) {
+      operationIds.push(...step.operationIds);
+      if (step.at !== undefined) clock.set(step.at);
+      if (step.timeZone !== undefined) clock.setTimeZone(step.timeZone);
+      try {
+        plan.ensureDailyGoals();
+      } finally {
+        clock.set(manifest.clock.instant);
+        clock.setTimeZone(manifest.clock.timeZone);
+      }
+      const unused = operationIds.splice(0);
+      expect(unused, 'Der Schritt legt weniger Fachbefehle an, als er Operations-IDs nennt').toEqual([]);
+      await dispatcher.deliver();
+    },
     partner: () => database.read((tx) => readPartnerCache(tx)),
     setSharing: (area, level) => database.transaction((tx) => setPartnerSharing(tx, writer, { area, level }, Instant.parse(clock.read().instant))),
     pushedOperations: () => [...pushedOperations],
@@ -170,6 +192,9 @@ export async function runSteps({ backend, manifest, phones }: SeedWorld): Promis
         break;
       case 'tagesziele_auswerten':
         await phones[step.installation]!.evaluate(step);
+        break;
+      case 'tagesziele_sicherstellen':
+        await phones[step.installation]!.ensureDailyGoals(step);
         break;
       case 'entkoppeln': {
         const { at, ...request } = uncouplingRequestOf(step, manifest.accounts);

@@ -1,6 +1,6 @@
 // Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112, #114). Sie führt jede
 // Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Serveruhr,
-// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
+// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite, Health-Attrappe und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
 // Development Build und der E2E-Build (`APP_VARIANT=e2e`, ein Release-Binary für Maestro).
 // `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit, dass weder das
 // Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält (Gegenprobe: die
@@ -58,10 +58,11 @@ export const testCapabilities: readonly TestCapability[] = [
     ],
     entries: { backendRoutes: ['POST /dev/seed'], deepLinks: ['seed'], commands: ['apps/backend/dev/seed-command.ts'] },
     // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138),
-    // `solo-energie` und `rollenwahl-offen` (#180) prüft der Release-Test zusätzlich über ihre Schlüssel.
-    // `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund von
-    // `momo.character` zu Recht im Produktions-Bundle steht.
-    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen'],
+    // `solo-energie` und `rollenwahl-offen` (#180) sowie `tage_ohne_app_oeffnung` und `zeitzonen_reisen`
+    // (#131) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit
+    // Bindestrich, weil `rollenwahl_offen` als Leer-Grund von `momo.character` zu Recht im
+    // Produktions-Bundle steht.
+    markers: ['/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen', 'tage_ohne_app_oeffnung', 'zeitzonen_reisen'],
   },
   {
     key: 'testuhr',
@@ -118,6 +119,16 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/backend/dev/meal-vision/'],
     entries: { backendRoutes: ['POST /dev/fotoanalyse'] },
     markers: ['fake_fotoanalyse'],
+  },
+  {
+    // #183: Attrappe des Health-Plattform-Adapters mit den Szenarien aus Spezifikation 3, Abschnitt 9. Die
+    // Integrationstests nutzen sie direkt, Development- und E2E-Build per Link `health`; im Produktionsbuild
+    // gilt der Adapter der Plattform.
+    key: 'health-attrappe',
+    description: 'Deterministisch steuerbare Health-Attrappe (Plattform-Adapter) mit Szenarien, gestellt per Link `health?szenario=<name>`',
+    modules: ['apps/mobile/src/health/testing/', 'apps/mobile/src/test-capabilities/health.ts'],
+    entries: { deepLinks: ['health'] },
+    markers: ['health_attrappe'],
   },
   {
     key: 'testgeruest',

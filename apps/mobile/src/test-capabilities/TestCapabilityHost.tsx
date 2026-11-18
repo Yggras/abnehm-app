@@ -54,12 +54,22 @@ function statusNotice(status: TestStatus) {
         ? <Notice tone="neutral" text={`Gerätetest ${phaseText[phase]}: ${results.length} von ${results.length} bestanden.`} />
         : <Notice tone="problem" cause="technik" text={`Gerätetest ${phaseText[phase]}: ${failed.length} von ${results.length} fehlgeschlagen. ${failed.map((result) => `${result.title}: ${result.error}`).join(' · ')}`} />;
     }
+    case 'health_gestellt':
+      return <Notice tone="neutral" text={`Health-Attrappe „${status.scenario}“: ${healthOutcomeText[status.outcome]}`} />;
     case 'ungueltig':
       return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger Link „${status.capability}“ der Testfähigkeiten. Parameter stehen in docs/entwicklung.md.`} />;
   }
 }
 
 const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
+
+const healthOutcomeText: Record<Extract<TestStatus, { type: 'health_gestellt' }>['outcome'], string> = {
+  verbunden: 'verbunden, Import läuft.',
+  nicht_verfuegbar: 'Health nicht verfügbar.',
+  installation_noetig: 'Installation nötig.',
+  ohne_konto: 'gestellt; ohne geöffnetes Konto nicht verbunden.',
+  fehlgeschlagen: 'fehlgeschlagen, siehe Metro-Log.',
+};
 
 export function TestCapabilityHost({
   inbox,

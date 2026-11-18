@@ -4,11 +4,12 @@ import type { PlanReader, WeightRecorder } from '@abnehm/contracts/ports';
 import type { SportRecordedOutcome, WaterAddedOutcome, WeightRecordedOutcome } from '@abnehm/contracts/trackers';
 
 import type { DailyGoalPersistence } from '../daily-goals';
-import type { LocalDatabase } from '../local-db';
+import type { LocalDatabase, TransactionContext } from '../local-db';
 import { quickCommandHandler, type QuickCommandHandlers } from '../shell/quick-commands';
 import type { TodaySource } from '../shell/today-registry';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
+import { applyHealthImport, type HealthImportBatch } from './health-import';
 import { lastSportOf, recordSportEntry, undoSport, type LastSport, type SportInput } from './sport';
 import { sportTodaySource } from './sport-today';
 import type { Refresh } from './today-source';
@@ -66,6 +67,12 @@ export type Trackers = Readonly<{
   undo(undoToken: string): UndoOutcome;
   /** Beendet einen Token, sobald seine Meldung kein „Rückgängig“ mehr anbietet. */
   expire(undoToken: string): void;
+  /**
+   * Interner Importbefehl für den Health-Import-Dienst, eine Transaktion je Stapel (Spezifikation 3,
+   * Abschnitt 6): Upserts, Löschungen, Abgleich, `reevaluateDailyGoals` für alle betroffenen Tage und
+   * `alongside`, in dem der Dienst seinen Cursor speichert. Scheitert ein Teil, bleibt nichts davon.
+   */
+  importHealth(batch: HealthImportBatch, alongside: (tx: TransactionContext) => void): void;
   /** Handler für die Quick-Command-Registry der Shell (`water.quick_add`). */
   quickCommands: QuickCommandHandlers;
   /**
@@ -115,6 +122,11 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     lastSport: () => database.read((tx) => lastSportOf(tx)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
+    importHealth: (batch, alongside) =>
+      database.transaction((tx) => {
+        applyHealthImport(tx, dependencies, batch);
+        alongside(tx);
+      }),
     quickCommands: {
       'water.quick_add': quickCommandHandler<'water.quick_add', WaterUndo>({
         execute(tx, { ml }) {

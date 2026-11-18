@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, TimeZone, UtcOffsetMinutes } from './base.ts';
+import { uuidV5 } from './ids.ts';
 import { QuickCommandOutcome } from './today.ts';
 import {
   activityTypes,
   importOrigins,
+  importedWeightG,
   manualOrigin,
   manualSportMilliKcal,
   manualSportMinutes,
@@ -12,6 +14,7 @@ import {
   sportEntryMinutes,
   waterAmountMl,
   waterOrigin,
+  type ImportOrigin,
 } from './tracker-rules.ts';
 
 // Wasser, Sport und Gewicht (Spezifikation 3): Transport-Schemas der Einträge und Ergebnisse der
@@ -94,7 +97,7 @@ const ManualSportEntryUpsert = z.strictObject({
  * Nur er hat externen Schlüssel, Quell-App, Ausblendestatus und die überschriebene Aktivitätsart, die
  * spätere Quelländerungen überdauert (Spezifikation 3, Abschnitt 6).
  */
-const ImportedSportEntryUpsert = z.strictObject({
+export const ImportedSportEntryUpsert = z.strictObject({
   ...sportEntryFields,
   overrideActivityType: ActivityType.nullable(),
   durationMinutes: z.int().min(sportEntryMinutes.min).max(sportEntryMinutes.max),
@@ -105,6 +108,7 @@ const ImportedSportEntryUpsert = z.strictObject({
   sourceAppName: z.string().min(1).max(200).nullable(),
   hiddenAt: Instant.nullable(),
 });
+export type ImportedSportEntryUpsert = z.infer<typeof ImportedSportEntryUpsert>;
 
 /**
  * Vollständige Nutzlast eines Sporteintrags im Sync, je Herkunft mit genau ihren Feldern (Spezifikation 0,
@@ -138,30 +142,58 @@ export type SportRecordedOutcome = z.infer<typeof SportRecordedOutcome>;
 export const ManualWeightG = z.int().min(manualWeightG.min).max(manualWeightG.max).multipleOf(manualWeightG.step);
 export type ManualWeightG = z.infer<typeof ManualWeightG>;
 
+/** Felder jedes Gewichtseintrags: Messzeitpunkt samt lokalem Tag, Zone und Offset der Anlage. */
+const weightEntryFields = { measuredAt: Instant, localDate: LocalDate, timeZone: TimeZone, utcOffsetMinutes: UtcOffsetMinutes };
+
+/** Manueller Gewichtseintrag: 20,0–350,0 kg in 100-g-Schritten. */
+const ManualWeightEntryUpsert = z.strictObject({ ...weightEntryFields, weightG: ManualWeightG, origin: z.literal(manualOrigin) });
+
 /**
- * Vollständige Nutzlast eines Gewichtseintrags im Sync, ohne Eigentums-, Server- und abgeleitete
- * Felder. Lokaler Tag, Zone und Offset gehören zum Messzeitpunkt in der Zone der Anlage. Bisher gibt es
- * nur manuelle Einträge; importierte samt externem Schlüssel und Ausblendestatus ergänzt der
- * Health-Import (Spezifikation 3, Abschnitt 6).
+ * Importierter Gewichtseintrag aus Apple Health bzw. Health Connect: genaue Gramm im Bereich 20–350 kg,
+ * externer Schlüssel, Quell-App und Ausblendestatus (Spezifikation 3, Abschnitte 3 und 6; #183).
  */
-export const WeightEntryUpsert = z.strictObject({
-  weightG: ManualWeightG,
-  origin: z.literal(manualOrigin),
-  measuredAt: Instant,
-  localDate: LocalDate,
-  timeZone: TimeZone,
-  utcOffsetMinutes: UtcOffsetMinutes,
+export const ImportedWeightEntryUpsert = z.strictObject({
+  ...weightEntryFields,
+  weightG: z.int().min(importedWeightG.min).max(importedWeightG.max),
+  origin: z.enum(importOrigins),
+  externalKey: z.string().min(1).max(200),
+  sourceAppId: z.string().min(1).max(200).nullable(),
+  sourceAppName: z.string().min(1).max(200).nullable(),
+  hiddenAt: Instant.nullable(),
 });
+export type ImportedWeightEntryUpsert = z.infer<typeof ImportedWeightEntryUpsert>;
+
+/**
+ * Vollständige Nutzlast eines Gewichtseintrags im Sync, je Herkunft mit genau ihren Feldern, ohne
+ * Eigentums-, Server- und abgeleitete Felder. Lokaler Tag, Zone und Offset gehören zum Messzeitpunkt in
+ * der Zone der Anlage; bei Importen gilt der mitgelieferte Offset (Spezifikation 3, Abschnitt 6).
+ */
+export const WeightEntryUpsert = z.discriminatedUnion('origin', [ManualWeightEntryUpsert, ImportedWeightEntryUpsert]);
 export type WeightEntryUpsert = z.infer<typeof WeightEntryUpsert>;
 
 /** Kanonischer Gewichtseintrag des Servers: Nutzlast samt Eigentümer und Zeitpunkten. */
-export const WeightEntryRecord = z.strictObject({
-  ...WeightEntryUpsert.shape,
-  personId: EntityId,
-  createdAt: Instant,
-  updatedAt: Instant,
-});
+export const WeightEntryRecord = z.discriminatedUnion('origin', [ManualWeightEntryUpsert.extend(ownership), ImportedWeightEntryUpsert.extend(ownership)]);
 export type WeightEntryRecord = z.infer<typeof WeightEntryRecord>;
+
+/** Herkunft eines importierten Eintrags. */
+export type { ImportOrigin };
+
+const importedSportNamespace = '6d0c2a4e-8f1b-4c7d-9e3a-2b5f7c9d1e40';
+const importedWeightNamespace = '6d0c2a4e-8f1b-4c7d-9e3a-2b5f7c9d1e41';
+
+/**
+ * Deterministische ID eines importierten Sporteintrags aus Person, Herkunft und externem Schlüssel
+ * (Spezifikation 3, Abschnitt 6). Zwei Geräte derselben Person erzeugen so dieselbe ID; der natürliche
+ * Schlüssel verhindert Dubletten.
+ */
+export function importedSportEntryId(personId: EntityId, origin: ImportOrigin, externalKey: string): EntityId {
+  return EntityId.parse(uuidV5(importedSportNamespace, `${personId}:${origin}:${externalKey}`));
+}
+
+/** Deterministische ID eines importierten Gewichtseintrags, wie `importedSportEntryId`. */
+export function importedWeightEntryId(personId: EntityId, origin: ImportOrigin, externalKey: string): EntityId {
+  return EntityId.parse(uuidV5(importedWeightNamespace, `${personId}:${origin}:${externalKey}`));
+}
 
 /** Werte der Meldung nach dem Eintragen, etwa „82,4 kg eingetragen · Rückgängig“. */
 export const WeightRecordedValues = z.strictObject({ weightG: ManualWeightG });

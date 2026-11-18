@@ -1,12 +1,13 @@
-import { and, asc, between, eq, inArray, isNotNull, or } from 'drizzle-orm';
+import { and, asc, between, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 
 import { EntityId, LocalDate, TimeZone, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { weekOf, type SportEntryFacts } from '@abnehm/contracts/tracker-rules';
-import type { SportEntryUpsert } from '@abnehm/contracts/trackers';
+import { ImportedSportEntryUpsert, type ImportOrigin, type SportEntryUpsert } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { sportEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
+import type { StoredImport } from './stored-import';
 
 // Repository der Sporteinträge: neben dem Sync-Adapter `sport-entity.ts` die einzige Stelle des
 // Tracker-Moduls, die Drizzle und die Tabelle `sport_entry` sieht. Andere Bereiche lesen sie nie
@@ -127,4 +128,36 @@ export function sportEntriesOfWeek(tx: ReadContext, personId: EntityId, localDat
     .where(or(inWeek, and(eq(sportEntry.personId, personId), inArray(sportEntry.id, replacing))))
     .orderBy(asc(sportEntry.startedAt), asc(sportEntry.id))
     .all();
+}
+
+/** Der importierte Sporteintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
+export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredImport<ImportedSportEntryUpsert> | undefined {
+  const row = sqliteOf(tx).select().from(sportEntry).where(eq(sportEntry.id, entityId)).get();
+  if (row === undefined || row.origin === 'manuell') return undefined;
+  const payload = ImportedSportEntryUpsert.parse({
+    activityType: row.activityType,
+    overrideActivityType: row.overrideActivityType,
+    startedAt: row.startedAt,
+    durationMinutes: row.durationMinutes,
+    activeMilliKcal: row.activeMilliKcal,
+    origin: row.origin,
+    externalKey: row.externalKey,
+    sourceAppId: row.sourceAppId,
+    sourceAppName: row.sourceAppName,
+    hiddenAt: row.hiddenAt,
+    localDate: row.localDate,
+    timeZone: row.timeZone,
+    utcOffsetMinutes: row.utcOffsetMinutes,
+  });
+  return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
+}
+
+/** Nicht gelöschte Importe einer Person aus einer Herkunft: externer Schlüssel und Beginn. */
+export function importedSportKeys(tx: ReadContext, personId: EntityId, origin: ImportOrigin): { externalKey: string; at: string }[] {
+  return sqliteOf(tx)
+    .select({ externalKey: sportEntry.externalKey, at: sportEntry.startedAt })
+    .from(sportEntry)
+    .where(and(eq(sportEntry.personId, personId), eq(sportEntry.origin, origin), isNull(sportEntry.deletedAt)))
+    .all()
+    .flatMap(({ externalKey, at }) => (externalKey === null ? [] : [{ externalKey, at }]));
 }

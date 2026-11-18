@@ -4,6 +4,7 @@ import { TimeZone } from '@abnehm/contracts/base';
 import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
+import { healthScenarios, type HealthScenario } from '../health/testing/fake-platform';
 import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
@@ -24,7 +25,9 @@ import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 //   abnehmapp-dev://profil?name=transport-offline
 //     stellt ein benanntes Laufzeitprofil (#113) über Fehler-Adapter und Testuhr;
 //   abnehmapp-dev://geraetetest?phase=vor_neustart|nach_neustart
-//     führt eine Phase der On-Device-Suite aus.
+//     führt eine Phase der On-Device-Suite aus;
+//   abnehmapp-dev://health?szenario=erstimport
+//     stellt die Health-Attrappe auf ein Szenario (#183) und verbindet den Health-Import.
 //
 // Geparst wird von Hand: Die URL-Implementierung von React Native ist unvollständig.
 
@@ -34,11 +37,12 @@ export type TestLink =
   | Readonly<{ type: 'uhr'; adjustment: ClockAdjustment }>
   | Readonly<{ type: 'profil'; profile: RuntimeProfileKey }>
   | Readonly<{ type: 'geraetetest'; phase: DeviceSuitePhase }>
+  | Readonly<{ type: 'health'; scenario: HealthScenario }>
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 /** Pfade der Deep Links; der Release-Test gleicht sie mit der Registry ab (`test/test-capabilities.ts`). */
-export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest' } as const;
+export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health' } as const;
 export type TestLinkPath = keyof typeof testLinkPaths;
 
 const clockParams = z
@@ -48,6 +52,8 @@ const clockParams = z
 const deviceSuiteParams = z.strictObject({ phase: z.enum(deviceSuitePhases) });
 
 const profileParams = z.strictObject({ name: runtimeProfileKeySchema });
+
+const healthParams = z.strictObject({ szenario: z.enum(healthScenarios) });
 
 /** Der Link als Testfähigkeit, oder `null`, wenn er keiner ist. */
 export function parseTestLink(link: string): TestLink | null {
@@ -84,6 +90,10 @@ export function parseTestLink(link: string): TestLink | null {
   if (path === testLinkPaths.geraetetest) {
     const suite = deviceSuiteParams.safeParse(Object.fromEntries(params));
     return suite.success ? { type: 'geraetetest', phase: suite.data.phase } : { type: 'ungueltig', capability: 'geraetetest' };
+  }
+  if (path === testLinkPaths.health) {
+    const health = healthParams.safeParse(Object.fromEntries(params));
+    return health.success ? { type: 'health', scenario: health.data.szenario } : { type: 'ungueltig', capability: 'health' };
   }
   return null;
 }

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
-import { BausteinKey, EntityId, Instant, LocalDate, Weekday } from './base.ts';
-import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from './goal-calculator.ts';
+import { BausteinKey, EntityId, Instant, LocalDate, type TimeZone, Weekday, weekdayOf } from './base.ts';
+import { dailyGoalId, DailyGoalSnapshot } from './daily-goals.ts';
+import { calculateGoals, sportSessionThreshold, type GoalCalculation, type GoalCalculatorInput } from './goal-calculator.ts';
 import { uuidV5 } from './ids.ts';
 import { ActivityLevel, CalculationSex } from './person.ts';
 import { EffectivePlan, MaintenanceReason, Pace } from './ports.ts';
@@ -240,6 +241,100 @@ export function effectivePlanOf(localDate: LocalDate, { goal, weeklyPlan, day }:
     },
   });
 }
+
+/** Schwelle von „Ernährung erfasst“: zwei Mahlzeitenkategorien (Spezifikation 1, Abschnitt 5; #13, #14). */
+export const minimumMealCategoriesPerDay = 2;
+
+/** Was die Snapshots eines Tags aus der an diesem Tag gültigen Zielversion brauchen. */
+export type DailyGoalTargets = Readonly<{
+  calorieBudgetMilliKcal: number;
+  lowerBoundMilliKcal: number;
+  waterTargetMl: number;
+  weeklySportTargetMinutes: number;
+}>;
+
+/**
+ * Die drei Snapshots eines Tags nach Platz (Spezifikation 1, Abschnitt 5): Bausteine aus dem Wochentag
+ * der gültigen Wochenplanversion, Schwellen aus der gültigen Zielversion, die Schwelle der Sporteinheit
+ * aus dem Sportwochenziel und den Sporttagen dieser Wochenplanversion. Kalorien stehen im Snapshot in
+ * ganzen kcal. Eine neue Zielversion speichert ohnehin ganze kcal (`wholeKcal`); einen Rest schneidet die
+ * Umrechnung ab, für Budget und Untergrenze gleich, damit die Untergrenze nie über das Budget steigt.
+ * App und Server bilden die Snapshots mit dieser einen Funktion.
+ */
+export function dailyGoalSnapshotsOf({
+  personId,
+  localDate,
+  timeZone,
+  dayEndsAt,
+  goal,
+  days,
+}: Readonly<{
+  personId: EntityId;
+  localDate: LocalDate;
+  timeZone: TimeZone;
+  /** Beginn des Folgetags in `timeZone`. */
+  dayEndsAt: Instant;
+  goal: DailyGoalTargets;
+  /** Alle sieben Tage der gültigen Wochenplanversion; ihre Sporttage bestimmen die Schwelle der Sporteinheit. */
+  days: WeeklyPlanDays;
+}>): [DailyGoalSnapshot, DailyGoalSnapshot, DailyGoalSnapshot] {
+  const sportDayCount = Weekday.options.filter((weekday) => days[weekday].includes('sporteinheit')).length;
+  const snapshotOf = (baustein: BausteinKey, index: number): DailyGoalSnapshot => {
+    const base = { personId, localDate, slot: index + 1, timeZone, dayEndsAt };
+    switch (baustein) {
+      case 'ernaehrung_erfasst':
+        return DailyGoalSnapshot.parse({ type: baustein, ...base, minimumMealCategories: minimumMealCategoriesPerDay });
+      case 'im_kalorienbudget':
+        return DailyGoalSnapshot.parse({
+          type: baustein,
+          ...base,
+          budgetKcal: Math.floor(goal.calorieBudgetMilliKcal / 1_000),
+          lowerBoundKcal: Math.floor(goal.lowerBoundMilliKcal / 1_000),
+        });
+      case 'wasserziel':
+        return DailyGoalSnapshot.parse({ type: baustein, ...base, targetMl: goal.waterTargetMl });
+      case 'sporteinheit':
+        // Der Tag ist selbst ein Sporttag, also gibt es mindestens einen und damit eine Schwelle.
+        return DailyGoalSnapshot.parse({
+          type: baustein,
+          ...base,
+          minimumSingleSessionMinutes: sportSessionThreshold(goal.weeklySportTargetMinutes, sportDayCount),
+        });
+      case 'gewogen':
+        return DailyGoalSnapshot.parse({ type: baustein, ...base });
+    }
+  };
+  const [first, second, third] = days[weekdayOf(localDate)];
+  return [snapshotOf(first, 0), snapshotOf(second, 1), snapshotOf(third, 2)];
+}
+
+/** Ein Tagesziel in `materializeDailyGoals`: seine deterministische ID und der festgeschriebene Snapshot. */
+const MaterializedDailyGoal = z.strictObject({ id: EntityId, snapshot: DailyGoalSnapshot });
+
+/**
+ * Nutzlast von `materializeDailyGoals` (Spezifikation 1, Abschnitt 5): genau die drei Tagesziele eines
+ * Tags auf den Plätzen 1–3, mit drei verschiedenen Bausteinen, derselben Person, Zone und demselben
+ * Tagesende und den IDs aus Person, Tag und Platz. Ob die Snapshots zum Plan passen, prüft der Server
+ * gegen seine Fassungen (#133).
+ */
+export const MaterializeDailyGoals = z
+  .strictObject({ localDate: LocalDate, goals: z.tuple([MaterializedDailyGoal, MaterializedDailyGoal, MaterializedDailyGoal]) })
+  .superRefine(({ localDate, goals }, context) => {
+    const [first] = goals;
+    goals.forEach(({ id, snapshot }, index) => {
+      const issue = (message: string, field: string) => context.addIssue({ code: 'custom', message, path: ['goals', index, field] });
+      if (snapshot.slot !== index + 1) issue('Plätze 1–3 in Reihenfolge', 'snapshot');
+      if (snapshot.localDate !== localDate) issue('Snapshot eines anderen Tags', 'snapshot');
+      if (snapshot.personId !== first.snapshot.personId || snapshot.timeZone !== first.snapshot.timeZone || snapshot.dayEndsAt !== first.snapshot.dayEndsAt) {
+        issue('Person, Zone und Tagesende gelten für alle drei', 'snapshot');
+      }
+      if (id !== dailyGoalId(snapshot.personId, localDate, snapshot.slot)) issue('ID folgt aus Person, Tag und Platz', 'id');
+    });
+    if (new Set(goals.map(({ snapshot }) => snapshot.type)).size !== 3) {
+      context.addIssue({ code: 'custom', message: 'Drei verschiedene Bausteine', path: ['goals'] });
+    }
+  });
+export type MaterializeDailyGoals = z.infer<typeof MaterializeDailyGoals>;
 
 /** Art einer Fassung im fachlichen Schlüssel. */
 export type PlanVersionKind = 'zielversion' | 'wochenplan';

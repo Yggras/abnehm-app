@@ -1,5 +1,6 @@
 import { writeCatalogFile, type CatalogFood } from '../../../scripts/bls-catalog/catalog-file.ts';
 import { openCatalog } from '../../local-db/testing/better-sqlite-catalog';
+import type { OwnFoodLookup } from '../food-search';
 
 /**
  * Kleiner BLS-Katalog für Modultests: dreizehn Lebensmittel mit ihren Werten aus dem Asset
@@ -32,3 +33,6 @@ export function openTestCatalog(foods: readonly CatalogFood[] = testCatalogFoods
 function food(key: string, name: string, milliKcal: number, proteinMg: number, carbsMg: number, fatMg: number): CatalogFood {
   return { key, name, milliKcalPer100: milliKcal, proteinMgPer100: proteinMg, carbsMgPer100: carbsMg, fatMgPer100: fatMg };
 }
+
+/** Für Tests nur über den BLS-Katalog: ein Konto ohne eigene Lebensmittel. */
+export const noOwnFoods: OwnFoodLookup = { search: () => [], overlaidOrigins: () => [] };

@@ -2,7 +2,10 @@ import type { ClockReading } from '@abnehm/clock';
 
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase, DeviceSuiteReport } from './device-suite/suite';
+import type { HealthConnectOutcome } from '../health';
+import type { HealthScenario } from '../health/testing/fake-platform';
 import type { FaultController, FaultPlan } from './faults';
+import type { TestHealth } from './health';
 import type { TestLink, TestLinkPath } from './links';
 import { applyRuntimeProfile, type RuntimeProfileKey } from './profiles';
 import type { SeedOutcome, SeedRun } from './seed/seed-flow';
@@ -22,6 +25,8 @@ export type TestStatus =
   | Readonly<{ type: 'profil_gestellt'; profile: RuntimeProfileKey; plan: FaultPlan; reading: ClockReading }>
   | Readonly<{ type: 'geraetetest_laeuft'; phase: DeviceSuitePhase }>
   | Readonly<{ type: 'geraetetest_fertig'; report: DeviceSuiteReport }>
+  /** `outcome` ist das Ergebnis des Verbindens, `ohne_konto` ohne geöffnetes Konto. */
+  | Readonly<{ type: 'health_gestellt'; scenario: HealthScenario; outcome: HealthConnectOutcome['type'] | 'ohne_konto' | 'fehlgeschlagen' }>
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 export type SeedHandler = (run: SeedRun) => Promise<SeedOutcome>;
@@ -31,6 +36,8 @@ export type TestInboxOptions = {
   clock: AppTestClock;
   /** Führt eine Phase der On-Device-Suite auf den Dateien des Geräts aus. */
   deviceSuite(phase: DeviceSuitePhase): Promise<DeviceSuiteReport>;
+  /** Health-Attrappe (#183). */
+  health: Pick<TestHealth, 'apply'>;
 };
 
 export type TestInbox = {
@@ -41,7 +48,7 @@ export type TestInbox = {
   subscribe(listener: () => void): () => void;
 };
 
-export function createTestInbox({ faults, clock, deviceSuite }: TestInboxOptions): TestInbox {
+export function createTestInbox({ faults, clock, deviceSuite, health }: TestInboxOptions): TestInbox {
   let current: TestStatus = { type: 'ruhe' };
   const listeners = new Set<() => void>();
   const queue: SeedRun[] = [];
@@ -99,6 +106,14 @@ export function createTestInbox({ faults, clock, deviceSuite }: TestInboxOptions
           return setStatus({ type: 'profil_gestellt', profile: link.profile, plan: faults.plan(), reading: clock.read() });
         case 'geraetetest':
           return runSuite(link.phase);
+        case 'health': {
+          const { scenario } = link;
+          void health.apply(scenario).then(
+            (outcome) => setStatus({ type: 'health_gestellt', scenario, outcome: outcome?.type ?? 'ohne_konto' }),
+            () => setStatus({ type: 'health_gestellt', scenario, outcome: 'fehlgeschlagen' }),
+          );
+          return;
+        }
         case 'seed':
           queue.push({ scenario: link.scenario, installation: link.installation, target: link.target });
           void drain();

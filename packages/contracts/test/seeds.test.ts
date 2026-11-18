@@ -64,7 +64,19 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'weight_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      ...[seedIds.ownFood.philippBircher, seedIds.ownFood.philippApfel].map((id) =>
+        expect.objectContaining({ entity_type: 'own_food', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
+  });
+
+  it('enthält ein eigenes Lebensmittel mit Portionsumrechnung und eine Korrektur eines BLS-Lebensmittels (#157)', () => {
+    const ownFoods = solo.initial.devices['philipp-iphone']!.rows.own_food;
+
+    expect(ownFoods).toEqual([
+      expect.objectContaining({ id: seedIds.ownFood.philippBircher, portions: [{ unit: 'portion', label: '1 Glas', baseAmount: 250_000 }], origin_type: null }),
+      expect.objectContaining({ id: seedIds.ownFood.philippApfel, name: 'Apfel roh', origin_type: 'bls', origin_key: 'F110100' }),
+    ]);
+    expect(solo.initial.server.own_food).toEqual(ownFoods);
   });
 
   describe('Gewicht (#175)', () => {

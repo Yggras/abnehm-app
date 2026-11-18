@@ -1,5 +1,7 @@
 import {
   ActivityType,
+  ImportedSportEntryUpsert,
+  ImportedWeightEntryUpsert,
   ManualSportMinutes,
   ManualWeightG,
   SportEntryRecord,
@@ -52,6 +54,16 @@ const imported = {
 const owned = { personId: philipp, createdAt: now, updatedAt: now } as const;
 
 const weight = { weightG: 82_400, origin: 'manuell', measuredAt: '2026-10-14T05:30:00.000Z', localDate: today, timeZone, utcOffsetMinutes: 120 } as const;
+/** Import: Waagenwert über Health Connect mit den genauen Gramm der Quelle (#183). */
+const importedWeight = {
+  ...weight,
+  weightG: 82_437,
+  origin: 'health_connect',
+  externalKey: '3f2b8c1e-7d4a-4b9e-8a1f-6c5d4e3b2a10',
+  sourceAppId: 'com.fitbit.FitbitMobile',
+  sourceAppName: null,
+  hiddenAt: null,
+} as const;
 
 export const trackerFixtures = {
   WaterMl: fixtures(WaterMl, {
@@ -122,6 +134,14 @@ export const trackerFixtures = {
       'mit Eigentümer': { ...sport, personId: philipp },
     },
   }),
+  ImportedSportEntryUpsert: fixtures(ImportedSportEntryUpsert, {
+    valid: { 'Import über Apple Health': imported, 'Import über 600 Minuten': { ...imported, durationMinutes: 1440 } },
+    invalid: { 'manuell': sport, 'Import über 1440 Minuten': { ...imported, durationMinutes: 1441 }, 'ohne externen Schlüssel': without(imported, 'externalKey') },
+  }),
+  ImportedWeightEntryUpsert: fixtures(ImportedWeightEntryUpsert, {
+    valid: { 'Import mit genauen Gramm': importedWeight, 'Import an den Grenzen': { ...importedWeight, weightG: 350_000 } },
+    invalid: { 'manuell': weight, 'Import unter 20 kg': { ...importedWeight, weightG: 19_999 }, 'ohne externen Schlüssel': without(importedWeight, 'externalKey') },
+  }),
   SportEntryRecord: fixtures(SportEntryRecord, {
     valid: { 'manuell kanonisch': { ...sport, ...owned }, 'Import kanonisch': { ...imported, ...owned } },
     invalid: {
@@ -145,17 +165,29 @@ export const trackerFixtures = {
     invalid: { '19,9 kg': 19_900, '350,1 kg': 350_100, 'zwei Nachkommastellen': 82_450, 'in kg': 82.4 },
   }),
   WeightEntryUpsert: fixtures(WeightEntryUpsert, {
-    valid: { 'morgens gewogen': weight, 'nachgetragen nach der Zeitumstellung': { ...weight, measuredAt: '2026-10-26T06:00:00.000Z', localDate: '2026-10-26', utcOffsetMinutes: 60 } },
+    valid: {
+      'morgens gewogen': weight,
+      'nachgetragen nach der Zeitumstellung': { ...weight, measuredAt: '2026-10-26T06:00:00.000Z', localDate: '2026-10-26', utcOffsetMinutes: 60 },
+      'Import mit genauen Gramm': importedWeight,
+      'Import über Apple Health, ausgeblendet': { ...importedWeight, origin: 'apple_health', sourceAppName: 'Fitbit', hiddenAt: now },
+      'Import an den Grenzen': { ...importedWeight, weightG: 20_000 },
+    },
     invalid: {
-      'importiert': { ...weight, origin: 'health_connect' },
-      'genaue Gramm': { ...weight, weightG: 82_437 },
+      'importiert ohne externen Schlüssel': { ...weight, origin: 'health_connect' },
+      'manuell mit genauen Gramm': { ...weight, weightG: 82_437 },
+      'manuell mit externem Schlüssel': { ...weight, externalKey: importedWeight.externalKey },
+      'manuell ausgeblendet': { ...weight, hiddenAt: now },
+      'Import unter 20 kg': { ...importedWeight, weightG: 19_999 },
+      'Import über 350 kg': { ...importedWeight, weightG: 350_001 },
+      'Import mit Bruchteil eines Gramms': { ...importedWeight, weightG: 82_437.5 },
+      'unbekannte Herkunft': { ...importedWeight, origin: 'fitbit' },
       'über der Grenze': { ...weight, weightG: 350_100 },
       'ohne Messzeitpunkt': without(weight, 'measuredAt'),
       'mit Eigentümer': { ...weight, personId: philipp },
     },
   }),
   WeightEntryRecord: fixtures(WeightEntryRecord, {
-    valid: { 'kanonisch': { ...weight, personId: philipp, createdAt: now, updatedAt: now } },
+    valid: { 'kanonisch': { ...weight, personId: philipp, createdAt: now, updatedAt: now }, 'Import kanonisch': { ...importedWeight, ...owned } },
     invalid: {
       'ohne Eigentümer': { ...weight, createdAt: now, updatedAt: now },
       'mit Tagesgewicht': { ...weight, personId: philipp, createdAt: now, updatedAt: now, dayWeightG: 82_400 },

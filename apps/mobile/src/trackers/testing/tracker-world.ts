@@ -45,9 +45,15 @@ export type TrackerWorld = Readonly<{
 
 /**
  * Neue Welt über der Uhr des Tests; `close` sperrt die Datenbank und löscht ihre Datei. Ohne `person`
- * fehlt die eigene Person wie vor dem ersten Pull.
+ * fehlt die eigene Person wie vor dem ersten Pull. `bausteine` registriert Evaluatoren beim
+ * Persistenzdienst, etwa um Tageszielerfüllungen zu prüfen.
  */
-export async function createTrackerWorld(clock: Clock, { person = true }: { person?: boolean } = {}): Promise<TrackerWorld> {
+export type TrackerWorldOptions = Readonly<{
+  person?: boolean;
+  bausteine?: Parameters<typeof createDailyGoalRegistry>[0]['bausteine'];
+}>;
+
+export async function createTrackerWorld(clock: Clock, { person = true, bausteine = [] }: TrackerWorldOptions = {}): Promise<TrackerWorld> {
   let failing = false;
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
@@ -57,7 +63,7 @@ export async function createTrackerWorld(clock: Clock, { person = true }: { pers
   const syncRegistry = createSyncRegistry([waterEntryEntity, weightEntryEntity, sportEntryEntity, dailyGoalCompletionEntity, energyBookingEntity]);
   const writer = createSyncWriter({ registry: syncRegistry, clock, newId });
   const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
-  const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock, writer, dispatcher });
+  const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine, checkIns: [] }), clock, writer, dispatcher });
   const reports: DayReport[] = [];
   const dependencies: TrackerDependencies = {
     database,

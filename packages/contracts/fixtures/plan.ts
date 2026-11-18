@@ -1,6 +1,16 @@
-import { BudgetSource, CreateGoalVersion, CreateWeeklyPlanVersion, GoalVersionRecord, WeeklyPlanDays, WeeklyPlanVersionRecord } from '../src/plan.ts';
+import { EntityId, LocalDate } from '../src/base.ts';
+import { dailyGoalId } from '../src/daily-goals.ts';
+import {
+  BudgetSource,
+  CreateGoalVersion,
+  CreateWeeklyPlanVersion,
+  GoalVersionRecord,
+  MaterializeDailyGoals,
+  WeeklyPlanDays,
+  WeeklyPlanVersionRecord,
+} from '../src/plan.ts';
 import { fixtures, without } from './define.ts';
-import { now, philipp, today } from './ids.ts';
+import { anna, now, philipp, timeZone, today, todayEndsAt } from './ids.ts';
 
 /** Referenzfall der Recherche (research/calorie-needs.md): Frau, 35 Jahre, 168 cm, 80 kg, wenig aktiv, entspannt; auch für Server-Tests. */
 export const referenceGoalVersion = {
@@ -38,6 +48,16 @@ export const standardWeekDays = {
 } as const;
 
 const stored = { personId: philipp, createdAt: now, updatedAt: now } as const;
+
+const goalIdOf = (slot: 1 | 2 | 3) => dailyGoalId(EntityId.parse(philipp), LocalDate.parse(today), slot);
+const snapshotBase = { personId: philipp, localDate: today, timeZone, dayEndsAt: todayEndsAt } as const;
+
+/** Mittwoch im Standard-Wochenplan mit dem Referenzfall: Ernährung erfasst, Wasserziel, Im Kalorienbudget. */
+const wednesdayGoals = [
+  { id: goalIdOf(1), snapshot: { type: 'ernaehrung_erfasst', ...snapshotBase, slot: 1, minimumMealCategories: 2 } },
+  { id: goalIdOf(2), snapshot: { type: 'wasserziel', ...snapshotBase, slot: 2, targetMl: 1_500 } },
+  { id: goalIdOf(3), snapshot: { type: 'im_kalorienbudget', ...snapshotBase, slot: 3, budgetKcal: 1_620, lowerBoundKcal: 1_514 } },
+] as const;
 
 export const planFixtures = {
   BudgetSource: fixtures(BudgetSource, {
@@ -79,6 +99,23 @@ export const planFixtures = {
   CreateWeeklyPlanVersion: fixtures(CreateWeeklyPlanVersion, {
     valid: { 'ab heute': { validFrom: today, days: standardWeekDays } },
     invalid: { 'ohne Tage': { validFrom: today }, 'mit Eigentümer': { validFrom: today, days: standardWeekDays, personId: philipp } },
+  }),
+  MaterializeDailyGoals: fixtures(MaterializeDailyGoals, {
+    valid: { 'drei Tagesziele eines Tags': { localDate: today, goals: wednesdayGoals } },
+    invalid: {
+      'nur zwei Tagesziele': { localDate: today, goals: wednesdayGoals.slice(0, 2) },
+      'Plätze vertauscht': { localDate: today, goals: [wednesdayGoals[1], wednesdayGoals[0], wednesdayGoals[2]] },
+      'Snapshot eines anderen Tags': { localDate: '2026-10-15', goals: wednesdayGoals },
+      'zufällige ID': { localDate: today, goals: [{ ...wednesdayGoals[0], id: philipp }, wednesdayGoals[1], wednesdayGoals[2]] },
+      'zwei Personen': {
+        localDate: today,
+        goals: [wednesdayGoals[0], wednesdayGoals[1], { ...wednesdayGoals[2], snapshot: { ...wednesdayGoals[2].snapshot, personId: anna } }],
+      },
+      'Baustein doppelt': {
+        localDate: today,
+        goals: [wednesdayGoals[0], wednesdayGoals[1], { id: goalIdOf(3), snapshot: { ...wednesdayGoals[1].snapshot, slot: 3 } }],
+      },
+    },
   }),
   WeeklyPlanVersionRecord: fixtures(WeeklyPlanVersionRecord, {
     valid: { 'kanonisch': { validFrom: today, days: standardWeekDays, ...stored } },
