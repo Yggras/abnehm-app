@@ -1,6 +1,6 @@
 import { LocalDate } from '@abnehm/contracts/base';
 import { ageOn, type GoalCalculatorInput } from '@abnehm/contracts/goal-calculator';
-import { ActivityLevel, CalculationSex } from '@abnehm/contracts/person';
+import type { ActivityLevel, CalculationSex } from '@abnehm/contracts/person';
 import type { Pace } from '@abnehm/contracts/ports';
 
 import type { GoalVersionValues } from './plan-repository';

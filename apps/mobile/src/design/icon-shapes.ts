@@ -37,6 +37,8 @@ export const iconShapes = {
   ],
   /** Erfassen */
   plus: [{ type: 'path', d: 'M12 5v14M5 12h14' }],
+  /** Verringern, etwa im Stepper (Gegenstück zu `plus`) */
+  minus: [{ type: 'path', d: 'M5 12h14' }],
   /** Momo · Insel */
   island: [
     { type: 'path', d: 'M3 18.5c1.5-.9 3-.9 4.5 0s3 .9 4.5 0 3-.9 4.5 0 3 .9 4.5 0' },

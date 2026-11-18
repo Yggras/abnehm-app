@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { GoalsScreen } from '../../plan-settings';
 
-export default placeholderRoute('settings', { section: 'goals' });
+export default routeScreen('settings', GoalsScreen, { section: 'goals' });
