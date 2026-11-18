@@ -59,6 +59,8 @@ export const SeedScenarioKey = z.enum([
   'rollenwahl-offen',
   'tage_ohne_app_oeffnung',
   'zeitzonen_reisen',
+  'haelfte-voll',
+  'doppelausgabe',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

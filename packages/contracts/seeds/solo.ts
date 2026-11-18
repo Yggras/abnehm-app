@@ -76,7 +76,7 @@ export const philippThresholds = {
  * Wochenplan von `solo`: Wiegetage sind Montag, Mittwoch, Donnerstag und Sonntag. Heute (Mittwoch) ist
  * Wiegetag und noch offen (Spezifikation 3, Abschnitt 9; #175), daneben vier Sporttage.
  */
-const weeklyPlan = {
+export const soloWeeklyPlan = {
   montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
   dienstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
   mittwoch: ['gewogen', 'wasserziel', 'sporteinheit'],
@@ -266,12 +266,12 @@ type SoloVariant = Readonly<{ water: WaterToday; sport: readonly SportUnit[]; pl
  * Randzustände des Gewichtstrends (#176).
  */
 const soloVariants = {
-  solo: { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan },
-  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], sport: sportWeek.solo, plan: weeklyPlan },
-  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], sport: sportWeek.solo, plan: weeklyPlan },
-  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], sport: sportWeek.solo, plan: weeklyPlan },
-  'solo-sport-erreicht': { water: waterToday.solo, sport: sportWeek['solo-sport-erreicht'], plan: weeklyPlan },
-  'solo-sport-ueber-ziel': { water: waterToday.solo, sport: sportWeek['solo-sport-ueber-ziel'], plan: weeklyPlan },
+  solo: { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan },
+  'solo-wasser-leer': { water: waterToday['solo-wasser-leer'], sport: sportWeek.solo, plan: soloWeeklyPlan },
+  'solo-wasser-erreicht': { water: waterToday['solo-wasser-erreicht'], sport: sportWeek.solo, plan: soloWeeklyPlan },
+  'solo-wasser-ueber-ziel': { water: waterToday['solo-wasser-ueber-ziel'], sport: sportWeek.solo, plan: soloWeeklyPlan },
+  'solo-sport-erreicht': { water: waterToday.solo, sport: sportWeek['solo-sport-erreicht'], plan: soloWeeklyPlan },
+  'solo-sport-ueber-ziel': { water: waterToday.solo, sport: sportWeek['solo-sport-ueber-ziel'], plan: soloWeeklyPlan },
   'solo-ohne-wiegetag': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlanOhneWiegetag },
   'solo-gewicht-steigend': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan, weights: weighings['solo-gewicht-steigend'] },
   'solo-gewicht-ohne-14-tage': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan, weights: weighings['solo-gewicht-ohne-14-tage'] },

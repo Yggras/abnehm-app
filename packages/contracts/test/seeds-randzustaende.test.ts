@@ -133,7 +133,7 @@ describe('Randzustand veralteter_partnerstand (#113)', () => {
       id: seedIds.partnerDailyGoalStatus.anna, stage: 'fast_geschafft', data_as_of: seedClock.instant, generation: 1,
     });
     // Annas Erfüllungen von heute: Sport um 06:16 UTC, Wasser um 11:30 UTC.
-    expect(rowsOf('veralteter_partnerstand', 'initial', 'daily_goal_completion', 'server').filter((row) => row.person_id === seedIds.person.anna)).toHaveLength(2);
+    expect(rowsOf('veralteter_partnerstand', 'initial', 'daily_goal_completion', 'server').filter((row) => row.person_id === seedIds.person.anna && row.local_date === seedDays.heute)).toHaveLength(2);
   });
 
   it('nur der Tageszielstand ist neu; Zusammenfassungen bleiben ohne Projectors der Bereiche alt, Anna synchronisiert nicht', () => {

@@ -135,6 +135,8 @@ export function changedOnServer(state: SeedState, { changes, createdAt }: { chan
 
 /** Partner-Projektionen, die das Gerät nur als Lesecache führt (#106). */
 const partnerCacheTables: readonly string[] = ['partner_summary', 'partner_daily_goal_status'];
+/** Projektionen, deren Anlage- und Änderungszeit auf dem Gerät ihr Datenstand ist: der Partnercache und der Inselfortschritt (#184). */
+const dataAsOfTables: readonly string[] = [...partnerCacheTables, 'island_progress'];
 
 /**
  * Was der Pull einer Installation übernimmt: jede für ihre Person sichtbare Änderung nach ihrem Cursor,
@@ -142,8 +144,9 @@ const partnerCacheTables: readonly string[] = ['partner_summary', 'partner_daily
  *
  * - Eine Fassung übernimmt das Gerät mit allen Spalten des Servers (`applyCanonical`).
  * - Eine Löschmarkierung setzt nur `deleted_at` und Serverversion einer bekannten Zeile (`applyTombstone`).
- * - Der Partnercache führt Anlage- und Änderungszeit einer Projektion als ihren Datenstand. Gelöschte
- *   Projektionen löscht er ganz; die beschreibt `uncoupledState`, hier sind sie nicht vorgesehen.
+ * - Der Partnercache und der Inselfortschritt führen Anlage- und Änderungszeit einer Projektion als ihren
+ *   Datenstand. Gelöschte Partnerprojektionen löscht der Cache ganz; die beschreibt `uncoupledState`, hier
+ *   sind sie nicht vorgesehen.
  */
 export function pulledBy(state: SeedState, installation: SeedKey, personId: string): SeedState {
   const device = state.devices[installation];
@@ -175,7 +178,7 @@ export function pulledBy(state: SeedState, installation: SeedKey, personId: stri
       }
       continue;
     }
-    const pulled = cached ? { ...current, created_at: current.data_as_of ?? null, updated_at: current.data_as_of ?? null } : current;
+    const pulled = dataAsOfTables.includes(table) ? { ...current, created_at: current.data_as_of ?? null, updated_at: current.data_as_of ?? null } : current;
     rows[table] = known ? local.map((row) => (row.id === current.id ? pulled : row)) : [...local, pulled];
   }
   const latest = String(state.server.sync_clock?.[0]?.position ?? '0') as SeedState['devices'][string]['cursor'];

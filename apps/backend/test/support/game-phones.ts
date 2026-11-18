@@ -8,6 +8,10 @@ import type { ContributionState } from '@abnehm/contracts/contribution';
 import { MomoCharacterState } from '@abnehm/contracts/today';
 import { WirContributionsState, type WirContribution } from '@abnehm/contracts/wir';
 
+import { dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
+import { insertDailyGoalForTest } from '../../../mobile/src/daily-goals/testing/persisted.ts';
+import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
+import { buildObjectCommand } from '../../../mobile/src/island/build-object.ts';
 import { createGameService, type GameService } from '../../../mobile/src/island/game-service.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
 import type { IslandStage } from '../../../mobile/src/island/role-choice.ts';
@@ -31,10 +35,12 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { personWithSession } from './authorization.ts';
 import { worldStart } from './coupled-world.ts';
+import { snapshotOf, type ServerDailyGoal } from './daily-goals.ts';
 
-// Geräte mit dem Spieldienst der App (#180, #184): Engine, Outbox und Adapter auf echtem SQLite
+// Geräte mit dem Spieldienst der App (#180, #184, #191): Engine, Outbox und Adapter auf echtem SQLite
 // (better-sqlite3) gegen die echte Hono-App mit Postgres, wie im Composition Root
-// (`src/session/device-session.ts`) mit den Inselinhalten im Sync. „Heute“ und „Wir“ folgen den lokalen Daten.
+// (`src/session/device-session.ts`) mit den Inselinhalten, Erfüllungen und Buchungen im Sync. „Heute“ und
+// „Wir“ folgen den lokalen Daten.
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -53,9 +59,11 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
   const database = await databases.open(accountId);
   const clock = createTestClock(worldStart);
   const newId = () => EntityId.parse(randomUUID());
-  const registry = createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities]);
+  // Erfüllungen und Buchungen bringen die Energie fürs Bauen (#191).
+  const registry = createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
   const writer = createSyncWriter({ registry, clock, newId });
   let online = true;
+  let dropNextPushResponse = false;
   const engine = createSyncEngine({
     database,
     registry,
@@ -66,12 +74,18 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
         const headers = new Headers(init?.headers);
         headers.set('authorization', `Bearer ${device.token ?? ''}`);
         headers.set('x-forwarded-for', device.ip);
-        return backend.app.request(String(input), { ...init, headers });
+        const response = await backend.app.request(String(input), { ...init, headers });
+        // Der Server hat verarbeitet, die Antwort geht unterwegs verloren.
+        if (dropNextPushResponse && String(input).endsWith('/v1/sync/push')) {
+          dropNextPushResponse = false;
+          throw new TypeError('Antwort verloren');
+        }
+        return response;
       },
     }),
     clock,
     installationId: newId(),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
   });
   const game: GameService = createGameService({ database, writer, clock, newId });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
@@ -88,6 +102,20 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     wir: latest<ContributionState<WirContribution[]>>((listener) => game.wirContributions.subscribe((state) => listener(WirContributionsState.parse(state)))),
     offline: () => (online = false),
     online: () => (online = true),
+    /**
+     * Dieselben Tagesziele wie auf dem Server, wie sie `materializeDailyGoals` (Spezifikation 1) brächte;
+     * ihre Erfüllungen und Gutschriften kommen dann per Pull.
+     */
+    materialize(goals: readonly ServerDailyGoal[]) {
+      const dayEnd = (localDate: string) => new Date(Date.parse(`${localDate}T00:00:00.000Z`) + 22 * 3_600_000);
+      database.transaction((tx) => goals.forEach((goal) => insertDailyGoalForTest(tx, goal.id, snapshotOf(goal, dayEnd(goal.localDate)))));
+    },
+    /** Der nächste Push erreicht den Server, seine Antwort aber nicht das Gerät. */
+    dropNextPushResponse: () => (dropNextPushResponse = true),
+    /** Ein Sync, dessen Push vorübergehend scheitert. */
+    async syncWithFailedPush() {
+      expect(await engine.sync()).toMatchObject({ push: 'unavailable' });
+    },
     async sync() {
       expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
     },

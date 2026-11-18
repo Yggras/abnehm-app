@@ -1,9 +1,10 @@
-import { inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 
 import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
-import { CreateGoalVersion, GoalVersionRecord } from '@abnehm/contracts/plan';
+import { CreateGoalVersion, goalVersionId, GoalVersionRecord } from '@abnehm/contracts/plan';
 
 import { policies } from '../authorization/authorization.ts';
+import type { DbExecutor } from '../database.ts';
 import { goalVersion } from '../db/schema/index.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
@@ -44,9 +45,11 @@ export const createGoalVersionCommand: ServerCommand<CreateGoalVersion> = {
   duplicate: () => [],
   async execute(tx, { actor, payload, businessKey, at }) {
     // Ein Budget aus einem Budgetvorschlag entsteht nur mit `acceptBudgetSuggestion` (Spezifikation 1,
-    // Abschnitt 7). Bis #134 und #151 diese Herkunft an den angenommenen Vorschlag bzw. die vorige Fassung
-    // binden, nimmt dieser Befehl sie nicht an; sonst umginge eine umbenannte Herkunft das 10-kcal-Raster.
-    if (payload.budgetSource === 'budgetvorschlag') throw new CommandRejection('invalid_payload');
+    // Abschnitt 7). „Ziele ändern“ darf es nur unverändert übernehmen; sonst umginge eine umbenannte
+    // Herkunft das 10-kcal-Raster.
+    if (payload.budgetSource === 'budgetvorschlag' && !(await carriesSuggestedBudget(tx, actor.personId, payload))) {
+      throw new CommandRejection('invalid_payload');
+    }
     return savePlanVersion(tx, { kind: 'zielversion', entity: goalVersionEntity, personId: actor.personId,
       validFrom: payload.validFrom, businessKey, at, async write(id, serverVersion) {
         const fields = { ...payload, updatedAt: at, serverVersion };
@@ -54,6 +57,21 @@ export const createGoalVersionCommand: ServerCommand<CreateGoalVersion> = {
       } });
   },
 };
+
+/**
+ * Ob die Fassung das Budget eines angenommenen Budgetvorschlags unverändert übernimmt: Die Fassung, die
+ * sie ersetzt, oder die vorige mit dem größten kleineren `valid_from` trägt dasselbe Budget mit derselben
+ * Herkunft. Die Kette reicht so bis zur Fassung aus `acceptBudgetSuggestion` zurück.
+ */
+async function carriesSuggestedBudget(tx: DbExecutor, personId: EntityId, payload: CreateGoalVersion): Promise<boolean> {
+  const columns = { budgetSource: goalVersion.budgetSource, calorieBudgetMilliKcal: goalVersion.calorieBudgetMilliKcal };
+  const replaced = await tx.select(columns).from(goalVersion).where(eq(goalVersion.id, goalVersionId(personId, payload.validFrom)));
+  const previous = await tx.select(columns).from(goalVersion)
+    .where(and(eq(goalVersion.personId, personId), lt(goalVersion.validFrom, payload.validFrom)))
+    .orderBy(desc(goalVersion.validFrom)).limit(1);
+  return [...replaced, ...previous].some((version) =>
+    version.budgetSource === 'budgetvorschlag' && version.calorieBudgetMilliKcal === payload.calorieBudgetMilliKcal);
+}
 
 function recordOf(row: typeof goalVersion.$inferSelect): GoalVersionRecord {
   return GoalVersionRecord.parse({

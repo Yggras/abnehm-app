@@ -19,6 +19,7 @@ export function fakeGameService(stage: IslandStage): GameService {
     takeGrowthIntro: () => false,
     declineRoles: refuse,
     withdrawRoles: refuse,
+    build: refuse,
     momoCharacter: {
       subscribe(listener) {
         listener(momoCharacterOf(stage));

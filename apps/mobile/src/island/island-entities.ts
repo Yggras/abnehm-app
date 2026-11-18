@@ -5,20 +5,23 @@ import {
   CommunityProjectRecord,
   IslandEventRecord,
   IslandFieldRecord,
+  IslandObjectRecord,
 } from '@abnehm/contracts/island-records';
 
-import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandProgress } from '../local-db/schema';
+import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
 import { serverManagedEntity, sqliteEntity, type SyncEntityAdapter } from '../sync';
 
 // Inselinhalte im App-Sync (Spezifikation 0, Abschnitte 8 und 10; Spezifikation 4, Abschnitt 11): Felder,
-// Freischaltungen, Gemeinschaftsprojekte, Ereignisse und der Inselfortschritt. Sie entstehen nur auf dem
-// Server (Schlüpfen, später Bauen, Levelaufstieg und Ereigniserzeugung) und kommen per Pull. Felder und
-// Freischaltungen sind unveränderlich; eine Löschmarkierung für sie ist ein Integrationsfehler.
+// Objekte, Freischaltungen, Gemeinschaftsprojekte, Ereignisse und der Inselfortschritt. Sie entstehen auf
+// dem Server (Schlüpfen, Bauen, später Levelaufstieg und Ereigniserzeugung) und kommen per Pull. Nur ein
+// eigenes gebautes Objekt legt das Gerät vorab an (`build-object.ts`); der kanonische Datensatz ersetzt es.
+// Felder und Freischaltungen sind unveränderlich; eine Löschmarkierung für sie ist ein Integrationsfehler.
 
 const coupled = { ownerField: 'couplingId' } as const;
 
 export const islandSyncEntities: readonly SyncEntityAdapter[] = [
   serverManagedEntity({ entityType: 'island_field', ...coupled, record: IslandFieldRecord, table: islandField }),
+  serverManagedEntity({ entityType: 'island_object', ...coupled, record: IslandObjectRecord, table: islandObject }),
   serverManagedEntity({ entityType: 'blueprint_unlock', ...coupled, record: BlueprintUnlockRecord, table: blueprintUnlock }),
   serverManagedEntity({ entityType: 'area_unlock', ...coupled, record: AreaUnlockRecord, table: areaUnlock }),
   serverManagedEntity({ entityType: 'community_project', ...coupled, record: CommunityProjectRecord, table: communityProject }),
