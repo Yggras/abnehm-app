@@ -5,7 +5,7 @@ import { SportRecordedValues, WaterAddedValues, WeightMessageValues } from '@abn
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
-import { activityNames, bausteinNames, quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
+import { activityNames, bausteinNames, germanList, quickCommandOwnerName, shellTexts, thousandthsWithOneDecimal } from './texts';
 
 // Texte des Meldungs-Hosts: Die sichtbare Zeile entsteht in der App aus `messageKey` und
 // typisierten Werten (Spezifikation 0, Abschnitt 2). Bereiche tragen ihre Meldungen hier ein,
@@ -29,11 +29,6 @@ const toMeal: Readonly<Record<MealKey, string>> = {
   abendessen: 'zum Abendessen',
   snacks: 'zu den Snacks',
 };
-
-/** „A“, „A und B“, „A, B und C“. */
-function germanList(items: readonly string[]): string {
-  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} und ${items.at(-1)}`;
-}
 
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -64,10 +59,12 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
    * Spezifikation 4: Momos Reaktion auf neue eigene Gutschriften eines Commits, als eine Meldung (#188):
    * „Wasserziel erfüllt · +1 Energie“ und „Alle drei geschafft · +1 Energie“ wie in Abschnitt 6. Kommen
    * mehrere zusammen, fasst die Meldung sie mit der Summe der Energie zusammen, etwa „Alle drei geschafft ·
-   * +2 Energie“ für das dritte Tagesziel samt Bonus (Nutzerentscheidung in #188). `gestern` zählt die
+   * +2 Energie“ für das dritte Tagesziel samt Bonus (Nutzerentscheidung in #188,
+   * https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756). `gestern` steht für die
    * gebündelten Tagesende-Gutschriften des Vortags; sie gibt es nur für „Im Kalorienbudget“ und den Bonus
-   * an solchen Tagen (CONTEXT.md). Die zusammengesetzten Wortlaute sind Designwerte, nicht belegt. Ohne
-   * „Rückgängig“; steht eine Meldung mit „Rückgängig“, wird sie deren zweite Zeile.
+   * an solchen Tagen (CONTEXT.md). `energie` ist die Summe der Gutschriften. Die zusammengesetzten
+   * Wortlaute sind Designwerte, nicht belegt. Ohne „Rückgängig“; steht eine Meldung mit „Rückgängig“, wird
+   * sie deren zweite Zeile.
    */
   'momo.energie': messageText(
     z
@@ -76,17 +73,17 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
         ziel2: BausteinKey.optional(),
         ziel3: BausteinKey.optional(),
         bonus: z.boolean(),
-        gestern: z.int().min(0).max(2),
+        gestern: z.boolean(),
         gesternBonus: z.boolean(),
+        energie: z.int().positive(),
       })
-      .refine((values) => values.gestern > 0 || values.bonus || values.ziel1 !== undefined, { message: 'Meldung ohne Gutschrift' }),
-    ({ ziel1, ziel2, ziel3, bonus, gestern, gesternBonus }) => {
+      .refine((values) => values.gestern || values.bonus || values.ziel1 !== undefined, { message: 'Meldung ohne Gutschrift' }),
+    ({ ziel1, ziel2, ziel3, bonus, gestern, gesternBonus, energie }) => {
       const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
       const today = bonus ? 'alle drei geschafft' : goals.length > 0 ? `${germanList(goals)} erfüllt` : null;
-      const yesterday = gestern > 0 ? `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''}` : null;
-      const energy = gestern + goals.length + (bonus ? 1 : 0);
+      const yesterday = gestern ? `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''}` : null;
       const text = yesterday === null ? capitalized(today!) : today === null ? yesterday : `${yesterday}, heute ${today}`;
-      return { text: `${text} · +${energy} Energie`, energy: true };
+      return { text: `${text} · +${energie} Energie`, energy: true };
     },
   ),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */

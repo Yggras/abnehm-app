@@ -16,6 +16,7 @@ import { createGameService, type GameService } from '../../../mobile/src/island/
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
 import type { IslandStage } from '../../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../../mobile/src/island/shared-action-commands.ts';
+import { quietGameDependencies } from '../../../mobile/src/island/testing/quiet-game.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { sharedAction as localAction } from '../../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../../mobile/src/local-db/sqlite.ts';
@@ -87,7 +88,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     installationId: newId(),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, buildObjectCommand] }),
   });
-  const game: GameService = createGameService({ database, writer, clock, newId, haptics: { feedback() {} }, refresh: () => () => {} });
+  const game: GameService = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
     let value: T | undefined;
     cleanups.push(subscribe((next) => (value = next)));

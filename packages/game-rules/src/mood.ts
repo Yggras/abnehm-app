@@ -16,13 +16,22 @@ export type MomoReactionMood = Extract<MomoMood, 'begeistert' | 'freut_sich'>;
 /** Ein eigenes Ereignis, auf das Momo kurz reagiert. */
 export type MomoEvent = 'tageszielerfuellung' | 'tagesbonus' | 'levelaufstieg';
 
+/** Rangfolge der Ereignisse, das stärkste zuerst. */
+const eventRank: readonly MomoEvent[] = ['levelaufstieg', 'tagesbonus', 'tageszielerfuellung'];
+
+/** Das stärkste von Ereignissen, die zusammen eintreffen: Levelaufstieg vor Tagesbonus vor Tageszielerfüllung. */
+export function strongestEvent(events: readonly MomoEvent[]): MomoEvent {
+  const strongest = eventRank.find((event) => events.includes(event));
+  if (strongest === undefined) throw new RangeError('Ohne Ereignis gibt es keine Reaktion');
+  return strongest;
+}
+
 /**
  * Momos Reaktion auf eigene Ereignisse, die zusammen eintreffen: begeistert nach Tagesbonus oder
  * Levelaufstieg, sonst freut sich (Spezifikation 4, Abschnitt 6).
  */
 export function reactionMood(events: readonly MomoEvent[]): MomoReactionMood {
-  if (events.length === 0) throw new RangeError('Ohne Ereignis gibt es keine Reaktion');
-  return events.some((event) => event !== 'tageszielerfuellung') ? 'begeistert' : 'freut_sich';
+  return strongestEvent(events) === 'tageszielerfuellung' ? 'freut_sich' : 'begeistert';
 }
 
 export type MoodFacts = Readonly<{

@@ -1,11 +1,10 @@
-import { minutesOfDay, type Clock } from '@abnehm/clock';
+import type { Clock } from '@abnehm/clock';
 import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole } from '@abnehm/contracts/island';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
-import { momoMood, reactionMood, type MomoReactionMood, type MomoView } from '@abnehm/game-rules/mood';
+import { reactionMood } from '@abnehm/game-rules/mood';
 
-import { latestCompletionDate } from '../daily-goals';
 import { motion } from '../design/tokens';
 import type { Haptics } from '../haptics/haptics';
 import type { LocalDatabase, ReadContext } from '../local-db';
@@ -16,6 +15,7 @@ import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
 import { takeGrowthIntro } from './growth-intro';
 import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
+import { createMoodState, distinct } from './mood-state';
 import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceOutcome } from './role-choice';
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
@@ -133,89 +133,6 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
 function ownPersonId(tx: ReadContext): EntityId | null {
   const own = readOwnPerson(tx);
   return own === undefined ? null : EntityId.parse(own.id);
-}
-
-/** Meldet einen Wert nur, wenn er sich geändert hat. */
-function distinct<T>(listener: (value: T) => void): (value: T) => void {
-  let last: string | null = null;
-  return (value) => {
-    const serialized = JSON.stringify(value);
-    if (serialized === last) return;
-    last = serialized;
-    listener(value);
-  };
-}
-
-/** Was Momos Stimmung aus der Datenbank braucht: die Stufe und die jüngste eigene Tageszielerfüllung. */
-type MomoFacts = Readonly<{ stage: IslandStage; lastOwnCompletion: LocalDate | null }>;
-
-function readMomoFacts(tx: ReadContext): MomoFacts {
-  const personId = ownPersonId(tx);
-  return { stage: readIslandStage(tx), lastOwnCompletion: personId === null ? null : latestCompletionDate(tx, personId) };
-}
-
-/**
- * Momos Stimmung je betrachtender Person (Spezifikation 4, Abschnitt 6): nur auf diesem Gerät, nie
- * synchronisiert. Die laufende Reaktion lebt im Speicher; nach einem Neustart reagiert Momo nicht erneut.
- * Neu abgeleitet wird bei jedem Commit, bei Beginn und Ende einer Reaktion und im Takt.
- */
-function createMoodState(clock: Clock, refresh: Refresh) {
-  let reaction: MomoReactionMood | null = null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const changed = new Set<() => void>();
-  const notify = () => {
-    for (const update of [...changed]) update();
-  };
-
-  function withMood({ stage, lastOwnCompletion }: MomoFacts, view: MomoView): IslandStage {
-    if (stage.type !== 'geschluepft' || stage.island === null) return stage;
-    const reading = clock.read();
-    const moodKey = momoMood({
-      view,
-      reaction,
-      minuteOfDay: minutesOfDay(reading),
-      // Insel-Ereignisse liefern ihren Hinweis mit #203; bis dahin wartet auf der Insel nichts.
-      islandNotice: 0,
-      today: LocalDate.parse(reading.localDate),
-      lastOwnCompletion,
-    });
-    return { ...stage, island: { ...stage.island, appearance: { ...stage.island.appearance, moodKey } } };
-  }
-
-  return {
-    /**
-     * Momo reagiert für `durationMs`; eine neue Reaktion ersetzt die laufende. Aufgerufen nach dem Commit
-     * der Beanspruchung: Die Datenbank lässt danach alle Beobachter neu lesen, die Reaktion erscheint also
-     * mit dem neuen Stand, etwa der höheren Energie.
-     */
-    react(next: MomoReactionMood, durationMs: number) {
-      clearTimeout(timer);
-      reaction = next;
-      timer = setTimeout(() => {
-        reaction = null;
-        notify();
-      }, durationMs);
-    },
-    /** Die Stufe samt Stimmung der Ansicht; gemeldet nur nach einer Änderung. */
-    observe(database: LocalDatabase, view: MomoView, listener: (stage: IslandStage) => void): () => void {
-      let facts: MomoFacts | null = null;
-      const report = distinct(listener);
-      const emit = () => {
-        if (facts !== null) report(withMood(facts, view));
-      };
-      changed.add(emit);
-      const stopTicks = refresh(emit);
-      const stopDatabase = database.observe(readMomoFacts, (next) => {
-        facts = next;
-        emit();
-      });
-      return () => {
-        changed.delete(emit);
-        stopTicks();
-        stopDatabase();
-      };
-    },
-  };
 }
 
 /**

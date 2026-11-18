@@ -24,6 +24,7 @@ import { createSyncRegistry, createSyncWriter, foundationSyncEntities, type Sync
 import { pendingOperations } from '../../sync/outbox';
 import { createGameService, type GameService } from '../game-service';
 import { anna, philipp } from './persons';
+import { quietGameDependencies } from './quiet-game';
 
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
@@ -61,7 +62,7 @@ export type LaichkugelWorld = Readonly<{
 
 export type LaichkugelWorldOptions = Readonly<{ haptics?: Haptics; refresh?: Refresh }>;
 
-export async function createLaichkugelWorld(clock: Clock, { haptics = { feedback() {} }, refresh = () => () => {} }: LaichkugelWorldOptions = {}): Promise<LaichkugelWorld> {
+export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameDependencies.haptics, refresh = quietGameDependencies.refresh }: LaichkugelWorldOptions = {}): Promise<LaichkugelWorld> {
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   let database = await databases.open('konto_philipp');

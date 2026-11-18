@@ -24,6 +24,11 @@ export const activityNames: Readonly<Record<ActivityType, string>> = {
   sonstiges: 'Sonstiges',
 };
 
+/** Aufzählung: „A“, „A und B“, „A, B und C“. */
+export function germanList(items: readonly string[]): string {
+  return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} und ${items.at(-1)}`;
+}
+
 /** Namen der Tagesziel-Bausteine, auf „Heute“ und in „‹Baustein› erfüllt · +1 Energie“. */
 export const bausteinNames: Readonly<Record<BausteinKey, string>> = {
   ernaehrung_erfasst: 'Ernährung erfasst',

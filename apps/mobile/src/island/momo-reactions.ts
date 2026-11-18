@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { LocalDate, localDateAfter, type BausteinKey, type EntityId, type Instant, type MessageKey, type MessageValues } from '@abnehm/contracts/base';
 import { decidedAtDayEnd } from '@abnehm/contracts/daily-goals';
 import { dailyBonusKey } from '@abnehm/contracts/energy';
-import type { MomoEvent } from '@abnehm/game-rules/mood';
+import { strongestEvent, type MomoEvent } from '@abnehm/game-rules/mood';
 
 import { completionsOfDay } from '../daily-goals';
 import { bookingByKey } from '../energy';
@@ -24,19 +24,25 @@ import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 
 /**
  * Alle in einem Commit neu gezeigten Ereignisse, zusammengefasst zu einer Meldung (Nutzerentscheidung in
- * #188): etwa „Wasserziel erfüllt · +1 Energie“, „Alle drei geschafft · +2 Energie“ für das dritte
- * Tagesziel samt Bonus oder „Gestern im Kalorienbudget · +1 Energie“ für die Tagesende-Gutschriften.
+ * #188, https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756): etwa „Wasserziel erfüllt ·
+ * +1 Energie“, „Alle drei geschafft · +2 Energie“ für das dritte Tagesziel samt Bonus oder „Gestern im
+ * Kalorienbudget · +1 Energie“ für die Tagesende-Gutschriften.
  */
 export type MomoReaction = Readonly<{
-  /** Tagesende-Gutschriften des Vortags, gebündelt; `null` ohne. */
-  yesterday: Readonly<{ energy: number; bonus: boolean }> | null;
+  /** Tagesende-Gutschriften des Vortags, gebündelt, mit oder ohne Bonus; `null` ohne. */
+  yesterday: Readonly<{ bonus: boolean }> | null;
   /** Heute erstmals erfüllte Tagesziele, in der Reihenfolge der Erfüllung. */
   goals: readonly BausteinKey[];
   /** Heute der Tagesbonus. */
   bonus: boolean;
+  /** Summe der Beträge aller dieser Gutschriften. */
+  energy: number;
 }>;
 
-type CreditEvent = Readonly<{ key: string; baustein: BausteinKey | null }>;
+type CreditEvent = Readonly<{ key: string; baustein: BausteinKey | null; amount: number }>;
+
+const isBonus = (credit: CreditEvent) => credit.baustein === null;
+const atDayEnd = (credit: CreditEvent) => credit.baustein !== null && decidedAtDayEnd(credit.baustein);
 
 /**
  * Gutschriften eines Tags, deren Tageszielerfüllung lokal vorliegt, in der Reihenfolge der Erfüllung; der
@@ -44,15 +50,16 @@ type CreditEvent = Readonly<{ key: string; baustein: BausteinKey | null }>;
  */
 function creditsOfDay(tx: ReadContext, personId: EntityId, localDate: LocalDate): CreditEvent[] {
   const goals = completionsOfDay(tx, personId, localDate)
-    // Die Gutschrift trägt denselben Schlüssel wie ihre Erfüllung.
-    .filter((completion) => bookingByKey(tx, completion.completionKey) !== null)
     .sort((a, b) => a.firstCompletedAt.localeCompare(b.firstCompletedAt) || a.slot - b.slot)
-    .map((completion) => ({ key: completion.completionKey, baustein: completion.baustein }));
+    .flatMap((completion) => {
+      // Die Gutschrift trägt denselben Schlüssel wie ihre Erfüllung.
+      const credit = bookingByKey(tx, completion.completionKey);
+      return credit === null ? [] : [{ key: completion.completionKey, baustein: completion.baustein, amount: credit.amount }];
+    });
   const bonusKey = dailyBonusKey(personId, localDate);
-  return bookingByKey(tx, bonusKey) === null ? goals : [...goals, { key: bonusKey, baustein: null }];
+  const bonus = bookingByKey(tx, bonusKey);
+  return bonus === null ? goals : [...goals, { key: bonusKey, baustein: null, amount: bonus.amount }];
 }
-
-const atDayEnd = (credit: CreditEvent) => credit.baustein !== null && decidedAtDayEnd(credit.baustein);
 
 /**
  * Tagesende-Gutschriften (CONTEXT.md): die der Bausteine, die sich erst nach Ablauf des Kalendertags
@@ -60,7 +67,7 @@ const atDayEnd = (credit: CreditEvent) => credit.baustein !== null && decidedAtD
  */
 function dayEndCredits(credits: readonly CreditEvent[]): CreditEvent[] {
   if (!credits.some(atDayEnd)) return [];
-  return credits.filter((credit) => atDayEnd(credit) || credit.baustein === null);
+  return credits.filter((credit) => atDayEnd(credit) || isBonus(credit));
 }
 
 const stateKey = 'momo_reaktionen';
@@ -103,13 +110,12 @@ export function claimReaction(tx: TransactionContext, personId: EntityId, today:
   };
   writeDeviceState(tx, stateKey, ShownReactions.parse({ days }), at);
   return {
-    yesterday: pending.dayEnd.length === 0 ? null : { energy: pending.dayEnd.length, bonus: pending.dayEnd.some(isBonus) },
+    yesterday: pending.dayEnd.length === 0 ? null : { bonus: pending.dayEnd.some(isBonus) },
     goals: pending.today.flatMap((credit) => (credit.baustein === null ? [] : [credit.baustein])),
     bonus: pending.today.some(isBonus),
+    energy: [...pending.dayEnd, ...pending.today].reduce((sum, credit) => sum + credit.amount, 0),
   };
 }
-
-const isBonus = (credit: CreditEvent) => credit.baustein === null;
 
 /** Die eigenen Ereignisse hinter einer Reaktion; gestern mit Bonus zählt als Tagesbonus. */
 export function eventsOf(reaction: MomoReaction): MomoEvent[] {
@@ -120,21 +126,28 @@ export function eventsOf(reaction: MomoReaction): MomoEvent[] {
 }
 
 /**
- * Die eine Haptik zu Ereignissen aus einem Commit: die des stärksten. Die Haptik-Arten sind genau die
- * Ereignisse, auf die Momo reagiert (#95).
+ * Die eine Haptik zu Ereignissen aus einem Commit: die des stärksten (`strongestEvent` der Spielregeln).
+ * Die Haptik-Arten sind genau die Ereignisse, auf die Momo reagiert (#95).
  */
 export function hapticOf(events: readonly MomoEvent[]): HapticKind {
-  return events.find((event) => event !== 'tageszielerfuellung') ?? 'tageszielerfuellung';
+  return strongestEvent(events);
 }
 
 /**
  * Die eine Meldung einer Reaktion für den Meldungs-Host (`momo.energie`); den Text setzt
- * `shell/message-texts.ts` zusammen. Bis zu drei Tagesziele stehen als `ziel1` bis `ziel3`.
+ * `shell/message-texts.ts` zusammen. Bis zu drei Tagesziele stehen als `ziel1` bis `ziel3`, weil
+ * Meldungswerte flach sind (`MessageValues`).
  */
 export function messageOfReaction(reaction: MomoReaction): Readonly<{ messageKey: MessageKey; values: MessageValues }> {
   const goals = Object.fromEntries(reaction.goals.map((baustein, index) => [`ziel${index + 1}`, baustein]));
   return {
     messageKey: 'momo.energie',
-    values: { ...goals, bonus: reaction.bonus, gestern: reaction.yesterday?.energy ?? 0, gesternBonus: reaction.yesterday?.bonus ?? false },
+    values: {
+      ...goals,
+      bonus: reaction.bonus,
+      gestern: reaction.yesterday !== null,
+      gesternBonus: reaction.yesterday?.bonus ?? false,
+      energie: reaction.energy,
+    },
   };
 }

@@ -305,15 +305,15 @@ describe('Quick-Commands und Meldungen', () => {
 
   const none = { yesterday: null, goals: [], bonus: false } as const;
   test.each([
-    [{ ...none, goals: ['wasserziel'] }, 'Wasserziel erfüllt · +1 Energie'],
-    [{ ...none, bonus: true }, 'Alle drei geschafft · +1 Energie'],
+    [{ ...none, goals: ['wasserziel'], energy: 1 }, 'Wasserziel erfüllt · +1 Energie'],
+    [{ ...none, bonus: true, energy: 1 }, 'Alle drei geschafft · +1 Energie'],
     // Mehreres aus einem Commit: eine Meldung mit der Summe der Energie.
-    [{ ...none, goals: ['sporteinheit'], bonus: true }, 'Alle drei geschafft · +2 Energie'],
-    [{ ...none, goals: ['wasserziel', 'gewogen'] }, 'Wasserziel und Gewogen erfüllt · +2 Energie'],
-    [{ ...none, goals: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'] }, 'Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie'],
-    [{ ...none, yesterday: { energy: 1, bonus: false } }, 'Gestern im Kalorienbudget · +1 Energie'],
-    [{ ...none, yesterday: { energy: 2, bonus: true } }, 'Gestern im Kalorienbudget, alle drei geschafft · +2 Energie'],
-    [{ yesterday: { energy: 1, bonus: false }, goals: ['wasserziel'], bonus: false }, 'Gestern im Kalorienbudget, heute Wasserziel erfüllt · +2 Energie'],
+    [{ ...none, goals: ['sporteinheit'], bonus: true, energy: 2 }, 'Alle drei geschafft · +2 Energie'],
+    [{ ...none, goals: ['wasserziel', 'gewogen'], energy: 2 }, 'Wasserziel und Gewogen erfüllt · +2 Energie'],
+    [{ ...none, goals: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'], energy: 3 }, 'Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie'],
+    [{ ...none, yesterday: { bonus: false }, energy: 1 }, 'Gestern im Kalorienbudget · +1 Energie'],
+    [{ ...none, yesterday: { bonus: true }, energy: 2 }, 'Gestern im Kalorienbudget, alle drei geschafft · +2 Energie'],
+    [{ yesterday: { bonus: false }, goals: ['wasserziel'], bonus: false, energy: 2 }, 'Gestern im Kalorienbudget, heute Wasserziel erfüllt · +2 Energie'],
   ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188)', async (reaction, text) => {
     closeIsland();
     closeIsland = appGameService.opened(fakeGameService(hatchedStage(), [reaction]));
