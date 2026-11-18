@@ -72,6 +72,9 @@ function notificationModeText(mode: NotificationTestMode): string {
     : `Mitteilungen simuliert: ${permissionText[mode.permission]}, Systemdialog antwortet „${permissionText[mode.answer]}“.`;
 }
 
+/** So lange steht der Stand des Mitteilungs-Ports nach dem Link `mitteilungen`. */
+export const notificationNoticeMs = 5000;
+
 const phaseText: Record<DeviceSuitePhase, string> = { vor_neustart: 'vor Neustart', nach_neustart: 'nach Neustart' };
 
 const healthOutcomeText: Record<Extract<TestStatus, { type: 'health_gestellt' }>['outcome'], string> = {
@@ -123,7 +126,16 @@ export function TestCapabilityHost({
     router.replace(hrefFor(seeded.target));
   }, [seeded, gate, pathname]);
 
-  const notice = statusNotice(status);
+  // Der Stand des Mitteilungs-Ports verdeckt sonst dauerhaft den Kopf der Seite, etwa auf Bildern für
+  // Impeccable; Maestro liest ihn sofort nach dem Link ab (#125).
+  const [hidden, setHidden] = useState<TestStatus | null>(null);
+  useEffect(() => {
+    if (status.type !== 'mitteilungen_gestellt') return;
+    const timer = setTimeout(() => setHidden(status), notificationNoticeMs);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  const notice = hidden === status ? null : statusNotice(status);
   if (notice === null) return null;
   return (
     <View pointerEvents="box-none" style={[styles.overlay, { top: insets.top + space[2] }]}>
