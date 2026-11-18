@@ -15,8 +15,10 @@ import {
   WaterMl,
   WeightEntryRecord,
   WeightEntryUpsert,
+  WeightDeletedOutcome,
   WeightRecordedOutcome,
-  WeightRecordedValues,
+  WeightMessageValues,
+  WeightUpdatedOutcome,
 } from '../src/trackers.ts';
 import { fixtures, without } from './define.ts';
 import { now, philipp, timeZone, today } from './ids.ts';
@@ -193,7 +195,7 @@ export const trackerFixtures = {
       'mit Tagesgewicht': { ...weight, personId: philipp, createdAt: now, updatedAt: now, dayWeightG: 82_400 },
     },
   }),
-  WeightRecordedValues: fixtures(WeightRecordedValues, {
+  WeightMessageValues: fixtures(WeightMessageValues, {
     valid: { '82,4 kg': { weightG: 82_400 } },
     invalid: { 'ohne Gewicht': {}, 'in kg': { weightG: 82.4 }, 'mit Abweichung': { weightG: 82_400, changeG: 2_100 } },
   }),
@@ -203,6 +205,21 @@ export const trackerFixtures = {
       'ohne Rückgängig': { messageKey: 'gewicht.eingetragen', values: { weightG: 82_400 } },
       'fremde Meldung': { messageKey: 'wasser.hinzugefuegt', values: { weightG: 82_400 }, undoToken: 'undo-7f3b' },
       'fertiger Text': { messageKey: 'gewicht.eingetragen', values: { weightG: 82_400, text: '82,4 kg eingetragen' }, undoToken: 'undo-7f3b' },
+    },
+  }),
+  WeightUpdatedOutcome: fixtures(WeightUpdatedOutcome, {
+    valid: { 'Gewicht geändert': { messageKey: 'gewicht.geaendert', values: { weightG: 82_100 }, undoToken: 'undo-7f3c' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'gewicht.geaendert', values: { weightG: 82_100 } },
+      'Meldung des Eintragens': { messageKey: 'gewicht.eingetragen', values: { weightG: 82_100 }, undoToken: 'undo-7f3c' },
+      'importierte Gramm': { messageKey: 'gewicht.geaendert', values: { weightG: 82_137 }, undoToken: 'undo-7f3c' },
+    },
+  }),
+  WeightDeletedOutcome: fixtures(WeightDeletedOutcome, {
+    valid: { 'Gewicht gelöscht': { messageKey: 'gewicht.geloescht', values: { weightG: 82_400 }, undoToken: 'undo-7f3d' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'gewicht.geloescht', values: { weightG: 82_400 } },
+      'ohne Gewicht': { messageKey: 'gewicht.geloescht', values: {}, undoToken: 'undo-7f3d' },
     },
   }),
 };

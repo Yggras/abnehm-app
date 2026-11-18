@@ -18,11 +18,10 @@ jest.mock('@shopify/react-native-skia', () => jest.requireActual<typeof mockSkia
 const clock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
 
 test('die volle Insel steht nach den Spielregeln auf Level 6 mit 56 und 81 Prozent', () => {
-  const { progress } = richIsland();
+  const { halves } = richIsland();
 
-  expect(progress.level).toBe(6);
-  expect(progress.levelNeed).toBe(16);
-  expect(progress.members.map(({ halfPercent }) => halfPercent)).toEqual([56, 81]);
+  expect(halves.level).toBe(6);
+  expect([halves.own.halfPercent, halves.partner.halfPercent]).toEqual([56, 81]);
 });
 
 test('die volle Insel zeichnet weniger Elemente und Animationen als der Spike', async () => {

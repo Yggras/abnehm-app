@@ -14,6 +14,7 @@ import { createHealthImport, unavailableHealthPlatform } from '../health';
 import { appHealthImport } from '../health/app-health';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
+import { buildObjectCommand } from '../island/build-object';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
@@ -33,7 +34,7 @@ import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { appTrackers, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
+import { appTrackers, appWeightDetail, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -117,9 +118,9 @@ function deviceState() {
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
-      // `trackers.sport` und `trackers.weight` und die Bildschirme des Bereichs (`appTrackers`). Den
-      // Schreib-Port `weightRecorder` gibt der Composition Root an `composeAreaPorts` weiter, sobald alle
-      // Pflichtports angemeldet sind.
+      // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und das Lesemodell
+      // des Gewicht-Detailbildschirms (`appWeightDetail`). Die Ports `weightRecorder` und `weightTrendReader`
+      // gibt der Composition Root an `composeAreaPorts` weiter, sobald alle Pflichtports angemeldet sind.
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
       // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
@@ -134,7 +135,7 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, confirmPhotoDraftCommand({ persistence })] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, buildObjectCommand, confirmPhotoDraftCommand({ persistence })] }),
       });
       activeEngine = engine;
       void dispatcher.deliver();
@@ -147,6 +148,7 @@ function deviceState() {
         health.startForegroundTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground }),
         waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
         weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
+        appWeightDetail.opened(trackers.weightDetail(planReaderOf(database), appTodayRefresh)),
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).

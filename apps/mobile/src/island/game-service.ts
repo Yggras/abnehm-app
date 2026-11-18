@@ -7,8 +7,8 @@ import type { WirContribution, WirContributionSource } from '@abnehm/contracts/w
 import type { LocalDatabase } from '../local-db';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
+import { buildObject, type BuildOutcome } from './build-object';
 import { takeGrowthIntro } from './growth-intro';
-import { halvesFor } from './halves';
 import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceOutcome } from './role-choice';
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
@@ -36,6 +36,11 @@ export type GameService = Readonly<{
   /** Zieht den eigenen offenen Vorschlag zurück. */
   withdrawRoles(actionId: EntityId): RoleChoiceOutcome;
   /**
+   * Baut einen Bauplan auf ein eigenes freies Feld; die eigene Hälfte wächst sofort, auch offline. Ein
+   * Levelaufstieg entsteht erst über den Sync (#191).
+   */
+  build(request: Readonly<{ fieldId: EntityId; blueprintKey: string }>): BuildOutcome;
+  /**
    * Ob „So wächst Momo“ jetzt erscheinen soll; genau beim ersten Aufruf je Installation `true` und dann
    * gemerkt (Einmal-Flag ohne Sync).
    */
@@ -61,6 +66,7 @@ export function createGameService({ database, writer, clock, newId }: GameServic
     takeGrowthIntro: () => database.transaction((tx) => takeGrowthIntro(tx, clock.read().instant)),
     declineRoles: (actionId) => database.transaction((tx) => commands.decline(tx, actionId)),
     withdrawRoles: (actionId) => database.transaction((tx) => commands.withdraw(tx, actionId)),
+    build: (request) => database.transaction((tx) => buildObject(tx, { writer, newId, clock }, request)),
     momoCharacter: { subscribe: (listener) => observeStage((stage) => listener(momoCharacterOf(stage))) },
     wirContributions: { subscribe: (listener) => observeStage((stage) => listener(wirContributionsOf(stage))) },
   };
@@ -80,8 +86,8 @@ function observeDistinct(database: LocalDatabase, listener: (stage: IslandStage)
 /**
  * `momo.character` (Spezifikation 4, Abschnitt 2.6): ohne Kopplung die Laichkugel mit „Partner einladen“,
  * vor dem Schlüpfen die Rollenwahl, für die vorschlagende Person als „Vorschlag gesendet“. Nach dem
- * Schlüpfen Momo mit Energie, Level und beiden Balkenanteilen aus dem Inselfortschritt (#184).
- * `waitingForPartner` und `islandNotice` füllen „Bauen: Fachbefehl“ (#191) und „Insel-Ereignisse:
+ * Schlüpfen Momo mit Energie, Level und beiden Balkenanteilen (#184); die eigene Hälfte und
+ * `waitingForPartner` folgen den eigenen Buchungen (#191). `islandNotice` füllt „Insel-Ereignisse:
  * Hinweise“ (#203).
  */
 export function momoCharacterOf(stage: IslandStage): TodayState<'momo.character'> {
@@ -90,11 +96,18 @@ export function momoCharacterOf(stage: IslandStage): TodayState<'momo.character'
       return { type: 'loading' };
     case 'geschluepft': {
       if (stage.island === null) return { type: 'loading' };
-      const { appearance, energy, progress, viewerPersonId } = stage.island;
-      const { own, partner } = halvesFor(progress, viewerPersonId);
+      const { appearance, energy, halves, partnerDisplayName } = stage.island;
       return {
         type: 'ready',
-        data: { appearance, energy, level: progress.level, ownHalfPercent: own.halfPercent, partnerHalfPercent: partner.halfPercent, waitingForPartner: false },
+        data: {
+          appearance,
+          energy,
+          level: halves.level,
+          ownHalfPercent: halves.own.halfPercent,
+          partnerHalfPercent: halves.partner.halfPercent,
+          waitingForPartner: halves.waitingForPartner,
+          partnerDisplayName,
+        },
       };
     }
     case 'laichkugel':

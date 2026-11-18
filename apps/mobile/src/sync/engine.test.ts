@@ -4,13 +4,14 @@
 import { randomUUID } from 'node:crypto';
 
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, ServerVersion, TimeZone } from '@abnehm/contracts/base';
 import type { TestWaterRecord, TestWaterUpsert } from '@abnehm/contracts/fixtures';
 import type { CanonicalChange, PullRequest, PullResponse, PushRequest, PushResponse, PushResult } from '@abnehm/contracts/sync';
 
-import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport, type TransportReply } from '.';
+import { createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type LocalCommand, type SyncTransport, type TransportReply } from '.';
 import type { LocalDatabase, TransactionContext } from '../local-db';
 import { createLocalDatabases } from '../local-db/local-databases';
 import { outbox, person, syncCursor } from '../local-db/schema';
@@ -76,7 +77,7 @@ function scriptedTransport(): ScriptedTransport {
 
 const applied = (operationId: string, canonical: CanonicalChange): PushResult => ({ type: 'applied', operationId: EntityId.parse(operationId), canonical });
 
-async function setup() {
+async function setup({ commands = [] }: { commands?: readonly LocalCommand[] } = {}) {
   const files = createBetterSqliteFiles();
   const errors: unknown[] = [];
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => errors.push(error) });
@@ -95,6 +96,7 @@ async function setup() {
     clock,
     installationId,
     onCanonicalChanges: (tx, changes) => hook(tx, changes),
+    commands: createLocalCommandRegistry({ database, writer, commands }),
   });
   const repository = testWaterRepository(writer, () => Instant.parse(clock.read().instant));
   return {
@@ -406,6 +408,60 @@ describe('Sync der App', () => {
     expect(outboxRows(database)).toEqual([expect.objectContaining({ entityId: id, payload: expect.objectContaining({ amountMl: 400 }) })]);
     const today = { type: 'tag', personId: PERSON, localDate: '2026-10-14' };
     expect(hookCalls[0]).toEqual([{ entityType: 'test_water_entry', entityId: id, type: 'reconciled', days: [today, today] }]);
+  });
+
+  it('übernimmt bei dauerhafter Ablehnung eines Fachbefehls den genannten kanonischen Datensatz nach der Reconciliation des Befehls (#134)', async () => {
+    const reconciled: string[] = [];
+    const command: LocalCommand = {
+      type: 'saveMealFavorite',
+      payload: z.record(z.string(), z.unknown()) as never,
+      referencePaths: [],
+      apply: () => [],
+      reconcileRejected: (_tx, operation) => {
+        reconciled.push(operation.businessKey);
+      },
+    };
+    const { database, repository, transport, engine, hookCalls, databases, files } = await setup({ commands: [command] });
+    const id = EntityId.parse(randomUUID());
+    database.transaction((tx) => testWaterEntity.applyCanonical(tx, { entityId: id, serverVersion: ServerVersion.parse('5'), data: recordData(250) }));
+    database.transaction((tx) => repository.saveTestCommand(tx, id, 'ersetzen:wirksam', water(300)));
+    transport.onPush = (request) => ({
+      type: 'ok',
+      body: { results: [{ type: 'permanently_rejected', operationId: request.operations[0]!.operationId,
+        error: { code: 'conflict', retryable: false }, canonical: record(id, 250, '5') }] },
+    });
+
+    await engine.sync();
+
+    expect(reconciled).toEqual(['ersetzen:wirksam']);
+    expect(database.read((tx) => repository.row(tx, id))).toMatchObject({ amountMl: 250, serverVersion: '5' });
+    expect(outboxRows(database)).toEqual([]);
+    const today = { type: 'tag', personId: PERSON, localDate: '2026-10-14' };
+    expect(hookCalls[0]).toEqual([{ entityType: 'test_water_entry', entityId: id, type: 'record', days: [today, today] }]);
+    databases.lock(); files.remove();
+  });
+
+  it('übernimmt den kanonischen Datensatz einer Befehlsablehnung nicht über eine jüngere offene Operation derselben Entität', async () => {
+    const command: LocalCommand = {
+      type: 'saveMealFavorite', payload: z.record(z.string(), z.unknown()) as never, referencePaths: [], apply: () => [], reconcileRejected: () => {},
+    };
+    const { database, repository, transport, engine, databases, files } = await setup({ commands: [command] });
+    const id = EntityId.parse(randomUUID());
+    database.transaction((tx) => testWaterEntity.applyCanonical(tx, { entityId: id, serverVersion: ServerVersion.parse('5'), data: recordData(250) }));
+    database.transaction((tx) => repository.saveTestCommand(tx, id, 'ersetzen:wirksam', water(300)));
+    let firstPush = true;
+    transport.onPush = (request) => {
+      if (!firstPush) return { type: 'unavailable' };
+      firstPush = false;
+      database.transaction((tx) => repository.save(tx, id, water(400)));
+      return { type: 'ok', body: { results: [{ type: 'permanently_rejected', operationId: request.operations[0]!.operationId,
+        error: { code: 'conflict', retryable: false }, canonical: record(id, 250, '5') }] } };
+    };
+
+    await engine.sync();
+
+    expect(database.read((tx) => repository.row(tx, id))).toMatchObject({ amountMl: 400 });
+    databases.lock(); files.remove();
   });
 
   it('entfernt eine abgelehnte Entität ohne kanonischen Zustand lokal', async () => {

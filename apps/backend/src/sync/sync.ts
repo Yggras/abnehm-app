@@ -216,7 +216,7 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
     } catch (error) {
       const code = error instanceof Rejection || error instanceof CommandRejection ? error.code : integrityViolation(error);
       if (code === null) throw error;
-      return rejected(operation, code, absent(operation));
+      return rejected(operation, code, error instanceof CommandRejection && error.canonical !== null ? error.canonical : absent(operation));
     }
   }
 

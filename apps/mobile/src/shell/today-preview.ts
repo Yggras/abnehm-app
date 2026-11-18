@@ -23,7 +23,7 @@ export function createTodayPreview(clock: Clock) {
     top_notice: { senderDisplayName: 'Anna', encouragementKey: 'stark_heute', action: intent('top_notice.open', { type: 'partner', focus: 'received_encouragement' }) },
     'momo.character': {
       appearance: { stage: 'geschluepft', formKey: 'huepfer', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } },
-      energy: 4, level: 6, ownHalfPercent: 100, partnerHalfPercent: 43, waitingForPartner: true,
+      energy: 4, level: 6, ownHalfPercent: 100, partnerHalfPercent: 43, waitingForPartner: true, partnerDisplayName: 'Anna',
       islandNotice: { newEvents: 1, claimableWishes: 0 },
     },
     'momo.daily_goals': goals,

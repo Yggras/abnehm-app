@@ -97,6 +97,20 @@ test('Wochenplan ohne Wiegetag: nur Gewicht und „Eintragen“, kein Wiegetag-S
   expect(enter()).toBeOnTheScreen();
 });
 
+test('ab drei Tagesgewichten: Trendwert mit der Unterzeile „Trend“ (#176)', async () => {
+  await renderToday({ weighings: [[80_000, '2026-10-11T05:30:00.000Z'], [81_000, '2026-10-12T05:30:00.000Z'], [79_000, '2026-10-13T05:30:00.000Z']] });
+
+  // 80 000 → 80 100 → 80 100 + 0,1 × (79 000 − 80 100) = 79 990
+  expect(screen.getByText('Trend')).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: 'Gewicht: 80,0 kg Trend, Heute ist Wiegetag. Details öffnen' })).toBeOnTheScreen();
+});
+
+test('unter drei Tagesgewichten ohne „Trend“', async () => {
+  await renderToday({ weighings: [[91_800, '2026-10-13T05:45:00.000Z']] });
+
+  expect(screen.queryByText('Trend')).not.toBeOnTheScreen();
+});
+
 test('ohne Messung: „Noch kein Gewicht“', async () => {
   await renderToday();
 

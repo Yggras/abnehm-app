@@ -6,11 +6,12 @@ import { goalVersionId, planVersionKey, weeklyPlanVersionId } from '@abnehm/cont
 
 import { goalVersion, person, projectionInvalidation, weeklyPlanDay, weeklyPlanVersion } from '../src/db/schema/index.ts';
 import { postgresPlanReader } from '../src/plan/plan-reader.ts';
-import { createTestBackend } from './support/app.ts';
+import { createTestBackend, type TestBackend } from './support/app.ts';
 import { call, defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession } from './support/authorization.ts';
 import { coupledWorld } from './support/coupled-world.ts';
 import { testSportProjector, testWaterProjector } from './support/partner-projectors.ts';
+import { insertDailyGoals } from './support/daily-goals.ts';
 import { goalVersionOp, planCommandScenarios, referenceGoal, standardDays, weeklyPlanOp } from './support/plan.ts';
 import { installationB, pullAll, push } from './support/sync.ts';
 
@@ -61,15 +62,56 @@ describe('createGoalVersion', () => {
     expect((await rows()).goals).toEqual([]);
   });
 
-  it('nimmt die Herkunft Budgetvorschlag nicht an; die entsteht nur mit acceptBudgetSuggestion', async () => {
-    const { backend, anna, rows } = await setup();
+  describe('Herkunft Budgetvorschlag (#134)', () => {
+    const suggested = { calorieBudgetMilliKcal: 1_765_000, budgetSource: 'budgetvorschlag' };
 
-    const [result] = await push(backend, anna.device, [
-      goalVersionOp(anna.personId, { payload: { calorieBudgetMilliKcal: 1_765_000, budgetSource: 'budgetvorschlag' } }),
-    ]);
+    /** Eine Zielversion aus einem angenommenen Vorschlag; anlegen wird sie `acceptBudgetSuggestion` (#151). */
+    async function acceptedSuggestion(backend: TestBackend, personId: EntityId, validFrom: string) {
+      const id = goalVersionId(personId, day(validFrom));
+      await backend.database.db.insert(goalVersion).values({ ...referenceGoal, ...suggested, budgetSource: 'budgetvorschlag', validFrom, id, personId,
+        createdAt: new Date('2026-10-14T12:00:00.000Z'), updatedAt: new Date('2026-10-14T12:00:00.000Z'), serverVersion: 1n });
+    }
 
-    expect(result).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' } });
-    expect((await rows()).goals).toEqual([]);
+    it('lehnt sie ohne vorige Fassung aus einem Budgetvorschlag ab; sonst umginge eine umbenannte Herkunft das 10-kcal-Raster', async () => {
+      const { backend, anna, rows } = await setup();
+
+      const [result] = await push(backend, anna.device, [goalVersionOp(anna.personId, { payload: suggested })]);
+
+      expect(result).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' } });
+      expect((await rows()).goals).toEqual([]);
+    });
+
+    it('nimmt sie an, wenn die vorige Fassung dasselbe Budget aus einem Budgetvorschlag trägt', async () => {
+      const { backend, anna, personId, rows } = await setup();
+      await acceptedSuggestion(backend, personId, '2026-10-14');
+
+      const [result] = await push(backend, anna.device, [goalVersionOp(anna.personId, { payload: { ...suggested, validFrom: '2026-10-15', waterTargetMl: 2_000 } })]);
+
+      expect(result).toMatchObject({ type: 'applied' });
+      expect((await rows()).goals).toContainEqual(expect.objectContaining({ validFrom: '2026-10-15', calorieBudgetMilliKcal: 1_765_000, budgetSource: 'budgetvorschlag' }));
+    });
+
+    it('nimmt sie beim Ersetzen der Fassung desselben Tags an, wenn diese dasselbe Budget aus einem Budgetvorschlag trägt', async () => {
+      const { backend, anna, personId } = await setup();
+      await acceptedSuggestion(backend, personId, '2026-10-15');
+
+      const [result] = await push(backend, anna.device, [goalVersionOp(anna.personId, { payload: { ...suggested, validFrom: '2026-10-15', waterTargetMl: 2_000 } })]);
+
+      expect(result).toMatchObject({ type: 'applied' });
+    });
+
+    it('lehnt ein anderes Budget und eine vorige Fassung ohne Budgetvorschlag ab', async () => {
+      const { backend, anna, personId } = await setup();
+      await acceptedSuggestion(backend, personId, '2026-10-14');
+      await push(backend, anna.device, [goalVersionOp(anna.personId, { payload: { validFrom: '2026-10-15' } })]);
+
+      const results = await push(backend, anna.device, [
+        goalVersionOp(anna.personId, { payload: { ...suggested, validFrom: '2026-10-15', calorieBudgetMilliKcal: 1_775_000 } }),
+        goalVersionOp(anna.personId, { payload: { ...suggested, validFrom: '2026-10-16' } }),
+      ]);
+
+      expect(codes(results)).toEqual(['invalid_payload', 'invalid_payload']);
+    });
   });
 
   it('lehnt einen Schlüssel ab, dessen valid_from nicht zur Nutzlast passt', async () => {
@@ -114,6 +156,66 @@ describe('createGoalVersion', () => {
       expect.objectContaining({ ownerPersonId: personId, area: null, fromDate: '2026-10-14' }),
       expect.objectContaining({ ownerPersonId: personId, area: null, fromDate: '2026-10-14' }),
     ]);
+  });
+});
+
+describe('Ersetzen wirksamer Fassungen (#134)', () => {
+  it('lehnt das Ersetzen einer Zielversion ab, sobald ein Tagesziel ab ihrem valid_from existiert, und nennt die kanonische Fassung', async () => {
+    const { backend, anna, personId, rows } = await setup();
+    const [created] = await push(backend, anna.device, [goalVersionOp(anna.personId)]);
+    await insertDailyGoals(backend, anna.personId, '2026-10-16');
+
+    const [result] = await push(backend, anna.device, [goalVersionOp(anna.personId, { payload: { waterTargetMl: 2_000 } })]);
+
+    const canonical = created!.type === 'applied' ? created!.changes![0] : undefined;
+    expect(result).toEqual({
+      type: 'permanently_rejected',
+      operationId: expect.any(String),
+      error: { code: 'conflict', retryable: false },
+      canonical: { ...canonical, entityId: goalVersionId(personId, day('2026-10-14')) },
+    });
+    expect((await rows()).goals).toEqual([expect.objectContaining({ waterTargetMl: 1_500 })]);
+  });
+
+  it('lehnt das Ersetzen einer wirksamen Wochenplanversion ab und lässt ihre Tage stehen', async () => {
+    const { backend, anna, rows } = await setup();
+    await push(backend, anna.device, [weeklyPlanOp(anna.personId)]);
+    await insertDailyGoals(backend, anna.personId, '2026-10-14');
+
+    const [result] = await push(backend, anna.device, [weeklyPlanOp(anna.personId, { days: { ...standardDays, mittwoch: ['gewogen', 'wasserziel', 'sporteinheit'] } })]);
+
+    expect(result).toMatchObject({
+      type: 'permanently_rejected',
+      error: { code: 'conflict' },
+      canonical: { type: 'record', entityType: 'weekly_plan_version', data: { days: standardDays } },
+    });
+    expect((await rows()).days.find((row) => row.weekday === 'mittwoch')).toMatchObject({ baustein1: 'ernaehrung_erfasst' });
+  });
+
+  it('nimmt das Ersetzen an, solange nur Tagesziele vor valid_from oder anderer Personen existieren', async () => {
+    const { backend, anna, rows } = await setup();
+    const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
+    const tomorrow = { validFrom: '2026-10-15' };
+    await push(backend, anna.device, [goalVersionOp(anna.personId, { payload: tomorrow }), weeklyPlanOp(anna.personId, tomorrow)]);
+    await insertDailyGoals(backend, anna.personId, '2026-10-14');
+    await insertDailyGoals(backend, philipp.personId, '2026-10-15');
+
+    const results = await push(backend, anna.device, [
+      goalVersionOp(anna.personId, { payload: { ...tomorrow, waterTargetMl: 2_000 } }),
+      weeklyPlanOp(anna.personId, { ...tomorrow, days: { ...standardDays, mittwoch: ['gewogen', 'wasserziel', 'sporteinheit'] } }),
+    ]);
+
+    expect(codes(results)).toEqual(['applied', 'applied']);
+    const { goals, days } = await rows();
+    expect(goals).toEqual([expect.objectContaining({ validFrom: '2026-10-15', waterTargetMl: 2_000 })]);
+    expect(days.find((row) => row.weekday === 'mittwoch')).toMatchObject({ baustein1: 'gewogen' });
+  });
+
+  it('legt eine neue Fassung auch dann an, wenn schon Tagesziele ab ihrem valid_from existieren; abgelehnt wird nur das Ersetzen', async () => {
+    const { backend, anna } = await setup();
+    await insertDailyGoals(backend, anna.personId, '2026-10-14');
+
+    expect(codes(await push(backend, anna.device, [goalVersionOp(anna.personId), weeklyPlanOp(anna.personId)]))).toEqual(['applied', 'applied']);
   });
 });
 

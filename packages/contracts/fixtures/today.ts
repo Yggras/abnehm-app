@@ -29,6 +29,7 @@ const character = {
   ownHalfPercent: 100,
   partnerHalfPercent: 43,
   waitingForPartner: true,
+  partnerDisplayName: 'Anna',
   islandNotice: { newEvents: 1, claimableWishes: 0 },
 } as const;
 
@@ -135,6 +136,7 @@ export const todayFixtures = {
       'negative Energie': { ...character, energy: -2 },
       'wartet mit halber Hälfte': { ...character, ownHalfPercent: 50 },
       'Energie des Partners': { ...character, partnerEnergy: 12 },
+      'ohne Partnername': without(character, 'partnerDisplayName'),
     },
   }),
   MomoCharacterEmptyReason: fixtures(MomoCharacterEmptyReason, {

@@ -19,7 +19,12 @@ export function appendBooking(tx: TransactionContext, booking: EnergyBooking): v
 
 /** Energiebestand und Beitrag zur eigenen Levelhälfte. Den angezeigten Bestand liefert `shownEnergy`. */
 export function readEnergy(tx: ReadContext, personId: EntityId): { balance: number; levelHalf: number } {
-  return summarizeEnergy(sqliteOf(tx).select().from(energyBooking).where(eq(energyBooking.personId, personId)).all().map(bookingOf));
+  return summarizeEnergy(bookingsOf(tx, personId));
+}
+
+/** Alle Buchungen einer Person, etwa für die verbaute Energie je Insel (`spentOnIsland`). */
+export function bookingsOf(tx: ReadContext, personId: EntityId): EnergyBooking[] {
+  return sqliteOf(tx).select().from(energyBooking).where(eq(energyBooking.personId, personId)).all().map(bookingOf);
 }
 
 /**
