@@ -1,0 +1,95 @@
+# Gerätelauf Anfeuern mit Zähler (Spezifikation 5, Abschnitt 4; #123): Seed „gekoppelt“ öffnet über den
+# Seed-Deep-Link direkt das Sheet `partner.encourage`. Philipp hat Anna dort heute schon dreimal angefeuert
+# (`packages/contracts/seeds/gekoppelt.ts`, Teil `anfeuerungen`); unter den fünf Botschaften steht deshalb
+# „Weitere Anfeuerungen sieht Anna in der App, ohne Push.“ Ein Tipp sendet ohne Rückfrage, das Sheet
+# schließt, und der Meldungs-Host bestätigt. Danach dasselbe ohne Netz über die Partner-Karte auf „Heute“:
+# Die Meldung sagt, dass die Anfeuerung beim nächsten Sync rausgeht.
+#
+# Transport: Android schaltet den Flugmodus, iOS-Simulatoren haben keinen; dort ersetzt ihn der
+# Transport-Fehlermodus des E2E-Builds (`fehler?transport=offline`, wie in `sync-offline.yaml`). Den
+# Zählerverlauf 3 → 2 → 1 belegen die Komponententests (`src/partner/EncourageScreen.test.tsx`). Die
+# Bildschirmfotos sind die Vorlage der Impeccable-Kritik. Einzeln mit `scripts/e2e-run --ablauf anfeuern`.
+appId: ${APP_ID}
+name: Anfeuern mit Zähler
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&ziel=/partner/encourage
+
+# Sheet nach drei Anfeuerungen ---------------------------------------------------------------------
+- extendedWaitUntil:
+    visible: "Anna anfeuern"
+    timeout: 30000
+- assertVisible: "Du schaffst das!.*"
+- assertVisible: "Ich denk an dich.*"
+- assertVisible: "Stark heute!.*"
+- assertVisible: "Gemeinsam für Momo.*"
+- assertVisible: "Bin stolz auf dich.*"
+- assertVisible: "Weitere Anfeuerungen sieht Anna in der App, ohne Push."
+- takeScreenshot: anfeuern-1-sheet
+
+# Ein Tipp sendet ---------------------------------------------------------------------------------
+- tapOn: "Stark heute!.*"
+- extendedWaitUntil:
+    visible: "Anfeuerung an Anna gesendet"
+    timeout: 10000
+- assertNotVisible: "Anna anfeuern"
+- takeScreenshot: anfeuern-2-gesendet
+
+# Ohne Netz über die Partner-Karte auf „Heute“ -----------------------------------------------------
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: enabled
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: fehler?transport=offline
+      - extendedWaitUntil:
+          visible: ".*Transport-Fehlermodus: kein Netz.*"
+          timeout: 10000
+- tapOn:
+    id: tab-today
+- scrollUntilVisible:
+    element:
+      text: "Anfeuern"
+    direction: DOWN
+- tapOn: "Anfeuern"
+- extendedWaitUntil:
+    visible: "Anna anfeuern"
+    timeout: 10000
+- assertVisible: "Weitere Anfeuerungen sieht Anna in der App, ohne Push."
+- tapOn: "Ich denk an dich.*"
+- extendedWaitUntil:
+    visible: "Wird gesendet, sobald du online bist"
+    timeout: 10000
+- takeScreenshot: anfeuern-3-offline
+
+# Netz zurück ---------------------------------------------------------------------------------------
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: fehler

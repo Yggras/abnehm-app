@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Instant } from '../src/base.ts';
 import { encouragementMessages, notificationTexts } from '../src/notification-texts.ts';
 import {
   EncouragementKey,
@@ -11,8 +12,8 @@ import {
 
 // Nachweis für #123: Katalog, Pushberechtigung und Zähler des Anfeuerns (Spezifikation 5, Abschnitt 4).
 
-const createdAt = '2026-10-14T12:00:00.000Z';
-const hours = (n: number) => new Date(Date.parse(createdAt) + n * 3_600_000).toISOString();
+const createdAt = Instant.parse('2026-10-14T12:00:00.000Z');
+const hours = (n: number) => Instant.parse(new Date(Date.parse(createdAt) + n * 3_600_000).toISOString());
 
 describe('Anfeuern-Katalog', () => {
   it('enthält genau die fünf Botschaften aus Abschnitt 4 im gemeinsamen Textkatalog', () => {
@@ -45,9 +46,9 @@ describe('Pushberechtigung', () => {
   });
 
   it('nur bei Eingang spätestens 24 Stunden nach createdAt', () => {
-    const decide = (receivedAt: string) => encouragementPushStatus({ earlierToday: 0, createdAt, receivedAt });
+    const decide = (receivedAt: Instant) => encouragementPushStatus({ earlierToday: 0, createdAt, receivedAt });
     expect(decide(hours(24))).toBe('ausstehend');
-    expect(decide(new Date(Date.parse(hours(24)) + 1).toISOString())).toBe('ohne_push');
+    expect(decide(Instant.parse(new Date(Date.parse(hours(24)) + 1).toISOString()))).toBe('ohne_push');
     // Eine vorgehende Geräteuhr verhindert den Push nicht.
     expect(decide(hours(-1))).toBe('ausstehend');
   });
