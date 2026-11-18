@@ -22,9 +22,14 @@ const parsedAppConfig = ts.getParsedCommandLineOfConfigFile(path.join(repoRoot, 
 if (parsedAppConfig === undefined) throw new Error('tsconfig der App nicht lesbar');
 const appConfig = parsedAppConfig;
 
+// Nur der RPC-Client der App samt seinen Importen (darunter der Typ der Backend-Routen) und die
+// globalen Deklarationen aus dem tsconfig der App. Die ganze App dreimal zu typprüfen sprengte mit
+// wachsender App das Heap-Limit der CI-Worker; der Nachweis betrifft nur diese Datei.
+const appRootNames = [...appConfig.fileNames.filter((fileName) => fileName.endsWith('.d.ts')), appStatus];
+
 let previousProgram: ts.Program | undefined;
 
-/** Typprüfung der App, wobei `apps/backend/src/status.ts` den angegebenen Inhalt hat. */
+/** Typprüfung des RPC-Clients der App, wobei `apps/backend/src/status.ts` den angegebenen Inhalt hat. */
 function appDiagnosticsWithBackendStatus(source: string): readonly ts.Diagnostic[] {
   const host = ts.createCompilerHost(appConfig.options);
   const readSourceFile = host.getSourceFile.bind(host);
@@ -33,7 +38,7 @@ function appDiagnosticsWithBackendStatus(source: string): readonly ts.Diagnostic
       ? ts.createSourceFile(fileName, source, languageVersion, true)
       : readSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
   const program = ts.createProgram({
-    rootNames: appConfig.fileNames,
+    rootNames: appRootNames,
     options: appConfig.options,
     host,
     oldProgram: previousProgram,
