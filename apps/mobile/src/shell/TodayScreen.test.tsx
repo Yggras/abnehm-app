@@ -34,6 +34,12 @@ test('komponiert feste Reihenfolge mit Ernährung, drei Zielen und Mini-Trackern
   expect(screen.getByRole('progressbar', { name: 'Wasser heute' })).toHaveAccessibilityValue({ min: 0, max: 1500, now: 750, text: '0,8 l von 1,5 l' });
 });
 
+test('ist die eigene Hälfte voll, wartet Momo neutral auf den Partner mit Namen (#191)', async () => {
+  // Das erste Fixture von MomoCharacterReady: eigene Hälfte voll, Partnerin Anna.
+  await render(<ClockProvider clock={clock}><MessageHostProvider><TodayContent registry={registryWithFixtures()} /></MessageHostProvider></ClockProvider>);
+  expect(screen.getByText('Deine Hälfte ist voll – Momo wartet auf Anna')).toBeOnTheScreen();
+});
+
 test('fehlender Pflichtbeitrag hat im Development einen sichtbaren Platzhalter', async () => {
   await render(<ClockProvider clock={clock}><MessageHostProvider><TodayContent registry={createTodayRegistry()} /></MessageHostProvider></ClockProvider>);
   expect(screen.getByText(/Beitrag für Kalorienbudget fehlt/)).toBeOnTheScreen();

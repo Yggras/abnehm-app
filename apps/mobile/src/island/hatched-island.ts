@@ -1,20 +1,34 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { IslandRole, MomoAppearance, type IslandProgress } from '@abnehm/contracts/island';
 import { SharedEventType } from '@abnehm/contracts/wir';
+import { indexCatalog, type ArtKey } from '@abnehm/game-rules/catalog';
+import { gameCatalog } from '@abnehm/game-rules/content';
 import type { IslandFieldOwner } from '@abnehm/game-rules/hatching';
+import { spentOnIsland } from '@abnehm/game-rules/progress';
 import { formAt } from '@abnehm/game-rules/unlocks';
 
+import { bookingsOf } from '../energy';
 import type { ReadContext } from '../local-db';
-import { areaUnlock, couplingMember, island, islandEvent, islandField, islandProgress } from '../local-db/schema';
+import { areaUnlock, communityProject, couplingMember, island, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
+import { halvesFor, type IslandHalves } from './halves';
 import { islandProgressOf } from './island-entities';
 
-// Die geschlüpfte Insel aus den lokalen Daten (Spezifikation 4, Abschnitte 2.1, 6 und 7; #184): Rollen,
-// Felder mit Besitzer, freigeschaltete Gebiete, Inselfortschritt, Momo und die gemeinsamen Ereignisse für
-// „Wir“. Alles kommt per Pull vom Server; solange ein Teil fehlt, etwa zwischen zwei Seiten desselben
-// Pulls, ist die Insel noch nicht lesbar.
+// Die geschlüpfte Insel aus den lokalen Daten (Spezifikation 4, Abschnitte 2.1, 6, 7 und 11; #184, #191):
+// Rollen, Felder mit Besitzer, Objekte auf den Feldern, freigeschaltete Gebiete, Inselfortschritt samt
+// Levelbalken, Momo und die gemeinsamen Ereignisse für „Wir“. Fast alles kommt per Pull vom Server; nur
+// eigene Bauten und damit die eigene Hälfte sind lokal sofort wirksam. Solange ein Teil fehlt, etwa
+// zwischen zwei Seiten desselben Pulls, ist die Insel noch nicht lesbar.
+
+const catalog = indexCatalog(gameCatalog);
+
+/**
+ * Ein Objekt auf seinem Feld mit der Grafik seiner Stufe, in der Form, die das Szenenmodell zeichnet
+ * (`SceneObject`). Das Lesemodell importiert das Szenenmodell nicht, weil es Design-Tokens zieht.
+ */
+export type PlacedObject = Readonly<{ id: string; fieldKey: string; art: ArtKey; ownerPersonId: string }>;
 
 /** Ein gemeinsames Ereignis für „Neu bei euch“, etwa „Momo ist geschlüpft“. */
 export type SharedIslandEvent = Readonly<{ eventId: EntityId; type: SharedEventType; occurredAt: Instant }>;
@@ -28,7 +42,11 @@ export type HatchedIsland = Readonly<{
   /** Angezeigte eigene Energie, mindestens 0. */
   energy: number;
   progress: IslandProgress;
+  /** Levelbalken: Level und Partner aus der Projektion, die eigene Hälfte aus den eigenen Buchungen. */
+  halves: IslandHalves;
   fields: readonly IslandFieldOwner[];
+  /** Objekte auf Feldern; was im Lager liegt, steht nicht auf der Insel. */
+  objects: readonly PlacedObject[];
   unlockedAreas: readonly string[];
   appearance: MomoAppearance;
   sharedEvents: readonly SharedIslandEvent[];
@@ -54,6 +72,11 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
   if (found === undefined || progressRow == null || own?.role == null || partner === undefined) return null;
   const islandId = EntityId.parse(found.id);
   const progress = islandProgressOf(progressRow);
+  // Verbaute Energie dieser Insel: alle ihre Objekte und Projekte, auch eingelagerte Objekte.
+  const holdings = {
+    objectIds: new Set(db.select({ id: islandObject.id }).from(islandObject).where(eq(islandObject.islandId, islandId)).all().map((row) => row.id)),
+    projectIds: new Set(db.select({ id: communityProject.id }).from(communityProject).where(eq(communityProject.islandId, islandId)).all().map((row) => row.id)),
+  };
 
   return {
     islandId,
@@ -63,12 +86,21 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
     ownRole: IslandRole.parse(own.role),
     energy,
     progress,
+    halves: halvesFor(progress, personId, spentOnIsland(bookingsOf(tx, personId), holdings)),
     fields: db
       .select({ key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId })
       .from(islandField)
       .where(eq(islandField.islandId, islandId))
       .orderBy(asc(islandField.fieldKey))
       .all(),
+    objects: db
+      .select({ id: islandObject.id, fieldKey: islandField.fieldKey, catalogKey: islandObject.catalogKey, level: islandObject.level, ownerPersonId: islandObject.ownerPersonId })
+      .from(islandObject)
+      .innerJoin(islandField, eq(islandField.id, islandObject.fieldId))
+      .where(and(eq(islandObject.islandId, islandId), isNotNull(islandObject.fieldId), isNull(islandObject.deletedAt)))
+      .orderBy(asc(islandField.fieldKey))
+      .all()
+      .map(({ id, fieldKey, catalogKey, level, ownerPersonId }) => ({ id, fieldKey, art: artOf(catalogKey, level), ownerPersonId })),
     unlockedAreas: db
       .select({ key: areaUnlock.areaKey })
       .from(areaUnlock)
@@ -85,4 +117,12 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .all()
       .map((row) => ({ eventId: EntityId.parse(row.eventId), type: SharedEventType.parse(row.type), occurredAt: Instant.parse(row.occurredAt) })),
   };
+}
+
+/** Grafik eines Objekts: die Stufe eines Bauplans oder die Deko; einen unbekannten Schlüssel zeichnet die Insel neutral. */
+function artOf(catalogKey: string, level: number): string {
+  const blueprint = catalog.find('bauplan', catalogKey);
+  if (blueprint.type === 'found') return blueprint.entry.art[level - 1] ?? catalogKey;
+  const deko = catalog.find('deko', catalogKey);
+  return deko.type === 'found' ? deko.entry.art : catalogKey;
 }

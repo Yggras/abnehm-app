@@ -5,6 +5,7 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { hatching } from '@abnehm/game-rules/hatching';
 import { islandProgress } from '@abnehm/game-rules/progress';
 
+import { halvesFor } from '../halves';
 import type { IslandViewProps } from '../IslandView';
 import { islandLayout } from '../layout';
 
@@ -60,7 +61,7 @@ export function richIsland(): RichIsland {
       objects: placed.map(([fieldKey, art, ownerPersonId], index) => ({ id: fixtureId(index + 1), fieldKey, art, ownerPersonId })),
       momo: MomoAppearance.parse({ stage: 'geschluepft', formKey: 'huepfer', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } }),
     },
-    progress: IslandProgress.parse({
+    halves: halvesFor(IslandProgress.parse({
       islandId: seedIds.island.philippAnna,
       couplingId: seedIds.coupling.philippAnna,
       level,
@@ -72,7 +73,7 @@ export function richIsland(): RichIsland {
       activeProject: { projectId: fixtureId(100), templateKey: gameCatalog.projects[0]!.key, sequenceNumber: 1, stage: 'gut_unterwegs' },
       dataAsOf: seedClock.instant,
       serverVersion: '1',
-    }),
+    }), philipp, spent[0]),
     viewerPersonId: philipp,
     partnerName: 'Anna',
     energy: 23,

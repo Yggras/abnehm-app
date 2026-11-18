@@ -13,7 +13,7 @@ import { createTestBackend, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { httpOutcome, personWithSession, resourceProbe, type AuthorizationScenario } from './authorization.ts';
 import { coupleByInvitation, worldStart, worldToday, type WorldPerson } from './coupled-world.ts';
-import { bonusOp, completeOp, insertDailyGoals } from './daily-goals.ts';
+import { bonusOp, completeOp, insertDailyGoals, type ServerDailyGoal } from './daily-goals.ts';
 import { decideOp, requestOp, uncoupleAs } from './shared-actions.ts';
 import { push, pushOutcome } from './sync.ts';
 
@@ -67,9 +67,19 @@ export async function builtWorld() {
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   const island = await hatch(backend, anna, philipp);
-  const goals = await insertDailyGoals(backend, philipp.personId, worldToday);
-  await push(backend, philipp.device, [...goals.map((goal) => completeOp(goal)), bonusOp(philipp.personId, worldToday)]);
+  await earnEnergy(backend, philipp, [worldToday]);
   return { backend, anna, philipp, actor: philipp.device, ...island };
+}
+
+/** Energie aus Tageszielen: je Tag drei Erfüllungen samt Bonus, also 4 Energie je Tag. Liefert die Tagesziele. */
+export async function earnEnergy(backend: TestBackend, person: WorldPerson, localDates: readonly string[]): Promise<ServerDailyGoal[]> {
+  const all: ServerDailyGoal[] = [];
+  for (const localDate of localDates) {
+    const goals = await insertDailyGoals(backend, person.personId, localDate);
+    await push(backend, person.device, [...goals.map((goal) => completeOp(goal)), bonusOp(person.personId, localDate)]);
+    all.push(...goals);
+  }
+  return all;
 }
 
 /** Ein zweites Paar mit eigener geschlüpfter Insel im selben Backend, etwa als Ziel manipulierter IDs. */
@@ -86,7 +96,7 @@ export type BuildWorld = Awaited<ReturnType<typeof builtWorld>>;
  * `0001_immutable_entities`); nur dieser Test umgeht die Trigger, um einen bekannten, aber nicht
  * freigeschalteten Bauplan herzustellen. Der ausgelieferte Katalog kennt bisher nur Start-Baupläne.
  */
-export async function lockBlueprint(world: BuildWorld, catalogKey: string) {
+export async function lockBlueprint(world: Readonly<{ backend: TestBackend; islandId: string }>, catalogKey: string) {
   await world.backend.database.db.transaction(async (tx) => {
     await tx.execute(sql`set local session_replication_role = replica`);
     await tx.delete(blueprintUnlock).where(and(eq(blueprintUnlock.islandId, world.islandId), eq(blueprintUnlock.catalogKey, catalogKey)));

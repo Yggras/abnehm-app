@@ -14,6 +14,7 @@ import { createHealthImport, unavailableHealthPlatform } from '../health';
 import { appHealthImport } from '../health/app-health';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
+import { buildObjectCommand } from '../island/build-object';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
@@ -134,7 +135,7 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, confirmPhotoDraftCommand({ persistence })] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, buildObjectCommand, confirmPhotoDraftCommand({ persistence })] }),
       });
       activeEngine = engine;
       void dispatcher.deliver();

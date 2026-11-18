@@ -8,6 +8,7 @@ import type { PartnerSharingLevel } from '@abnehm/contracts/coupling';
 import { canonicalRows, uncouplingRequestOf, withoutDerivedColumns, type SeedKey, type SeedManifest, type SeedState, type SeedStep } from '@abnehm/contracts/seeds';
 import { InstallationId, PushResult, type OutboxOperation } from '@abnehm/contracts/sync';
 
+import { buildObjectCommand } from '../../../mobile/src/island/build-object.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
 import { createDailyGoalPersistence, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
@@ -125,7 +126,7 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
     clock,
     installationId: InstallationId.parse(installation.installationId),
     onCanonicalChanges: persistence.onCanonicalChanges,
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, confirmPhotoDraftCommand({ persistence })] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, buildObjectCommand, confirmPhotoDraftCommand({ persistence })] }),
   });
   return {
     device,
