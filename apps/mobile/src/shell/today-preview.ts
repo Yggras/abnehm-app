@@ -8,14 +8,19 @@ export function createTodayPreview(clock: Clock) {
   const registry = createTodayRegistry();
   const sampleDay = clock.read().localDate;
   const intent = (actionId: string, target: object) => ({ actionId, target });
-  const goal = (slot: number, currentState: string, progress: object, messageKey: string, target: object) => ({
-    slot, evaluation: { type: 'evaluated', currentState, dayClosed: false, progress, completion: { type: 'nie' }, messageKey, values: {} },
-    action: intent('tagesziel.open_area', target),
-  });
+  // Wie die Evaluatoren: `messageKey` `tagesziel.<baustein>.<zustand>`, Werte sind die Fortschrittsfelder.
+  const goal = (slot: number, currentState: string, progress: { type: string } & Record<string, number | string>, target: object, completion: object = { type: 'nie' }) => {
+    const { type, ...values } = progress;
+    return {
+      slot, evaluation: { type: 'evaluated', currentState, dayClosed: false, progress, completion, messageKey: `tagesziel.${type}.${currentState}`, values },
+      action: intent('tagesziel.open_area', target),
+    };
+  };
   const goals = [
-    goal(1, 'teilweise', { type: 'ernaehrung_erfasst', recordedMealCategories: 1, minimumMealCategories: 2 }, 'tagesziel.ernaehrung.teilweise', { type: 'log' }),
-    goal(2, 'teilweise', { type: 'wasserziel', countedMl: 750, targetMl: 1500 }, 'tagesziel.wasserziel.teilweise', { type: 'capture.water' }),
-    goal(3, 'offen', { type: 'sporteinheit', longestSessionMinutes: 0, minimumSingleSessionMinutes: 30 }, 'tagesziel.sporteinheit.offen', { type: 'capture.sport' }),
+    goal(1, 'erfuellt', { type: 'ernaehrung_erfasst', recordedMealCategories: 2, minimumMealCategories: 2 }, { type: 'log' },
+      { type: 'festgehalten', firstCompletedAt: clock.read().instant }),
+    goal(2, 'teilweise', { type: 'wasserziel', countedMl: 750, targetMl: 1500 }, { type: 'capture.water' }),
+    goal(3, 'tagesende', { type: 'im_kalorienbudget', intakeKcal: 840, budgetKcal: 1620, lowerBoundKcal: 1200 }, { type: 'log' }),
   ];
   const quick = { type: 'command', commandKey: 'water.quick_add', params: { ml: 250 } };
   const data: Record<TodaySlot, unknown> = {

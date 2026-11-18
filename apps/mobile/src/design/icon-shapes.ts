@@ -65,6 +65,15 @@ export const iconShapes = {
   ],
   /** Erfüllt */
   check: [{ type: 'path', d: 'M5.5 12.5l4.2 4.2 8.8-9.2' }],
+  /** Teilweise: Teilring (Tagesziel, Design-System „Bedeutung nie nur über Farbe“) */
+  ringPartial: [{ type: 'path', d: 'M12 3.5A8.5 8.5 0 1 1 3.5 12' }],
+  /** Offen: gestrichelter Kreis (Tagesziel) */
+  circleDashed: [
+    {
+      type: 'path',
+      d: 'M13.11 3.57A8.5 8.5 0 0 1 17.17 5.26M18.74 6.83A8.5 8.5 0 0 1 20.43 10.89M20.43 13.11A8.5 8.5 0 0 1 18.74 17.17M17.17 18.74A8.5 8.5 0 0 1 13.11 20.43M10.89 20.43A8.5 8.5 0 0 1 6.83 18.74M5.26 17.17A8.5 8.5 0 0 1 3.57 13.11M3.57 10.89A8.5 8.5 0 0 1 5.26 6.83M6.83 5.26A8.5 8.5 0 0 1 10.89 3.57',
+    },
+  ],
   /** Anfeuern */
   heart: [{ type: 'path', d: 'M12 19.5s-7.2-4.4-7.2-9.6A4 4 0 0 1 12 7.6a4 4 0 0 1 7.2 2.3c0 5.2-7.2 9.6-7.2 9.6z' }],
   /** Bauen */

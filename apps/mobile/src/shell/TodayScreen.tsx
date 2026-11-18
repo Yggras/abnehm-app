@@ -2,6 +2,7 @@ import { localDateAfter, weekdayOf, type Instant, type LocalDate } from '@abnehm
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { UiActionIntent } from '@abnehm/contracts/routes';
 import type { EncouragementKey } from '@abnehm/contracts/partner';
+import type { DailyGoalState } from '@abnehm/contracts/daily-goals';
 import type {
   HeaderReady, MomoCharacterReady, MomoDailyGoalsReady, NutritionBudgetReady, NutritionLogReady,
   MomoCharacterEmptyReason, PartnerCardReady, TopNoticeReady, TrackerEmptyReason, TrackerSportReady, TrackerWaterReady,
@@ -11,12 +12,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
-import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
+import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, Notice, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton, type IconName, type IconTone } from '../design';
 import { openTarget } from '../navigation';
 import { dataAgeOf, partnerHeadline, partnerTexts, standText } from '../partner';
 import { PartnerAvatar } from '../partner/PartnerAvatar';
 import { PartnerStage } from '../partner/PartnerStage';
 import { isTestArtifact } from '../test-artifact';
+import { dailyGoalText } from './daily-goal-texts';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
 import { thousandthsWithOneDecimal, waitingForPartnerText } from './texts';
@@ -33,6 +35,8 @@ const names: Record<TodaySlot, string> = {
   'nutrition.budget': 'Kalorienbudget', 'nutrition.log': 'Ernährung', 'trackers.water': 'Wasser',
   'trackers.sport': 'Sport', 'trackers.weight': 'Gewicht', partner: 'Partner',
 };
+/** Beiträge mit Namen in der Mehrzahl, für „… laden“ bzw. „… sind gerade nicht verfügbar“. */
+const pluralNames: ReadonlySet<TodaySlot> = new Set(['momo.daily_goals']);
 function action(intent: UiActionIntent) { openTarget(intent.target); }
 /** Texte der festgelegten Leer-Gründe; ein anderer Grund zeigt den allgemeinen Satz. */
 const emptyTexts: Readonly<Record<MomoCharacterEmptyReason | TrackerEmptyReason | 'noch_keine_eintraege', string>> = {
@@ -50,38 +54,49 @@ function staleLabel(dataAsOf: Instant): string {
   return `Stand: ${date!.split('-').reverse().join('.')} · ${time!.slice(0, 5)} UTC`;
 }
 
-/** Jeder Steckplatz beobachtet ausschließlich seine Quelle; auch ungültige neue Daten fallen am Vertragsrand auf. */
-function useContribution<K extends TodaySlot>(registry: TodayRegistry, key: K): TodayState<K> | null {
+/**
+ * Jeder Steckplatz beobachtet ausschließlich seine Quelle; auch ungültige neue Daten fallen am Vertragsrand auf.
+ * `retry` meldet den Steckplatz neu an, sodass seine Quelle neu liest.
+ */
+function useContribution<K extends TodaySlot>(registry: TodayRegistry, key: K): readonly [TodayState<K> | null, () => void] {
   const [snapshot, setSnapshot] = useState<{ registry: TodayRegistry; value: TodayState<K> } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   // Im Release ist eine fehlende Quelle ein Integrationsfehler, nicht ein dauerhaftes Lade-Skelett.
   if (!isTestArtifact()) registry.read(key);
   useEffect(() => {
     try { return registry.subscribe(key, (value) => setSnapshot({ registry, value })); }
     catch (error) { if (!(error instanceof MissingTodayContributionError) || !isTestArtifact()) throw error; }
-  }, [registry, key]);
-  return snapshot?.registry === registry ? snapshot.value : null;
+  }, [registry, key, attempt]);
+  return [snapshot?.registry === registry ? snapshot.value : null, () => setAttempt((count) => count + 1)] as const;
 }
 
 function State<K extends TodaySlot>({ registry, slot, children }: {
   registry: TodayRegistry; slot: K; children: (data: Data<TodayState<K>>) => ReactNode;
 }) {
-  const state = useContribution(registry, slot);
-  return <StateView state={state} slot={slot}>{children}</StateView>;
+  const [state, retry] = useContribution(registry, slot);
+  return <StateView state={state} slot={slot} retry={retry}>{children}</StateView>;
 }
 
-function StateView<K extends TodaySlot>({ state, slot, children }: {
-  state: TodayState<K> | null; slot: K; children: (data: Data<TodayState<K>>) => ReactNode;
+/** „Erneut versuchen“: Führt die Aktion zurück auf „Heute“, liest der Steckplatz neu, sonst öffnet sie ihr Ziel. */
+function retryWith(intent: UiActionIntent, retry?: () => void) {
+  if (intent.target.type === 'today' && retry) retry();
+  else action(intent);
+}
+
+function StateView<K extends TodaySlot>({ state, slot, retry, children }: {
+  state: TodayState<K> | null; slot: K; retry?: () => void; children: (data: Data<TodayState<K>>) => ReactNode;
 }) {
+  const plural = pluralNames.has(slot);
   if (!state) return <Text tone="inkMuted">{isTestArtifact() ? `Beitrag für ${names[slot]} fehlt` : 'Lädt …'}</Text>;
   switch (state.type) {
-    case 'loading': return <View style={styles.group}><Text tone="inkMuted">{names[slot]} lädt …</Text><Skeleton width="100%" height={48} /></View>;
+    case 'loading': return <View style={styles.group}><Text tone="inkMuted">{names[slot]} {plural ? 'laden' : 'lädt'} …</Text><Skeleton width="100%" height={48} /></View>;
     case 'ready': return <>{children(state.data as Data<TodayState<K>>)}</>;
     case 'stale': return <View style={styles.group}><Text tone="inkMuted">{staleLabel(state.dataAsOf)}</Text>{children(state.data as Data<TodayState<K>>)}</View>;
     case 'empty': return <View style={styles.group}>
       <Text>{emptyTextOf(state.reasonKey)}</Text>
       {state.action ? <Button variant="secondary" label="Jetzt öffnen" onPress={() => action(state.action!)} /> : null}
     </View>;
-    case 'error': return <View style={styles.group}><Text>{names[slot]} ist gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => action(state.retryAction!)} /> : null}</View>;
+    case 'error': return <View style={styles.group}><Text>{names[slot]} {plural ? 'sind' : 'ist'} gerade nicht verfügbar. {state.retryAction ? 'Versuch es erneut.' : 'Versuch es später noch einmal.'}</Text>{state.retryAction ? <Button label="Erneut versuchen" variant="secondary" onPress={() => retryWith(state.retryAction!, retry)} /> : null}</View>;
   }
 }
 
@@ -100,15 +115,17 @@ function Header({ data }: { data: HeaderReady }) {
   </View>;
 }
 
-const goalNames = {
-  ernaehrung_erfasst: 'Ernährung erfasst', im_kalorienbudget: 'Im Kalorienbudget',
-  wasserziel: 'Wasserziel', sporteinheit: 'Sporteinheit', gewogen: 'Gewogen',
-} as const;
-const goalStatus = { offen: 'Noch offen', teilweise: 'Unterwegs', erfuellt: 'Erreicht', tagesende: 'Am Tagesende' } as const;
+/** Symbol je Zustand (Design-System, „Bedeutung nie nur über Farbe“); der Text nennt den Zustand immer mit. */
+const goalSymbols: Readonly<Record<DailyGoalState, { icon: IconName; tone: IconTone }>> = {
+  erfuellt: { icon: 'check', tone: 'success' },
+  teilweise: { icon: 'ringPartial', tone: 'neutral' },
+  offen: { icon: 'circleDashed', tone: 'neutral' },
+  tagesende: { icon: 'moon', tone: 'hint' },
+};
 const trackerStatus = { leer: 'Noch offen', teil: 'Unterwegs', erreicht: 'Ziel erreicht', ueber_ziel: 'Über dem Ziel' } as const;
 
-function MomoArea({ character, goals, large, stale }: { character: MomoCharacterReady; goals: MomoDailyGoalsReady; large: boolean; stale?: Instant }) {
-  return <Card><View style={[styles.momo, large && styles.stack]}>
+function MomoCharacter({ character, large, stale }: { character: MomoCharacterReady; large: boolean; stale?: Instant }) {
+  return <View style={[styles.momo, large && styles.stack]}>
     <View style={styles.momoStage}>
       <MomoAppearanceProvider appearance={character.appearance}><MomoFigure mood={character.appearance.moodKey ?? 'neugierig'} size={size.momoToday} /></MomoAppearanceProvider>
     </View>
@@ -126,9 +143,53 @@ function MomoArea({ character, goals, large, stale }: { character: MomoCharacter
       </View>
       {character.islandNotice && (character.islandNotice.newEvents || character.islandNotice.claimableWishes) ? <Text>Neues auf der Insel</Text> : null}
     </View>
-  </View>
-  <Text variant="headline">Deine drei Tagesziele</Text>
-  {goals.map((goal) => <Button key={goal.slot} compact variant="text" block label={`${goal.slot}. ${goalNames[goal.evaluation.progress.type]} · ${goalStatus[goal.evaluation.currentState]}`} onPress={() => action(goal.action)} />)}
+  </View>;
+}
+
+/**
+ * Die drei Tagesziele nach Platz: Symbol, Name samt Wert aus `messageKey` und Zustand in Worten. Eine Zeile
+ * öffnet den Bereich des Bausteins; erfüllte Zeilen liegen auf `success-soft`.
+ */
+function DailyGoals({ goals, stale }: { goals: MomoDailyGoalsReady; stale?: Instant }) {
+  return <View style={styles.goals}>
+    {stale ? <Text tone="inkMuted">{staleLabel(stale)}</Text> : null}
+    {goals.map((goal) => {
+      const text = dailyGoalText(goal.evaluation);
+      const symbol = goalSymbols[goal.evaluation.currentState];
+      const done = goal.evaluation.currentState === 'erfuellt';
+      return <Pressable key={goal.slot} accessibilityRole="button" accessibilityLabel={`${text.title}${text.status ? `, ${text.status}` : ''}. Öffnen`}
+        onPress={() => action(goal.action)} style={({ pressed }) => [styles.goal, done && styles.goalDone, pressed && styles.goalPressed]}>
+        <Icon name={symbol.icon} tone={symbol.tone} />
+        <View style={styles.flex}>
+          <Text variant="headline">{text.title}</Text>
+          {text.status ? <Text variant="label" tone="inkMuted">{text.status}</Text> : null}
+        </View>
+        <Icon name="chevron" tone="inkMuted" />
+      </Pressable>;
+    })}
+  </View>;
+}
+
+/**
+ * Momo-Bereich: Momo mit Energie und Levelbalken (Spezifikation 4), darunter die drei Tagesziele
+ * (Spezifikation 1). Beide Beiträge zeigen ihren Zustand unabhängig voneinander. Vor dem Schlüpfen ersetzt
+ * die Laichkugel nur Momo; die Tagesziele bleiben sichtbar, weil sie auch solo Energie bringen
+ * (Spezifikation 4, User Story 2).
+ */
+function MomoSlot({ registry, large }: { registry: TodayRegistry; large: boolean }) {
+  const [character, retryCharacter] = useContribution(registry, 'momo.character');
+  const [goals, retryGoals] = useContribution(registry, 'momo.daily_goals');
+  return <Card>
+    {character?.type === 'ready' || character?.type === 'stale'
+      ? <MomoCharacter character={character.data as MomoCharacterReady} large={large} stale={character.type === 'stale' ? character.dataAsOf : undefined} />
+      : <>
+        {character?.type === 'empty' ? <MomoFigure mood="neugierig" size={80} /> : null}
+        <StateView slot="momo.character" state={character} retry={retryCharacter}>{() => null}</StateView>
+      </>}
+    <Text variant="headline" accessibilityRole="header">Deine drei Tagesziele</Text>
+    {goals?.type === 'ready' || goals?.type === 'stale'
+      ? <DailyGoals goals={goals.data as MomoDailyGoalsReady} stale={goals.type === 'stale' ? goals.dataAsOf : undefined} />
+      : <StateView slot="momo.daily_goals" state={goals} retry={retryGoals}>{() => null}</StateView>}
   </Card>;
 }
 
@@ -139,13 +200,20 @@ function Nutrition({ budget, log, stale }: { budget: NutritionBudgetReady; log: 
     {stale ? <Text tone="inkMuted">{staleLabel(stale)}</Text> : null}
     <Text variant="numberXl">{Math.abs(remaining).toLocaleString('de-DE')} kcal {remaining < 0 ? 'drüber' : 'übrig'}</Text>
     <Text tone="inkMuted">{log.intakeKcal.toLocaleString('de-DE')} von {budget.budgetKcal.toLocaleString('de-DE')} kcal · {budget.maintenanceReason ? 'Haltemodus' : 'Kalorienbudget'}</Text>
-    {budget.notice ? <View style={styles.row}>
-      <Icon name="star" tone="hint" />
-      <View style={styles.flex}><Text>{budget.notice.type === 'goal_weight_reached' ? 'Zielgewicht erreicht' : `Budgetvorschlag: ${budget.notice.suggestedBudgetKcal} kcal`}</Text></View>
-      <Button label="Ansehen" variant="text" compact onPress={() => action(budget.notice!.action)} />
-    </View> : null}
+    {budget.notice ? <BudgetNotice notice={budget.notice} /> : null}
     <Button label="Tagesprotokoll öffnen" variant="secondary" onPress={() => action(log.logAction)} />
   </Card>;
+}
+
+/**
+ * Hinweis der Ernährungskarte (Spezifikation 1, Abschnitte 6–8): neutral formuliert, im Ton `hint`, nie
+ * `problem`, immer mit Symbol und Text.
+ */
+function BudgetNotice({ notice }: { notice: NonNullable<NutritionBudgetReady['notice']> }) {
+  const open = { label: 'Ansehen', onPress: () => action(notice.action) };
+  return notice.type === 'goal_weight_reached'
+    ? <Notice tone="hint" icon="flag" text="Zielgewicht erreicht" action={open} />
+    : <Notice tone="hint" icon="info" text={`Vorschlag für dein Kalorienbudget: ${notice.suggestedBudgetKcal.toLocaleString('de-DE')} kcal`} action={open} />;
 }
 
 /**
@@ -185,9 +253,9 @@ function Tracker({ label, value, of, status, detail, quick, quickLabel, progress
  * nie Zusammenfassungen; veraltet neutral „Offline · letzter Stand …“ statt des allgemeinen Stale-Hinweises.
  */
 function PartnerSlot({ registry }: { registry: TodayRegistry }) {
-  const state = useContribution(registry, 'partner');
+  const [state, retry] = useContribution(registry, 'partner');
   if (state?.type === 'stale' && state.data.type === 'coupled') return <Partner data={state.data} stale />;
-  return <StateView state={state} slot="partner">{(data) => <Partner data={data as PartnerCardReady} stale={false} />}</StateView>;
+  return <StateView state={state} slot="partner" retry={retry}>{(data) => <Partner data={data as PartnerCardReady} stale={false} />}</StateView>;
 }
 
 /** Der Beitrag meldet sich im Minutentakt neu; so liest die Karte das Alter ihres Stands mit der aktuellen Uhr. */
@@ -243,7 +311,7 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
         <Icon name="chevron" tone="inkMuted" />
       </Pressable>;
     }}</State></View>
-    <View testID="today-slot-momo"><CardPair registry={registry} first="momo.character" second="momo.daily_goals">{(a, b, stale) => <MomoArea character={a as MomoCharacterReady} goals={b as MomoDailyGoalsReady} large={large} stale={stale} />}</CardPair></View>
+    <View testID="today-slot-momo"><MomoSlot registry={registry} large={large} /></View>
     <View testID="today-slot-nutrition"><CardPair registry={registry} first="nutrition.budget" second="nutrition.log">{(a, b, stale) => <Nutrition budget={a as NutritionBudgetReady} log={b as NutritionLogReady} stale={stale} />}</CardPair></View>
     <View testID="today-slot-trackers" style={[styles.trackers, large && styles.stack]}>
       <View style={!large && styles.trackerColumn}><State registry={registry} slot="trackers.water">{(value) => { const d = value as TrackerWaterReady; return <Tracker label="Wasser" value={`${thousandthsWithOneDecimal(d.countedMl)} l`} of={`von ${thousandthsWithOneDecimal(d.targetMl)} l`} progress={{ label: 'Wasser heute', value: d.countedMl, target: d.targetMl }} status={trackerStatus[d.status]} detail={d.detailAction} quick={d.quickAction} quickLabel="+250 ml" />; }}</State></View>
@@ -257,17 +325,14 @@ export function TodayContent({ registry }: { registry: TodayRegistry }) {
 function CardPair<A extends TodaySlot, B extends TodaySlot>({ registry, first, second, children }: {
   registry: TodayRegistry; first: A; second: B; children: (a: Data<TodayState<A>>, b: Data<TodayState<B>>, stale?: Instant) => ReactNode;
 }) {
-  const a = useContribution(registry, first);
-  const b = useContribution(registry, second);
-  if (first === 'momo.character' && a?.type === 'empty') {
-    return <Card><MomoFigure mood="neugierig" size={80} /><StateView slot={first} state={a}>{() => null}</StateView></Card>;
-  }
+  const [a, retryA] = useContribution(registry, first);
+  const [b, retryB] = useContribution(registry, second);
   if ((a?.type === 'ready' || a?.type === 'stale') && (b?.type === 'ready' || b?.type === 'stale')) {
     return <>{children(a.data as Data<TodayState<A>>, b.data as Data<TodayState<B>>, a.type === 'stale' ? a.dataAsOf : b.type === 'stale' ? b.dataAsOf : undefined)}</>;
   }
   return <View style={styles.group}>
-    {a?.type === 'ready' || a?.type === 'stale' ? null : <StateView slot={first} state={a}>{() => null}</StateView>}
-    {b?.type === 'ready' || b?.type === 'stale' ? null : <StateView slot={second} state={b}>{() => null}</StateView>}
+    {a?.type === 'ready' || a?.type === 'stale' ? null : <StateView slot={first} state={a} retry={retryA}>{() => null}</StateView>}
+    {b?.type === 'ready' || b?.type === 'stale' ? null : <StateView slot={second} state={b} retry={retryB}>{() => null}</StateView>}
   </View>;
 }
 
@@ -280,6 +345,10 @@ const styles = StyleSheet.create({
   momoStage: { backgroundColor: color.momoStage, borderRadius: size.momoToday / 2 },
   group: { gap: space[2] }, trackers: { flexDirection: 'row', gap: space[2] }, stack: { flexDirection: 'column' },
   trackerColumn: { flex: 1, minWidth: 0 },
+  goals: { gap: space[2] },
+  goal: { minHeight: size.rowMin, minWidth: size.touchMin, flexDirection: 'row', alignItems: 'center', gap: space[3], paddingHorizontal: space[3], paddingVertical: space[2], borderRadius: radius.md, backgroundColor: color.surfaceSunken },
+  goalDone: { backgroundColor: color.successSoft },
+  goalPressed: { opacity: 0.85 },
   levelbar: { flexDirection: 'row', height: size.levelbarHeight, borderRadius: size.levelbarHeight / 2, overflow: 'hidden', backgroundColor: color.surfaceSunken },
   levelHalf: { flex: 1 }, ownFill: { height: '100%', backgroundColor: color.self }, partnerFill: { height: '100%', alignSelf: 'flex-end', backgroundColor: color.partner },
   tracker: { gap: space[2], padding: space[3], borderRadius: radius.md, backgroundColor: color.surfaceCard, boxShadow: boxShadow.card },

@@ -38,6 +38,20 @@ export function materializedDays(tx: ReadContext, personId: EntityId, from: Loca
     .map((row) => ({ localDate: LocalDate.parse(row.localDate), dayEndsAt: Instant.parse(row.dayEndsAt) }));
 }
 
+/**
+ * Die gespeicherten Snapshots der Tagesziele eines Tags, nach Platz geordnet; leer, solange der Tag nicht
+ * materialisiert ist. Die Snapshots sind ungeprüft, der Aufrufer prüft sie gegen `DailyGoalSnapshot`.
+ */
+export function dailyGoalSnapshotsOn(tx: ReadContext, personId: EntityId, localDate: LocalDate): unknown[] {
+  return sqliteOf(tx)
+    .select({ snapshot: dailyGoal.snapshot })
+    .from(dailyGoal)
+    .where(and(eq(dailyGoal.personId, personId), eq(dailyGoal.localDate, localDate)))
+    .orderBy(asc(dailyGoal.slot))
+    .all()
+    .map((row) => row.snapshot);
+}
+
 /** Legt die drei Tagesziele eines Tags an; Zone und Offset gehören zum Beginn des Tags. */
 export function insertDailyGoals(
   tx: TransactionContext,
