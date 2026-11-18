@@ -12,7 +12,8 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Chip, IconButton, space, Text, TextField } from '../design';
 import { checkAmountInput, defaultAmountMilli } from './amount-input';
 import type { Nutrition } from './nutrition';
-import { checkPortionDraft, conversionFields, editableBaseOf, type ConversionUnit } from './own-food-input';
+import { conversionFields, type ConversionUnit } from './own-food-fields';
+import { checkPortionDraft, editableBaseOf } from './own-food-input';
 import {
   amountProblemText,
   conversionProblemText,

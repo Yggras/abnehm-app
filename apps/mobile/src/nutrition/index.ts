@@ -14,5 +14,5 @@ export type { FoodSearch, FoodSearchHit, FoodSearchResult, SearchMark } from './
 export { mealPhotoEntity, confirmPhotoDraftCommand, type PhotoDraftConfirmation, type PhotoMealComponent } from './meal-photos';
 export { ownFoodEntity } from './own-food-entity';
 export { rebuildOwnFoodIndex, type OwnFoodChoice } from './own-food-repository';
-export type { OwnFoodBase, OwnFoodValues } from './own-foods';
+export type { OwnFoodBase } from './own-foods';
 export { createNutrition, type AmountPrefill, type Nutrition, type NutritionDependencies } from './nutrition';

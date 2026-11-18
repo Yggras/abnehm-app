@@ -17,7 +17,7 @@ import { BlsCatalogProvider, useFoodSearch } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
 import type { Nutrition } from './nutrition';
 import { editableBaseOf, emptyOwnFoodDraft, ownFoodDraftOf, type OwnFoodDraft } from './own-food-input';
-import type { OwnFoodBase, OwnFoodValues } from './own-foods';
+import type { OwnFoodBase } from './own-foods';
 import { OwnFoodForm } from './OwnFoodForm';
 import { dateText, markNames, mealNames, nutritionTexts } from './texts';
 import { useLocalToday } from './use-day-log';
@@ -118,7 +118,7 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
   };
 
   /** Speichert ein eigenes Lebensmittel und öffnet es danach in der Mengenprüfung. */
-  const saveOwnFood = (base: OwnFoodBase, values: OwnFoodValues, captureMethod: CaptureMethod, unit?: DisplayUnit) => {
+  const saveOwnFood = (base: OwnFoodBase, values: FoodValues, captureMethod: CaptureMethod, unit?: DisplayUnit) => {
     // Das Formular hat die Werte schon geprüft; scheitert der Befehl trotzdem, ist das ein Fehler.
     const saved = attempt(() => nutrition.saveOwnFood(base, values));
     if (!saved.done) return;
@@ -147,7 +147,7 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
   };
 
   /** Ohne Änderung entsteht nichts: Erst eine geänderte Fassung wird zum eigenen Lebensmittel (#157). */
-  const submit = (step: FormStep, values: OwnFoodValues) => {
+  const submit = (step: FormStep, values: FoodValues) => {
     if (step.from !== undefined && sameValues(values, step.from.snapshot)) {
       setForm(null);
       setSelected(step.from);
@@ -168,7 +168,8 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
         onDelete={
           base?.type === 'eigen'
             ? () => {
-                attempt(() => nutrition.deleteOwnFood(base.key));
+                // Scheitert das Löschen, bleibt das Formular offen.
+                if (!attempt(() => nutrition.deleteOwnFood(base.key)).done) return;
                 setOwnFoodChanges((count) => count + 1);
                 setForm(null);
               }

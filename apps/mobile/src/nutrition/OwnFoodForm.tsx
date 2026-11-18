@@ -1,10 +1,10 @@
-import type { BaseUnit } from '@abnehm/contracts/nutrition';
+import type { BaseUnit, FoodValues } from '@abnehm/contracts/nutrition';
 import { createRef, useState, type RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Chip, Notice, ProblemMessage, space, Text, TextField, type TextFieldHandle } from '../design';
-import { checkOwnFoodDraft, type OwnFoodDraft, type OwnFoodField, type PortionDraft } from './own-food-input';
-import type { OwnFoodValues } from './own-foods';
+import { conversionFields, type OwnFoodField } from './own-food-fields';
+import { checkOwnFoodDraft, type OwnFoodDraft, type PortionDraft } from './own-food-input';
 import { nutritionTexts, ownFoodProblemText } from './texts';
 
 // Formular „Eigenes Lebensmittel“ (Spezifikation 2, Abschnitte 3 und 6): Name, Einheit g oder ml,
@@ -36,7 +36,7 @@ export type OwnFoodFormProps = {
   hint?: string;
   initial: OwnFoodDraft;
   /** Gültige Werte; der Aufrufer speichert sie und schließt das Formular. */
-  onSave: (values: OwnFoodValues) => void;
+  onSave: (values: FoodValues) => void;
   onCancel: () => void;
   /** Nur bei einem bestehenden eigenen Lebensmittel; fragt vorher inline nach. */
   onDelete?: () => void;
@@ -110,8 +110,8 @@ export function OwnFoodForm({ title, hint, initial, onSave, onCancel, onDelete }
             unit={draft.baseUnit}
             value={draft[unit].amount}
             onChangeText={(amount) => changePortion(unit, { amount })}
-            problem={problem(unit === 'stueck' ? 'stueckAmount' : 'portionAmount')}
-            ref={input(unit === 'stueck' ? 'stueckAmount' : 'portionAmount')}
+            problem={problem(conversionFields[unit].amount)}
+            ref={input(conversionFields[unit].amount)}
           />
           <TextField
             kind="text"
@@ -119,8 +119,8 @@ export function OwnFoodForm({ title, hint, initial, onSave, onCancel, onDelete }
             placeholder={texts.conversionPlaceholder(unit)}
             value={draft[unit].label}
             onChangeText={(label) => changePortion(unit, { label })}
-            problem={problem(unit === 'stueck' ? 'stueckLabel' : 'portionLabel')}
-            ref={input(unit === 'stueck' ? 'stueckLabel' : 'portionLabel')}
+            problem={problem(conversionFields[unit].label)}
+            ref={input(conversionFields[unit].label)}
           />
         </View>
       ))}

@@ -6,11 +6,13 @@ import {
   type BaseUnit,
   type FoodRef,
   type NutritionSnapshot,
+  type FoodValues,
   type PortionConversion,
 } from '@abnehm/contracts/nutrition';
 
 import { parseDecimalMilli } from './amount-input';
-import type { OwnFoodBase, OwnFoodValues } from './own-foods';
+import { conversionFields, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
+import type { OwnFoodBase } from './own-foods';
 import { milliText } from './texts';
 
 // Formular „Eigenes Lebensmittel“ (Spezifikation 2, Abschnitte 2 und 3): Die Person tippt deutsche
@@ -35,43 +37,12 @@ export type OwnFoodDraft = Readonly<{
   portion: PortionDraft;
 }>;
 
-export type OwnFoodField =
-  | 'name'
-  | 'referenceAmount'
-  | 'kcal'
-  | 'protein'
-  | 'carbs'
-  | 'fat'
-  | 'stueckAmount'
-  | 'stueckLabel'
-  | 'portionAmount'
-  | 'portionLabel'
-  /** Eiweiß, Kohlenhydrate und Fett zusammen. */
-  | 'makros';
-
-/** Warum eine Eingabe nicht gespeichert werden kann. */
-export type OwnFoodProblem = 'leer' | 'format' | 'tausenderpunkt' | 'null' | 'zu_gross' | 'ganze_ml' | 'zu_lang' | 'makros_zu_schwer' | 'gewicht_fehlt';
-
 export type OwnFoodCheck =
-  | { type: 'werte'; values: OwnFoodValues }
+  | { type: 'werte'; values: FoodValues }
   | { type: 'probleme'; problems: Readonly<Partial<Record<OwnFoodField, OwnFoodProblem>>> };
 
 
 const emptyPortion: PortionDraft = { amount: '', label: '' };
-
-/** Stück oder Portion. */
-export type ConversionUnit = PortionConversion['unit'];
-
-/** Die Formularfelder einer Umrechnung: Gewicht bzw. Volumen und Bezeichnung. */
-export const conversionFields = {
-  stueck: { amount: 'stueckAmount', label: 'stueckLabel' },
-  portion: { amount: 'portionAmount', label: 'portionLabel' },
-} as const satisfies Record<ConversionUnit, Record<'amount' | 'label', OwnFoodField>>;
-
-/** Die Umrechnungseinheit eines Formularfelds; `undefined` für Name, Nährwerte und Bezugsmenge. */
-export function conversionUnitOf(field: OwnFoodField): ConversionUnit | undefined {
-  return (['stueck', 'portion'] as const).find((unit) => Object.values(conversionFields[unit]).includes(field as never));
-}
 
 /**
  * Was eine Änderung an diesem Lebensmittel speichern würde: das eigene Lebensmittel selbst oder die

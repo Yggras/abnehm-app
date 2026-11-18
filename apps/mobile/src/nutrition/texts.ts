@@ -3,7 +3,7 @@ import { foodNameMaxLength, maxBaseAmount, portionLabelMaxLength, roundMacroGram
 
 import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
-import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-input';
+import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
 
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
 // („1.210 kcal“, „0,5 Stück“), Einheiten mit Leerzeichen, ohne Schuld- und Verlust-Framing.

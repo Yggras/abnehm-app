@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, LocalDate, ServerVersion, TimeZone } from '@abnehm/contracts/base';
-import { OwnFoodRecord, OwnFoodUpsert, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import { OwnFoodRecord, OwnFoodUpsert, type FoodRef, type FoodValues, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
 
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
 import type { LocalDatabase } from '../local-db';
@@ -20,7 +20,6 @@ import {
   ownFoodEntity,
   type DayLog,
   type FoodSearchResult,
-  type OwnFoodValues,
 } from '.';
 import { checkAmountInput } from './amount-input';
 import { openTestCatalog } from './testing/test-catalog';
@@ -36,7 +35,7 @@ const morning = Instant.parse('2026-10-14T06:30:00.000Z');
 const today = LocalDate.parse('2026-10-14');
 
 /** Ein Bircher-Müsli aus dem Glas: 100 g mit 150 kcal, ein Glas sind 250 g. */
-const muesli: OwnFoodValues = {
+const muesli: FoodValues = {
   name: 'Bircher-Müsli im Glas',
   baseUnit: 'g',
   referenceAmount: 100_000,
@@ -63,7 +62,7 @@ const blsApple: NutritionSnapshot = {
 const blsAppleRef = { type: 'bls', key: 'F110100' } as const;
 
 /** Die Werte eines Snapshots, wie sie das Formular vorbelegt. */
-const valuesOf = ({ source: _source, attribution: _attribution, ...values }: NutritionSnapshot): OwnFoodValues => values;
+const valuesOf = ({ source: _source, attribution: _attribution, ...values }: NutritionSnapshot): FoodValues => values;
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {

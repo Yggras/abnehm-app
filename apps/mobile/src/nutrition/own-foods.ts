@@ -13,9 +13,6 @@ import { readOwnFood, tombstoneOwnFood, writeOwnFood, type OwnFoodChoice } from 
 // betrifft keinen Tag, denn Einträge tragen ihren Snapshot. Deshalb melden die Befehle keine Tage an
 // `reevaluateDailyGoals`.
 
-/** Werte eines eigenen Lebensmittels, wie die Person sie eingibt; die Herkunftsreferenz legt das Modul fest. */
-export type OwnFoodValues = FoodValues;
-
 /**
  * Was die Person ändert: `null` legt ein neues eigenes Lebensmittel an, ein eigenes ändert genau
  * dieses, ein BLS-Lebensmittel wird zum eigenen Lebensmittel mit dieser Herkunftsreferenz. Barcodes
@@ -31,7 +28,7 @@ type OwnFoodDependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'new
  * `InvalidNutritionInputError` bei ungültigen Werten oder einem fehlenden bzw. gelöschten eigenen
  * Lebensmittel, ohne etwas zu schreiben.
  */
-export function saveOwnFood(tx: TransactionContext, { clock, writer, newId }: OwnFoodDependencies, base: OwnFoodBase, values: OwnFoodValues): OwnFoodChoice {
+export function saveOwnFood(tx: TransactionContext, { clock, writer, newId }: OwnFoodDependencies, base: OwnFoodBase, values: FoodValues): OwnFoodChoice {
   const target = targetOf(tx, base, newId);
   const parsed = OwnFoodUpsert.safeParse({ ...values, origin: target.origin });
   if (!parsed.success) throw new InvalidNutritionInputError(`Ungültiges eigenes Lebensmittel: ${parsed.error.message}`);

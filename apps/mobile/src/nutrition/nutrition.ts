@@ -4,6 +4,7 @@ import {
   entryAmount,
   type DisplayUnit,
   type FoodRef,
+  type FoodValues,
   type NutritionEntryAddedOutcome,
   type NutritionEntryAddedValues,
   type NutritionSnapshot,
@@ -21,7 +22,7 @@ import { latestAmountOf } from './entry-repository';
 import { createFoodSearch, type FoodSearch } from './food-search';
 import { confirmPhotoDraft, type PhotoDraftConfirmation } from './meal-photos';
 import { overlaidOrigins, searchOwnFoods, type OwnFoodChoice } from './own-food-repository';
-import { deleteOwnFood, saveOwnFood, type OwnFoodBase, type OwnFoodValues } from './own-foods';
+import { deleteOwnFood, saveOwnFood, type OwnFoodBase } from './own-foods';
 
 export type NutritionDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl ist genau eine Transaktion darin. */
@@ -74,7 +75,7 @@ export type Nutrition = Readonly<{
    * Daten bleiben unverändert. Liefert Referenz und neue Fassung für künftige Einträge; gespeicherte
    * Einträge behalten ihren Snapshot. Wirft `InvalidNutritionInputError`, ohne etwas zu schreiben.
    */
-  saveOwnFood(base: OwnFoodBase, values: OwnFoodValues): OwnFoodChoice;
+  saveOwnFood(base: OwnFoodBase, values: FoodValues): OwnFoodChoice;
   /** Löscht ein eigenes Lebensmittel (Tombstone); Einträge bleiben über ihren Snapshot nutzbar. */
   deleteOwnFood(id: EntityId): void;
   /**
