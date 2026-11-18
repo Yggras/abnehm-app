@@ -145,6 +145,14 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['Fake-Mitteilungs-Port'],
   },
   {
+    // #187: Galerie des Momo-Rigs für Geräteprüfung und Impeccable-Critique; Momo selbst ist Produktcode.
+    key: 'momo-galerie',
+    description: 'Momo-Galerie: beide Formen in allen Stimmungen mit Accessoires und Momo im Insel-Canvas, per Link `momo-galerie?ansicht=heute|insel`',
+    modules: ['apps/mobile/src/test-capabilities/momo-gallery/'],
+    entries: { deepLinks: ['momo-galerie'] },
+    markers: ['Momo-Galerie'],
+  },
+  {
     key: 'testgeruest',
     description: 'Gemeinsames Gerüst: Development-Server und -App des Backends, Eingang, Deep Links und Wirt der App-Testfähigkeiten',
     modules: [

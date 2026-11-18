@@ -199,7 +199,7 @@ describe('Quick-Commands und Meldungen', () => {
   test('Heute-Vorschau bucht Wasser über den Mini-Tracker ohne Navigation und öffnet Sport/Gewicht über Routen', async () => {
     await renderRouter(appDir, { initialUrl: '/' });
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
-    expect(screen.getByRole('image', { name: 'Momo, zufrieden' })).toBeOnTheScreen();
+    expect(screen.getByRole('image', { name: 'Momo, Hüpfer, zufrieden' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: /Anna feuert dich an: Stark heute!/ })).toBeOnTheScreen();
     for (const name of ['Ernährung erfasst · 2 von 2 Mahlzeiten, erfüllt. Öffnen', 'Wasserziel · 0,8 von 1,5 l, teilweise. Öffnen', 'Im Kalorienbudget · am Tagesende. Öffnen']) {
       expect(screen.getByRole('button', { name })).toBeOnTheScreen();

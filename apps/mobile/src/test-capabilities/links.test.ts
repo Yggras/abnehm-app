@@ -24,6 +24,20 @@ function inboxWith(options: Partial<TestInboxOptions> = {}) {
   });
 }
 
+describe('Link `momo-galerie` (#187)', () => {
+  it('öffnet die Galerie in der Ansicht „Heute“ oder „Insel“; andere Ansichten sind ungültig', () => {
+    expect(parseTestLink('abnehmapp-dev://momo-galerie')).toEqual({ type: 'momo-galerie', view: 'heute' });
+    expect(parseTestLink('abnehmapp-e2e://momo-galerie?ansicht=insel')).toEqual({ type: 'momo-galerie', view: 'insel' });
+    expect(parseTestLink('abnehmapp-dev://momo-galerie?ansicht=schrank')).toEqual({ type: 'ungueltig', capability: 'momo-galerie' });
+  });
+
+  it('der Eingang meldet die geöffnete Ansicht', () => {
+    const inbox = inboxWith();
+    inbox.receive(parseTestLink('abnehmapp-dev://momo-galerie?ansicht=insel')!);
+    expect(inbox.status()).toEqual({ type: 'momo_galerie', view: 'insel' });
+  });
+});
+
 describe('Link `health` (#183)', () => {
   it('nennt ein Szenario der Health-Attrappe; unbekannte Szenarien und fehlende Parameter sind ungültig', () => {
     expect(parseTestLink('abnehmapp-dev://health?szenario=erstimport')).toEqual({ type: 'health', scenario: 'erstimport' });

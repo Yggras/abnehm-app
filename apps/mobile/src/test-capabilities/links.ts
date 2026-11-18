@@ -10,6 +10,7 @@ import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
+import { momoGalleryViews, type MomoGalleryView } from './momo-gallery/views';
 import { permissionOfName, type NotificationAnswer } from './notifications';
 import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 
@@ -33,6 +34,9 @@ import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 //   abnehmapp-dev://mitteilungen?erlaubnis=unentschieden|erlaubt|verweigert[&antwort=erlaubt|verweigert]
 //     stellt den Mitteilungs-Port auf den Fake mit dieser Erlaubnis und dieser Antwort im Systemdialog
 //     (#125); `erlaubnis=system` stellt ihn zurück auf den echten Port.
+//   abnehmapp-dev://momo-galerie[?ansicht=heute|insel]
+//     öffnet die Momo-Galerie (#187): alle Stimmungen beider Formen mit Accessoires in 104 dp bzw. Momo im
+//     Insel-Canvas, verdeckt von einem Objekt davor.
 //
 // Geparst wird von Hand: Die URL-Implementierung von React Native ist unvollständig.
 
@@ -45,11 +49,12 @@ export type TestLink =
   | Readonly<{ type: 'health'; scenario: HealthScenario }>
   /** `permission: null` ist der echte Port des Systems. */
   | Readonly<{ type: 'mitteilungen'; permission: NotificationPermission | null; answer: NotificationAnswer }>
+  | Readonly<{ type: 'momo-galerie'; view: MomoGalleryView }>
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 /** Pfade der Deep Links; der Release-Test gleicht sie mit der Registry ab (`test/test-capabilities.ts`). */
-export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health', mitteilungen: 'mitteilungen' } as const;
+export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health', mitteilungen: 'mitteilungen', 'momo-galerie': 'momo-galerie' } as const;
 export type TestLinkPath = keyof typeof testLinkPaths;
 
 const clockParams = z
@@ -61,6 +66,7 @@ const deviceSuiteParams = z.strictObject({ phase: z.enum(deviceSuitePhases) });
 const profileParams = z.strictObject({ name: runtimeProfileKeySchema });
 
 const healthParams = z.strictObject({ szenario: z.enum(healthScenarios) });
+const galleryParams = z.strictObject({ ansicht: z.enum(momoGalleryViews).default('heute') });
 const notificationParams = z.strictObject({
   erlaubnis: z.enum(['system', 'unentschieden', 'erlaubt', 'verweigert']),
   antwort: z.enum(['erlaubt', 'verweigert']).default('erlaubt'),
@@ -111,6 +117,10 @@ export function parseTestLink(link: string): TestLink | null {
     if (!notifications.success) return { type: 'ungueltig', capability: 'mitteilungen' };
     const { erlaubnis, antwort } = notifications.data;
     return { type: 'mitteilungen', permission: erlaubnis === 'system' ? null : permissionOfName[erlaubnis], answer: permissionOfName[antwort] };
+  }
+  if (path === testLinkPaths['momo-galerie']) {
+    const gallery = galleryParams.safeParse(Object.fromEntries(params));
+    return gallery.success ? { type: 'momo-galerie', view: gallery.data.ansicht } : { type: 'ungueltig', capability: 'momo-galerie' };
   }
   return null;
 }

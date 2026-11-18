@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { Chip, Notice, space, Text } from '../design';
-import { MomoFigure } from '../shell/MomoFigure';
+import { MomoFigure } from '../momo';
 import { OnboardingFrame } from './OnboardingFrame';
 import { onboardingTexts } from './texts';
 

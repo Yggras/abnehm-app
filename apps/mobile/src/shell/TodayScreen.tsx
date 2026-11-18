@@ -19,7 +19,7 @@ import { PartnerAvatar } from '../partner/PartnerAvatar';
 import { PartnerStage } from '../partner/PartnerStage';
 import { isTestArtifact } from '../test-artifact';
 import { dailyGoalText } from './daily-goal-texts';
-import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
+import { MomoAppearanceProvider, MomoFigure } from '../momo';
 import { useQuickCommand } from './use-quick-command';
 import { thousandthsWithOneDecimal, waitingForPartnerText } from './texts';
 import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContributionError } from './today-registry';

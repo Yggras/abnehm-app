@@ -9,7 +9,7 @@ import { BackHandler, StyleSheet, View } from 'react-native';
 import { Button, Sheet, space, Text } from '../design';
 import type { TargetOf } from '../navigation';
 import { useMessageHost } from '../shell/MessageHost';
-import { MomoAppearanceProvider, MomoFigure } from '../shell/MomoFigure';
+import { MomoAppearanceProvider, MomoFigure } from '../momo';
 import type { BuildOutcome } from './build-object';
 import { buildOptions, type BlueprintOption } from './build-options';
 import { BuildSheet } from './BuildSheet';
