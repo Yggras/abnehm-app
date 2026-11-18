@@ -40,26 +40,36 @@ export function readingOf(instant: Instant, timeZone: TimeZone): ClockReading {
   return readingAt(Date.parse(Instant.parse(instant)), timeZone);
 }
 
+const minuteMs = 60_000;
+/** Offsets liegen zwischen UTC−12 und UTC+14; 15 Stunden um UTC-Mitternacht schließen jeden Tagesbeginn ein. */
+const searchWindowMinutes = 15 * 60;
+
+/**
+ * Erster Zeitpunkt eines lokalen Tags in einer Zone, etwa für `dayEndsAt` als Beginn des Folgetags
+ * (#131). Fällt Mitternacht durch eine Umstellung aus, beginnt der Tag mit der ersten Minute, die ihn
+ * abliest. Gesucht wird minutengenau, weil Zonen nur auf ganzen Minuten umstellen. Liest keine Uhr.
+ */
+export function startOfLocalDate(localDate: LocalDate, timeZone: TimeZone): Instant {
+  const target = LocalDate.parse(localDate);
+  const [year, month, day] = target.split('-').map(Number) as [number, number, number];
+  const utcMidnight = Date.UTC(year, month - 1, day) / minuteMs;
+  // Kleinste Minute, deren Ablesung den Tag erreicht hat; lokale Tage ordnen sich als Zeichenfolgen.
+  let low = utcMidnight - searchWindowMinutes;
+  let high = utcMidnight + searchWindowMinutes;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (readingAt(middle * minuteMs, timeZone).localDate >= target) high = middle;
+    else low = middle + 1;
+  }
+  return readingAt(low * minuteMs, timeZone).instant;
+}
+
 /**
  * Lokaler Tag eines gegebenen Zeitpunkts bei einem festen Offset zu UTC, etwa dem Offset, den ein
  * Health-Datensatz mitliefert (Spezifikation 3, Abschnitt 6; #183). Liest keine Uhr und keine Zone.
  */
 export function localDateAtOffset(instant: Instant, utcOffsetMinutes: number): LocalDate {
   return LocalDate.parse(new Date(Date.parse(Instant.parse(instant)) + utcOffsetMinutes * 60_000).toISOString().slice(0, 10));
-}
-
-/**
- * Erster Zeitpunkt eines lokalen Tags in einer Zone, etwa der Beginn des Verbindungstags des
- * Health-Imports (#183): Mitternacht der Wanduhr, zurückgerechnet mit dem Offset der Zone. Der zweite
- * Schritt nimmt den Offset zum gefundenen Zeitpunkt, falls er sich zwischen UTC-Mitternacht und lokaler
- * Mitternacht ändert. Fällt Mitternacht durch eine Umstellung aus, ist es der erste Zeitpunkt danach.
- */
-export function startOfLocalDay(localDate: LocalDate, timeZone: TimeZone): Instant {
-  const wallMidnight = Date.parse(`${LocalDate.parse(localDate)}T00:00:00.000Z`);
-  const first = wallMidnight - readingAt(wallMidnight, timeZone).utcOffsetMinutes * 60_000;
-  const start = wallMidnight - readingAt(first, timeZone).utcOffsetMinutes * 60_000;
-  // Ausgefallene Mitternacht: Der Zeitpunkt liegt noch im Vortag; der Tag beginnt mit der Umstellung danach.
-  return readingAt(start, timeZone).localDate === localDate ? Instant.parse(new Date(start).toISOString()) : Instant.parse(new Date(first).toISOString());
 }
 
 /**

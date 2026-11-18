@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 
-import { localDateAtOffset, readingOf, startOfLocalDay } from '../src/clock.ts';
+import { localDateAtOffset, readingOf, startOfLocalDate } from '../src/clock.ts';
 
-// Nachweis für #183: Beginn eines lokalen Tags und lokaler Tag zu einem festen Offset, wie sie der
-// Health-Import für den Verbindungstag bzw. mitgelieferte Offsets braucht.
+// Nachweis für #183: Beginn eines lokalen Tags (Verbindungstag des Health-Imports, dieselbe Funktion wie
+// `dayEndsAt` aus #131) und lokaler Tag zu einem mitgelieferten Offset.
 
 const berlin = TimeZone.parse('Europe/Berlin');
 
-describe('startOfLocalDay', () => {
+describe('startOfLocalDate', () => {
   it('ist Mitternacht der Zone, auch an Tagen der Zeitumstellung', () => {
-    expect(startOfLocalDay(LocalDate.parse('2026-10-14'), berlin)).toBe('2026-10-13T22:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-10-25'), berlin)).toBe('2026-10-24T22:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-10-26'), berlin)).toBe('2026-10-25T23:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-03-29'), berlin)).toBe('2026-03-28T23:00:00.000Z');
-    expect(startOfLocalDay(LocalDate.parse('2026-10-14'), TimeZone.parse('Asia/Kathmandu'))).toBe('2026-10-13T18:15:00.000Z');
+    expect(startOfLocalDate(LocalDate.parse('2026-10-14'), berlin)).toBe('2026-10-13T22:00:00.000Z');
+    expect(startOfLocalDate(LocalDate.parse('2026-10-25'), berlin)).toBe('2026-10-24T22:00:00.000Z');
+    expect(startOfLocalDate(LocalDate.parse('2026-10-26'), berlin)).toBe('2026-10-25T23:00:00.000Z');
+    expect(startOfLocalDate(LocalDate.parse('2026-03-29'), berlin)).toBe('2026-03-28T23:00:00.000Z');
+    expect(startOfLocalDate(LocalDate.parse('2026-10-14'), TimeZone.parse('Asia/Kathmandu'))).toBe('2026-10-13T18:15:00.000Z');
   });
 
   // Eigenschaft statt erratener Umstellungsdaten: Der Zeitpunkt gehört zum Tag, eine Minute davor nicht.
@@ -24,7 +24,7 @@ describe('startOfLocalDay', () => {
     const timeZone = TimeZone.parse(zone);
     for (let day = 0; day < 365; day += 1) {
       const localDate = LocalDate.parse(new Date(Date.UTC(2026, 0, 1 + day)).toISOString().slice(0, 10));
-      const start = startOfLocalDay(localDate, timeZone);
+      const start = startOfLocalDate(localDate, timeZone);
       expect(readingOf(start, timeZone).localDate, `${zone} ${localDate}`).toBe(localDate);
       const before = Instant.parse(new Date(Date.parse(start) - 60_000).toISOString());
       expect(readingOf(before, timeZone).localDate, `${zone} ${localDate}`).not.toBe(localDate);

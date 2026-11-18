@@ -116,6 +116,21 @@ export function dailyGoalKey(personId: EntityId, localDate: LocalDate, slot: Dai
   return `tagesziel:${personId}:${localDate}:${slot}`;
 }
 
+const dailyGoalNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b65';
+
+/**
+ * Deterministische ID eines Tagesziels aus Person, lokalem Tag und Platz (Spezifikation 1, Abschnitt 5).
+ * Legen zwei Geräte denselben Tag an, meinen sie dieselben drei Tagesziele.
+ */
+export function dailyGoalId(personId: EntityId, localDate: LocalDate, slot: DailyGoalSlot): EntityId {
+  return EntityId.parse(uuidV5(dailyGoalNamespace, dailyGoalKey(personId, localDate, slot)));
+}
+
+/** Fachlicher Schlüssel von `materializeDailyGoals`: `tagesziele:<person>:<tag>`, je Tag genau einer. */
+export function dailyGoalsKey(personId: EntityId, localDate: LocalDate): string {
+  return `tagesziele:${personId}:${localDate}`;
+}
+
 const completionNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b60';
 
 /** Deterministische ID der Tageszielerfüllung: Zwei Geräte erzeugen dieselbe Erfüllung mit derselben ID. */

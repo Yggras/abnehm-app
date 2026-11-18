@@ -11,6 +11,7 @@ export {
   type Plan,
   type PlanDependencies,
 } from './plan';
+export { followDailyGoalTriggers } from './daily-goal-triggers';
 export { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from './plan-entities';
 export { planReaderOf } from './plan-reader';
 export { preselectedWeekChoice, standardWeeklyPlan, type WeekChoice, type WeekChoiceError } from './weekly-plan';

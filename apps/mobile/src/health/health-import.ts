@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { startOfLocalDay, type Clock } from '@abnehm/clock';
+import { startOfLocalDate, type Clock } from '@abnehm/clock';
 import { Instant, LocalDate } from '@abnehm/contracts/base';
 
 import type { LocalDatabase } from '../local-db';
@@ -158,7 +158,7 @@ export function createHealthImport({ database, platform, trackers, clock, onErro
             {
               connectedAt: now.instant,
               connectedOn: now.localDate,
-              workoutsSince: startOfLocalDay(now.localDate, now.timeZone),
+              workoutsSince: startOfLocalDate(now.localDate, now.timeZone),
               weightsSince: windowStart(now.instant),
               lastImportAt: null,
             } satisfies HealthConnection,
