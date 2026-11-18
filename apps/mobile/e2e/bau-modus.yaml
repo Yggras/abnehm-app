@@ -25,10 +25,11 @@ name: Bau-Modus auf der Insel
     file: teilablaeufe/link.yaml
     env:
       LINK: seed?szenario=gekoppelt&ziel=/momo
+# „So wächst Momo“ erscheint beim ersten Öffnen nach dem Schlüpfen. Das Sheet ist modal und verdeckt die
+# Insel für die Bedienungshilfen (iOS-Simulator, beobachtet am 18.11.2026); gewartet wird daher auf beides.
 - extendedWaitUntil:
-    visible: "Momos Insel, Level 3.*"
+    visible: "Verstanden|Momos Insel, Level 3.*"
     timeout: 30000
-# „So wächst Momo“ erscheint beim ersten Öffnen nach dem Schlüpfen.
 - runFlow:
     when:
       visible: "Verstanden"
