@@ -1,6 +1,6 @@
 import { EntityId, LocalDate, localDateAfter } from '@abnehm/contracts/base';
 import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
-import { isWeighDay, showsTrend } from '@abnehm/contracts/tracker-rules';
+import { currentTrendG, isWeighDay } from '@abnehm/contracts/tracker-rules';
 import type { TrackerWeightReady } from '@abnehm/contracts/today';
 
 import type { ReadContext } from '../local-db';
@@ -8,7 +8,7 @@ import { readOwnPerson } from '../local-db/person-header';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import { observedTodaySource, type Refresh } from './today-source';
 import type { TrackerDependencies } from './trackers';
-import { trendPointsOf } from './weight-trend-reader';
+import { trendPointsOf } from './weight';
 
 // Beitrag `trackers.weight` für „Heute“ (Spezifikation 3, Abschnitt 7): ab drei Tagesgewichten der
 // Trendwert, vorher das letzte Tagesgewicht (#176), und der Stand des Wiegetags. Am Wiegetag ist er `wiegetag_offen` oder `gewogen`, sonst `kein_wiegetag`
@@ -40,8 +40,9 @@ export function weightTodaySource(
     const personId = EntityId.parse(person.id);
     const points = trendPointsOf(tx, personId);
     const last = points.at(-1);
+    const trendG = currentTrendG(points);
     const value: TrackerWeightReady['value'] =
-      last === undefined ? null : showsTrend(points.length) ? { type: 'trend', weightG: last.trendG } : { type: 'tagesgewicht', weightG: last.dayWeightG };
+      last === undefined ? null : trendG !== null ? { type: 'trend', weightG: trendG } : { type: 'tagesgewicht', weightG: last.dayWeightG };
     return { personId, localDate: clock.read().localDate, lastWeighedOn: last === undefined ? null : LocalDate.parse(last.localDate), value };
   };
   return observedTodaySource(database, refresh, readDay, async (day) => {

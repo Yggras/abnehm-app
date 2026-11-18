@@ -181,29 +181,45 @@ describe('Bearbeitungs-Sheet', () => {
     expect(within(sheet).getByLabelText('Gewicht').props.value).toBe('76,0');
     expect(within(sheet).getByLabelText('Gemessen am').props.value).toBe('2026-10-14T05:30:00.000Z');
     await user.clear(within(sheet).getByLabelText('Gewicht'));
-    await user.type(within(sheet).getByLabelText('Gewicht'), '76,4');
+    await user.type(within(sheet).getByLabelText('Gewicht'), '78,4');
     await user.press(within(sheet).getByRole('button', { name: 'Speichern' }));
     await act(async () => {});
 
     expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
-    expect(world.weights().find((weight) => weight.measuredAt === '2026-10-14T05:30:00.000Z')).toMatchObject({ weightG: 76_400 });
-    expect(screen.getByText('76,4 kg gespeichert')).toBeOnTheScreen();
+    expect(world.weights().find((weight) => weight.measuredAt === '2026-10-14T05:30:00.000Z')).toMatchObject({ weightG: 78_400 });
+    expect(screen.getByText('78,4 kg gespeichert')).toBeOnTheScreen();
     await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
     await act(async () => {});
     expect(world.weights().find((weight) => weight.measuredAt === '2026-10-14T05:30:00.000Z')).toMatchObject({ weightG: 76_000 });
   });
 
-  test('fragt beim Bearbeiten nicht „Tippfehler?“', async () => {
+  test('fragt beim Bearbeiten „Tippfehler?“ und vergleicht mit dem letzten Tagesgewicht der übrigen Messungen', async () => {
+    const world = await open({ weighings: falling });
+
+    await user.press(row());
+    const sheet = () => screen.getByTestId('sheet');
+    // 77,9 kg liegt 1,9 kg über dem eigenen alten Wert (76,0), aber nur 2,1 kg unter dem übrigen Tagesgewicht (80,0).
+    await user.clear(within(sheet()).getByLabelText('Gewicht'));
+    await user.type(within(sheet()).getByLabelText('Gewicht'), '77,9');
+    await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
+
+    expect(within(sheet()).getByText('Tippfehler? Das sind 2,1 kg weniger als dein letztes Tagesgewicht (80,0 kg).')).toBeOnTheScreen();
+    await user.press(within(sheet()).getByRole('button', { name: 'Stimmt so' }));
+    await act(async () => {});
+    expect(world.weights().find((weight) => weight.measuredAt === '2026-10-14T05:30:00.000Z')).toMatchObject({ weightG: 77_900 });
+  });
+
+  test('fragt beim Bearbeiten nicht, solange der Wert höchstens 2 kg vom übrigen Tagesgewicht abweicht', async () => {
     const world = await open({ weighings: falling });
 
     await user.press(row());
     const sheet = screen.getByTestId('sheet');
     await user.clear(within(sheet).getByLabelText('Gewicht'));
-    await user.type(within(sheet).getByLabelText('Gewicht'), '86,0');
+    await user.type(within(sheet).getByLabelText('Gewicht'), '78,0');
     await user.press(within(sheet).getByRole('button', { name: 'Speichern' }));
 
     expect(screen.queryByText(/Tippfehler/)).not.toBeOnTheScreen();
-    expect(world.weights().find((weight) => weight.measuredAt === '2026-10-14T05:30:00.000Z')).toMatchObject({ weightG: 86_000 });
+    expect(world.weights().find((weight) => weight.measuredAt === '2026-10-14T05:30:00.000Z')).toMatchObject({ weightG: 78_000 });
   });
 
   test('„Löschen“ löscht ohne Bestätigungsdialog; „Rückgängig“ legt die Messung neu an', async () => {

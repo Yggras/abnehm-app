@@ -15,7 +15,16 @@ import { sportTodaySource } from './sport-today';
 import type { ObservedSource, Refresh } from './today-source';
 import { addWaterEntry, undoWater, type WaterUndo } from './water';
 import { waterTodaySource } from './water-today';
-import { deleteWeightEntry, lastWeightsOf, recordWeightEntry, undoWeight, updateWeightEntry, type LastWeights, type WeightInput } from './weight';
+import {
+  deleteWeightEntry,
+  lastWeightsOf,
+  recordWeightEntry,
+  undoWeight,
+  updateWeightEntry,
+  type LastWeights,
+  type WeightChanged,
+  type WeightInput,
+} from './weight';
 import { weightDetailSource, type WeightDetailState } from './weight-detail';
 import { createWeightRecorder } from './weight-recorder';
 import { weightTodaySource } from './weight-today';
@@ -71,9 +80,10 @@ export type Trackers = Readonly<{
   lastSport(): LastSport | null;
   /**
    * Letztes Gewicht (Vorbelegung des Formulars) und letztes Tagesgewicht (Vergleichswert der Frage
-   * „Tippfehler?“) der eigenen Person; `null`, wenn sie noch nie gewogen hat.
+   * „Tippfehler?“) der eigenen Person; `null`, wenn sie noch nie gewogen hat. `except` lässt eine Messung
+   * aus, etwa die gerade bearbeitete.
    */
-  lastWeights(): LastWeights | null;
+  lastWeights(except?: EntityId): LastWeights | null;
   /**
    * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
    * Tokens aus `addWater`, `recordWeight`, `updateWeight`, `deleteWeight` und `recordSport`; Buchungen über
@@ -131,25 +141,22 @@ export type Trackers = Readonly<{
 export function createTrackers(dependencies: TrackerDependencies): Trackers {
   const { database } = dependencies;
   const tokens = createUndoTokens();
+  /** Ergebnis eines Gewichtsbefehls nach seiner Transaktion: Meldung und Werte samt Undo-Token. */
+  const weightOutcome = <K extends string>({ messageKey, values, undo }: WeightChanged<K>) => ({
+    messageKey,
+    values,
+    undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)),
+  });
 
   return {
     addWater({ ml }) {
       const { messageKey, values, undo } = database.transaction((tx) => addWaterEntry(tx, dependencies, ml));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWater(tx, dependencies, undo)) };
     },
-    recordWeight(input) {
-      const { messageKey, values, undo } = database.transaction((tx) => recordWeightEntry(tx, dependencies, dependencies.newId(), input));
-      return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)) };
-    },
-    updateWeight(entryId, input) {
-      const { messageKey, values, undo } = database.transaction((tx) => updateWeightEntry(tx, dependencies, entryId, input));
-      return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)) };
-    },
-    deleteWeight(entryId) {
-      const { messageKey, values, undo } = database.transaction((tx) => deleteWeightEntry(tx, dependencies, entryId));
-      return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoWeight(tx, dependencies, undo)) };
-    },
-    lastWeights: () => database.read((tx) => lastWeightsOf(tx)),
+    recordWeight: (input) => weightOutcome(database.transaction((tx) => recordWeightEntry(tx, dependencies, dependencies.newId(), input))),
+    updateWeight: (entryId, input) => weightOutcome(database.transaction((tx) => updateWeightEntry(tx, dependencies, entryId, input))),
+    deleteWeight: (entryId) => weightOutcome(database.transaction((tx) => deleteWeightEntry(tx, dependencies, entryId))),
+    lastWeights: (except) => database.read((tx) => lastWeightsOf(tx, except)),
     recordSport(input) {
       const { messageKey, values, undo } = database.transaction((tx) => recordSportEntry(tx, dependencies, dependencies.newId(), input));
       return { messageKey, values, undoToken: tokens.issue(database, (tx) => undoSport(tx, dependencies, undo)) };

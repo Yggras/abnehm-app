@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { manualOrigin } from '@abnehm/contracts/tracker-rules';
+
 import { Button, Card, color, ListGroup, ListRow, Notice, radius, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
 import type { Trackers } from './trackers';
@@ -117,7 +119,7 @@ function WeightSummary({ detail }: { detail: WeightDetail }) {
 
 function MeasurementRow({ entry, today, onEdit }: { entry: WeightHistoryEntry; today: WeightDetail['today']; onEdit: (entry: EditedWeight) => void }) {
   const when = `${dayText(entry.localDate, today)} · ${timeText(entry.measuredAt, entry.timeZone)}`;
-  const imported = entry.origin !== 'manuell';
+  const imported = entry.origin !== manualOrigin;
   const parts = [when, entry.isDayWeight ? weightTexts.dayWeightMark : null, imported ? entry.sourceAppName : originNames.manuell].filter(Boolean);
   const subtitle = parts.join(' · ');
   return (

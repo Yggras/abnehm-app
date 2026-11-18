@@ -17,7 +17,7 @@ import {
   WeightEntryUpsert,
   WeightDeletedOutcome,
   WeightRecordedOutcome,
-  WeightRecordedValues,
+  WeightMessageValues,
   WeightUpdatedOutcome,
 } from '../src/trackers.ts';
 import { fixtures, without } from './define.ts';
@@ -195,7 +195,7 @@ export const trackerFixtures = {
       'mit Tagesgewicht': { ...weight, personId: philipp, createdAt: now, updatedAt: now, dayWeightG: 82_400 },
     },
   }),
-  WeightRecordedValues: fixtures(WeightRecordedValues, {
+  WeightMessageValues: fixtures(WeightMessageValues, {
     valid: { '82,4 kg': { weightG: 82_400 } },
     invalid: { 'ohne Gewicht': {}, 'in kg': { weightG: 82.4 }, 'mit Abweichung': { weightG: 82_400, changeG: 2_100 } },
   }),

@@ -252,20 +252,24 @@ export function isCountingWeightEntry(entry: WeightEntryFacts): boolean {
 export type DayWeight = Readonly<{ localDate: string; weightG: number }>;
 
 /**
- * Tagesgewichte aufsteigend nach lokalem Tag: je Tag die früheste zählende Messung. Weitere Messungen
- * desselben Tags bleiben gespeichert, zählen aber nicht als Tagesgewicht (#38). Maßgeblich ist der
- * gespeicherte lokale Tag des Eintrags, nicht das UTC-Datum seines Zeitpunkts.
+ * Die Messungen, die Tagesgewicht ihres Tags sind, aufsteigend nach lokalem Tag: je Tag die früheste
+ * zählende Messung. Weitere Messungen desselben Tags bleiben gespeichert, zählen aber nicht als
+ * Tagesgewicht (#38). Maßgeblich ist der gespeicherte lokale Tag des Eintrags, nicht das UTC-Datum seines
+ * Zeitpunkts. Bei gleichem Zeitpunkt gewinnt die zuerst übergebene Messung.
  */
-export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
-  const earliest = new Map<string, WeightEntryFacts>();
+export function dayWeightEntries<T extends WeightEntryFacts>(entries: readonly T[]): T[] {
+  const earliest = new Map<string, T>();
   for (const entry of entries) {
     if (!isCountingWeightEntry(entry)) continue;
     const known = earliest.get(entry.localDate);
     if (known === undefined || Date.parse(entry.measuredAt) < Date.parse(known.measuredAt)) earliest.set(entry.localDate, entry);
   }
-  return [...earliest.values()]
-    .sort((a, b) => (a.localDate < b.localDate ? -1 : 1))
-    .map(({ localDate, weightG }) => ({ localDate, weightG }));
+  return [...earliest.values()].sort((a, b) => (a.localDate < b.localDate ? -1 : 1));
+}
+
+/** Tagesgewichte aufsteigend nach lokalem Tag, nach `dayWeightEntries`. */
+export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
+  return dayWeightEntries(entries).map(({ localDate, weightG }) => ({ localDate, weightG }));
 }
 
 /**
@@ -334,6 +338,21 @@ export function trendValueOn(points: readonly TrendPoint[], localDate: string): 
   return pointsUntil(points, localDate).at(-1)?.trendG ?? null;
 }
 
+/** Trendwert nach dem letzten Tagesgewicht, sofern der Trend angezeigt wird (ab drei Tagesgewichten); sonst `null`. */
+export function currentTrendG(points: readonly TrendPoint[]): number | null {
+  const last = points.at(-1);
+  return last !== undefined && showsTrend(points.length) ? last.trendG : null;
+}
+
+/**
+ * Eine Gewichtsveränderung in g als kg mit einer Nachkommastelle, halbe Zehntel vom Nullpunkt weg. Die
+ * Spezifikation legt die Richtung der Halbrundung nicht fest; so rundet ein Abnehmen wie ein Zunehmen
+ * gleicher Größe. Was auf 0,0 kg rundet, ist 0, nie −0.
+ */
+export function changeInTenthKg(changeG: number): number {
+  return (Math.sign(changeG) * Math.round(Math.abs(changeG) / 100)) / 10 || 0;
+}
+
 /** Veränderung über 14 Tage in kg mit einer Nachkommastelle und ihre Richtung nach der Rundung. */
 export type WeightChange =
   | Readonly<{ changeKg: number; direction: 'sinkend' | 'stabil' | 'steigend' }>
@@ -349,8 +368,7 @@ const changeDays = 14;
  *
  * Grundlage sind die nach außen gerundeten Trendwerte in g. So liefert eine Reihe des
  * `WeightTrendReader` dieselbe Zahl wie das Tracker-Modul, und Gleitkommareste kippen keine Rundung.
- * Gerundet wird auf 0,1 kg, halbe Zehntel vom Nullpunkt weg: Die Spezifikation legt die Richtung der
- * Halbrundung nicht fest, so rundet ein Abnehmen wie ein Zunehmen gleicher Größe.
+ * Gerundet wird mit `changeInTenthKg` auf 0,1 kg.
  */
 export function weightChange(points: readonly TrendPoint[], localDate: string): WeightChange {
   const known = pointsUntil(points, localDate);
@@ -361,9 +379,7 @@ export function weightChange(points: readonly TrendPoint[], localDate: string): 
     return { changeKg: null, direction: 'noch_nicht_verfuegbar' };
   }
   const reference = trendValueOn(known, localDateOf(calendarDay(localDate) - changeDays)) ?? first.dayWeightG;
-  const changeG = last.trendG - reference;
-  // `|| 0` vermeidet −0 bei einer Veränderung, die auf 0,0 kg rundet.
-  const changeKg = (Math.sign(changeG) * Math.round(Math.abs(changeG) / 100)) / 10 || 0;
+  const changeKg = changeInTenthKg(last.trendG - reference);
   return { changeKg, direction: changeKg < 0 ? 'sinkend' : changeKg > 0 ? 'steigend' : 'stabil' };
 }
 

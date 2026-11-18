@@ -1,6 +1,6 @@
 import { minutesOfDay, readingOf } from '@abnehm/clock';
 import { localDateAfter, weekdayOf, type Instant, type LocalDate, type TimeZone } from '@abnehm/contracts/base';
-import type { WeightChange } from '@abnehm/contracts/tracker-rules';
+import { changeInTenthKg, type WeightChange } from '@abnehm/contracts/tracker-rules';
 
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import type { WeightHistoryEntry } from './weight-detail';
@@ -16,33 +16,28 @@ const minus = '−';
 /** Gewicht in kg mit einer Nachkommastelle, etwa „82,4 kg“. */
 export const kgText = (weightG: number) => `${kg(weightG)} kg`;
 
-/**
- * Veränderung in g mit Vorzeichen auf 0,1 kg, etwa „−0,8 kg“ oder „+0,3 kg“; was auf 0,0 kg rundet, steht
- * ohne Vorzeichen. Gerundet wird vom Nullpunkt weg wie bei `changeKg`.
- */
-export function signedKgText(changeG: number): string {
-  const tenths = Math.round(Math.abs(changeG) / 100);
-  const sign = tenths === 0 ? '' : changeG < 0 ? minus : '+';
-  return `${sign}${kg(tenths * 100)} kg`;
+/** kg mit einer Nachkommastelle und Vorzeichen, etwa „−0,8 kg“ oder „+0,3 kg“; 0,0 kg ohne Vorzeichen. */
+function signedTenthKgText(changeKg: number, spoken: boolean): string {
+  const sign = changeKg === 0 ? '' : changeKg < 0 ? (spoken ? 'minus ' : minus) : spoken ? 'plus ' : '+';
+  return `${sign}${Math.abs(changeKg).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg`;
 }
 
+/** Veränderung in g, gerundet wie `changeKg` (`changeInTenthKg`), etwa „−0,8 kg“. */
+export const signedKgText = (changeG: number) => signedTenthKgText(changeInTenthKg(changeG), false);
+
 /** Zugänglich gesprochen: „minus 0,8 kg“ statt eines Strichs. */
-export function spokenSignedKg(changeG: number): string {
-  const tenths = Math.round(Math.abs(changeG) / 100);
-  const sign = tenths === 0 ? '' : changeG < 0 ? 'minus ' : 'plus ';
-  return `${sign}${kg(tenths * 100)} kg`;
-}
+export const spokenSignedKg = (changeG: number) => signedTenthKgText(changeInTenthKg(changeG), true);
 
 /** „Trend −0,4 kg in 2 Wochen“; ohne Messung in den letzten 14 Tagen ein Hinweis statt der Zahl. */
 export function changeText(change: WeightChange): string {
   if (change.changeKg === null) return 'Für die Veränderung in 2 Wochen fehlt eine Messung der letzten 14 Tage.';
-  return `Trend ${signedKgText(change.changeKg * 1000)} in 2 Wochen`;
+  return `Trend ${signedTenthKgText(change.changeKg, false)} in 2 Wochen`;
 }
 
 /** Zugänglicher Name von `changeText`. */
 export function spokenChange(change: WeightChange): string {
   if (change.changeKg === null) return changeText(change);
-  return `Trend ${spokenSignedKg(change.changeKg * 1000)} in 2 Wochen`;
+  return `Trend ${signedTenthKgText(change.changeKg, true)} in 2 Wochen`;
 }
 
 /** Datum ausgeschrieben, etwa „13. Dezember 2026“. */

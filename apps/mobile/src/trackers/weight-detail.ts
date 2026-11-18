@@ -1,23 +1,22 @@
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
 import {
+  currentTrendG,
+  dayWeightEntries,
   dayWeights,
   isCountingWeightEntry,
-  type manualOrigin,
-  showsTrend,
   sinceStartG,
   weightChange,
   weightForecast,
   weightTrend,
   type WeightChange,
 } from '@abnehm/contracts/tracker-rules';
-import type { ImportOrigin } from '@abnehm/contracts/trackers';
 
 import type { ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { observedSource, type ObservedSource, type Refresh } from './today-source';
 import type { TrackerDependencies } from './trackers';
-import { weightEntriesOf, type WeightRow } from './weight-repository';
+import { weightEntriesOf, type WeightOrigin, type WeightRow } from './weight-repository';
 
 // Lesemodell des Gewicht-Detailbildschirms `capture.weight` (Spezifikation 3, Abschnitte 3 und 5):
 // Trendgewicht, letztes Tagesgewicht, „seit Start“, Veränderung in 2 Wochen und Prognose, darunter alle
@@ -32,7 +31,7 @@ export type WeightHistoryEntry = Readonly<{
   localDate: LocalDate;
   /** Zone der Anlage; in ihr zeigt der Verlauf die Uhrzeit. */
   timeZone: TimeZone;
-  origin: typeof manualOrigin | ImportOrigin;
+  origin: WeightOrigin;
   /** Anzeigename der Quell-App eines Imports, falls bekannt. */
   sourceAppName: string | null;
   /** Die früheste zählende Messung ihres Tags. */
@@ -91,10 +90,9 @@ export function weightDetailSource(
 export function weightDetailOf(rows: readonly WeightRow[], today: LocalDate, plan: EffectivePlan): WeightDetail {
   const points = weightTrend(dayWeights(rows));
   const last = points.at(-1);
+  const trendG = currentTrendG(points);
   const trend: WeightTrendSummary | null =
-    last !== undefined && showsTrend(points.length)
-      ? { trendG: last.trendG, sinceStartG: sinceStartG(points, today) ?? 0, change: weightChange(points, today) }
-      : null;
+    trendG === null ? null : { trendG, sinceStartG: sinceStartG(points, today) ?? 0, change: weightChange(points, today) };
   const goal = plan.type === 'gueltig' ? plan.goal : null;
   const forecastDate = goal === null ? null : weightForecast({ today, trendG: trend?.trendG ?? null, goalWeightG: goal.goalWeightG, pace: goal.pace });
   return {
@@ -107,24 +105,20 @@ export function weightDetailOf(rows: readonly WeightRow[], today: LocalDate, pla
   };
 }
 
-/** Zählende Messungen, neueste zuerst; die erste je lokalem Tag (aufsteigend gelesen) ist das Tagesgewicht. */
+/** Zählende Messungen, neueste zuerst; welche Tagesgewicht ist, sagen die Tracker-Regeln (`dayWeightEntries`). */
 function historyOf(rows: readonly WeightRow[]): WeightHistoryEntry[] {
-  const seenDays = new Set<string>();
-  const entries: WeightHistoryEntry[] = [];
-  for (const row of rows) {
-    if (!isCountingWeightEntry(row)) continue;
-    const isDayWeight = !seenDays.has(row.localDate);
-    seenDays.add(row.localDate);
-    entries.push({
+  const dayWeightIds = new Set(dayWeightEntries(rows).map((row) => row.id));
+  return rows
+    .filter(isCountingWeightEntry)
+    .map((row) => ({
       id: EntityId.parse(row.id),
       weightG: row.weightG,
       measuredAt: Instant.parse(row.measuredAt),
       localDate: LocalDate.parse(row.localDate),
       timeZone: TimeZone.parse(row.timeZone),
-      origin: row.origin as WeightHistoryEntry['origin'],
+      origin: row.origin,
       sourceAppName: row.sourceAppName,
-      isDayWeight,
-    });
-  }
-  return entries.reverse();
+      isDayWeight: dayWeightIds.has(row.id),
+    }))
+    .reverse();
 }

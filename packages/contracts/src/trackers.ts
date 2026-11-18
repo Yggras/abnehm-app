@@ -195,14 +195,17 @@ export function importedWeightEntryId(personId: EntityId, origin: ImportOrigin, 
   return EntityId.parse(uuidV5(importedWeightNamespace, `${personId}:${origin}:${externalKey}`));
 }
 
-/** Werte der Meldung nach dem Eintragen, etwa „82,4 kg eingetragen · Rückgängig“. */
-export const WeightRecordedValues = z.strictObject({ weightG: ManualWeightG });
-export type WeightRecordedValues = z.infer<typeof WeightRecordedValues>;
+/**
+ * Werte der Meldungen nach Eintragen, Bearbeiten und Löschen eines manuellen Gewichts, etwa
+ * „82,4 kg eingetragen · Rückgängig“: das Gewicht der Messung.
+ */
+export const WeightMessageValues = z.strictObject({ weightG: ManualWeightG });
+export type WeightMessageValues = z.infer<typeof WeightMessageValues>;
 
 /** Ergebnis von `recordWeight`: Meldung samt typisierten Werten und flüchtigem, nie synchronisiertem Undo-Token. */
 export const WeightRecordedOutcome = QuickCommandOutcome.extend({
   messageKey: z.literal('gewicht.eingetragen'),
-  values: WeightRecordedValues,
+  values: WeightMessageValues,
 });
 export type WeightRecordedOutcome = z.infer<typeof WeightRecordedOutcome>;
 
@@ -212,13 +215,13 @@ export type WeightRecordedOutcome = z.infer<typeof WeightRecordedOutcome>;
  */
 export const WeightUpdatedOutcome = QuickCommandOutcome.extend({
   messageKey: z.literal('gewicht.geaendert'),
-  values: WeightRecordedValues,
+  values: WeightMessageValues,
 });
 export type WeightUpdatedOutcome = z.infer<typeof WeightUpdatedOutcome>;
 
 /** Ergebnis von `deleteWeight` ohne Bestätigungsdialog, etwa „82,4 kg gelöscht · Rückgängig“. */
 export const WeightDeletedOutcome = QuickCommandOutcome.extend({
   messageKey: z.literal('gewicht.geloescht'),
-  values: WeightRecordedValues,
+  values: WeightMessageValues,
 });
 export type WeightDeletedOutcome = z.infer<typeof WeightDeletedOutcome>;

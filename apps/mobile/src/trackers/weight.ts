@@ -1,8 +1,18 @@
 import { readingOf } from '@abnehm/clock';
 import { EntityId, type Instant, type LocalDate } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
-import { dayWeights, isInFuture, isValidManualWeight, lastWeightG, manualOrigin, manualWeightG, type DayWeight } from '@abnehm/contracts/tracker-rules';
-import { WeightEntryUpsert, type WeightRecordedValues } from '@abnehm/contracts/trackers';
+import {
+  dayWeights,
+  isInFuture,
+  isValidManualWeight,
+  lastWeightG,
+  manualOrigin,
+  manualWeightG,
+  weightTrend,
+  type DayWeight,
+  type TrendPoint,
+} from '@abnehm/contracts/tracker-rules';
+import { WeightEntryUpsert, type WeightMessageValues } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
@@ -29,7 +39,7 @@ export type WeightUndo =
   | Readonly<{ type: 'weight_deleted'; deleted: DeletedWeight }>;
 
 /** Ergebnis eines Gewichtsbefehls in der Transaktion: Meldung, Werte, gemeldeter Tag und Undo. */
-type WeightChanged<K extends string> = Readonly<{ messageKey: K; values: WeightRecordedValues; localDate: LocalDate; undo: WeightUndo }>;
+export type WeightChanged<K extends string> = Readonly<{ messageKey: K; values: WeightMessageValues; localDate: LocalDate; undo: WeightUndo }>;
 export type WeightRecorded = WeightChanged<'gewicht.eingetragen'>;
 
 type Dependencies = Pick<TrackerDependencies, 'clock' | 'writer' | 'persistence'>;
@@ -87,14 +97,23 @@ export function deleteWeightEntry(tx: TransactionContext, { clock, writer, persi
 /** Letztes Gewicht (zuletzt gemessene zählende Messung) und letztes Tagesgewicht samt seinem Tag. */
 export type LastWeights = Readonly<{ weightG: number; dayWeight: DayWeight }>;
 
-/** Nach den Tracker-Regeln, in einer Lesung; ohne eigene Person (vor dem ersten Pull) oder Messung `null`. */
-export function lastWeightsOf(tx: ReadContext): LastWeights | null {
+/**
+ * Nach den Tracker-Regeln, in einer Lesung; ohne eigene Person (vor dem ersten Pull) oder Messung `null`.
+ * `except` lässt eine Messung aus, etwa die gerade bearbeitete: Ihr Formular vergleicht für „Tippfehler?“
+ * mit dem letzten Tagesgewicht der übrigen Messungen.
+ */
+export function lastWeightsOf(tx: ReadContext, except?: EntityId): LastWeights | null {
   const person = readOwnPerson(tx);
   if (person === undefined) return null;
-  const entries = weightEntriesOf(tx, EntityId.parse(person.id));
+  const entries = weightEntriesOf(tx, EntityId.parse(person.id)).filter((entry) => entry.id !== except);
   const weightG = lastWeightG(entries);
   const dayWeight = dayWeights(entries).at(-1);
   return weightG === null || dayWeight === undefined ? null : { weightG, dayWeight };
+}
+
+/** Gewichtstrend der Person nach jedem Tagesgewicht, aufsteigend; zählende Einträge, auch importierte. */
+export function trendPointsOf(tx: ReadContext, personId: EntityId): TrendPoint[] {
+  return weightTrend(dayWeights(weightEntriesOf(tx, personId)));
 }
 
 /**

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { showsTrend, sinceStartG, trendValueOn, weightChange, weightForecast, weightTrend, type DayWeight } from '../src/tracker-rules.ts';
+import {
+  changeInTenthKg,
+  currentTrendG,
+  dayWeightEntries,
+  showsTrend,
+  sinceStartG,
+  trendValueOn,
+  weightChange,
+  weightForecast,
+  weightTrend,
+  type DayWeight,
+} from '../src/tracker-rules.ts';
 
 // Nachweis für #176: Gewichtstrend, Trendwert eines Tages, `changeKg`, „seit Start“ und Prognose der
 // Tracker-Regeln (Spezifikation 3, Abschnitt 3; Spezifikation 0, Abschnitt 5).
@@ -64,6 +75,38 @@ describe('Trendwert eines Tages', () => {
     expect(showsTrend(0)).toBe(false);
     expect(showsTrend(2)).toBe(false);
     expect(showsTrend(3)).toBe(true);
+  });
+});
+
+describe('Messungen der Tagesgewichte', () => {
+  const entry = (id: string, measuredAt: string, localDate: string, extra: { deletedAt?: string; hiddenAt?: string } = {}) => ({
+    id, weightG: 80_000, measuredAt, localDate, deletedAt: extra.deletedAt ?? null, hiddenAt: extra.hiddenAt ?? null,
+  });
+
+  it('liefert je Tag die früheste zählende Messung samt ihren Feldern, aufsteigend nach Tag', () => {
+    const entries = [
+      entry('spaet', '2026-10-14T09:00:00.000Z', '2026-10-14'),
+      entry('frueh-geloescht', '2026-10-14T04:00:00.000Z', '2026-10-14', { deletedAt: '2026-10-14T05:00:00.000Z' }),
+      entry('frueh', '2026-10-14T05:30:00.000Z', '2026-10-14'),
+      entry('gestern-ausgeblendet', '2026-10-13T05:00:00.000Z', '2026-10-13', { hiddenAt: '2026-10-13T06:00:00.000Z' }),
+      entry('gestern', '2026-10-13T06:00:00.000Z', '2026-10-13'),
+    ];
+    expect(dayWeightEntries(entries).map((day) => day.id)).toEqual(['gestern', 'frueh']);
+  });
+});
+
+describe('Trendwert nach dem letzten Tagesgewicht', () => {
+  it('gibt es erst ab drei Tagesgewichten', () => {
+    expect(currentTrendG([])).toBeNull();
+    expect(currentTrendG(weightTrend([day('2026-10-01', 80_000), day('2026-10-02', 81_000)]))).toBeNull();
+    expect(currentTrendG(weightTrend([day('2026-10-01', 80_000), day('2026-10-02', 81_000), day('2026-10-03', 79_000)]))).toBe(79_990);
+  });
+});
+
+describe('Rundung einer Veränderung auf 0,1 kg', () => {
+  it('rundet halbe Zehntel vom Nullpunkt weg und kennt keine negative Null', () => {
+    expect([changeInTenthKg(-450), changeInTenthKg(450), changeInTenthKg(-449), changeInTenthKg(760), changeInTenthKg(-760)]).toEqual([-0.5, 0.5, -0.4, 0.8, -0.8]);
+    expect(Object.is(changeInTenthKg(-40), 0)).toBe(true);
   });
 });
 

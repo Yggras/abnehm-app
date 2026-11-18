@@ -10,6 +10,7 @@ import { useUndoableMessage, type UndoableOutcome } from '../shell/use-undoable-
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { gramsOfKgText } from './kg-text';
 import type { Trackers } from './trackers';
+import { weightTexts } from './weight-texts';
 
 // Formular „Gewicht eintragen“ (Spezifikation 3, Abschnitte 3–5; #38): kg mit einer Nachkommastelle,
 // das letzte Gewicht vorausgefüllt, damit die Person nur die Änderung tippt, und der Messzeitpunkt
@@ -19,8 +20,8 @@ import type { Trackers } from './trackers';
 //
 // Mit `entry` bearbeitet es eine manuelle Messung (#176): Wert und Messzeitpunkt sind vorausgefüllt,
 // „Speichern“ ändert sie, „Löschen“ löscht sie ohne Bestätigungsdialog; die Meldung bietet „Rückgängig“.
-// Die Frage „Tippfehler?“ gilt nur für neue Einträge: Beim Nachbessern einer älteren Messung wäre das
-// letzte Tagesgewicht kein sinnvoller Vergleich, oft ist es die Messung selbst.
+// „Tippfehler?“ gilt auch hier; verglichen wird mit dem letzten Tagesgewicht der übrigen Messungen, denn
+// das letzte Tagesgewicht wäre oft die bearbeitete Messung selbst.
 
 // Die Grenzen kommen aus den Tracker-Regeln, damit der Satz bei einer Änderung stimmt.
 const invalidWeight = `Bitte ein Gewicht von ${kg(manualWeightG.min)} bis ${kg(manualWeightG.max)} kg mit höchstens einer Nachkommastelle eingeben.`;
@@ -42,7 +43,7 @@ export function WeightEntryForm({ trackers, entry, onSaved }: WeightEntryFormPro
   const message = useUndoableMessage();
   const field = useRef<TextFieldHandle>(null);
   // Vorbelegung (letztes Gewicht) und Vergleichswert (letztes Tagesgewicht) bleiben, solange das Formular offen ist.
-  const [last] = useState(() => (entry === undefined ? trackers.lastWeights() : null));
+  const [last] = useState(() => trackers.lastWeights(entry?.id));
   const [text, setText] = useState(() => (entry !== undefined ? kg(entry.weightG) : last === null ? '' : kg(last.weightG)));
   const [measuredAt, setMeasuredAt] = useState(() => entry?.measuredAt ?? clock.read().instant);
   const [invalid, setInvalid] = useState(false);
@@ -129,7 +130,7 @@ export function WeightEntryForm({ trackers, entry, onSaved }: WeightEntryFormPro
       ) : (
         <Button label="Speichern" block onPress={save} />
       )}
-      {entry !== undefined ? <Button variant="secondary" label="Löschen" block onPress={() => run(() => trackers.deleteWeight(entry.id))} /> : null}
+      {entry !== undefined ? <Button variant="secondary" label={weightTexts.delete} block onPress={() => run(() => trackers.deleteWeight(entry.id))} /> : null}
     </View>
   );
 }

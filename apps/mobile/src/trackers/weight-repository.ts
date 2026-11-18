@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, LocalDate, TimeZone, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import type { WeightEntryFacts } from '@abnehm/contracts/tracker-rules';
+import type { manualOrigin, WeightEntryFacts } from '@abnehm/contracts/tracker-rules';
 import { ImportedWeightEntryUpsert, type ImportOrigin, type WeightEntryUpsert } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -13,11 +13,14 @@ import type { StoredImport } from './stored-import';
 // Tracker-Moduls, die Drizzle und die Tabelle `weight_entry` sieht. Andere Bereiche lesen sie nie
 // (Spezifikation 3, Abschnitt 2).
 
+/** Herkunft eines Gewichtseintrags; die Tabelle erzwingt sie mit einem `CHECK`. */
+export type WeightOrigin = typeof manualOrigin | ImportOrigin;
+
 /** Was Befehle und Sync von einem gespeicherten Eintrag wissen müssen. */
 export type StoredWeightEntry = Readonly<{
   personId: EntityId;
-  /** `manuell` oder die Herkunft eines Imports; nur manuelle Einträge lassen sich bearbeiten und löschen. */
-  origin: string;
+  /** Nur manuelle Einträge lassen sich bearbeiten und löschen. */
+  origin: WeightOrigin;
   weightG: number;
   measuredAt: Instant;
   localDate: LocalDate;
@@ -70,7 +73,7 @@ export function readWeightEntry(tx: ReadContext, entityId: EntityId): StoredWeig
     .get();
   return row && {
     personId: EntityId.parse(row.personId),
-    origin: row.origin,
+    origin: row.origin as WeightOrigin,
     weightG: row.weightG,
     measuredAt: row.measuredAt as Instant,
     localDate: LocalDate.parse(row.localDate),
@@ -85,8 +88,7 @@ export function readWeightEntry(tx: ReadContext, entityId: EntityId): StoredWeig
 export type WeightRow = WeightEntryFacts &
   Readonly<{
     id: string;
-    /** `manuell` oder die Herkunft eines Imports. */
-    origin: string;
+    origin: WeightOrigin;
     /** Anzeigename der Quell-App eines Imports, falls bekannt. */
     sourceAppName: string | null;
     /** Zone der Anlage; in ihr gilt der lokale Tag des Eintrags. */
@@ -113,7 +115,8 @@ export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightRow[
     .from(weightEntry)
     .where(eq(weightEntry.personId, personId))
     .orderBy(asc(weightEntry.measuredAt), asc(weightEntry.id))
-    .all();
+    .all()
+    .map((row) => ({ ...row, origin: row.origin as WeightOrigin }));
 }
 
 /** Der importierte Gewichtseintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
