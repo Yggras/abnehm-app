@@ -1,6 +1,7 @@
 import type { AreaKey } from '@abnehm/contracts/base';
 import type { PartnerDailyGoalStage, PartnerSummaryEnvelope } from '@abnehm/contracts/partner';
 
+import { titleOf } from '../shell/texts';
 import type { DataAge } from './partner-view';
 
 // Texte des Partnerbereichs nach Spezifikation 5, Abschnitt 2 (#121). Angezeigt wird die kurze Form,
@@ -9,17 +10,20 @@ import type { DataAge } from './partner-view';
 /** Ein Text in angezeigter und vorgelesener Form. */
 export type Spoken = Readonly<{ shown: string; spoken: string }>;
 
+/** Titel und Aktionen heißen wie ihre Routen (`shell/texts.ts`). */
 export const partnerTexts = {
-  title: 'Wir',
+  title: titleOf({ type: 'partner' }),
   soloTitle: 'Momo wartet im Ei',
   soloBody: 'Deine Tracker kannst du auch allein vollständig nutzen. Wenn ihr zu zweit seid, kümmert ihr euch gemeinsam um Momo.',
-  invite: 'Partner einladen',
-  redeem: 'Code eingeben',
-  encourageTitle: 'Anfeuern',
+  /** Kurzform des Solo-Zustands auf der Partner-Karte von „Heute“. */
+  soloToday: 'Momo wartet im Ei. Lade deinen Partner ein, wenn ihr gemeinsam starten möchtet.',
+  invite: titleOf({ type: 'partner.invite' }),
+  redeem: titleOf({ type: 'partner.redeem' }),
+  encourage: titleOf({ type: 'partner.encourage' }),
   encourageBody: (name: string) => `Schick ${name} eine kurze Ermutigung.`,
-  encourage: 'Anfeuern',
   loading: 'Partner lädt …',
-  noStatusYet: 'Tagesziele noch ohne Stand',
+  /** Veraltet, aber noch ohne Datenstand, etwa zwischen zwei Pull-Seiten direkt nach dem Koppeln. */
+  offline: 'Offline',
 } as const;
 
 /** Grober Tageszielstand, ohne „X von 3“. */
@@ -86,6 +90,14 @@ export function ageText(age: DataAge): Spoken {
     case 'datum':
       return { shown: `${age.day}.${age.month}. ${age.time}`, spoken: `${age.day}.${age.month}. ${age.time} Uhr` };
   }
+}
+
+/**
+ * Zugänglicher Name des Partnerkopfs auf „Wir“ und „Heute“, etwa „Anna, Tagesziele: unterwegs, Stand vor
+ * 5 Minuten“. Ohne Tageszielstand oder Datenstand entfällt der jeweilige Teil.
+ */
+export function partnerHeadline(name: string, stage: PartnerDailyGoalStage | null, stand: Spoken | null): string {
+  return [name, stage === null ? null : `Tagesziele: ${stageTexts[stage]}`, stand?.spoken].filter((part) => part != null).join(', ');
 }
 
 /** „Stand vor 5 Min.“ bzw. veraltet neutral „Offline · letzter Stand vor 12 Min.“. */

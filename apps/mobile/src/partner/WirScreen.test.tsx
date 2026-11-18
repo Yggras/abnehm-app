@@ -225,6 +225,23 @@ describe('„Wir“ gekoppelt', () => {
     expect((await weightRow()).getByText('Trend +0,3 kg in 2 Wochen')).toBeOnTheScreen();
   });
 
+  it('zeigt gekoppelt ohne jede Projektion nur den Namen und offline neutral „Offline“ (#121, Review)', async () => {
+    const philipp = await openPhilipp('gekoppelt');
+    await renderRouter(appDir, { initialUrl: '/partner' });
+    await screen.findByTestId('wir-bereich-wasser');
+    // Zwischen zwei Pull-Seiten direkt nach dem Koppeln: Kopplung da, Projektionen noch nicht.
+    await philipp.pull([
+      ...(['wasser', 'sport', 'gewicht'] as const).map((area) =>
+        notice({ type: 'partner_summary', projectionId: seedIds.partnerSummary.anna[area] }, 'freigabe_entzogen')),
+      notice({ type: 'partner_daily_goal_status', projectionId: seedIds.partnerDailyGoalStatus.anna }, 'entkopplung'),
+    ]);
+    expect(within(overview()).getByRole('header', { name: 'Anna' })).toBeOnTheScreen();
+    expect(screen.queryByText(/Stand|Tagesziele|Anfang|unterwegs|geschafft/)).not.toBeOnTheScreen();
+
+    await philipp.setOnline(false);
+    expect(screen.getByText('Offline')).toBeOnTheScreen();
+  });
+
   it('lässt nach Revocation-Notices für alle Bereiche nur Namen und groben Stand stehen, ohne Hinweis', async () => {
     const philipp = await openPhilipp('gekoppelt');
     await renderRouter(appDir, { initialUrl: '/partner' });
@@ -307,6 +324,7 @@ describe('Partner-Karte auf „Heute“ über die Heute-Registry', () => {
     const philipp = await openPhilipp('gekoppelt');
     const slot = await renderToday(philipp.partner);
     expect(slot.getByLabelText('Anna, Tagesziele: fast geschafft, Stand gerade eben')).toBeOnTheScreen();
+    expect(slot.getByText('A')).toBeOnTheScreen();
     expect(slot.getByText('Stand gerade eben')).toBeOnTheScreen();
     expect(slot.getByRole('button', { name: 'Anfeuern' })).toBeOnTheScreen();
     expect(slot.queryByText(/Wasser|Sport|Trend|%/)).not.toBeOnTheScreen();

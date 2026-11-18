@@ -13,8 +13,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useClock } from '../clock/clock-context';
 import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
-import { dataAgeOf } from '../partner/partner-view';
-import { partnerTexts, stageTexts, standText } from '../partner/texts';
+import { dataAgeOf, partnerHeadline, partnerTexts, stageTexts, standText } from '../partner';
+import { PartnerAvatar } from '../partner/PartnerAvatar';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
@@ -192,19 +192,18 @@ function PartnerSlot({ registry }: { registry: TodayRegistry }) {
 /** Der Beitrag meldet sich im Minutentakt neu; so liest die Karte das Alter ihres Stands mit der aktuellen Uhr. */
 function Partner({ data, stale }: { data: PartnerCardReady; stale: boolean }) {
   const clock = useClock();
-  if (data.type === 'solo') return <Card><Text variant="headline" accessibilityRole="header">Wir</Text>
-    <Text>Momo wartet im Ei. Lade deinen Partner ein, wenn ihr gemeinsam starten möchtet.</Text>
+  if (data.type === 'solo') return <Card><Text variant="headline" accessibilityRole="header">{partnerTexts.title}</Text>
+    <Text>{partnerTexts.soloToday}</Text>
     <Button label={partnerTexts.invite} variant="secondary" onPress={() => action(data.inviteAction)} />
     <Button label={partnerTexts.redeem} variant="text" onPress={() => action(data.redeemAction)} />
   </Card>;
-  const stage = stageTexts[data.dailyGoalStage];
   const stand = standText(dataAgeOf(data.dataAsOf, clock.read()), stale);
-  return <Card><Text variant="headline" accessibilityRole="header">Wir</Text>
-    <View accessible accessibilityLabel={`${data.partnerDisplayName}, Tagesziele: ${stage}, ${stand.spoken}`} style={styles.partner}>
-      <Icon name="person" tone="partner" />
+  return <Card><Text variant="headline" accessibilityRole="header">{partnerTexts.title}</Text>
+    <View accessible accessibilityLabel={partnerHeadline(data.partnerDisplayName, data.dailyGoalStage, stand)} style={styles.partner}>
+      <PartnerAvatar displayName={data.partnerDisplayName} />
       <View style={styles.flex}>
         <Text variant="bodyStrong">{data.partnerDisplayName}</Text>
-        <Text tone="inkMuted">{stage}</Text>
+        <Text tone="inkMuted">{stageTexts[data.dailyGoalStage]}</Text>
         <Text variant="caption" tone="inkMuted">{stand.shown}</Text>
       </View>
     </View>

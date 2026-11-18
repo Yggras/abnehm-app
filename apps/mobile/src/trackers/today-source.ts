@@ -1,4 +1,5 @@
 import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext } from '../local-db';
+import type { Refresh } from '../shell/followed-source';
 import type { TodaySlot, TodaySource, TodayState } from '../shell/today-registry';
 
 // Gemeinsamer Ablauf der Tracker-Beiträge für „Heute“ (Spezifikation 3, Abschnitt 7): Ein Beitrag liest
@@ -6,8 +7,8 @@ import type { TodaySlot, TodaySource, TodayState } from '../shell/today-registry
 // ohne neue Eingabe zum nächsten Tag wechselt. Den gelesenen Stand löst er asynchron auf, etwa mit dem
 // `PlanReader`, und meldet nur das Ergebnis der jüngsten Lesung.
 
-/** Stößt erneutes Lesen ohne Datenbankänderung an; die Rückgabe beendet den Anstoß. */
-export type Refresh = (update: () => void) => () => void;
+/** Stößt erneutes Lesen ohne Datenbankänderung an; geteilt mit dem Partnerbereich. */
+export type { Refresh };
 
 export function observedTodaySource<K extends TodaySlot, R>(
   database: Pick<LocalDatabase, 'observe' | 'read'>,

@@ -75,9 +75,13 @@ export function wirPartnerOf(reading: PartnerReading, online: boolean, now: Cloc
   };
 }
 
-const inviteAction = { actionId: 'partner_card.invite', target: { type: 'partner.invite' } } as const satisfies UiActionIntent;
-const redeemAction = { actionId: 'partner_card.redeem', target: { type: 'partner.redeem' } } as const satisfies UiActionIntent;
-const encourageAction = { actionId: 'partner_card.encourage', target: { type: 'partner.encourage' } } as const satisfies UiActionIntent;
+/** Die Aktionen des Partnerbereichs, auf „Heute“ als `UiActionIntent` im Beitrag, auf „Wir“ direkt. */
+export const partnerActions = {
+  invite: { actionId: 'partner_card.invite', target: { type: 'partner.invite' } },
+  redeem: { actionId: 'partner_card.redeem', target: { type: 'partner.redeem' } },
+  encourage: { actionId: 'partner_card.encourage', target: { type: 'partner.encourage' } },
+} as const satisfies Record<string, UiActionIntent>;
+const { invite: inviteAction, redeem: redeemAction, encourage: encourageAction } = partnerActions;
 
 /**
  * Beitrag `partner` für „Heute“: solo Einladen und Code eingeben, gekoppelt Anzeigename, grober

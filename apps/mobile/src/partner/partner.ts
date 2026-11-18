@@ -3,26 +3,25 @@ import type { Clock } from '@abnehm/clock';
 import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { readPartnerCache } from '../partner-cache';
-import type { Source } from '../shell/followed-source';
+import type { Refresh, Source } from '../shell/followed-source';
 import type { TodaySource } from '../shell/today-registry';
 import { readLastPullAt } from '../sync';
+import type { ObserveNetwork } from '../sync/triggers';
 import { partnerCardOf, wirPartnerOf, type PartnerReading, type WirPartner } from './partner-view';
 
 // Partnerbereich der App (Spezifikation 5, Abschnitte 2 und 3; #121) über der Datenbank eines Kontos.
 // Er liest den Partner ausschließlich aus dem widerrufbaren Partnercache (#106): Jede Pull-Seite mit
 // Löschmarkierung oder Revocation-Notice löst einen Commit aus, nach dem „Wir“ und „Heute“ neu lesen.
 
-/** Stößt erneutes Lesen ohne Datenbankänderung an, etwa im Minutentakt; die Rückgabe beendet den Anstoß. */
-export type Refresh = (update: () => void) => () => void;
-
-/** Netzstatus des Geräts: meldet den Stand, sobald er bekannt ist, und jeden Wechsel; die Rückgabe beendet das. */
-export type ObserveOnline = (listener: (online: boolean) => void) => () => void;
-
 export type PartnerDependencies = Readonly<{
   database: LocalDatabase;
   clock: Clock;
-  /** Ohne Meldung gilt das Gerät als verbunden; veraltet ist der Stand dann über das Alter des letzten Pulls. */
-  observeOnline: ObserveOnline;
+  /**
+   * Netzstatus des Geräts wie für die Sync-Auslöser. Ohne Meldung gilt das Gerät als verbunden; veraltet ist
+   * der Stand dann über das Alter des letzten Pulls.
+   */
+  observeOnline: ObserveNetwork;
+  /** Minutentakt: Alter des Stands und die 10-Minuten-Grenze ändern sich auch ohne Commit. */
   refresh: Refresh;
   /** Sync des Fundaments (#102) für Pull-to-Refresh. */
   sync: () => Promise<unknown>;

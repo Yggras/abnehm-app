@@ -1,13 +1,14 @@
 import type { AreaKey } from '@abnehm/contracts/base';
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Card, color, Icon, Notice, radius, size, Skeleton, space, Text, useLargeTextLayout, type IconName } from '../design';
+import { Button, Card, color, Icon, Notice, size, Skeleton, space, Text, useLargeTextLayout, type IconName } from '../design';
 import { openTarget } from '../navigation';
 import { MomoFigure } from '../shell/MomoFigure';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner } from './app-partner';
-import type { CoupledPartner, WirPartner } from './partner-view';
-import { areaNames, partnerTexts, stageTexts, standText, summaryText, type Spoken } from './texts';
+import { PartnerAvatar } from './PartnerAvatar';
+import { partnerActions, type CoupledPartner, type WirPartner } from './partner-view';
+import { areaNames, partnerHeadline, partnerTexts, stageTexts, standText, summaryText, type Spoken } from './texts';
 
 // Tab „Wir“ (Spezifikation 5, Abschnitt 2; #121): ohne Kopplung der Leerzustand „Momo wartet im Ei“,
 // gekoppelt die Partnerübersicht und die Anfeuern-Karte. Antwortbedürftige Vorgänge, Challenge,
@@ -54,8 +55,8 @@ function Solo() {
         </Text>
         <Text style={styles.center}>{partnerTexts.soloBody}</Text>
         <View style={styles.actions}>
-          <Button block label={partnerTexts.invite} onPress={() => openTarget({ type: 'partner.invite' })} />
-          <Button block variant="text" label={partnerTexts.redeem} onPress={() => openTarget({ type: 'partner.redeem' })} />
+          <Button block label={partnerTexts.invite} onPress={() => openTarget(partnerActions.invite.target)} />
+          <Button block variant="text" label={partnerTexts.redeem} onPress={() => openTarget(partnerActions.redeem.target)} />
         </View>
       </View>
     </Card>
@@ -66,15 +67,15 @@ function Coupled({ partner }: { partner: Readonly<{ type: 'coupled' } & CoupledP
   const stand = partner.age === null ? null : standText(partner.age, partner.stale);
   return (
     <>
-      {partner.stale && stand !== null ? <Notice tone="neutral" icon="offline" text={stand.shown} /> : null}
+      {partner.stale ? <Notice tone="neutral" icon="offline" text={stand?.shown ?? partnerTexts.offline} /> : null}
       <Overview partner={partner} stand={stand} />
       <Card>
         <View testID="wir-anfeuern" style={styles.group}>
           <Text variant="headline" accessibilityRole="header">
-            {partnerTexts.encourageTitle}
+            {partnerTexts.encourage}
           </Text>
           <Text>{partnerTexts.encourageBody(partner.displayName)}</Text>
-          <Button label={partnerTexts.encourage} onPress={() => openTarget({ type: 'partner.encourage' })} />
+          <Button label={partnerTexts.encourage} onPress={() => openTarget(partnerActions.encourage.target)} />
         </View>
       </Card>
     </>
@@ -85,20 +86,16 @@ function Coupled({ partner }: { partner: Readonly<{ type: 'coupled' } & CoupledP
 function Overview({ partner, stand }: { partner: CoupledPartner; stand: Spoken | null }) {
   const singleColumn = useLargeTextLayout();
   const name = partner.displayName;
-  const stage = partner.dailyGoal === null ? partnerTexts.noStatusYet : stageTexts[partner.dailyGoal.stage];
+  const stage = partner.dailyGoal?.stage ?? null;
   const spokenStand = stand === null ? '' : `, ${stand.spoken}`;
   return (
     <Card>
       <View testID="wir-partneruebersicht" style={styles.group}>
-        <View accessible accessibilityRole="header" accessibilityLabel={`${name}, Tagesziele: ${stage}${spokenStand}`} style={styles.person}>
-          <View style={styles.avatar}>
-            <Text variant="title" tone="onPrimary">
-              {[...name][0]!.toLocaleUpperCase('de-DE')}
-            </Text>
-          </View>
+        <View accessible accessibilityRole="header" accessibilityLabel={partnerHeadline(name, stage, stand)} style={styles.person}>
+          <PartnerAvatar displayName={name} />
           <View style={styles.flex}>
             <Text variant="headline">{name}</Text>
-            <Text tone="inkMuted">{stage}</Text>
+            {stage === null ? null : <Text tone="inkMuted">{stageTexts[stage]}</Text>}
           </View>
         </View>
         {partner.summaries.map((summary) => {
@@ -140,15 +137,6 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   actions: { alignSelf: 'stretch', gap: space[2] },
   person: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
-  // Weiß auf `partner` nur als großer, fetter Text (research/design-system.md, Kontrasttabelle).
-  avatar: {
-    width: size.avatar,
-    height: size.avatar,
-    borderRadius: radius.pill,
-    backgroundColor: color.partner,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   flex: { flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: size.touchMin, borderTopWidth: 1, borderTopColor: color.line, paddingTop: space[2] },
   stacked: { flexDirection: 'column', alignItems: 'flex-start', gap: space[1] },
