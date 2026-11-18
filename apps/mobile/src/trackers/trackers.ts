@@ -12,7 +12,8 @@ import type { SyncWriter } from '../sync';
 import { applyHealthImport, type HealthImportBatch } from './health-import';
 import { lastSportOf, recordSportEntry, undoSport, type LastSport, type SportInput } from './sport';
 import { sportTodaySource } from './sport-today';
-import type { ObservedSource, Refresh } from './today-source';
+import type { Source } from '../shell/followed-source';
+import type { Refresh } from './observed-source';
 import { addWaterEntry, undoWater, type WaterUndo } from './water';
 import { waterTodaySource } from './water-today';
 import {
@@ -116,7 +117,7 @@ export type Trackers = Readonly<{
    * Zielgewicht und Tempo aus dem `PlanReader` und alle zählenden Messungen. `refresh` stößt das erneute
    * Lesen ohne Datenbankänderung an, etwa am Tageswechsel.
    */
-  weightDetail(planReader: PlanReader, refresh: Refresh): ObservedSource<WeightDetailState>;
+  weightDetail(planReader: PlanReader, refresh: Refresh): Source<WeightDetailState>;
   /**
    * Beitrag `trackers.water` für „Heute“: heute gezählte ml und Wasserziel aus dem `PlanReader`.
    * `refresh` stößt das erneute Lesen ohne Datenbankänderung an, etwa am Tageswechsel.

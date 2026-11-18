@@ -14,12 +14,13 @@ import {
 
 import type { ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
-import { observedSource, type ObservedSource, type Refresh } from './today-source';
+import type { Source } from '../shell/followed-source';
+import { observedSource, type Refresh } from './observed-source';
 import type { TrackerDependencies } from './trackers';
 import { weightEntriesOf, type WeightOrigin, type WeightRow } from './weight-repository';
 
 // Lesemodell des Gewicht-Detailbildschirms `capture.weight` (Spezifikation 3, Abschnitte 3 und 5):
-// Trendgewicht, letztes Tagesgewicht, „seit Start“, Veränderung in 2 Wochen und Prognose, darunter alle
+// Gewichtstrend, letztes Tagesgewicht, „seit Start“, Veränderung in 2 Wochen und Prognose, darunter alle
 // zählenden Messungen mit Herkunft. Zielgewicht, Tempo und Haltemodus kommen aus dem `PlanReader`. Alle
 // Zahlen stammen aus den Tracker-Regeln, wie im `WeightTrendReader` und im Mini-Tracker.
 
@@ -49,7 +50,6 @@ export type WeightTrendSummary = Readonly<{
 
 export type WeightDetail = Readonly<{
   today: LocalDate;
-  dayWeightCount: number;
   lastDayWeight: Readonly<{ localDate: LocalDate; weightG: number }> | null;
   trend: WeightTrendSummary | null;
   /** Prognose als Schätzung; entfällt im Haltemodus, ohne Trend, ohne Plan und am Ziel. */
@@ -70,7 +70,7 @@ export function weightDetailSource(
   { database, clock }: Pick<TrackerDependencies, 'database' | 'clock'>,
   planReader: PlanReader,
   refresh: Refresh,
-): ObservedSource<WeightDetailState> {
+): Source<WeightDetailState> {
   const read = (tx: ReadContext): WeightReading | null => {
     const person = readOwnPerson(tx);
     if (person === undefined) return null;
@@ -87,17 +87,18 @@ export function weightDetailSource(
 }
 
 /** Das Lesemodell aus allen Einträgen der Person (aufsteigend nach Messzeitpunkt), dem Tag und dem Plan. */
-export function weightDetailOf(rows: readonly WeightRow[], today: LocalDate, plan: EffectivePlan): WeightDetail {
-  const points = weightTrend(dayWeights(rows));
+function weightDetailOf(rows: readonly WeightRow[], today: LocalDate, plan: EffectivePlan): WeightDetail {
+  // Nur Tagesgewichte bis heute; ein später gemessener Tag (etwa nach einem Sprung der Uhr) zählt noch nicht.
+  const points = weightTrend(dayWeights(rows)).filter((point) => point.localDate <= today);
   const last = points.at(-1);
   const trendG = currentTrendG(points);
+  const sinceStart = sinceStartG(points, today);
   const trend: WeightTrendSummary | null =
-    trendG === null ? null : { trendG, sinceStartG: sinceStartG(points, today) ?? 0, change: weightChange(points, today) };
+    trendG === null || sinceStart === null ? null : { trendG, sinceStartG: sinceStart, change: weightChange(points, today) };
   const goal = plan.type === 'gueltig' ? plan.goal : null;
   const forecastDate = goal === null ? null : weightForecast({ today, trendG: trend?.trendG ?? null, goalWeightG: goal.goalWeightG, pace: goal.pace });
   return {
     today,
-    dayWeightCount: points.length,
     lastDayWeight: last === undefined ? null : { localDate: LocalDate.parse(last.localDate), weightG: last.dayWeightG },
     trend,
     forecast: forecastDate === null || goal === null ? null : { localDate: LocalDate.parse(forecastDate), goalWeightG: goal.goalWeightG },

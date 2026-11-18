@@ -23,10 +23,10 @@ function signedTenthKgText(changeKg: number, spoken: boolean): string {
 }
 
 /** Veränderung in g, gerundet wie `changeKg` (`changeInTenthKg`), etwa „−0,8 kg“. */
-export const signedKgText = (changeG: number) => signedTenthKgText(changeInTenthKg(changeG), false);
+const signedKgText = (changeG: number) => signedTenthKgText(changeInTenthKg(changeG), false);
 
 /** Zugänglich gesprochen: „minus 0,8 kg“ statt eines Strichs. */
-export const spokenSignedKg = (changeG: number) => signedTenthKgText(changeInTenthKg(changeG), true);
+const spokenSignedKg = (changeG: number) => signedTenthKgText(changeInTenthKg(changeG), true);
 
 /** „Trend −0,4 kg in 2 Wochen“; ohne Messung in den letzten 14 Tagen ein Hinweis statt der Zahl. */
 export function changeText(change: WeightChange): string {
@@ -41,7 +41,7 @@ export function spokenChange(change: WeightChange): string {
 }
 
 /** Datum ausgeschrieben, etwa „13. Dezember 2026“. */
-export function longDateText(localDate: LocalDate): string {
+function longDateText(localDate: LocalDate): string {
   const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
   return `${day}. ${months[month - 1]} ${year}`;
 }

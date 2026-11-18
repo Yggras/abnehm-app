@@ -30,8 +30,11 @@ const futureMeasurement = 'Der Messzeitpunkt liegt in der Zukunft. Bitte einen Z
 /** Eine manuelle Messung, die das Formular bearbeitet. */
 export type EditedWeight = Readonly<{ id: EntityId; weightG: number; measuredAt: Instant }>;
 
+/** Was das Formular vom Tracker-Modul braucht. */
+export type WeightFormTrackers = Pick<Trackers, 'recordWeight' | 'updateWeight' | 'deleteWeight' | 'lastWeights' | 'undo' | 'expire'>;
+
 export type WeightEntryFormProps = {
-  trackers: Pick<Trackers, 'recordWeight' | 'updateWeight' | 'deleteWeight' | 'lastWeights' | 'undo' | 'expire'>;
+  trackers: WeightFormTrackers;
   /** Bearbeitet diese manuelle Messung, statt eine neue einzutragen. */
   entry?: EditedWeight;
   /** Gespeichert oder gelöscht; der Aufrufer schließt das Formular. */

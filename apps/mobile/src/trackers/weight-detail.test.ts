@@ -63,7 +63,7 @@ async function setup(planReader: PlanReader = fakePlanReader({ goals: [goal], we
 it('ist ohne Messung leer, ohne Trend und ohne Prognose', async () => {
   const { detail } = await setup();
 
-  expect(detail()).toEqual({ today: '2026-10-14', dayWeightCount: 0, lastDayWeight: null, trend: null, forecast: null, entries: [] });
+  expect(detail()).toEqual({ today: '2026-10-14', lastDayWeight: null, trend: null, forecast: null, entries: [] });
 });
 
 it('zeigt unter drei Tagesgewichten nur das Tagesgewicht und die Messungen', async () => {
@@ -71,7 +71,7 @@ it('zeigt unter drei Tagesgewichten nur das Tagesgewicht und die Messungen', asy
   await weigh(80_000, '2026-10-13T05:30:00.000Z');
   await weigh(79_800, '2026-10-14T05:30:00.000Z');
 
-  expect(detail()).toMatchObject({ dayWeightCount: 2, lastDayWeight: { localDate: '2026-10-14', weightG: 79_800 }, trend: null, forecast: null });
+  expect(detail()).toMatchObject({ lastDayWeight: { localDate: '2026-10-14', weightG: 79_800 }, trend: null, forecast: null });
 });
 
 it('zeigt ab drei Tagesgewichten Trend, „seit Start“, Veränderung in 2 Wochen und Prognose', async () => {
@@ -82,7 +82,6 @@ it('zeigt ab drei Tagesgewichten Trend, „seit Start“, Veränderung in 2 Woch
 
   // Trend 79 240; Prognose: 4,24 kg ÷ 0,5 kg × 7 = 59,36 → 60 Tage nach dem 14.10.
   expect(detail()).toMatchObject({
-    dayWeightCount: 3,
     lastDayWeight: { localDate: '2026-10-14', weightG: 76_000 },
     trend: { trendG: 79_240, sinceStartG: -760, change: { changeKg: -0.8, direction: 'sinkend' } },
     forecast: { localDate: '2026-12-13', goalWeightG: 75_000 },

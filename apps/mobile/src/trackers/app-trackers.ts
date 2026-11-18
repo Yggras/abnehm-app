@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { followSource } from '../shell/followed-source';
 import { createOpenedModule, useOpenedModule, type OpenedModule } from '../shell/opened-module';
-import type { ObservedSource } from './today-source';
 import type { Trackers } from './trackers';
 import type { WeightDetailState } from './weight-detail';
 
@@ -19,15 +19,15 @@ export function useAppTrackers(): Trackers | null {
 }
 
 /**
- * Lesemodell des Gewicht-Detailbildschirms für das geöffnete Konto. Der Composition Root meldet es mit
- * dem `PlanReader` dieses Kontos an (`trackers.weightDetail(planReaderOf(database), appTodayRefresh)`).
+ * Lesemodell des Gewicht-Detailbildschirms für das geöffnete Konto; ohne geöffnetes Konto lädt es. Der
+ * Composition Root meldet es mit dem `PlanReader` dieses Kontos an
+ * (`appWeightDetail.opened(trackers.weightDetail(planReaderOf(database), appTodayRefresh))`).
  */
-export const appWeightDetail = createOpenedModule<ObservedSource<WeightDetailState>>();
+export const appWeightDetail = followSource<WeightDetailState>({ type: 'loading' });
 
-/** Der jüngste Zustand des Gewicht-Detailbildschirms; lädt, solange kein Konto geöffnet ist. */
+/** Der jüngste Zustand des Gewicht-Detailbildschirms. */
 export function useWeightDetail(): WeightDetailState {
-  const source = useOpenedModule(appWeightDetail);
-  const [state, setState] = useState<{ source: ObservedSource<WeightDetailState>; value: WeightDetailState } | null>(null);
-  useEffect(() => source?.subscribe((value) => setState({ source, value })), [source]);
-  return state !== null && state.source === source ? state.value : { type: 'loading' };
+  const [state, setState] = useState<WeightDetailState>({ type: 'loading' });
+  useEffect(() => appWeightDetail.source.subscribe(setState), []);
+  return state;
 }

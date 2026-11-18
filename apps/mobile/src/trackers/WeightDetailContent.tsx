@@ -5,10 +5,9 @@ import { manualOrigin } from '@abnehm/contracts/tracker-rules';
 
 import { Button, Card, color, ListGroup, ListRow, Notice, radius, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
-import type { Trackers } from './trackers';
 import type { WeightDetail, WeightHistoryEntry } from './weight-detail';
 import { changeText, dayText, kgText, originNames, spokenChange, timeText, weightTexts } from './weight-texts';
-import { WeightEntryForm, type EditedWeight } from './WeightEntryForm';
+import { WeightEntryForm, type EditedWeight, type WeightFormTrackers } from './WeightEntryForm';
 
 // Inhalt des Gewicht-Detailbildschirms `capture.weight` (Spezifikation 3, Abschnitt 5; #38), von oben nach
 // unten: Trendgewicht groß und Tagesgewicht klein, „seit Start“, Veränderung in 2 Wochen und Prognose als
@@ -18,7 +17,7 @@ import { WeightEntryForm, type EditedWeight } from './WeightEntryForm';
 
 export type WeightDetailContentProps = {
   detail: WeightDetail;
-  trackers: Pick<Trackers, 'recordWeight' | 'updateWeight' | 'deleteWeight' | 'lastWeights' | 'undo' | 'expire'>;
+  trackers: WeightFormTrackers;
 };
 
 const addTarget = { type: 'capture.weight', newEntry: true } as const;

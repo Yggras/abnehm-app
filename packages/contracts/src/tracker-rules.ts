@@ -398,8 +398,11 @@ export function sinceStartG(points: readonly TrendPoint[], localDate: string): n
 /** Tempo des Plans; im Haltemodus gibt es keines (`PlanReader`, Spezifikation 1). */
 export type ForecastPace = 'entspannt' | 'zuegiger';
 
-/** Abnahme je Woche und Tempo in g für die Prognose: 0,5 bzw. 0,75 kg (#14; Spezifikation 3, Abschnitt 3). */
-const forecastWeeklyLossG: Readonly<Record<ForecastPace, number>> = { entspannt: 500, zuegiger: 750 };
+/**
+ * Abnahme je Woche und Tempo in g: 0,5 bzw. 0,75 kg (#14; Spezifikation 3, Abschnitt 3). Einzige Quelle;
+ * auch der Zielrechner rechnet seine Prognose damit.
+ */
+export const forecastWeeklyLossG: Readonly<Record<ForecastPace, number>> = { entspannt: 500, zuegiger: 750 };
 
 /**
  * Prognose, wann das Zielgewicht erreicht ist (Spezifikation 3, Abschnitt 3): heute + aufgerundet
