@@ -65,6 +65,10 @@ const weightTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', '
 const sportTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.sport');
 /** Momo auf „Heute“ (Spezifikation 4): Laichkugel und Rollenwahl (#180), nach dem Schlüpfen Momo mit Level (#184). */
 const momoTodayOpened = followTodayContribution(appTodayRegistry, 'momo', 'momo.character');
+/** Die drei Tagesziele im Momo-Bereich auf „Heute“ (Spezifikation 1, #136). */
+const dailyGoalsTodayOpened = followTodayContribution(appTodayRegistry, 'ziele', 'momo.daily_goals');
+/** Kalorienbudget, Haltemodus und Hinweis der Ernährungskarte auf „Heute“ (Spezifikation 1, #136). */
+const budgetTodayOpened = followTodayContribution(appTodayRegistry, 'ziele', 'nutrition.budget');
 /** Partner-Karte `partner` auf „Heute“ (Spezifikation 5, #121): solo Einladen, gekoppelt Name und grober Stand. */
 const partnerTodayOpened = followTodayContribution(appTodayRegistry, 'partner', 'partner');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
@@ -132,9 +136,9 @@ function deviceState() {
     // Kontobezogene Beobachter an der geöffneten Datenbank; beim Sperren lösen sie sich wieder.
     onAccountOpened(database) {
       const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError });
-      const persistence = createDailyGoalPersistence({
-        registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock: appClock, writer: syncWriter, dispatcher,
-      });
+      // Baustein-Auswertung (Spezifikation 0, Abschnitt 3); die Evaluatoren registrieren die Spezifikationen 2 und 3.
+      const dailyGoalRegistry = createDailyGoalRegistry({ bausteine: [], checkIns: [] });
+      const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
@@ -151,6 +155,8 @@ function deviceState() {
       // des Tracker-Moduls.
       const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
       persistence.registerMissingDaysHook(plan.materializeMissingDays);
+      // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
+      const planToday = plan.today(dailyGoalRegistry);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       // Stimmungen folgen der Uhr im Takt von „Heute“; die Erfolgshaptik löst nur dieser Dienst aus (#188).
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh });
@@ -182,6 +188,7 @@ function deviceState() {
         sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
+        dailyGoalsTodayOpened(planToday.dailyGoals(appTodayRefresh)), budgetTodayOpened(planToday.budget(appTodayRefresh)),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
         followDailyGoalTriggers({
           ensure: plan.ensureDailyGoals,

@@ -22,6 +22,7 @@ import { updateOwnPerson, type SyncWriter } from '../sync';
 import { createDailyGoalMaterialization } from './daily-goals';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
+import { createPlanToday, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
 import { freeWeeklyPlan, standardWeeklyPlan, type WeekChoice, type WeekChoiceError, type WeeklyPlanDayError, type WeeklyPlanInput } from './weekly-plan';
 
 export type PlanDependencies = Readonly<{
@@ -147,6 +148,11 @@ export type Plan = Readonly<{
    * dann in derselben Transaktion an, bevor der Dienst ihn auswertet.
    */
   materializeMissingDays: MissingDaysHook;
+  /**
+   * „Heute“-Beiträge `momo.daily_goals` und `nutrition.budget` (Spezifikation 1, Abschnitt 6). Sie werten
+   * mit derselben Registry aus wie der Persistenzdienst der Tagesziele.
+   */
+  today(dailyGoals: DailyGoalEvaluator): PlanToday;
 }>;
 
 /**
@@ -260,6 +266,8 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     },
 
     materializeMissingDays: dailyGoals.missingDaysHook,
+
+    today: (evaluator) => createPlanToday({ database, clock, dailyGoals: evaluator }),
   };
 
   /** Heute, morgen und der Zeitpunkt aus einer Ablesung der Uhr. */

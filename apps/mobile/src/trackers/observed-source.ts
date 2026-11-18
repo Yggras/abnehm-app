@@ -1,5 +1,6 @@
-import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext } from '../local-db';
+import type { LocalDatabase, ReadContext } from '../local-db';
 import type { Refresh, Source } from '../shell/followed-source';
+import { observeWithRefresh } from '../shell/observed-reading';
 
 // Gemeinsamer Ablauf der beobachteten Lesemodelle des Tracker-Moduls, etwa der Beiträge für „Heute“
 // (Spezifikation 3, Abschnitt 7) und des Gewicht-Detailbildschirms: Ein Lesemodell liest bei jedem
@@ -34,18 +35,10 @@ export function observedSource<R, S>(
           () => current() && listener(states.failed),
         );
       };
-      const stopObserving = database.observe(read, publish);
-      const stopRefresh = refresh(() => {
-        try {
-          publish(database.read(read));
-        } catch (error) {
-          if (!(error instanceof LocalDatabaseClosedError)) throw error;
-        }
-      });
+      const stop = observeWithRefresh(database, refresh, read, publish);
       return () => {
         active = false;
-        stopObserving();
-        stopRefresh();
+        stop();
       };
     },
   };

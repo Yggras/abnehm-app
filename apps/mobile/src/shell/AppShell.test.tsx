@@ -201,7 +201,7 @@ describe('Quick-Commands und Meldungen', () => {
     await user.press(screen.getByRole('button', { name: 'Beispieldaten anzeigen' }));
     expect(screen.getByRole('image', { name: 'Momo, zufrieden' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: /Anna feuert dich an: Stark heute!/ })).toBeOnTheScreen();
-    for (const name of ['1. Ernährung erfasst · Unterwegs', '2. Wasserziel · Unterwegs', '3. Sporteinheit · Noch offen']) {
+    for (const name of ['Ernährung erfasst · 2 von 2 Mahlzeiten, erfüllt. Öffnen', 'Wasserziel · 0,8 von 1,5 l, teilweise. Öffnen', 'Im Kalorienbudget · am Tagesende. Öffnen']) {
       expect(screen.getByRole('button', { name })).toBeOnTheScreen();
     }
     await user.press(screen.getByRole('button', { name: 'Wasser: +250 ml' }));
