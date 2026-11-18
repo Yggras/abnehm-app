@@ -12,7 +12,7 @@ export const notificationChannels: readonly NotificationChannel[] = [
   { key: 'partner_momo', name: 'Partner & Momo' },
 ];
 
-export type Notifications = Readonly<{
+export type AppNotifications = Readonly<{
   /** Zuletzt gelesene Erlaubnis; `null`, bis sie gelesen ist. */
   permission(): NotificationPermission | null;
   subscribe(listener: () => void): () => void;
@@ -31,7 +31,7 @@ export type NotificationsOptions = Readonly<{
   onError(error: unknown): void;
 }>;
 
-export function createNotifications({ port, onForegroundNotification = () => {}, onError }: NotificationsOptions): Notifications {
+export function createNotifications({ port, onForegroundNotification = () => {}, onError }: NotificationsOptions): AppNotifications {
   let permission: NotificationPermission | null = null;
   const listeners = new Set<() => void>();
   const publish = (next: NotificationPermission) => {

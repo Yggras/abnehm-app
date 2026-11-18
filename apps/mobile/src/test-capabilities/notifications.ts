@@ -16,12 +16,29 @@ import type {
 // zurück auf den echten Port; ein Seed stellt die Erlaubnis seiner Installation ein (Szenario `solo`:
 // unentschieden). Im Produktions-Bundle fehlt das Modul (Release-Sperren).
 
+/** Antwort der Person im Systemdialog des Fakes. */
+export type NotificationAnswer = Exclude<NotificationPermission, 'undetermined'>;
+
+/** Deutsche Namen der Erlaubnis in Links und Hinweisen der Testfähigkeit `mitteilungen`. */
+export const permissionNames = { undetermined: 'unentschieden', granted: 'erlaubt', denied: 'verweigert' } as const satisfies Record<
+  NotificationPermission,
+  string
+>;
+
+export type PermissionName = (typeof permissionNames)[NotificationPermission];
+
+/** Die Erlaubnis zu ihrem deutschen Namen, Umkehrung von `permissionNames`. */
+export const permissionOfName = { unentschieden: 'undetermined', erlaubt: 'granted', verweigert: 'denied' } as const satisfies Record<
+  PermissionName,
+  NotificationPermission
+>;
+
 export type NotificationOperation = Exclude<keyof NotificationPort, 'setForegroundBehavior'>;
 
 export type FakeNotificationPortOptions = Readonly<{
   permission?: NotificationPermission;
   /** Antwort im Systemdialog; ohne Angabe „Erlauben“. */
-  answer?: Exclude<NotificationPermission, 'undetermined'>;
+  answer?: NotificationAnswer;
   /** Push-Token des Geräts. */
   pushToken?: string;
 }>;
@@ -30,7 +47,7 @@ export type FakeNotificationPort = NotificationPort &
   Readonly<{
     setPermission(permission: NotificationPermission): void;
     /** Antwort der Person im nächsten Systemdialog. */
-    answerWith(answer: Exclude<NotificationPermission, 'undetermined'>): void;
+    answerWith(answer: NotificationAnswer): void;
     /** Jeder weitere Aufruf der Operation scheitert, bis `heal` sie wieder freigibt. */
     fail(operation: NotificationOperation, error?: Error): void;
     heal(operation?: NotificationOperation): void;
@@ -49,7 +66,7 @@ export type FakeNotificationPort = NotificationPort &
 
 export class FakeNotificationError extends Error {
   constructor(operation: NotificationOperation) {
-    super(`Fake-Mitteilungs-Port: ${operation} gestellt gescheitert`);
+    super(`Fake-Mitteilungs-Port: ${operation} gezielt gescheitert`);
     this.name = 'FakeNotificationError';
   }
 }
@@ -144,13 +161,13 @@ export function createFakeNotificationPort(options: FakeNotificationPortOptions 
 }
 
 /** Wohin der Mitteilungs-Port eines Test-Artefakts gerade spricht. */
-export type NotificationTestMode = Readonly<{ type: 'system' } | { type: 'fake'; permission: NotificationPermission; answer: Exclude<NotificationPermission, 'undetermined'> }>;
+export type NotificationTestMode = Readonly<{ type: 'system' } | { type: 'fake'; permission: NotificationPermission; answer: NotificationAnswer }>;
 
 export type NotificationTestControl = Readonly<{
   /** Der Port der App: vor dem echten Port, umschaltbar auf den Fake. */
   port(system: NotificationPort): NotificationPort;
   /** Stellt die App auf den Fake mit dieser Erlaubnis bzw. mit `null` zurück auf den echten Port. */
-  simulate(permission: NotificationPermission | null, answer?: Exclude<NotificationPermission, 'undetermined'>): void;
+  simulate(permission: NotificationPermission | null, answer?: NotificationAnswer): void;
   mode(): NotificationTestMode;
   /** Nach jedem Umschalten; die App liest dann die Erlaubnis neu. */
   subscribe(listener: () => void): () => void;

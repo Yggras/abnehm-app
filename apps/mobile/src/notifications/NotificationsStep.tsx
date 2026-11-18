@@ -1,16 +1,13 @@
-import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { OnboardingStepOutcome } from '@abnehm/contracts/onboarding';
-
 import { Button, space } from '../design';
-import type { OnboardingStepProps } from '../shell/onboarding-registry';
+import type { OnboardingStepOutcomeOf, OnboardingStepProps } from '../shell/onboarding-registry';
 import { PermissionExplanation, PermissionState } from './PermissionParts';
-import { useNotificationPermission, useNotifications } from './NotificationsProvider';
+import { useNotificationPermission, usePermissionRequest } from './NotificationsProvider';
 import type { NotificationPermission } from './port';
 import { notificationTexts } from './texts';
 
-type Outcome = Extract<OnboardingStepOutcome, { type: 'notifications_granted' | 'notifications_denied' | 'skipped' }>;
+type Outcome = OnboardingStepOutcomeOf<'notifications'>;
 
 /**
  * Ergebnis nach dem Systemdialog: Nicht erteilt ist `notifications_denied`, auch wenn Android noch einmal
@@ -29,15 +26,10 @@ function answerOutcome(answer: NotificationPermission | null): Outcome {
  * Erlaubnis schon entschieden, zeigt der Schritt den Stand mit „Weiter“.
  */
 export function NotificationsStep({ complete }: OnboardingStepProps<'notifications'>) {
-  const notifications = useNotifications();
   const permission = useNotificationPermission();
-  const [asking, setAsking] = useState(false);
+  const { asking, request } = usePermissionRequest();
 
-  const allow = async () => {
-    setAsking(true);
-    const answer = await notifications.request().finally(() => setAsking(false));
-    complete(answerOutcome(answer));
-  };
+  const allow = async () => complete(answerOutcome(await request()));
 
   return (
     <View style={styles.step}>

@@ -10,6 +10,7 @@ import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
+import { permissionOfName, type NotificationAnswer } from './notifications';
 import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 
 // Deep Links der Testfähigkeiten (#112, #114), nur in Test-Artefakten (Development- und E2E-Build;
@@ -43,7 +44,7 @@ export type TestLink =
   | Readonly<{ type: 'geraetetest'; phase: DeviceSuitePhase }>
   | Readonly<{ type: 'health'; scenario: HealthScenario }>
   /** `permission: null` ist der echte Port des Systems. */
-  | Readonly<{ type: 'mitteilungen'; permission: NotificationPermission | null; answer: Exclude<NotificationPermission, 'undetermined'> }>
+  | Readonly<{ type: 'mitteilungen'; permission: NotificationPermission | null; answer: NotificationAnswer }>
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
@@ -60,7 +61,6 @@ const deviceSuiteParams = z.strictObject({ phase: z.enum(deviceSuitePhases) });
 const profileParams = z.strictObject({ name: runtimeProfileKeySchema });
 
 const healthParams = z.strictObject({ szenario: z.enum(healthScenarios) });
-const notificationAnswers = { erlaubt: 'granted', verweigert: 'denied' } as const;
 const notificationParams = z.strictObject({
   erlaubnis: z.enum(['system', 'unentschieden', 'erlaubt', 'verweigert']),
   antwort: z.enum(['erlaubt', 'verweigert']).default('erlaubt'),
@@ -110,8 +110,7 @@ export function parseTestLink(link: string): TestLink | null {
     const notifications = notificationParams.safeParse(Object.fromEntries(params));
     if (!notifications.success) return { type: 'ungueltig', capability: 'mitteilungen' };
     const { erlaubnis, antwort } = notifications.data;
-    const permission = erlaubnis === 'system' ? null : erlaubnis === 'unentschieden' ? 'undetermined' : notificationAnswers[erlaubnis];
-    return { type: 'mitteilungen', permission, answer: notificationAnswers[antwort] };
+    return { type: 'mitteilungen', permission: erlaubnis === 'system' ? null : permissionOfName[erlaubnis], answer: permissionOfName[antwort] };
   }
   return null;
 }

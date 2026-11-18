@@ -293,7 +293,7 @@ export default defineConfig([
     rules: {
       'no-restricted-properties': [
         'error',
-        { object: 'Linking', property: 'openSettings', message: 'Die System-Einstellungen öffnet `Notifications.openSettings()` aus apps/mobile/src/notifications/.' },
+        { object: 'Linking', property: 'openSettings', message: 'Die System-Einstellungen öffnet `useNotifications().openSettings()` über den Mitteilungs-Port (apps/mobile/src/notifications/).' },
       ],
     },
   },

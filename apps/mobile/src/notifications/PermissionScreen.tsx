@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, space } from '../design';
@@ -6,7 +5,7 @@ import { closeRoute, type RouteScreenProps } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 import { PermissionExplanation, PermissionState } from './PermissionParts';
-import { useNotificationPermission, useNotifications } from './NotificationsProvider';
+import { useNotificationPermission, useNotifications, usePermissionRequest } from './NotificationsProvider';
 import { notificationTexts } from './texts';
 
 /**
@@ -18,15 +17,10 @@ import { notificationTexts } from './texts';
 export function NotificationPermissionScreen({ target }: RouteScreenProps<'notifications.permission'>) {
   const notifications = useNotifications();
   const permission = useNotificationPermission();
-  const [asking, setAsking] = useState(false);
+  const { asking, request } = usePermissionRequest();
 
   const allow = async () => {
-    setAsking(true);
-    try {
-      await notifications.request();
-    } finally {
-      setAsking(false);
-    }
+    await request();
     closeRoute();
   };
 

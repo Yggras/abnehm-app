@@ -38,15 +38,19 @@ test('liest die Erlaubnis und fragt auf iOS ohne vorläufige Erlaubnis (provisio
 });
 
 test.each([
-  ['undetermined', true, 'undetermined'],
-  ['granted', true, 'granted'],
+  ['undetermined', true, false, 'undetermined'],
+  ['granted', true, true, 'granted'],
   // Android 13+ vor der ersten Frage und nach dem ersten „Nicht zulassen“: Das System würde noch fragen.
-  ['denied', true, 'undetermined'],
-  // iOS nach „Nicht erlauben“, Android nach dem zweiten „Nicht zulassen“ oder abgeschaltet in den Einstellungen.
-  ['denied', false, 'denied'],
-] as const)('Expo-Status %s mit canAskAgain %s ist die Erlaubnis %s', async (status, canAskAgain, expected) => {
-  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce({ status, canAskAgain } as Notifications.NotificationPermissionsStatus);
-  jest.mocked(Notifications.requestPermissionsAsync).mockResolvedValueOnce({ status, canAskAgain } as Notifications.NotificationPermissionsStatus);
+  ['denied', true, false, 'undetermined'],
+  // Android 13+ mit erteilter Laufzeitberechtigung, aber in den Systemeinstellungen abgeschaltet
+  // (`!areNotificationsEnabled()`): Ein Dialog käme nicht mehr, nur die Systemeinstellungen helfen.
+  ['denied', true, true, 'denied'],
+  // iOS nach „Nicht erlauben“, Android nach dem zweiten „Nicht zulassen“.
+  ['denied', false, false, 'denied'],
+] as const)('Expo-Status %s mit canAskAgain %s und granted %s ist die Erlaubnis %s', async (status, canAskAgain, granted, expected) => {
+  const response = { status, canAskAgain, granted } as Notifications.NotificationPermissionsStatus;
+  jest.mocked(Notifications.getPermissionsAsync).mockResolvedValueOnce(response);
+  jest.mocked(Notifications.requestPermissionsAsync).mockResolvedValueOnce(response);
   expect(await expoNotificationPort.permission()).toBe(expected);
   expect(await expoNotificationPort.requestPermission()).toBe(expected);
 });

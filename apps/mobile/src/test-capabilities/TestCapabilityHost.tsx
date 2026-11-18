@@ -12,7 +12,7 @@ import { isSessionScreenGate, sessionScreenPath } from '../shell/session-routes'
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase } from './device-suite/suite';
 import type { TestInbox, TestStatus } from './inbox';
-import type { NotificationTestControl, NotificationTestMode } from './notifications';
+import { permissionNames, type NotificationTestControl, type NotificationTestMode } from './notifications';
 import { transportFaultModeName } from './network';
 import { runtimeProfiles } from './profiles';
 import { runSeed } from './seed/seed-flow';
@@ -64,12 +64,10 @@ function statusNotice(status: TestStatus) {
   }
 }
 
-const permissionText = { undetermined: 'unentschieden', granted: 'erlaubt', denied: 'verweigert' } as const;
-
 function notificationModeText(mode: NotificationTestMode): string {
   return mode.type === 'system'
     ? 'Mitteilungen: echter Port des Systems.'
-    : `Mitteilungen simuliert: ${permissionText[mode.permission]}, Systemdialog antwortet „${permissionText[mode.answer]}“.`;
+    : `Mitteilungen simuliert: ${permissionNames[mode.permission]}, Systemdialog antwortet „${permissionNames[mode.answer]}“.`;
 }
 
 /** So lange steht der Stand des Mitteilungs-Ports nach dem Link `mitteilungen`. */
@@ -128,14 +126,14 @@ export function TestCapabilityHost({
 
   // Der Stand des Mitteilungs-Ports verdeckt sonst dauerhaft den Kopf der Seite, etwa auf Bildern für
   // Impeccable; Maestro liest ihn sofort nach dem Link ab (#125).
-  const [hidden, setHidden] = useState<TestStatus | null>(null);
+  const [expiredStatus, setExpiredStatus] = useState<TestStatus | null>(null);
   useEffect(() => {
     if (status.type !== 'mitteilungen_gestellt') return;
-    const timer = setTimeout(() => setHidden(status), notificationNoticeMs);
+    const timer = setTimeout(() => setExpiredStatus(status), notificationNoticeMs);
     return () => clearTimeout(timer);
   }, [status]);
 
-  const notice = hidden === status ? null : statusNotice(status);
+  const notice = expiredStatus === status ? null : statusNotice(status);
   if (notice === null) return null;
   return (
     <View pointerEvents="box-none" style={[styles.overlay, { top: insets.top + space[2] }]}>

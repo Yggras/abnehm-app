@@ -19,7 +19,7 @@ import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
-import { createNotifications, NotificationsStep, type Notifications } from '../notifications';
+import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
 import { createDeviceInvitationFlows } from '../online';
 import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
@@ -211,7 +211,7 @@ function deviceState() {
   return device;
 }
 
-let notifications: Notifications | null = null;
+let notifications: AppNotifications | null = null;
 
 /**
  * Mitteilungen des Geräts (Spezifikation 5, Abschnitt 8). Das Wurzel-Layout ruft das beim Start auf:
@@ -219,7 +219,7 @@ let notifications: Notifications | null = null;
  * Die Erlaubnis liest sie bei jeder Rückkehr in den Vordergrund neu, etwa aus den System-Einstellungen.
  * In Test-Artefakten liegt vor dem echten Port der Umschalter auf den Fake (#125).
  */
-export function deviceNotifications(): Notifications {
+export function deviceNotifications(): AppNotifications {
   if (notifications !== null) return notifications;
   const port = testCapabilities?.adapters.notifications(expoNotificationPort) ?? expoNotificationPort;
   const created = createNotifications({ port, onError });

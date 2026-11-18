@@ -13,12 +13,17 @@ const dataOf = (data: unknown): NotificationData => (typeof data === 'object' &&
 
 /**
  * Erlaubnis aus Sicht der Person: `undetermined`, solange das System den Dialog noch zeigen würde.
- * Ab Android 13 meldet Expo vor der ersten Frage schon `denied` (`areNotificationsEnabled()` ist falsch,
- * `getPermissionsWithPromiseImplApi33` in expo-notifications 58.1.9), unterscheidbar nur über
- * `canAskAgain`. Auf iOS ist `canAskAgain` bei `denied` immer falsch (`EXPermissionsService.m`).
+ * Ab Android 13 meldet Expo vor der ersten Frage schon `denied`, weil `areNotificationsEnabled()` falsch
+ * ist; unterscheidbar ist das nur über `canAskAgain`. Dieselbe Meldung kommt aber auch bei erteilter
+ * Laufzeitberechtigung, wenn die Mitteilungen in den Systemeinstellungen abgeschaltet sind; dann ist
+ * `granted` wahr, und es hilft nur der Weg in die Systemeinstellungen
+ * (`getPermissionsWithPromiseImplApi33` in expo-notifications 58.1.9:
+ * https://github.com/expo/expo/blob/sdk-58/packages/expo-notifications/android/src/main/java/expo/modules/notifications/permissions/NotificationPermissionsModule.kt).
+ * Auf iOS ist `canAskAgain` bei `denied` immer falsch (`EXPermissionsService.m`:
+ * https://github.com/expo/expo/blob/sdk-58/packages/expo-modules-core/ios/Legacy/Services/Permissions/EXPermissionsService.m).
  */
-const permissionOf = ({ status, canAskAgain }: Notifications.NotificationPermissionsStatus) =>
-  status === 'denied' && canAskAgain ? 'undetermined' : status;
+const permissionOf = ({ status, canAskAgain, granted }: Notifications.NotificationPermissionsStatus) =>
+  status === 'denied' && canAskAgain && !granted ? 'undetermined' : status;
 
 const responseOf = (response: Notifications.NotificationResponse): NotificationResponse => ({
   notificationId: response.notification.request.identifier,
