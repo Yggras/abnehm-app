@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { usePreventRemove } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { instantAtWallClock, minutesOfDay, readingOf } from '@abnehm/clock';
@@ -14,7 +15,7 @@ import {
 } from '@abnehm/contracts/notifications';
 
 import { useClock } from '../clock/clock-context';
-import { Button, DateTimePicker, ListGroup, ListRow, Notice, ProblemMessage, Skeleton, size, space, Switch, type IconName } from '../design';
+import { Button, DateTimePicker, ListGroup, ListRow, Notice, ProblemMessage, Sheet, Skeleton, size, space, Switch, Text, type IconName } from '../design';
 import { openTarget, type RouteScreenProps } from '../navigation';
 import {
   notificationTexts,
@@ -34,8 +35,9 @@ import { SectionTitle } from './SectionTitle';
  * Seite „Benachrichtigungen“ (Spezifikation 5, Abschnitt 6): Systemstatus (#125), Tages-Check-ins mit
  * Uhrzeit, die Tracker der Check-ins, Partner-Pushes und der Infotext (#132). Die Werte bilden die
  * synchronisierte Benachrichtigungseinstellung (Last-Write-Wins); sie gelten erst mit „Speichern“, das
- * gesperrt ist, solange der Abend nicht nach dem Mittag liegt. Schalter und Uhrzeit-Picker kommen aus
- * `@expo/ui`, alles andere ist gebrandet.
+ * gesperrt ist, solange der Abend nicht nach dem Mittag liegt. Wer die Seite mit ungesicherten Änderungen
+ * verlässt, wird gefragt, ob gespeichert oder verworfen wird (Impeccable-Prüfung, P1). Schalter und
+ * Uhrzeit-Picker kommen aus `@expo/ui`, alles andere ist gebrandet.
  */
 export function NotificationsScreen({ target }: RouteScreenProps<'settings'>) {
   const settings = useNotificationSettings();
@@ -85,13 +87,25 @@ function SettingForm({ settings }: { settings: NotificationSettings }) {
   const valid = NotificationSettingUpsert.safeParse(shown).success;
   const changed = draft !== null && !sameNotificationSetting(draft, saved);
   const change = (patch: Partial<Setting>) => setDraft({ ...shown, ...patch });
+  // Abgefangenes Verlassen: erst die Rückfrage, nach Speichern oder Verwerfen dann die Navigation selbst.
+  const [leaving, setLeaving] = useState<Readonly<{ repeat: () => void; confirmed: boolean }> | null>(null);
+  usePreventRemove(changed, ({ repeat }) => setLeaving({ repeat, confirmed: false }));
+  // Die Navigation läuft erst weiter, wenn der Entwurf weg ist; sonst finge die Sperre sie erneut ab.
+  useEffect(() => {
+    if (leaving?.confirmed && !changed) leaving.repeat();
+  }, [leaving, changed]);
 
-  function save() {
+  /** Speichert; liefert, ob der Entwurf danach gespeichert ist. */
+  function save(): boolean {
     const result = settings.save(shown);
-    if (result.type === 'invalid') return;
+    if (result.type === 'invalid') return false;
+    if (result.type === 'no_person') {
+      showMessage({ messageKey: 'shell.nicht_geklappt', values: {} });
+      return false;
+    }
     setDraft(null);
     if (result.type === 'saved') showMessage({ messageKey: 'benachrichtigungen.gespeichert', values: {} });
-    else if (result.type === 'no_person') showMessage({ messageKey: 'shell.nicht_geklappt', values: {} });
+    return true;
   }
 
   return (
@@ -127,6 +141,26 @@ function SettingForm({ settings }: { settings: NotificationSettings }) {
       </View>
       <Notice tone="neutral" text={texts.info} />
       <Button label={texts.save} block disabled={!valid || !changed} onPress={save} />
+      <Sheet visible={leaving !== null && !leaving.confirmed} onClose={() => setLeaving(null)}>
+        <View style={styles.sheet}>
+          <Text variant="title" accessibilityRole="header">
+            {texts.leave.title}
+          </Text>
+          <Text>{texts.leave.text}</Text>
+          {valid ? null : <ProblemMessage text={texts.order} />}
+          <Button label={texts.save} block disabled={!valid}
+            onPress={() => {
+              if (save()) setLeaving((current) => current && { ...current, confirmed: true });
+              else setLeaving(null);
+            }} />
+          <Button label={texts.leave.discard} variant="secondary" block
+            onPress={() => {
+              setDraft(null);
+              setLeaving((current) => current && { ...current, confirmed: true });
+            }} />
+          <Button label={texts.leave.stay} variant="text" block onPress={() => setLeaving(null)} />
+        </View>
+      </Sheet>
     </>
   );
 }
@@ -167,4 +201,5 @@ const styles = StyleSheet.create({
   section: { gap: space[3] },
   controls: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   loading: { minHeight: size.rowMin, justifyContent: 'center', paddingHorizontal: space[4] },
+  sheet: { gap: space[4] },
 });

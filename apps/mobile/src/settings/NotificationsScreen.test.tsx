@@ -6,10 +6,12 @@ import { createTestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 import { defaultNotificationSetting, notificationSettingId } from '@abnehm/contracts/notifications';
 
+import SettingsOverview from '../app/settings/index';
 import SettingsNotifications from '../app/settings/notifications';
 import { createAccountWorld, philipp, type AccountWorld } from './testing/account-world';
 
 jest.mock('../design/native/DateTimePicker', () => jest.requireActual('../design/testing/text-date-time-picker'));
+jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
 
 // Nachweis für #132: die Seite „Benachrichtigungen“ (Spezifikation 5, Abschnitt 6) mit der echten
 // Routendatei, dem echten App-Modul der Benachrichtigungseinstellung über einer SQLite-Datei und dem
@@ -177,5 +179,60 @@ describe('Seite „Benachrichtigungen“', () => {
 
     expect(picker('Uhrzeit mittags')).toHaveDisplayValue(at('12:00'));
     expect(toggle('Sport')).not.toBeChecked();
+  });
+
+  describe('Verlassen mit ungesicherten Änderungen (Impeccable-Prüfung, P1)', () => {
+    async function openFromOverview() {
+      world = await createAccountWorld({ clock });
+      await renderRouter({ _layout: world.Layout, 'settings/index': SettingsOverview, 'settings/notifications': SettingsNotifications }, { initialUrl: '/settings' });
+      await act(async () => {});
+      await user.press(screen.getByRole('button', { name: /^Benachrichtigungen/ }));
+      expect(screen).toHavePathname('/settings/notifications');
+    }
+
+    test('ohne Änderung geht Zurück ohne Rückfrage', async () => {
+      await openFromOverview();
+      await user.press(screen.getByRole('button', { name: 'Zurück' }));
+      expect(screen).toHavePathname('/settings');
+      expect(screen.queryByText('Änderungen speichern?')).not.toBeOnTheScreen();
+    });
+
+    test('fragt nach; „Speichern“ speichert und geht zurück', async () => {
+      await openFromOverview();
+      await user.press(toggle('Gewicht'));
+
+      await user.press(screen.getByRole('button', { name: 'Zurück' }));
+      expect(screen).toHavePathname('/settings/notifications');
+      expect(screen.getByRole('header', { name: 'Änderungen speichern?' })).toBeOnTheScreen();
+
+      await user.press(screen.getAllByRole('button', { name: 'Speichern' }).at(-1)!);
+      expect(world.notificationSettings()).toEqual([expect.objectContaining({ ...defaultNotificationSetting, trackerGewicht: false })]);
+      expect(screen).toHavePathname('/settings');
+    });
+
+    test('„Verwerfen“ geht ohne Speichern zurück', async () => {
+      await openFromOverview();
+      await user.press(toggle('Abends'));
+      await user.press(screen.getByRole('button', { name: 'Zurück' }));
+
+      await user.press(screen.getByRole('button', { name: 'Verwerfen' }));
+
+      expect(screen).toHavePathname('/settings');
+      expect(world.notificationSettings()).toEqual([]);
+      expect(world.outbox()).toEqual([]);
+    });
+
+    test('„Weiter bearbeiten“ bleibt auf der Seite und behält den Entwurf; ungültig ist Speichern auch hier gesperrt', async () => {
+      await openFromOverview();
+      await pick('Uhrzeit abends', '12:00');
+      await user.press(screen.getByRole('button', { name: 'Zurück' }));
+
+      expect(screen.getAllByRole('button', { name: 'Speichern' }).at(-1)).toBeDisabled();
+      await user.press(screen.getByRole('button', { name: 'Weiter bearbeiten' }));
+
+      expect(screen).toHavePathname('/settings/notifications');
+      expect(screen.queryByText('Änderungen speichern?')).not.toBeOnTheScreen();
+      expect(picker('Uhrzeit abends')).toHaveDisplayValue(at('12:00'));
+    });
   });
 });

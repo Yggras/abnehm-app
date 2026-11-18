@@ -34,5 +34,12 @@ export const notificationTexts = {
     info: 'Keine Ruhezeiten und keine besonderen Wochenendzeiten.',
     save: 'Speichern',
     loading: 'Benachrichtigungen werden geladen',
+    /** Rückfrage beim Verlassen mit ungesicherten Änderungen (Impeccable-Prüfung, #132). */
+    leave: {
+      title: 'Änderungen speichern?',
+      text: 'Deine Änderungen an den Benachrichtigungen sind noch nicht gespeichert.',
+      stay: 'Weiter bearbeiten',
+      discard: 'Verwerfen',
+    },
   },
 } as const;
