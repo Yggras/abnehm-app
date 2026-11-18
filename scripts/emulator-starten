@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Startet den festen Emulator `medium_phone` (E2E_ANDROID_AVD) ohne Quick-Boot-Snapshot (#294), wartet auf den
+# Systemstart und gibt seine adb-Seriennummer aus:
+#   scripts/emulator-starten                # für E2E-Läufe: läuft schon ein Emulator, nur dessen Seriennummer
+#   scripts/emulator-starten --ohne-geraet  # für `npm run android`: nur starten, wenn kein Android-Gerät läuft
+#
+# Warum ohne Snapshot: Mit Quick Boot lädt der Emulator beim Start den Snapshot `default_boot`; dabei werden
+# System- und Nutzerdaten mit dem damaligen Stand überschrieben. Mit `-no-snapshot-save` gingen außerdem alle
+# Installationen beim Beenden verloren. So kam nach jedem Neustart ein veralteter Development Build zurück.
+# `-no-snapshot` lädt und speichert keinen Snapshot; installierte Apps bleiben in `userdata-qemu.img`.
+# Quelle: https://developer.android.com/studio/run/emulator-commandline (Quick Boot, `-snapshot`, Daten-Image).
+# Ohne `--device` nimmt `expo run:android` das erste laufende Gerät und startet sonst selbst `emulator @<avd>`
+# ohne Snapshot-Option, also mit Quick Boot (@expo/cli 58.1.11:
+# https://unpkg.com/@expo/cli@58.1.11/build/src/start/platforms/android/getDevices.js und
+# https://unpkg.com/@expo/cli@58.1.11/build/src/start/platforms/android/emulator.js); deshalb startet
+# `npm run android` den Emulator vorher hier. Für diesen Weg und für Android Studio stellt das Skript außerdem
+# die Boot-Option des AVD auf „Cold boot“ (https://developer.android.com/studio/run/managing-avds, Tabelle 1):
+# `fastboot.forceColdBoot=yes` und `fastboot.forceFastBoot=no` in seiner config.ini. Dass diese Schlüssel die
+# Option sind, sagt die Doku nicht. Beobachtet am 18.11.2026 (#294, Emulator `medium_phone`): Mit `no`/`yes`
+# (Anlieferung) lud `emulator @medium_phone` einen älteren Snapshot und verwarf den neueren Stand; mit `yes`/`no`
+# startete es mit dem aktuellen Stand und speicherte beim Beenden per `adb emu kill` keinen Snapshot. Ob
+# `forceColdBoot=yes` allein reicht, ist nicht geprüft. Ein Start aus Android Studio ist nicht am Gerät geprüft.
+# Die Gerätesperre (scripts/geraete-slot) nimmt der Aufrufer.
+set -euo pipefail
+
+usage() {
+  sed -n '2,5p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+only_without_device=false
+case "${1:-}" in
+  "") ;;
+  --ohne-geraet) only_without_device=true ;;
+  *) usage ;;
+esac
+
+adb_bin() {
+  if command -v adb >/dev/null; then command -v adb; else echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb"; fi
+}
+adb="$(adb_bin)"
+avd="${E2E_ANDROID_AVD:-medium_phone}"
+
+# Boot-Option des AVD auf Kaltstart; AVD-Verzeichnis wie in https://developer.android.com/tools/variables.
+config="${ANDROID_AVD_HOME:-${ANDROID_USER_HOME:-$HOME/.android}/avd}/$avd.avd/config.ini"
+if [[ -f "$config" ]]; then
+  sed -i.bak -e '/^fastboot\.forceColdBoot=/d' -e '/^fastboot\.forceFastBoot=/d' "$config" && rm -f "$config.bak"
+  printf 'fastboot.forceColdBoot=yes\nfastboot.forceFastBoot=no\n' >>"$config"
+else
+  echo "Warnung: $config fehlt; Boot-Option des AVD nicht gesetzt." >&2
+fi
+
+if [[ "$only_without_device" == true ]]; then
+  # Läuft irgendein Gerät, wählt Expo es selbst; dann gibt es nichts zu starten.
+  if "$adb" devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit !found }'; then exit 0; fi
+fi
+
+serial="$("$adb" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
+if [[ -z "$serial" ]]; then
+  echo "Starte den Emulator „${avd}“ ohne Snapshot …" >&2
+  "${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator" -avd "$avd" -no-snapshot -no-boot-anim >/dev/null 2>&1 &
+  # Mit einem weiteren angeschlossenen Gerät braucht jeder adb-Aufruf die Seriennummer des Emulators.
+  # Frist für Start und Systemstart (ABNEHM_EMULATOR_START_SEKUNDEN, Standard 300), damit etwa ein fehlendes
+  # AVD `npm run android` nicht endlos und stumm warten lässt.
+  deadline=$(( $(date +%s) + ${ABNEHM_EMULATOR_START_SEKUNDEN:-300} ))
+  waited() { (( $(date +%s) < deadline )) || { echo "Fehler: Der Emulator „${avd}“ meldet sich nicht." >&2; exit 1; }; sleep 1; }
+  until serial="$("$adb" devices | awk 'NR > 1 && $1 ~ /^emulator-/ { print $1; exit }')" && [[ -n "$serial" ]]; do waited; done
+  "$adb" -s "$serial" wait-for-device
+  until [[ "$("$adb" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; do waited; done
+fi
+echo "$serial"

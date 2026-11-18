@@ -1,0 +1,63 @@
+#!/bin/sh
+# Hermetischer Test für scripts/emulator-starten: adb und emulator sind gemockt und protokollieren ihre Aufrufe.
+set -eu
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+script="$root/scripts/emulator-starten"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+mkdir -p "$tmp/bin" "$tmp/sdk/emulator" "$tmp/avd/medium_phone.avd"
+printf 'avd.ini.encoding=UTF-8\nfastboot.forceColdBoot=no\nfastboot.forceFastBoot=yes\nhw.lcd.width=1080\n' > "$tmp/avd/medium_phone.avd/config.ini"
+# `devices` listet den Inhalt von $tmp/devices; nach dem Start des Emulators steht dort emulator-5554.
+printf '%s\n' '#!/bin/sh' \
+  "echo \"adb \$*\" >> \"$tmp/calls\"" \
+  "case \"\$*\" in" \
+  "  devices) printf 'List of devices attached\n'; cat \"$tmp/devices\" ;;" \
+  "  *getprop*) echo 1 ;;" \
+  'esac' \
+  'exit 0' > "$tmp/bin/adb"
+printf '%s\n' '#!/bin/sh' \
+  "echo \"emulator \$*\" >> \"$tmp/calls\"" \
+  "printf 'emulator-5554\tdevice\n' >> \"$tmp/devices\"" > "$tmp/sdk/emulator/emulator"
+chmod +x "$tmp/bin/adb" "$tmp/sdk/emulator/emulator"
+export PATH="$tmp/bin:$PATH" ANDROID_HOME="$tmp/sdk" ANDROID_AVD_HOME="$tmp/avd"
+fail() { echo "FEHLER: $*" >&2; exit 1; }
+reset() { : > "$tmp/calls"; if [ -n "$1" ]; then printf '%s\n' "$1"; fi > "$tmp/devices"; }
+
+# Ohne Emulator: startet medium_phone ohne Quick-Boot-Snapshot und gibt die Seriennummer aus.
+reset ''
+[ "$("$script")" = emulator-5554 ] || fail 'Seriennummer nach dem Start'
+grep -Fx 'emulator -avd medium_phone -no-snapshot -no-boot-anim' "$tmp/calls" >/dev/null || fail 'Emulator nicht ohne Snapshot gestartet'
+grep -F 'no-snapshot-save' "$tmp/calls" >/dev/null && fail 'alte Option -no-snapshot-save noch aktiv'
+
+# Das AVD steht danach auf Kaltstart, damit auch Android Studio und `expo run:android` keinen Snapshot laden.
+config="$tmp/avd/medium_phone.avd/config.ini"
+grep -Fx 'fastboot.forceColdBoot=yes' "$config" >/dev/null || fail 'AVD nicht auf Kaltstart gestellt'
+grep -Fx 'fastboot.forceFastBoot=no' "$config" >/dev/null || fail 'Quick Boot im AVD noch aktiv'
+[ "$(grep -c '^fastboot.forceColdBoot=' "$config")" = 1 ] || fail 'Schlüssel doppelt'
+grep -Fx 'hw.lcd.width=1080' "$config" >/dev/null || fail 'übrige AVD-Einstellungen verändert'
+
+# Läuft schon ein Emulator, startet kein zweiter.
+reset "$(printf 'emulator-5556\tdevice\n')"
+[ "$("$script")" = emulator-5556 ] || fail 'laufender Emulator nicht erkannt'
+grep -F 'emulator -avd' "$tmp/calls" >/dev/null && fail 'zweiter Emulator gestartet'
+
+# Ein echtes Gerät hält den Start für E2E-Läufe nicht auf, wohl aber mit --ohne-geraet (npm run android).
+reset "$(printf 'R58W123\tdevice\n')"
+[ "$("$script")" = emulator-5554 ] || fail 'E2E: Emulator neben echtem Gerät'
+reset "$(printf 'R58W123\tdevice\n')"
+[ -z "$("$script" --ohne-geraet)" ] || fail '--ohne-geraet: Ausgabe trotz Gerät'
+grep -F 'emulator -avd' "$tmp/calls" >/dev/null && fail '--ohne-geraet: Emulator trotz Gerät gestartet'
+reset ''
+[ "$("$script" --ohne-geraet)" = emulator-5554 ] || fail '--ohne-geraet: ohne Gerät nicht gestartet'
+
+# Ein anderes AVD über E2E_ANDROID_AVD.
+reset ''
+E2E_ANDROID_AVD=pixel "$script" > /dev/null
+grep -Fx 'emulator -avd pixel -no-snapshot -no-boot-anim' "$tmp/calls" >/dev/null || fail 'E2E_ANDROID_AVD'
+# Meldet sich der Emulator nicht, bricht das Skript nach der Frist mit Fehler ab, statt endlos zu warten.
+printf '#!/bin/sh\necho "emulator $*" >> "%s/calls"\n' "$tmp" > "$tmp/sdk/emulator/emulator"
+reset ''
+status=0; ABNEHM_EMULATOR_START_SEKUNDEN=1 "$script" > /dev/null 2> "$tmp/err" || status=$?
+[ "$status" = 1 ] || fail "Emulator meldet sich nicht: Exit $status statt 1"
+grep -F 'meldet sich nicht' "$tmp/err" >/dev/null || fail 'keine Fehlermeldung bei Zeitüberschreitung'
+printf 'emulator-starten: OK\n'
