@@ -42,7 +42,8 @@ name: Rollenwahl annehmen, Momo schlüpft
 - takeScreenshot: schluepfen-2-so-waechst-momo
 - tapOn: "Verstanden"
 - assertVisible: "Momos Insel, Level 1, 0 eigene Objekte"
-- assertVisible: "Level 1"
+# Levelbalken: iOS meldet „Level 1“, Android hängt den Wert an („Level 1, Deine Hälfte zu 0 Prozent gefüllt“).
+- assertVisible: "Level 1.*"
 - takeScreenshot: schluepfen-3-insel
 
 # Einmal-Flag: Nach einem Wechsel zu „Heute“ und zurück erscheint „So wächst Momo“ nicht wieder.
