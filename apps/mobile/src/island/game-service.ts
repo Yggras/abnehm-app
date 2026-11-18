@@ -1,32 +1,53 @@
 import type { Clock } from '@abnehm/clock';
-import { TimeZone, type EntityId } from '@abnehm/contracts/base';
+import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole } from '@abnehm/contracts/island';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
+import { reactionMood } from '@abnehm/game-rules/mood';
 
-import type { LocalDatabase } from '../local-db';
+import { motion } from '../design/tokens';
+import type { Haptics } from '../haptics/haptics';
+import type { LocalDatabase, ReadContext } from '../local-db';
+import { readOwnPerson } from '../local-db/person-header';
+import type { Refresh } from '../shell/followed-source';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
 import { takeGrowthIntro } from './growth-intro';
+import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
+import { createMoodState, distinct } from './mood-state';
 import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceOutcome } from './role-choice';
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
 // der Laichkugel über die Rollenwahl (#180) bis zur geschlüpften Insel (#184), die Befehle der Rollenwahl,
-// das Einmal-Flag „So wächst Momo“ und die Beiträge an „Heute“ (`momo.character`) und „Wir“
-// (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je geöffneter
-// Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
+// das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
+// (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je
+// geöffneter Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
 export type GameServiceDependencies = Readonly<{
   database: LocalDatabase;
   writer: SyncWriter;
   clock: Clock;
   newId: () => EntityId;
+  /** Erfolgshaptik (#95); der Spieldienst ist ihr einziger Aufrufer. */
+  haptics: Haptics;
+  /** Takt, zu dem die Stimmung ohne Datenbankänderung neu abgeleitet wird, etwa um 20:00 und am Tageswechsel. */
+  refresh: Refresh;
 }>;
 
 export type GameService = Readonly<{
-  /** Meldet die aktuelle Stufe und jede Änderung nach einem Commit; liefert die Abmeldung. */
+  /**
+   * Meldet die aktuelle Stufe und jede Änderung nach einem Commit; liefert die Abmeldung. Momos Stimmung
+   * ist die der Inselansicht: Abends schläft Momo dort.
+   */
   observeStage(listener: (stage: IslandStage) => void): () => void;
+  /**
+   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften, je Commit zu einer zusammengefasst.
+   * Solange ein Beobachter angemeldet ist, beansprucht der Dienst jedes neue Ereignis genau einmal je
+   * Installation, löst dazu höchstens eine Haptik aus und lässt Momo kurz reagieren. Ohne Beobachter wartet
+   * das Ereignis.
+   */
+  observeReactions(listener: (reaction: MomoReaction) => void): () => void;
   /** Schlägt die Rollen vor, indem die eigene Person ihre Rolle wählt. */
   proposeRoles(role: IslandRole): RoleChoiceOutcome;
   /** Nimmt den offenen Vorschlag des Partners an; Momo schlüpft auf dem Server mit dem nächsten Sync. */
@@ -56,31 +77,62 @@ const roleChoiceAction = { actionId: 'momo.open_role_choice', target: { type: 'm
 const answerRoleChoiceAction = { actionId: 'wir.answer_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 const openIslandAction = { actionId: 'wir.open_island', target: { type: 'momo' } } as const;
 
-export function createGameService({ database, writer, clock, newId }: GameServiceDependencies): GameService {
+/** Wie lange Momo nach einem eigenen Ereignis reagiert (`duration-celebrate`, Design-System › Bewegung). */
+const reactionMs = motion.duration.celebrate;
+
+export function createGameService({ database, writer, clock, newId, haptics, refresh }: GameServiceDependencies): GameService {
   const commands = roleChoiceCommands({ writer, newId, timeZone: () => TimeZone.parse(clock.read().timeZone) });
-  const observeStage = (listener: (stage: IslandStage) => void) => observeDistinct(database, listener);
+  const mood = createMoodState(clock, refresh);
+  const observeStage = (listener: (stage: IslandStage) => void) => mood.observe(database, 'insel', listener);
+
+  function observeReactions(listener: (reaction: MomoReaction) => void) {
+    return database.observe(
+      (tx) => {
+        const personId = ownPersonId(tx);
+        return personId !== null && hasUnshownReactions(tx, personId, LocalDate.parse(clock.read().localDate));
+      },
+      // Der Beobachter schreibt selbst: Die Beanspruchung ist eine eigene Transaktion nach der auslösenden.
+      // Ihr Commit lässt alle Beobachter noch innerhalb der laufenden Melderunde neu lesen; dieser hier
+      // liest danach `false` und schreibt nicht wieder, die Runden enden also.
+      (pending) => {
+        if (!pending) return;
+        const reaction = database.transaction((tx) => {
+          const personId = ownPersonId(tx);
+          const reading = clock.read();
+          const claimed = personId === null ? null : claimReaction(tx, personId, LocalDate.parse(reading.localDate), reading.instant);
+          // Erst nach dem Commit, aber bevor die Beobachter neu lesen: So zeigt „Heute“ Momo sofort reagierend.
+          if (claimed !== null) {
+            const events = eventsOf(claimed);
+            tx.afterCommit(() => {
+              haptics.feedback(hapticOf(events));
+              mood.react(reactionMood(events), reactionMs);
+            });
+          }
+          return claimed;
+        });
+        if (reaction !== null) listener(reaction);
+      },
+    );
+  }
+
   return {
     observeStage,
+    observeReactions,
     proposeRoles: (role) => database.transaction((tx) => commands.propose(tx, role)),
     acceptRoles: (actionId) => database.transaction((tx) => commands.accept(tx, actionId)),
     takeGrowthIntro: () => database.transaction((tx) => takeGrowthIntro(tx, clock.read().instant)),
     declineRoles: (actionId) => database.transaction((tx) => commands.decline(tx, actionId)),
     withdrawRoles: (actionId) => database.transaction((tx) => commands.withdraw(tx, actionId)),
     build: (request) => database.transaction((tx) => buildObject(tx, { writer, newId, clock }, request)),
-    momoCharacter: { subscribe: (listener) => observeStage((stage) => listener(momoCharacterOf(stage))) },
-    wirContributions: { subscribe: (listener) => observeStage((stage) => listener(wirContributionsOf(stage))) },
+    momoCharacter: { subscribe: (listener) => mood.observe(database, 'heute', (stage) => listener(momoCharacterOf(stage))) },
+    // „Wir“ zeigt Momo nicht; seine Beiträge folgen nur der Datenbank.
+    wirContributions: { subscribe: (listener) => database.observe(readIslandStage, distinct((stage) => listener(wirContributionsOf(stage)))) },
   };
 }
 
-/** Meldet die Stufe nur, wenn sie sich geändert hat; jeder Commit der Datenbank liest sie neu. */
-function observeDistinct(database: LocalDatabase, listener: (stage: IslandStage) => void) {
-  let last: string | null = null;
-  return database.observe(readIslandStage, (stage) => {
-    const serialized = JSON.stringify(stage);
-    if (serialized === last) return;
-    last = serialized;
-    listener(stage);
-  });
+function ownPersonId(tx: ReadContext): EntityId | null {
+  const own = readOwnPerson(tx);
+  return own === undefined ? null : EntityId.parse(own.id);
 }
 
 /**

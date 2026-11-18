@@ -1,4 +1,7 @@
 import { render, screen, userEvent } from '@testing-library/react-native';
+import { Dimensions, StyleSheet } from 'react-native';
+
+import { withDeviceConfig } from '../design/testing/device-config';
 import { hitArea } from '../design/testing/hit-area';
 import type { IslandHalves } from './halves';
 import { IslandHud, type IslandHudProps } from './IslandHud';
@@ -119,4 +122,51 @@ test('ohne volle eigene Hälfte steht kein Wartetext', async () => {
   await render(hud({ halves: annasSicht, partnerName: 'Philipp' }));
 
   expect(screen.queryByText(/wartet auf/)).not.toBeOnTheScreen();
+});
+
+describe('große Schrift (Impeccable-Prüfung, B12)', () => {
+  const ownLine = () => StyleSheet.flatten(screen.getByTestId('hud-jahreszeit').props.style) ?? {};
+  /** Schriftfaktor für die Tests eines `describe`; danach wieder wie vorher, nachdem das HUD abgebaut ist. */
+  const atFontScale = (fontScale: number) => {
+    const initial = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
+    beforeEach(() => Dimensions.set({ window: { ...initial.window, fontScale }, screen: { ...initial.screen, fontScale } }));
+    afterEach(() => {
+      screen.unmount();
+      Dimensions.set(initial);
+    });
+  };
+
+  describe('Schriftfaktor 1,0', () => {
+    atFontScale(1);
+
+    test('steht alles in einer Zeile', async () => {
+      await render(hud());
+
+      expect(ownLine()).not.toHaveProperty('flexBasis');
+    });
+  });
+
+  describe('ab Schriftfaktor 1,3', () => {
+    atFontScale(1.3);
+
+    test('bricht das HUD in zwei Zeilen um: Jahreszeit oben, Energie und „Bereiche“ darunter', async () => {
+      await render(hud());
+
+      expect(ownLine()).toMatchObject({ flexBasis: '100%' });
+      expect(screen.getByLabelText('23 Energie')).toBeOnTheScreen();
+      expect(screen.getByRole('switch', { name: 'Bereiche' })).toBeOnTheScreen();
+    });
+  });
+
+  describe('Schriftfaktor 2,0', () => {
+    withDeviceConfig('schriftfaktor-2');
+
+    test('bleibt zweizeilig, der Schalter behält seine 48 dp', async () => {
+      await render(hud());
+
+      expect(ownLine()).toMatchObject({ flexBasis: '100%' });
+      const area = hitArea(screen.getByRole('switch', { name: 'Bereiche' }));
+      expect(Math.min(area.width, area.height)).toBeGreaterThanOrEqual(48);
+    });
+  });
 });

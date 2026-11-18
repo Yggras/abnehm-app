@@ -9,10 +9,11 @@ import { motion } from './tokens';
  * - `settle`: Rückfedern nach dem Drücken, Chips;
  * - `celebrate`: Tagesbonus und Levelaufstieg;
  * - `enter`, `exit`: Meldung oder Sheet erscheint bzw. verschwindet;
- * - `move`: Standardübergang innerhalb eines Bildschirms, etwa ein wachsender Balken;
+ * - `move`: Standardübergang innerhalb eines Bildschirms;
+ * - `fill`: Ring und Levelbalken füllen sich (`duration-slow`);
  * - `loop`: dauerhafte Bewegung wie Wellen, Ruheatmung, Partikel, Wippen der Laichkugel.
  */
-export type MotionIntent = 'bounce' | 'settle' | 'celebrate' | 'enter' | 'exit' | 'move' | 'loop';
+export type MotionIntent = 'bounce' | 'settle' | 'celebrate' | 'enter' | 'exit' | 'move' | 'fill' | 'loop';
 
 type Bezier = readonly [number, number, number, number];
 type SpringConfig = { readonly damping: number; readonly stiffness: number; readonly mass: number };
@@ -46,6 +47,8 @@ export function motionFor(intent: MotionIntent, { reduceMotion }: { reduceMotion
       return { type: 'timing', duration: motion.duration.base, easing: motion.easing.exit };
     case 'move':
       return { type: 'timing', duration: motion.duration.base, easing: motion.easing.standard };
+    case 'fill':
+      return { type: 'timing', duration: motion.duration.slow, easing: motion.easing.standard };
     case 'loop':
       return { type: 'loop', duration: motion.duration.celebrate };
   }

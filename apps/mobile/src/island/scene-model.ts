@@ -42,8 +42,11 @@ export type Owner = 'self' | 'partner' | null;
 /** Seite der Erdschicht unter einem Feld. */
 export type EarthSide = 'links' | 'rechts';
 
-/** `bereiche` färbt die eigenen Felder und die des Partners (Schalter „Bereiche“). */
-export type IslandMode = 'ansehen' | 'bereiche';
+/**
+ * `bereiche` färbt die eigenen Felder und die des Partners (Schalter „Bereiche“). Im Bau-Modus leuchten
+ * die Felder, auf die der gewählte Bauplan darf (#192; `build-options.ts`).
+ */
+export type IslandMode = 'ansehen' | 'bereiche' | Readonly<{ type: 'bauen'; fields: ReadonlySet<string> }>;
 
 export type IslandSceneRequest = Readonly<{
   island: IslandSceneInput;
@@ -53,6 +56,8 @@ export type IslandSceneRequest = Readonly<{
   zoom: number;
   /** Angetipptes Feld, hervorgehoben bis zur nächsten Auswahl. */
   selectedField?: string | null;
+  /** Das eben gebaute Objekt; es erscheint mit Feder (#192). */
+  appearing?: string | null;
 }>;
 
 /** Färbung eines Felds in der Bereichsansicht. */
@@ -70,15 +75,17 @@ export type SceneItem =
   | Readonly<{ layer: 'wasser'; type: 'welle'; at: Point; phase: number }>
   | Readonly<{ layer: 'sockel'; type: 'seite'; field: string; side: EarthSide; polygon: Polygon; tone: ColorToken; shade: number }>
   | Readonly<{ layer: 'felder'; type: 'feld'; field: string; polygon: Polygon; tone: ColorToken; tint: AreaTint | null }>
-  /** `at` ist die Mitte des Felds; dort steht das Objekt mittig (Design-System › Insel). */
-  | Readonly<{ layer: 'objekte'; type: 'objekt'; id: string; field: string; at: Point; art: ArtKey }>
+  /** `at` ist die Mitte des Felds; dort steht das Objekt mittig (Design-System › Insel). `appearing`: eben gebaut. */
+  | Readonly<{ layer: 'objekte'; type: 'objekt'; id: string; field: string; at: Point; art: ArtKey; appearing: boolean }>
   | Readonly<{ layer: 'objekte'; type: 'momo'; field: string; at: Point; appearance: MomoAppearance }>
   | Readonly<{ layer: 'nebel'; type: 'nebel'; area: string; cells: readonly Polygon[]; tone: ColorToken; opacity: number }>
   /** Blatt, das mit `phase` (0–1) über der Insel schwebt, im Laub der Jahreszeit; bei reduzierter Bewegung still. */
   | Readonly<{ layer: 'overlays'; type: 'partikel'; at: Point; phase: number; tone: ColorToken }>
   | Readonly<{ layer: 'overlays'; type: 'abend'; tone: ColorToken; opacity: number }>
-  /** Laterne oder Fenster, das abends über der Abend-Überlagerung leuchtet. */
+  /** Laterne oder Fenster, das abends über der Abend-Überlagerung leuchtet; `at` ist das Licht der Grafik. */
   | Readonly<{ layer: 'overlays'; type: 'licht'; field: string; at: Point; tone: ColorToken }>
+  /** Gültiges Feld im Bau-Modus; leuchtet pulsierend, auch abends (Design-System › Insel). */
+  | Readonly<{ layer: 'overlays'; type: 'baubar'; field: string; polygon: Polygon; tone: ColorToken }>
   /** Angetipptes Feld; liegt über allem, damit man es auch abends erkennt. */
   | Readonly<{ layer: 'overlays'; type: 'auswahl'; field: string; polygon: Polygon; tone: ColorToken; opacity: number }>;
 
@@ -116,7 +123,7 @@ const selectionOpacity = 0.5;
 /** Eine Zelle mit Land: ein Feld der Insel oder ein Stück eines gesperrten Gebiets. */
 type Ground = Cell & Readonly<{ key: string; field: SceneField | null; fogArea: string | null }>;
 
-export function islandScene({ island, viewerPersonId, mode, localTime, zoom, selectedField = null }: IslandSceneRequest): IslandScene {
+export function islandScene({ island, viewerPersonId, mode, localTime, zoom, selectedField = null, appearing = null }: IslandSceneRequest): IslandScene {
   const project = projection(zoom);
   const season = seasonOf(localTime.localDate);
   const daytime = daytimeOf(localTime.minutesOfDay);
@@ -177,7 +184,8 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   const standing: { cell: Cell; item: SceneItem }[] = island.objects.flatMap((object) => {
     const field = fieldsByKey.get(object.fieldKey);
     if (field === undefined) return [];
-    return [{ cell: field, item: { layer: 'objekte', type: 'objekt', id: object.id, field: field.key, at: project.center(field), art: object.art } }];
+    const item: SceneItem = { layer: 'objekte', type: 'objekt', id: object.id, field: field.key, at: project.center(field), art: object.art, appearing: object.id === appearing };
+    return [{ cell: field, item }];
   });
   if (place !== null) {
     const { field } = place;
@@ -215,10 +223,19 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
           { layer: 'overlays', type: 'abend', tone: 'islandNight', opacity: opacity.evening },
           ...island.objects.flatMap((object): SceneItem[] => {
             const field = fieldsByKey.get(object.fieldKey);
-            if (field === undefined || !artOf(object.art).lit) return [];
-            return [{ layer: 'overlays', type: 'licht', field: field.key, at: project.center(field), tone: 'islandLamp' }];
+            const { light } = artOf(object.art);
+            if (field === undefined || light === null) return [];
+            const center = project.center(field);
+            return [{ layer: 'overlays', type: 'licht', field: field.key, at: { x: center.x + light.x * zoom, y: center.y + light.y * zoom }, tone: 'islandLamp' }];
           }),
         ];
+
+  const buildable: SceneItem[] =
+    typeof mode === 'object'
+      ? island.fields
+          .filter((field) => mode.fields.has(field.key))
+          .map((field): SceneItem => ({ layer: 'overlays', type: 'baubar', field: field.key, polygon: project.diamond(field), tone: 'islandBuildable' }))
+      : [];
 
   const selected = selectedField === null ? undefined : fieldsByKey.get(selectedField);
   const selection: SceneItem[] =
@@ -232,7 +249,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     foliage,
     focus: place === null ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : project.point(place.middle),
     bounds,
-    items: [...water, ...sides, ...fieldItems, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...selection],
+    items: [...water, ...sides, ...fieldItems, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...buildable, ...selection],
     hitAt(point) {
       if (place !== null && project.onMomo(place.field, point)) return { type: 'momo' };
       const cell = groundByCell.get(cellKey(project.cellAt(point)));
