@@ -120,7 +120,7 @@ describe('Deep Link `mitteilungen`', () => {
   test('der Eingang stellt den Port sofort um und meldet den Stand', async () => {
     const notifications = createNotificationTestControl();
     const port = notifications.port(createFakeNotificationPort({ permission: 'granted' }));
-    const inbox = createTestInbox({ faults: createFaultController(), clock: createAppTestClock(deviceClock), notifications, deviceSuite: () => Promise.reject(new Error('nicht im Test')) });
+    const inbox = createTestInbox({ faults: createFaultController(), clock: createAppTestClock(deviceClock), notifications, deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) } });
 
     inbox.receive(parseTestLink('abnehmapp-dev://mitteilungen?erlaubnis=verweigert')!);
 
