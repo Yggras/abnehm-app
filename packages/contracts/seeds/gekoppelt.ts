@@ -17,7 +17,8 @@ import {
   type SeedWeeklyPlan,
 } from './rows.ts';
 import { geschluepftePart } from './geschluepft.ts';
-import { soloParts } from './solo.ts';
+import { philippThresholds, soloParts, soloWeeklyPlan } from './solo.ts';
+import { energieverlaufPart, gekoppeltBauten, type SeedBuild } from './spielverlauf.ts';
 
 // Szenario `gekoppelt` (Spezifikation 0, Abschnitt 12; #117): Philipp (iPhone, Rolle Bauen) und Anna
 // (Android, Rolle Natur) haben das Onboarding abgeschlossen und sind gekoppelt, die Insel ist
@@ -87,6 +88,18 @@ const annaWeeklyPlan = {
   sonntag: ['wasserziel', 'ernaehrung_erfasst', 'gewogen'],
 } as const satisfies SeedWeeklyPlan;
 
+/**
+ * Schwellen der Tagesziele aus Annas Zielversion, das Kalorienbudget in ganzen kcal. Drei
+ * Mahlzeitenkategorien für „Ernährung erfasst“ wie bei Philipp, erst für den Energieverlauf (#191) nötig
+ * (Designwert, nicht belegt).
+ */
+const annaThresholds = {
+  ernaehrung_erfasst: { minimumMealCategories: 3 },
+  wasserziel: { targetMl: 2_000 },
+  sporteinheit: { minimumSingleSessionMinutes: 20 },
+  im_kalorienbudget: { budgetKcal: 1_930, lowerBoundKcal: 1_459 },
+} as const;
+
 /** Ziele (Spezifikation 1): Annas Zielversion, Wochenplan und ihre drei Tagesziele von heute. */
 const annaZiele: SeedPart = {
   area: 'ziele',
@@ -127,11 +140,7 @@ const annaZiele: SeedPart = {
       dayEndsAt: seedDayEnds.heute,
       createdAt: '2026-10-14T05:00:00.000Z',
       bausteine: annaWeeklyPlan.mittwoch,
-      thresholds: {
-        wasserziel: { targetMl: 2_000 },
-        sporteinheit: { minimumSingleSessionMinutes: 20 },
-        im_kalorienbudget: { budgetKcal: 1_930, lowerBoundKcal: 1_459 },
-      },
+      thresholds: annaThresholds,
     }),
   ],
 };
@@ -473,19 +482,29 @@ const projektionenOf = (annas: AnnasProjections): SeedPart => ({
   ],
 });
 
+/** Energieverlauf beider seit dem Zielstart (#191): je Tag drei erfüllte Tagesziele samt Bonus. */
+const energieverlauf = energieverlaufPart([
+  { personId: philipp, plan: soloWeeklyPlan, thresholds: philippThresholds, goalsFrom: '2026-10-01T07:05:00.000Z' },
+  { personId: anna, plan: annaWeeklyPlan, thresholds: annaThresholds, goalsFrom: '2026-10-01T18:10:00.000Z' },
+]);
+
 /**
  * Beiträge beider Partner in Reihenfolge; Philipps Daten sind die aus `solo`. Vor dem Schlüpfen
  * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine. Geschlüpft kommen
- * zuletzt die Inhalte der Insel (#184), damit die Positionen davor gleich bleiben. `annas` legt den
- * Stand von Annas Projektionen fest (#113).
+ * zuletzt der Energieverlauf seit dem Zielstart und die Inhalte der Insel samt Bauten (#184, #191), damit
+ * die Positionen davor gleich bleiben. `annas` legt den Stand von Annas Projektionen fest (#113), `builds`
+ * die Bauten auf der Insel.
  */
-const partnerParts = ({ hatched, annas }: Readonly<{ hatched: boolean; annas: AnnasProjections }>): readonly SeedPart[] => [
+const partnerParts = ({ hatched, annas, builds = gekoppeltBauten }: Readonly<{ hatched: boolean; annas: AnnasProjections; builds?: readonly SeedBuild[] }>): readonly SeedPart[] => [
   ...soloParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched }), projektionenOf(annas),
-  ...(hatched ? [geschluepftePart(hatchedAt)] : []),
+  ...(hatched ? [energieverlauf, geschluepftePart(hatchedAt, builds)] : []),
 ];
 
 /** Beiträge des Szenarios, Annas Projektionen zu einem früheren Stand (#113). */
 export const gekoppeltPartsWith = (annas: AnnasProjections): readonly SeedPart[] => partnerParts({ hatched: true, annas });
+
+/** Beiträge von `gekoppelt` mit anderen Bauten auf der Insel, etwa `haelfte-voll` (#191). */
+export const gekoppeltPartsBuilt = (builds: readonly SeedBuild[]): readonly SeedPart[] => partnerParts({ hatched: true, annas: annasProjectionsNow, builds });
 
 /** Beiträge des Szenarios `gekoppelt`. */
 export const gekoppeltParts: readonly SeedPart[] = gekoppeltPartsWith(annasProjectionsNow);
@@ -528,13 +547,14 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 8: Energieverlauf seit dem Zielstart und Bauten (#191): Level 3, Philipp mit 23 Energie.
   // Revision 7: Inhalte der geschlüpften Insel seit #184 (Felder, Start-Baupläne, Projekt 1, Ereignis, Fortschritt).
   // Revision 6: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
   // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, dazu Philipps Sportwoche aus `solo`.
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 7,
+  revision: 8,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

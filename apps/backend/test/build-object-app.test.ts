@@ -88,7 +88,7 @@ describe('Bauen App ↔ Backend', { timeout: 30_000 }, () => {
 
   it('das Gerät baut nur bei ausreichendem Bestand, auf freie eigene Felder und mit freigeschalteten Bauplänen', async () => {
     const world = await hatchedPhones();
-    const { backend, philippsPhone } = world;
+    const { philippsPhone } = world;
     await energize(world, [worldToday]);
 
     expect(build(philippsPhone, 'grundinsel:0:0', 'laterne')).toMatchObject({ type: 'gebaut' });
@@ -128,7 +128,7 @@ describe('Bauen App ↔ Backend', { timeout: 30_000 }, () => {
 
   it('kanonisches Duplikat: Geht die Antwort verloren, ersetzt der Retry die lokalen Zeilen, und nichts zählt doppelt', async () => {
     const world = await hatchedPhones();
-    const { backend, philippsPhone } = world;
+    const { philippsPhone } = world;
     await energize(world, [worldToday]);
     build(philippsPhone, 'grundinsel:0:0', 'laterne');
 
