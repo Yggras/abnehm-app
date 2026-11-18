@@ -6,12 +6,19 @@ import type { ContractErrorCode } from '@abnehm/contracts/errors';
 import type { PersonActor, ResourceFacts, ResourcePolicy, ResourceTarget } from '../authorization/authorization.ts';
 import type { DbExecutor } from '../database.ts';
 
-/** Dauerhaft ungültige Fachregel: nur die Teiloperation rollt zurück, nicht der übrige Batch. */
+/**
+ * Dauerhaft ungültige Fachregel: nur die Teiloperation rollt zurück, nicht der übrige Batch. Nach
+ * erfolgreicher Objekt-Autorisierung darf die Ablehnung den kanonischen Datensatz der betroffenen
+ * Entität nennen (Spezifikation 0, Abschnitt 10); die App übernimmt ihn dann. Ohne ihn antwortet der
+ * Rahmen mit `absent`.
+ */
 export class CommandRejection extends Error {
   readonly code: Exclude<ContractErrorCode, 'forbidden' | 'operation_conflict'>;
-  constructor(code: Exclude<ContractErrorCode, 'forbidden' | 'operation_conflict'>) {
+  readonly canonical: CanonicalChange | null;
+  constructor(code: Exclude<ContractErrorCode, 'forbidden' | 'operation_conflict'>, canonical: CanonicalChange | null = null) {
     super(code);
     this.code = code;
+    this.canonical = canonical;
   }
 }
 

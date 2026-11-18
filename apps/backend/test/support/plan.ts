@@ -9,6 +9,7 @@ import { policies } from '../../src/authorization/authorization.ts';
 import { createTestBackend, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { httpOutcome, personWithSession, type AuthorizationScenario } from './authorization.ts';
+import { insertDailyGoals } from './daily-goals.ts';
 import { pushOutcome, pushRaw } from './sync.ts';
 
 // Ziel- und Wochenplanversionen im Push (#128): Operationen, wie sie das Plan-Modul der App erzeugt,
@@ -70,9 +71,11 @@ export const planCommandScenarios = {
     arrange,
     attempt: (world: World, device: Device) => pushOutcome(world.backend, device, goalVersionOp(world.personId)),
     manipulierte_id: async (world: World) => {
-      // Der Schlüssel nennt Person und Fassung einer anderen Person, die es schon gibt.
+      // Der Schlüssel nennt Person und Fassung einer anderen Person, die es schon gibt. Sie ist wirksam,
+      // sodass ein Ersetzen ihren kanonischen Datensatz nennen würde; die fremde Person bekommt ihn nie.
       const philipp = await personWithSession(world.backend, 'philipp@example.test', 'Philipp');
       await pushRaw(world.backend, philipp.device, [goalVersionOp(philipp.personId)]);
+      await insertDailyGoals(world.backend, philipp.personId, '2026-10-14');
       return pushOutcome(world.backend, world.actor, goalVersionOp(philipp.personId));
     },
     verbotene_operation: (world: World) => genericUpsert(world, 'goal_version', referenceGoal),
@@ -84,6 +87,7 @@ export const planCommandScenarios = {
     manipulierte_id: async (world: World) => {
       const philipp = await personWithSession(world.backend, 'philipp@example.test', 'Philipp');
       await pushRaw(world.backend, philipp.device, [weeklyPlanOp(philipp.personId)]);
+      await insertDailyGoals(world.backend, philipp.personId, '2026-10-14');
       return pushOutcome(world.backend, world.actor, weeklyPlanOp(philipp.personId));
     },
     verbotene_operation: (world: World) => genericUpsert(world, 'weekly_plan_version', { validFrom: '2026-10-14', days: standardDays }),

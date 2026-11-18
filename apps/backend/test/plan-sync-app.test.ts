@@ -31,15 +31,21 @@ import {
   foundationLocalCommands,
   foundationSyncEntities,
 } from '../../mobile/src/sync/index.ts';
+import { pendingOperations } from '../../mobile/src/sync/outbox.ts';
 import { goalVersion, person, weeklyPlanDay } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { defaultPassword, newDevice, signIn, type Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
+import { insertDailyGoals } from './support/daily-goals.ts';
 
 // Nachweis für #128: Erstplan speichern über das Plan-Modul der App, Push über die echte Hono-App nach
 // Postgres und Pull auf eine zweite Installation derselben Person. Dort liest der `PlanReader` die
 // Fassungen aus SQLite, und die Übernahme meldet die Tage bis heute + 13 mit `planaenderung`. App-Code
 // läuft auf echtem SQLite (better-sqlite3), der HTTP-Transport über `app.request`.
+//
+// Nachweis für #134: Änderungen ab morgen über denselben Weg. Ist eine Fassung auf dem Server wirksam
+// geworden, lehnt er ihr Ersetzen dauerhaft ab, und die App übernimmt den kanonischen Stand aus der
+// Ablehnung (Spezifikation 0, Abschnitt 10).
 
 /** Mittwoch, 14.10.2026, 12:00 in Berlin. */
 const start = { instant: Instant.parse('2026-10-14T10:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') };
@@ -101,6 +107,8 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     sync: () => engine.sync(),
     signals,
     goals: () => database.read((tx) => sqliteOf(tx).select().from(localGoalVersion).all()),
+    pendingPlanCommands: () => database.read((tx) => pendingOperations(tx, 100))
+      .filter((operation) => operation.type === 'createGoalVersion' || operation.type === 'createWeeklyPlanVersion'),
   };
 }
 
@@ -150,5 +158,59 @@ describe('Erstplan im Sync', () => {
     await expect(b.planReader.effectivePlan(personId, day('2026-10-19'))).resolves.toMatchObject({ weeklyPlanDay: { bausteine: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'] } });
     const planDays = Array.from({ length: 14 }, (_, index) => `2026-10-${String(14 + index).padStart(2, '0')}`);
     expect(b.signals).toContainEqual(expect.objectContaining({ personId, cause: 'planaenderung', localDates: planDays }));
+  });
+});
+
+describe('Änderungen ab morgen im Sync (#134)', () => {
+  /** Plan mit Sport Di/Do/Sa und Wiegen montags; `extra` legt einen weiteren Wiegetag fest. */
+  const week = (extra: 'dienstag' | 'freitag') => ({
+    montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
+    dienstag: ['ernaehrung_erfasst', 'wasserziel', extra === 'dienstag' ? 'gewogen' : 'sporteinheit'],
+    mittwoch: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+    donnerstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+    freitag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
+    samstag: ['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'],
+    sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
+  } as const);
+
+  async function planned() {
+    const context = await setup();
+    await context.a.plan.saveInitialPlan(draft);
+    await context.a.sync();
+    return { ...context, serverGoals: () => context.backend.database.db.select().from(goalVersion) };
+  }
+
+  it('überträgt eine Änderung ab morgen und ersetzt sie am selben Tag, solange sie nicht wirksam ist', async () => {
+    const { a, serverGoals } = await planned();
+
+    a.plan.changeGoals({ ...draft, waterTargetMl: 2_000 });
+    await a.sync();
+    a.plan.changeGoals({ ...draft, waterTargetMl: 2_500 });
+    await a.sync();
+
+    expect(a.pendingPlanCommands()).toEqual([]);
+    expect((await serverGoals()).map((goal) => [goal.validFrom, goal.waterTargetMl]).sort()).toEqual([['2026-10-14', 1_500], ['2026-10-15', 2_500]]);
+    expect(a.plan.settings().goal.upcoming).toMatchObject({ version: { validFrom: '2026-10-15', waterTargetMl: 2_500 }, changed: ['waterTargetMl'] });
+  });
+
+  it('übernimmt nach der Ablehnung einer wirksamen Fassung den kanonischen Stand des Servers', async () => {
+    const { backend, anna, a, serverGoals } = await planned();
+    a.plan.changeGoals({ ...draft, waterTargetMl: 2_000 });
+    a.plan.changeWeeklyPlan(week('freitag'));
+    await a.sync();
+    // Ein anderes Gerät hat den 15.10. schon materialisiert, etwa nach einer Reise nach Osten: Beide
+    // Fassungen ab dem 15.10. sind damit wirksam.
+    await insertDailyGoals(backend, anna.personId, '2026-10-15');
+
+    a.plan.changeGoals({ ...draft, waterTargetMl: 2_500 });
+    a.plan.changeWeeklyPlan(week('dienstag'));
+    expect(a.plan.settings().goal.upcoming?.version.waterTargetMl).toBe(2_500);
+    await a.sync();
+
+    expect(a.pendingPlanCommands()).toEqual([]);
+    expect((await serverGoals()).find((goal) => goal.validFrom === '2026-10-15')).toMatchObject({ waterTargetMl: 2_000 });
+    const settings = a.plan.settings();
+    expect(settings.goal.upcoming).toMatchObject({ version: { validFrom: '2026-10-15', waterTargetMl: 2_000 } });
+    expect(settings.weeklyPlan.upcoming).toMatchObject({ validFrom: '2026-10-15', changedWeekdays: ['freitag'] });
   });
 });

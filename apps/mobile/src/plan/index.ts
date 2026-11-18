@@ -5,7 +5,11 @@
 // Fassungen in `@abnehm/contracts/plan`.
 export {
   createPlan,
+  type GoalChangeResult,
   type GoalDraft,
+  type GoalVersionField,
+  type PlanSettings,
+  type WeeklyPlanChangeResult,
   type InitialPlanDraft,
   type InitialPlanResult,
   type Plan,
@@ -14,4 +18,11 @@ export {
 export { followDailyGoalTriggers } from './daily-goal-triggers';
 export { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from './plan-entities';
 export { planReaderOf } from './plan-reader';
-export { preselectedWeekChoice, standardWeeklyPlan, type WeekChoice, type WeekChoiceError } from './weekly-plan';
+export {
+  preselectedWeekChoice,
+  standardWeeklyPlan,
+  type WeekChoice,
+  type WeekChoiceError,
+  type WeeklyPlanDayError,
+  type WeeklyPlanInput,
+} from './weekly-plan';
