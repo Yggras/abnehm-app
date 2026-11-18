@@ -4,4 +4,4 @@
 export { appPartner } from './app-partner';
 export { createPartner, type Partner, type PartnerDependencies } from './partner';
 export { dataAgeOf } from './partner-view';
-export { partnerHeadline, partnerTexts, stageTexts, standText } from './texts';
+export { partnerHeadline, partnerTexts, standText } from './texts';

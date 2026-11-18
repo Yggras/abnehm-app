@@ -13,8 +13,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useClock } from '../clock/clock-context';
 import { boxShadow, Button, Card, color, EnergySymbol, Icon, IconButton, ProgressBar, radius, size, space, Text, useLargeTextLayout, Skeleton } from '../design';
 import { openTarget } from '../navigation';
-import { dataAgeOf, partnerHeadline, partnerTexts, stageTexts, standText } from '../partner';
+import { dataAgeOf, partnerHeadline, partnerTexts, standText } from '../partner';
 import { PartnerAvatar } from '../partner/PartnerAvatar';
+import { PartnerStage } from '../partner/PartnerStage';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
@@ -203,7 +204,7 @@ function Partner({ data, stale }: { data: PartnerCardReady; stale: boolean }) {
       <PartnerAvatar displayName={data.partnerDisplayName} />
       <View style={styles.flex}>
         <Text variant="bodyStrong">{data.partnerDisplayName}</Text>
-        <Text tone="inkMuted">{stageTexts[data.dailyGoalStage]}</Text>
+        <PartnerStage stage={data.dailyGoalStage} />
         <Text variant="caption" tone="inkMuted">{stand.shown}</Text>
       </View>
     </View>

@@ -7,8 +7,9 @@ import { MomoFigure } from '../shell/MomoFigure';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner } from './app-partner';
 import { PartnerAvatar } from './PartnerAvatar';
+import { PartnerStage } from './PartnerStage';
 import { partnerActions, type CoupledPartner, type WirPartner } from './partner-view';
-import { areaNames, partnerHeadline, partnerTexts, stageTexts, standText, summaryText, type Spoken } from './texts';
+import { areaNames, partnerHeadline, partnerTexts, standText, summaryText, type Spoken } from './texts';
 
 // Tab „Wir“ (Spezifikation 5, Abschnitt 2; #121): ohne Kopplung der Leerzustand „Momo wartet im Ei“,
 // gekoppelt die Partnerübersicht und die Anfeuern-Karte. Antwortbedürftige Vorgänge, Challenge,
@@ -95,7 +96,7 @@ function Overview({ partner, stand }: { partner: CoupledPartner; stand: Spoken |
           <PartnerAvatar displayName={name} />
           <View style={styles.flex}>
             <Text variant="headline">{name}</Text>
-            {stage === null ? null : <Text tone="inkMuted">{stageTexts[stage]}</Text>}
+            {stage === null ? null : <PartnerStage stage={stage} />}
           </View>
         </View>
         {partner.summaries.map((summary) => {
@@ -115,7 +116,7 @@ function Overview({ partner, stand }: { partner: CoupledPartner; stand: Spoken |
                   {area}
                 </Text>
               </View>
-              <Text variant="bodyStrong" style={!singleColumn && styles.value}>
+              <Text style={!singleColumn && styles.value}>
                 {value.shown}
               </Text>
             </View>

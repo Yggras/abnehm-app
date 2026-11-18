@@ -153,7 +153,8 @@ describe('„Wir“ gekoppelt', () => {
     const card = await screen.findByTestId('wir-partneruebersicht');
     expect(within(card).getByRole('header', { name: 'Anna, Tagesziele: fast geschafft, Stand gerade eben' })).toBeOnTheScreen();
     expect(within(card).getByText('A')).toBeOnTheScreen();
-    expect(within(card).getByText('fast geschafft')).toBeOnTheScreen();
+    // Die Stufe steht sichtbar mit ihrem Bezug (Impeccable-Kritik, P2).
+    expect(within(card).getByText('Tagesziele: fast geschafft')).toBeOnTheScreen();
     expect(screen.queryByText(/von 3/)).not.toBeOnTheScreen();
     // Ernährung hält Anna privat: keine Zeile, kein Hinweis.
     expect(areaRows()).toEqual(['wir-bereich-wasser', 'wir-bereich-sport', 'wir-bereich-gewicht']);
@@ -251,7 +252,7 @@ describe('„Wir“ gekoppelt', () => {
       notice({ type: 'partner_summary', projectionId: seedIds.partnerSummary.anna[area] }, 'freigabe_entzogen')));
 
     expect(areaRows()).toEqual([]);
-    expect(within(overview()).getByText('fast geschafft')).toBeOnTheScreen();
+    expect(within(overview()).getByText('Tagesziele: fast geschafft')).toBeOnTheScreen();
     expect(screen.queryByText(/privat|freigegeben|Wasser|Sport|Gewicht/)).not.toBeOnTheScreen();
   });
 
@@ -325,6 +326,7 @@ describe('Partner-Karte auf „Heute“ über die Heute-Registry', () => {
     const slot = await renderToday(philipp.partner);
     expect(slot.getByLabelText('Anna, Tagesziele: fast geschafft, Stand gerade eben')).toBeOnTheScreen();
     expect(slot.getByText('A')).toBeOnTheScreen();
+    expect(slot.getByText('Tagesziele: fast geschafft')).toBeOnTheScreen();
     expect(slot.getByText('Stand gerade eben')).toBeOnTheScreen();
     expect(slot.getByRole('button', { name: 'Anfeuern' })).toBeOnTheScreen();
     expect(slot.queryByText(/Wasser|Sport|Trend|%/)).not.toBeOnTheScreen();

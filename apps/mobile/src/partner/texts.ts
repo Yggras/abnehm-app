@@ -13,6 +13,8 @@ export type Spoken = Readonly<{ shown: string; spoken: string }>;
 /** Titel und Aktionen heißen wie ihre Routen (`shell/texts.ts`). */
 export const partnerTexts = {
   title: titleOf({ type: 'partner' }),
+  /** Bezug des groben Tageszielstands, sichtbar wie im zugänglichen Namen (`partnerHeadline`). */
+  stageLabel: 'Tagesziele',
   soloTitle: 'Momo wartet im Ei',
   soloBody: 'Deine Tracker kannst du auch allein vollständig nutzen. Wenn ihr zu zweit seid, kümmert ihr euch gemeinsam um Momo.',
   /** Kurzform des Solo-Zustands auf der Partner-Karte von „Heute“. */
@@ -97,7 +99,7 @@ export function ageText(age: DataAge): Spoken {
  * 5 Minuten“. Ohne Tageszielstand oder Datenstand entfällt der jeweilige Teil.
  */
 export function partnerHeadline(name: string, stage: PartnerDailyGoalStage | null, stand: Spoken | null): string {
-  return [name, stage === null ? null : `Tagesziele: ${stageTexts[stage]}`, stand?.spoken].filter((part) => part != null).join(', ');
+  return [name, stage === null ? null : `${partnerTexts.stageLabel}: ${stageTexts[stage]}`, stand?.spoken].filter((part) => part != null).join(', ');
 }
 
 /** „Stand vor 5 Min.“ bzw. veraltet neutral „Offline · letzter Stand vor 12 Min.“. */
