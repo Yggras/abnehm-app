@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { CatalogKey, DisplayName, EntityId, Instant, MessageKey } from './base.ts';
+import { type AreaKey, CatalogKey, DisplayName, EntityId, Instant, MessageKey } from './base.ts';
+import { uuidV5 } from './ids.ts';
 import { EncouragementKey } from './partner.ts';
 import type { RouteTarget } from './routes.ts';
 
@@ -93,3 +94,104 @@ export function notificationTarget(intent: NotificationIntent): RouteTarget {
  */
 export const NotificationPermission = z.enum(['undetermined', 'granted', 'denied']);
 export type NotificationPermission = z.infer<typeof NotificationPermission>;
+
+/** Lokale Wanduhrzeit `HH:MM` (00:00–23:59), etwa eines Tages-Check-ins; ohne Datum und Zone. */
+export const WallClockTime = z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/);
+export type WallClockTime = z.infer<typeof WallClockTime>;
+
+/** Minute des Tages (0–1439) einer Wanduhrzeit. */
+export function wallClockMinutes(time: WallClockTime): number {
+  const parsed = WallClockTime.parse(time);
+  return Number(parsed.slice(0, 2)) * 60 + Number(parsed.slice(3, 5));
+}
+
+/** Wanduhrzeit `HH:MM` zu einer Minute des Tages (0–1439). */
+export function wallClockTimeOf(minutes: number): WallClockTime {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return WallClockTime.parse(`${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`);
+}
+
+const notificationSettingFields = {
+  middayEnabled: z.boolean(),
+  middayTime: WallClockTime,
+  eveningEnabled: z.boolean(),
+  eveningTime: WallClockTime,
+  /** Tracker, die die Tages-Check-ins berücksichtigen. */
+  trackerErnaehrung: z.boolean(),
+  trackerWasser: z.boolean(),
+  trackerSport: z.boolean(),
+  trackerGewicht: z.boolean(),
+  /** Alle Server-Pushes: Anfeuern, Challenge-Vorschläge, Insel-Meilensteine und gemeinsame Vorgänge. */
+  partnerPushEnabled: z.boolean(),
+};
+
+/**
+ * Abend nach Mittag, auch wenn einer der beiden aus ist, wie der `CHECK` beider Datenbanken. `HH:MM`
+ * ordnet sich als Zeichenfolge wie die Uhrzeit.
+ */
+const eveningAfterMidday = (value: { middayTime: string; eveningTime: string }) => value.eveningTime > value.middayTime;
+const eveningAfterMiddayIssue = { message: 'Der Abend-Check-in muss nach dem Mittag-Check-in liegen', path: ['eveningTime'] };
+
+/**
+ * Generisches Upsert der Benachrichtigungseinstellung (Spezifikation 5, Abschnitte 6 und 10): eine je
+ * Person mit der ID aus `notificationSettingId`, Last-Write-Wins, nur die Eigentümerin liest und
+ * schreibt. Die Uhrzeiten sind lokale Wanduhrzeiten der jeweils aktuellen Gerätezone.
+ */
+export const NotificationSettingUpsert = z.strictObject(notificationSettingFields).refine(eveningAfterMidday, eveningAfterMiddayIssue);
+export type NotificationSettingUpsert = z.infer<typeof NotificationSettingUpsert>;
+
+/** Kanonischer Datensatz der Benachrichtigungseinstellung (`notification_setting`); nur die Eigentümerin erhält ihn. */
+export const NotificationSettingRecord = z
+  .strictObject({ personId: EntityId, ...notificationSettingFields, createdAt: Instant, updatedAt: Instant })
+  .refine(eveningAfterMidday, eveningAfterMiddayIssue);
+export type NotificationSettingRecord = z.infer<typeof NotificationSettingRecord>;
+
+/**
+ * Standard, solange die Person nichts gespeichert hat: Mittag an, 13:00; Abend an, 19:00; alle vier
+ * Tracker; Partner-Pushes an. Die Uhrzeiten sind Designwerte aus #37, nicht wissenschaftlich belegt.
+ */
+export const defaultNotificationSetting: NotificationSettingUpsert = Object.freeze({
+  middayEnabled: true,
+  middayTime: '13:00',
+  eveningEnabled: true,
+  eveningTime: '19:00',
+  trackerErnaehrung: true,
+  trackerWasser: true,
+  trackerSport: true,
+  trackerGewicht: true,
+  partnerPushEnabled: true,
+});
+
+const settingKeys = Object.keys(notificationSettingFields) as (keyof NotificationSettingUpsert)[];
+
+/** Nur die Felder der Einstellung, etwa aus einer Zeile oder einem Datensatz mit Eigentümer und Zeitpunkten. */
+export function notificationSettingOf(value: NotificationSettingUpsert): NotificationSettingUpsert {
+  return Object.fromEntries(settingKeys.map((key) => [key, value[key]])) as NotificationSettingUpsert;
+}
+
+/** Ob zwei Einstellungen in allen Feldern übereinstimmen. */
+export function sameNotificationSetting(a: NotificationSettingUpsert, b: NotificationSettingUpsert): boolean {
+  return settingKeys.every((key) => a[key] === b[key]);
+}
+
+const checkInTrackerFields = {
+  ernaehrung: 'trackerErnaehrung',
+  wasser: 'trackerWasser',
+  sport: 'trackerSport',
+  gewicht: 'trackerGewicht',
+} as const satisfies Record<AreaKey, keyof NotificationSettingUpsert>;
+
+/** Feld der Einstellung, das einen Tracker in die Check-ins aufnimmt. */
+export function checkInTrackerField(area: AreaKey): (typeof checkInTrackerFields)[AreaKey] {
+  return checkInTrackerFields[area];
+}
+
+const notificationSettingNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b66';
+
+/**
+ * Deterministische ID der Benachrichtigungseinstellung einer Person (UUIDv5): Zwei Geräte, die sie
+ * gleichzeitig anlegen, erzeugen dieselbe ID und damit keine Dublette.
+ */
+export function notificationSettingId(personId: EntityId): EntityId {
+  return EntityId.parse(uuidV5(notificationSettingNamespace, `notification_setting:${personId}`));
+}

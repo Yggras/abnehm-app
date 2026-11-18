@@ -3,17 +3,21 @@ import { Stack } from 'expo-router';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId } from '@abnehm/contracts/base';
+import { notificationSettingId, type NotificationSettingUpsert } from '@abnehm/contracts/notifications';
 
 import type { SessionStore, StoredSession } from '../../auth/app-auth';
 import { fakeAuthBackend, type FakeAuthAccount } from '../../auth/testing/fake-auth-backend';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { outbox, person } from '../../local-db/schema';
+import { notificationSetting, outbox, person } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { personRow } from '../../local-db/testing/rows';
 import { createLogout, syncBeforeLogout, type LogoutRecord, type LogoutStore } from '../../logout';
 import { ClockProvider } from '../../clock/clock-context';
 import { createNotifications, NotificationsProvider, type NotificationPermission } from '../../notifications';
+import { appNotificationSettings } from '../../notifications/app-notification-settings';
+import { createNotificationSettings } from '../../notifications/notification-setting';
+import { notificationSettingEntity } from '../../notifications/notification-setting-entity';
 import { MessageHostProvider } from '../../shell/MessageHost';
 import { createAppSession } from '../../session/app-session';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities, unsecuredOperationCount } from '../../sync';
@@ -24,7 +28,8 @@ import { followOwnDisplayName } from '../own-display-name';
 
 // Test-Welt der Einstellungen (Spezifikation 5, Abschnitt 6): das echte Auth-Modul und das echte
 // Abmeldemodul über `fakeAuthBackend`, davor der Fehler-Adapter der Testfähigkeiten des Fundaments
-// (`faults`), und der Anzeigename über einer echten SQLite-Datei (Test-Adapter der lokalen Datenbank).
+// (`faults`), und der Anzeigename sowie die Benachrichtigungseinstellung (#132) über einer echten
+// SQLite-Datei (Test-Adapter der lokalen Datenbank).
 //
 // Der Sync vor dem Abmelden ist eine Attrappe der Engine: Er erreicht den Server, solange der
 // Fehler-Adapter Verbindung und einen Server hat, sichert aber nichts. Was in der Outbox liegt, etwa ein
@@ -63,7 +68,7 @@ export async function createAccountWorld({ clock, notificationPermission = 'gran
   const faults = createFaultController();
   let ids = 0;
   const newId = () => EntityId.parse(`20000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
-  const writer = createSyncWriter({ registry: createSyncRegistry(foundationSyncEntities), clock, newId });
+  const writer = createSyncWriter({ registry: createSyncRegistry([...foundationSyncEntities, notificationSettingEntity]), clock, newId });
   const displayName = followOwnDisplayName({ writer, clock });
   const sessionStore: SessionStore & { value: StoredSession | null } = memory<StoredSession>();
   const logoutStore: LogoutStore & { value: LogoutRecord | null } = memory<LogoutRecord>();
@@ -72,7 +77,13 @@ export async function createAccountWorld({ clock, notificationPermission = 'gran
     fetch: faultyFetch(backend.fetch, faults),
     sessionStore,
     databases,
-    onAccountOpened: (database) => displayName.opened(database),
+    onAccountOpened(database) {
+      // Wie im Composition Root: Anzeigename und Benachrichtigungseinstellung folgen der Kontodatenbank (#132).
+      const stops = [displayName.opened(database), appNotificationSettings.opened(createNotificationSettings({ database, writer, clock }))];
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
     onError,
   });
   const reachable = () => faults.plan().transport !== 'offline' && faults.plan().server !== 'unavailable';
@@ -144,6 +155,18 @@ export async function createAccountWorld({ clock, notificationPermission = 'gran
         }),
       ]),
     person: () => (databases.current() ?? database).read((tx) => sqliteOf(tx).select().from(person).get()),
+    notificationSettings: () => (databases.current() ?? database).read((tx) => sqliteOf(tx).select().from(notificationSetting).all()),
+    /** Schreibt die Einstellung, wie sie ein Pull vom Server übernähme: ohne Outbox. */
+    applyNotificationSetting(setting: NotificationSettingUpsert) {
+      const at = clock.read().instant;
+      (databases.current() ?? database).transaction((tx) => {
+        sqliteOf(tx)
+          .insert(notificationSetting)
+          .values({ id: notificationSettingId(philipp.personId), personId: philipp.personId, ...setting, createdAt: at, updatedAt: at, serverVersion: '7' })
+          .onConflictDoUpdate({ target: notificationSetting.id, set: { ...setting, updatedAt: at, serverVersion: '7' } })
+          .run();
+      });
+    },
     outbox: () => (databases.current() ?? database).read((tx) => sqliteOf(tx).select().from(outbox).all()),
     cleanup() {
       databases.lock();

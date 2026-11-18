@@ -1,0 +1,95 @@
+# Benachrichtigungseinstellungen überleben einen Neustart (#132; Spezifikation 5, Testing Decisions):
+# Einstellungen › Benachrichtigungen, „Abends“ und „Gewicht“ ausschalten, „Speichern“, App wirklich
+# beenden und neu starten. Danach zeigt die Seite denselben Stand; „Mittags“ und „Wasser“ bleiben an.
+#
+# Die Schalter tragen Rolle `switch` und ihren Zustand (`design/native/Switch.tsx`); Maestro wählt sie
+# über `checked` aus (https://docs.maestro.dev/reference/selectors/state-selectors), damit die gleichnamige
+# Zeilenbeschriftung nicht passt. Die Uhrzeit ändert der Ablauf nicht; Uhrzeit-Validierung und Speichern
+# der Uhrzeit belegen die Komponententests (`src/settings/NotificationsScreen.test.tsx`).
+appId: ${APP_ID}
+name: Benachrichtigungseinstellungen nach Neustart
+---
+- runFlow: teilablaeufe/anmelden.yaml
+
+# Einstellungen › Benachrichtigungen: Standard -----------------------------------------------------
+- tapOn: "Einstellungen"
+- tapOn: "Benachrichtigungen.*"
+- extendedWaitUntil:
+    visible: "Tages-Check-ins"
+    timeout: 10000
+- assertVisible:
+    text: "Abends"
+    checked: true
+- takeScreenshot: benachrichtigungen-standard
+
+# Abends und Gewicht aus, speichern ----------------------------------------------------------------
+- tapOn:
+    text: "Abends"
+    checked: true
+
+# Zurück mit ungesicherter Änderung fragt nach (Impeccable-Prüfung, P1): Android-Zurück bzw. iOS-Randgeste
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 1%, 50%
+          end: 80%, 50%
+          duration: 400
+- extendedWaitUntil:
+    visible: "Änderungen speichern?"
+    timeout: 10000
+- takeScreenshot: benachrichtigungen-rueckfrage
+- tapOn: "Weiter bearbeiten"
+- assertVisible:
+    text: "Abends"
+    checked: false
+
+- scrollUntilVisible:
+    element:
+      text: "Gewicht"
+      checked: true
+    direction: DOWN
+- tapOn:
+    text: "Gewicht"
+    checked: true
+- scrollUntilVisible:
+    element: "Speichern"
+    direction: DOWN
+- tapOn: "Speichern"
+- extendedWaitUntil:
+    visible: "Benachrichtigungen gespeichert"
+    timeout: 10000
+- takeScreenshot: benachrichtigungen-gespeichert
+
+# Echter Neustart -----------------------------------------------------------------------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Hallo, Philipp"
+    timeout: 30000
+- tapOn: "Einstellungen"
+- tapOn: "Benachrichtigungen.*"
+- extendedWaitUntil:
+    visible: "Tages-Check-ins"
+    timeout: 10000
+- assertVisible:
+    text: "Abends"
+    checked: false
+- assertVisible:
+    text: "Mittags"
+    checked: true
+- scrollUntilVisible:
+    element:
+      text: "Gewicht"
+      checked: false
+    direction: DOWN
+- assertVisible:
+    text: "Wasser"
+    checked: true
+- takeScreenshot: benachrichtigungen-nach-neustart

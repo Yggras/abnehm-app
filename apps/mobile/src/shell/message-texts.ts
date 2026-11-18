@@ -105,6 +105,8 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   ),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
+  /** Spezifikation 5: Benachrichtigungseinstellung gespeichert (#132). */
+  'benachrichtigungen.gespeichert': messageText(z.strictObject({}), () => ({ text: 'Benachrichtigungen gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */
   'konto.passwort_geaendert': messageText(z.strictObject({}), () => ({ text: 'Passwort geändert. Deine anderen Geräte sind abgemeldet.' })),
   /** Ein unbekanntes oder ungültiges Ziel, etwa ein veralteter Link, hat „Heute“ geöffnet. */

@@ -39,6 +39,7 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import { signIn, type Device } from './auth-client.ts';
 import { seedDailyGoalRegistry } from '../../../mobile/src/daily-goals/testing/seed-evaluators.ts';
 import { uncoupleAs } from './shared-actions.ts';
+import { notificationSettingEntity } from '../../../mobile/src/notifications/notification-setting-entity.ts';
 
 // Seed-Welt für Integrationstests der Manifeste (#112, #113, #117): Postgres hinter der echten Hono-App
 // und je Installation ein angemeldetes Gerät mit eigener SQLite-Datenbank (better-sqlite3), Sync-Engine
@@ -49,7 +50,7 @@ import { uncoupleAs } from './shared-actions.ts';
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity,
 ]);
 
 export type SeedPhone = Readonly<{
