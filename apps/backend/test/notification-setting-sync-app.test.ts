@@ -12,7 +12,8 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { notificationSetting as localNotificationSetting } from '../../mobile/src/local-db/schema/index.ts';
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { createNotificationSettings, notificationSettingEntity as localEntity, type NotificationSettings } from '../../mobile/src/notifications/notification-setting.ts';
+import { createNotificationSettings, type NotificationSettings } from '../../mobile/src/notifications/notification-setting.ts';
+import { notificationSettingEntity as localEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
 import { policies } from '../src/authorization/authorization.ts';
 import { notificationSetting } from '../src/db/schema/index.ts';

@@ -16,7 +16,8 @@ import { createLogout, syncBeforeLogout, type LogoutRecord, type LogoutStore } f
 import { ClockProvider } from '../../clock/clock-context';
 import { createNotifications, NotificationsProvider, type NotificationPermission } from '../../notifications';
 import { appNotificationSettings } from '../../notifications/app-notification-settings';
-import { createNotificationSettings, notificationSettingEntity } from '../../notifications/notification-setting';
+import { createNotificationSettings } from '../../notifications/notification-setting';
+import { notificationSettingEntity } from '../../notifications/notification-setting-entity';
 import { MessageHostProvider } from '../../shell/MessageHost';
 import { createAppSession } from '../../session/app-session';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities, unsecuredOperationCount } from '../../sync';

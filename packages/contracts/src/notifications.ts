@@ -99,6 +99,18 @@ export type NotificationPermission = z.infer<typeof NotificationPermission>;
 export const WallClockTime = z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/);
 export type WallClockTime = z.infer<typeof WallClockTime>;
 
+/** Minute des Tages (0–1439) einer Wanduhrzeit. */
+export function wallClockMinutes(time: WallClockTime): number {
+  const parsed = WallClockTime.parse(time);
+  return Number(parsed.slice(0, 2)) * 60 + Number(parsed.slice(3, 5));
+}
+
+/** Wanduhrzeit `HH:MM` zu einer Minute des Tages (0–1439). */
+export function wallClockTimeOf(minutes: number): WallClockTime {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return WallClockTime.parse(`${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`);
+}
+
 const notificationSettingFields = {
   middayEnabled: z.boolean(),
   middayTime: WallClockTime,
@@ -150,6 +162,18 @@ export const defaultNotificationSetting: NotificationSettingUpsert = Object.free
   partnerPushEnabled: true,
 });
 
+const settingKeys = Object.keys(notificationSettingFields) as (keyof NotificationSettingUpsert)[];
+
+/** Nur die Felder der Einstellung, etwa aus einer Zeile oder einem Datensatz mit Eigentümer und Zeitpunkten. */
+export function notificationSettingOf(value: NotificationSettingUpsert): NotificationSettingUpsert {
+  return Object.fromEntries(settingKeys.map((key) => [key, value[key]])) as NotificationSettingUpsert;
+}
+
+/** Ob zwei Einstellungen in allen Feldern übereinstimmen. */
+export function sameNotificationSetting(a: NotificationSettingUpsert, b: NotificationSettingUpsert): boolean {
+  return settingKeys.every((key) => a[key] === b[key]);
+}
+
 const checkInTrackerFields = {
   ernaehrung: 'trackerErnaehrung',
   wasser: 'trackerWasser',
@@ -160,11 +184,6 @@ const checkInTrackerFields = {
 /** Feld der Einstellung, das einen Tracker in die Check-ins aufnimmt. */
 export function checkInTrackerField(area: AreaKey): (typeof checkInTrackerFields)[AreaKey] {
   return checkInTrackerFields[area];
-}
-
-/** Tracker, die die Check-ins berücksichtigen, in der festen Reihenfolge Ernährung, Wasser, Sport, Gewicht. */
-export function checkInTrackers(setting: NotificationSettingUpsert): AreaKey[] {
-  return (Object.keys(checkInTrackerFields) as AreaKey[]).filter((area) => setting[checkInTrackerFields[area]]);
 }
 
 const notificationSettingNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b66';

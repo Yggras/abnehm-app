@@ -2,20 +2,29 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { instantAtWallClock, minutesOfDay, readingOf } from '@abnehm/clock';
-import type { AreaKey, Instant, TimeZone } from '@abnehm/contracts/base';
+import { AreaKey } from '@abnehm/contracts/base';
 import {
   checkInTrackerField,
   NotificationSettingUpsert,
-  WallClockTime,
+  sameNotificationSetting,
+  wallClockMinutes,
+  wallClockTimeOf,
   type NotificationSettingUpsert as Setting,
+  type WallClockTime,
 } from '@abnehm/contracts/notifications';
 
 import { useClock } from '../clock/clock-context';
 import { Button, DateTimePicker, ListGroup, ListRow, Notice, ProblemMessage, Skeleton, size, space, Switch, type IconName } from '../design';
 import { openTarget, type RouteScreenProps } from '../navigation';
-import { PermissionState, useNotificationPermission, useNotifications, notificationTexts } from '../notifications';
-import { useNotificationSettings, useSavedNotificationSetting } from '../notifications/app-notification-settings';
-import type { NotificationSettings } from '../notifications/notification-setting';
+import {
+  notificationTexts,
+  PermissionState,
+  useNotificationPermission,
+  useNotifications,
+  useNotificationSettings,
+  useSavedNotificationSetting,
+  type NotificationSettings,
+} from '../notifications';
 import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
@@ -66,7 +75,6 @@ function Loading() {
 }
 
 const trackerIcons: Readonly<Record<AreaKey, IconName>> = { ernaehrung: 'plate', wasser: 'drop', sport: 'sport', gewicht: 'scale' };
-const trackers = Object.keys(trackerIcons) as AreaKey[];
 
 function SettingForm({ settings }: { settings: NotificationSettings }) {
   const { showMessage } = useMessageHost();
@@ -75,7 +83,7 @@ function SettingForm({ settings }: { settings: NotificationSettings }) {
   const [draft, setDraft] = useState<Setting | null>(null);
   const shown = draft ?? saved;
   const valid = NotificationSettingUpsert.safeParse(shown).success;
-  const changed = draft !== null && (Object.keys(saved) as (keyof Setting)[]).some((key) => draft[key] !== saved[key]);
+  const changed = draft !== null && !sameNotificationSetting(draft, saved);
   const change = (patch: Partial<Setting>) => setDraft({ ...shown, ...patch });
 
   function save() {
@@ -101,7 +109,7 @@ function SettingForm({ settings }: { settings: NotificationSettings }) {
       <View style={styles.section}>
         <SectionTitle>{texts.trackersTitle}</SectionTitle>
         <ListGroup>
-          {trackers.map((area) => {
+          {AreaKey.options.map((area) => {
             const field = checkInTrackerField(area);
             return (
               <ListRow key={area} icon={trackerIcons[area]} title={texts.trackers[area]}
@@ -145,22 +153,14 @@ function CheckInRow(props: {
             label={props.timeLabel}
             mode="time"
             timeZone={today.timeZone}
-            value={instantAtWallClock(today.localDate, minutesOf(props.time), today.timeZone)}
-            onChange={(instant) => props.onTime(wallClockOf(instant, today.timeZone))}
+            value={instantAtWallClock(today.localDate, wallClockMinutes(props.time), today.timeZone)}
+            onChange={(instant) => props.onTime(wallClockTimeOf(minutesOfDay(readingOf(instant, today.timeZone))))}
           />
           <Switch label={props.title} value={props.enabled} onValueChange={props.onEnabled} />
         </View>
       }
     />
   );
-}
-
-const minutesOf = (time: WallClockTime) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
-
-function wallClockOf(instant: Instant, timeZone: TimeZone): WallClockTime {
-  const minutes = minutesOfDay(readingOf(instant, timeZone));
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return WallClockTime.parse(`${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`);
 }
 
 const styles = StyleSheet.create({

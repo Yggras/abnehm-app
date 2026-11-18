@@ -33,7 +33,7 @@ import { waterEntryEntity, weightEntryEntity } from '../../mobile/src/trackers/i
 import { dumpServer, seedServer } from '../dev/seed/server-seed.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { signIn } from './support/auth-client.ts';
-import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting.ts';
+import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
 
 // Nachweis für #180: die Szenarien `solo-energie` und `rollenwahl-offen` (Spezifikation 4, Abschnitt 13)
 // auf Postgres und den Geräten, deren Engine, Adapter und Spieldienst auf echtem SQLite (better-sqlite3)

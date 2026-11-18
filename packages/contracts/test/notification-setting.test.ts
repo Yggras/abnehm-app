@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { EntityId } from '../src/base.ts';
-import { checkInTrackers, defaultNotificationSetting, NotificationSettingUpsert, notificationSettingId } from '../src/notifications.ts';
+import { AreaKey, EntityId } from '../src/base.ts';
+import {
+  checkInTrackerField,
+  defaultNotificationSetting,
+  NotificationSettingUpsert,
+  notificationSettingId,
+  notificationSettingOf,
+  sameNotificationSetting,
+  wallClockMinutes,
+  wallClockTimeOf,
+} from '../src/notifications.ts';
 
 // Nachweis für #132: Benachrichtigungseinstellung (Spezifikation 5, Abschnitt 10). Gültige und ungültige
 // Fixtures prüft `fixtures.test.ts`; hier stehen Standardwerte, Schema-Regel und die deterministische ID.
@@ -49,9 +58,33 @@ describe('Benachrichtigungseinstellung', () => {
     expect(NotificationSettingUpsert.safeParse({ ...defaultNotificationSetting, middayTime: time }).success).toBe(false);
   });
 
-  it('nennt die Tracker der Check-ins in fester Reihenfolge Ernährung, Wasser, Sport, Gewicht', () => {
-    expect(checkInTrackers(defaultNotificationSetting)).toEqual(['ernaehrung', 'wasser', 'sport', 'gewicht']);
-    expect(checkInTrackers({ ...defaultNotificationSetting, trackerWasser: false, trackerGewicht: false })).toEqual(['ernaehrung', 'sport']);
+  it('ordnet jedem Tracker sein Feld zu', () => {
+    expect(AreaKey.options.map(checkInTrackerField)).toEqual([
+      'trackerErnaehrung', 'trackerWasser', 'trackerSport', 'trackerGewicht',
+    ]);
+  });
+
+  it('vergleicht und wählt nur die Felder der Einstellung', () => {
+    const record = { personId: philipp, ...defaultNotificationSetting, createdAt: '2026-10-14T10:00:00.000Z' };
+    expect(notificationSettingOf(record)).toEqual(defaultNotificationSetting);
+    expect(sameNotificationSetting(record, { ...defaultNotificationSetting })).toBe(true);
+    expect(sameNotificationSetting(defaultNotificationSetting, { ...defaultNotificationSetting, trackerSport: false })).toBe(false);
+  });
+});
+
+describe('Wanduhrzeit', () => {
+  it.each([
+    ['00:00', 0],
+    ['09:05', 545],
+    ['13:00', 780],
+    ['23:59', 1439],
+  ])('%s ist Minute %i des Tages und zurück', (time, minutes) => {
+    expect(wallClockMinutes(time)).toBe(minutes);
+    expect(wallClockTimeOf(minutes)).toBe(time);
+  });
+
+  it('lehnt Minuten außerhalb des Tages ab', () => {
+    expect(() => wallClockTimeOf(1440)).toThrow();
   });
 });
 

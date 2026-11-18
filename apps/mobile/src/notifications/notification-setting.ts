@@ -4,53 +4,24 @@ import type { Clock } from '@abnehm/clock';
 import { EntityId, type ServerVersion } from '@abnehm/contracts/base';
 import {
   defaultNotificationSetting,
-  NotificationSettingRecord,
   NotificationSettingUpsert,
   notificationSettingId,
+  notificationSettingOf,
+  sameNotificationSetting,
 } from '@abnehm/contracts/notifications';
 
 import type { LocalDatabase, ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { notificationSetting } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { sqliteEntity } from '../sync/sqlite-entity';
 import type { SyncWriter } from '../sync/outbox';
 
 // Benachrichtigungseinstellung der eigenen Person (Spezifikation 5, Abschnitte 6 und 10; #132): eine je
 // Person mit der deterministischen ID aus der Person-ID, synchronisiert mit Last-Write-Wins. Solange die
 // Person nichts gespeichert hat, gilt der Standard; angelegt wird sie beim ersten Speichern, auf jedem
 // Gerät mit derselben ID. Die Seite „Benachrichtigungen“ spricht nur mit `NotificationSettings`, der
-// Check-in-Planer liest sie mit `readNotificationSetting`. Kein React Native, damit Node-Tests laden.
-
-const fields = (setting: NotificationSettingUpsert): NotificationSettingUpsert => ({
-  middayEnabled: setting.middayEnabled,
-  middayTime: setting.middayTime,
-  eveningEnabled: setting.eveningEnabled,
-  eveningTime: setting.eveningTime,
-  trackerErnaehrung: setting.trackerErnaehrung,
-  trackerWasser: setting.trackerWasser,
-  trackerSport: setting.trackerSport,
-  trackerGewicht: setting.trackerGewicht,
-  partnerPushEnabled: setting.partnerPushEnabled,
-});
-
-const same = (a: NotificationSettingUpsert, b: NotificationSettingUpsert) =>
-  (Object.keys(defaultNotificationSetting) as (keyof NotificationSettingUpsert)[]).every((key) => a[key] === b[key]);
-
-/** Die Einstellung im App-Sync: Upsert ohne Löschen; nur die Eigentümerin erhält sie. */
-export const notificationSettingEntity = sqliteEntity({
-  entityType: 'notification_setting',
-  ownerField: 'personId',
-  upsert: NotificationSettingUpsert,
-  deletable: false,
-  record: NotificationSettingRecord,
-  table: notificationSetting,
-  row: (id, data) => ({ id, personId: data.personId, ...fields(data), createdAt: data.createdAt, updatedAt: data.updatedAt }),
-  replay(tx, entityId, change) {
-    if (change.type !== 'upsert_entity') return;
-    sqliteOf(tx).update(notificationSetting).set({ ...fields(change.payload), updatedAt: change.createdAt }).where(eq(notificationSetting.id, entityId)).run();
-  },
-});
+// Check-in-Planer kann sie mit `readNotificationSetting` lesen. Den Sync-Adapter enthält
+// `notification-setting-entity.ts`. Kein React Native, damit Node-Tests laden.
 
 function storedRow(tx: ReadContext) {
   const own = readOwnPerson(tx);
@@ -62,7 +33,7 @@ function storedRow(tx: ReadContext) {
 /** Gespeicherte Einstellung der eigenen Person, sonst der Standard. */
 export function readNotificationSetting(tx: ReadContext): NotificationSettingUpsert {
   const { row } = storedRow(tx);
-  return row === undefined ? defaultNotificationSetting : fields(row);
+  return row === undefined ? defaultNotificationSetting : notificationSettingOf(row);
 }
 
 export type SaveNotificationSettingResult =
@@ -90,7 +61,7 @@ export function createNotificationSettings({ database, writer, clock }: Notifica
   let current = defaultNotificationSetting;
   const listeners = new Set<() => void>();
   database.observe(readNotificationSetting, (next) => {
-    if (same(next, current)) return;
+    if (sameNotificationSetting(next, current)) return;
     current = next;
     for (const listener of [...listeners]) listener();
   });
@@ -104,11 +75,11 @@ export function createNotificationSettings({ database, writer, clock }: Notifica
     save(input) {
       const parsed = NotificationSettingUpsert.safeParse(input);
       if (!parsed.success) return { type: 'invalid' };
-      const setting = fields(parsed.data);
+      const setting = notificationSettingOf(parsed.data);
       return database.transaction((tx): SaveNotificationSettingResult => {
         const { own, row } = storedRow(tx);
         if (own === undefined) return { type: 'no_person' };
-        if (row !== undefined && same(fields(row), setting)) return { type: 'unchanged' };
+        if (row !== undefined && sameNotificationSetting(row, setting)) return { type: 'unchanged' };
         const at = clock.read().instant;
         const id = notificationSettingId(EntityId.parse(own.id));
         const db = sqliteOf(tx);

@@ -1,5 +1,5 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
-import { NotificationSettingRecord, NotificationSettingUpsert, notificationSettingId } from '@abnehm/contracts/notifications';
+import { NotificationSettingRecord, NotificationSettingUpsert, notificationSettingId, notificationSettingOf } from '@abnehm/contracts/notifications';
 
 import { notificationSetting } from '../db/schema/index.ts';
 import { ownedEntity } from '../sync/registry.ts';
@@ -18,29 +18,11 @@ export const notificationSettingEntity = ownedEntity({
   upsert: NotificationSettingUpsert,
   deletable: false,
   validate: async (_tx, change) => (change.entityId === notificationSettingId(change.ownerPersonId) ? null : 'invalid_payload'),
-  columns: (payload) => ({
-    middayEnabled: payload.middayEnabled,
-    middayTime: payload.middayTime,
-    eveningEnabled: payload.eveningEnabled,
-    eveningTime: payload.eveningTime,
-    trackerErnaehrung: payload.trackerErnaehrung,
-    trackerWasser: payload.trackerWasser,
-    trackerSport: payload.trackerSport,
-    trackerGewicht: payload.trackerGewicht,
-    partnerPushEnabled: payload.partnerPushEnabled,
-  }),
+  columns: (payload) => notificationSettingOf(payload),
   record: (row): NotificationSettingRecord =>
     NotificationSettingRecord.parse({
       personId: EntityId.parse(row.personId),
-      middayEnabled: row.middayEnabled,
-      middayTime: row.middayTime,
-      eveningEnabled: row.eveningEnabled,
-      eveningTime: row.eveningTime,
-      trackerErnaehrung: row.trackerErnaehrung,
-      trackerWasser: row.trackerWasser,
-      trackerSport: row.trackerSport,
-      trackerGewicht: row.trackerGewicht,
-      partnerPushEnabled: row.partnerPushEnabled,
+      ...notificationSettingOf(row),
       createdAt: Instant.parse(row.createdAt.toISOString()),
       updatedAt: Instant.parse(row.updatedAt.toISOString()),
     }),

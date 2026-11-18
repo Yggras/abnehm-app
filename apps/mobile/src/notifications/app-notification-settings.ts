@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-import { defaultNotificationSetting, type NotificationSettingUpsert } from '@abnehm/contracts/notifications';
+import type { NotificationSettingUpsert } from '@abnehm/contracts/notifications';
 
 import { createOpenedModule, useOpenedModule } from '../shell/opened-module';
 import type { NotificationSettings } from './notification-setting';
@@ -11,15 +11,12 @@ import type { NotificationSettings } from './notification-setting';
 
 export const appNotificationSettings = createOpenedModule<NotificationSettings>();
 
-const unsubscribed = () => () => {};
-const defaults = () => defaultNotificationSetting;
-
 /** Das Modul des geöffneten Kontos; `null`, solange keines offen ist. */
 export function useNotificationSettings(): NotificationSettings | null {
   return useOpenedModule(appNotificationSettings);
 }
 
 /** Die gespeicherte Einstellung, sonst der Standard; folgt jeder Änderung, auch aus dem Pull. */
-export function useSavedNotificationSetting(settings: NotificationSettings | null): NotificationSettingUpsert {
-  return useSyncExternalStore(settings?.subscribe ?? unsubscribed, settings?.current ?? defaults);
+export function useSavedNotificationSetting(settings: NotificationSettings): NotificationSettingUpsert {
+  return useSyncExternalStore(settings.subscribe, settings.current);
 }

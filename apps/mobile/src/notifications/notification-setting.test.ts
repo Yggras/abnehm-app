@@ -13,7 +13,8 @@ import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { personRow } from '../local-db/testing/rows';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../sync';
 import { pendingOperations } from '../sync/outbox';
-import { createNotificationSettings, notificationSettingEntity, readNotificationSetting } from './notification-setting';
+import { createNotificationSettings, readNotificationSetting } from './notification-setting';
+import { notificationSettingEntity } from './notification-setting-entity';
 
 // Nachweis für #132: die Benachrichtigungseinstellung der App (Spezifikation 5, Abschnitte 6 und 10)
 // gegen eine echte SQLite-Datei mit den Migrationen der App. Ohne gespeicherte Einstellung gilt der
