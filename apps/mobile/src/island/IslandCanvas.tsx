@@ -127,8 +127,10 @@ function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, mot
       flush();
       nodes.push(<Fill key={`${item.type}-${index}`} color={color[item.tone]} opacity={item.type === 'abend' ? item.opacity : 1} />);
     } else {
-      // Objekte behalten ihren Schlüssel, wenn ein neues dazukommt; sonst begänne ihr Erscheinen neu.
-      run.push(<Item key={item.type === 'objekt' ? `objekt-${item.id}` : index} item={item} foliage={scene.foliage} motion={motion} />);
+      // Objekte behalten ihren Schlüssel, wenn ein neues dazukommt; sonst begänne ihr Erscheinen neu. Feld und
+      // Grafik gehören dazu: Ein umgestelltes oder aufgewertetes Objekt erscheint wieder mit Feder (#194).
+      const key = item.type === 'objekt' ? `objekt-${item.id}-${item.field}-${item.art}` : index;
+      run.push(<Item key={key} item={item} foliage={scene.foliage} motion={motion} />);
     }
   });
   flush();

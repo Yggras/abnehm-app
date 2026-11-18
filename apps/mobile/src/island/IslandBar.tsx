@@ -65,21 +65,21 @@ export function IslandBar({ onOpen }: IslandBarProps) {
 }
 
 export type BuildModeBarProps = {
-  /** Name des gewählten Bauplans. */
-  name: string;
+  /** Was gerade gesetzt wird, etwa „Laterne bauen“ oder „Laterne umstellen“. */
+  title: string;
   onCancel: () => void;
 };
 
 /**
- * Leiste im Bau-Modus anstelle der Einstiege (#192): was gebaut wird, wie es geht, und „Abbrechen“, das
- * jederzeit erreichbar ist (Spezifikation 4, Abschnitt 7). Der Hinweis wird angesagt, sobald der
- * Bau-Modus beginnt.
+ * Leiste im Bau-Modus anstelle der Einstiege (#192): was gebaut oder umgestellt wird (#194), wie es geht,
+ * und „Abbrechen“, das jederzeit erreichbar ist (Spezifikation 4, Abschnitt 7). Der Hinweis wird angesagt,
+ * sobald der Modus beginnt.
  */
-export function BuildModeBar({ name, onCancel }: BuildModeBarProps) {
+export function BuildModeBar({ title, onCancel }: BuildModeBarProps) {
   return (
     <View style={styles.building}>
-      <View style={styles.buildingText} accessible accessibilityLiveRegion="polite" accessibilityLabel={`${buildTexts.placing(name)}. ${buildTexts.placingHint}`}>
-        <Text variant="headline">{buildTexts.placing(name)}</Text>
+      <View style={styles.buildingText} accessible accessibilityLiveRegion="polite" accessibilityLabel={`${title}. ${buildTexts.placingHint}`}>
+        <Text variant="headline">{title}</Text>
         <Text variant="label" tone="inkMuted">
           {buildTexts.placingHint}
         </Text>

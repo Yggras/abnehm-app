@@ -13,7 +13,7 @@ import { islandTexts } from './texts';
  * zeigt der Tab in jeder Ansicht die Rollenwahl (#180). Nach dem Schlüpfen zeigt er die echte Insel aus
  * den lokalen Daten (#184). Die Leiste öffnet ihre Ansichten über die Route `momo` mit `view`, denselben
  * Weg wie Aktionen auf „Wir“; die Ansichten selbst liefern spätere Tickets. „Bauen“ öffnet das Bau-Sheet
- * direkt, auch über die Route mit `view: 'bauen'` (#192).
+ * direkt, auch über die Route mit `view: 'bauen'` (#192), ebenso „Lager“ das Lager-Sheet (#194).
  */
 export function MomoTab({ target }: RouteScreenProps<'momo'>) {
   const game = useGameService();
@@ -40,6 +40,8 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
       island={stage.island}
       takeGrowthIntro={game.takeGrowthIntro}
       build={game.build}
+      upgrade={game.upgrade}
+      place={game.place}
       onOpen={(view) => openTarget({ type: 'momo', view })}
       requestedView={target.view}
       onViewHandled={clearView}
