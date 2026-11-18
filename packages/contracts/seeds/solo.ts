@@ -102,8 +102,26 @@ const weeklyPlanOhneWiegetag = {
   sonntag: ['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget'],
 } as const satisfies SoloWeeklyPlan;
 
+/**
+ * Zielversion im Haltemodus für den Randzustand „Prognose im Haltemodus entfallen“ (Spezifikation 3,
+ * Abschnitt 9; #176): dieselben Eingaben wie in `solo`, aber ohne Tempo. Die kcal-Werte stammen aus dem
+ * Zielrechner (`calculateGoals` mit `pace: null`), sodass die Fassung zu ihren Eingaben passt.
+ */
+const haltemodus = {
+  calorie_budget_milli_kcal: 3_010_000,
+  basal_metabolic_rate_milli_kcal: 1_883_000,
+  total_energy_expenditure_milli_kcal: 3_012_000,
+  lower_bound_milli_kcal: 1_883_000,
+  deficit_milli_kcal: null,
+  maintenance_reason: 'gewaehlt',
+  pace: null,
+} as const;
+
+/** Tempo der Zielversion: wie in `solo` „entspannt“ oder der Haltemodus (#176). */
+type SoloGoal = 'tempo' | 'haltemodus';
+
 /** Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). */
-export const soloZieleOf = (plan: SoloWeeklyPlan): SeedPart => ({
+export const soloZieleOf = (plan: SoloWeeklyPlan, goal: SoloGoal = 'tempo'): SeedPart => ({
   area: 'ziele',
   entities: [
     {
@@ -131,6 +149,7 @@ export const soloZieleOf = (plan: SoloWeeklyPlan): SeedPart => ({
         goal_weight_g: 84_000,
         water_target_ml: 2_500,
         weekly_sport_target_minutes: 150,
+        ...(goal === 'haltemodus' ? haltemodus : {}),
         ...created('2026-10-01T07:05:00.000Z'),
       },
     },
@@ -202,13 +221,49 @@ const sportWeek = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, readonly SportUnit[]>>;
 
-/** Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche und Wochenplan. */
-type SoloVariant = Readonly<{ water: WaterToday; sport: readonly SportUnit[]; plan: SoloWeeklyPlan }>;
+/** Eine manuelle Messung: ID, Gewicht in g, Zeitpunkt und lokaler Tag in Berlin. */
+type SeedWeighing = Readonly<{ id: string; weight: number; at: string; localDate: string }>;
+
+/** Zwei Wiegungen bis gestern: unter drei Tagesgewichten, also noch ohne Trend (#175, #176). */
+const weighingsSolo: readonly SeedWeighing[] = [
+  { id: seedIds.weightEntry.philippVorgestern, weight: 92_400, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
+  { id: seedIds.weightEntry.philippGestern, weight: 91_800, at: '2026-10-13T05:45:00.000Z', localDate: seedDays.gestern },
+];
+
+/**
+ * Messungen je Szenario. `solo` ist zugleich der Randzustand „unter drei Tagesgewichten“; die Varianten
+ * zeigen die übrigen Randzustände des Gewichtstrends aus Spezifikation 3, Abschnitt 9 (#176):
+ * - `solo-gewicht-steigend`: steigender Trend, Veränderung in 2 Wochen +0,2 kg;
+ * - `solo-gewicht-ohne-14-tage`: Trend, aber kein Tagesgewicht in den letzten 14 Tagen;
+ * - `solo-haltemodus`: drei Tagesgewichte über dem Zielgewicht, die Prognose entfällt im Haltemodus.
+ */
+const weighings = {
+  solo: weighingsSolo,
+  'solo-gewicht-steigend': [
+    { id: seedIds.weightEntry.philippVerlauf[0], weight: 91_400, at: '2026-10-09T05:30:00.000Z', localDate: '2026-10-09' },
+    { id: seedIds.weightEntry.philippVerlauf[1], weight: 91_600, at: '2026-10-10T05:30:00.000Z', localDate: '2026-10-10' },
+    { id: seedIds.weightEntry.philippVorgestern, weight: 92_000, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
+    { id: seedIds.weightEntry.philippGestern, weight: 92_400, at: '2026-10-13T05:45:00.000Z', localDate: seedDays.gestern },
+  ],
+  'solo-gewicht-ohne-14-tage': [
+    { id: seedIds.weightEntry.philippVerlauf[0], weight: 92_800, at: '2026-09-24T05:30:00.000Z', localDate: '2026-09-24' },
+    { id: seedIds.weightEntry.philippVerlauf[1], weight: 92_600, at: '2026-09-26T05:30:00.000Z', localDate: '2026-09-26' },
+    { id: seedIds.weightEntry.philippVerlauf[2], weight: 92_400, at: '2026-09-29T05:30:00.000Z', localDate: '2026-09-29' },
+  ],
+  'solo-haltemodus': [
+    { id: seedIds.weightEntry.philippVerlauf[0], weight: 92_600, at: '2026-10-11T05:30:00.000Z', localDate: '2026-10-11' },
+    ...weighingsSolo,
+  ],
+} as const satisfies Partial<Record<SeedScenarioKey, readonly SeedWeighing[]>>;
+
+/** Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche, Wochenplan, Messungen und Tempo. */
+type SoloVariant = Readonly<{ water: WaterToday; sport: readonly SportUnit[]; plan: SoloWeeklyPlan; weights?: readonly SeedWeighing[]; goal?: SoloGoal }>;
 
 /**
  * `solo` und seine Varianten: `solo-wasser-*` zeigen die übrigen Status des Wasser-Mini-Trackers
  * (#171), `solo-sport-*` die des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` den
- * Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175).
+ * Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175), `solo-gewicht-*` und `solo-haltemodus` die
+ * Randzustände des Gewichtstrends (#176).
  */
 const soloVariants = {
   solo: { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan },
@@ -218,12 +273,15 @@ const soloVariants = {
   'solo-sport-erreicht': { water: waterToday.solo, sport: sportWeek['solo-sport-erreicht'], plan: soloWeeklyPlan },
   'solo-sport-ueber-ziel': { water: waterToday.solo, sport: sportWeek['solo-sport-ueber-ziel'], plan: soloWeeklyPlan },
   'solo-ohne-wiegetag': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlanOhneWiegetag },
+  'solo-gewicht-steigend': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-steigend'] },
+  'solo-gewicht-ohne-14-tage': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-ohne-14-tage'] },
+  'solo-haltemodus': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-haltemodus'], goal: 'haltemodus' },
 } as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
 
 type SoloScenario = keyof typeof soloVariants;
 
-/** Tracker (Spezifikation 3): Wasser heute und Sportwoche je Szenario, zwei Wiegungen bis gestern. */
-export const soloTrackerOf = (water: WaterToday, sport: readonly SportUnit[] = sportWeek.solo): SeedPart => ({
+/** Tracker (Spezifikation 3): Wasser heute, Sportwoche und Messungen je Szenario, ohne Messung von heute. */
+export const soloTrackerOf = (water: WaterToday, sport: readonly SportUnit[] = sportWeek.solo, weights: readonly SeedWeighing[] = weighings.solo): SeedPart => ({
   area: 'tracker',
   entities: [
     ...water.map(([amountMl, loggedAt], index) =>
@@ -231,10 +289,7 @@ export const soloTrackerOf = (water: WaterToday, sport: readonly SportUnit[] = s
     ...sport.map(({ id, activity, startedAt, minutes, localDate, createdAt }) =>
       seedSportEntry({ id, personId: philipp, activity, startedAt, minutes, createdAt, localDate })),
     // Heute (Mittwoch, Wiegetag) hat Philipp noch nicht gewogen (#175).
-    ...[
-      { id: seedIds.weightEntry.philippVorgestern, weight: 92_400, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
-      { id: seedIds.weightEntry.philippGestern, weight: 91_800, at: '2026-10-13T05:45:00.000Z', localDate: seedDays.gestern },
-    ].map(({ id, weight, at, localDate }) => ({
+    ...weights.map(({ id, weight, at, localDate }) => ({
       table: 'weight_entry',
       // Seit #175 beim Sync angemeldet: Die Einträge stehen im Änderungsprotokoll.
       entityType: 'weight_entry',
@@ -300,7 +355,12 @@ export const soloEigeneLebensmittel: SeedPart = {
 };
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = ({ water, sport, plan }: SoloVariant): readonly SeedPart[] => [soloFundament, soloZieleOf(plan), soloTrackerOf(water, sport), soloErnaehrung];
+const soloPartsWith = ({ water, sport, plan, weights, goal }: SoloVariant): readonly SeedPart[] => [
+  soloFundament,
+  soloZieleOf(plan, goal),
+  soloTrackerOf(water, sport, weights),
+  soloErnaehrung,
+];
 
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(soloVariants.solo);
@@ -333,7 +393,7 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   });
 }
 
-/** `solo` und seine Varianten (#171, #173, #175). */
+/** `solo` und seine Varianten (#171, #173, #175, #176). */
 export const soloManifests = Object.fromEntries(
   (Object.keys(soloVariants) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
 ) as Readonly<Record<SoloScenario, SeedManifest>>;

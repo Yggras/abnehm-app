@@ -252,20 +252,24 @@ export function isCountingWeightEntry(entry: WeightEntryFacts): boolean {
 export type DayWeight = Readonly<{ localDate: string; weightG: number }>;
 
 /**
- * Tagesgewichte aufsteigend nach lokalem Tag: je Tag die früheste zählende Messung. Weitere Messungen
- * desselben Tags bleiben gespeichert, zählen aber nicht als Tagesgewicht (#38). Maßgeblich ist der
- * gespeicherte lokale Tag des Eintrags, nicht das UTC-Datum seines Zeitpunkts.
+ * Die Messungen, die Tagesgewicht ihres Tags sind, aufsteigend nach lokalem Tag: je Tag die früheste
+ * zählende Messung. Weitere Messungen desselben Tags bleiben gespeichert, zählen aber nicht als
+ * Tagesgewicht (#38). Maßgeblich ist der gespeicherte lokale Tag des Eintrags, nicht das UTC-Datum seines
+ * Zeitpunkts. Bei gleichem Zeitpunkt gewinnt die zuerst übergebene Messung.
  */
-export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
-  const earliest = new Map<string, WeightEntryFacts>();
+export function dayWeightEntries<T extends WeightEntryFacts>(entries: readonly T[]): T[] {
+  const earliest = new Map<string, T>();
   for (const entry of entries) {
     if (!isCountingWeightEntry(entry)) continue;
     const known = earliest.get(entry.localDate);
     if (known === undefined || Date.parse(entry.measuredAt) < Date.parse(known.measuredAt)) earliest.set(entry.localDate, entry);
   }
-  return [...earliest.values()]
-    .sort((a, b) => (a.localDate < b.localDate ? -1 : 1))
-    .map(({ localDate, weightG }) => ({ localDate, weightG }));
+  return [...earliest.values()].sort((a, b) => (a.localDate < b.localDate ? -1 : 1));
+}
+
+/** Tagesgewichte aufsteigend nach lokalem Tag, nach `dayWeightEntries`. */
+export function dayWeights(entries: readonly WeightEntryFacts[]): DayWeight[] {
+  return dayWeightEntries(entries).map(({ localDate, weightG }) => ({ localDate, weightG }));
 }
 
 /**
@@ -294,6 +298,132 @@ export const typoLimitG = 2000;
  */
 export function asksForTypo(weightG: number, lastDayWeightG: number | null): boolean {
   return lastDayWeightG !== null && Math.abs(weightG - lastDayWeightG) > typoLimitG;
+}
+
+/** Glättungskonstante des Gewichtstrends wie in *The Hacker's Diet* (Spezifikation 3, Abschnitt 3). */
+const trendSmoothing = 0.9;
+
+/** Ab so vielen Tagesgewichten wird der Trend angezeigt (Designwert aus Spezifikation 3, Abschnitt 3). */
+export const trendMinDayWeights = 3;
+
+/** Ein Tag mit Tagesgewicht und dem Gewichtstrend danach, beide in ganzen g. */
+export type TrendPoint = Readonly<{ localDate: string; dayWeightG: number; trendG: number }>;
+
+/**
+ * Gewichtstrend nach jedem Tagesgewicht, aufsteigend (Spezifikation 3, Abschnitt 3): Die Tagesgewichte
+ * werden zeitgewichtet exponentiell geglättet, `Trend += (1 − 0,9^Δt) × (Tagesgewicht − Trend)` mit Δt in
+ * Kalendertagen seit dem letzten Tagesgewicht; Startwert ist das erste Tagesgewicht. Bei täglichem Wiegen
+ * ist das die Glättung aus *The Hacker's Diet* (https://www.fourmilab.ch/hackdiet/e4/signalnoise.html); die
+ * Anpassung an Lücken ist eine eigene Ableitung der Spezifikation und nicht belegt. Gerechnet wird mit
+ * Gleitkomma in g, nach außen auf ganze g gerundet. Die Eingabe ist aufsteigend wie aus `dayWeights`.
+ */
+export function weightTrend(days: readonly DayWeight[]): TrendPoint[] {
+  let trend = 0;
+  let previous: number | null = null;
+  return days.map(({ localDate, weightG }) => {
+    const current = calendarDay(localDate);
+    trend = previous === null ? weightG : trend + (1 - trendSmoothing ** (current - previous)) * (weightG - trend);
+    previous = current;
+    return { localDate, dayWeightG: weightG, trendG: Math.round(trend) };
+  });
+}
+
+/** Ob der Trend angezeigt wird: ab drei Tagesgewichten, vorher erscheinen nur Punkte. */
+export function showsTrend(dayWeightCount: number): boolean {
+  return dayWeightCount >= trendMinDayWeights;
+}
+
+/** Trendwert eines Tages: der Trend nach dem letzten Tagesgewicht an oder vor diesem Tag; davor `null`. */
+export function trendValueOn(points: readonly TrendPoint[], localDate: string): number | null {
+  return pointsUntil(points, localDate).at(-1)?.trendG ?? null;
+}
+
+/** Trendwert nach dem letzten Tagesgewicht, sofern der Trend angezeigt wird (ab drei Tagesgewichten); sonst `null`. */
+export function currentTrendG(points: readonly TrendPoint[]): number | null {
+  const last = points.at(-1);
+  return last !== undefined && showsTrend(points.length) ? last.trendG : null;
+}
+
+/**
+ * Eine Gewichtsveränderung in g als kg mit einer Nachkommastelle, halbe Zehntel vom Nullpunkt weg. Die
+ * Spezifikation legt die Richtung der Halbrundung nicht fest; so rundet ein Abnehmen wie ein Zunehmen
+ * gleicher Größe. Was auf 0,0 kg rundet, ist 0, nie −0.
+ */
+export function changeInTenthKg(changeG: number): number {
+  return (Math.sign(changeG) * Math.round(Math.abs(changeG) / 100)) / 10 || 0;
+}
+
+/** Veränderung über 14 Tage in kg mit einer Nachkommastelle und ihre Richtung nach der Rundung. */
+export type WeightChange =
+  | Readonly<{ changeKg: number; direction: 'sinkend' | 'stabil' | 'steigend' }>
+  | Readonly<{ changeKg: null; direction: 'noch_nicht_verfuegbar' }>;
+
+/** Zeitraum von `changeKg` in Tagen (Spezifikation 0, Abschnitt 5). */
+const changeDays = 14;
+
+/**
+ * `changeKg` am Tag D (Spezifikation 0, Abschnitt 5; Spezifikation 3, Abschnitt 3): Trendwert am Tag D
+ * minus Trendwert am Tag D − 14; liegt das erste Tagesgewicht nach D − 14, ist es der Bezug. Nicht
+ * verfügbar unter drei Tagesgewichten bis D oder ohne Tagesgewicht zwischen D − 13 und D.
+ *
+ * Grundlage sind die nach außen gerundeten Trendwerte in g. So liefert eine Reihe des
+ * `WeightTrendReader` dieselbe Zahl wie das Tracker-Modul, und Gleitkommareste kippen keine Rundung.
+ * Gerundet wird mit `changeInTenthKg` auf 0,1 kg.
+ */
+export function weightChange(points: readonly TrendPoint[], localDate: string): WeightChange {
+  const known = pointsUntil(points, localDate);
+  const first = known[0];
+  const last = known.at(-1);
+  const windowStart = localDateOf(calendarDay(localDate) - (changeDays - 1));
+  if (!showsTrend(known.length) || first === undefined || last === undefined || last.localDate < windowStart) {
+    return { changeKg: null, direction: 'noch_nicht_verfuegbar' };
+  }
+  const reference = trendValueOn(known, localDateOf(calendarDay(localDate) - changeDays)) ?? first.dayWeightG;
+  const changeKg = changeInTenthKg(last.trendG - reference);
+  return { changeKg, direction: changeKg < 0 ? 'sinkend' : changeKg > 0 ? 'steigend' : 'stabil' };
+}
+
+/**
+ * „Seit Start“ in g: Trendwert am Tag minus erstes Tagesgewicht der Person; nur solange der Trend
+ * angezeigt wird, sonst `null` (Spezifikation 3, Abschnitt 3).
+ */
+export function sinceStartG(points: readonly TrendPoint[], localDate: string): number | null {
+  const known = pointsUntil(points, localDate);
+  const first = known[0];
+  const last = known.at(-1);
+  if (!showsTrend(known.length) || first === undefined || last === undefined) return null;
+  return last.trendG - first.dayWeightG;
+}
+
+/** Tempo des Plans; im Haltemodus gibt es keines (`PlanReader`, Spezifikation 1). */
+export type ForecastPace = 'entspannt' | 'zuegiger';
+
+/**
+ * Abnahme je Woche und Tempo in g: 0,5 bzw. 0,75 kg (#14; Spezifikation 3, Abschnitt 3). Einzige Quelle;
+ * auch der Zielrechner rechnet seine Prognose damit.
+ */
+export const forecastWeeklyLossG: Readonly<Record<ForecastPace, number>> = { entspannt: 500, zuegiger: 750 };
+
+/**
+ * Prognose, wann das Zielgewicht erreicht ist (Spezifikation 3, Abschnitt 3): heute + aufgerundet
+ * `(Trendwert − Zielgewicht) ÷ Rate × 7` Tage. Sie entfällt (`null`) im Haltemodus (`pace` ist `null`),
+ * ohne angezeigten Trend (`trendG` ist `null`) und sobald der Trendwert das Zielgewicht erreicht oder
+ * unterschritten hat. Angezeigt wird sie immer als „Schätzung“.
+ */
+export function weightForecast({
+  today,
+  trendG,
+  goalWeightG,
+  pace,
+}: Readonly<{ today: string; trendG: number | null; goalWeightG: number; pace: ForecastPace | null }>): string | null {
+  if (pace === null || trendG === null || trendG <= goalWeightG) return null;
+  return localDateOf(calendarDay(today) + Math.ceil(((trendG - goalWeightG) * 7) / forecastWeeklyLossG[pace]));
+}
+
+/** Die Punkte an oder vor dem Tag; die Punkte sind aufsteigend. */
+function pointsUntil(points: readonly TrendPoint[], localDate: string): readonly TrendPoint[] {
+  const end = points.findIndex((point) => point.localDate > localDate);
+  return end === -1 ? points : points.slice(0, end);
 }
 
 /** Neutrale Status eines Mini-Trackers auf „Heute“; nie `problem` (Spezifikation 3, Abschnitt 7). */

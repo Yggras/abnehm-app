@@ -1,7 +1,7 @@
 import type { MealKey } from '@abnehm/contracts/base';
 import { NutritionEntryAddedValues } from '@abnehm/contracts/nutrition';
 import { QuickCommandKey } from '@abnehm/contracts/today';
-import { SportRecordedValues, WaterAddedValues, WeightRecordedValues } from '@abnehm/contracts/trackers';
+import { SportRecordedValues, WaterAddedValues, WeightMessageValues } from '@abnehm/contracts/trackers';
 import { z } from 'zod';
 
 import type { ToastLine } from '../design';
@@ -44,7 +44,11 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
     text: `${kcal.toLocaleString('de-DE')} kcal ${toMeal[meal]} hinzugefügt`,
   })),
   /** Spezifikation 3: Gewicht eingetragen („91,8 kg eingetragen · Rückgängig“); nur die Person selbst sieht es. */
-  'gewicht.eingetragen': messageText(WeightRecordedValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
+  'gewicht.eingetragen': messageText(WeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
+  /** Spezifikation 3: manuelle Messung bearbeitet („82,1 kg gespeichert · Rückgängig“; #176). */
+  'gewicht.geaendert': messageText(WeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg gespeichert` })),
+  /** Spezifikation 3: manuelle Messung ohne Bestätigungsdialog gelöscht („82,4 kg gelöscht · Rückgängig“; #176). */
+  'gewicht.geloescht': messageText(WeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg gelöscht` })),
   /** Spezifikation 3: manueller Sporteintrag angelegt („30 min Laufen eingetragen · Rückgängig“). */
   'sport.eingetragen': messageText(SportRecordedValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,

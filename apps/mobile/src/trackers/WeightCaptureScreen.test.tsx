@@ -66,11 +66,12 @@ test('Tipps erreichen „Speichern“ auch bei offener Tastatur, statt sie nur z
   expect(screen.getByTestId(screenScrollId).props.keyboardShouldPersistTaps).toBe('handled');
 });
 
-test('ohne newEntry zeigt die Route bis zum Detailbildschirm (#176) den Platzhalter des Bereichs', async () => {
+test('ohne newEntry lädt der Detailbildschirm (#176), solange sein Lesemodell nicht angemeldet ist', async () => {
   await open();
   await act(() => router.push('/capture/weight'));
 
-  expect(screen.getByText('Kommt mit: Wasser, Sport, Gewicht & Health')).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Gewicht')).not.toBeOnTheScreen();
+  expect(screen.getByText('Gewicht lädt …')).toBeOnTheScreen();
 });
 
 test('lädt, solange kein Konto geöffnet ist', async () => {
