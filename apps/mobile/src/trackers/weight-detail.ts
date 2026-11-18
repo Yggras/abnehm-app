@@ -3,7 +3,7 @@ import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
 import {
   dayWeights,
   isCountingWeightEntry,
-  manualOrigin,
+  type manualOrigin,
   showsTrend,
   sinceStartG,
   weightChange,

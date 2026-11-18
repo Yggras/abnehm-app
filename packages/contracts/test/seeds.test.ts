@@ -16,7 +16,8 @@ import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
 import { PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
-import { countedWaterMl, dayWeights, isWeighDay, trackerStatus, weekMinutes } from '../src/tracker-rules.ts';
+import { CreateGoalVersion } from '../src/plan.ts';
+import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, weekMinutes, weightChange, weightForecast, weightTrend } from '../src/tracker-rules.ts';
 
 // Nachweis für #112, #116 und #117: Format der Seed-Manifeste, Baukasten der Bereichsbeiträge und die
 // Partner-Szenarien `gekoppelt` und `nach_entkopplung`; für #171 die Wassereinträge von solo und seine
@@ -111,6 +112,53 @@ describe('Seed-Manifest', () => {
       expect(variant.weight_entry).toEqual(solo.initial.server.weight_entry);
       expect(variant.water_entry).toEqual(solo.initial.server.water_entry);
       expect(variant.goal_version).toEqual(solo.initial.server.goal_version);
+    });
+  });
+
+  describe('Gewichtstrend (#176)', () => {
+    const points = (scenario: keyof typeof seedManifests) =>
+      weightTrend(
+        dayWeights(
+          (seedManifests[scenario].initial.server.weight_entry ?? []).map((row) => ({
+            weightG: Number(row.weight_g), measuredAt: String(row.measured_at), localDate: String(row.local_date), deletedAt: null, hiddenAt: null,
+          })),
+        ),
+      );
+    const goal = (scenario: keyof typeof seedManifests) => seedManifests[scenario].initial.server.goal_version?.[0];
+
+    it('solo: unter drei Tagesgewichten, noch ohne Trend', () => {
+      expect(showsTrend(points('solo').length)).toBe(false);
+    });
+
+    it('solo-gewicht-steigend: steigender Trend', () => {
+      expect(showsTrend(points('solo-gewicht-steigend').length)).toBe(true);
+      expect(weightChange(points('solo-gewicht-steigend'), seedDays.heute)).toEqual({ changeKg: 0.2, direction: 'steigend' });
+    });
+
+    it('solo-gewicht-ohne-14-tage: Trend, aber kein Tagesgewicht in den letzten 14 Tagen', () => {
+      expect(showsTrend(points('solo-gewicht-ohne-14-tage').length)).toBe(true);
+      expect(weightChange(points('solo-gewicht-ohne-14-tage'), seedDays.heute)).toEqual({ changeKg: null, direction: 'noch_nicht_verfuegbar' });
+    });
+
+    it('solo-haltemodus: Trend über dem Zielgewicht, die Prognose entfällt nur wegen des Haltemodus', () => {
+      const trendG = points('solo-haltemodus').at(-1)!.trendG;
+      const { goal_weight_g: goalWeightG, pace, maintenance_reason: reason } = goal('solo-haltemodus')!;
+      expect(showsTrend(points('solo-haltemodus').length)).toBe(true);
+      expect({ pace, reason }).toEqual({ pace: null, reason: 'gewaehlt' });
+      expect(weightForecast({ today: seedDays.heute, trendG, goalWeightG: Number(goalWeightG), pace: null })).toBeNull();
+      expect(weightForecast({ today: seedDays.heute, trendG, goalWeightG: Number(goalWeightG), pace: 'entspannt' })).not.toBeNull();
+    });
+
+    it('solo-haltemodus: Die Zielversion passt zu ihren Eingaben im Zielrechner', () => {
+      const row = goal('solo-haltemodus')!;
+      const version = CreateGoalVersion.safeParse({
+        validFrom: row.valid_from, calorieBudgetMilliKcal: row.calorie_budget_milli_kcal, basalMetabolicRateMilliKcal: row.basal_metabolic_rate_milli_kcal,
+        totalEnergyExpenditureMilliKcal: row.total_energy_expenditure_milli_kcal, lowerBoundMilliKcal: row.lower_bound_milli_kcal,
+        deficitMilliKcal: row.deficit_milli_kcal, budgetSource: row.budget_source, calculationSex: row.calculation_sex, ageYears: row.age_years,
+        heightCm: row.height_cm, weightG: row.weight_g, activityLevel: row.activity_level, maintenanceReason: row.maintenance_reason, pace: row.pace,
+        goalWeightG: row.goal_weight_g, waterTargetMl: row.water_target_ml, weeklySportTargetMinutes: row.weekly_sport_target_minutes,
+      });
+      expect(version.error?.issues ?? []).toEqual([]);
     });
   });
 

@@ -80,7 +80,8 @@ export const seedIds = {
     /** In `tage_ohne_app_oeffnung` (#131): am 07.10. außerhalb, am 10.10. innerhalb des Nachholfensters. */
     philippOhneAppOeffnung: [id('0020', 13), id('0020', 14)],
   },
-  weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3) },
+  // 0021/4–6: Philipps weitere Messungen in den Gewichts-Varianten von `solo` (#176).
+  weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3), philippVerlauf: [id('0021', 4), id('0021', 5), id('0021', 6)] },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
   // 0022/5–8: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).
   sportEntry: {
