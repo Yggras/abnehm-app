@@ -112,7 +112,7 @@ test('listet alle Messungen mit Herkunft und kennzeichnet das Tagesgewicht', asy
   expect(screen.getByRole('header', { name: 'Messungen' })).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: '76,8 kg, heute · 11:00 · Manuell' })).toBeOnTheScreen();
   expect(screen.getByRole('button', { name: '76,0 kg, heute · 07:30 · Tagesgewicht · Manuell' })).toBeOnTheScreen();
-  expect(screen.getByRole('button', { name: '80,0 kg, Mo, 12.10. · 07:30 · Tagesgewicht · Manuell' })).toBeOnTheScreen();
+  expect(screen.getByRole('button', { name: '80,0 kg, 12.10. · 07:30 · Tagesgewicht · Manuell' })).toBeOnTheScreen();
 });
 
 test('zeigt importierte Messungen mit Herkunft und Quell-App, ohne Bearbeiten', async () => {

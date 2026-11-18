@@ -6,7 +6,7 @@ import { manualOrigin } from '@abnehm/contracts/tracker-rules';
 import { Button, Card, color, ListGroup, ListRow, Notice, radius, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
 import type { WeightDetail, WeightHistoryEntry } from './weight-detail';
-import { changeText, dayText, kgText, originNames, spokenChange, timeText, weightTexts } from './weight-texts';
+import { changeText, dayText, kgText, originNames, shortDayText, spokenChange, timeText, weightTexts } from './weight-texts';
 import { WeightEntryForm, type EditedWeight, type WeightFormTrackers } from './WeightEntryForm';
 
 // Inhalt des Gewicht-Detailbildschirms `capture.weight` (Spezifikation 3, Abschnitt 5; #38), von oben nach
@@ -121,7 +121,7 @@ function WeightSummary({ detail }: { detail: WeightDetail }) {
 }
 
 function MeasurementRow({ entry, today, onEdit }: { entry: WeightHistoryEntry; today: WeightDetail['today']; onEdit: (entry: EditedWeight) => void }) {
-  const when = `${dayText(entry.localDate, today)} · ${timeText(entry.measuredAt, entry.timeZone)}`;
+  const when = `${shortDayText(entry.localDate, today)} · ${timeText(entry.measuredAt, entry.timeZone)}`;
   const imported = entry.origin !== manualOrigin;
   const parts = [when, entry.isDayWeight ? weightTexts.dayWeightMark : null, imported ? entry.sourceAppName : originNames.manuell].filter(Boolean);
   const subtitle = parts.join(' · ');
