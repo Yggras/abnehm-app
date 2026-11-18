@@ -273,9 +273,9 @@ const soloVariants = {
   'solo-sport-erreicht': { water: waterToday.solo, sport: sportWeek['solo-sport-erreicht'], plan: soloWeeklyPlan },
   'solo-sport-ueber-ziel': { water: waterToday.solo, sport: sportWeek['solo-sport-ueber-ziel'], plan: soloWeeklyPlan },
   'solo-ohne-wiegetag': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlanOhneWiegetag },
-  'solo-gewicht-steigend': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan, weights: weighings['solo-gewicht-steigend'] },
-  'solo-gewicht-ohne-14-tage': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan, weights: weighings['solo-gewicht-ohne-14-tage'] },
-  'solo-haltemodus': { water: waterToday.solo, sport: sportWeek.solo, plan: weeklyPlan, weights: weighings['solo-haltemodus'], goal: 'haltemodus' },
+  'solo-gewicht-steigend': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-steigend'] },
+  'solo-gewicht-ohne-14-tage': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-ohne-14-tage'] },
+  'solo-haltemodus': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-haltemodus'], goal: 'haltemodus' },
 } as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
 
 type SoloScenario = keyof typeof soloVariants;
