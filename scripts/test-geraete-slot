@@ -4,14 +4,15 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 slot="$root/scripts/geraete-slot"
 tmp=$(mktemp -d)
-agent=
-trap '[ -z "$agent" ] || kill "$agent" 2>/dev/null || true; rm -rf "$tmp"' EXIT HUP INT TERM
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 mkdir -p "$tmp/bin" "$tmp/main"
 git -C "$tmp/main" init -q
 git -C "$tmp/main" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
 git -C "$tmp/main" worktree add -qb work/900001-test "$tmp/work"
 git -C "$tmp/main" worktree add -qb work/900002-test "$tmp/work2"
 main=$(git -C "$tmp/main" rev-parse --show-toplevel)
+work=$(git -C "$tmp/work" rev-parse --show-toplevel)
+state="$(git -C "$tmp/main" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-geraete-slot"
 for tool in xcrun docker; do
   printf '#!/bin/sh\necho "%s $*" >> "%s/calls"\n' "$tool" "$tmp" > "$tmp/bin/$tool"
 done
@@ -20,135 +21,90 @@ printf '%s\n' '#!/bin/sh' \
   '[ "$1" = devices ] && printf "List of devices attached\nemulator-5554\tdevice\nR58W123\tdevice\n"' \
   'exit 0' > "$tmp/bin/adb"
 chmod +x "$tmp/bin/"*
-# Hermetisch: Keine echte Agent-Session (etwa Claude Code, das diesen Test ausführt) bekommt einen Erneuerer.
-export PATH="$tmp/bin:$PATH" ABNEHM_GERAETE_SLOT_INTERVALL=1 ABNEHM_GERAETE_SLOT_AGENTEN=kein-agent-im-test
+unset ABNEHM_GERAETE_SLOT
+export PATH="$tmp/bin:$PATH" ABNEHM_GERAETE_SLOT_INTERVALL=1 ABNEHM_GERAETE_SLOT_NACHFRIST_SEKUNDEN=0
 fail() { echo "FEHLER: $*" >&2; exit 1; }
 in_dir() { dir=$1; shift; (cd "$dir" && "$slot" "$@"); }
+cleaned() { grep -Fx 'xcrun simctl shutdown all' "$tmp/calls" >/dev/null 2>&1; }
+# hold <dir>: hält die Sperre im Hintergrund, bis $tmp/go existiert; setzt holder_pid.
+hold() {
+  rm -f "$tmp/go" "$tmp/held"
+  (cd "$1" && exec "$slot" mit -- sh -c "touch '$tmp/held'; while [ ! -f '$tmp/go' ]; do sleep 0.1; done") 2>/dev/null &
+  holder_pid=$!
+  while [ ! -f "$tmp/held" ]; do sleep 0.1; done
+}
 
-# Neu nehmen räumt Geräte und E2E-Backend auf; der Inhaber erneuert ohne Aufräumen.
-[ "$(in_dir "$tmp/main" nehmen 2>/dev/null)" = genommen ] || fail 'nehmen auf freier Sperre'
-grep -Fx 'xcrun simctl shutdown all' "$tmp/calls" >/dev/null || fail 'Simulatoren nicht heruntergefahren'
+# Erstes Nehmen räumt Geräte und E2E-Backend auf; nach dem Befehl ist die Sperre frei.
+[ "$(in_dir "$tmp/main" mit -- echo lauf 2>/dev/null)" = lauf ] || fail 'Befehl nicht ausgeführt'
+cleaned || fail 'Simulatoren nicht heruntergefahren'
 grep -Fx 'adb -s emulator-5554 emu kill' "$tmp/calls" >/dev/null || fail 'Emulator nicht beendet'
 grep -F 'R58W123 emu' "$tmp/calls" >/dev/null && fail 'echtes Gerät beendet'
 grep -Fx 'docker compose --project-name abnehm-e2e down --volumes --remove-orphans' "$tmp/calls" >/dev/null || fail 'E2E-Backend nicht entfernt'
-: > "$tmp/calls"
-[ "$(in_dir "$tmp/main" nehmen 2>/dev/null)" = erneuert ] || fail 'erneuern'
-[ ! -s "$tmp/calls" ] || fail 'Erneuern hat aufgeräumt'
+[ "$(in_dir "$tmp/work" status)" = "frei (zuletzt: $main)" ] || fail "nach dem Befehl nicht frei: $(in_dir "$tmp/work" status)"
 
-# Eine andere Session wartet (Exit 3) und darf nicht freigeben.
-status=0; in_dir "$tmp/work" nehmen > /dev/null 2> "$tmp/err" || status=$?
-[ "$status" = 3 ] || fail "belegt: Exit $status statt 3"
-grep -F "$main" "$tmp/err" >/dev/null || fail 'Inhaber nicht genannt'
+# Derselbe Worktree findet seine Geräte wieder vor; Exit-Code des Befehls kommt durch.
+: > "$tmp/calls"
+status=0; in_dir "$tmp/main" mit -- sh -c 'exit 7' 2>/dev/null || status=$?
+[ "$status" = 7 ] || fail "Exit-Code $status statt 7"
+cleaned && fail 'gleicher Worktree hat aufgeräumt'
+
+# Während der Befehl läuft, wartet eine andere Session; danach räumt sie auf, weil der Worktree wechselt.
+hold "$tmp/main"
 in_dir "$tmp/work" status | grep -F "belegt: $main" >/dev/null || fail 'status belegt'
-in_dir "$tmp/work" freigeben 2>/dev/null && fail 'fremde Sperre freigegeben'
-
-# Freigeben räumt auf und löst die Sperre.
-: > "$tmp/calls"
-in_dir "$tmp/main" freigeben 2>/dev/null
-grep -Fx 'xcrun simctl shutdown all' "$tmp/calls" >/dev/null || fail 'Freigeben ohne Aufräumen'
-[ "$(in_dir "$tmp/work" status)" = frei ] || fail 'nach Freigeben nicht frei'
-
-# Verwaist nach Ablauf der Frist.
-[ "$(in_dir "$tmp/work" nehmen 2>/dev/null)" = genommen ] || fail 'nehmen nach Freigabe'
-[ "$(ABNEHM_GERAETE_SLOT_MINUTEN=0 in_dir "$tmp/main" nehmen 2>/dev/null)" = genommen ] || fail 'abgelaufene Sperre nicht übernommen'
-
-# Verwaist, weil der Worktree des Inhabers fehlt.
-in_dir "$tmp/main" freigeben 2>/dev/null
-in_dir "$tmp/work" nehmen > /dev/null 2>&1
-rm -rf "$tmp/work"
-[ "$(in_dir "$tmp/main" nehmen 2>/dev/null)" = genommen ] || fail 'Sperre ohne Worktree nicht übernommen'
-
-# --warten nimmt die Sperre, sobald der Inhaber sie freigibt.
-(cd "$tmp/work2" && "$slot" nehmen --warten > "$tmp/warten" 2>/dev/null) &
+(cd "$tmp/work" && "$slot" mit -- echo zweiter > "$tmp/warten" 2>"$tmp/err") &
 waiter=$!
 sleep 2
-in_dir "$tmp/main" freigeben 2>/dev/null
+[ -s "$tmp/warten" ] && fail 'nicht gewartet'
+grep -F "belegt: $main" "$tmp/err" >/dev/null || fail 'Inhaber beim Warten nicht genannt'
+: > "$tmp/calls"
+touch "$tmp/go"
+wait "$holder_pid"
 wait "$waiter" || fail 'warten fehlgeschlagen'
-[ "$(cat "$tmp/warten")" = genommen ] || fail 'warten hat nicht genommen'
+[ "$(cat "$tmp/warten")" = zweiter ] || fail 'wartender Befehl nicht ausgeführt'
+cleaned || fail 'Wechsel des Worktrees ohne Aufräumen'
+grep -F "Zuletzt nutzte $main" "$tmp/err" >/dev/null || fail 'Hinweis auf Neuinstallation fehlt'
+
+# Verschachtelt: ein Befehl unter der Sperre nimmt sie ohne Warten erneut.
+[ "$(in_dir "$tmp/work" mit -- "$slot" mit -- echo innen 2>/dev/null)" = innen ] || fail 'verschachtelter Aufruf'
+
+# Nachfrist: Nach dem Befehl hat derselbe Worktree Vorrang, ein anderer wartet.
+ABNEHM_GERAETE_SLOT_NACHFRIST_SEKUNDEN=60 in_dir "$tmp/work" mit -- true 2>/dev/null
+in_dir "$tmp/main" status | grep -F "Nachfrist: $work hat noch" >/dev/null || fail "status Nachfrist: $(in_dir "$tmp/main" status)"
+(cd "$tmp/main" && exec "$slot" mit -- touch "$tmp/vorbei") 2>/dev/null &
+waiter=$!
+sleep 2
+[ -f "$tmp/vorbei" ] && fail 'Nachfrist nicht beachtet'
+kill "$waiter"; wait "$waiter" 2>/dev/null || true
+: > "$tmp/calls"
+in_dir "$tmp/work" mit -- true 2>/dev/null || fail 'eigener Worktree in der Nachfrist'
+cleaned && fail 'Nachfrist des eigenen Worktrees hat aufgeräumt'
+# Fehlt der Worktree des letzten Inhabers, gilt seine Nachfrist nicht.
+printf 'zuletzt=%s/fehlt\nfrei_ab=%s\n' "$tmp" "$(( $(date +%s) + 60 ))" > "$state"
+in_dir "$tmp/main" mit -- true 2>/dev/null || fail 'Nachfrist ohne Worktree'
+
+# Absturz: Stirbt der Prozess von `mit`, übernimmt die nächste Session sofort.
+hold "$tmp/main"
+pkill -P "$holder_pid" 2>/dev/null || true
+kill -9 "$holder_pid"
+wait "$holder_pid" 2>/dev/null || true
+in_dir "$tmp/work" status | grep -F 'verwaist: Prozess' >/dev/null || fail 'Absturz nicht als verwaist erkannt'
+in_dir "$tmp/work" mit -- true 2>"$tmp/err" || fail 'verwaiste Sperre nicht übernommen'
+grep -F 'verwaist' "$tmp/err" >/dev/null || fail 'Übernahme nicht gemeldet'
+
+# Sperre der Vorgängerversion (Inhaber = Worktree): gilt bis zur Frist, danach verwaist.
+printf 'inhaber=%s\nseit=%s\nerneuert=%s\n' "$work" "$(date +%s)" "$(date +%s)" > "$state"
+in_dir "$tmp/main" status | grep -F "belegt: $work" >/dev/null || fail 'alte Sperre nicht beachtet'
+ABNEHM_GERAETE_SLOT_MINUTEN=0 in_dir "$tmp/main" mit -- true 2>/dev/null || fail 'abgelaufene alte Sperre nicht übernommen'
+
+# `nehmen` gibt es nicht mehr.
+status=0; in_dir "$tmp/main" nehmen 2>/dev/null || status=$?
+[ "$status" = 2 ] || fail "nehmen: Exit $status statt 2"
 
 # Notfall: erzwungene Freigabe einer fremden Sperre.
-in_dir "$tmp/main" freigeben --erzwingen 2>/dev/null
-[ "$(in_dir "$tmp/main" status)" = frei ] || fail 'erzwungene Freigabe'
-
-# Automatische Erneuerung (#294): Ruft eine Agent-Session `nehmen` auf, erneuert ein Hintergrundprozess die
-# Sperre, solange diese Session lebt. `testagent` steht für Claude Code bzw. Pi; Frist 3 s, Takt 1 s.
-printf '%s\n' '#!/bin/sh' '"$@"' 'while :; do sleep 1; done' > "$tmp/bin/testagent"
-chmod +x "$tmp/bin/testagent"
-export ABNEHM_GERAETE_SLOT_AGENTEN=testagent ABNEHM_GERAETE_SLOT_SEKUNDEN=3 ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
-state="$(git -C "$tmp/main" rev-parse --path-format=absolute --git-common-dir)/abnehm-app-geraete-slot"
-renewer() { sed -n 's/^erneuerer_pid=//p' "$state"; }
-bound_to() { sed -n 's/^sitzung_pid=//p' "$state"; }
-alive() { kill -0 "$1" 2>/dev/null; }
-gone_within() { n=0; while alive "$1"; do n=$((n + 1)); [ "$n" -le 30 ] || return 1; sleep 0.2; done; }
-agent_takes() { # $1 Worktree; startet eine Agent-Session, die die Sperre nimmt und weiterläuft
-  "$tmp/bin/testagent" sh -c "cd '$1' && '$slot' nehmen > '$tmp/agent' 2>/dev/null" &
-  agent=$!
-  n=0; until [ -s "$tmp/agent" ] && [ "$(bound_to 2>/dev/null)" = "$agent" ]; do n=$((n + 1)); [ "$n" -le 50 ] || fail 'Agent hat die Sperre nicht genommen'; sleep 0.2; done
-}
-
-# Ohne Agent unter den Vorfahren bleibt es beim bisherigen Verhalten: kein Erneuerer.
-in_dir "$tmp/main" nehmen > /dev/null 2>&1
-[ -z "$(renewer)" ] || fail 'Erneuerer ohne Agent-Session gestartet'
-in_dir "$tmp/main" freigeben 2>/dev/null
-
-# Ruft dieselbe Session zweimal `nehmen` auf, läuft für sie genau ein Erneuerer.
-"$tmp/bin/testagent" sh -c "cd '$tmp/work2' && '$slot' nehmen > /dev/null 2>&1 && '$slot' nehmen > '$tmp/agent2' 2>/dev/null" &
-twice=$!
-n=0; until [ -s "$tmp/agent2" ]; do n=$((n + 1)); [ "$n" -le 50 ] || fail 'zweites nehmen'; sleep 0.2; done
-[ "$(cat "$tmp/agent2")" = erneuert ] || fail 'zweites nehmen'
-[ "$(bound_to)" = "$twice" ] || fail 'Erneuerer hängt nicht an der aufrufenden Session'
-[ "$(pgrep -f "geraete-slot __erneuerer $twice " | wc -l | tr -d ' ')" = 1 ] || fail 'mehr als ein Erneuerer für dieselbe Session'
-kill "$twice"; wait "$twice" 2>/dev/null || true
-in_dir "$tmp/work2" freigeben 2>/dev/null
-
-# Die lebende Session behält die Sperre über die Frist hinaus.
-agent_takes "$tmp/work2"
-[ "$(cat "$tmp/agent")" = genommen ] || fail 'Agent: nehmen'
-first=$(renewer)
-alive "$first" || fail 'Erneuerer läuft nicht'
-sleep 5
-status=0; in_dir "$tmp/main" nehmen > /dev/null 2>&1 || status=$?
-[ "$status" = 3 ] || fail "lebende Session nach Ablauf der Frist verdrängt (Exit $status)"
-
-# Endet die Session, verfällt die Sperre nach der Frist, und der Erneuerer endet.
-kill "$agent"; wait "$agent" 2>/dev/null || true
-gone_within "$first" || fail 'Erneuerer läuft nach Ende der Session weiter'
-sleep 4
-[ "$(in_dir "$tmp/main" nehmen 2>/dev/null)" = genommen ] || fail 'Sperre der beendeten Session nicht verfallen'
-in_dir "$tmp/main" freigeben 2>/dev/null
-
-# Eine neue Session im selben Worktree (etwa nach einem Neustart) bekommt einen eigenen Erneuerer, auch wenn
-# der ihrer beendeten Vorgängerin noch nicht abgelaufen ist (Takt hier 30 s).
-ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=30
-agent_takes "$tmp/work2"
-old=$(renewer)
-kill "$agent"; wait "$agent" 2>/dev/null || true
-ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
-: > "$tmp/agent"
-agent_takes "$tmp/work2"
-[ "$(cat "$tmp/agent")" = erneuert ] || fail 'neue Session: nehmen'
-[ "$(bound_to)" = "$agent" ] || fail 'Erneuerer hängt nicht an der neuen Session'
-gone_within "$old" || fail 'Erneuerer der beendeten Session läuft weiter'
-sleep 5
-status=0; in_dir "$tmp/main" nehmen > /dev/null 2>&1 || status=$?
-[ "$status" = 3 ] || fail "neue Session nach Ablauf der Frist verdrängt (Exit $status)"
-kill "$agent"; wait "$agent" 2>/dev/null || true
-in_dir "$tmp/work2" freigeben 2>/dev/null
-
-# Freigeben beendet die Erneuerung sofort, nicht erst beim nächsten Takt (hier 30 s).
-ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=30
-agent_takes "$tmp/work2"
-pid=$(renewer)
-in_dir "$tmp/work2" freigeben 2>/dev/null
-gone_within "$pid" || fail 'Erneuerer läuft nach freigeben weiter'
-kill "$agent"; wait "$agent" 2>/dev/null || true
-ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN=1
-
-# Fehlt der Worktree des Inhabers, endet der Erneuerer.
-git -C "$tmp/main" worktree add -qb work/900003-test "$tmp/work3"
-agent_takes "$tmp/work3"
-pid=$(renewer)
-rm -rf "$tmp/work3"
-gone_within "$pid" || fail 'Erneuerer läuft ohne Worktree weiter'
-kill "$agent"; wait "$agent" 2>/dev/null || true
+hold "$tmp/main"
+in_dir "$tmp/work" freigeben --erzwingen 2>/dev/null
+case "$(in_dir "$tmp/work" status)" in frei*) ;; *) fail 'erzwungene Freigabe' ;; esac
+touch "$tmp/go"
+wait "$holder_pid"
+case "$(in_dir "$tmp/work" status)" in frei*) ;; *) fail 'Ende des alten Inhabers hat die Sperre verändert' ;; esac
 printf 'geraete-slot: OK\n'

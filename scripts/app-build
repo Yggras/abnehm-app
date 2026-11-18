@@ -25,6 +25,7 @@ usage() {
   exit 2
 }
 
+args=("$@")
 variant="${1:-}"
 platform="${2:-}"
 [[ "$variant" == "e2e" || "$variant" == "produktion" ]] || usage
@@ -69,9 +70,10 @@ fi
 target="$platform-$([[ "$device" == true ]] && echo geraet || ([[ "$platform" == ios ]] && echo simulator || echo emulator))"
 out="$mobile/build/$variant/$target"
 if [[ "$only_path" == true ]]; then echo "$out/artefakt.json"; exit 0; fi
-# Gerätesperre (#282): Nur eine Session baut oder nutzt Geräte. Selbst genommen → am Ende wieder freigeben.
-slot="$(cd "$repo_root" && scripts/geraete-slot nehmen --warten)"
-[[ "$slot" != genommen ]] || trap '(cd "$repo_root" && scripts/geraete-slot freigeben)' EXIT
+# Gerätesperre (#282): Der Build läuft unter scripts/geraete-slot, außer ein Aufrufer (e2e-run) hält sie schon.
+if [[ -z "${ABNEHM_GERAETE_SLOT:-}" ]]; then
+  cd "$repo_root" && exec scripts/geraete-slot mit -- "$repo_root/scripts/app-build" ${args[@]+"${args[@]}"}
+fi
 rm -rf "$out"
 mkdir -p "$out"
 
