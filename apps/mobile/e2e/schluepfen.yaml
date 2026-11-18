@@ -33,10 +33,10 @@ name: Rollenwahl annehmen, Momo schlüpft
 - tapOn: "Annehmen"
 
 # Momo schlüpft -------------------------------------------------------------------------------------
+# Gewartet wird auf den Inhalt des Sheets: „So wächst Momo“ steht auf Android auch im Levelbalken.
 - extendedWaitUntil:
-    visible: "So wächst Momo"
+    visible: "Tagesziele bringen Energie."
     timeout: 30000
-- assertVisible: "Tagesziele bringen Energie."
 - assertVisible: "Bauen gibt Energie aus und füllt deine Hälfte."
 - assertVisible: "Sind beide Hälften voll, steigt Momo ein Level."
 - takeScreenshot: schluepfen-2-so-waechst-momo
@@ -53,11 +53,12 @@ name: Rollenwahl annehmen, Momo schlüpft
 - tapOn:
     id: tab-momo
 - assertVisible: "Momos Insel, Level 1, 0 eigene Objekte"
-- assertNotVisible: "So wächst Momo"
+- assertNotVisible: "Tagesziele bringen Energie."
 - takeScreenshot: schluepfen-4-insel-nach-tabwechsel
 
-# Zweiter Einstieg: Der Levelbalken öffnet „So wächst Momo“ erneut (Impeccable-Kritik zu #184).
-- tapOn: "So wächst Momo"
+# Zweiter Einstieg: Der Levelbalken öffnet „So wächst Momo“ erneut (Impeccable-Kritik zu #184). iOS fasst
+# seine Texte im Label „Level 1“ zusammen, deshalb trifft der Tipp den Balken über das Level.
+- tapOn: "Level 1.*"
 - assertVisible: "Tagesziele bringen Energie."
 - takeScreenshot: schluepfen-5-levelbalken-erklaerung
 - tapOn: "Verstanden"
