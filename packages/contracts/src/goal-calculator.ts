@@ -173,6 +173,9 @@ const minimumAgeYears = 18;
  */
 export const bodyInputLimits = { heightCm: limits.heightCm, weightG: limits.weightG, minimumAgeYears } as const;
 
+/** Bereich und Raster von Wasser- und Sportwochenziel (Designwerte), etwa für die Stepper der Einstellungsseite „Ziele“. */
+export const targetInputLimits = { waterTargetMl: limits.waterTargetMl, weeklySportTargetMinutes: limits.weeklySportTargetMinutes } as const;
+
 /** Verletzte Grenze der Körperdaten; dieselben Schlüssel meldet `calculateGoals`. */
 export type BodyDataError = `${'height' | 'weight'}_${'out_of_range' | 'not_on_step'}` | 'underage';
 

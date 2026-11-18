@@ -29,7 +29,7 @@ import { createNotificationSettings } from '../notifications/notification-settin
 import { notificationSettingEntity } from '../notifications/notification-setting-entity';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner } from '../partner';
-import { createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
@@ -192,6 +192,9 @@ function deviceState() {
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
         dailyGoalsTodayOpened(planToday.dailyGoals(appTodayRefresh)), budgetTodayOpened(planToday.budget(appTodayRefresh)),
+        // Einstellungsseite „Ziele“ (#147): das Plan-Modul für „Ziele ändern“ und sein Lesemodell mit dem
+        // Basisgewicht der Prognose aus dem `WeightTrendReader` des Tracker-Moduls.
+        appPlan.opened(plan), appGoalSettings.opened(plan.goalSettings(trackers.weightTrendReader, appTodayRefresh)),
         // Benachrichtigungseinstellung (Spezifikation 5, #132): die Seite „Benachrichtigungen“ spricht nur mit diesem Modul.
         appNotificationSettings.opened(createNotificationSettings({ database, writer: syncWriter, clock: appClock })),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).

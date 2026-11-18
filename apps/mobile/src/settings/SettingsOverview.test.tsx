@@ -88,8 +88,20 @@ test('heißt auf Android „Health Connect“', async () => {
   }
 });
 
+test('„Ziele“ öffnet die Seite des Plan-Moduls statt eines Platzhalters (#147)', async () => {
+  await openOverview();
+
+  await user.press(screen.getByRole('button', { name: 'Ziele' }));
+
+  expect(screen).toHavePathname('/settings/goals');
+  expect(await screen.findByRole('header', { name: 'Ziele' })).toBeOnTheScreen();
+  expect(screen.queryByText('Dieser Bereich ist noch in Arbeit.')).not.toBeOnTheScreen();
+  expect(screen.getByText('Die App gibt keine medizinische Beratung; alle Werte sind Schätzungen.')).toBeOnTheScreen();
+  await act(() => testRouter.back());
+  expect(screen).toHavePathname('/settings');
+});
+
 test.each([
-  ['Ziele', '/settings/goals', 'Ziele', 'Kommt mit: Ziele & Onboarding'],
   ['Wochenplan', '/settings/weekly_plan', 'Wochenplan', 'Kommt mit: Ziele & Onboarding'],
   ['Partner & Freigaben', '/settings/partner_sharing', 'Partner & Freigaben', 'Kommt mit: Partner & Benachrichtigungen'],
   ['Apple Health', '/settings/health', 'Gesundheitsdaten', 'Kommt mit: Wasser, Sport, Gewicht & Health'],

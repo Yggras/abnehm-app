@@ -1,14 +1,13 @@
 import type { LocalDate } from '@abnehm/contracts/base';
 import { changeInTenthKg, type WeightChange } from '@abnehm/contracts/tracker-rules';
 
-import { thousandthsWithOneDecimal as kg } from '../shell/texts';
+import { thousandthsWithOneDecimal as kg, monthNames as months } from '../shell/texts';
 import { dayText } from './entry-texts';
 
 // Texte des Gewicht-Detailbildschirms (Spezifikation 3, Abschnitt 5). Gewichte stehen in g und werden nur
 // hier auf 0,1 kg gerundet. Veränderungen sind neutral formuliert: Ein steigender Trend ist eine Zahl mit
 // Vorzeichen, ohne Wertung und ohne Warnfarbe.
 
-const months = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'] as const;
 const minus = '−';
 
 /** Gewicht in kg mit einer Nachkommastelle, etwa „82,4 kg“. */

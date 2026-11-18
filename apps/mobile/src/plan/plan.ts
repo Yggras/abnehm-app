@@ -2,8 +2,7 @@ import type { Clock } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, localDateAfter, Weekday } from '@abnehm/contracts/base';
 import { planChangeDays } from '@abnehm/contracts/daily-goals';
 import type { ContractError } from '@abnehm/contracts/errors';
-import { ageOn, calculateGoals, type GoalCalculatorInput, type GoalCalculatorResult, type GoalInputError } from '@abnehm/contracts/goal-calculator';
-import type { ActivityLevel, CalculationSex } from '@abnehm/contracts/person';
+import { calculateGoals, type GoalCalculatorResult, type GoalInputError } from '@abnehm/contracts/goal-calculator';
 import {
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
@@ -13,13 +12,16 @@ import {
   weeklyPlanVersionId,
   type WeeklyPlanDays,
 } from '@abnehm/contracts/plan';
-import type { Pace, WeightRecorder } from '@abnehm/contracts/ports';
+import type { WeightRecorder, WeightTrendReader } from '@abnehm/contracts/ports';
 
 import type { DailyGoalPersistence, MissingDaysHook } from '../daily-goals';
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
+import type { Refresh, Source } from '../shell/followed-source';
 import { updateOwnPerson, type SyncWriter } from '../sync';
 import { createDailyGoalMaterialization } from './daily-goals';
+import { calculatorInput, keptSuggestedBudget, type GoalDraft } from './goal-draft';
+import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
 import { createPlanToday, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
@@ -37,27 +39,6 @@ export type PlanDependencies = Readonly<{
   /** Port aus Spezifikation 3: legt das Startgewicht in seiner eigenen Transaktion an. */
   weightRecorder: WeightRecorder;
   newId: () => EntityId;
-}>;
-
-/**
- * Eingaben des Zielrechners: im Onboarding aus den Schritten 3–7, in den Einstellungen die bisherigen
- * Werte samt Änderung. `null` übernimmt jeweils den Vorschlag des Zielrechners.
- */
-export type GoalDraft = Readonly<{
-  calculationSex: CalculationSex;
-  birthDate: LocalDate;
-  heightCm: number;
-  /** Aktuelles Gewicht; im Onboarding aus Schritt 3 und zugleich das Startgewicht. */
-  weightG: number;
-  activityLevel: ActivityLevel;
-  pregnantOrBreastfeeding: boolean;
-  knownEatingDisorder: boolean;
-  goalWeightG: number | null;
-  /** `null` wählt den Haltemodus. */
-  pace: Pace | null;
-  manualBudgetKcal: number | null;
-  waterTargetMl: number | null;
-  weeklySportTargetMinutes: number | null;
 }>;
 
 /** Der lokale Onboarding-Entwurf bei „Plan speichern“ in Schritt 8. */
@@ -86,9 +67,6 @@ export type WeeklyPlanChangeResult =
   | Readonly<{ type: 'gespeichert'; validFrom: LocalDate; weeklyPlanVersionId: EntityId }>
   | Readonly<{ type: 'unveraendert'; validFrom: LocalDate }>
   | Readonly<{ type: 'ungueltig'; errors: WeeklyPlanDayError[] }>;
-
-/** Feld einer Zielversion, das sich mit einer bevorstehenden Fassung ändern kann. */
-export type GoalVersionField = Exclude<keyof GoalVersionValues, 'validFrom'>;
 
 /**
  * Einstellungsansicht (Spezifikation 1, Abschnitt 10): je Art die heute gültige Fassung und eine
@@ -134,6 +112,13 @@ export type Plan = Readonly<{
   changeWeeklyPlan(days: WeeklyPlanInput): WeeklyPlanChangeResult;
   /** Einstellungsansicht der eigenen Person für die Seiten „Ziele“ und „Wochenplan“. */
   settings(): PlanSettings;
+  /**
+   * Lesemodell der Einstellungsseite „Ziele“ (Spezifikation 1, Abschnitt 10; #147): heute gültige Fassung
+   * mit Herleitung, Prognose und Grund des Haltemodus, eine bevorstehende „ab morgen“, der Ausgangsentwurf
+   * für `changeGoals` und dessen Vorschau. Das Basisgewicht der Prognose liest es über den
+   * `WeightTrendReader` aus Spezifikation 3; neu gelesen wird bei jedem Commit und auf Anstoß von `refresh`.
+   */
+  goalSettings(weightTrendReader: Pick<WeightTrendReader, 'latest'>, refresh: Refresh): Source<GoalSettingsState>;
   /**
    * Tagesziele sicherstellen (Spezifikation 1, Abschnitt 5), bei jedem Auslöser: App-Start, Rückkehr in
    * den Vordergrund und lokaler Tageswechsel bei geöffneter App. In einer lokalen Transaktion legt es
@@ -239,9 +224,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
       const { today, tomorrow } = readClock();
       return database.read((tx) => {
         const personId = EntityId.parse(requireOwnPerson(tx).id);
-        const currentGoal = readGoalVersionOn(tx, personId, today)?.values ?? null;
-        const nextGoal = readGoalVersionOn(tx, personId, tomorrow)?.values;
-        const changed = nextGoal === undefined || nextGoal.validFrom <= today ? [] : changedGoalFields(currentGoal, nextGoal);
+        const goals = readGoalVersionsAround(tx, personId, today);
         const currentPlan = readWeeklyPlanOn(tx, personId, today);
         const nextPlan = readWeeklyPlanOn(tx, personId, tomorrow);
         const changedWeekdays = nextPlan === undefined || nextPlan.validFrom <= today
@@ -249,7 +232,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
           : Weekday.options.filter((weekday) => currentPlan === undefined || !sameValues(currentPlan.days[weekday], nextPlan.days[weekday]));
         return {
           today,
-          goal: { current: currentGoal, upcoming: nextGoal !== undefined && changed.length > 0 ? { version: nextGoal, changed } : null },
+          goal: { current: goals.current, upcoming: upcomingGoalOf(goals, today) },
           weeklyPlan: {
             current: currentPlan === undefined ? null : { validFrom: currentPlan.validFrom, days: currentPlan.days },
             upcoming: nextPlan !== undefined && changedWeekdays.length > 0 ? { validFrom: nextPlan.validFrom, days: nextPlan.days, changedWeekdays } : null,
@@ -257,6 +240,8 @@ export function createPlan(dependencies: PlanDependencies): Plan {
         };
       });
     },
+
+    goalSettings: (weightTrendReader, refresh) => goalSettingsSource({ database, clock }, weightTrendReader, refresh),
 
     ensureDailyGoals() {
       database.transaction((tx) => {
@@ -288,8 +273,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     validFrom: LocalDate,
     inForce: StoredGoalVersion | undefined,
   ): { type: 'gueltig'; version: CreateGoalVersion } | { type: 'ungueltig'; errors: GoalInputError[] } {
-    const suggestedBudget = inForce?.values.budgetSource === 'budgetvorschlag' && draft.manualBudgetKcal !== null &&
-      draft.manualBudgetKcal * 1_000 === inForce.values.calorieBudgetMilliKcal ? inForce.values.calorieBudgetMilliKcal : null;
+    const suggestedBudget = keptSuggestedBudget(draft, inForce?.values);
     const input = calculatorInput({ ...draft, manualBudgetKcal: suggestedBudget === null ? draft.manualBudgetKcal : null }, validFrom);
     const calculation = calculateGoals(input);
     if (calculation.type === 'ungueltig') return calculation;
@@ -338,35 +322,9 @@ export function createPlan(dependencies: PlanDependencies): Plan {
   }
 }
 
-function calculatorInput(draft: GoalDraft, calculationDate: LocalDate): GoalCalculatorInput {
-  return {
-    calculationDate,
-    calculationSex: draft.calculationSex,
-    ageYears: ageOn(draft.birthDate, calculationDate),
-    heightCm: draft.heightCm,
-    weightG: draft.weightG,
-    // Die Zielversion speichert keine Prognose; Basisgewicht der Berechnung ist die Eingabe.
-    weightTrendG: null,
-    activityLevel: draft.activityLevel,
-    pregnantOrBreastfeeding: draft.pregnantOrBreastfeeding,
-    knownEatingDisorder: draft.knownEatingDisorder,
-    goalWeightG: draft.goalWeightG,
-    pace: draft.pace,
-    manualBudgetKcal: draft.manualBudgetKcal,
-    waterTargetMl: draft.waterTargetMl,
-    weeklySportTargetMinutes: draft.weeklySportTargetMinutes,
-  };
-}
-
 /** Ob an diesem Tag schon Zielversion und Wochenplanversion der Person gelten. */
 function hasPlanOn(tx: ReadContext, personId: EntityId, localDate: LocalDate): boolean {
   return readGoalVersionOn(tx, personId, localDate) !== undefined && readWeeklyPlanOn(tx, personId, localDate) !== undefined;
-}
-
-/** Felder, in denen sich die bevorstehende Fassung von der heute gültigen unterscheidet; ohne diese alle. */
-function changedGoalFields(current: GoalVersionValues | null, next: GoalVersionValues): GoalVersionField[] {
-  return (Object.keys(next) as (keyof GoalVersionValues)[])
-    .filter((field): field is GoalVersionField => field !== 'validFrom' && (current === null || current[field] !== next[field]));
 }
 
 /** Gleiche fachliche Werte, unabhängig von der Reihenfolge der Felder. */

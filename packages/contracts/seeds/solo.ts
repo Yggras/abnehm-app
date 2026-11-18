@@ -1,4 +1,4 @@
-import { buildSeedState, type SeedPart } from './build.ts';
+import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
 import {
@@ -6,6 +6,7 @@ import {
   seedCreated as created,
   seedDailyGoals,
   seedDay as day,
+  seedGoalVersion,
   seedManualOrigin,
   seedOwnFood,
   seedSportEntry,
@@ -14,6 +15,7 @@ import {
   type SeedWeeklyPlan,
 } from './rows.ts';
 import type { BausteinKey } from '../src/base.ts';
+import { goalSettingsVariants, type GoalSettingsVariant } from './ziele-einstellungen.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
 // nicht gekoppelt (Momo ist noch ein Ei: ohne Kopplung gibt es weder Rolle noch Insel), hat
@@ -25,8 +27,8 @@ import type { BausteinKey } from '../src/base.ts';
 
 const philipp = seedIds.person.philipp;
 
-/** Fundament: die fertige Person ohne Kopplung. */
-export const soloFundament: SeedPart = {
+/** Fundament: die fertige Person ohne Kopplung; Varianten ändern einzelne Angaben (#147). */
+const soloFundamentWith = (person: GoalSettingsVariant['person'] = {}): SeedPart => ({
   area: 'fundament',
   entities: [
     {
@@ -52,10 +54,13 @@ export const soloFundament: SeedPart = {
         created_at: '2026-10-01T07:00:00.000Z',
         updated_at: '2026-10-01T07:05:00.000Z',
         deleted_at: null,
+        ...person,
       },
     },
   ],
-};
+});
+
+export const soloFundament: SeedPart = soloFundamentWith();
 
 /** Wochenplan mit dem Tag von heute (Mittwoch), aus dem die drei Tagesziele von heute entstehen. */
 export type SoloWeeklyPlan = SeedWeeklyPlan & Readonly<{ mittwoch: readonly [BausteinKey, BausteinKey, BausteinKey] }>;
@@ -108,12 +113,12 @@ const weeklyPlanOhneWiegetag = {
  * Zielrechner (`calculateGoals` mit `pace: null`), sodass die Fassung zu ihren Eingaben passt.
  */
 const haltemodus = {
-  calorie_budget_milli_kcal: 3_010_000,
-  basal_metabolic_rate_milli_kcal: 1_883_000,
-  total_energy_expenditure_milli_kcal: 3_012_000,
-  lower_bound_milli_kcal: 1_883_000,
-  deficit_milli_kcal: null,
-  maintenance_reason: 'gewaehlt',
+  calorieBudgetMilliKcal: 3_010_000,
+  basalMetabolicRateMilliKcal: 1_883_000,
+  totalEnergyExpenditureMilliKcal: 3_012_000,
+  lowerBoundMilliKcal: 1_883_000,
+  deficitMilliKcal: null,
+  maintenanceReason: 'gewaehlt',
   pace: null,
 } as const;
 
@@ -124,35 +129,31 @@ type SoloGoal = 'tempo' | 'haltemodus';
 export const soloZieleOf = (plan: SoloWeeklyPlan, goal: SoloGoal = 'tempo'): SeedPart => ({
   area: 'ziele',
   entities: [
-    {
-      table: 'goal_version',
-      // Seit #128 beim Sync angemeldet: Die Fassung steht im Änderungsprotokoll.
-      entityType: 'goal_version',
-      ownerPersonId: philipp,
-      row: {
-        id: seedIds.goalVersion.philipp,
-        person_id: philipp,
-        valid_from: seedDays.zielstart,
-        calorie_budget_milli_kcal: 2_417_875,
-        basal_metabolic_rate_milli_kcal: 1_882_500,
-        total_energy_expenditure_milli_kcal: 2_917_875,
-        lower_bound_milli_kcal: 1_882_500,
-        deficit_milli_kcal: 500_000,
-        budget_source: 'berechnet',
-        calculation_sex: 'maennlich',
-        age_years: 36,
-        height_cm: 182,
-        weight_g: 92_000,
-        activity_level: 'maessig_aktiv',
-        maintenance_reason: null,
+    seedGoalVersion({
+      id: seedIds.goalVersion.philipp,
+      personId: philipp,
+      createdAt: '2026-10-01T07:05:00.000Z',
+      values: {
+        validFrom: seedDays.zielstart,
+        calorieBudgetMilliKcal: 2_417_875,
+        basalMetabolicRateMilliKcal: 1_882_500,
+        totalEnergyExpenditureMilliKcal: 2_917_875,
+        lowerBoundMilliKcal: 1_882_500,
+        deficitMilliKcal: 500_000,
+        budgetSource: 'berechnet',
+        calculationSex: 'maennlich',
+        ageYears: 36,
+        heightCm: 182,
+        weightG: 92_000,
+        activityLevel: 'maessig_aktiv',
+        maintenanceReason: null,
         pace: 'entspannt',
-        goal_weight_g: 84_000,
-        water_target_ml: 2_500,
-        weekly_sport_target_minutes: 150,
+        goalWeightG: 84_000,
+        waterTargetMl: 2_500,
+        weeklySportTargetMinutes: 150,
         ...(goal === 'haltemodus' ? haltemodus : {}),
-        ...created('2026-10-01T07:05:00.000Z'),
       },
-    },
+    }),
     seedWeeklyPlan({
       id: seedIds.weeklyPlanVersion.philipp,
       personId: philipp,
@@ -270,14 +271,34 @@ const weighings = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, readonly SeedWeighing[]>>;
 
-/** Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche, Wochenplan, Messungen und Tempo. */
-type SoloVariant = Readonly<{ water: WaterToday; sport: readonly SportUnit[]; plan: SoloWeeklyPlan; weights?: readonly SeedWeighing[]; goal?: SoloGoal }>;
+/**
+ * Was `solo` und seine Varianten unterscheidet: Wasser von heute, Sportwoche, Wochenplan, Messungen und Tempo;
+ * die Varianten der Einstellungsseite „Ziele“ (#147) bringen Personenangaben, Zielversionen und Messungen mit.
+ */
+type SoloVariant = Readonly<{
+  water: WaterToday;
+  sport: readonly SportUnit[];
+  plan: SoloWeeklyPlan;
+  weights?: readonly SeedWeighing[];
+  goal?: SoloGoal;
+  goalSettings?: GoalSettingsVariant;
+}>;
+
+/** Eine Variante der Einstellungsseite „Ziele“ (#147) über `solo`. */
+const goalSettingsVariant = (variant: GoalSettingsVariant): SoloVariant => ({
+  water: waterToday.solo,
+  sport: sportWeek.solo,
+  plan: soloWeeklyPlan,
+  weights: variant.weights,
+  goalSettings: variant,
+});
 
 /**
  * `solo` und seine Varianten: `solo-wasser-*` zeigen die übrigen Status des Wasser-Mini-Trackers
  * (#171), `solo-sport-*` die des Sport-Mini-Trackers (#173), `solo-ohne-wiegetag` den
  * Gewichts-Mini-Tracker ohne Wiegetag im Wochenplan (#175), `solo-gewicht-*` und `solo-haltemodus` die
- * Randzustände des Gewichtstrends (#176).
+ * Randzustände des Gewichtstrends (#176). Die Varianten der Einstellungsseite „Ziele“ (#147) stehen in
+ * `ziele-einstellungen.ts`.
  */
 const soloVariants = {
   solo: { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan },
@@ -290,6 +311,10 @@ const soloVariants = {
   'solo-gewicht-steigend': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-steigend'] },
   'solo-gewicht-ohne-14-tage': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-gewicht-ohne-14-tage'] },
   'solo-haltemodus': { water: waterToday.solo, sport: sportWeek.solo, plan: soloWeeklyPlan, weights: weighings['solo-haltemodus'], goal: 'haltemodus' },
+  ...Object.fromEntries(Object.entries(goalSettingsVariants).map(([key, variant]) => [key, goalSettingsVariant(variant)])) as Record<
+    keyof typeof goalSettingsVariants,
+    SoloVariant
+  >,
 } as const satisfies Partial<Record<SeedScenarioKey, SoloVariant>>;
 
 type SoloScenario = keyof typeof soloVariants;
@@ -369,17 +394,22 @@ export const soloEigeneLebensmittel: SeedPart = {
 };
 
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
-const soloPartsWith = ({ water, sport, plan, weights, goal }: SoloVariant): readonly SeedPart[] => [
-  soloFundament,
-  soloZieleOf(plan, goal),
+const soloPartsWith = ({ water, sport, plan, weights, goal, goalSettings }: SoloVariant): readonly SeedPart[] => [
+  goalSettings === undefined ? soloFundament : soloFundamentWith(goalSettings.person),
+  goalSettings === undefined ? soloZieleOf(plan, goal) : withGoalVersions(soloZieleOf(plan), goalSettings.goals),
   soloTrackerOf(water, sport, weights),
   soloErnaehrung,
 ];
 
+/** Die Ziele von `solo` mit anderen Zielversionen; Wochenplan und Tagesziele von heute bleiben. */
+function withGoalVersions(part: SeedPart, goals: readonly SeedEntity[]): SeedPart {
+  return { area: part.area, entities: [...goals, ...part.entities.filter((entity) => entity.table !== 'goal_version')] };
+}
+
 /** Beiträge von `solo`; `gekoppelt` übernimmt sie als Philipps Daten. */
 export const soloParts = soloPartsWith(soloVariants.solo);
 
-/** `solo` oder eine seiner Varianten; sie unterscheiden sich nur im Wasser von heute, in der Sportwoche oder im Wochenplan. */
+/** `solo` oder eine seiner Varianten (`SoloVariant`). */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
     parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, sportVorwoche],
@@ -408,7 +438,7 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   });
 }
 
-/** `solo` und seine Varianten (#171, #173, #175, #176). */
+/** `solo` und seine Varianten (#171, #173, #175, #176, #147). */
 export const soloManifests = Object.fromEntries(
   (Object.keys(soloVariants) as SoloScenario[]).map((scenario) => [scenario, soloScenario(scenario)]),
 ) as Readonly<Record<SoloScenario, SeedManifest>>;
