@@ -11,8 +11,12 @@ import { thousandthsWithOneDecimal } from './texts';
 // So liefern ihn die Test-Evaluatoren des Fundaments (#104); die Evaluatoren der Spezifikationen 2 und 3
 // folgen demselben Schema. Die Formulierungen sind Designwerte.
 
-/** Zeile eines Tagesziels: Name samt Wert und Zustand in Worten; `null`, wenn der Name ihn schon sagt. */
-export type DailyGoalText = Readonly<{ title: string; status: string | null }>;
+/**
+ * Text eines Tagesziels. `title` ist die ganze Aussage („Wasserziel · 1,0 von 1,5 l“), `name` und `detail`
+ * ihre Teile, damit die Zeile den Wert unter dem Namen zeigen kann, statt mitten im Wert umzubrechen.
+ * `status` ist der Zustand in Worten; `null`, wenn der Wert ihn schon sagt („am Tagesende“).
+ */
+export type DailyGoalText = Readonly<{ title: string; name: string; detail: string | null; status: string | null }>;
 
 export const bausteinNames: Readonly<Record<BausteinKey, string>> = {
   ernaehrung_erfasst: 'Ernährung erfasst',
@@ -79,6 +83,8 @@ export function dailyGoalText(evaluation: DailyGoalEvaluated): DailyGoalText {
   const state = stateNames[evaluation.currentState];
   return {
     title: detail === null ? name : `${name} · ${detail}`,
+    name,
+    detail,
     status: credited ? `${state} · bereits gutgeschrieben` : detail === state ? null : state,
   };
 }

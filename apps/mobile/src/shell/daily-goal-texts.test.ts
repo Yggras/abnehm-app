@@ -14,16 +14,16 @@ function goal(evaluation: Partial<DailyGoalEvaluated> & Pick<DailyGoalEvaluated,
 it('zeigt das Wasserziel mit gezählter Menge und Ziel in Litern', () => {
   const water = { countedMl: 1000, targetMl: 1500 };
   expect(dailyGoalText(goal({ currentState: 'teilweise', progress: { type: 'wasserziel', ...water }, messageKey: 'tagesziel.wasserziel.teilweise', values: water })))
-    .toEqual({ title: 'Wasserziel · 1,0 von 1,5 l', status: 'teilweise' });
+    .toEqual({ title: 'Wasserziel · 1,0 von 1,5 l', name: 'Wasserziel', detail: '1,0 von 1,5 l', status: 'teilweise' });
 });
 
 it('zeigt „Im Kalorienbudget“ tagsüber als „am Tagesende“ und danach mit Aufnahme und Budget', () => {
   const values = { intakeKcal: 1540, budgetKcal: 1620, lowerBoundKcal: 1200 };
   const progress = { type: 'im_kalorienbudget', ...values } as const;
   expect(dailyGoalText(goal({ currentState: 'tagesende', progress, messageKey: 'tagesziel.im_kalorienbudget.tagesende', values })))
-    .toEqual({ title: 'Im Kalorienbudget · am Tagesende', status: null });
+    .toMatchObject({ title: 'Im Kalorienbudget · am Tagesende', status: null });
   expect(dailyGoalText(goal({ currentState: 'erfuellt', dayClosed: true, progress, messageKey: 'tagesziel.im_kalorienbudget.erfuellt', values })))
-    .toEqual({ title: 'Im Kalorienbudget · 1.540 von 1.620 kcal', status: 'erfüllt' });
+    .toMatchObject({ title: 'Im Kalorienbudget · 1.540 von 1.620 kcal', status: 'erfüllt' });
 });
 
 it('nennt nach einer Korrektur den aktuellen Zustand und die festgehaltene Gutschrift', () => {
@@ -34,7 +34,7 @@ it('nennt nach einer Korrektur den aktuellen Zustand und die festgehaltene Gutsc
     messageKey: 'tagesziel.wasserziel.offen',
     values: water,
     completion: { type: 'festgehalten', firstCompletedAt: at },
-  }))).toEqual({ title: 'Wasserziel · 0,0 von 1,5 l', status: 'offen · bereits gutgeschrieben' });
+  }))).toMatchObject({ title: 'Wasserziel · 0,0 von 1,5 l', status: 'offen · bereits gutgeschrieben' });
 });
 
 it('zeigt Ernährung, Sporteinheit und Gewogen mit ihren Werten', () => {
@@ -45,13 +45,13 @@ it('zeigt Ernährung, Sporteinheit und Gewogen mit ihren Werten', () => {
   expect(dailyGoalText(goal({ currentState: 'teilweise', progress: { type: 'sporteinheit', ...sport }, messageKey: 'tagesziel.sporteinheit.teilweise', values: sport })).title)
     .toBe('Sporteinheit · 20 von 30 min');
   expect(dailyGoalText(goal({ currentState: 'erfuellt', progress: { type: 'gewogen', weightEntryCount: 1 }, messageKey: 'tagesziel.gewogen.erfuellt', values: { weightEntryCount: 1 } })))
-    .toEqual({ title: 'Gewogen · eingetragen', status: 'erfüllt' });
+    .toMatchObject({ title: 'Gewogen · eingetragen', status: 'erfüllt' });
 });
 
 it('zeigt bei unbekanntem messageKey oder unpassenden Werten nur den Namen des Bausteins, nie den Schlüssel', () => {
   const water = { countedMl: 750, targetMl: 1500 };
   expect(dailyGoalText(goal({ currentState: 'teilweise', progress: { type: 'wasserziel', ...water }, messageKey: 'wasser.unbekannt', values: water })))
-    .toEqual({ title: 'Wasserziel', status: 'teilweise' });
+    .toMatchObject({ title: 'Wasserziel', status: 'teilweise' });
   expect(dailyGoalText(goal({ currentState: 'teilweise', progress: { type: 'wasserziel', ...water }, messageKey: 'tagesziel.wasserziel.teilweise', values: { ml: 750 } })))
-    .toEqual({ title: 'Wasserziel', status: 'teilweise' });
+    .toMatchObject({ title: 'Wasserziel', status: 'teilweise' });
 });

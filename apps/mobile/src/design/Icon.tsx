@@ -18,7 +18,8 @@ function Shape({ shape }: { shape: IconShape }) {
     case 'path':
       return <Path d={shape.d} />;
     case 'circle':
-      return <Circle cx={shape.cx} cy={shape.cy} r={shape.r} />;
+      // Die Spur steht wie beim Fortschrittsbalken in `surface-sunken`.
+      return <Circle cx={shape.cx} cy={shape.cy} r={shape.r} stroke={shape.track ? color.surfaceSunken : undefined} />;
     case 'rect':
       return <Rect x={shape.x} y={shape.y} width={shape.width} height={shape.height} rx={shape.rx} />;
   }

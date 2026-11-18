@@ -120,7 +120,8 @@ function Header({ data }: { data: HeaderReady }) {
 /** Symbol je Zustand (Design-System, „Bedeutung nie nur über Farbe“); der Text nennt den Zustand immer mit. */
 const goalSymbols: Readonly<Record<DailyGoalState, { icon: IconName; tone: IconTone }>> = {
   erfuellt: { icon: 'check', tone: 'success' },
-  teilweise: { icon: 'ringPartial', tone: 'neutral' },
+  // Bogen in der Farbe der Fortschrittsbalken der Mini-Tracker.
+  teilweise: { icon: 'ringPartial', tone: 'self' },
   offen: { icon: 'circleDashed', tone: 'neutral' },
   tagesende: { icon: 'moon', tone: 'hint' },
 };
@@ -149,8 +150,10 @@ function MomoCharacter({ character, large, stale }: { character: MomoCharacterRe
 }
 
 /**
- * Die drei Tagesziele nach Platz: Symbol, Name samt Wert aus `messageKey` und Zustand in Worten. Eine Zeile
- * öffnet den Bereich des Bausteins; erfüllte Zeilen liegen auf `success-soft`.
+ * Die drei Tagesziele nach Platz: Symbol, Name und darunter Wert und Zustand in Worten, alles aus `messageKey`.
+ * Der Wert steht in eigener Zeile, damit er auf dem iPhone SE nicht mitten im Wert umbricht; der
+ * zugängliche Name nennt die ganze Aussage. Eine Zeile öffnet den Bereich des Bausteins; erfüllte Zeilen
+ * liegen auf `success-soft`.
  */
 function DailyGoals({ goals, stale }: { goals: MomoDailyGoalsReady; stale?: Instant }) {
   return <View style={styles.goals}>
@@ -159,12 +162,13 @@ function DailyGoals({ goals, stale }: { goals: MomoDailyGoalsReady; stale?: Inst
       const text = dailyGoalText(goal.evaluation);
       const symbol = goalSymbols[goal.evaluation.currentState];
       const done = goal.evaluation.currentState === 'erfuellt';
+      const subline = [text.detail, text.status].filter((part) => part !== null).join(' · ');
       return <Pressable key={goal.slot} accessibilityRole="button" accessibilityLabel={`${text.title}${text.status ? `, ${text.status}` : ''}. Öffnen`}
         onPress={() => action(goal.action)} style={({ pressed }) => [styles.goal, done && styles.goalDone, pressed && styles.goalPressed]}>
         <Icon name={symbol.icon} tone={symbol.tone} />
         <View style={styles.flex}>
-          <Text variant="headline">{text.title}</Text>
-          {text.status ? <Text variant="label" tone="inkMuted">{text.status}</Text> : null}
+          <Text variant="headline">{text.name}</Text>
+          {subline ? <Text variant="label" tone="inkMuted">{subline}</Text> : null}
         </View>
         <Icon name="chevron" tone="inkMuted" />
       </Pressable>;

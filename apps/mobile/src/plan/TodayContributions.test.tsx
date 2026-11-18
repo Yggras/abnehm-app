@@ -68,8 +68,10 @@ describe('Tagesziele', () => {
       'Wasserziel · 0,0 von 1,5 l, offen. Öffnen',
       'Im Kalorienbudget · am Tagesende. Öffnen',
     ]);
-    expect(screen.getByText('Wasserziel · 0,0 von 1,5 l')).toBeOnTheScreen();
-    expect(screen.getByText('Im Kalorienbudget · am Tagesende')).toBeOnTheScreen();
+    // Sichtbar steht der Wert unter dem Namen; zusammen ergeben sie die Aussage aus `messageKey`.
+    expect(screen.getByText('Wasserziel')).toBeOnTheScreen();
+    expect(screen.getByText('0,0 von 1,5 l · offen')).toBeOnTheScreen();
+    expect(screen.getByText('am Tagesende')).toBeOnTheScreen();
 
     await user.press(goalRow('Wasserziel · 0,0 von 1,5 l, offen. Öffnen'));
     expect(openTarget).toHaveBeenLastCalledWith({ type: 'capture.water' });
@@ -81,15 +83,15 @@ describe('Tagesziele', () => {
     const { enter } = await renderToday();
 
     await act(async () => enter(wednesday, { countedMl: 1000 }));
-    expect(screen.getByText('Wasserziel · 1,0 von 1,5 l')).toBeOnTheScreen();
-    expect(screen.getByText('teilweise')).toBeOnTheScreen();
+    expect(screen.getByText('1,0 von 1,5 l · teilweise')).toBeOnTheScreen();
+    expect(screen.getByTestId('icon-ringPartial', { includeHiddenElements: true })).toBeOnTheScreen();
 
     await act(async () => enter(wednesday, { countedMl: 1500 }));
-    expect(screen.getByText('erfüllt')).toBeOnTheScreen();
+    expect(screen.getByText('1,5 von 1,5 l · erfüllt')).toBeOnTheScreen();
     expect(screen.getByTestId('icon-check', { includeHiddenElements: true })).toBeOnTheScreen();
 
     await act(async () => enter(wednesday, { countedMl: 0 }));
-    expect(screen.getByText('offen · bereits gutgeschrieben')).toBeOnTheScreen();
+    expect(screen.getByText('0,0 von 1,5 l · offen · bereits gutgeschrieben')).toBeOnTheScreen();
   });
 
   test('lädt, bis der Tag materialisiert ist, und ist ohne Plan leer', async () => {
@@ -100,7 +102,7 @@ describe('Tagesziele', () => {
     });
     expect(screen.getByText('Tagesziele laden …')).toBeOnTheScreen();
     await act(async () => plan.ensureDailyGoals());
-    expect(screen.getByText('Sporteinheit · 0 von 50 min')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Sporteinheit · 0 von 50 min, offen. Öffnen' })).toBeOnTheScreen();
 
     worlds.splice(0).forEach((world) => world.close());
     screen.unmount();
@@ -119,7 +121,7 @@ describe('Tagesziele', () => {
     expect(screen.getByText('Tagesziele sind gerade nicht verfügbar. Versuch es erneut.')).toBeOnTheScreen();
     failing = false;
     await user.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
-    expect(screen.getByText('Wasserziel · 0,0 von 1,5 l')).toBeOnTheScreen();
+    expect(screen.getByText('0,0 von 1,5 l · offen')).toBeOnTheScreen();
     expect(openTarget).not.toHaveBeenCalled();
   });
 });
@@ -193,7 +195,7 @@ test('veraltete Daten beider Beiträge zeigen ihren Stand', async () => {
   await render(<ClockProvider clock={world.clock}><MessageHostProvider><TodayContent registry={registry} /></MessageHostProvider></ClockProvider>);
 
   expect(screen.getAllByText('Stand: 14.10.2026 · 08:30 UTC')).toHaveLength(2);
-  expect(screen.getAllByText('Wasserziel · 0,8 von 1,5 l')).toHaveLength(3);
+  expect(screen.getAllByText('0,8 von 1,5 l · teilweise')).toHaveLength(3);
   expect(screen.getByText('Zielgewicht erreicht')).toBeOnTheScreen();
 });
 
@@ -222,7 +224,7 @@ describe('Schriftfaktor 2,0', () => {
       },
     });
 
-    for (const text of ['Ernährung erfasst · 0 von 2 Mahlzeiten', 'Wasserziel · 0,0 von 1,5 l', 'Im Kalorienbudget · am Tagesende', 'Zielgewicht erreicht']) {
+    for (const text of ['Ernährung erfasst', '0 von 2 Mahlzeiten · offen', 'Wasserziel', '0,0 von 1,5 l · offen', 'Im Kalorienbudget', 'am Tagesende', 'Zielgewicht erreicht']) {
       const node = screen.getByText(text);
       expect(node).toBeOnTheScreen();
       // Kein Abschneiden: Die Zeilen dürfen umbrechen.

@@ -4,7 +4,14 @@
 
 export type IconShape =
   | { readonly type: 'path'; readonly d: string }
-  | { readonly type: 'circle'; readonly cx: number; readonly cy: number; readonly r: number }
+  | {
+      readonly type: 'circle';
+      readonly cx: number;
+      readonly cy: number;
+      readonly r: number;
+      /** Spur unter einem Bogen, etwa beim Teilring: in der Farbe der Fortschrittsspur statt im Ton des Icons. */
+      readonly track?: true;
+    }
   | {
       readonly type: 'rect';
       readonly x: number;
@@ -65,8 +72,14 @@ export const iconShapes = {
   ],
   /** Erfüllt */
   check: [{ type: 'path', d: 'M5.5 12.5l4.2 4.2 8.8-9.2' }],
-  /** Teilweise: Teilring (Tagesziel, Design-System „Bedeutung nie nur über Farbe“) */
-  ringPartial: [{ type: 'path', d: 'M12 3.5A8.5 8.5 0 1 1 3.5 12' }],
+  /**
+   * Teilweise: Teilring auf voller Spur (Tagesziel, Design-System „Bedeutung nie nur über Farbe“). Die
+   * Spur unterscheidet ihn von einem Ladekreis.
+   */
+  ringPartial: [
+    { type: 'circle', cx: 12, cy: 12, r: 8.5, track: true },
+    { type: 'path', d: 'M12 3.5A8.5 8.5 0 1 1 3.5 12' },
+  ],
   /** Offen: gestrichelter Kreis (Tagesziel) */
   circleDashed: [
     {
