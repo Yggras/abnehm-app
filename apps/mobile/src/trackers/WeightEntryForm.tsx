@@ -133,7 +133,7 @@ export function WeightEntryForm({ trackers, entry, onSaved }: WeightEntryFormPro
       ) : (
         <Button label="Speichern" block onPress={save} />
       )}
-      {entry !== undefined ? <Button variant="secondary" label={weightTexts.delete} block onPress={() => run(() => trackers.deleteWeight(entry.id))} /> : null}
+      {entry !== undefined ? <Button variant="text" label={weightTexts.delete} block onPress={() => run(() => trackers.deleteWeight(entry.id))} /> : null}
     </View>
   );
 }

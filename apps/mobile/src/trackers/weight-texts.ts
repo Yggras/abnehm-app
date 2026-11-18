@@ -69,6 +69,7 @@ export const originNames: Readonly<Record<WeightHistoryEntry['origin'], string>>
 
 export const weightTexts = {
   trendLabel: 'Trendgewicht',
+  trendExplained: 'Geglättet aus deinen Tagesgewichten: Einzelne Tage schwanken, der Trend zeigt die Richtung.',
   dayWeightLabel: 'Tagesgewicht',
   dayWeightOn: (weightG: number, localDate: LocalDate, today: LocalDate) => `Tagesgewicht ${kgText(weightG)} · ${dayText(localDate, today)}`,
   sinceStart: (changeG: number) => `Seit Start ${signedKgText(changeG)}`,

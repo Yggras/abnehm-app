@@ -88,11 +88,15 @@ function WeightSummary({ detail }: { detail: WeightDetail }) {
           </>
         ) : (
           <>
-            <View accessible accessibilityLabel={`${weightTexts.trendLabel} ${kgText(trend.trendG)}. ${dayWeight}`}>
-              <Text variant="label" tone="inkMuted">
-                {weightTexts.trendLabel}
-              </Text>
-              <Text variant="numberXl">{kgText(trend.trendG)}</Text>
+            <View accessible accessibilityLabel={`${weightTexts.trendLabel} ${kgText(trend.trendG)}. ${weightTexts.trendExplained} ${dayWeight}`} style={styles.trend}>
+              <View>
+                <Text variant="label" tone="inkMuted">
+                  {weightTexts.trendLabel}
+                </Text>
+                <Text variant="numberXl">{kgText(trend.trendG)}</Text>
+              </View>
+              {/* Hauptaufgabe (Impeccable-Kritik): den Trend verstehen, ohne von Tagesschwankungen verunsichert zu werden. */}
+              <Text variant="label">{weightTexts.trendExplained}</Text>
               <Text variant="label" tone="inkMuted">
                 {dayWeight}
               </Text>
@@ -135,6 +139,7 @@ function MeasurementRow({ entry, today, onEdit }: { entry: WeightHistoryEntry; t
 const styles = StyleSheet.create({
   section: { gap: space[2] },
   summary: { gap: space[3] },
+  trend: { gap: space[1] },
   facts: { gap: space[1] },
   forecast: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[2] },
   // Wie das Herkunfts-Etikett der Listenzeile: neutral, kein Warnton.

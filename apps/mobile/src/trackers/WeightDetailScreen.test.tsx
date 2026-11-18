@@ -89,6 +89,7 @@ test('zeigt oben Trendgewicht groß, Tagesgewicht klein, „seit Start“, Verä
   const trend = screen.getByText('79,2 kg');
   expect(StyleSheet.flatten(trend.props.style)).toMatchObject({ fontSize: typeTokens.numberXl.fontSize });
   expect(screen.getByText('Tagesgewicht 76,0 kg · heute')).toBeOnTheScreen();
+  expect(screen.getByText('Geglättet aus deinen Tagesgewichten: Einzelne Tage schwanken, der Trend zeigt die Richtung.')).toBeOnTheScreen();
   expect(screen.getByText('Seit Start −0,8 kg')).toBeOnTheScreen();
   expect(screen.getByText('Trend −0,8 kg in 2 Wochen')).toBeOnTheScreen();
   expect(screen.getByText('Zielgewicht 75,0 kg etwa am 13. Dezember 2026')).toBeOnTheScreen();
