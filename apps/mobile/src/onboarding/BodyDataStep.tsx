@@ -9,7 +9,7 @@ import { useClock } from '../clock/clock-context';
 import { Chip, DateTimePicker, ProblemMessage, space, Text, TextField, type TextFieldHandle } from '../design';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { gramsOfKgText } from '../trackers/kg-text';
-import type { BodyDataProblem } from './body-data';
+import { bodyFieldProblems, type BodyDataProblem } from './body-data';
 import { useOnboarding } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
 import { stepTitles } from './steps';
@@ -66,18 +66,21 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
     setProblems((current) => current.filter((problem) => !resolved.includes(problem)));
   };
 
-  const problemOf = (...keys: BodyDataProblem[]) => {
+  const problemOf = (...keys: readonly BodyDataProblem[]) => {
     const problem = problems.find((candidate) => keys.includes(candidate));
     return problem === undefined ? undefined : texts.problems[problem];
   };
 
-  /** Ein Text, der keine Zahl im erlaubten Format ist, fehlt im Entwurf; dann nennt das Feld das Format statt „fehlt“. */
-  const fieldProblem = (text: string, parsed: number | null, invalid: string, keys: BodyDataProblem[]) => {
+  /**
+   * Ein Text ohne Zahl im erlaubten Format und eine 0 fehlen im Entwurf, dessen Schema nur positive Werte
+   * kennt. Dann nennt das Feld den erlaubten Bereich statt „fehlt“.
+   */
+  const fieldProblem = (text: string, parsed: number | null, invalid: string, keys: readonly BodyDataProblem[]) => {
     const problem = problemOf(...keys);
-    return problem !== undefined && text.trim() !== '' && parsed === null ? invalid : problem;
+    return problem !== undefined && text.trim() !== '' && positiveOrUndefined(parsed) === undefined ? invalid : problem;
   };
-  const heightProblem = fieldProblem(heightText, heightOfText(heightText), texts.heightInvalid, ['height_missing', 'height_out_of_range', 'height_not_on_step']);
-  const weightProblem = fieldProblem(weightText, gramsOfKgText(weightText), texts.weightInvalid, ['weight_missing', 'weight_out_of_range', 'weight_not_on_step']);
+  const heightProblem = fieldProblem(heightText, heightOfText(heightText), texts.heightInvalid, bodyFieldProblems.height);
+  const weightProblem = fieldProblem(weightText, gramsOfKgText(weightText), texts.weightInvalid, bodyFieldProblems.weight);
   const sexProblem = problemOf('calculation_sex_missing');
   const birthDateProblem = problemOf('birth_date_missing');
 
@@ -144,7 +147,7 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
         value={heightText}
         onChangeText={(text) => {
           setHeightText(text);
-          change({ heightCm: positiveOrUndefined(heightOfText(text)) }, ['height_missing', 'height_out_of_range', 'height_not_on_step']);
+          change({ heightCm: positiveOrUndefined(heightOfText(text)) }, bodyFieldProblems.height);
         }}
         hint={texts.heightHint}
         problem={heightProblem}
@@ -158,7 +161,7 @@ export function BodyDataStep({ onNext, onUnderage }: BodyDataStepProps) {
         value={weightText}
         onChangeText={(text) => {
           setWeightText(text);
-          change({ weightG: positiveOrUndefined(gramsOfKgText(text)) }, ['weight_missing', 'weight_out_of_range', 'weight_not_on_step']);
+          change({ weightG: positiveOrUndefined(gramsOfKgText(text)) }, bodyFieldProblems.weight);
         }}
         hint={texts.weightHint}
         problem={weightProblem}

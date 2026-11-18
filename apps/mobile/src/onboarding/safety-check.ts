@@ -1,6 +1,7 @@
 import type { LocalDate } from '@abnehm/contracts/base';
 import { ageOn, calculateGoals, type SafetyTrigger } from '@abnehm/contracts/goal-calculator';
 
+import { checkBodyData } from './body-data';
 import type { OnboardingDraft } from './draft';
 
 // Vorschau von Onboarding-Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9) über den
@@ -17,10 +18,12 @@ export type SafetyCheck = Readonly<{
   answered: boolean;
 }>;
 
-/** `null`, solange der Entwurf keine gültigen Körperdaten aus Schritt 3 hat. */
+/** `null`, solange der Entwurf keine vollständigen, gültigen Körperdaten aus Schritt 3 hat (`checkBodyData`). */
 export function safetyCheckOf(draft: OnboardingDraft, today: LocalDate): SafetyCheck | null {
-  const { calculationSex, birthDate, heightCm, weightG, pregnantOrBreastfeeding, knownEatingDisorder } = draft;
-  if (calculationSex === undefined || birthDate === undefined || heightCm === undefined || weightG === undefined) return null;
+  const body = checkBodyData(draft, today);
+  if (body.type !== 'vollstaendig') return null;
+  const { calculationSex, birthDate, heightCm, weightG } = body.body;
+  const { pregnantOrBreastfeeding, knownEatingDisorder } = draft;
   const result = calculateGoals({
     calculationDate: today,
     calculationSex,

@@ -363,6 +363,18 @@ describe('Schritt 3 „Körperdaten“', () => {
     );
     expect(screen.getByRole('header', { name: 'Körperdaten' })).toBeOnTheScreen();
 
+    // Eine 0 ist eine Eingabe außerhalb der Grenzen, kein fehlender Wert.
+    await user.clear(screen.getByLabelText('Größe'));
+    await user.type(screen.getByLabelText('Größe'), '0');
+    await user.clear(screen.getByLabelText('Aktuelles Gewicht'));
+    await user.type(screen.getByLabelText('Aktuelles Gewicht'), '0,0');
+    await next();
+    expect(screen.getByLabelText('Größe')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib deine Größe in ganzen Zentimetern von 120 bis 230 ein.');
+    expect(screen.getByLabelText('Aktuelles Gewicht')).toHaveProp(
+      'accessibilityHint',
+      'Fehler: Bitte gib dein Gewicht von 30,0 bis 300,0 kg mit höchstens einer Nachkommastelle ein.',
+    );
+
     await user.clear(screen.getByLabelText('Größe'));
     await user.type(screen.getByLabelText('Größe'), '120');
     await user.clear(screen.getByLabelText('Aktuelles Gewicht'));
@@ -435,7 +447,7 @@ describe('Sperre unter 18', () => {
 });
 
 describe('Schritt 4 „Sicherheits-Check“', () => {
-  const forced = /ohne Kaloriendefizit: Dein Kalorienbudget deckt deinen geschätzten Tagesbedarf \(Haltemodus\)\..*ärztlich begleiten/;
+  const forced = /ohne Kaloriendefizit: Dein Kalorienbudget entspricht deinem Gesamtumsatz, also deinem geschätzten täglichen Energieverbrauch \(Haltemodus\)\..*ärztlich begleiten/;
   const chronic = 'Hast du eine chronische Erkrankung? Dann sprich vor dem Abnehmen mit deiner Ärztin oder deinem Arzt.';
 
   async function openStepFour(body: Parameters<typeof fillBody>[0] = {}) {

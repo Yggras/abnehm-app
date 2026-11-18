@@ -1,12 +1,10 @@
 import { useState } from 'react';
 
-import { useClock } from '../clock/clock-context';
 
 import { Notice, Skeleton, Text } from '../design';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { ownerName, shellTexts, titleOf } from '../shell/texts';
 import { isTestArtifact } from '../test-artifact';
-import { checkBodyData } from './body-data';
 import { BodyDataStep } from './BodyDataStep';
 import { useOnboarding, useOnboardingProgress } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
@@ -35,9 +33,7 @@ type FlowPosition = 'koerperdaten' | 'minderjaehrig' | 'sicherheits_check' | 'ak
 export function OnboardingFlow() {
   const onboarding = useOnboarding();
   const progress = useOnboardingProgress();
-  const clock = useClock();
   const [confirmed, setConfirmed] = useState(false);
-  const [position, setPosition] = useState<FlowPosition | null>(null);
 
   // Nur für den Moment, bis das Onboarding die gerade angekommene Person gesehen hat.
   if (progress.type === 'laedt') {
@@ -57,9 +53,20 @@ export function OnboardingFlow() {
       />
     );
   }
-  const shown =
-    position ?? (checkBodyData(onboarding.readDraft(), clock.read().localDate).type === 'minderjaehrig' ? 'minderjaehrig' : 'koerperdaten');
-  switch (shown) {
+  return <BodyAndSafetySteps />;
+}
+
+/**
+ * Schritte 3 und 4 samt Sperrbildschirm und dem Platzhalter für Schritt 5. Wo sie beginnen, bestimmt das
+ * Onboarding-Modul einmal beim Öffnen aus dem Entwurf: Ergibt das Geburtsdatum unter 18 Jahre, steht dort
+ * die Sperre.
+ */
+function BodyAndSafetySteps() {
+  const onboarding = useOnboarding();
+  const [position, setPosition] = useState<FlowPosition>(() =>
+    onboarding.bodyData().type === 'minderjaehrig' ? 'minderjaehrig' : 'koerperdaten',
+  );
+  switch (position) {
     case 'koerperdaten':
       return <BodyDataStep onNext={() => setPosition('sicherheits_check')} onUnderage={() => setPosition('minderjaehrig')} />;
     case 'minderjaehrig':

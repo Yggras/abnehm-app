@@ -60,6 +60,7 @@ export const onboardingTexts = {
 } as const;
 
 const { heightCm, weightG, minimumAgeYears } = bodyInputLimits;
+const birthDateChoose = 'Tippe auf das Datum und wähle dein Geburtsdatum.';
 const heightInvalid = `Bitte gib deine Größe in ganzen Zentimetern von ${heightCm.min} bis ${heightCm.max} ein.`;
 const weightInvalid = `Bitte gib dein Gewicht von ${kg(weightG.min)} bis ${kg(weightG.max)} kg mit höchstens einer Nachkommastelle ein.`;
 
@@ -75,7 +76,7 @@ export const bodyDataTexts = {
   sexValues: { weiblich: 'weiblich', maennlich: 'männlich' },
   birthDate: 'Geburtsdatum',
   /** Der Picker zeigt eine Vorauswahl, die nicht als Eingabe zählt; der Satz nennt deshalb die Handlung (Impeccable-critique). */
-  birthDateUnset: 'Tippe auf das Datum und wähle dein Geburtsdatum.',
+  birthDateUnset: birthDateChoose,
   height: 'Größe',
   heightHint: `${heightCm.min} bis ${heightCm.max} cm`,
   weight: 'Aktuelles Gewicht',
@@ -85,7 +86,7 @@ export const bodyDataTexts = {
   weightInvalid,
   problems: {
     calculation_sex_missing: 'Bitte wähle einen Wert für die Berechnung.',
-    birth_date_missing: 'Tippe auf das Datum und wähle dein Geburtsdatum.',
+    birth_date_missing: birthDateChoose,
     height_missing: 'Bitte gib deine Größe ein.',
     weight_missing: 'Bitte gib dein aktuelles Gewicht ein.',
     height_out_of_range: heightInvalid,
@@ -109,8 +110,8 @@ function germanList(items: readonly string[]): string {
 
 /**
  * Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9; User Stories 9–13). Der
- * erzwungene Haltemodus rechnet ohne Defizit, das Budget ist dann der Gesamtumsatz (Abschnitt 3); der Text
- * sagt „geschätzter Tagesbedarf“, weil die App „Gesamtumsatz“ erst in Schritt 7 erklärt.
+ * erzwungene Haltemodus rechnet ohne Defizit, das Budget ist dann der Gesamtumsatz (Abschnitt 3). Der Text
+ * erklärt den Begriff mit der Definition aus `CONTEXT.md`, weil die Herleitung erst in Schritt 7 folgt.
  * Hinweise sind neutral und nie in `problem`-Farbe (Abschnitt 6).
  */
 export const safetyCheckTexts = {
@@ -122,7 +123,7 @@ export const safetyCheckTexts = {
   bmi: 'Dein BMI',
   bmiSource: 'Aus deiner Größe und deinem aktuellen Gewicht',
   maintenanceForced: (triggers: readonly SafetyTrigger[]) =>
-    `Wegen ${germanList(triggers.map((trigger) => safetyReasons[trigger]))} rechnet die App für dich ohne Kaloriendefizit: Dein Kalorienbudget deckt deinen geschätzten Tagesbedarf (Haltemodus). Wenn du abnehmen möchtest, lass dich bitte ärztlich begleiten.`,
+    `Wegen ${germanList(triggers.map((trigger) => safetyReasons[trigger]))} rechnet die App für dich ohne Kaloriendefizit: Dein Kalorienbudget entspricht deinem Gesamtumsatz, also deinem geschätzten täglichen Energieverbrauch (Haltemodus). Wenn du abnehmen möchtest, lass dich bitte ärztlich begleiten.`,
   chronicIllness: 'Hast du eine chronische Erkrankung? Dann sprich vor dem Abnehmen mit deiner Ärztin oder deinem Arzt.',
   answerRequired: 'Beantworte beide Fragen, um weiterzumachen.',
 } as const;

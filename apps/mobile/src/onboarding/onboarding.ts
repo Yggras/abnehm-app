@@ -5,7 +5,7 @@ import type { AppAuth, RegisterResult, SignInResult } from '../auth';
 import type { LocalDatabase } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { updateOwnPerson, type SyncCycleResult, type SyncWriter } from '../sync';
-import { checkBodyData, type BodyDataProblem } from './body-data';
+import { checkBodyData, type BodyDataCheck, type BodyDataProblem } from './body-data';
 import { readOnboardingDraft, updateOnboardingDraft, type OnboardingDraft, type OnboardingDraftChange } from './draft';
 
 // Onboarding-Modul (Spezifikation 1, Abschnitte 1 und 9): der Weg vom Willkommen bis „Heute“. Vor dem
@@ -64,6 +64,8 @@ export type Onboarding = {
    * im Entwurf ab; mit ihr speichert Schritt 8 es ohne Dublette.
    */
   confirmBodyData(): BodyDataResult;
+  /** Stand der Körperdaten im Entwurf am heutigen Tag, etwa für den Sperrbildschirm nach einem Neustart. */
+  bodyData(): BodyDataCheck;
   /** Für `onAccountOpened` der App-Sitzung; die Rückgabe löst die Beobachtung beim Sperren. */
   opened(database: LocalDatabase): () => void;
 };
@@ -171,6 +173,8 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
     readDraft: () => requireDatabase().read(readOnboardingDraft),
 
     updateDraft: (change) => requireDatabase().transaction((tx) => updateOnboardingDraft(tx, change, clock.read().instant)),
+
+    bodyData: () => requireDatabase().read((tx) => checkBodyData(readOnboardingDraft(tx), clock.read().localDate)),
 
     confirmBodyData() {
       const { instant, localDate } = clock.read();

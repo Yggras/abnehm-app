@@ -15,6 +15,12 @@ export type BodyDataProblem =
   | 'weight_missing'
   | Exclude<BodyDataError, 'underage'>;
 
+/** Die Probleme, die ein Eingabefeld von Schritt 3 anzeigt. */
+export const bodyFieldProblems = {
+  height: ['height_missing', 'height_out_of_range', 'height_not_on_step'],
+  weight: ['weight_missing', 'weight_out_of_range', 'weight_not_on_step'],
+} as const satisfies Record<string, readonly BodyDataProblem[]>;
+
 export type BodyData = Readonly<{ calculationSex: CalculationSex; birthDate: LocalDate; heightCm: number; weightG: number }>;
 
 export type BodyDataCheck =
