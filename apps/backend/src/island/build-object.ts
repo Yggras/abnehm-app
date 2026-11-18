@@ -10,13 +10,12 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 
 import { policies } from '../authorization/authorization.ts';
 import { changeWriter, updated } from '../coupling/change-writer.ts';
-import type { DbExecutor } from '../database.ts';
-import { blueprintUnlock, couplingMember, island, islandField, islandObject, islandProgress } from '../db/schema/index.ts';
+import { blueprintUnlock, couplingMember, island, islandField, islandObject } from '../db/schema/index.ts';
 import { insertBooking, readBookings } from '../energy/bookings.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
-import { islandObjectEntity, islandProgressEntity } from './island-entities.ts';
-import { projectIslandProgress } from './progress-projector.ts';
+import { islandObjectEntity } from './island-entities.ts';
+import { progressChange } from './progress-change.ts';
 
 // Bauen auf dem Server (Spezifikation 4, Abschnitte 2.5, 3, 7 und 11; Spezifikation 0, Abschnitt 4): Objekt,
 // Feldbelegung und `build_debit` atomar in einem Fachbefehl, dazu der neu berechnete Inselfortschritt.
@@ -114,10 +113,3 @@ export const buildObjectCommand: ServerCommand<BuildObject> = {
     return { changes, idMappings: [] };
   },
 };
-
-/** Berechnet den Inselfortschritt neu und liefert ihn als kanonische Änderung. */
-export async function progressChange(tx: DbExecutor, islandId: EntityId, at: Date): Promise<CanonicalChange> {
-  await projectIslandProgress(tx, { islandId, at });
-  const [row] = await tx.select({ id: islandProgress.id }).from(islandProgress).where(eq(islandProgress.islandId, islandId));
-  return canonicalAfterWrite(tx, islandProgressEntity, EntityId.parse(row!.id));
-}

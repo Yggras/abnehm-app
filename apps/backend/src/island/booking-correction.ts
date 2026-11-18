@@ -6,7 +6,7 @@ import type { CanonicalChange } from '@abnehm/contracts/sync';
 import type { DbExecutor } from '../database.ts';
 import { communityProject, energyBooking, islandObject } from '../db/schema/index.ts';
 import { bookCounterBooking } from '../energy/bookings.ts';
-import { progressChange } from './build-object.ts';
+import { progressChange } from './progress-change.ts';
 
 // Fehlerkorrektur an Spielbuchungen (Spezifikation 4, Abschnitt 1; Spezifikation 0, Abschnitt 4): nur als
 // Gegenbuchung mit exaktem Gegenzeichen, serverintern und ohne Client-Befehl. Eine Gegenbuchung wirkt mit

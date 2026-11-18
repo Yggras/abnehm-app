@@ -33,7 +33,9 @@ import { energieverlaufPart, gekoppeltBauten, type SeedBuild } from './spielverl
 // Zwei Inhalte reserviert das Manifest als versionierte Erweiterungspunkte (`extensions`): die
 // Bilddaten der Fotos (Spezifikation 2, seit #162 Fassung 2) und das offene Deko-Geschenk von Anna an Philipp als
 // antwortbedürftigen Vorgang (Spezifikation 4, #198). Weitere Bereiche ergänzen ihren Beitrag hier,
-// etwa Level 6 und die aktive Challenge (Spezifikation 4).
+// etwa die aktive Challenge (Spezifikation 4). Die Insel steht auf Level 3 mit 23 Energie für Philipp statt
+// auf Level 6 aus dem Design-System: Level 6 passt nicht in die Zeitleiste seit dem Zielstart
+// (Nutzerentscheidung in #191, `spielverlauf.ts`).
 
 const philipp = seedIds.person.philipp;
 const anna = seedIds.person.anna;

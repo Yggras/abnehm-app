@@ -51,9 +51,9 @@ export const MomoCharacterReady = z
     waitingForPartner: z.boolean(),
     /**
      * Anzeigename des Partners für „Deine Hälfte ist voll – Momo wartet auf ‹Name›“ (Spezifikation 4,
-     * Abschnitt 7). Nach dem Schlüpfen gibt es immer einen Partner. Additiv ergänzt in #191.
+     * Abschnitt 7). Nach dem Schlüpfen gibt es immer einen Partner. Neues Pflichtfeld aus #191.
      */
-    partnerDisplayName: z.string().min(1).max(64),
+    partnerDisplayName: DisplayName,
     islandNotice: z
       .strictObject({ newEvents: z.int().nonnegative(), claimableWishes: z.int().nonnegative() })
       .optional(),
