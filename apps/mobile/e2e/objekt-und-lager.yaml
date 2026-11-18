@@ -1,0 +1,121 @@
+# Gerätelauf Objekt-Sheet und Lager (Spezifikation 4, Abschnitt 7; #194): Seed „gekoppelt“ → eine Laterne
+# bauen → antippen → auf Stufe 2 aufwerten → umstellen → einlagern → aus dem Lager wieder platzieren. Danach
+# ein Objekt von Anna mit „von Anna gebaut“. Die Bildschirmfotos sind die Vorlage der Impeccable-Kritik.
+#
+# Im Seed `gekoppelt` hat Philipp (Bauen, Seite a) Level 3 und 23 Energie; seine zehn Laternen stehen in der
+# eigenen Ecke, Annas Apfelbäume in ihrer (`packages/contracts/seeds/spielverlauf.ts`). Wie in `bau-modus`
+# liegt Feld (5, 7) bei 29 % / 45 % und Feld (5, 6) bei 37 % / 43 % des Bildschirms; die Werte passen für
+# iPhone SE (3. Generation, 375 × 667 pt) und `medium_phone` (412 × 915 dp). Nicht im Standardumfang von
+# `scripts/e2e-run`; Aufruf mit `--ablauf objekt-und-lager`.
+appId: ${APP_ID}
+name: Objekt-Sheet und Lager auf der Insel
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&ziel=/momo
+# „So wächst Momo“ erscheint beim ersten Öffnen nach dem Schlüpfen (siehe `bau-modus`).
+- extendedWaitUntil:
+    visible: "Verstanden|Momos Insel, Level 3.*"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Verstanden"
+    commands:
+      - tapOn: "Verstanden"
+- assertVisible: "Momos Insel, Level 3, 10 eigene Objekte"
+
+# Eine Laterne auf Feld (5, 7) bauen --------------------------------------------------------------------
+- tapOn: "Bauen"
+- extendedWaitUntil:
+    visible: "Laterne, 3 Energie"
+    timeout: 10000
+- tapOn: "Laterne, 3 Energie"
+- extendedWaitUntil:
+    visible: "Laterne bauen.*"
+    timeout: 10000
+- tapOn:
+    point: "29%,45%"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 11 eigene Objekte"
+    timeout: 10000
+- assertVisible: "20 Energie"
+
+# Objekt-Sheet: Aufwerten mit Preis, Umstellen, Einlagern -----------------------------------------------
+- tapOn:
+    point: "29%,45%"
+- extendedWaitUntil:
+    visible: "Auf Stufe 2 aufwerten · 6 Energie"
+    timeout: 10000
+- assertVisible: "Stufe 1"
+- assertVisible: "Umstellen"
+- assertVisible: "Einlagern"
+- takeScreenshot: objekt-1-objekt-sheet
+- tapOn: "Auf Stufe 2 aufwerten · 6 Energie"
+- extendedWaitUntil:
+    visible: "14 Energie"
+    timeout: 10000
+- takeScreenshot: objekt-2-aufgewertet
+
+# Umstellen: die freien eigenen Felder leuchten, ein Tippen setzt die Laterne ----------------------------
+- tapOn:
+    point: "29%,45%"
+- extendedWaitUntil:
+    visible: "Stufe 2"
+    timeout: 10000
+- takeScreenshot: objekt-3-objekt-sheet-stufe-2
+- tapOn: "Umstellen"
+- extendedWaitUntil:
+    visible: "Laterne umstellen.*"
+    timeout: 10000
+- takeScreenshot: objekt-4-umstellen
+- tapOn:
+    point: "37%,43%"
+- extendedWaitUntil:
+    notVisible: "Laterne umstellen.*"
+    timeout: 10000
+- assertVisible: "Momos Insel, Level 3, 11 eigene Objekte"
+
+# Einlagern und aus dem Lager platzieren ------------------------------------------------------------------
+- tapOn:
+    point: "37%,43%"
+- extendedWaitUntil:
+    visible: "Einlagern"
+    timeout: 10000
+- tapOn: "Einlagern"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 10 eigene Objekte"
+    timeout: 10000
+- tapOn: "Lager"
+- extendedWaitUntil:
+    visible: "Gebaut · Stufe 2"
+    timeout: 10000
+- takeScreenshot: objekt-5-lager
+- tapOn: "Laterne platzieren"
+- extendedWaitUntil:
+    visible: "Laterne platzieren.*"
+    timeout: 10000
+- takeScreenshot: objekt-6-platzieren
+- tapOn:
+    point: "29%,45%"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 11 eigene Objekte"
+    timeout: 10000
+- assertVisible: "14 Energie"
+- takeScreenshot: objekt-7-platziert
+
+# Ein Objekt von Anna: nur Infos ---------------------------------------------------------------------------
+# Annas Ecke liegt rechts der Lichtung außerhalb des Bildschirms; ein Wischen nach links holt sie heran.
+- swipe:
+    start: "85%,62%"
+    end: "15%,62%"
+    duration: 800
+- takeScreenshot: objekt-8-annas-ecke
