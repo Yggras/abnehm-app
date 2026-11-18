@@ -13,6 +13,18 @@ export type MomoView = 'heute' | 'insel';
 /** Laufende Reaktion auf ein eigenes Ereignis: Tagesbonus oder Levelaufstieg bzw. Tageszielerfüllung. */
 export type MomoReactionMood = Extract<MomoMood, 'begeistert' | 'freut_sich'>;
 
+/** Ein eigenes Ereignis, auf das Momo kurz reagiert. */
+export type MomoEvent = 'tageszielerfuellung' | 'tagesbonus' | 'levelaufstieg';
+
+/**
+ * Momos Reaktion auf eigene Ereignisse, die zusammen eintreffen: begeistert nach Tagesbonus oder
+ * Levelaufstieg, sonst freut sich (Spezifikation 4, Abschnitt 6).
+ */
+export function reactionMood(events: readonly MomoEvent[]): MomoReactionMood {
+  if (events.length === 0) throw new RangeError('Ohne Ereignis gibt es keine Reaktion');
+  return events.some((event) => event !== 'tageszielerfuellung') ? 'begeistert' : 'freut_sich';
+}
+
 export type MoodFacts = Readonly<{
   view: MomoView;
   /** Die Reaktion, solange sie läuft (`duration-celebrate`); danach `null`. */

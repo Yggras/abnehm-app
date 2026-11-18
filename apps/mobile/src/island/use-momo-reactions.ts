@@ -14,9 +14,9 @@ export function useMomoReactions(): void {
   const { showMessage } = useMessageHost();
   useEffect(
     () =>
-      game?.observeReactions((reactions) => {
-        for (const reaction of reactions) showMessage(messageOfReaction(reaction));
-      }),
+      // Eine Meldung je Reaktion: Meldungen ohne „Rückgängig“ ersetzen einander, deshalb fasst der Spieldienst
+      // alles aus einem Commit zusammen (#188).
+      game?.observeReactions((reaction) => showMessage(messageOfReaction(reaction))),
     [game, showMessage],
   );
 }

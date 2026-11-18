@@ -3,7 +3,7 @@ import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole } from '@abnehm/contracts/island';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
-import { momoMood, type MomoReactionMood, type MomoView } from '@abnehm/game-rules/mood';
+import { momoMood, reactionMood, type MomoReactionMood, type MomoView } from '@abnehm/game-rules/mood';
 
 import { latestCompletionDate } from '../daily-goals';
 import { motion } from '../design/tokens';
@@ -15,7 +15,7 @@ import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
 import { takeGrowthIntro } from './growth-intro';
-import { claimReactions, hapticOfReactions, hasUnshownReactions, moodOfReactions, type MomoReaction } from './momo-reactions';
+import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
 import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceOutcome } from './role-choice';
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
@@ -42,11 +42,12 @@ export type GameService = Readonly<{
    */
   observeStage(listener: (stage: IslandStage) => void): () => void;
   /**
-   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften, je Commit gesammelt. Solange ein
-   * Beobachter angemeldet ist, beansprucht der Dienst jedes neue Ereignis genau einmal je Installation,
-   * löst dazu höchstens eine Haptik aus und lässt Momo kurz reagieren. Ohne Beobachter wartet das Ereignis.
+   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften, je Commit zu einer zusammengefasst.
+   * Solange ein Beobachter angemeldet ist, beansprucht der Dienst jedes neue Ereignis genau einmal je
+   * Installation, löst dazu höchstens eine Haptik aus und lässt Momo kurz reagieren. Ohne Beobachter wartet
+   * das Ereignis.
    */
-  observeReactions(listener: (reactions: readonly MomoReaction[]) => void): () => void;
+  observeReactions(listener: (reaction: MomoReaction) => void): () => void;
   /** Schlägt die Rollen vor, indem die eigene Person ihre Rolle wählt. */
   proposeRoles(role: IslandRole): RoleChoiceOutcome;
   /** Nimmt den offenen Vorschlag des Partners an; Momo schlüpft auf dem Server mit dem nächsten Sync. */
@@ -84,28 +85,32 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
   const mood = createMoodState(clock, refresh);
   const observeStage = (listener: (stage: IslandStage) => void) => mood.observe(database, 'insel', listener);
 
-  function observeReactions(listener: (reactions: readonly MomoReaction[]) => void) {
+  function observeReactions(listener: (reaction: MomoReaction) => void) {
     return database.observe(
       (tx) => {
         const personId = ownPersonId(tx);
         return personId !== null && hasUnshownReactions(tx, personId, LocalDate.parse(clock.read().localDate));
       },
+      // Der Beobachter schreibt selbst: Die Beanspruchung ist eine eigene Transaktion nach der auslösenden.
+      // Ihr Commit lässt alle Beobachter noch innerhalb der laufenden Melderunde neu lesen; dieser hier
+      // liest danach `false` und schreibt nicht wieder, die Runden enden also.
       (pending) => {
         if (!pending) return;
-        const reactions = database.transaction((tx) => {
+        const reaction = database.transaction((tx) => {
           const personId = ownPersonId(tx);
           const reading = clock.read();
-          const claimed = personId === null ? [] : claimReactions(tx, personId, LocalDate.parse(reading.localDate), reading.instant);
+          const claimed = personId === null ? null : claimReaction(tx, personId, LocalDate.parse(reading.localDate), reading.instant);
           // Erst nach dem Commit, aber bevor die Beobachter neu lesen: So zeigt „Heute“ Momo sofort reagierend.
-          if (claimed.length > 0) {
+          if (claimed !== null) {
+            const events = eventsOf(claimed);
             tx.afterCommit(() => {
-              haptics.feedback(hapticOfReactions(claimed));
-              mood.react(moodOfReactions(claimed), reactionMs);
+              haptics.feedback(hapticOf(events));
+              mood.react(reactionMood(events), reactionMs);
             });
           }
           return claimed;
         });
-        if (reactions.length > 0) listener(reactions);
+        if (reaction !== null) listener(reaction);
       },
     );
   }

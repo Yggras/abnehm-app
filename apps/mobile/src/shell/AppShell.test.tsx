@@ -303,12 +303,18 @@ describe('Quick-Commands und Meldungen', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  const none = { yesterday: null, goals: [], bonus: false } as const;
   test.each([
-    [{ type: 'tageszielerfuellung', baustein: 'wasserziel' }, 'Wasserziel erfüllt · +1 Energie'],
-    [{ type: 'tagesbonus' }, 'Alle drei geschafft · +1 Energie'],
-    [{ type: 'tagesende', energy: 1, bonus: false }, 'Gestern im Kalorienbudget · +1 Energie'],
-    [{ type: 'tagesende', energy: 2, bonus: true }, 'Gestern im Kalorienbudget, alle drei geschafft · +2 Energie'],
-  ] as const)('Momos Reaktion %o erscheint über den Meldungs-Host (#188)', async (reaction, text) => {
+    [{ ...none, goals: ['wasserziel'] }, 'Wasserziel erfüllt · +1 Energie'],
+    [{ ...none, bonus: true }, 'Alle drei geschafft · +1 Energie'],
+    // Mehreres aus einem Commit: eine Meldung mit der Summe der Energie.
+    [{ ...none, goals: ['sporteinheit'], bonus: true }, 'Alle drei geschafft · +2 Energie'],
+    [{ ...none, goals: ['wasserziel', 'gewogen'] }, 'Wasserziel und Gewogen erfüllt · +2 Energie'],
+    [{ ...none, goals: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'] }, 'Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie'],
+    [{ ...none, yesterday: { energy: 1, bonus: false } }, 'Gestern im Kalorienbudget · +1 Energie'],
+    [{ ...none, yesterday: { energy: 2, bonus: true } }, 'Gestern im Kalorienbudget, alle drei geschafft · +2 Energie'],
+    [{ yesterday: { energy: 1, bonus: false }, goals: ['wasserziel'], bonus: false }, 'Gestern im Kalorienbudget, heute Wasserziel erfüllt · +2 Energie'],
+  ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188)', async (reaction, text) => {
     closeIsland();
     closeIsland = appGameService.opened(fakeGameService(hatchedStage(), [reaction]));
     await renderRouter(appDir, { initialUrl: '/' });

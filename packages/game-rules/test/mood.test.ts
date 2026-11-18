@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LocalDate } from '@abnehm/contracts/base';
 
-import { momoMood, type MoodFacts } from '../src/mood.ts';
+import { momoMood, reactionMood, type MoodFacts } from '../src/mood.ts';
 
 // Nachweis für #188: Momos Stimmung nach Abschnitt 6 von #83, Priorität von oben nach unten:
 // begeistert, freut sich, schläft (nur Insel, 20:00–06:00), neugierig, döst, zufrieden.
@@ -74,6 +74,23 @@ describe('Grenze von „döst“', () => {
 
   it('noch nie erfüllt → döst', () => {
     expect(momoMood(facts({ lastOwnCompletion: null }))).toBe('doest');
+  });
+});
+
+describe('Reaktion auf eigene Ereignisse', () => {
+  it.each([
+    [['tageszielerfuellung'], 'freut_sich'],
+    [['tageszielerfuellung', 'tageszielerfuellung'], 'freut_sich'],
+    [['tagesbonus'], 'begeistert'],
+    [['levelaufstieg'], 'begeistert'],
+    // Kommen Ereignisse zusammen, zählt das stärkste.
+    [['tageszielerfuellung', 'tagesbonus'], 'begeistert'],
+  ] as const)('%j → %s', (events, mood) => {
+    expect(reactionMood(events)).toBe(mood);
+  });
+
+  it('ohne Ereignis gibt es keine Reaktion', () => {
+    expect(() => reactionMood([])).toThrow(RangeError);
   });
 });
 

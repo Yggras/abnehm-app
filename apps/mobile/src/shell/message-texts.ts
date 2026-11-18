@@ -30,6 +30,13 @@ const toMeal: Readonly<Record<MealKey, string>> = {
   snacks: 'zu den Snacks',
 };
 
+/** „A“, „A und B“, „A, B und C“. */
+function germanList(items: readonly string[]): string {
+  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} und ${items.at(-1)}`;
+}
+
+const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Development Build: Für einen Quick-Command fehlt noch der Handler seines Bereichs. */
   'shell.quick_command.in_arbeit': messageText(z.strictObject({ commandKey: QuickCommandKey }), ({ commandKey }) => ({
@@ -54,24 +61,34 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,
   })),
   /**
-   * Spezifikation 4: ein Tagesziel erstmals erfüllt („Wasserziel erfüllt · +1 Energie“; #188). Wie alle
-   * Spielreaktionen ohne „Rückgängig“; steht eine Meldung mit „Rückgängig“, wird sie deren zweite Zeile.
+   * Spezifikation 4: Momos Reaktion auf neue eigene Gutschriften eines Commits, als eine Meldung (#188):
+   * „Wasserziel erfüllt · +1 Energie“ und „Alle drei geschafft · +1 Energie“ wie in Abschnitt 6. Kommen
+   * mehrere zusammen, fasst die Meldung sie mit der Summe der Energie zusammen, etwa „Alle drei geschafft ·
+   * +2 Energie“ für das dritte Tagesziel samt Bonus (Nutzerentscheidung in #188). `gestern` zählt die
+   * gebündelten Tagesende-Gutschriften des Vortags; sie gibt es nur für „Im Kalorienbudget“ und den Bonus
+   * an solchen Tagen (CONTEXT.md). Die zusammengesetzten Wortlaute sind Designwerte, nicht belegt. Ohne
+   * „Rückgängig“; steht eine Meldung mit „Rückgängig“, wird sie deren zweite Zeile.
    */
-  'momo.tagesziel_erfuellt': messageText(z.strictObject({ baustein: BausteinKey }), ({ baustein }) => ({
-    text: `${bausteinNames[baustein]} erfüllt · +1 Energie`,
-    energy: true,
-  })),
-  /** Spezifikation 4: Tagesbonus, alle drei Tagesziele erfüllt (#188). */
-  'momo.tagesbonus': messageText(z.strictObject({}), () => ({ text: 'Alle drei geschafft · +1 Energie', energy: true })),
-  /**
-   * Spezifikation 4: Tagesende-Gutschriften des Vortags, gebündelt beim ersten Öffnen nach Mitternacht
-   * (#188). Tagesende-Gutschriften gibt es nur für „Im Kalorienbudget“ und den Bonus an solchen Tagen
-   * (CONTEXT.md). Der Wortlaut ist ein Designwert, nicht belegt.
-   */
-  'momo.tagesende': messageText(z.strictObject({ energy: z.int().min(1).max(2), bonus: z.boolean() }), ({ energy, bonus }) => ({
-    text: `Gestern im Kalorienbudget${bonus ? ', alle drei geschafft' : ''} · +${energy} Energie`,
-    energy: true,
-  })),
+  'momo.energie': messageText(
+    z
+      .strictObject({
+        ziel1: BausteinKey.optional(),
+        ziel2: BausteinKey.optional(),
+        ziel3: BausteinKey.optional(),
+        bonus: z.boolean(),
+        gestern: z.int().min(0).max(2),
+        gesternBonus: z.boolean(),
+      })
+      .refine((values) => values.gestern > 0 || values.bonus || values.ziel1 !== undefined, { message: 'Meldung ohne Gutschrift' }),
+    ({ ziel1, ziel2, ziel3, bonus, gestern, gesternBonus }) => {
+      const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
+      const today = bonus ? 'alle drei geschafft' : goals.length > 0 ? `${germanList(goals)} erfüllt` : null;
+      const yesterday = gestern > 0 ? `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''}` : null;
+      const energy = gestern + goals.length + (bonus ? 1 : 0);
+      const text = yesterday === null ? capitalized(today!) : today === null ? yesterday : `${yesterday}, heute ${today}`;
+      return { text: `${text} · +${energy} Energie`, energy: true };
+    },
+  ),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */

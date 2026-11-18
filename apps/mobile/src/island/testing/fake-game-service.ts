@@ -17,7 +17,7 @@ export function fakeGameService(stage: IslandStage, reactions: readonly MomoReac
       return () => {};
     },
     observeReactions(listener) {
-      if (reactions.length > 0) listener(reactions);
+      for (const reaction of reactions) listener(reaction);
       return () => {};
     },
     proposeRoles: refuse,

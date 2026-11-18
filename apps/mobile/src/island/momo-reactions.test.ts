@@ -29,6 +29,8 @@ const yesterday = LocalDate.parse('2026-10-13');
 const twoDaysAgo = LocalDate.parse('2026-10-12');
 /** 12:00 in Berlin (Sommerzeit). */
 const noon = Instant.parse('2026-10-14T10:00:00.000Z');
+/** Reaktion auf heute erstmals erfüllte Tagesziele ohne Bonus. */
+const met = (...goals: BausteinKey[]): MomoReaction => ({ yesterday: null, goals, bonus: false });
 const allFulfilled: Partial<TestDayFacts> = { weightEntryCount: 1, countedMl: 1500, sessionMinutes: [30], intakeKcal: 1500 };
 
 /** Beginn des Folgetags in Berlin; alle Testtage liegen in der Sommerzeit. */
@@ -91,7 +93,7 @@ async function setup({ hatched = true }: { hatched?: boolean } = {}) {
   materialize(today);
 
   const reactions: MomoReaction[] = [];
-  const listen = () => world.game.observeReactions((next) => void reactions.push(...next));
+  const listen = () => world.game.observeReactions((next) => void reactions.push(next));
 
   return {
     world,
@@ -154,7 +156,7 @@ describe('Momo-Reaktionen', () => {
     world.listen();
     world.enter(today, { countedMl: 1500 });
 
-    expect(world.reactions).toEqual([{ type: 'tageszielerfuellung', baustein: 'wasserziel' }]);
+    expect(world.reactions).toEqual([met('wasserziel')]);
     expect(world.haptics).toEqual(['tageszielerfuellung']);
     expect(world.todayMood()).toBe('freut_sich');
 
@@ -199,7 +201,7 @@ describe('Momo-Reaktionen', () => {
     world.listen();
     world.reevaluate(today, 'app_oeffnung');
 
-    expect(world.reactions).toEqual([{ type: 'tageszielerfuellung', baustein: 'wasserziel' }]);
+    expect(world.reactions).toEqual([met('wasserziel')]);
     expect(world.haptics).toEqual(['tageszielerfuellung']);
   });
 
@@ -219,13 +221,8 @@ describe('Momo-Reaktionen', () => {
     world.enter(today, { weightEntryCount: 1, countedMl: 1500 });
     world.enter(today, allFulfilled);
 
-    expect(world.reactions).toEqual([
-      { type: 'tageszielerfuellung', baustein: 'gewogen' },
-      { type: 'tageszielerfuellung', baustein: 'wasserziel' },
-      { type: 'tageszielerfuellung', baustein: 'sporteinheit' },
-      { type: 'tagesbonus' },
-    ]);
-    // Je Commit höchstens eine Haptik: das dritte Tagesziel und der Bonus entstehen zusammen.
+    // Je Commit eine Reaktion und höchstens eine Haptik: Das dritte Tagesziel und der Bonus entstehen zusammen.
+    expect(world.reactions).toEqual([met('gewogen', 'wasserziel'), { yesterday: null, goals: ['sporteinheit'], bonus: true }]);
     expect(world.haptics).toEqual(['tageszielerfuellung', 'tagesbonus']);
     expect(world.todayMood()).toBe('begeistert');
   });
@@ -236,7 +233,7 @@ describe('Momo-Reaktionen', () => {
     expect(world.reactions).toEqual([]);
     expect(world.haptics).toEqual([]);
     world.listen();
-    expect(world.reactions).toEqual([{ type: 'tageszielerfuellung', baustein: 'wasserziel' }]);
+    expect(world.reactions).toEqual([met('wasserziel')]);
     expect(world.haptics).toEqual(['tageszielerfuellung']);
   });
 
@@ -244,7 +241,7 @@ describe('Momo-Reaktionen', () => {
     const world = await setup({ hatched: false });
     world.listen();
     world.enter(today, { countedMl: 1500 });
-    expect(world.reactions).toEqual([{ type: 'tageszielerfuellung', baustein: 'wasserziel' }]);
+    expect(world.reactions).toEqual([met('wasserziel')]);
   });
 });
 
@@ -255,10 +252,7 @@ describe('Tagesende-Gutschriften', () => {
     world.clock.set(Instant.parse('2026-10-13T18:00:00.000Z'));
     world.listen();
     world.enter(yesterday, { weightEntryCount: 1, countedMl: 1500, intakeKcal: 1500 });
-    expect(world.reactions).toEqual([
-      { type: 'tageszielerfuellung', baustein: 'gewogen' },
-      { type: 'tageszielerfuellung', baustein: 'wasserziel' },
-    ]);
+    expect(world.reactions).toEqual([met('gewogen', 'wasserziel')]);
     await world.world.restart();
 
     // Am Morgen: Der Tagesabschluss erfüllt „Im Kalorienbudget“ für gestern und vergibt den Bonus.
@@ -267,7 +261,7 @@ describe('Tagesende-Gutschriften', () => {
     world.listen();
     world.reevaluate(yesterday, 'app_oeffnung');
 
-    expect(world.reactions.slice(2)).toEqual([{ type: 'tagesende', energy: 2, bonus: true }]);
+    expect(world.reactions.slice(1)).toEqual([{ yesterday: { energy: 2, bonus: true }, goals: [], bonus: false }]);
     expect(world.haptics).toEqual(['tageszielerfuellung', 'tagesbonus']);
     expect(world.todayMood()).toBe('begeistert');
   });
@@ -278,7 +272,7 @@ describe('Tagesende-Gutschriften', () => {
     world.clock.set(Instant.parse('2026-10-14T05:00:00.000Z'));
     world.listen();
     world.enter(yesterday, { intakeKcal: 1500 }, 'tagesabschluss');
-    expect(world.reactions).toEqual([{ type: 'tagesende', energy: 1, bonus: false }]);
+    expect(world.reactions).toEqual([{ yesterday: { energy: 1, bonus: false }, goals: [], bonus: false }]);
     expect(world.haptics).toEqual(['tageszielerfuellung']);
   });
 });
@@ -307,7 +301,7 @@ describe('stille Übernahme älterer Ereignisse', () => {
     expect(world.haptics).toEqual([]);
 
     world.pull(other.recordsOf(today));
-    expect(world.reactions).toEqual([{ type: 'tageszielerfuellung', baustein: 'gewogen' }]);
+    expect(world.reactions).toEqual([met('gewogen')]);
     expect(world.world.database.read((tx) => bookingByKey(tx, dailyGoalKey(philipp, twoDaysAgo, 3)))).not.toBeNull();
     expect(world.world.database.read((tx) => bookingByKey(tx, dailyBonusKey(philipp, twoDaysAgo)))).toBeNull();
   });

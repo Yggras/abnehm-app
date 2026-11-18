@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
 import { LocalDate, localDateAfter, type BausteinKey, type EntityId, type Instant, type MessageKey, type MessageValues } from '@abnehm/contracts/base';
+import { decidedAtDayEnd } from '@abnehm/contracts/daily-goals';
 import { dailyBonusKey } from '@abnehm/contracts/energy';
-import type { MomoReactionMood } from '@abnehm/game-rules/mood';
+import type { MomoEvent } from '@abnehm/game-rules/mood';
 
 import { completionsOfDay } from '../daily-goals';
 import { bookingByKey } from '../energy';
@@ -21,19 +22,19 @@ import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 // Datensatz. Welche Schlüssel diese Installation gezeigt hat, merkt sie im Gerätezustand, ohne Sync, nur für
 // heute und gestern. Beanspruchen und Merken laufen in einer Transaktion (Spezifikation 0, Abschnitt 1).
 
-export type MomoReaction =
-  /** „‹Baustein› erfüllt · +1 Energie“; Momo freut sich. */
-  | Readonly<{ type: 'tageszielerfuellung'; baustein: BausteinKey }>
-  /** „Alle drei geschafft · +1 Energie“; Momo ist begeistert. */
-  | Readonly<{ type: 'tagesbonus' }>
-  /** Tagesende-Gutschriften des Vortags als eine Meldung. */
-  | Readonly<{ type: 'tagesende'; energy: number; bonus: boolean }>;
-
 /**
- * Der einzige Baustein, der sich erst nach Ablauf des Kalendertags entscheidet (CONTEXT.md,
- * „Tagesende-Gutschrift“; Spezifikation 0, Abschnitt 3).
+ * Alle in einem Commit neu gezeigten Ereignisse, zusammengefasst zu einer Meldung (Nutzerentscheidung in
+ * #188): etwa „Wasserziel erfüllt · +1 Energie“, „Alle drei geschafft · +2 Energie“ für das dritte
+ * Tagesziel samt Bonus oder „Gestern im Kalorienbudget · +1 Energie“ für die Tagesende-Gutschriften.
  */
-const dayEndBaustein: BausteinKey = 'im_kalorienbudget';
+export type MomoReaction = Readonly<{
+  /** Tagesende-Gutschriften des Vortags, gebündelt; `null` ohne. */
+  yesterday: Readonly<{ energy: number; bonus: boolean }> | null;
+  /** Heute erstmals erfüllte Tagesziele, in der Reihenfolge der Erfüllung. */
+  goals: readonly BausteinKey[];
+  /** Heute der Tagesbonus. */
+  bonus: boolean;
+}>;
 
 type CreditEvent = Readonly<{ key: string; baustein: BausteinKey | null }>;
 
@@ -51,10 +52,15 @@ function creditsOfDay(tx: ReadContext, personId: EntityId, localDate: LocalDate)
   return bookingByKey(tx, bonusKey) === null ? goals : [...goals, { key: bonusKey, baustein: null }];
 }
 
-/** Tagesende-Gutschriften: die des Kalorienbudgets und an solchen Tagen der Tagesbonus. */
+const atDayEnd = (credit: CreditEvent) => credit.baustein !== null && decidedAtDayEnd(credit.baustein);
+
+/**
+ * Tagesende-Gutschriften (CONTEXT.md): die der Bausteine, die sich erst nach Ablauf des Kalendertags
+ * entscheiden, und an solchen Tagen der Tagesbonus.
+ */
 function dayEndCredits(credits: readonly CreditEvent[]): CreditEvent[] {
-  if (!credits.some((credit) => credit.baustein === dayEndBaustein)) return [];
-  return credits.filter((credit) => credit.baustein === dayEndBaustein || credit.baustein === null);
+  if (!credits.some(atDayEnd)) return [];
+  return credits.filter((credit) => atDayEnd(credit) || credit.baustein === null);
 }
 
 const stateKey = 'momo_reaktionen';
@@ -85,45 +91,50 @@ export function hasUnshownReactions(tx: ReadContext, personId: EntityId, today: 
 }
 
 /**
- * Beansprucht alle noch nicht gezeigten Ereignisse und liefert ihre Reaktionen: zuerst die gebündelten
- * Tagesende-Gutschriften von gestern, dann die Ereignisse von heute. Ein zweiter Aufruf liefert für
- * dieselben Ereignisse nichts mehr, auch nach einem Neustart.
+ * Beansprucht alle noch nicht gezeigten Ereignisse und fasst sie zu einer Reaktion zusammen; `null`, wenn
+ * es keine gibt. Ein zweiter Aufruf liefert für dieselben Ereignisse nichts mehr, auch nach einem Neustart.
  */
-export function claimReactions(tx: TransactionContext, personId: EntityId, today: LocalDate, at: Instant): MomoReaction[] {
+export function claimReaction(tx: TransactionContext, personId: EntityId, today: LocalDate, at: Instant): MomoReaction | null {
   const pending = unshown(tx, personId, today);
-  if (pending.today.length === 0 && pending.dayEnd.length === 0) return [];
+  if (pending.today.length === 0 && pending.dayEnd.length === 0) return null;
   const days = {
     [pending.yesterday]: [...(pending.shown[pending.yesterday] ?? []), ...pending.dayEnd.map((credit) => credit.key)],
     [today]: [...(pending.shown[today] ?? []), ...pending.today.map((credit) => credit.key)],
   };
   writeDeviceState(tx, stateKey, ShownReactions.parse({ days }), at);
-  const reactions: MomoReaction[] = pending.today.map((credit) =>
-    credit.baustein === null ? { type: 'tagesbonus' } : { type: 'tageszielerfuellung', baustein: credit.baustein },
-  );
-  if (pending.dayEnd.length === 0) return reactions;
-  return [{ type: 'tagesende', energy: pending.dayEnd.length, bonus: pending.dayEnd.some((credit) => credit.baustein === null) }, ...reactions];
+  return {
+    yesterday: pending.dayEnd.length === 0 ? null : { energy: pending.dayEnd.length, bonus: pending.dayEnd.some(isBonus) },
+    goals: pending.today.flatMap((credit) => (credit.baustein === null ? [] : [credit.baustein])),
+    bonus: pending.today.some(isBonus),
+  };
 }
 
-const withBonus = (reaction: MomoReaction) => reaction.type === 'tagesbonus' || (reaction.type === 'tagesende' && reaction.bonus);
+const isBonus = (credit: CreditEvent) => credit.baustein === null;
 
-/** Momos Stimmung zu Reaktionen aus einem Commit: begeistert mit Tagesbonus, sonst freut sich. */
-export function moodOfReactions(reactions: readonly MomoReaction[]): MomoReactionMood {
-  return reactions.some(withBonus) ? 'begeistert' : 'freut_sich';
+/** Die eigenen Ereignisse hinter einer Reaktion; gestern mit Bonus zählt als Tagesbonus. */
+export function eventsOf(reaction: MomoReaction): MomoEvent[] {
+  const events: MomoEvent[] = reaction.goals.map(() => 'tageszielerfuellung');
+  if (reaction.bonus) events.push('tagesbonus');
+  if (reaction.yesterday !== null) events.push(reaction.yesterday.bonus ? 'tagesbonus' : 'tageszielerfuellung');
+  return events;
 }
 
-/** Die eine Haptik zu Reaktionen aus einem Commit; mit Tagesbonus die des Bonus. */
-export function hapticOfReactions(reactions: readonly MomoReaction[]): HapticKind {
-  return reactions.some(withBonus) ? 'tagesbonus' : 'tageszielerfuellung';
+/**
+ * Die eine Haptik zu Ereignissen aus einem Commit: die des stärksten. Die Haptik-Arten sind genau die
+ * Ereignisse, auf die Momo reagiert (#95).
+ */
+export function hapticOf(events: readonly MomoEvent[]): HapticKind {
+  return events.find((event) => event !== 'tageszielerfuellung') ?? 'tageszielerfuellung';
 }
 
-/** Die Meldung einer Reaktion für den Meldungs-Host; die Texte stehen in `shell/message-texts.ts`. */
+/**
+ * Die eine Meldung einer Reaktion für den Meldungs-Host (`momo.energie`); den Text setzt
+ * `shell/message-texts.ts` zusammen. Bis zu drei Tagesziele stehen als `ziel1` bis `ziel3`.
+ */
 export function messageOfReaction(reaction: MomoReaction): Readonly<{ messageKey: MessageKey; values: MessageValues }> {
-  switch (reaction.type) {
-    case 'tageszielerfuellung':
-      return { messageKey: 'momo.tagesziel_erfuellt', values: { baustein: reaction.baustein } };
-    case 'tagesbonus':
-      return { messageKey: 'momo.tagesbonus', values: {} };
-    case 'tagesende':
-      return { messageKey: 'momo.tagesende', values: { energy: reaction.energy, bonus: reaction.bonus } };
-  }
+  const goals = Object.fromEntries(reaction.goals.map((baustein, index) => [`ziel${index + 1}`, baustein]));
+  return {
+    messageKey: 'momo.energie',
+    values: { ...goals, bonus: reaction.bonus, gestern: reaction.yesterday?.energy ?? 0, gesternBonus: reaction.yesterday?.bonus ?? false },
+  };
 }
