@@ -1,31 +1,41 @@
-import { Skeleton, size, Text } from '../design';
+import { Notice, Skeleton, size, Text } from '../design';
 import { closeRoute, type RouteScreenProps } from '../navigation';
-import { Placeholder } from '../shell/Placeholder';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
-import { useAppTrackers } from './app-trackers';
+import { useAppTrackers, useWeightDetail } from './app-trackers';
+import { weightTexts } from './weight-texts';
+import { WeightDetailContent } from './WeightDetailContent';
 import { WeightEntryForm } from './WeightEntryForm';
 
 /**
  * Bildschirm der Route `capture.weight` (Spezifikation 3, Abschnitte 4 und 5). Mit `newEntry: true`
  * öffnet er direkt das Formular für einen neuen Eintrag, wie „Eintragen“ auf dem Mini-Tracker und
  * „Gewicht“ im ＋-Sheet. Gespeichert kehrt der modale Ablauf zum Aufrufer zurück; die Meldung mit
- * „Rückgängig“ erscheint dort. Den Detailbildschirm mit Verlauf liefert #176; bis dahin zeigt die
- * Route ohne `newEntry` den Platzhalter des Bereichs.
+ * „Rückgängig“ erscheint dort. Ohne `newEntry` zeigt er den Detailbildschirm mit Trend und Verlauf (#176).
  */
 export function WeightCaptureScreen({ target }: RouteScreenProps<'capture.weight'>) {
   const trackers = useAppTrackers();
-  if (target.newEntry !== true) return <Placeholder target={target} />;
+  const detail = useWeightDetail();
   return (
     <ScreenFrame title={titleOf(target)} presentation="modal">
-      {trackers === null ? (
-        <>
-          <Text tone="inkMuted">Gewicht lädt …</Text>
-          <Skeleton width="100%" height={size.fieldHeight} />
-        </>
-      ) : (
+      {trackers === null || (target.newEntry !== true && detail.type === 'loading') ? (
+        <Loading />
+      ) : target.newEntry === true ? (
         <WeightEntryForm trackers={trackers} onSaved={closeRoute} />
-      )}
+      ) : detail.type === 'error' ? (
+        <Notice tone="problem" cause="technik" text={weightTexts.failed} />
+      ) : detail.type === 'ready' ? (
+        <WeightDetailContent detail={detail.detail} trackers={trackers} />
+      ) : null}
     </ScreenFrame>
+  );
+}
+
+function Loading() {
+  return (
+    <>
+      <Text tone="inkMuted">{weightTexts.loading}</Text>
+      <Skeleton width="100%" height={size.fieldHeight} />
+    </>
   );
 }

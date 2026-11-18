@@ -1,4 +1,4 @@
-import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
 import {
   dayWeights,
@@ -9,7 +9,6 @@ import {
   weightChange,
   weightForecast,
   weightTrend,
-  type DayWeight,
   type WeightChange,
 } from '@abnehm/contracts/tracker-rules';
 import type { ImportOrigin } from '@abnehm/contracts/trackers';
@@ -31,6 +30,8 @@ export type WeightHistoryEntry = Readonly<{
   weightG: number;
   measuredAt: Instant;
   localDate: LocalDate;
+  /** Zone der Anlage; in ihr zeigt der Verlauf die Uhrzeit. */
+  timeZone: TimeZone;
   origin: typeof manualOrigin | ImportOrigin;
   /** Anzeigename der Quell-App eines Imports, falls bekannt. */
   sourceAppName: string | null;
@@ -50,7 +51,7 @@ export type WeightTrendSummary = Readonly<{
 export type WeightDetail = Readonly<{
   today: LocalDate;
   dayWeightCount: number;
-  lastDayWeight: DayWeight | null;
+  lastDayWeight: Readonly<{ localDate: LocalDate; weightG: number }> | null;
   trend: WeightTrendSummary | null;
   /** Prognose als Schätzung; entfällt im Haltemodus, ohne Trend, ohne Plan und am Ziel. */
   forecast: Readonly<{ localDate: LocalDate; goalWeightG: number }> | null;
@@ -99,7 +100,7 @@ export function weightDetailOf(rows: readonly WeightRow[], today: LocalDate, pla
   return {
     today,
     dayWeightCount: points.length,
-    lastDayWeight: last === undefined ? null : { localDate: last.localDate, weightG: last.dayWeightG },
+    lastDayWeight: last === undefined ? null : { localDate: LocalDate.parse(last.localDate), weightG: last.dayWeightG },
     trend,
     forecast: forecastDate === null || goal === null ? null : { localDate: LocalDate.parse(forecastDate), goalWeightG: goal.goalWeightG },
     entries: historyOf(rows),
@@ -119,6 +120,7 @@ function historyOf(rows: readonly WeightRow[]): WeightHistoryEntry[] {
       weightG: row.weightG,
       measuredAt: Instant.parse(row.measuredAt),
       localDate: LocalDate.parse(row.localDate),
+      timeZone: TimeZone.parse(row.timeZone),
       origin: row.origin as WeightHistoryEntry['origin'],
       sourceAppName: row.sourceAppName,
       isDayWeight,

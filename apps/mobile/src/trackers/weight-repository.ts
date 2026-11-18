@@ -89,6 +89,8 @@ export type WeightRow = WeightEntryFacts &
     origin: string;
     /** Anzeigename der Quell-App eines Imports, falls bekannt. */
     sourceAppName: string | null;
+    /** Zone der Anlage; in ihr gilt der lokale Tag des Eintrags. */
+    timeZone: string;
   }>;
 
 /**
@@ -101,6 +103,7 @@ export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightRow[
       id: weightEntry.id,
       origin: weightEntry.origin,
       sourceAppName: weightEntry.sourceAppName,
+      timeZone: weightEntry.timeZone,
       weightG: weightEntry.weightG,
       measuredAt: weightEntry.measuredAt,
       localDate: weightEntry.localDate,

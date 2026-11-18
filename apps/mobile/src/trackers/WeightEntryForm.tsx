@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import type { EntityId, Instant } from '@abnehm/contracts/base';
 import { asksForTypo, isInFuture, isValidManualWeight, manualWeightG } from '@abnehm/contracts/tracker-rules';
 
 import { useClock } from '../clock/clock-context';
 import { Button, DateTimePicker, Notice, space, Text, TextField, type TextFieldHandle } from '../design';
-import { useUndoableMessage } from '../shell/use-undoable-message';
+import { useUndoableMessage, type UndoableOutcome } from '../shell/use-undoable-message';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { gramsOfKgText } from './kg-text';
 import type { Trackers } from './trackers';
@@ -15,25 +16,35 @@ import type { Trackers } from './trackers';
 // „jetzt“, änderbar für nachgetragene Messungen. Weicht die Eingabe um mehr als 2 kg vom letzten
 // Tagesgewicht ab, fragt es vor dem Speichern inline „Tippfehler?“ – kein Systemdialog. Nach dem
 // Speichern zeigt der Meldungs-Host „… kg eingetragen · Rückgängig“.
+//
+// Mit `entry` bearbeitet es eine manuelle Messung (#176): Wert und Messzeitpunkt sind vorausgefüllt,
+// „Speichern“ ändert sie, „Löschen“ löscht sie ohne Bestätigungsdialog; die Meldung bietet „Rückgängig“.
+// Die Frage „Tippfehler?“ gilt nur für neue Einträge: Beim Nachbessern einer älteren Messung wäre das
+// letzte Tagesgewicht kein sinnvoller Vergleich, oft ist es die Messung selbst.
 
 // Die Grenzen kommen aus den Tracker-Regeln, damit der Satz bei einer Änderung stimmt.
 const invalidWeight = `Bitte ein Gewicht von ${kg(manualWeightG.min)} bis ${kg(manualWeightG.max)} kg mit höchstens einer Nachkommastelle eingeben.`;
 const futureMeasurement = 'Der Messzeitpunkt liegt in der Zukunft. Bitte einen Zeitpunkt bis jetzt wählen.';
 
+/** Eine manuelle Messung, die das Formular bearbeitet. */
+export type EditedWeight = Readonly<{ id: EntityId; weightG: number; measuredAt: Instant }>;
+
 export type WeightEntryFormProps = {
-  trackers: Pick<Trackers, 'recordWeight' | 'lastWeights' | 'undo' | 'expire'>;
-  /** Gespeichert; der Aufrufer schließt das Formular. */
+  trackers: Pick<Trackers, 'recordWeight' | 'updateWeight' | 'deleteWeight' | 'lastWeights' | 'undo' | 'expire'>;
+  /** Bearbeitet diese manuelle Messung, statt eine neue einzutragen. */
+  entry?: EditedWeight;
+  /** Gespeichert oder gelöscht; der Aufrufer schließt das Formular. */
   onSaved: () => void;
 };
 
-export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
+export function WeightEntryForm({ trackers, entry, onSaved }: WeightEntryFormProps) {
   const clock = useClock();
   const message = useUndoableMessage();
   const field = useRef<TextFieldHandle>(null);
   // Vorbelegung (letztes Gewicht) und Vergleichswert (letztes Tagesgewicht) bleiben, solange das Formular offen ist.
-  const [last] = useState(() => trackers.lastWeights());
-  const [text, setText] = useState(() => (last === null ? '' : kg(last.weightG)));
-  const [measuredAt, setMeasuredAt] = useState(() => clock.read().instant);
+  const [last] = useState(() => (entry === undefined ? trackers.lastWeights() : null));
+  const [text, setText] = useState(() => (entry !== undefined ? kg(entry.weightG) : last === null ? '' : kg(last.weightG)));
+  const [measuredAt, setMeasuredAt] = useState(() => entry?.measuredAt ?? clock.read().instant);
   const [invalid, setInvalid] = useState(false);
   /** Der Messzeitpunkt liegt nach „jetzt“, etwa weil die Uhr zurückgesprungen ist; der Picker endet bei jetzt. */
   const [future, setFuture] = useState(false);
@@ -47,18 +58,22 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
     setAsked(null);
   };
 
-  const record = (weightG: number) => {
+  /** Führt den Befehl aus, schließt und zeigt die Meldung mit „Rückgängig“. */
+  const run = (command: () => UndoableOutcome & Readonly<{ undoToken: string }>) => {
     let outcome;
     try {
-      outcome = trackers.recordWeight({ weightG, measuredAt });
+      outcome = command();
     } catch (error) {
-      // Die Eingaben sind vorher geprüft; scheitert der Befehl trotzdem an ihnen, ist das ein Fehler.
+      // Die Eingaben sind vorher geprüft; scheitert der Befehl trotzdem, etwa weil die Messung inzwischen
+      // gelöscht ist, sieht die Person „Das hat nicht geklappt …“.
       return message.failed(error);
     }
     const { undoToken } = outcome;
     onSaved();
     message.show(outcome, { run: () => trackers.undo(undoToken), expire: () => trackers.expire(undoToken) });
   };
+  const record = (weightG: number) =>
+    run(() => (entry === undefined ? trackers.recordWeight({ weightG, measuredAt }) : trackers.updateWeight(entry.id, { weightG, measuredAt })));
 
   const save = () => {
     const weightG = gramsOfKgText(text);
@@ -114,6 +129,7 @@ export function WeightEntryForm({ trackers, onSaved }: WeightEntryFormProps) {
       ) : (
         <Button label="Speichern" block onPress={save} />
       )}
+      {entry !== undefined ? <Button variant="secondary" label="Löschen" block onPress={() => run(() => trackers.deleteWeight(entry.id))} /> : null}
     </View>
   );
 }

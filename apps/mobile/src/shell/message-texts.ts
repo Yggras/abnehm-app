@@ -45,6 +45,10 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   })),
   /** Spezifikation 3: Gewicht eingetragen („91,8 kg eingetragen · Rückgängig“); nur die Person selbst sieht es. */
   'gewicht.eingetragen': messageText(WeightRecordedValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
+  /** Spezifikation 3: manuelle Messung bearbeitet („82,1 kg gespeichert · Rückgängig“; #176). */
+  'gewicht.geaendert': messageText(WeightRecordedValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg gespeichert` })),
+  /** Spezifikation 3: manuelle Messung ohne Bestätigungsdialog gelöscht („82,4 kg gelöscht · Rückgängig“; #176). */
+  'gewicht.geloescht': messageText(WeightRecordedValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg gelöscht` })),
   /** Spezifikation 3: manueller Sporteintrag angelegt („30 min Laufen eingetragen · Rückgängig“). */
   'sport.eingetragen': messageText(SportRecordedValues, ({ activityType, durationMinutes }) => ({
     text: `${durationMinutes} min ${activityNames[activityType]} eingetragen`,
