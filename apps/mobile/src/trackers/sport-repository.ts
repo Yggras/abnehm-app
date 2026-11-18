@@ -207,3 +207,16 @@ export function importedSportKeys(tx: ReadContext, personId: EntityId, origin: I
     .all()
     .flatMap(({ externalKey, at }) => (externalKey === null ? [] : [{ externalKey, at }]));
 }
+
+/**
+ * Lokale Tage der manuellen Einträge, die dieser Import ersetzt und deren Zählen an ihm hängt: nicht gelöscht
+ * und nicht reaktiviert. Sie können auf dem Nachbartag liegen (Spezifikation 3, Abschnitt 3).
+ */
+export function daysReplacedBy(tx: ReadContext, importId: EntityId): LocalDate[] {
+  return sqliteOf(tx)
+    .selectDistinct({ localDate: sportEntry.localDate })
+    .from(sportEntry)
+    .where(and(eq(sportEntry.replacedByEntryId, importId), isNull(sportEntry.deletedAt), isNull(sportEntry.reactivatedAt)))
+    .all()
+    .map(({ localDate }) => LocalDate.parse(localDate));
+}

@@ -214,7 +214,7 @@ describe('Import der Änderungen', () => {
     await connected(world);
     const sportId = importedSportEntryId(philipp, 'apple_health', 'training-heute');
     const weightId = importedWeightEntryId(philipp, 'apple_health', 'gewicht-2-tage');
-    // Ausblenden und Umbenennen liefert #186; hier setzt der Test die Felder wie ein Pull.
+    // Ausblenden und „Aktivitätsart ändern“ liefert #186; hier setzt der Test die Felder wie ein Pull.
     world.database.transaction((tx) => {
       sqliteOf(tx).update(sportEntry).set({ hiddenAt: noon, overrideActivityType: 'krafttraining' }).where(eq(sportEntry.id, sportId)).run();
       sqliteOf(tx).update(weightEntry).set({ hiddenAt: noon }).where(eq(weightEntry.id, weightId)).run();
@@ -645,7 +645,7 @@ describe('Quell-Apps', () => {
 });
 
 describe('Korrekturen der Person überdauern Änderungen in der Quelle (#186)', () => {
-  it('Szenario `korrekturen`: ein ausgeblendeter und ein umbenannter Import, danach ein Upsert aus der Quelle', async () => {
+  it('Szenario `korrekturen`: ein ausgeblendeter Import und einer mit geänderter Aktivitätsart, danach ein Upsert aus der Quelle', async () => {
     const world = await healthWorld();
     await applyHealthScenario(world.fake, 'korrekturen', world.clock);
     await connected(world);
@@ -668,7 +668,7 @@ describe('Korrekturen der Person überdauern Änderungen in der Quelle (#186)', 
     expect(byKey(weights, 'gewicht-korrektur')).toMatchObject({ weightG: 82_512, hiddenAt: noon, deletedAt: null });
     expect(world.errors).toEqual([]);
 
-    // Gezählt und gezeigt wird nur das umbenannte Training, mit der überschriebenen Art.
+    // Gezählt und gezeigt wird nur das Training mit geänderter Art, mit der überschriebenen Art.
     const planReader = fakeAreaPorts({ planReader: fakePlanReader({ goals: [], weeklyPlans: [] }) }).planReader;
     let week: unknown;
     const stop = world.trackers.sportWeek(planReader, () => () => {}, null).subscribe((state) => (week = state));

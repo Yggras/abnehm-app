@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import type { Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
-import { activityTypes, type ImportOrigin } from '@abnehm/contracts/tracker-rules';
+import { activityTypes } from '@abnehm/contracts/tracker-rules';
 import type { ActivityType } from '@abnehm/contracts/trackers';
 
 import { Button, ListGroup, ListRow, Notice, Sheet } from '../design';
@@ -39,7 +39,7 @@ export type ImportedEntrySheetProps = {
   /** Heute; der Tag des Eintrags steht relativ dazu, etwa „heute“ oder „gestern“. */
   today: LocalDate;
   trackers: ImportedSheetTrackers;
-  /** Weggewischt, ausgeblendet oder umbenannt; der Aufrufer setzt `imported` auf `null`. */
+  /** Weggewischt, ausgeblendet oder die Art geändert; der Aufrufer setzt `imported` auf `null`. */
   onClose: () => void;
 };
 
@@ -58,9 +58,11 @@ export const importedTexts = {
   origin: 'Herkunft',
   sourceApp: 'Quell-App',
   /** Titel, etwa „Training aus Apple Health“. */
-  title: (imported: ImportedEntry) => `${imported.type === 'training' ? 'Training' : 'Gewicht'} aus ${originNames[imported.entry.origin as ImportOrigin]}`,
+  title: (imported: ImportedEntry) => `${imported.type === 'training' ? 'Training' : 'Gewicht'} aus ${originNames[imported.entry.origin]}`,
   /** Unter der Art, wenn die Person sie geändert hat, etwa „erkannt als Radfahren“. */
   recognized: (activityType: ActivityType) => `erkannt als ${activityNames[activityType]}`,
+  /** Hinweis über der Auswahl der Art, etwa „Erkannt als Radfahren.“ */
+  recognizedNotice: (activityType: ActivityType) => `Erkannt als ${activityNames[activityType]}.`,
   /** Zugänglicher Name von „Ausblenden“, etwa „52 min Radfahren ausblenden“. */
   hideSpoken: (imported: ImportedEntry) =>
     imported.type === 'training'
@@ -104,7 +106,7 @@ function ImportedEntryContent({ imported, today, trackers, onDone }: ImportedEnt
     };
     return (
       <SheetLayout title={importedTexts.changeActivity} actions={<Button variant="text" label={importedTexts.back} block onPress={() => setChoosing(false)} />}>
-        {entry.recognizedActivityType !== null ? <Notice tone="neutral" text={sentence(importedTexts.recognized(entry.recognizedActivityType))} /> : null}
+        {entry.recognizedActivityType !== null ? <Notice tone="neutral" text={importedTexts.recognizedNotice(entry.recognizedActivityType)} /> : null}
         <ListGroup>
           {activityTypes.map((type) => (
             <ListRow
@@ -141,7 +143,7 @@ function ImportedEntryContent({ imported, today, trackers, onDone }: ImportedEnt
     <SheetLayout title={importedTexts.title(imported)} actions={actions}>
       <ListGroup>{imported.type === 'training' ? <TrainingValues entry={imported.entry} today={today} /> : <WeightValues entry={imported.entry} today={today} />}</ListGroup>
       <ListGroup>
-        <ListRow title={importedTexts.origin} value={originNames[imported.entry.origin as ImportOrigin]} />
+        <ListRow title={importedTexts.origin} value={originNames[imported.entry.origin]} />
         {sourceApp !== null ? <ListRow title={importedTexts.sourceApp} value={sourceApp} /> : null}
       </ListGroup>
       <Notice tone="hint" text={importedTexts.sourceHint} />
@@ -150,14 +152,15 @@ function ImportedEntryContent({ imported, today, trackers, onDone }: ImportedEnt
 }
 
 function TrainingValues({ entry, today }: { entry: SportListEntry; today: LocalDate }) {
-  const overridden = entry.recognizedActivityType !== null && entry.recognizedActivityType !== entry.activityType;
+  const recognized = entry.recognizedActivityType;
+  const overridden = recognized !== null && recognized !== entry.activityType;
   return (
     <>
       <ListRow
         icon={activityIcons[entry.activityType]}
         title={importedTexts.activity}
         value={activityNames[entry.activityType]}
-        subtitle={overridden ? importedTexts.recognized(entry.recognizedActivityType!) : undefined}
+        subtitle={overridden ? importedTexts.recognized(recognized) : undefined}
       />
       <ListRow title={importedTexts.duration} value={sportTexts.minutes(entry.durationMinutes)} />
       <ListRow title={importedTexts.start} value={when(entry.startedAt, entry.timeZone, entry.localDate, today)} />
@@ -185,9 +188,4 @@ function WeightValues({ entry, today }: { entry: WeightHistoryEntry; today: Loca
 /** Tag und Uhrzeit, etwa „heute · 07:00“ oder „Mo, 12.10. · 18:30“. */
 function when(instant: Instant, timeZone: TimeZone, localDate: LocalDate, today: LocalDate): string {
   return `${dayText(localDate, today)} · ${timeText(instant, timeZone)}`;
-}
-
-/** Erster Buchstabe groß, als eigener Satz im Hinweis. */
-function sentence(text: string): string {
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }

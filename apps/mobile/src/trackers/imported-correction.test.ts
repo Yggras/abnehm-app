@@ -217,6 +217,25 @@ describe('hideImported', () => {
     expect(today()).toMatchObject({ type: 'ready', data: { weekMinutes: 52 } });
   });
 
+  it('meldet auch den Tag eines ersetzten manuellen Eintrags am Vortag, bei Ausblenden und Rückgängig (Spezifikation 3, Abschnitt 3)', async () => {
+    const created = await world();
+    const { trackers, reports } = created;
+    importWorkouts(created, workout('training', Instant.parse('2026-10-13T22:00:00.000Z'), 52 * 60));
+    const importId = importedSportId(created, 'training');
+    // 23:30–00:30: Der Import ab 00:00 hat ihn ersetzt; er zählt nach dem Ausblenden am Dienstag wieder.
+    pulledManual(created, { startedAt: Instant.parse('2026-10-13T21:30:00.000Z'), durationMinutes: 60, localDate: LocalDate.parse('2026-10-13'), replacedByEntryId: importId });
+    // Reaktiviert zählt er ohnehin, sein Tag ändert sich durch das Ausblenden nicht.
+    pulledManual(created, { localDate: LocalDate.parse('2026-10-12'), replacedByEntryId: importId, reactivatedAt: noon });
+    reports.length = 0;
+
+    const { undoToken } = trackers.hideImported(importId);
+    expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-14', '2026-10-13'], cause: 'eingabe' }]);
+
+    reports.length = 0;
+    trackers.undo(undoToken);
+    expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-14', '2026-10-13'], cause: 'rueckgaengig' }]);
+  });
+
   it('blendet ein importiertes Gewicht aus, das Tagesgewicht war: Tagesgewicht, Trend, Verlauf und „Gewogen“ folgen sofort', async () => {
     const created = await world();
     const { trackers, weights, operations, reports } = created;

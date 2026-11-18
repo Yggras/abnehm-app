@@ -140,7 +140,7 @@ it('zeigt die überschriebene Art vor der Plattformart und keine ausgeblendeten 
     {
       origin: 'apple_health',
       type: 'workout',
-      upserts: [workout('umbenannt', '2026-10-13T05:00:00.000Z'), workout('ausgeblendet', '2026-10-13T16:00:00.000Z')],
+      upserts: [workout('art-geaendert', '2026-10-13T05:00:00.000Z'), workout('ausgeblendet', '2026-10-13T16:00:00.000Z')],
       deletedKeys: [],
       reconcileSince: null,
       notBefore: at('2026-10-01T00:00:00.000Z'),

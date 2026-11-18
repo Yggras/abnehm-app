@@ -8,7 +8,7 @@ import type { SportListEntry, SportWeek } from './sport-week';
 // und werden nur hier auf ganze kcal gerundet; sie sind eine Anzeige und zählen nirgends.
 
 /** Kalorien einer Einheit als Näherung, etwa „≈ 210 kcal“; gesprochen „etwa 210 kcal“. */
-export const kcalText =(milliKcal: number, spoken: boolean) => `${spoken ? 'etwa' : '≈'} ${Math.round(milliKcal / 1000).toLocaleString('de-DE')} kcal`;
+export const kcalText = (milliKcal: number, spoken: boolean) => `${spoken ? 'etwa' : '≈'} ${Math.round(milliKcal / 1000).toLocaleString('de-DE')} kcal`;
 
 export const sportTexts = {
   loading: 'Sport lädt …',
