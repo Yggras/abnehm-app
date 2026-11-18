@@ -172,7 +172,7 @@ describe('Registry der Testfähigkeiten', () => {
   it('jeder registrierte Deep Link wird ausschließlich im Deep-Link-Modul der Testfähigkeiten angenommen', () => {
     const handler = read(deepLinkHandler);
     const paths = testCapabilities.flatMap(({ entries }) => entries.deepLinks ?? []);
-    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'profil', 'seed', 'uhr']);
+    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'health', 'profil', 'seed', 'uhr']);
     for (const path of paths) expect(handler, path).toContain(`'${path}'`);
     expect(testCapabilities.some(({ modules }) => belongsTo(deepLinkHandler, modules))).toBe(true);
   });
@@ -353,6 +353,49 @@ describe('Steuerbare Serveruhr (#271)', () => {
   });
 });
 
+// Health-Attrappe (#183) -------------------------------------------------------------------------------
+//
+// Die allgemeinen Prüfungen laufen für `health-attrappe` über die Registry. Dieser Block belegt zusätzlich,
+// dass das Produktions-Bundle den Health-Import samt Plattform-Adapter enthält, aber weder die Attrappe noch
+// ihren Link, und dass es keinen Schalter gibt, der sie dort einschaltet.
+
+describe('Health-Attrappe (#183)', () => {
+  const capability = testCapabilities.find(({ key }) => key === 'health-attrappe')!;
+  const healthFakeMarker = 'health_attrappe';
+
+  it('ist zentral registriert, mit Modulen, Link und Marker', () => {
+    expect(read('apps/mobile/src/health/testing/fake-platform.ts')).toContain(`healthFakeMarker = '${healthFakeMarker}'`);
+    expect(capability).toMatchObject({
+      modules: ['apps/mobile/src/health/testing/', 'apps/mobile/src/test-capabilities/health.ts'],
+      entries: { deepLinks: ['health'] },
+      markers: [healthFakeMarker],
+    });
+  });
+
+  it('das Produktions-Bundle enthält den Health-Import, aber weder Attrappe noch Szenarien noch Link', () => {
+    for (const bundle of bundles.production) {
+      expect(bundle.sources, bundle.platform).toEqual(expect.arrayContaining(['apps/mobile/src/health/health-import.ts', 'apps/mobile/src/health/platform.ts']));
+      expect(bundle.sources.filter((source) => belongsTo(source, capability.modules)), bundle.platform).toEqual([]);
+      for (const reference of [healthFakeMarker, 'token_verfallen', 'zwei_weckungen', 'Health-Attrappe']) {
+        expect(bundle.js.includes(reference), `${bundle.platform}: ${reference}`).toBe(false);
+      }
+    }
+  });
+
+  it('Gegenprobe: Development- und E2E-Bundle enthalten die Attrappe samt Szenarien', () => {
+    for (const bundle of [...bundles.development, ...bundles.e2e]) {
+      expect(bundle.sources, bundle.platform).toEqual(expect.arrayContaining(['apps/mobile/src/health/testing/fake-platform.ts', 'apps/mobile/src/test-capabilities/health.ts']));
+      for (const reference of [healthFakeMarker, 'token_verfallen', 'zwei_weckungen']) expect(bundle.js.includes(reference), `${bundle.platform}: ${reference}`).toBe(true);
+    }
+  });
+
+  it('der Composition Root erreicht die Attrappe nur über die Grenze der Testfähigkeiten', () => {
+    const root = read('apps/mobile/src/session/device-session.ts');
+    expect(root).toContain('testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform');
+    expect(root).not.toMatch(/fake-platform|test-capabilities\/health/);
+  });
+});
+
 describe('Produktions-Bundle der App', () => {
   describe.each(testCapabilities.map((capability) => [capability.key, capability] as const))('%s', (_, capability: TestCapability) => {
     it('enthält kein Modul der Fähigkeit', () => {
@@ -382,7 +425,9 @@ describe('Produktions-Bundle der App', () => {
 
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
-    expect(appCapabilities.map(({ key }) => key).sort()).toEqual(['fehler-adapter', 'fixture-insel', 'geraetetest', 'laufzeitprofile', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus']);
+    expect(appCapabilities.map(({ key }) => key).sort()).toEqual([
+      'fehler-adapter', 'fixture-insel', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
+    ]);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {
         expect(bundle.sources.some((source) => belongsTo(source, capability.modules)), `${bundle.platform}: ${capability.key}`).toBe(true);
