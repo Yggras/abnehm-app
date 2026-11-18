@@ -118,6 +118,9 @@ export function quickCommandOwnerName(commandKey: QuickCommandKey): string {
   return ownerNames[quickCommandOwners[commandKey]];
 }
 
+/** Monatsnamen, Januar zuerst, etwa für „13. Dezember 2026“ oder „etwa Mai 2027“. */
+export const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'] as const;
+
 /**
  * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg („91,8“) oder ml als l;
  * umgerechnet nur an der Oberfläche (Spezifikation 3, Abschnitt 1). Gerundet wird hier kaufmännisch:

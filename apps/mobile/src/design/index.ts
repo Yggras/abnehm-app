@@ -21,6 +21,7 @@ export { Toast, type ToastLine, type ToastProps } from './Toast';
 export { ProgressBar, type ProgressBarProps } from './ProgressBar';
 export { LevelBar, type LevelBarProps } from './LevelBar';
 export { Skeleton, type SkeletonProps } from './Skeleton';
+export { Stepper, type StepperProps } from './Stepper';
 
 export { Sheet, type SheetProps } from './native/Sheet';
 export { Switch, type SwitchProps } from './native/Switch';

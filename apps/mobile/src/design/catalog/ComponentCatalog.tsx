@@ -20,6 +20,7 @@ import { Switch } from '../native/Switch';
 import { Notice } from '../Notice';
 import { ProgressBar } from '../ProgressBar';
 import { Skeleton } from '../Skeleton';
+import { Stepper } from '../Stepper';
 import { Text } from '../Text';
 import { TextField } from '../TextField';
 import { useLargeTextLayout } from '../text-scale';
@@ -371,6 +372,18 @@ function Progress() {
   );
 }
 
+function Steppers() {
+  const [water, setWater] = useState(1_500);
+  return (
+    <Section title="Stepper">
+      <ListGroup>
+        <Stepper label="Wasserziel" value={water} valueText={`${(water / 1_000).toLocaleString('de-DE')} l`} min={500} max={5_000} step={250} onChange={setWater} />
+        <Stepper label="An der Obergrenze" value={600} valueText="600 min" min={30} max={600} step={10} onChange={noop} hint="„Erhöhen“ ist gesperrt" />
+      </ListGroup>
+    </Section>
+  );
+}
+
 function NativeElements() {
   const clock = useClock();
   const reading = clock.read();
@@ -488,6 +501,7 @@ export default function ComponentCatalog() {
         <Rows />
         <Toasts />
         <Progress />
+        <Steppers />
         <NativeElements />
         <Haptics />
         <LargeText />
