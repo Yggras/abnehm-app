@@ -14,6 +14,10 @@ import type { DbExecutor } from '../database.ts';
 // an; der Sync-Kern bleibt dabei unverändert. Für eigene Einträge mit `person_id` baut `ownedEntity`
 // die Operationen aus der Tabelle.
 
+/** Zeitpunkt einer Zeile als UTC-ISO-8601, wie ihn die Transport-Schemas erwarten. */
+export const iso = (value: Date) => value.toISOString();
+export const isoOrNull = (value: Date | null) => (value === null ? null : value.toISOString());
+
 /** Eine Entität, wie sie in Postgres liegt: Serverversion, Löschmarkierung und kanonische Felder. */
 export type StoredEntity = Readonly<{ serverVersion: bigint; deletedAt: Date | null; data: EntityData }>;
 

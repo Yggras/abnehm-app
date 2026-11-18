@@ -1,7 +1,7 @@
 import type { IslandRole } from '@abnehm/contracts/island';
 
 import { baseIslandKey, fieldKey, type FieldSide, type GameCatalog } from './catalog.ts';
-import { islandProgress, type LevelProgress } from './progress.ts';
+import { islandProgress, type MemberHalf } from './progress.ts';
 import { projectNeed } from './projects.ts';
 import { unlocksAt, type UnlockedBlueprint } from './unlocks.ts';
 
@@ -41,8 +41,11 @@ export type Hatching = Readonly<{
   /** Gemeinschaftsprojekt 1 mit festgeschriebenem Bedarf je Anteil. */
   project: Readonly<{ sequenceNumber: 1; templateKey: string; buildNeed: number; natureNeed: number }>;
   event: typeof hatchedEvent;
-  /** Fortschritt ohne verbaute Energie: Level 1, beide Hälften leer, in der Reihenfolge Bauen, Natur. */
-  progress: LevelProgress;
+  /**
+   * Fortschritt ohne verbaute Energie: Level 1, beide Hälften leer. Die Mitglieder stehen nach Person
+   * sortiert, wie der Projector sie in `IslandProgress` schreibt.
+   */
+  progress: Readonly<{ level: number; levelNeed: number; members: readonly (MemberHalf & Readonly<{ personId: string }>)[] }>;
 }>;
 
 const sideOfRole: Readonly<Record<IslandRole, FieldSide>> = { bauen: 'a', natur: 'b' };
@@ -63,6 +66,12 @@ export function hatching(catalog: GameCatalog, { proposerPersonId, proposerRole,
     blueprints: unlocksAt(catalog, 1).blueprints,
     project: { sequenceNumber: 1, templateKey: first.key, buildNeed: need, natureNeed: need },
     event: hatchedEvent,
-    progress: islandProgress([0, 0]),
+    progress: startProgress([proposerPersonId, partnerPersonId]),
   };
+}
+
+function startProgress(personIds: readonly [string, string]): Hatching['progress'] {
+  const { level, levelNeed, halves } = islandProgress([0, 0]);
+  const members = [...personIds].sort().map((personId, index) => ({ personId, ...halves[index]! }));
+  return { level, levelNeed, members };
 }

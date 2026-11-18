@@ -29,7 +29,7 @@ export function hatchedStage(): Extract<IslandStage, { type: 'geschluepft' }> {
         couplingId: '5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c01',
         level: plan.progress.level,
         levelNeed: plan.progress.levelNeed,
-        members: [anna, philipp].sort().map((personId) => ({ personId, ...plan.progress.halves[personId === plan.roles.bauen ? 0 : 1]! })),
+        members: plan.progress.members,
         activeProject: { projectId: '5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c03', templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
         dataAsOf: at,
         serverVersion: '1',

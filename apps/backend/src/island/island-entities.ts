@@ -7,7 +7,7 @@ import {
 } from '@abnehm/contracts/island-records';
 
 import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandProgress } from '../db/schema/index.ts';
-import { serverManaged, type ServerSyncEntity } from '../sync/registry.ts';
+import { iso, isoOrNull, serverManaged, type ServerSyncEntity } from '../sync/registry.ts';
 import { islandProgressRecord } from './progress-projector.ts';
 
 // Inselinhalte im Sync (Spezifikation 0, Abschnitte 8 und 10; Spezifikation 4, Abschnitt 11): Felder,
@@ -15,8 +15,6 @@ import { islandProgressRecord } from './progress-projector.ts';
 // entstehen nur serverseitig (Schlüpfen, später Bauen, Levelaufstieg und Ereigniserzeugung) und kommen
 // per Pull zu beiden aktiven Mitgliedern; ein generisches Upsert oder Löschen gibt es nicht.
 
-const iso = (value: Date) => value.toISOString();
-const isoOrNull = (value: Date | null) => (value === null ? null : value.toISOString());
 const owned = (row: { islandId: string; couplingId: string }) => ({ islandId: row.islandId, couplingId: row.couplingId });
 
 export const islandSyncEntities: readonly ServerSyncEntity[] = [

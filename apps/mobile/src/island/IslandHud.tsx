@@ -3,6 +3,7 @@ import type { Season } from '@abnehm/game-rules/catalog';
 import { StyleSheet, View } from 'react-native';
 
 import { boxShadow, color, EnergySymbol, Icon, IconButton, LevelBar, radius, space, Text, useLargeTextLayout } from '../design';
+import { halvesFor } from './halves';
 import type { Daytime } from './scene-model';
 import { islandTexts } from './texts';
 
@@ -27,8 +28,7 @@ export type IslandHudProps = {
  */
 export function IslandHud({ season, daytime, energy, progress, viewerPersonId, partnerName, areas, onToggleAreas }: IslandHudProps) {
   const large = useLargeTextLayout();
-  const own = progress.members.find((member) => member.personId === viewerPersonId);
-  const partner = progress.members.find((member) => member.personId !== viewerPersonId);
+  const { own, partner } = halvesFor(progress, viewerPersonId);
   return (
     <View style={styles.hud}>
       <View style={[styles.row, large && styles.wrap]}>
@@ -47,8 +47,8 @@ export function IslandHud({ season, daytime, energy, progress, viewerPersonId, p
       <View style={styles.card}>
         <LevelBar
           level={progress.level}
-          ownPercent={own?.halfPercent ?? 0}
-          partnerPercent={partner?.halfPercent ?? 0}
+          ownPercent={own.halfPercent}
+          partnerPercent={partner.halfPercent}
           partnerName={partnerName}
         />
       </View>

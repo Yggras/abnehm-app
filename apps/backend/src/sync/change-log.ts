@@ -26,12 +26,7 @@ export async function currentServerVersion(tx: DbExecutor): Promise<bigint> {
 
 /** Nächste Position der Sync-Clock; sperrt die Clock bis zum Ende der Transaktion. */
 export async function nextServerVersion(tx: DbExecutor): Promise<bigint> {
-  const result = await tx.execute<{ position: string }>(
-    sql`update sync_clock set position = position + 1 where id = 1 returning position::text as position`,
-  );
-  const position = result.rows[0]?.position;
-  if (position === undefined) throw new Error('Sync-Clock fehlt');
-  return BigInt(position);
+  return nextServerVersions(tx, 1);
 }
 
 /**

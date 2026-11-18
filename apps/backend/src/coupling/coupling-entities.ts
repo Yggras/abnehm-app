@@ -2,15 +2,13 @@ import { CouplingMemberRecord, CouplingRecord } from '@abnehm/contracts/coupling
 import { IslandRecord, SharedAction } from '@abnehm/contracts/island';
 
 import { coupling, couplingMember, island, sharedAction } from '../db/schema/index.ts';
-import { serverManaged, type ServerSyncEntity } from '../sync/registry.ts';
+import { iso, isoOrNull, serverManaged, type ServerSyncEntity } from '../sync/registry.ts';
 
 // Kopplung, Mitglieder, Insel und gemeinsame Aktionen im Sync (Spezifikation 0, Abschnitte 8–10). Sie
 // entstehen nur serverseitig (Kopplungsannahme, Fachbefehle gemeinsamer Aktionen, Entkopplungs-Kern);
 // der Pull liefert sie den aktiven Mitgliedern, ein generisches Upsert oder Löschen gibt es nicht. Die
 // Freigaben, die die Eigentümerin per Upsert ändert, meldet `partner-projections/sharing-entities.ts` an.
 
-const iso = (value: Date) => value.toISOString();
-const isoOrNull = (value: Date | null) => (value === null ? null : value.toISOString());
 
 /** Die gemeinsame Aktion einer Zeile in der Form des Vertrags. */
 function sharedActionRecord(row: typeof sharedAction.$inferSelect): SharedAction {

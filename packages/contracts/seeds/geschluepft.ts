@@ -65,8 +65,7 @@ export function geschluepftePart(hatchedAt: string): SeedPart {
         level: plan.progress.level,
         level_need: plan.progress.levelNeed,
         content: {
-          // Mitglieder nach Person sortiert wie im Projector; die Hälften der Spielregel stehen in der Reihenfolge Bauen, Natur.
-          members: [philipp, anna].sort().map((personId) => ({ personId, ...plan.progress.halves[personId === plan.roles.bauen ? 0 : 1]! })),
+          members: plan.progress.members.map((member) => ({ ...member })),
           activeProject: { projectId, templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
         },
         data_as_of: hatchedAt,

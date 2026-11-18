@@ -69,12 +69,13 @@ describe('Schlüpfen', () => {
     const result = hatching(catalog, { proposerPersonId: vorschlagend, proposerRole: 'bauen', partnerPersonId: annehmend });
 
     expect(result.event).toEqual({ type: 'momo_geschluepft', occasionKey: 'geschluepft' });
+    // Mitglieder nach Person sortiert wie im Projector: …2b01 vor …2b02.
     expect(result.progress).toEqual({
       level: 1,
       levelNeed: 11,
-      halves: [
-        { halfPercent: 0, halfFull: false },
-        { halfPercent: 0, halfFull: false },
+      members: [
+        { personId: vorschlagend, halfPercent: 0, halfFull: false },
+        { personId: annehmend, halfPercent: 0, halfFull: false },
       ],
     });
   });

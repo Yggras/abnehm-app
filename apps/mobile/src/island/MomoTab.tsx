@@ -37,8 +37,7 @@ export function MomoTab(_: RouteScreenProps<'momo'>) {
   return (
     <HatchedIslandScreen
       island={stage.island}
-      growthIntroPending={game.growthIntroPending()}
-      onGrowthIntroShown={game.markGrowthIntroShown}
+      takeGrowthIntro={game.takeGrowthIntro}
       onOpen={(view) => openTarget({ type: 'momo', view })}
       bottomInset={bottomInset}
     />

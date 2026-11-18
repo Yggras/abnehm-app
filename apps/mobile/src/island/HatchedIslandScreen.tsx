@@ -1,6 +1,7 @@
 import type { MomoAppearance } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Sheet, space, Text } from '../design';
@@ -19,21 +20,24 @@ import { momoSheetTexts } from './texts';
 
 export type HatchedIslandScreenProps = Readonly<{
   island: HatchedIsland;
-  /** Ob „So wächst Momo“ auf dieser Installation noch nicht erschienen ist. */
-  growthIntroPending: boolean;
-  onGrowthIntroShown(): void;
+  /** Ob „So wächst Momo“ jetzt erscheinen soll; merkt das Erscheinen (Einmal-Flag je Installation). */
+  takeGrowthIntro(): boolean;
   onOpen(view: IslandEntry): void;
   bottomInset: number;
 }>;
 
 type SheetContent = 'momo' | 'wachstum' | null;
 
-export function HatchedIslandScreen({ island, growthIntroPending, onGrowthIntroShown, onOpen, bottomInset }: HatchedIslandScreenProps) {
-  const [sheet, setSheet] = useState<SheetContent>(growthIntroPending ? 'wachstum' : null);
-  // Gemerkt wird das Erscheinen, nicht erst das Schließen: Auch weggewischt kommt es nicht wieder.
-  useEffect(() => {
-    if (growthIntroPending) onGrowthIntroShown();
-  }, [growthIntroPending, onGrowthIntroShown]);
+export function HatchedIslandScreen({ island, takeGrowthIntro, onOpen, bottomInset }: HatchedIslandScreenProps) {
+  const [sheet, setSheet] = useState<SheetContent>(null);
+  // Ein besuchter Tab bleibt gemountet, auch wenn die Person woanders ist; das native Sheet läge dann über
+  // dem fremden Bildschirm. Die Erklärung erscheint deshalb erst, wenn der Tab im Vordergrund ist.
+  // Gemerkt wird das Erscheinen, nicht erst das Schließen: Auch weggewischt kommt sie nicht wieder.
+  useFocusEffect(
+    useCallback(() => {
+      if (takeGrowthIntro()) setSheet('wachstum');
+    }, [takeGrowthIntro]),
+  );
   const scene = useMemo(
     (): IslandSceneInput => ({
       ...islandLayout(gameCatalog, { fields: island.fields, unlockedAreas: island.unlockedAreas }),

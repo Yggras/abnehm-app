@@ -1,6 +1,6 @@
 import type { Instant } from '@abnehm/contracts/base';
 
-import type { ReadContext, TransactionContext } from '../local-db';
+import type { TransactionContext } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 
 // „So wächst Momo“ (Spezifikation 4, Abschnitt 7; #184): Beim ersten Öffnen des Tabs „Momo“ nach dem
@@ -11,12 +11,12 @@ import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 
 const key = 'momo_so_waechst_momo';
 
-/** Ob die Erklärung auf dieser Installation schon erschienen ist. */
-export function growthIntroShown(tx: ReadContext): boolean {
-  return readDeviceState(tx, key) !== undefined;
-}
-
-/** Merkt, dass die Erklärung erschienen ist; ein zweites Mal ändert nichts. */
-export function markGrowthIntroShown(tx: TransactionContext, at: Instant): void {
-  if (!growthIntroShown(tx)) writeDeviceState(tx, key, { shownAt: at }, at);
+/**
+ * Ob die Erklärung jetzt erscheinen soll: genau beim ersten Aufruf je Installation `true`. Prüfen und
+ * Merken laufen in einer Transaktion, damit sie nie zweimal erscheint.
+ */
+export function takeGrowthIntro(tx: TransactionContext, at: Instant): boolean {
+  if (readDeviceState(tx, key) !== undefined) return false;
+  writeDeviceState(tx, key, { shownAt: at }, at);
+  return true;
 }

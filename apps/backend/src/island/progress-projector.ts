@@ -4,12 +4,12 @@ import { and, eq, sum } from 'drizzle-orm';
 
 import { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
 import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
-import { islandProgress as levelProgress, spentOnIsland } from '@abnehm/game-rules/progress';
+import { islandProgress, spentOnIsland } from '@abnehm/game-rules/progress';
 import { commonStage } from '@abnehm/game-rules/projects';
 
 import { changeWriter, updated } from '../coupling/change-writer.ts';
 import type { DbExecutor } from '../database.ts';
-import { communityProject, couplingMember, island, islandObject, islandProgress, projectContribution } from '../db/schema/index.ts';
+import { communityProject, couplingMember, island, islandObject, islandProgress as islandProgressTable, projectContribution } from '../db/schema/index.ts';
 import { readBookings } from '../energy/bookings.ts';
 
 // Projector Inselfortschritt (Spezifikation 4, Abschnitt 2.1; Vertrag `IslandProgress`: Spezifikation 0,
@@ -38,7 +38,7 @@ export async function projectIslandProgress(tx: DbExecutor, { islandId, at }: Is
     projectIds: new Set((await tx.select({ id: communityProject.id }).from(communityProject).where(eq(communityProject.islandId, islandId))).map((row) => row.id)),
   };
   const bookings = await readBookings(tx, members);
-  const progress = levelProgress([spentOnIsland(bookings.get(a)!, holdings), spentOnIsland(bookings.get(b)!, holdings)]);
+  const progress = islandProgress([spentOnIsland(bookings.get(a)!, holdings), spentOnIsland(bookings.get(b)!, holdings)]);
 
   const content = {
     members: [
@@ -47,21 +47,21 @@ export async function projectIslandProgress(tx: DbExecutor, { islandId, at }: Is
     ],
     activeProject: await activeProject(tx, islandId),
   };
-  const [current] = await tx.select({ id: islandProgress.id }).from(islandProgress).where(eq(islandProgress.islandId, islandId));
+  const [current] = await tx.select({ id: islandProgressTable.id }).from(islandProgressTable).where(eq(islandProgressTable.islandId, islandId));
   const id = current?.id ?? randomUUID();
   const columns = { level: progress.level, levelNeed: progress.levelNeed, content, dataAsOf: at };
   let serverVersion = 0n;
   await changeWriter(tx, at)({ entityType: 'island_progress', couplingId }, async (stamp) => {
     serverVersion = stamp.serverVersion;
-    if (current === undefined) await tx.insert(islandProgress).values({ id, islandId, couplingId, ...columns, ...stamp });
-    else await tx.update(islandProgress).set({ ...columns, ...updated(stamp) }).where(eq(islandProgress.id, id));
+    if (current === undefined) await tx.insert(islandProgressTable).values({ id, islandId, couplingId, ...columns, ...stamp });
+    else await tx.update(islandProgressTable).set({ ...columns, ...updated(stamp) }).where(eq(islandProgressTable.id, id));
     return id;
   });
   return islandProgressRecord({ islandId, couplingId, ...columns, serverVersion });
 }
 
 /** Der Inselfortschritt einer Zeile in der Form des Vertrags; geprüft, damit nie mehr gesendet wird. */
-export function islandProgressRecord(row: Pick<typeof islandProgress.$inferSelect, 'islandId' | 'couplingId' | 'level' | 'levelNeed' | 'content' | 'dataAsOf' | 'serverVersion'>): IslandProgress {
+export function islandProgressRecord(row: Pick<typeof islandProgressTable.$inferSelect, 'islandId' | 'couplingId' | 'level' | 'levelNeed' | 'content' | 'dataAsOf' | 'serverVersion'>): IslandProgress {
   return IslandProgress.parse({
     islandId: row.islandId,
     couplingId: row.couplingId,

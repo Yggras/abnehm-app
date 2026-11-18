@@ -95,7 +95,7 @@ export async function createLaichkugelWorld(clock: Clock): Promise<LaichkugelWor
           .values({
             id: newId(), ...owned, level: plan.progress.level, levelNeed: plan.progress.levelNeed, dataAsOf: at, ...synced,
             content: {
-              members: [anna, philipp].sort().map((personId) => ({ personId, ...plan.progress.halves[personId === plan.roles.bauen ? 0 : 1]! })),
+              members: plan.progress.members,
               activeProject: { projectId, templateKey: plan.project.templateKey, sequenceNumber: 1, stage: 'gestartet' },
             },
           })

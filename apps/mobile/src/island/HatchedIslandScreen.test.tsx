@@ -2,7 +2,7 @@
  * @jest-environment ./jest/skia-environment.js
  */
 import { act, fireEvent, screen, userEvent } from '@testing-library/react-native';
-import { router, Slot } from 'expo-router';
+import { router, Slot, Stack } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 import { createGestureController } from 'react-native-gesture-handler/jest-utils';
 
@@ -101,6 +101,30 @@ test('Momo antippen öffnet das Momo-Sheet mit Form und Level; dort lässt sich 
   for (const sentence of growthSentences) expect(screen.getByText(sentence)).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'Verstanden' }));
   expect(screen.queryByTestId('sheet')).toBeNull();
+});
+
+test('schlüpft Momo, während die Person einen anderen Bildschirm sieht, erscheint „So wächst Momo“ erst beim Öffnen des Tabs', async () => {
+  const world = await createLaichkugelWorld(clock);
+  cleanups.push(() => world.close());
+  world.couple();
+  cleanups.push(appGameService.opened(world.game));
+  const Layout = () => (
+    <IslandHost clock={clock}>
+      <MessageHostProvider>
+        <Stack />
+      </MessageHostProvider>
+    </IslandHost>
+  );
+  await renderRouter({ _layout: Layout, index: () => null, momo: routeScreen('momo', MomoTab), wir: () => null }, { initialUrl: '/momo' });
+  // Der Tab bleibt gemountet, während die Person „Wir“ ansieht; dort kommt der Pull mit dem Schlüpfen an.
+  await act(() => router.push('/wir'));
+  await act(() => world.hatch());
+
+  // Auch im verdeckten, aber gemounteten Bildschirm darf das Sheet nicht aufgehen.
+  expect(screen.queryByText('So wächst Momo', { includeHiddenElements: true })).toBeNull();
+
+  await act(() => router.back());
+  expect(screen.getByRole('header', { name: 'So wächst Momo' })).toBeOnTheScreen();
 });
 
 test('solange die Insel noch nicht vollständig angekommen ist, lädt der Tab', async () => {

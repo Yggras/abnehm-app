@@ -16,8 +16,7 @@ export function fakeGameService(stage: IslandStage): GameService {
     },
     proposeRoles: refuse,
     acceptRoles: refuse,
-    growthIntroPending: () => false,
-    markGrowthIntroShown: () => {},
+    takeGrowthIntro: () => false,
     declineRoles: refuse,
     withdrawRoles: refuse,
     momoCharacter: {

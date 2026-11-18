@@ -7,7 +7,8 @@ import type { WirContribution, WirContributionSource } from '@abnehm/contracts/w
 import type { LocalDatabase } from '../local-db';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
-import { growthIntroShown, markGrowthIntroShown } from './growth-intro';
+import { takeGrowthIntro } from './growth-intro';
+import { halvesFor } from './halves';
 import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceOutcome } from './role-choice';
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
@@ -34,10 +35,11 @@ export type GameService = Readonly<{
   declineRoles(actionId: EntityId): RoleChoiceOutcome;
   /** Zieht den eigenen offenen Vorschlag zurück. */
   withdrawRoles(actionId: EntityId): RoleChoiceOutcome;
-  /** Ob „So wächst Momo“ auf dieser Installation noch nicht erschienen ist (Einmal-Flag ohne Sync). */
-  growthIntroPending(): boolean;
-  /** Merkt, dass „So wächst Momo“ erschienen ist. */
-  markGrowthIntroShown(): void;
+  /**
+   * Ob „So wächst Momo“ jetzt erscheinen soll; genau beim ersten Aufruf je Installation `true` und dann
+   * gemerkt (Einmal-Flag ohne Sync).
+   */
+  takeGrowthIntro(): boolean;
   /** Beitrag `momo.character` für „Heute“. */
   momoCharacter: TodaySource<'momo.character'>;
   /** Beiträge von Spezifikation 4 für „Wir“. */
@@ -56,8 +58,7 @@ export function createGameService({ database, writer, clock, newId }: GameServic
     observeStage,
     proposeRoles: (role) => database.transaction((tx) => commands.propose(tx, role)),
     acceptRoles: (actionId) => database.transaction((tx) => commands.accept(tx, actionId)),
-    growthIntroPending: () => database.read((tx) => !growthIntroShown(tx)),
-    markGrowthIntroShown: () => database.transaction((tx) => markGrowthIntroShown(tx, clock.read().instant)),
+    takeGrowthIntro: () => database.transaction((tx) => takeGrowthIntro(tx, clock.read().instant)),
     declineRoles: (actionId) => database.transaction((tx) => commands.decline(tx, actionId)),
     withdrawRoles: (actionId) => database.transaction((tx) => commands.withdraw(tx, actionId)),
     momoCharacter: { subscribe: (listener) => observeStage((stage) => listener(momoCharacterOf(stage))) },
@@ -90,9 +91,7 @@ export function momoCharacterOf(stage: IslandStage): TodayState<'momo.character'
     case 'geschluepft': {
       if (stage.island === null) return { type: 'loading' };
       const { appearance, energy, progress, viewerPersonId } = stage.island;
-      const own = progress.members.find((member) => member.personId === viewerPersonId);
-      const partner = progress.members.find((member) => member.personId !== viewerPersonId);
-      if (own === undefined || partner === undefined) throw new Error('Inselfortschritt ohne die eigene Person');
+      const { own, partner } = halvesFor(progress, viewerPersonId);
       return {
         type: 'ready',
         data: { appearance, energy, level: progress.level, ownHalfPercent: own.halfPercent, partnerHalfPercent: partner.halfPercent, waitingForPartner: false },
