@@ -1,0 +1,56 @@
+# E2E-Ablauf (Spezifikation 4, Testing Decisions; #184): Seed „Rollenwahl offen“ → annehmen → Momo schlüpft.
+#
+# Der Seed `rollenwahl-offen` meldet philipp@example.test an: Philipp und Anna sind gekoppelt, die Insel
+# wartet auf die Rollen, und Anna hat vorgeschlagen, sich um die Natur zu kümmern. Philipp nimmt im Tab
+# „Momo“ an. Die Annahme ist zuerst nur vorgemerkt („Angenommen“); mit dem nächsten Sync schlüpft Momo auf
+# dem Server, und der Pull bringt Insel, Felder, Fortschritt und Ereignis. Danach zeigt der Tab die echte
+# Insel auf Level 1, beim ersten Öffnen mit „So wächst Momo“, und „Heute“ zeigt Momo mit Level.
+appId: ${APP_ID}
+name: Rollenwahl annehmen, Momo schlüpft
+---
+# Ein abgebrochener Lauf kann den Flugmodus eingeschaltet hinterlassen.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=rollenwahl-offen&ziel=/momo
+- extendedWaitUntil:
+    visible: "Anna schlägt eure Rollen vor"
+    timeout: 30000
+- assertVisible: "Du: Bauen · Anna: Natur"
+- takeScreenshot: schluepfen-1-rollenwahl
+- tapOn: "Annehmen"
+
+# Momo schlüpft -------------------------------------------------------------------------------------
+- extendedWaitUntil:
+    visible: "So wächst Momo"
+    timeout: 30000
+- assertVisible: "Tagesziele bringen Energie."
+- assertVisible: "Bauen gibt Energie aus und füllt deine Hälfte."
+- assertVisible: "Sind beide Hälften voll, steigt Momo ein Level."
+- takeScreenshot: schluepfen-2-so-waechst-momo
+- tapOn: "Verstanden"
+- assertVisible: "Momos Insel, Level 1, 0 eigene Objekte"
+- assertVisible: "Level 1"
+- takeScreenshot: schluepfen-3-insel
+
+# „Heute“ zeigt Momo mit Level -----------------------------------------------------------------------
+- tapOn:
+    id: tab-today
+- extendedWaitUntil:
+    visible: "Momo · Level 1"
+    timeout: 10000
+- takeScreenshot: schluepfen-4-heute
+
+# Einmal-Flag: Zurück im Tab „Momo“ erscheint „So wächst Momo“ nicht wieder.
+- tapOn:
+    id: tab-momo
+- assertVisible: "Momos Insel, Level 1, 0 eigene Objekte"
+- assertNotVisible: "So wächst Momo"
