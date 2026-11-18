@@ -3,7 +3,7 @@ import { act, fireEvent, screen, userEvent, within } from '@testing-library/reac
 import { renderRouter, testRouter } from 'expo-router/testing-library';
 import type * as ZodModule from 'zod';
 
-import { EntityId } from '@abnehm/contracts/base';
+import { EntityId, type BausteinKey } from '@abnehm/contracts/base';
 import { RouteName, type RouteTarget } from '@abnehm/contracts/routes';
 
 import { withDeviceConfig } from '../design/testing/device-config';
@@ -303,24 +303,25 @@ describe('Quick-Commands und Meldungen', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
-  const none = { yesterday: null, goals: [], bonus: false } as const;
+  const today = (goals: readonly BausteinKey[], bonus = false) => ({ goals, bonus, energy: goals.length + (bonus ? 1 : 0) });
   test.each([
-    [{ ...none, goals: ['wasserziel'], energy: 1 }, 'Wasserziel erfüllt · +1 Energie'],
-    [{ ...none, bonus: true, energy: 1 }, 'Alle drei geschafft · +1 Energie'],
+    [{ yesterday: null, today: today(['wasserziel']) }, ['Wasserziel erfüllt · +1 Energie']],
+    [{ yesterday: null, today: today([], true) }, ['Alle drei geschafft · +1 Energie']],
     // Mehreres aus einem Commit: eine Meldung mit der Summe der Energie.
-    [{ ...none, goals: ['sporteinheit'], bonus: true, energy: 2 }, 'Alle drei geschafft · +2 Energie'],
-    [{ ...none, goals: ['wasserziel', 'gewogen'], energy: 2 }, 'Wasserziel und Gewogen erfüllt · +2 Energie'],
-    [{ ...none, goals: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'], energy: 3 }, 'Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie'],
-    [{ ...none, yesterday: { bonus: false }, energy: 1 }, 'Gestern im Kalorienbudget · +1 Energie'],
-    [{ ...none, yesterday: { bonus: true }, energy: 2 }, 'Gestern im Kalorienbudget, alle drei geschafft · +2 Energie'],
-    [{ yesterday: { bonus: false }, goals: ['wasserziel'], bonus: false, energy: 2 }, 'Gestern im Kalorienbudget, heute Wasserziel erfüllt · +2 Energie'],
-  ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188)', async (reaction, text) => {
+    [{ yesterday: null, today: today(['sporteinheit'], true) }, ['Alle drei geschafft · +2 Energie']],
+    [{ yesterday: null, today: today(['wasserziel', 'gewogen']) }, ['Wasserziel und Gewogen erfüllt · +2 Energie']],
+    [{ yesterday: null, today: today(['ernaehrung_erfasst', 'wasserziel', 'gewogen']) }, ['Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie']],
+    [{ yesterday: { bonus: false, energy: 1 }, today: null }, ['Gestern im Kalorienbudget · +1 Energie']],
+    [{ yesterday: { bonus: true, energy: 2 }, today: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie']],
+    // Gestern und heute zusammen: zwei Zeilen derselben Meldung, je mit eigenem Betrag.
+    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']) }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie', 'Sporteinheit erfüllt · +1 Energie']],
+  ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188)', async (reaction, lines) => {
     closeIsland();
     closeIsland = appGameService.opened(fakeGameService(hatchedStage(), [reaction]));
     await renderRouter(appDir, { initialUrl: '/' });
 
     const slot = await screen.findByTestId('message-slot');
-    expect(within(slot).getByText(text)).toBeOnTheScreen();
+    for (const line of lines) expect(within(slot).getByText(line)).toBeOnTheScreen();
     expect(within(slot).queryByRole('button', { name: 'Rückgängig' })).not.toBeOnTheScreen();
   });
 

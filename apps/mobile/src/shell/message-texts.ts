@@ -11,14 +11,20 @@ import { activityNames, bausteinNames, germanList, quickCommandOwnerName, shellT
 // typisierten Werten (Spezifikation 0, Abschnitt 2). Bereiche tragen ihre Meldungen hier ein,
 // etwa Spezifikation 3 „+250 ml Wasser“ und Spezifikation 4 „Wasserziel erfüllt · +1 Energie“.
 
-/** Ein Eintrag: Schema der Werte und die daraus erzeugte Zeile. */
+/**
+ * Die Zeilen einer Meldung: meist eine, für Momos Reaktion auf gestern und heute zwei (#188). Eine
+ * zweizeilige Meldung hat nie „Rückgängig“.
+ */
+export type MessageLines = ToastLine | readonly [ToastLine, ToastLine];
+
+/** Ein Eintrag: Schema der Werte und die daraus erzeugten Zeilen. */
 export type MessageTextEntry<S extends z.ZodType = z.ZodType> = Readonly<{
   values: S;
-  render: (values: z.output<S>) => ToastLine;
+  render: (values: z.output<S>) => MessageLines;
 }>;
 
 /** Typisiert einen Eintrag, sodass `render` die Werte aus dem Schema kennt. */
-export function messageText<S extends z.ZodType>(values: S, render: (values: z.output<S>) => ToastLine): MessageTextEntry {
+export function messageText<S extends z.ZodType>(values: S, render: (values: z.output<S>) => MessageLines): MessageTextEntry {
   return { values, render } as MessageTextEntry;
 }
 
@@ -29,8 +35,6 @@ const toMeal: Readonly<Record<MealKey, string>> = {
   abendessen: 'zum Abendessen',
   snacks: 'zu den Snacks',
 };
-
-const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Development Build: Für einen Quick-Command fehlt noch der Handler seines Bereichs. */
@@ -59,12 +63,13 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
    * Spezifikation 4: Momos Reaktion auf neue eigene Gutschriften eines Commits, als eine Meldung (#188):
    * „Wasserziel erfüllt · +1 Energie“ und „Alle drei geschafft · +1 Energie“ wie in Abschnitt 6. Kommen
    * mehrere zusammen, fasst die Meldung sie mit der Summe der Energie zusammen, etwa „Alle drei geschafft ·
-   * +2 Energie“ für das dritte Tagesziel samt Bonus (Nutzerentscheidung in #188,
-   * https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756). `gestern` steht für die
-   * gebündelten Tagesende-Gutschriften des Vortags; sie gibt es nur für „Im Kalorienbudget“ und den Bonus
-   * an solchen Tagen (CONTEXT.md). `energie` ist die Summe der Gutschriften. Die zusammengesetzten
-   * Wortlaute sind Designwerte, nicht belegt. Ohne „Rückgängig“; steht eine Meldung mit „Rückgängig“, wird
-   * sie deren zweite Zeile.
+   * +2 Energie“ für das dritte Tagesziel samt Bonus. Die gebündelten Tagesende-Gutschriften des Vortags
+   * stehen in einer eigenen Zeile über heute, etwa „Gestern im Kalorienbudget, alle drei geschafft · +2
+   * Energie“; sie gibt es nur für „Im Kalorienbudget“ und den Bonus an solchen Tagen (CONTEXT.md).
+   * `energie` und `gesternEnergie` sind die Summen der Gutschriften je Tag, 0 heißt ohne diesen Tag
+   * (Nutzerentscheidungen in #188, https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756).
+   * Die zusammengesetzten Wortlaute sind Designwerte, nicht belegt. Ohne „Rückgängig“; steht eine Meldung
+   * mit „Rückgängig“, hängt der Host die Zeile von heute an.
    */
   'momo.energie': messageText(
     z
@@ -73,17 +78,21 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
         ziel2: BausteinKey.optional(),
         ziel3: BausteinKey.optional(),
         bonus: z.boolean(),
-        gestern: z.boolean(),
+        energie: z.int().nonnegative(),
         gesternBonus: z.boolean(),
-        energie: z.int().positive(),
+        gesternEnergie: z.int().nonnegative(),
       })
-      .refine((values) => values.gestern || values.bonus || values.ziel1 !== undefined, { message: 'Meldung ohne Gutschrift' }),
-    ({ ziel1, ziel2, ziel3, bonus, gestern, gesternBonus, energie }) => {
+      .refine((values) => values.energie + values.gesternEnergie > 0, { message: 'Meldung ohne Gutschrift' }),
+    ({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }) => {
       const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
-      const today = bonus ? 'alle drei geschafft' : goals.length > 0 ? `${germanList(goals)} erfüllt` : null;
-      const yesterday = gestern ? `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''}` : null;
-      const text = yesterday === null ? capitalized(today!) : today === null ? yesterday : `${yesterday}, heute ${today}`;
-      return { text: `${text} · +${energie} Energie`, energy: true };
+      const todayText = bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`;
+      const today: ToastLine = { text: `${todayText} · +${energie} Energie`, energy: true };
+      const yesterday: ToastLine = {
+        text: `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''} · +${gesternEnergie} Energie`,
+        energy: true,
+      };
+      if (gesternEnergie === 0) return today;
+      return energie === 0 ? yesterday : [yesterday, today];
     },
   ),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */

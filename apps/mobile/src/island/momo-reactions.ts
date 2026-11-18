@@ -23,20 +23,17 @@ import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 // heute und gestern. Beanspruchen und Merken laufen in einer Transaktion (Spezifikation 0, Abschnitt 1).
 
 /**
- * Alle in einem Commit neu gezeigten Ereignisse, zusammengefasst zu einer Meldung (Nutzerentscheidung in
- * #188, https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756): etwa „Wasserziel erfüllt ·
+ * Alle in einem Commit neu gezeigten Ereignisse, zusammengefasst zu einer Meldung mit je einer Zeile für
+ * gestern und heute (Nutzerentscheidungen in #188,
+ * https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756): etwa „Wasserziel erfüllt ·
  * +1 Energie“, „Alle drei geschafft · +2 Energie“ für das dritte Tagesziel samt Bonus oder „Gestern im
- * Kalorienbudget · +1 Energie“ für die Tagesende-Gutschriften.
+ * Kalorienbudget · +1 Energie“ für die Tagesende-Gutschriften. Mindestens ein Teil ist gesetzt.
  */
 export type MomoReaction = Readonly<{
-  /** Tagesende-Gutschriften des Vortags, gebündelt, mit oder ohne Bonus; `null` ohne. */
-  yesterday: Readonly<{ bonus: boolean }> | null;
-  /** Heute erstmals erfüllte Tagesziele, in der Reihenfolge der Erfüllung. */
-  goals: readonly BausteinKey[];
-  /** Heute der Tagesbonus. */
-  bonus: boolean;
-  /** Summe der Beträge aller dieser Gutschriften. */
-  energy: number;
+  /** Tagesende-Gutschriften des Vortags, gebündelt; `null` ohne. */
+  yesterday: Readonly<{ bonus: boolean; energy: number }> | null;
+  /** Heute erstmals erfüllte Tagesziele in der Reihenfolge der Erfüllung und der Tagesbonus; `null` ohne. */
+  today: Readonly<{ goals: readonly BausteinKey[]; bonus: boolean; energy: number }> | null;
 }>;
 
 type CreditEvent = Readonly<{ key: string; baustein: BausteinKey | null; amount: number }>;
@@ -110,18 +107,26 @@ export function claimReaction(tx: TransactionContext, personId: EntityId, today:
   };
   writeDeviceState(tx, stateKey, ShownReactions.parse({ days }), at);
   return {
-    yesterday: pending.dayEnd.length === 0 ? null : { bonus: pending.dayEnd.some(isBonus) },
-    goals: pending.today.flatMap((credit) => (credit.baustein === null ? [] : [credit.baustein])),
-    bonus: pending.today.some(isBonus),
-    energy: [...pending.dayEnd, ...pending.today].reduce((sum, credit) => sum + credit.amount, 0),
+    yesterday: pending.dayEnd.length === 0 ? null : { bonus: pending.dayEnd.some(isBonus), energy: energyOf(pending.dayEnd) },
+    today:
+      pending.today.length === 0
+        ? null
+        : {
+            goals: pending.today.flatMap((credit) => (credit.baustein === null ? [] : [credit.baustein])),
+            bonus: pending.today.some(isBonus),
+            energy: energyOf(pending.today),
+          },
   };
 }
 
+/** Summe der Beträge der Gutschriften. */
+const energyOf = (credits: readonly CreditEvent[]) => credits.reduce((sum, credit) => sum + credit.amount, 0);
+
 /** Die eigenen Ereignisse hinter einer Reaktion; gestern mit Bonus zählt als Tagesbonus. */
-export function eventsOf(reaction: MomoReaction): MomoEvent[] {
-  const events: MomoEvent[] = reaction.goals.map(() => 'tageszielerfuellung');
-  if (reaction.bonus) events.push('tagesbonus');
-  if (reaction.yesterday !== null) events.push(reaction.yesterday.bonus ? 'tagesbonus' : 'tageszielerfuellung');
+export function eventsOf({ yesterday, today }: MomoReaction): MomoEvent[] {
+  const events: MomoEvent[] = (today?.goals ?? []).map(() => 'tageszielerfuellung');
+  if (today?.bonus) events.push('tagesbonus');
+  if (yesterday !== null) events.push(yesterday.bonus ? 'tagesbonus' : 'tageszielerfuellung');
   return events;
 }
 
@@ -135,19 +140,19 @@ export function hapticOf(events: readonly MomoEvent[]): HapticKind {
 
 /**
  * Die eine Meldung einer Reaktion für den Meldungs-Host (`momo.energie`); den Text setzt
- * `shell/message-texts.ts` zusammen. Bis zu drei Tagesziele stehen als `ziel1` bis `ziel3`, weil
- * Meldungswerte flach sind (`MessageValues`).
+ * `shell/message-texts.ts` zusammen, eine Zeile je Tag. Bis zu drei Tagesziele stehen als `ziel1` bis
+ * `ziel3`, weil Meldungswerte flach sind (`MessageValues`). Ein Betrag 0 heißt: ohne diesen Tag.
  */
-export function messageOfReaction(reaction: MomoReaction): Readonly<{ messageKey: MessageKey; values: MessageValues }> {
-  const goals = Object.fromEntries(reaction.goals.map((baustein, index) => [`ziel${index + 1}`, baustein]));
+export function messageOfReaction({ yesterday, today }: MomoReaction): Readonly<{ messageKey: MessageKey; values: MessageValues }> {
+  const goals = Object.fromEntries((today?.goals ?? []).map((baustein, index) => [`ziel${index + 1}`, baustein]));
   return {
     messageKey: 'momo.energie',
     values: {
       ...goals,
-      bonus: reaction.bonus,
-      gestern: reaction.yesterday !== null,
-      gesternBonus: reaction.yesterday?.bonus ?? false,
-      energie: reaction.energy,
+      bonus: today?.bonus ?? false,
+      energie: today?.energy ?? 0,
+      gesternBonus: yesterday?.bonus ?? false,
+      gesternEnergie: yesterday?.energy ?? 0,
     },
   };
 }
