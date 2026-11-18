@@ -4,10 +4,10 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
-import { color, useReducedMotion } from '../design';
+import { color, useReducedMotion, type ColorToken } from '../design';
 import { fogPath, LampGlow, MomoOnIsland, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
-import type { IslandScene, Rect, SceneHit, SceneItem } from './scene-model';
-import { useLoop } from './use-loop';
+import type { IslandScene, Polygon, Rect, SceneHit, SceneItem } from './scene-model';
+import { useLoop, usePulse } from './use-loop';
 import { panBy, resizeView, startView, toScene, zoomAt, type Size, type Viewport } from './viewport';
 
 export type IslandCanvasProps = {
@@ -85,8 +85,10 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
   const gesture = useCompetingGestures(tap, move);
 
   const transform = useDerivedValue<Transforms3d>(() => [{ translateX: view.value.x }, { translateY: view.value.y }, { scale: view.value.scale }]);
-  const progress = useLoop(useReducedMotion());
-  const drawing = useMemo(() => drawScene(scene, transform, progress), [scene, transform, progress]);
+  const reduceMotion = useReducedMotion();
+  const progress = useLoop(reduceMotion);
+  const pulse = usePulse(reduceMotion);
+  const drawing = useMemo(() => drawScene(scene, transform, { progress, pulse }), [scene, transform, progress, pulse]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -108,7 +110,7 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
  * Zeichnet die Liste in ihrer Reihenfolge. Lagune und Abend füllen den ganzen Canvas, alles andere
  * liegt im Ausschnitt; aufeinanderfolgende Einträge teilen sich eine Gruppe.
  */
-function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, progress: SharedValue<number>): ReactNode[] {
+function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, motion: Motion): ReactNode[] {
   const nodes: ReactNode[] = [];
   let run: ReactNode[] = [];
   const flush = () => {
@@ -125,7 +127,8 @@ function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, pro
       flush();
       nodes.push(<Fill key={`${item.type}-${index}`} color={color[item.tone]} opacity={item.type === 'abend' ? item.opacity : 1} />);
     } else {
-      run.push(<Item key={index} item={item} foliage={scene.foliage} progress={progress} />);
+      // Objekte behalten ihren Schlüssel, wenn ein neues dazukommt; sonst begänne ihr Erscheinen neu.
+      run.push(<Item key={item.type === 'objekt' ? `objekt-${item.id}` : index} item={item} foliage={scene.foliage} motion={motion} />);
     }
   });
   flush();
@@ -135,7 +138,10 @@ function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, pro
 /** Einträge im Ausschnitt; Lagune und Abend füllen den Canvas und zeichnet `drawScene` selbst. */
 type FramedItem = Exclude<SceneItem, Readonly<{ type: 'wasser' | 'abend' }>>;
 
-function Item({ item, foliage, progress }: { item: FramedItem; foliage: IslandScene['foliage']; progress: SharedValue<number> }) {
+/** Takte der Bewegung: `progress` für Wellen, Atmung und Partikel, `pulse` für die gültigen Felder im Bau-Modus. */
+type Motion = Readonly<{ progress: SharedValue<number>; pulse: SharedValue<number> }>;
+
+function Item({ item, foliage, motion: { progress, pulse } }: { item: FramedItem; foliage: IslandScene['foliage']; motion: Motion }) {
   switch (item.type) {
     case 'inselschatten':
       return <Path path={polygonPath(item.polygon)} color={color[item.tone]} />;
@@ -160,7 +166,7 @@ function Item({ item, foliage, progress }: { item: FramedItem; foliage: IslandSc
       );
     }
     case 'objekt':
-      return <ObjectArt at={item.at} art={item.art} foliage={foliage} />;
+      return <ObjectArt at={item.at} art={item.art} foliage={foliage} appearing={item.appearing} />;
     case 'momo':
       return <MomoOnIsland at={item.at} appearance={item.appearance} progress={progress} />;
     case 'nebel':
@@ -169,7 +175,18 @@ function Item({ item, foliage, progress }: { item: FramedItem; foliage: IslandSc
       return <Particle at={item.at} phase={item.phase} tone={item.tone} progress={progress} />;
     case 'licht':
       return <LampGlow at={item.at} />;
+    case 'baubar':
+      return <Buildable polygon={item.polygon} tone={item.tone} pulse={pulse} />;
     case 'auswahl':
       return <Path path={polygonPath(item.polygon)} color={color[item.tone]} opacity={item.opacity} />;
   }
+}
+
+/** Deckkraft gültiger Felder im Bau-Modus zwischen Ruhe und Spitze des Pulsierens (Designwerte aus #192, nicht belegt). */
+const buildableOpacity = { low: 0.45, high: 0.85 } as const;
+
+/** Gültiges Feld im Bau-Modus: leuchtet pulsierend, bei „Bewegung reduzieren“ ruhig (`usePulse`). */
+function Buildable({ polygon, tone, pulse }: { polygon: Polygon; tone: ColorToken; pulse: SharedValue<number> }) {
+  const glow = useDerivedValue(() => buildableOpacity.low + (buildableOpacity.high - buildableOpacity.low) * pulse.value);
+  return <Path path={polygonPath(polygon)} color={color[tone]} opacity={glow} />;
 }

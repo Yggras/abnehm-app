@@ -26,8 +26,9 @@ export type IslandHudProps = {
  * HUD oben auf der Insel (Spezifikation 4, Abschnitt 7): Jahreszeit mit Tageszeit, eigene Energie,
  * Schalter „Bereiche“ und der Levelbalken. Jahreszeit und Energie sind Anzeigen ohne Sockelkante,
  * damit sie nicht wie Buttons aussehen (Impeccable-Prüfung, B19). Ab Schriftfaktor 1,3 bricht die
- * obere Zeile um (B12). Ist die eigene Hälfte voll, steht unter dem Balken neutral „Deine Hälfte ist
- * voll – Momo wartet auf ‹Name›“ (#191).
+ * obere Zeile in zwei Zeilen um: oben Jahreszeit und Tageszeit, darunter Energie und „Bereiche“ (B12).
+ * Ist die eigene Hälfte voll, steht unter dem Balken neutral „Deine Hälfte ist voll – Momo wartet auf
+ * ‹Name›“ (#191).
  */
 export function IslandHud({ season, daytime, energy, halves, partnerName, areas, onToggleAreas, onLevelPress }: IslandHudProps) {
   const large = useLargeTextLayout();
@@ -35,9 +36,11 @@ export function IslandHud({ season, daytime, energy, halves, partnerName, areas,
   return (
     <View style={styles.hud}>
       <View style={[styles.row, large && styles.wrap]}>
-        <View style={styles.label}>
-          <Icon name={daytime === 'abend' ? 'moon' : 'sun'} size="sm" tone="inkMuted" />
-          <Text variant="label">{`${islandTexts.season[season]} · ${islandTexts.daytime[daytime]}`}</Text>
+        <View testID="hud-jahreszeit" style={large ? styles.ownLine : null}>
+          <View style={styles.label}>
+            <Icon name={daytime === 'abend' ? 'moon' : 'sun'} size="sm" tone="inkMuted" />
+            <Text variant="label">{`${islandTexts.season[season]} · ${islandTexts.daytime[daytime]}`}</Text>
+          </View>
         </View>
         <View style={styles.spacer} />
         <View accessible accessibilityLabel={islandTexts.energy(energy)} style={styles.label}>
@@ -65,6 +68,8 @@ const styles = StyleSheet.create({
   hud: { gap: space[2] },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   wrap: { flexWrap: 'wrap' },
+  // Eine ganze Zeile breit, damit Energie und „Bereiche“ sicher in die zweite Zeile rutschen.
+  ownLine: { flexBasis: '100%', flexDirection: 'row' },
   spacer: { flexGrow: 1 },
   label: {
     flexDirection: 'row',

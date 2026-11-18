@@ -39,6 +39,17 @@ export function openTarget(target: RouteTarget) {
   else router.push(href);
 }
 
+/**
+ * Ändert Parameter des gezeigten Ziels, ohne zu navigieren, etwa um eine erledigte Ansicht aus der Route
+ * zu nehmen (`undefined` entfernt den Parameter). Typisiert nach dem Schema der Route.
+ */
+export function setTargetParams<N extends RouteName>(
+  _route: N,
+  params: { [K in Exclude<keyof TargetOf<N>, 'type'>]?: TargetOf<N>[K] | undefined },
+) {
+  router.setParams(params as Record<string, string | undefined>);
+}
+
 /** Schließt einen modalen Ablauf oder eine Seite und kehrt zum Aufrufer zurück, sonst zu „Heute“. */
 export function closeRoute() {
   if (router.canGoBack()) router.back();

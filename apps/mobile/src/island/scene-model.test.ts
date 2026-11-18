@@ -145,7 +145,7 @@ describe('Zeichenreihenfolge', () => {
       { layer: 'objekte', type: 'momo', field: 'grundinsel:1:0', at: { x: 32, y: 32 }, appearance: momo },
     ]);
     expect(ofType(items, 'objekt').find((item) => item.id === 'a')).toEqual({
-      layer: 'objekte', type: 'objekt', id: 'a', field: 'grundinsel:2:1', at: { x: 32, y: 64 }, art: 'laterne_1',
+      layer: 'objekte', type: 'objekt', id: 'a', field: 'grundinsel:2:1', at: { x: 32, y: 64 }, art: 'laterne_1', appearing: false,
     });
   });
 });
@@ -246,10 +246,10 @@ describe('Abend', () => {
   test('abends liegt `island-night` mit `opacity-evening` über der Szene, darüber leuchten Laternen in `island-lamp`', () => {
     const items = at(21, 0).items;
 
-    // Zuletzt gezeichnet; Laterne auf Feld (0, 0): Mitte (0, 16).
+    // Zuletzt gezeichnet; Laterne auf Feld (0, 0): Mitte (0, 16), ihr Licht 31 dp darüber (`art.ts`).
     expect(items.slice(-2)).toEqual([
       { layer: 'overlays', type: 'abend', tone: 'islandNight', opacity: 0.45 },
-      { layer: 'overlays', type: 'licht', field: 'grundinsel:0:0', at: { x: 0, y: 16 }, tone: 'islandLamp' },
+      { layer: 'overlays', type: 'licht', field: 'grundinsel:0:0', at: { x: 0, y: -15 }, tone: 'islandLamp' },
     ]);
   });
 
@@ -323,6 +323,49 @@ describe('Auswahl', () => {
   test('ohne Auswahl oder mit unbekanntem Feld gibt es keine Hervorhebung', () => {
     expect(ofType(islandScene(request()).items, 'auswahl')).toEqual([]);
     expect(ofType(islandScene(request({ selectedField: 'grundinsel:9:9' })).items, 'auswahl')).toEqual([]);
+  });
+});
+
+describe('Bau-Modus (#192)', () => {
+  const building = (fields: readonly string[], overrides: Partial<IslandSceneRequest> = {}) =>
+    islandScene(request({ mode: { type: 'bauen', fields: new Set(fields) }, ...overrides }));
+
+  test('gültige Felder leuchten in `island-buildable` über der Szene, andere nicht', () => {
+    const glowing = ofType(building(['grundinsel:0:0']).items, 'baubar');
+
+    expect(glowing).toEqual([
+      {
+        layer: 'overlays', type: 'baubar', field: 'grundinsel:0:0', tone: 'islandBuildable',
+        polygon: [{ x: 0, y: 0 }, { x: 32, y: 16 }, { x: 0, y: 32 }, { x: -32, y: 16 }],
+      },
+    ]);
+  });
+
+  test('auch abends leuchten sie, über der Abend-Überlagerung', () => {
+    const items = building(['grundinsel:0:0'], { localTime: { localDate: LocalDate.parse('2026-10-14'), minutesOfDay: 21 * 60 } }).items;
+    const types = items.map((item) => item.type);
+
+    expect(types.indexOf('baubar')).toBeGreaterThan(types.indexOf('abend'));
+  });
+
+  test('Felder, die die Insel nicht hat, leuchten nicht; ohne Bau-Modus leuchtet nichts', () => {
+    expect(ofType(building(['grundinsel:9:9']).items, 'baubar')).toEqual([]);
+    expect(ofType(islandScene(request()).items, 'baubar')).toEqual([]);
+    expect(ofType(islandScene(request({ mode: 'bereiche' })).items, 'baubar')).toEqual([]);
+  });
+
+  test('im Bau-Modus sind die Bereiche nicht gefärbt', () => {
+    expect(ofType(building(['grundinsel:0:0']).items, 'feld').every((item) => item.tint === null)).toBe(true);
+  });
+
+  test('ein eben gebautes Objekt erscheint, die übrigen stehen schon', () => {
+    const objects = [
+      { id: 'neu', fieldKey: 'grundinsel:0:0', art: 'laterne_1', ownerPersonId: philipp },
+      { id: 'alt', fieldKey: 'grundinsel:2:0', art: 'apfelbaum_1', ownerPersonId: anna },
+    ];
+    const items = islandScene(request({ island: { ...island, objects }, appearing: 'neu' })).items;
+
+    expect(ofType(items, 'objekt').map(({ id, appearing }) => [id, appearing])).toEqual([['neu', true], ['alt', false]]);
   });
 });
 

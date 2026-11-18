@@ -1,0 +1,93 @@
+# Gerätelauf Bau-Modus (Spezifikation 4, Abschnitt 7; #192): Seed „gekoppelt“ → „Bauen“ → Laterne → ein
+# leuchtendes Feld → die Laterne steht, Energie und eigene Hälfte ändern sich. Danach ein Tipp auf ein
+# freies eigenes Feld mit dem Bau-Sheet für dieses Feld und „Abbrechen“ im Bau-Modus. Die Bildschirmfotos
+# sind die Vorlage der Impeccable-Kritik.
+#
+# Im Seed `gekoppelt` hat Philipp (Bauen, Seite a) Level 3 und 23 Energie; seine zehn Laternen stehen in der
+# eigenen Ecke (`packages/contracts/seeds/spielverlauf.ts`). Der Start zeigt die Mitte der Lichtung in der
+# Mitte der Insel. Feld (5, 7) im eigenen Rollenbereich ist frei; seine Mitte liegt 80 dp links und 40 dp
+# über der Mitte der Lichtung (Feldmitte ((x − y) · 32, (x + y) · 16 + 16), Mitte der Lichtung (16, 248)).
+# Maestro tippt in Prozent der Bildschirmgröße; die Werte passen für iPhone SE (3. Generation, 375 × 667 pt)
+# und `medium_phone` (412 × 915 dp), deren Insel den ganzen Bildschirm füllt. Nicht im Standardumfang von
+# `scripts/e2e-run`; Aufruf mit `--ablauf bau-modus`.
+appId: ${APP_ID}
+name: Bau-Modus auf der Insel
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&ziel=/momo
+# „So wächst Momo“ erscheint beim ersten Öffnen nach dem Schlüpfen. Das Sheet ist modal und verdeckt die
+# Insel für die Bedienungshilfen (iOS-Simulator, beobachtet am 18.11.2026); gewartet wird daher auf beides.
+- extendedWaitUntil:
+    visible: "Verstanden|Momos Insel, Level 3.*"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Verstanden"
+    commands:
+      - tapOn: "Verstanden"
+- assertVisible: "Momos Insel, Level 3, 10 eigene Objekte"
+- assertVisible: "23 Energie"
+- takeScreenshot: bau-modus-1-insel
+
+# Über „Bauen“: alle passenden Baupläne mit Preis --------------------------------------------------------
+- tapOn: "Bauen"
+- extendedWaitUntil:
+    visible: "Du hast 23 Energie"
+    timeout: 10000
+- assertVisible: "Laterne, 3 Energie"
+- assertVisible: "Apfelbaum, 3 Energie"
+- takeScreenshot: bau-modus-2-bau-sheet
+- tapOn: "Laterne, 3 Energie"
+
+# Bau-Modus: gültige Felder leuchten, ein Tippen baut ---------------------------------------------------
+- extendedWaitUntil:
+    visible: "Laterne bauen.*"
+    timeout: 10000
+- takeScreenshot: bau-modus-3-leuchtende-felder
+- tapOn:
+    point: "29%,45%"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 11 eigene Objekte"
+    timeout: 10000
+- assertVisible: "20 Energie"
+- assertNotVisible: "Laterne bauen.*"
+- takeScreenshot: bau-modus-4-gebaut
+
+# Nach Tipp auf ein freies eigenes Feld: was dort passt ---------------------------------------------------
+# Feld (5, 6) liegt eine halbe Feldbreite rechts und eine halbe Feldhöhe über (5, 7).
+- tapOn:
+    point: "37%,43%"
+- extendedWaitUntil:
+    visible: "Auf dieses Feld bauen"
+    timeout: 10000
+- assertVisible: "Holzweg, 1 Energie"
+- assertNotVisible: "Apfelbaum.*"
+- takeScreenshot: bau-modus-5-sheet-fuer-feld
+- tapOn: "Holzweg, 1 Energie"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 12 eigene Objekte"
+    timeout: 10000
+
+# Abbrechen im Bau-Modus ---------------------------------------------------------------------------------
+- tapOn: "Bauen"
+- extendedWaitUntil:
+    visible: "Sitzbank, 2 Energie"
+    timeout: 10000
+- tapOn: "Sitzbank, 2 Energie"
+- extendedWaitUntil:
+    visible: "Abbrechen"
+    timeout: 10000
+- tapOn: "Abbrechen"
+- assertNotVisible: "Sitzbank bauen.*"
+- assertVisible: "Momos Insel, Level 3, 12 eigene Objekte"
+- takeScreenshot: bau-modus-6-abgebrochen
