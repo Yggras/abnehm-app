@@ -8,9 +8,9 @@
 # Abläufe (apps/mobile/e2e/): sync-offline (E2E), geraetesmoke (Shell), geraetetest (On-Device-Suite),
 # mitteilungen-erlauben (Erklär-Bildschirm → Systemdialog, nur Android).
 # Das E2E-Backend ist ein eigener Compose-Stack `abnehm-e2e` (Development-Image mit Seed-Route) auf
-# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Der Lauf nimmt die
-# Gerätesperre (scripts/geraete-slot). Alle Worktrees teilen den Stack; die Sperre entfernt ihn samt Volume,
-# wenn ihr Inhaber wechselt, weil jeder Worktree eigene Secrets hat (scripts/dev-secrets). Jeder Lauf
+# 127.0.0.1:${E2E_BACKEND_PORT:-8788}; ein laufendes `npm run backend` stört es nicht. Der Lauf hält die
+# Gerätesperre (scripts/geraete-slot mit). Alle Worktrees teilen den Stack; die Sperre entfernt ihn samt Volume,
+# wenn ein anderer Worktree sie nimmt, weil jeder Worktree eigene Secrets hat (scripts/dev-secrets). Jeder Lauf
 # schreibt Protokoll, Bildschirmfotos, JUnit-Bericht und die Artefakt-IDs der getesteten Binaries nach
 # ~/Library/Logs/abnehm-app/e2e/<Zeitpunkt>/; die Zusammenfassung steht in zusammenfassung.txt.
 set -euo pipefail
@@ -23,6 +23,7 @@ usage() {
   exit 2
 }
 
+args=("$@")
 platforms=(ios android)
 if [[ "${1:-}" == "ios" || "${1:-}" == "android" ]]; then platforms=("$1"); shift
 elif [[ "${1:-}" == "alle" ]]; then shift; fi
@@ -40,16 +41,17 @@ while [[ $# -gt 0 ]]; do
 done
 for flow in "${flows[@]}"; do [[ -f "$mobile/e2e/$flow.yaml" ]] || { echo "Unbekannter Ablauf: $flow" >&2; exit 2; }; done
 
+# Gerätesperre (#282): Der ganze Lauf samt Build läuft unter scripts/geraete-slot.
+if [[ -z "${ABNEHM_GERAETE_SLOT:-}" ]]; then
+  cd "$repo_root" && exec scripts/geraete-slot mit -- "$repo_root/scripts/e2e-run" ${args[@]+"${args[@]}"}
+fi
+
 port="${E2E_BACKEND_PORT:-8788}"
 export E2E_BACKEND_PORT="$port"
 log_dir="${E2E_LOG_DIR:-$HOME/Library/Logs/abnehm-app/e2e}/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$log_dir"
 summary="$log_dir/zusammenfassung.txt"
 echo "E2E-Lauf $(date -u +%Y-%m-%dT%H:%M:%SZ), Commit $(cd "$repo_root" && git rev-parse HEAD)" > "$summary"
-
-# Gerätesperre (#282) wie in scripts/app-build -----------------------------------------------------
-slot="$(cd "$repo_root" && scripts/geraete-slot nehmen --warten)"
-[[ "$slot" != genommen ]] || trap '(cd "$repo_root" && scripts/geraete-slot freigeben)' EXIT
 
 # E2E-Backend ---------------------------------------------------------------------------------------
 echo "Starte das E2E-Backend auf 127.0.0.1:$port …" >&2
@@ -81,7 +83,6 @@ adb_bin() {
 # Läufe ---------------------------------------------------------------------------------------------
 failed=0
 for platform in "${platforms[@]}"; do
-  (cd "$repo_root" && scripts/geraete-slot nehmen >/dev/null)  # erneuern, damit die Sperre nicht verfällt
   if [[ -n "$device" && "$platform" == ios ]]; then
     # Maestro meldet ein per Kabel angeschlossenes iPhone als „not connected“ (#101); dort läuft der
     # Ablauf von Hand, siehe docs/entwicklung.md › „Echte Geräte“.

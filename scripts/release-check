@@ -16,6 +16,7 @@ set -uo pipefail
 # shellcheck source=prod-umgebung
 source "$(dirname "${BASH_SOURCE[0]}")/prod-umgebung"
 repo_root="$prod_repo_root"
+args=("$@")
 all_steps=(stand statisch autorisierung release-sperren tests backend-image maestro android-geraet iphone-geraet produktion-binaries sichtpruefung)
 
 usage() {
@@ -41,6 +42,17 @@ steps=("${all_steps[@]}")
 if [[ -n "$only" ]]; then
   IFS=',' read -r -a steps <<<"$only"
   for step in "${steps[@]}"; do [[ " ${all_steps[*]} " == *" $step "* ]] || { echo "Unbekannter Schritt: $step" >&2; exit 2; }; done
+fi
+
+# Gerätesperre (#282): Mit Schritten an Builds, Simulatoren oder Geräten läuft der ganze Lauf unter
+# scripts/geraete-slot, auch die Handschritte dazwischen.
+if [[ -z "${ABNEHM_GERAETE_SLOT:-}" ]]; then
+  for step in "${steps[@]}"; do
+    case "$step" in
+      maestro|android-geraet|iphone-geraet|produktion-binaries)
+        cd "$repo_root" && exec scripts/geraete-slot mit -- "$repo_root/scripts/release-check" ${args[@]+"${args[@]}"} ;;
+    esac
+  done
 fi
 
 load_prod_url
@@ -102,20 +114,7 @@ e2e_backend() {
   fi
 }
 
-# Gerätesperre (#282) für Schritte mit Builds, Simulatoren und Geräten. Selbst genommen → am Ende freigeben.
-slot=""
 for step in "${steps[@]}"; do
-  case "$step" in
-    maestro|android-geraet|iphone-geraet|produktion-binaries)
-      slot="$(scripts/geraete-slot nehmen --warten)" || exit 1
-      [[ "$slot" != genommen ]] || trap 'scripts/geraete-slot freigeben' EXIT
-      break ;;
-  esac
-done
-
-for step in "${steps[@]}"; do
-  # Erneuern, damit die Sperre während langer Handschritte nicht verfällt.
-  [[ -z "$slot" ]] || scripts/geraete-slot nehmen >/dev/null
   case "$step" in
     stand)
       git fetch --quiet origin main

@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Gerätesperre (#282): Simulatoren, Emulatoren und App-Builds nutzt auf diesem Rechner immer nur eine Session.
-#   scripts/geraete-slot nehmen              # nehmen oder erneuern; Exit 3 = von einer anderen Session belegt
-#   scripts/geraete-slot nehmen --warten     # warten, bis die Sperre frei ist
-#   scripts/geraete-slot freigeben           # Geräte herunterfahren, E2E-Backend entfernen, Sperre lösen
-#   scripts/geraete-slot freigeben --erzwingen   # nur nach Rücksprache: Sperre einer anderen Session lösen
+# Gerätesperre (#282, pro Befehl seit #298): Simulatoren, Emulatoren und App-Builds nutzt auf diesem Rechner immer nur eine Session.
+#   scripts/geraete-slot mit -- <befehl> [argumente …]   # wartet auf die Sperre, führt den Befehl aus, gibt frei
 #   scripts/geraete-slot status
+#   scripts/geraete-slot freigeben --erzwingen            # nur nach Rücksprache: Sperre einer anderen Session lösen
 #
-# Inhaber ist der Worktree des Aufrufs. `nehmen` gibt auf stdout `genommen` oder `erneuert` aus. Eine Sperre
-# verfällt, wenn ihr Worktree fehlt oder sie ABNEHM_GERAETE_SLOT_MINUTEN (60) lang nicht erneuert wurde.
-# Läuft `nehmen` in einer Agent-Session (Claude Code oder Pi unter den Vorfahren, #294), erneuert ein
-# Hintergrundprozess die Sperre alle 5 Minuten, solange diese Session lebt und ihr Worktree existiert.
-# Wer die Sperre neu nimmt oder freigibt, fährt alle Simulatoren und Emulatoren herunter und entfernt den
-# E2E-Stack samt Volumes (nur synthetische Seed-Daten): Jeder Worktree hat eigene Secrets, ein Postgres-Volume
-# eines anderen Worktrees ließe das E2E-Backend an der Anmeldung scheitern.
+# Die Sperre gilt nur, solange der Befehl läuft: Inhaber ist der Prozess von `mit`. Endet er, auch durch einen
+# Absturz, ist die Sperre frei. Befehle darin, die selbst `mit` nutzen (scripts/app-build in scripts/e2e-run),
+# erkennen die Sperre an ABNEHM_GERAETE_SLOT und laufen ohne neues Nehmen. Danach hat derselbe Worktree eine
+# Nachfrist von ABNEHM_GERAETE_SLOT_NACHFRIST_SEKUNDEN (300) Vorrang, damit Folgeschritte wie Bildschirmfotos
+# seine Geräte noch vorfinden; jeder weitere Befehl beginnt sie neu.
+# Freigeben lässt Simulatoren und Emulatoren laufen. Erst wenn ein anderer Worktree die Sperre nimmt, fährt
+# `mit` alle herunter und entfernt den E2E-Stack samt Volumes (nur synthetische Seed-Daten): Jeder Worktree hat
+# eigene Secrets, ein Postgres-Volume eines anderen Worktrees ließe das E2E-Backend an der Anmeldung scheitern.
 set -euo pipefail
 
 usage() {
@@ -24,11 +23,9 @@ me="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Fehler: Nicht in ei
 common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
 state="$common_dir/abnehm-app-geraete-slot"
 lockfile="$common_dir/abnehm-app-geraete-slot.lock"
-# ABNEHM_GERAETE_SLOT_SEKUNDEN und …_ERNEUERN_SEKUNDEN verkürzen Frist und Takt im Test (scripts/test-geraete-slot).
-lease_seconds="${ABNEHM_GERAETE_SLOT_SEKUNDEN:-$(( ${ABNEHM_GERAETE_SLOT_MINUTEN:-60} * 60 ))}"
-renew_seconds="${ABNEHM_GERAETE_SLOT_ERNEUERN_SEKUNDEN:-300}"
-# Prozessnamen der Agent-Sessions, an deren Leben die automatische Erneuerung hängt.
-agents="${ABNEHM_GERAETE_SLOT_AGENTEN:-claude pi}"
+grace_seconds="${ABNEHM_GERAETE_SLOT_NACHFRIST_SEKUNDEN:-300}"
+# Nur für Sperren der Vorgängerversion ohne Prozess (Inhaber = Worktree, Frist 60 Minuten).
+legacy_lease_seconds=$(( ${ABNEHM_GERAETE_SLOT_MINUTEN:-60} * 60 ))
 
 # Lesen und Schreiben des Zustands laufen unter einer Dateisperre wie in scripts/start-ticket-worktree.
 locked() {
@@ -38,86 +35,37 @@ locked() {
 }
 
 field() { [[ -f "$state" ]] && sed -n "s/^$1=//p" "$state" || true; }
-# Liest den Zustand (neu) ein; `start_renewer` braucht den Stand nach `__nehmen`.
-load_state() {
-  holder="$(field inhaber)"
-  since="$(field seit)"
-  renewed="$(field erneuert)"
-  renewer_pid="$(field erneuerer_pid)"
-  renewer_start="$(field erneuerer_start)"
-  session_pid="$(field sitzung_pid)"
-  session_start="$(field sitzung_start)"
-}
-load_state
+holder="$(field inhaber)"
+pid="$(field pid)"
+started="$(field start)"
+since="$(field seit)"
+renewed="$(field erneuert)"
+last="$(field zuletzt)"
+free_from="$(field frei_ab)"
 now="$(date +%s)"
 
+# Startzeit eines Prozesses; schützt davor, eine wiederverwendete PID für den Inhaber zu halten.
+start_of() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//' || true; }
+
 describe() {
-  echo "$holder (seit $(( (now - since) / 60 )) min, zuletzt erneuert vor $(( (now - renewed) / 60 )) min)"
+  if [[ -n "$pid" ]]; then echo "$holder (PID $pid, seit $(( (now - ${since:-$now}) / 60 )) min: $(field befehl))"
+  else echo "$holder (Vorgängerversion, seit $(( (now - ${since:-$now}) / 60 )) min, zuletzt erneuert vor $(( (now - ${renewed:-$now}) / 60 )) min)"; fi
 }
 
 orphan_reason() {
-  if [[ ! -d "$holder" ]]; then echo "Worktree fehlt"
-  elif (( now - renewed >= lease_seconds )); then echo "seit $(( (now - renewed) / 60 )) min nicht erneuert"; fi
-}
-
-# $1 seit; optional $2–$5: PID und Startzeit des Erneuerers und der Agent-Session, an der er hängt.
-write_state() {
-  {
-    printf 'inhaber=%s\nseit=%s\nerneuert=%s\n' "$me" "$1" "$now"
-    [[ -z "${2:-}" ]] || printf 'erneuerer_pid=%s\nerneuerer_start=%s\nsitzung_pid=%s\nsitzung_start=%s\n' "$2" "$3" "$4" "$5"
-  } >"$state.tmp"
-  mv "$state.tmp" "$state"
-}
-keep_renewer() { write_state "$since" "$renewer_pid" "$renewer_start" "$session_pid" "$session_start"; }
-
-# Startzeit eines Prozesses. Erst PID und Startzeit zusammen bezeichnen einen Prozess, denn PIDs werden neu
-# vergeben.
-started_at() { ps -o lstart= -p "$1" 2>/dev/null | sed 's/^ *//; s/ *$//'; }
-alive() { [[ -n "$1" && -n "$2" && "$(started_at "$1")" == "$2" ]]; }
-
-stop_renewer() {
-  if alive "$renewer_pid" "$renewer_start"; then kill "$renewer_pid" 2>/dev/null || true; fi
-}
-
-# Nächster Vorfahre, der eine Agent-Session ist; setzt found_pid und found_start, ohne Treffer Exit 1.
-# Geprüft werden die ersten beiden Wörter der Befehlszeile, damit auch Node-Starter wie `node …/bin/pi` passen.
-agent_session() {
-  local pid="$PPID" args first second name
-  while [[ -n "$pid" && "$pid" -gt 1 ]]; do
-    args="$(ps -o args= -p "$pid" 2>/dev/null)" || return 1
-    read -r first second _ <<<"$args" || true
-    for name in $agents; do
-      if [[ "${first##*/}" == "$name" || "${second##*/}" == "$name" ]]; then
-        found_pid="$pid"
-        found_start="$(started_at "$pid")"
-        return 0
-      fi
-    done
-    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
-  done
-  return 1
-}
-
-# Nach erfolgreichem `nehmen` (außerhalb der Dateisperre, damit der Erneuerer sie nicht erbt): Ruft eine
-# Agent-Session auf, hängt der Erneuerer danach an genau dieser Session. Ein Erneuerer einer anderen Session,
-# etwa einer beendeten Vorgängerin im selben Worktree, wird ersetzt. Ohne Agent bleibt alles, wie es ist.
-start_renewer() {
-  local pid
-  # load_state setzt renewer_* und session_*, agent_session setzt found_pid und found_start (globale Variablen).
-  load_state
-  agent_session || return 0
-  if alive "$renewer_pid" "$renewer_start" && [[ "$session_pid" == "$found_pid" && "$session_start" == "$found_start" ]]; then
-    return 0
+  if [[ -n "$pid" ]]; then
+    local current
+    current="$(start_of "$pid")"
+    [[ -n "$current" && "$current" == "$started" ]] || echo "Prozess $pid beendet"
+  elif [[ ! -d "$holder" ]]; then echo "Worktree fehlt"
+  elif (( now - ${renewed:-0} >= legacy_lease_seconds )); then echo "seit $(( (now - ${renewed:-0}) / 60 )) min nicht erneuert"
   fi
-  stop_renewer
-  # Eigene Prozesssitzung (setsid), damit der Erneuerer das Ende des aufrufenden Werkzeugs überlebt.
-  if command -v perl >/dev/null 2>&1; then
-    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die' "$0" __erneuerer "$found_pid" "$found_start" </dev/null >/dev/null 2>&1 &
-  else
-    nohup "$0" __erneuerer "$found_pid" "$found_start" </dev/null >/dev/null 2>&1 &
-  fi
-  pid=$!
-  locked __eintragen "$pid" "$(started_at "$pid")" "$found_pid" "$found_start" || kill "$pid" 2>/dev/null || true
+}
+
+# Läuft die Nachfrist des letzten Inhabers für diesen Worktree noch, die Restsekunden; sonst nichts.
+grace_left() {
+  [[ -n "$last" && "$last" != "$me" && -d "$last" ]] || return 0
+  (( ${free_from:-0} > now )) && echo $(( free_from - now )) || true
 }
 
 adb_bin() {
@@ -140,12 +88,7 @@ clean_up_devices() {
 }
 
 case "${1:-}" in
-  __nehmen)
-    if [[ "$holder" == "$me" ]]; then
-      keep_renewer
-      echo erneuert
-      exit 0
-    fi
+  __nehmen)  # __nehmen <pid> <token> <befehl>; Exit 3 = belegt
     if [[ -n "$holder" ]]; then
       reason="$(orphan_reason)"
       if [[ -z "$reason" ]]; then
@@ -153,78 +96,86 @@ case "${1:-}" in
         exit 3
       fi
       echo "Gerätesperre von $holder ist verwaist ($reason); übernehme sie." >&2
-      stop_renewer
+    else
+      left="$(grace_left)"
+      if [[ -n "$left" ]]; then
+        echo "Gerätesperre: Nachfrist von $last läuft noch $left s." >&2
+        exit 3
+      fi
     fi
-    clean_up_devices
-    write_state "$now"
-    echo genommen
-    ;;
-  __freigeben)
-    if [[ -z "$holder" ]]; then
-      echo "Gerätesperre ist frei." >&2
-      exit 0
+    previous="${holder:-$last}"
+    if [[ "$previous" != "$me" ]]; then
+      [[ -z "$previous" ]] || echo "Gerätesperre: Zuletzt nutzte $previous die Geräte; die App muss neu installiert werden." >&2
+      clean_up_devices
     fi
-    if [[ "$holder" != "$me" && "${2:-}" != --erzwingen ]]; then
-      echo "Fehler: Die Gerätesperre hält $(describe)." >&2
-      exit 1
+    # `erneuert` hält ältere Fassungen dieses Skripts in nicht aktualisierten Worktrees fern.
+    printf 'inhaber=%s\npid=%s\nstart=%s\ntoken=%s\nseit=%s\nerneuert=%s\nbefehl=%s\n' \
+      "$me" "$2" "$(start_of "$2")" "$3" "$now" "$now" "$4" >"$state.tmp"
+    mv "$state.tmp" "$state"
+    ;;
+  __freigeben)  # __freigeben <token>: nur die eigene Sperre; die Geräte laufen weiter, die Nachfrist beginnt
+    if [[ -n "$holder" && "$(field token)" == "$2" ]]; then
+      printf 'zuletzt=%s\nfrei_ab=%s\n' "$me" "$(( now + grace_seconds ))" >"$state.tmp"
+      mv "$state.tmp" "$state"
     fi
-    stop_renewer
-    clean_up_devices
-    rm -f "$state"
-    echo "Gerätesperre freigegeben." >&2
     ;;
-  __eintragen)
-    # $2/$3 Erneuerer, $4/$5 Agent-Session (PID, Startzeit); nur, solange dieser Worktree die Sperre hält.
-    [[ "$holder" == "$me" ]] || exit 1
-    write_state "$since" "$2" "$3" "$4" "$5"
+  __erzwingen)
+    if [[ -z "$holder" ]]; then echo "Gerätesperre ist frei." >&2; exit 0; fi
+    printf 'zuletzt=%s\n' "$holder" >"$state.tmp"
+    mv "$state.tmp" "$state"
+    echo "Gerätesperre von $holder gelöst." >&2
     ;;
-  __erneuern)
-    # Erneuert, solange der aufrufende Erneuerer ($2) eingetragen ist und seine Agent-Session lebt.
-    [[ "$holder" == "$me" && "$renewer_pid" == "$2" ]] || exit 1
-    alive "$session_pid" "$session_start" || exit 1
-    keep_renewer
-    ;;
-  __erneuerer)
-    # Läuft im Hintergrund für die Agent-Session $2 (PID) und $3 (Startzeit). Endet, sobald `__erneuern` scheitert: Session beendet, Sperre freigegeben oder
-    # übernommen, Worktree entfernt (dann findet `lockf` dieses Skript nicht mehr).
-    while sleep "$renew_seconds"; do
-      locked __erneuern "$$" || exit 0
+  mit)
+    shift
+    [[ "${1:-}" == -- ]] && shift
+    [[ $# -gt 0 ]] || usage
+    # Ein umschließender Befehl hält die Sperre schon.
+    if [[ -n "${ABNEHM_GERAETE_SLOT:-}" && "$ABNEHM_GERAETE_SLOT" == "$(field token)" && -z "$(orphan_reason)" ]]; then
+      exec "$@"
+    fi
+    token="$$-$now-$RANDOM"
+    command_line="$(printf '%s ' "$@" | tr '\n' ' ' | cut -c1-160)"
+    messages="$(mktemp)"
+    trap 'rm -f "$messages"' EXIT
+    waited=false
+    while true; do
+      status=0
+      locked __nehmen "$$" "$token" "$command_line" 2>"$messages" || status=$?
+      [[ "$status" == 0 ]] && break
+      [[ "$status" == 3 ]] || { cat "$messages" >&2; rm -f "$messages"; exit "$status"; }
+      if [[ "$waited" == false ]]; then
+        cat "$messages" >&2
+        echo "Warte auf die Gerätesperre …" >&2
+        waited=true
+      fi
+      sleep "${ABNEHM_GERAETE_SLOT_INTERVALL:-20}"
     done
-    ;;
-  nehmen)
-    case "${2:-}" in
-      "") locked __nehmen; start_renewer ;;
-      --warten)
-        waited=false
-        messages="$(mktemp)"
-        trap 'rm -f "$messages"' EXIT
-        while true; do
-          status=0
-          result="$(locked __nehmen 2>"$messages")" || status=$?
-          if [[ "$status" == 0 ]]; then cat "$messages" >&2; echo "$result"; start_renewer; exit 0; fi
-          [[ "$status" == 3 ]] || { cat "$messages" >&2; exit "$status"; }
-          if [[ "$waited" == false ]]; then
-            cat "$messages" >&2
-            echo "Warte auf die Gerätesperre …" >&2
-            waited=true
-          fi
-          sleep "${ABNEHM_GERAETE_SLOT_INTERVALL:-20}"
-        done
-        ;;
-      *) usage ;;
-    esac
+    cat "$messages" >&2
+    rm -f "$messages"
+    trap 'locked __freigeben "$token"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    export ABNEHM_GERAETE_SLOT="$token"
+    status=0
+    "$@" || status=$?
+    exit "$status"
     ;;
   freigeben)
-    [[ -z "${2:-}" || "${2:-}" == --erzwingen ]] || usage
-    locked __freigeben "${2:-}"
+    [[ "${2:-}" == --erzwingen ]] || usage
+    locked __erzwingen
+    ;;
+  nehmen)
+    echo "Fehler: \`nehmen\` gibt es nicht mehr; Gerätebefehle laufen mit \`scripts/geraete-slot mit -- <befehl>\`." >&2
+    exit 2
     ;;
   status)
-    if [[ -z "$holder" ]]; then echo "frei"
+    if [[ -z "$holder" ]]; then
+      left="$(grace_left)"
+      if [[ -n "$left" ]]; then echo "Nachfrist: $last hat noch $left s Vorrang"
+      else echo "frei${last:+ (zuletzt: $last)}"; fi
     else
       reason="$(orphan_reason)"
-      auto=""
-      ! alive "$renewer_pid" "$renewer_start" || auto=" – erneuert automatisch für die Session $session_pid"
-      echo "belegt: $(describe)${reason:+ – verwaist: $reason}$auto"
+      echo "belegt: $(describe)${reason:+ – verwaist: $reason}"
     fi
     ;;
   *) usage ;;
