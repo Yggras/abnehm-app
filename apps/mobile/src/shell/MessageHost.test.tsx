@@ -27,6 +27,10 @@ jest.mock('./message-texts', () => {
       })),
       'test.bonus': actual.messageText(zod.strictObject({}), () => ({ text: 'Alle drei geschafft · +1 Energie', energy: true })),
       'test.gespeichert': actual.messageText(zod.strictObject({}), () => ({ text: 'Eintrag gespeichert' })),
+      'test.gestern_und_heute': actual.messageText(zod.strictObject({}), () => [
+        { text: 'Gestern im Kalorienbudget · +1 Energie', energy: true },
+        { text: 'Wasserziel erfüllt · +1 Energie', energy: true },
+      ]),
     },
   };
 });
@@ -253,6 +257,40 @@ describe('mehrere Meldungen', () => {
       ['Wasserziel erfüllt · +1 Energie'],
       ['Alle drei geschafft · +1 Energie'],
     ]);
+  });
+});
+
+// Eine Meldung ohne „Rückgängig“ darf selbst zwei Zeilen tragen, etwa Momos Reaktion auf gestern und
+// heute (#188, https://github.com/Yggras/abnehm-app/issues/188#issuecomment-6986767756).
+describe('zweizeilige Meldung', () => {
+  const twoLines = { messageKey: 'test.gestern_und_heute', values: {} };
+
+  test('zeigt beide Zeilen mit ihrem Energiesymbol, ohne „Rückgängig“, und sagt beide an', async () => {
+    await renderHost();
+
+    await show(twoLines);
+
+    expect(screen.getByText('Gestern im Kalorienbudget · +1 Energie')).toBeOnTheScreen();
+    expect(screen.getByText('Wasserziel erfüllt · +1 Energie')).toBeOnTheScreen();
+    expect(screen.getAllByTestId('icon-energy', { includeHiddenElements: true })).toHaveLength(2);
+    expect(undoButton()).not.toBeOnTheScreen();
+    expect(announce.mock.calls).toEqual([['Gestern im Kalorienbudget · +1 Energie'], ['Wasserziel erfüllt · +1 Energie']]);
+    await wait(dwell);
+    expect(screen.queryByText('Wasserziel erfüllt · +1 Energie')).not.toBeOnTheScreen();
+  });
+
+  test('an eine Meldung mit „Rückgängig“ hängt der Host nur ihre letzte Zeile an', async () => {
+    await renderHost();
+    const message = water();
+    await show(message);
+
+    await show(twoLines);
+
+    expect(screen.getByText('+250 ml Wasser')).toBeOnTheScreen();
+    expect(screen.getByText('Wasserziel erfüllt · +1 Energie')).toBeOnTheScreen();
+    expect(screen.queryByText('Gestern im Kalorienbudget · +1 Energie')).not.toBeOnTheScreen();
+    expect(undoButton()).toBeOnTheScreen();
+    expect(announce.mock.calls.at(-1)).toEqual(['Wasserziel erfüllt · +1 Energie']);
   });
 });
 

@@ -44,6 +44,14 @@ export type DailyGoalSnapshot = z.infer<typeof DailyGoalSnapshot>;
 export const DailyGoalState = z.enum(['offen', 'teilweise', 'erfuellt', 'tagesende']);
 export type DailyGoalState = z.infer<typeof DailyGoalState>;
 
+/**
+ * Ob sich der Baustein erst nach Ablauf des Kalendertags entscheidet; das gilt nur für „Im
+ * Kalorienbudget“. Seine Gutschrift und der Bonus an solchen Tagen sind Tagesende-Gutschriften (CONTEXT.md).
+ */
+export function decidedAtDayEnd(baustein: BausteinKey): boolean {
+  return baustein === 'im_kalorienbudget';
+}
+
 /** Fortschritt je Baustein (Feld `type`), zusammen mit der Schwelle aus dem Snapshot. */
 export const DailyGoalProgress = z.discriminatedUnion('type', [
   z.strictObject({
@@ -176,7 +184,7 @@ export const DailyGoalEvaluated = z
   .refine(stateMatchesProgress, stateRule)
   .refine(
     (evaluation) =>
-      evaluation.completion.type === 'nie' || evaluation.progress.type !== 'im_kalorienbudget' || evaluation.dayClosed,
+      evaluation.completion.type === 'nie' || !decidedAtDayEnd(evaluation.progress.type) || evaluation.dayClosed,
     { message: 'Erfüllung vor dem Tagesende', path: ['completion'] },
   );
 export type DailyGoalEvaluated = z.infer<typeof DailyGoalEvaluated>;

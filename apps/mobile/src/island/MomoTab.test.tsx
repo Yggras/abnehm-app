@@ -203,10 +203,11 @@ describe('Beiträge gegen die Vertrags-Fixtures', () => {
     cleanups.push(world.game.momoCharacter.subscribe((state) => characters.push(state)));
     cleanups.push(world.game.wirContributions.subscribe((state) => contributions.push(state)));
 
+    // Die Gutschriften stammen vom 01. und 02.10.; am 14.10. döst Momo deshalb (#188).
     expect(MomoCharacterState.parse(characters.at(-1))).toEqual({
       type: 'ready',
       data: {
-        appearance: { stage: 'geschluepft', formKey: 'kaulquappe', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } },
+        appearance: { stage: 'geschluepft', formKey: 'kaulquappe', moodKey: 'doest', accessories: { kopf: null, hals: null } },
         energy: 2,
         level: 1,
         ownHalfPercent: 0,

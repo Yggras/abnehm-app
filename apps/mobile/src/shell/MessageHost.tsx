@@ -20,7 +20,8 @@ export type MessageHost = {
    * Zeigt eine Meldung. Es steht immer höchstens eine: Eine Meldung mit „Rückgängig“ bleibt ihre
    * volle Standzeit stehen; eine Meldung ohne kommt währenddessen als zweite Zeile dazu, die
    * Standzeit beginnt neu. Eine neue Meldung mit „Rückgängig“ ersetzt die bisherige, deren Undo
-   * verfällt. Meldungen ohne „Rückgängig“ ersetzen einander.
+   * verfällt. Meldungen ohne „Rückgängig“ ersetzen einander. Eine Meldung ohne „Rückgängig“ darf selbst
+   * zwei Zeilen haben (#188); an eine Meldung mit „Rückgängig“ wird dann nur ihre letzte angehängt.
    */
   showMessage(message: Message): void;
 };
@@ -43,12 +44,16 @@ type Shown = { line: ToastLine; secondLine?: ToastLine; undo?: MessageUndo };
 const HostContext = createContext<MessageHost | null>(null);
 const ShownContext = createContext<{ shown: Shown | null; pressUndo: (undo: MessageUndo) => void } | null>(null);
 
-function lineOf({ messageKey, values }: Message): ToastLine {
+/** Die Zeilen einer Meldung, eine oder zwei. */
+function linesOf({ messageKey, values }: Message): readonly [ToastLine] | readonly [ToastLine, ToastLine] {
   const entry = Object.prototype.hasOwnProperty.call(messageTexts, messageKey) ? messageTexts[messageKey] : undefined;
   const parsed = entry?.values.safeParse(values);
-  if (entry && parsed?.success) return entry.render(parsed.data);
+  if (entry && parsed?.success) {
+    const lines = entry.render(parsed.data);
+    return Array.isArray(lines) ? (lines as readonly [ToastLine, ToastLine]) : [lines as ToastLine];
+  }
   if (!isTestArtifact()) throw new MissingMessageTextError(messageKey);
-  return { text: shellTexts.missingMessageText(messageKey) };
+  return [{ text: shellTexts.missingMessageText(messageKey) }];
 }
 
 /** Standzeit unter der aktuellen Systemeinstellung; als Ref, weil der laufende Timer sie liest. */
@@ -93,13 +98,16 @@ export function MessageHostProvider({ children }: { children: ReactNode }) {
 
     const host: MessageHost = {
       showMessage(message) {
-        const line = lineOf(message);
+        const lines = linesOf(message);
+        const [line, secondLine] = lines;
         const previous = current;
         if (message.undo) display({ line, undo: message.undo });
-        else if (previous?.undo) display({ ...previous, secondLine: line });
-        else display({ line });
+        // Angehängt wird nur die letzte Zeile; die Meldung mit „Rückgängig“ behält ihre erste.
+        else if (previous?.undo) display({ ...previous, secondLine: lines.at(-1) });
+        else display({ line, secondLine });
         if (message.undo && previous?.undo !== message.undo) previous?.undo?.expire?.();
-        AccessibilityInfo.announceForAccessibility(line.text);
+        const shown = message.undo === undefined && previous?.undo ? [lines.at(-1)!] : lines;
+        for (const { text } of shown) AccessibilityInfo.announceForAccessibility(text);
       },
     };
     // Nur das „Rückgängig“ der gerade gezeigten Meldung zählt, und nur einmal: Danach ist sie weg.

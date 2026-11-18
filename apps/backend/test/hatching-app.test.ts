@@ -10,7 +10,8 @@ import { gamePhones, proposalOn } from './support/game-phones.ts';
 // Annahme ist offline nur vorgemerkt; Insel, Felder, Freischaltungen, Ereignis und Inselfortschritt kommen
 // erst mit dem Sync (Spezifikation 4, Abschnitt 11).
 
-const kaulquappe = { stage: 'geschluepft', formKey: 'kaulquappe', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } };
+// Ohne eigene Tageszielerfüllung heute und gestern döst Momo (#188).
+const kaulquappe = { stage: 'geschluepft', formKey: 'kaulquappe', moodKey: 'doest', accessories: { kopf: null, hals: null } };
 
 /** Anna hat Natur vorgeschlagen; beide Geräte kennen den Vorschlag. */
 async function roleChoiceOpen() {

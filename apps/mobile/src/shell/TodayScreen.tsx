@@ -19,7 +19,7 @@ import { PartnerStage } from '../partner/PartnerStage';
 import { isTestArtifact } from '../test-artifact';
 import { MomoAppearanceProvider, MomoFigure } from './MomoFigure';
 import { useQuickCommand } from './use-quick-command';
-import { thousandthsWithOneDecimal, waitingForPartnerText } from './texts';
+import { bausteinNames, thousandthsWithOneDecimal, waitingForPartnerText } from './texts';
 import { type TodayRegistry, type TodaySlot, type TodayState, MissingTodayContributionError } from './today-registry';
 
 type Data<S> = S extends ContributionState<infer D, string> ? D : never;
@@ -100,10 +100,6 @@ function Header({ data }: { data: HeaderReady }) {
   </View>;
 }
 
-const goalNames = {
-  ernaehrung_erfasst: 'Ernährung erfasst', im_kalorienbudget: 'Im Kalorienbudget',
-  wasserziel: 'Wasserziel', sporteinheit: 'Sporteinheit', gewogen: 'Gewogen',
-} as const;
 const goalStatus = { offen: 'Noch offen', teilweise: 'Unterwegs', erfuellt: 'Erreicht', tagesende: 'Am Tagesende' } as const;
 const trackerStatus = { leer: 'Noch offen', teil: 'Unterwegs', erreicht: 'Ziel erreicht', ueber_ziel: 'Über dem Ziel' } as const;
 
@@ -128,7 +124,7 @@ function MomoArea({ character, goals, large, stale }: { character: MomoCharacter
     </View>
   </View>
   <Text variant="headline">Deine drei Tagesziele</Text>
-  {goals.map((goal) => <Button key={goal.slot} compact variant="text" block label={`${goal.slot}. ${goalNames[goal.evaluation.progress.type]} · ${goalStatus[goal.evaluation.currentState]}`} onPress={() => action(goal.action)} />)}
+  {goals.map((goal) => <Button key={goal.slot} compact variant="text" block label={`${goal.slot}. ${bausteinNames[goal.evaluation.progress.type]} · ${goalStatus[goal.evaluation.currentState]}`} onPress={() => action(goal.action)} />)}
   </Card>;
 }
 
