@@ -1,14 +1,17 @@
 import {
   EncouragementKey,
+  EncouragementPushStatus,
+  EncouragementRecord,
   PartnerDailyGoalStage,
   PartnerDailyGoalStatus,
   PartnerPhotoList,
   PartnerPhotoRequest,
   PartnerSummaryEnvelope,
   RevocationNotice,
+  SendEncouragement,
 } from '../src/partner.ts';
-import { fixtures } from './define.ts';
-import { anna, coupling, notice, now, philipp, projection, today } from './ids.ts';
+import { fixtures, without } from './define.ts';
+import { anna, coupling, encouragement, notice, now, philipp, projection, timeZone, today } from './ids.ts';
 
 const envelopeBase = {
   id: projection,
@@ -18,6 +21,30 @@ const envelopeBase = {
   couplingId: coupling,
   dataAsOf: now,
   serverVersion: '1834',
+} as const;
+
+const sendEncouragement = {
+  encouragementId: encouragement,
+  messageKey: 'stark_heute',
+  createdAt: now,
+  localDate: today,
+  timeZone,
+  utcOffsetMinutes: 120,
+} as const;
+
+const encouragementRecord = {
+  couplingId: coupling,
+  senderPersonId: philipp,
+  recipientPersonId: anna,
+  messageKey: 'stark_heute',
+  sentAt: now,
+  localDate: today,
+  timeZone,
+  utcOffsetMinutes: 120,
+  pushStatus: 'ausstehend',
+  thankedAt: null,
+  createdAt: now,
+  updatedAt: now,
 } as const;
 
 const water = {
@@ -164,5 +191,31 @@ export const partnerFixtures = {
   EncouragementKey: fixtures(EncouragementKey, {
     valid: { 'Du schaffst das': 'du_schaffst_das', 'Gemeinsam für Momo': 'gemeinsam_fuer_momo' },
     invalid: { 'Freitext': 'Kleiner Stups: Trink was 💧' },
+  }),
+  EncouragementPushStatus: fixtures(EncouragementPushStatus, {
+    valid: { 'ohne Push': 'ohne_push', 'ausstehend': 'ausstehend', 'zugestellt': 'zugestellt' },
+    invalid: { 'gelesen gibt es nicht': 'gelesen' },
+  }),
+  SendEncouragement: fixtures(SendEncouragement, {
+    valid: {
+      'Stark heute': sendEncouragement,
+      // Unbekannte Schlüssel lehnt erst der Server mit `unknown_catalog_key` ab.
+      'unbekannter Katalogschlüssel': { ...sendEncouragement, messageKey: 'kleiner_stups' },
+    },
+    invalid: {
+      'mit Empfänger': { ...sendEncouragement, recipientPersonId: anna },
+      'Freitext': { ...sendEncouragement, messageKey: 'Kleiner Stups: Trink was 💧' },
+      'ohne Zeitzone': without(sendEncouragement, 'timeZone'),
+    },
+  }),
+  EncouragementRecord: fixtures(EncouragementRecord, {
+    valid: {
+      'gesendet, mit Push': encouragementRecord,
+      'vierte des Tages, bedankt': { ...encouragementRecord, pushStatus: 'ohne_push', thankedAt: now },
+    },
+    invalid: {
+      'unbekannter Schlüssel': { ...encouragementRecord, messageKey: 'kleiner_stups' },
+      'ohne Danke-Feld': without(encouragementRecord, 'thankedAt'),
+    },
   }),
 };

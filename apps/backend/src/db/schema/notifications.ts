@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, pgTable, unique } from 'drizzle-orm/pg-core';
 
-import { EncouragementKey } from '@abnehm/contracts/partner';
+import { EncouragementKey, EncouragementPushStatus } from '@abnehm/contracts/partner';
 
 import { coupling, person } from './accounts.ts';
 import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from './columns.ts';
@@ -9,7 +9,6 @@ import { day, flag, id, instant, json, mutable, oneOf, ref, text, whole } from '
 // Benachrichtigungen, Anfeuern und Geräte (Spezifikation 0, Abschnitte 2, 8 und 9; Spezifikation 5,
 // Abschnitte 4, 9 und 10). Push-Installation, Intents und Zustellversuche gibt es nur in Postgres.
 
-export const pushStatuses = ['ohne_push', 'ausstehend', 'zugestellt', 'unterdrueckt', 'fehlgeschlagen'] as const;
 export const intentTypes = [
   'anfeuern',
   'levelaufstieg',
@@ -75,7 +74,7 @@ export const encouragement = pgTable(
   },
   (t) => [
     check('encouragement_message_key_check', oneOf(t.messageKey, EncouragementKey.options)),
-    check('encouragement_push_status_check', oneOf(t.pushStatus, pushStatuses)),
+    check('encouragement_push_status_check', oneOf(t.pushStatus, EncouragementPushStatus.options)),
     check('encouragement_recipient_check', sql`${t.senderPersonId} <> ${t.recipientPersonId}`),
   ],
 );

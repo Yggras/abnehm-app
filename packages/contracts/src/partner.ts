@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { EntityId, Instant, LocalDate, MealKey, ServerVersion, type AreaKey } from './base.ts';
+import { CatalogKey, EntityId, Instant, LocalDate, MealKey, ServerVersion, TimeZone, UtcOffsetMinutes, type AreaKey } from './base.ts';
 import { addDays, daysBetween, isoWeekdayIndex } from './calendar.ts';
 import { uuidV5 } from './ids.ts';
 import { mealCategoryCount } from './units.ts';
@@ -184,6 +184,82 @@ export const EncouragementKey = z.enum([
   'stolz_auf_dich',
 ]);
 export type EncouragementKey = z.infer<typeof EncouragementKey>;
+
+/**
+ * Push-Status einer Anfeuerung (Spezifikation 5, Abschnitt 4). `ausstehend` oder `ohne_push` setzt
+ * `sendEncouragement`, die übrigen schreibt der Zusteller aus dem Intent zurück. Sender und Empfänger
+ * sehen ihn nicht.
+ */
+export const EncouragementPushStatus = z.enum(['ohne_push', 'ausstehend', 'zugestellt', 'unterdrueckt', 'fehlgeschlagen']);
+export type EncouragementPushStatus = z.infer<typeof EncouragementPushStatus>;
+
+/** Anfeuerungen mit Push je Absender und lokalem Absendertag (Spezifikation 5, Abschnitt 4; Designwert, nicht belegt). */
+export const encouragementPushesPerDay = 3;
+
+/** Spätester Eingang auf dem Server nach `createdAt`, der noch einen Push auslöst (Designwert, nicht belegt). */
+const encouragementPushWindowMs = 24 * 60 * 60_000;
+
+/**
+ * Push-Status einer neuen Anfeuerung: `ausstehend` bis einschließlich der dritten akzeptierten Anfeuerung
+ * desselben Absenders am selben lokalen Absendertag und nur bei Eingang spätestens 24 Stunden nach
+ * `createdAt`; sonst `ohne_push`. `earlierToday` zählt die schon akzeptierten Anfeuerungen dieses Tags.
+ */
+export function encouragementPushStatus({ earlierToday, createdAt, receivedAt }: Readonly<{
+  earlierToday: number;
+  createdAt: Instant;
+  receivedAt: Instant;
+}>): Extract<EncouragementPushStatus, 'ausstehend' | 'ohne_push'> {
+  const late = Date.parse(receivedAt) - Date.parse(createdAt) > encouragementPushWindowMs;
+  return earlierToday < encouragementPushesPerDay && !late ? 'ausstehend' : 'ohne_push';
+}
+
+/** Wie viele Anfeuerungen heute noch als Push ankommen, nach den eigenen Anfeuerungen des lokalen Tags. */
+export function remainingEncouragementPushes(sentToday: number): number {
+  return Math.max(0, encouragementPushesPerDay - sentToday);
+}
+
+/**
+ * Nutzlast des Fachbefehls `sendEncouragement` (Spezifikation 5, Abschnitt 4): clientseitige ID,
+ * Botschaftsschlüssel, `createdAt` sowie lokaler Tag, Zeitzone und Offset des Absenders. Absender,
+ * Kopplung und Empfänger leitet der Server ab; ein mitgeschickter Empfänger macht die Nutzlast ungültig.
+ * Der Schlüssel ist hier nur syntaktisch geprüft: Einen unbekannten lehnt der Server mit
+ * `unknown_catalog_key` ab.
+ */
+export const SendEncouragement = z.strictObject({
+  encouragementId: EntityId,
+  messageKey: CatalogKey,
+  createdAt: Instant,
+  localDate: LocalDate,
+  timeZone: TimeZone,
+  utcOffsetMinutes: UtcOffsetMinutes,
+});
+export type SendEncouragement = z.infer<typeof SendEncouragement>;
+
+/** Fachlicher Schlüssel von `sendEncouragement`: je Anfeuerung genau einer. */
+export function sendEncouragementKey(encouragementId: EntityId): string {
+  return `anfeuern:${encouragementId}`;
+}
+
+/**
+ * Kanonische Anfeuerung im Sync, lesbar für beide aktiven Mitglieder der Kopplung. `sentAt` ist das
+ * `createdAt` des Absenders; Tag, Zone und Offset sind ebenfalls die des Absenders. Kein generisches
+ * Update: Es ändern sie nur `sendEncouragement` und `thankEncouragements`.
+ */
+export const EncouragementRecord = z.strictObject({
+  couplingId: EntityId,
+  senderPersonId: EntityId,
+  recipientPersonId: EntityId,
+  messageKey: EncouragementKey,
+  sentAt: Instant,
+  localDate: LocalDate,
+  timeZone: TimeZone,
+  utcOffsetMinutes: UtcOffsetMinutes,
+  pushStatus: EncouragementPushStatus,
+  thankedAt: Instant.nullable(),
+  createdAt: Instant,
+  updatedAt: Instant,
+});
+export type EncouragementRecord = z.infer<typeof EncouragementRecord>;
 
 /**
  * Kurzlebiger, opaker Verweis auf ein Partnerfoto, höchstens 10 Minuten gültig; ausdrücklich keine

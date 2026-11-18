@@ -16,8 +16,11 @@ export const RoleRequestPayload = z.strictObject({
   senderDisplayName: DisplayName,
 });
 
+/** Nutzlast von `anfeuern`: Absender-Anzeigename und fester Botschaftsschlüssel (Spezifikation 5, Abschnitt 4). */
+export const EncouragementNotificationPayload = z.strictObject({ senderDisplayName: DisplayName, encouragementKey: EncouragementKey });
+
 const payloads = {
-  anfeuern: z.strictObject({ senderDisplayName: DisplayName, encouragementKey: EncouragementKey }),
+  anfeuern: EncouragementNotificationPayload,
   levelaufstieg: z.strictObject({ level: z.int().min(2) }),
   gebiet: z.strictObject({ gebietKey: CatalogKey }),
   projektabschluss: z.strictObject({ templateKey: CatalogKey }),

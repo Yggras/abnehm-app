@@ -1,5 +1,6 @@
 import {
   defaultNotificationSetting,
+  EncouragementNotificationPayload,
   NotificationIntent,
   NotificationPermission,
   NotificationSettingRecord,
@@ -63,6 +64,13 @@ export const notificationFixtures = {
   NotificationPermission: fixtures(NotificationPermission, {
     valid: { 'unentschieden': 'undetermined', 'erlaubt': 'granted', 'verweigert': 'denied' },
     invalid: { 'vorläufig gibt es nicht (keine provisional-Erlaubnis)': 'provisional', 'leer': '' },
+  }),
+  EncouragementNotificationPayload: fixtures(EncouragementNotificationPayload, {
+    valid: { 'Anna, Gemeinsam für Momo': { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' } },
+    invalid: {
+      'Freitext': { senderDisplayName: 'Anna', encouragementKey: 'Kleiner Stups: Trink was 💧' },
+      'mit Empfänger': { senderDisplayName: 'Anna', encouragementKey: 'stark_heute', recipientPersonId: philipp },
+    },
   }),
   RoleRequestPayload: fixtures(RoleRequestPayload, {
     valid: {
