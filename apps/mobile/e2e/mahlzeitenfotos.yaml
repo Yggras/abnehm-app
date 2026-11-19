@@ -75,10 +75,14 @@ name: Mahlzeitenfotos ansehen, freigeben und löschen
       - extendedWaitUntil:
           visible: ".*Transport-Fehlermodus: kein Netz.*"
           timeout: 10000
-- extendedWaitUntil:
-    notVisible: "Mahlzeitenfoto, Mittagessen"
-    timeout: 10000
-- assertVisible: "Mittagessen: Linsensuppe, 300 g, 270 kcal, KI-Schätzung"
+# Der Link des Fehlermodus öffnet „Heute“; zurück ins Protokoll.
+- tapOn:
+    id: tab-log
+- scrollUntilVisible:
+    element:
+      text: "Mittagessen: Linsensuppe, 300 g, 270 kcal, KI-Schätzung"
+    direction: DOWN
+- assertNotVisible: "Mahlzeitenfoto, Mittagessen"
 - takeScreenshot: mahlzeitenfotos-6-offline
 
 # Netz zurück ---------------------------------------------------------------------------------------
