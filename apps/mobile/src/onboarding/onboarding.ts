@@ -56,7 +56,7 @@ export type PlanSaveResult =
   | Readonly<{ type: 'fehlgeschlagen' }>;
 
 /** Was das Onboarding vom Plan-Modul der geöffneten Kontodatenbank braucht. */
-export type OnboardingPlan = Pick<Plan, 'saveInitialPlan'>;
+export type OnboardingPlan = Pick<Plan, 'saveInitialPlan' | 'settings'>;
 
 export type Onboarding = {
   /** Schritt 2: legt das Konto samt Person an; die Bestätigung aus Schritt 1 folgt mit der Person. */
@@ -94,6 +94,12 @@ export type Onboarding = {
    * Plan-Moduls geht an `onError` und endet als `fehlgeschlagen`.
    */
   savePlan(): Promise<PlanSaveResult>;
+  /**
+   * Ob heute schon Zielversion und Wochenplanversion gelten, etwa nach „Zurück“ aus Schritt 9. Dann legt
+   * erneutes Speichern nur geänderte Fassungen ab morgen an, und Schritt 8 sagt das (Spezifikation 1,
+   * Abschnitt 4; Entscheidung in #134).
+   */
+  hasPlanToday(): boolean;
   /** Für `onAccountOpened` der App-Sitzung mit dem Plan-Modul dieser Datenbank; die Rückgabe löst die Beobachtung beim Sperren. */
   opened(database: LocalDatabase, plan: OnboardingPlan): () => void;
 };
@@ -130,9 +136,13 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
     for (const listener of [...listeners]) listener();
   }
 
-  function requireDatabase(): LocalDatabase {
+  function requireOpened() {
     if (current === null) throw new Error('Onboarding ohne geöffnete Kontodatenbank');
-    return current.database;
+    return current;
+  }
+
+  function requireDatabase(): LocalDatabase {
+    return requireOpened().database;
   }
 
   function writeDisclaimer(database: LocalDatabase, acceptedAt: Instant) {
@@ -222,9 +232,13 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
       });
     },
 
+    hasPlanToday() {
+      const { weeklyPlan, goal } = requireOpened().plan.settings();
+      return weeklyPlan.current !== null && goal.current !== null;
+    },
+
     async savePlan() {
-      if (current === null) throw new Error('Onboarding ohne geöffnete Kontodatenbank');
-      const { database, plan } = current;
+      const { database, plan } = requireOpened();
       const draft = initialPlanDraftOf(database.read(readOnboardingDraft), clock.read().localDate);
       if (draft === null) return { type: 'unvollstaendig' };
       try {

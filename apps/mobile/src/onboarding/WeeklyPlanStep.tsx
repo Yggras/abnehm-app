@@ -6,12 +6,12 @@ import { Weekday } from '@abnehm/contracts/base';
 import { useClock } from '../clock/clock-context';
 import { Chip, ListGroup, ListRow, Notice, space, Text } from '../design';
 import { SectionTitle } from '../settings/SectionTitle';
-import { weeklyPlanTexts as texts } from './goal-texts';
 import type { OnboardingDraftChange } from './draft';
 import { useOnboarding } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
 import { stepTitles } from './steps';
 import { toggledSportDays, weekChoiceOf, weekPreviewOf } from './week';
+import { weeklyPlanTexts as texts } from './week-texts';
 
 export type WeeklyPlanStepProps = {
   /** Zurück zu Schritt 7; die Wahl bleibt im Entwurf. */
@@ -25,14 +25,17 @@ type SaveState = 'bereit' | 'speichert' | 'fehlgeschlagen' | 'unvollstaendig';
 /**
  * Schritt 8 „Wochenplan“ (Spezifikation 1, Abschnitte 4 und 9): Chips Mo–So für die Sporttage und eine
  * Einzelauswahl für den Wiegetag, vorausgewählt Di/Do/Sa und Montag. Sporttag und Wiegetag sperren sich
- * gegenseitig; der gesperrte Chip und ein Satz darunter sagen, warum. Darunter die drei Tagesziele je
- * Wochentag und die Mindestdauer einer Sporteinheit. „Plan speichern“ ruft über das Onboarding-Modul
- * „Erstplan speichern“ auf, ohne Netz; nach einem Fehler heißt die Hauptaktion „Erneut versuchen“.
+ * gegenseitig; der gesperrte Chip und ein Satz darunter sagen, warum. Unter den Sporttagen steht die
+ * Mindestdauer einer Sporteinheit, darunter die Tagesziele je Wochentag. „Plan speichern“ ruft über das
+ * Onboarding-Modul „Erstplan speichern“ auf, ohne Netz; nach einem Fehler heißt die Hauptaktion „Erneut
+ * versuchen“. Gilt heute schon ein Plan, etwa nach „Zurück“ aus Schritt 9, sagt der Schritt, dass
+ * Änderungen ab morgen gelten.
  */
 export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
   const onboarding = useOnboarding();
   const today = useClock().read().localDate;
   const [draft, setDraft] = useState(() => onboarding.readDraft());
+  const [fromTomorrow] = useState(() => onboarding.hasPlanToday());
   const [state, setState] = useState<SaveState>('bereit');
   const choice = weekChoiceOf(draft);
   const preview = weekPreviewOf(draft, today);
@@ -61,27 +64,16 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
       }}
     >
       <Text>{texts.intro}</Text>
+      {fromTomorrow ? <Notice tone="hint" icon="info" text={texts.fromTomorrow} /> : null}
 
       <View style={styles.section}>
         <SectionTitle>{texts.sportDays}</SectionTitle>
-        <View style={styles.chips}>
-          {Weekday.options.map((weekday) => {
-            const locked = weekday === choice.weighDay;
-            return (
-              <Chip
-                key={weekday}
-                label={texts.weekdayShort(weekday)}
-                accessibilityLabel={texts.weekday(weekday)}
-                accessibilityHint={locked ? texts.weighDayLocked(weekday) : undefined}
-                selection="multiple"
-                square
-                selected={choice.sportDays.includes(weekday)}
-                disabled={locked}
-                onPress={() => change({ sportDays: toggledSportDays(choice, weekday) })}
-              />
-            );
-          })}
-        </View>
+        <WeekdayChips
+          selection="multiple"
+          isSelected={(weekday) => choice.sportDays.includes(weekday)}
+          lockedHint={(weekday) => (weekday === choice.weighDay ? texts.weighDayLocked(weekday) : null)}
+          onPress={(weekday) => change({ sportDays: toggledSportDays(choice, weekday) })}
+        />
         {/* Die Folge der Wahl direkt unter den Chips, die sie auslösen (Impeccable-critique). */}
         {preview === null ? null : (
           <Text variant="caption">
@@ -97,24 +89,13 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
 
       <View style={styles.section}>
         <SectionTitle>{texts.weighDay}</SectionTitle>
-        <View accessibilityRole="radiogroup" accessibilityLabel={texts.weighDay} style={styles.chips}>
-          {Weekday.options.map((weekday) => {
-            const locked = choice.sportDays.includes(weekday);
-            return (
-              <Chip
-                key={weekday}
-                label={texts.weekdayShort(weekday)}
-                accessibilityLabel={texts.weekday(weekday)}
-                accessibilityHint={locked ? texts.sportDayLocked(weekday) : undefined}
-                selection="single"
-                square
-                selected={weekday === choice.weighDay}
-                disabled={locked}
-                onPress={() => change({ weighDay: weekday })}
-              />
-            );
-          })}
-        </View>
+        <WeekdayChips
+          selection="single"
+          groupLabel={texts.weighDay}
+          isSelected={(weekday) => weekday === choice.weighDay}
+          lockedHint={(weekday) => (choice.sportDays.includes(weekday) ? texts.sportDayLocked(weekday) : null)}
+          onPress={(weekday) => change({ weighDay: weekday })}
+        />
         {choice.sportDays.length > 0 ? (
           <Text variant="caption" tone="inkMuted">
             {texts.sportDaysLocked}
@@ -132,11 +113,11 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
           {/* Plätze 1 und 2 gelten jeden Tag; je Zeile steht nur der dritte, der die Tage unterscheidet. */}
           <Text>{texts.everyDay(preview.everyDay)}</Text>
           <ListGroup>
-            {preview.days.map(({ weekday, bausteine, third }) => (
+            {preview.days.map(({ weekday, bausteine, thirdBaustein }) => (
               <ListRow
                 key={weekday}
                 title={texts.weekday(weekday)}
-                value={texts.baustein(third)}
+                value={texts.baustein(thirdBaustein)}
                 accessibilityLabel={texts.dayLabel(weekday, bausteine)}
               />
             ))}
@@ -144,6 +125,47 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
         </View>
       )}
     </OnboardingFrame>
+  );
+}
+
+/**
+ * Sieben quadratische Wochentag-Chips Mo–So. Ein gesperrter Tag trägt seinen Grund als Hinweis für
+ * Screenreader; der sichtbare Satz steht unter der Gruppe.
+ */
+function WeekdayChips({
+  selection,
+  groupLabel,
+  isSelected,
+  lockedHint,
+  onPress,
+}: {
+  selection: 'single' | 'multiple';
+  /** Name der Einzelauswahl als `radiogroup`. */
+  groupLabel?: string;
+  isSelected: (weekday: Weekday) => boolean;
+  /** Grund der Sperre; `null`, wenn der Tag wählbar ist. */
+  lockedHint: (weekday: Weekday) => string | null;
+  onPress: (weekday: Weekday) => void;
+}) {
+  return (
+    <View accessibilityRole={selection === 'single' ? 'radiogroup' : undefined} accessibilityLabel={groupLabel} style={styles.chips}>
+      {Weekday.options.map((weekday) => {
+        const hint = lockedHint(weekday);
+        return (
+          <Chip
+            key={weekday}
+            label={texts.weekdayShort(weekday)}
+            accessibilityLabel={texts.weekday(weekday)}
+            accessibilityHint={hint ?? undefined}
+            selection={selection}
+            square
+            selected={isSelected(weekday)}
+            disabled={hint !== null}
+            onPress={() => onPress(weekday)}
+          />
+        );
+      })}
+    </View>
   );
 }
 

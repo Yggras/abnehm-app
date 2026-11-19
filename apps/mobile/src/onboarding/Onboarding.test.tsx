@@ -889,6 +889,7 @@ describe('Schritt 8 „Wochenplan“', () => {
   it('wählt Dienstag, Donnerstag und Samstag als Sporttage und Montag als Wiegetag vor', async () => {
     await openStepEight();
 
+    expect(screen.queryByText(/gilt ab morgen/)).toBeNull();
     expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 8 von 11' });
     for (const day of ['Dienstag', 'Donnerstag', 'Samstag']) expect(sportDay(day)).toBeChecked();
     for (const day of ['Montag', 'Mittwoch', 'Freitag', 'Sonntag']) expect(sportDay(day)).not.toBeChecked();
@@ -971,18 +972,21 @@ describe('Schritt 8 „Wochenplan“', () => {
 
     await user.press(screen.getByRole('button', { name: 'Zurück' }));
     expect(await screen.findByRole('header', { name: 'Wochenplan' })).toBeOnTheScreen();
+    // Heute gilt schon ein Plan: Änderungen gelten ab morgen (Spezifikation 1, Abschnitt 4; Entscheidung in #134).
+    expect(screen.getByText('Dein Plan gilt schon ab heute. Was du hier änderst, gilt ab morgen; deine Tagesziele für heute bleiben.')).toBeOnTheScreen();
     await user.press(sportDay('Mittwoch'));
     await savePlan();
 
     expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
     expect(mockDevice.startWeights()).toHaveLength(1);
     expect(mockDevice.dailyGoalsOn(today)).toHaveLength(3);
+    expect(mockDevice.weeklyPlanVersions()).toEqual([today, LocalDate.parse('2026-10-15')]);
     expect(mockDevice.server.calls()).toHaveLength(calls);
   });
 
   it('bietet nach einem Fehler Wiederholen an; danach entsteht genau ein Startgewicht', async () => {
     await openStepEight();
-    mockDevice.failWeightRecorder(true);
+    mockDevice.failWeightRecorder('wirft');
 
     await savePlan();
 
@@ -1109,7 +1113,7 @@ describe('Zugänglichkeit', () => {
     expect(screen.getByText(/^Montag ist dein Wiegetag\./)).toBeOnTheScreen();
     await expectAccessible();
 
-    mockDevice.failWeightRecorder(true);
+    mockDevice.failWeightRecorder('wirft');
     await savePlan();
     await screen.findByRole('button', { name: 'Erneut versuchen' });
     mockDevice.takeErrors();

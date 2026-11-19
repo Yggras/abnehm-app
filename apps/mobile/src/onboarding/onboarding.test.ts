@@ -353,17 +353,26 @@ describe('Schritt 8 „Wochenplan“: Plan speichern', () => {
     await throughStepSeven();
     expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
 
+    expect(device.onboarding.hasPlanToday()).toBe(true);
     device.onboarding.updateDraft({ sportDays: ['mittwoch'] });
     expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
 
     expect(device.startWeights()).toHaveLength(1);
-    // Die heutigen Tagesziele behalten die Werte des ersten Speicherns (Entscheidung in #134).
+    // Die heutigen Tagesziele behalten die Werte des ersten Speicherns; der geänderte Wochenplan gilt ab
+    // morgen (Entscheidung in #134).
     expect(device.dailyGoalsOn(today).map(({ baustein }) => baustein)).toEqual(['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget']);
+    expect(device.weeklyPlanVersions()).toEqual([today, LocalDate.parse('2026-10-15')]);
+  });
+
+  it('vor dem ersten Speichern gilt heute kein Plan', async () => {
+    await throughStepSeven();
+
+    expect(device.onboarding.hasPlanToday()).toBe(false);
   });
 
   it('scheitert der `WeightRecorder`, meldet es „fehlgeschlagen“ ohne Plan; Wiederholen speichert genau einmal', async () => {
     await throughStepSeven();
-    device.failWeightRecorder(true);
+    device.failWeightRecorder('wirft');
 
     expect(await device.onboarding.savePlan()).toEqual({ type: 'fehlgeschlagen' });
     expect(device.takeErrors()).toEqual([new Error('WeightRecorder: Transaktion gescheitert')]);
@@ -373,6 +382,26 @@ describe('Schritt 8 „Wochenplan“: Plan speichern', () => {
     expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
     expect(device.startWeights()).toHaveLength(1);
     expect(device.dailyGoalsOn(today)).toHaveLength(3);
+  });
+
+  it('lehnt der `WeightRecorder` das Startgewicht mit einem Vertragsfehler ab, meldet es „fehlgeschlagen“ ohne Plan', async () => {
+    await throughStepSeven();
+    device.failWeightRecorder('lehnt_ab');
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'fehlgeschlagen' });
+    expect(device.takeErrors()).toEqual([{ code: 'invalid_payload', retryable: false }]);
+    expect(device.dailyGoalsOn(today)).toEqual([]);
+    expect(device.weeklyPlanVersions()).toEqual([]);
+  });
+
+  it('lehnt das Plan-Modul den Entwurf ab, etwa ein Zielgewicht unter BMI 18,5, ist er unvollständig, und es entsteht nichts', async () => {
+    await throughStepSeven();
+    // 168 cm: BMI 18,5 liegt bei 52,2 kg.
+    device.onboarding.updateDraft({ goalWeightG: 50_000 });
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'unvollstaendig' });
+    expect(device.startWeights()).toEqual([]);
+    expect(device.weeklyPlanVersions()).toEqual([]);
   });
 
   it('ohne bestätigte Körperdaten ist der Entwurf unvollständig, und es entsteht nichts', async () => {

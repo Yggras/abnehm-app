@@ -1,4 +1,4 @@
-import type { BausteinKey } from '@abnehm/contracts/base';
+import type { BausteinKey, Weekday } from '@abnehm/contracts/base';
 import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
 import type { ActivityType } from '@abnehm/contracts/trackers';
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
@@ -28,6 +28,16 @@ export const activityNames: Readonly<Record<ActivityType, string>> = {
 export function germanList(items: readonly string[]): string {
   return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} und ${items.at(-1)}`;
 }
+
+/** Wochentage ausgeschrieben, etwa als zugänglicher Name eines Wochentag-Chips. */
+export const weekdayNames: Readonly<Record<Weekday, string>> = {
+  montag: 'Montag', dienstag: 'Dienstag', mittwoch: 'Mittwoch', donnerstag: 'Donnerstag', freitag: 'Freitag', samstag: 'Samstag', sonntag: 'Sonntag',
+};
+
+/** Wochentage kurz, etwa auf quadratischen Chips. */
+export const weekdayShortNames: Readonly<Record<Weekday, string>> = {
+  montag: 'Mo', dienstag: 'Di', mittwoch: 'Mi', donnerstag: 'Do', freitag: 'Fr', samstag: 'Sa', sonntag: 'So',
+};
 
 /** Namen der Tagesziel-Bausteine, auf „Heute“ und in „‹Baustein› erfüllt · +1 Energie“. */
 export const bausteinNames: Readonly<Record<BausteinKey, string>> = {

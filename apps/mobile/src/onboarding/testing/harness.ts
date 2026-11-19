@@ -50,13 +50,14 @@ export function createOnboardingDevice(clock: Clock) {
     clock,
     newId,
   });
-  // Startgewicht über den Fixture-Adapter aus #104; `failWeightRecorder` lässt den Port scheitern wie
-  // eine gescheiterte Transaktion des Tracker-Moduls.
+  // Startgewicht über den Fixture-Adapter aus #104; `failWeightRecorder` lässt den Port scheitern: `wirft`
+  // wie eine gescheiterte Transaktion des Tracker-Moduls, `lehnt_ab` mit einem Vertragsfehler.
   const weights = fakeWeightRecorder((measuredAt) => LocalDate.parse(readingOf(measuredAt, clock.read().timeZone).localDate));
-  let weightRecorderFails = false;
+  let weightRecorderFails: false | 'wirft' | 'lehnt_ab' = false;
   const weightRecorder: WeightRecorder = {
     async recordManualWeight(input) {
-      if (weightRecorderFails) throw new Error('WeightRecorder: Transaktion gescheitert');
+      if (weightRecorderFails === 'wirft') throw new Error('WeightRecorder: Transaktion gescheitert');
+      if (weightRecorderFails === 'lehnt_ab') return { type: 'contract_error', error: { code: 'invalid_payload', retryable: false } };
       return weights.recordManualWeight(input);
     },
   };
@@ -166,10 +167,13 @@ export function createOnboardingDevice(clock: Clock) {
     ownPerson: () => databases.current()?.read(readOwnPerson),
     /** Die Startgewichte, die der `WeightRecorder` angenommen hat; je `entryId` eines. */
     startWeights: () => weights.entries(),
-    /** `true`: Jeder Aufruf des `WeightRecorder` scheitert, bis `false` folgt. */
-    failWeightRecorder(fails: boolean) {
+    /** Jeder Aufruf des `WeightRecorder` scheitert auf diese Art, bis `false` folgt. */
+    failWeightRecorder(fails: false | 'wirft' | 'lehnt_ab') {
       weightRecorderFails = fails;
     },
+    /** `valid_from` der Wochenplanversionen der geöffneten Kontodatenbank, aufsteigend. */
+    weeklyPlanVersions: () =>
+      databases.current()?.read((tx) => sqliteOf(tx).select({ validFrom: schema.weeklyPlanVersion.validFrom }).from(schema.weeklyPlanVersion).orderBy(asc(schema.weeklyPlanVersion.validFrom)).all().map(({ validFrom }) => validFrom)) ?? [],
     /** Die Tagesziele der geöffneten Kontodatenbank an einem lokalen Tag, nach Platz. */
     dailyGoalsOn: (localDate: LocalDate) =>
       databases.current()?.read((tx) => sqliteOf(tx).select().from(schema.dailyGoal).where(eq(schema.dailyGoal.localDate, localDate)).orderBy(asc(schema.dailyGoal.slot)).all()) ?? [],
