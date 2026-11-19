@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ContractError } from './errors.ts';
 import {
+  ChallengeProposalPayload,
   EncouragementNotificationPayload,
   LevelUpPayload,
   RoleRequestPayload,
@@ -94,6 +95,17 @@ export const notificationTexts = defineNotificationTexts({
   'rollen_anfrage.rollenwahl': notificationText(
     RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),
     ({ senderDisplayName }) => ({ title: `${senderDisplayName} schlägt eure Rollen vor`, body: 'Wenn du zustimmst, schlüpft Momo 🐣' }),
+  ),
+  /**
+   * Spezifikation 4, Abschnitt 12: an den Partner (#210). Den Namen der Vorlage ergänzt der Zusteller aus
+   * dem Spielkatalog (`templateName`); die Payload selbst trägt nur den Schlüssel.
+   */
+  challenge_vorschlag: notificationText(
+    ChallengeProposalPayload.extend({ templateName: z.string().min(1).max(80) }),
+    ({ senderDisplayName, templateName }) => ({
+      title: `${senderDisplayName} schlägt eine Challenge vor`,
+      body: `${templateName} – sieben Tage gemeinsam. Magst du mitmachen?`,
+    }),
   ),
   /** Spezifikation 5, Abschnitt 9: Information an den Partner, keine Anfrage. */
   entkopplung: notificationText(UncouplingNotificationPayload, ({ senderDisplayName }) => ({

@@ -1,8 +1,10 @@
 import {
   BuildObject,
+  ChallengeProposalDecision,
   ChallengeStatus,
   ClaimEventReward,
   CommonStage,
+  DecideChallengeProposal,
   DecideSharedAction,
   IslandEventKind,
   IslandProgress,
@@ -15,14 +17,16 @@ import {
   MomoMood,
   PlacementTarget,
   PlaceObject,
+  ProposeChallenge,
   RequestedSharedActionType,
   RequestSharedAction,
   SharedAction,
   SharedActionDecision,
   UpgradeObject,
+  WithdrawChallengeProposal,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
-import { anna, command, coupling, island, islandEventState, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
+import { anna, challenge, command, coupling, island, islandEventState, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
 
 const progress = {
   islandId: island,
@@ -155,6 +159,29 @@ export const islandFixtures = {
   SharedActionDecision: fixtures(SharedActionDecision, {
     valid: { 'annehmen': 'annehmen', 'zurückziehen': 'zurueckziehen' },
     invalid: { 'Status statt Entscheidung': 'angenommen' },
+  }),
+  ProposeChallenge: fixtures(ProposeChallenge, {
+    valid: { 'Gut getrunken': { challengeId: challenge, templateKey: 'gut_getrunken' } },
+    invalid: {
+      'ohne Vorlage': { challengeId: challenge },
+      'Anteil aus dem Client': { challengeId: challenge, templateKey: 'gut_getrunken', requiredCount: 1 },
+      'Partner aus dem Client': { challengeId: challenge, templateKey: 'gut_getrunken', partnerPersonId: anna },
+    },
+  }),
+  ChallengeProposalDecision: fixtures(ChallengeProposalDecision, {
+    valid: { 'annehmen': 'annehmen', 'ablehnen': 'ablehnen' },
+    invalid: { 'Zurückziehen ist ein eigener Befehl': 'zurueckziehen' },
+  }),
+  DecideChallengeProposal: fixtures(DecideChallengeProposal, {
+    valid: { 'Anna nimmt an': { challengeId: challenge, decision: 'annehmen' }, 'Anna lehnt ab': { challengeId: challenge, decision: 'ablehnen' } },
+    invalid: {
+      'Zurückziehen': { challengeId: challenge, decision: 'zurueckziehen' },
+      'Startzeit aus dem Client': { challengeId: challenge, decision: 'annehmen', startedAt: now },
+    },
+  }),
+  WithdrawChallengeProposal: fixtures(WithdrawChallengeProposal, {
+    valid: { 'Philipp zieht zurück': { challengeId: challenge } },
+    invalid: { 'ohne Challenge': {} },
   }),
   DecideSharedAction: fixtures(DecideSharedAction, {
     valid: { 'Partner nimmt an': { actionId: sharedAction, decision: 'annehmen', timeZone } },
