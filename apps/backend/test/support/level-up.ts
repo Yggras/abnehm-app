@@ -23,7 +23,8 @@ export const closingField = philippsFelder[3];
 
 /**
  * `builtWorld`, in der Annas Hälfte auf Level 1 voll ist (3 Apfelbäume und ein Beerenstrauch, 11 verbaut)
- * und Philipp mit 8 verbaut eine Laterne fehlt. Philipp hat 12 Energie gesammelt, also noch 4.
+ * und Philipp mit 8 verbaut eine Laterne fehlt (oder die Aufwertung seiner Sitzbank auf Stufe 2 für 4).
+ * Philipp hat 12 Energie gesammelt, also noch 4.
  */
 export async function levelUpWorld() {
   const world = await builtWorld();
@@ -34,10 +35,11 @@ export async function levelUpWorld() {
     await buildAs(world, world.anna.device, { fieldId: world.fieldId(annasFelder[index]!), blueprintKey });
   }
   const philipps = ['laterne', 'laterne', 'sitzbank'] as const;
+  const objects: EntityId[] = [];
   for (const [index, blueprintKey] of philipps.entries()) {
-    await buildAs(world, world.actor, { fieldId: world.fieldId(philippsFelder[index]!), blueprintKey });
+    objects.push(await buildAs(world, world.actor, { fieldId: world.fieldId(philippsFelder[index]!), blueprintKey }));
   }
-  return world;
+  return { ...world, philippsSitzbank: objects[2]! };
 }
 
 export type LevelUpWorld = Awaited<ReturnType<typeof levelUpWorld>>;

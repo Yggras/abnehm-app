@@ -223,7 +223,7 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     expect(islandOf(iphone).events.open.map((event) => event.visitor.name)).toEqual(['Eule Otto', 'Schwan Selma', 'Fuchs Fridolin', 'Igel Ilse']);
   });
 
-  it('levelaufstieg-ausstehend: Vor dem Pull wartet Momo auf Anna; danach feiern beide Geräte Level 4 genau einmal (#200)', { timeout: 30_000 }, async () => {
+  it('levelaufstieg-ausstehend: Vor dem Pull wartet Momo auf Anna; danach feiern beide Geräte Level 4 genau einmal, Philipp beim nächsten sichtbaren Moment (#200)', { timeout: 30_000 }, async () => {
     const manifest = seedManifests['levelaufstieg-ausstehend'];
     const world = await seeded(manifest);
     const [iphone, android] = [world.phones['philipp-iphone']!, world.phones['anna-android']!];
@@ -232,12 +232,15 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
       cleanups.push(phone.game.observeReactions((reaction) => reactions.push(reaction)));
       return () => reactions.flatMap((reaction) => (reaction.level === null ? [] : [reaction.level]));
     };
-    const [philippsFeiern, annasFeiern] = [levelUps(iphone), levelUps(android)];
+    // Anna sieht ihre Insel beim Sync; Philipps Oberfläche erscheint erst nach seinem Pull. Beide Geräte haben
+    // Level 3 schon gefeiert (Seed), die Feier hängt also nicht daran, ob die Oberfläche vor dem Pull steht.
+    const annasFeiern = levelUps(android);
     expect(islandOf(iphone)).toMatchObject({ halves: { level: 3, own: { halfFull: true }, waitingForPartner: true } });
     // Offline wirken Annas Bauten sofort auf ihre eigene Hälfte, das Level kommt erst über den Sync.
     expect(islandOf(android)).toMatchObject({ halves: { level: 3, own: { halfFull: true }, partner: { halfFull: true }, waitingForPartner: false } });
 
     await runSyncSteps(manifest, world);
+    const philippsFeiern = levelUps(iphone);
 
     for (const phone of [iphone, android]) {
       expect(islandOf(phone)).toMatchObject({ halves: { level: 4, waitingForPartner: false } });

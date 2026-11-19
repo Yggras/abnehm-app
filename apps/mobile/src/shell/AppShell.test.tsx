@@ -315,9 +315,11 @@ describe('Quick-Commands und Meldungen', () => {
     [{ yesterday: { bonus: true, energy: 2 }, today: null, level: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie']],
     // Gestern und heute zusammen: zwei Zeilen derselben Meldung, je mit eigenem Betrag.
     [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']), level: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie', 'Sporteinheit erfüllt · +1 Energie']],
-    // Levelaufstieg (#200): eine Zeile; mit Gutschriften aus demselben Commit steht er als zweite Zeile unter der von heute.
+    // Levelaufstieg (#200): eine Zeile; mit Gutschriften aus demselben Commit steht er als zweite Zeile unter ihnen,
+    // gestern und heute dann in einer Zeile mit der Summe.
     [{ yesterday: null, today: null, level: 7 }, ['Momo ist jetzt auf Level 7']],
-    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']), level: 4 }, ['Sporteinheit erfüllt · +1 Energie', 'Momo ist jetzt auf Level 4']],
+    [{ yesterday: null, today: today(['wasserziel']), level: 2 }, ['Wasserziel erfüllt · +1 Energie', 'Momo ist jetzt auf Level 2']],
+    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']), level: 4 }, ['Gestern im Kalorienbudget, alle drei geschafft, heute Sporteinheit erfüllt · +3 Energie', 'Momo ist jetzt auf Level 4']],
     [{ yesterday: { bonus: false, energy: 1 }, today: null, level: 3 }, ['Gestern im Kalorienbudget · +1 Energie', 'Momo ist jetzt auf Level 3']],
   ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188, #200)', async (reaction, lines) => {
     closeIsland();

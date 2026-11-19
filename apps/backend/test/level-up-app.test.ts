@@ -4,11 +4,12 @@ import { EntityId } from '@abnehm/contracts/base';
 import { islandEventId } from '@abnehm/contracts/island-records';
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import { notificationTexts } from '@abnehm/contracts/notification-texts';
+import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { energyBooking } from '../src/db/schema/index.ts';
 import { correctBooking } from '../src/island/booking-correction.ts';
-import { buildOp, fieldKeys } from './support/building.ts';
-import { closingField, levelEventsOf, levelIntents, levelUpWorld, type LevelUpWorld } from './support/level-up.ts';
+import { buildOp, builtWorld, earnEnergy, fieldKeys, upgradeOp } from './support/building.ts';
+import { closingField, levelEventsOf, levelIntents, levelUpWorld, spendWithoutProjection, type LevelUpWorld } from './support/level-up.ts';
 import { pullAll, push } from './support/sync.ts';
 
 // Nachweis für #200 am Server: Levelaufstieg im selben Befehl mit echter Hono-App, isoliertem Postgres und
@@ -16,7 +17,7 @@ import { pullAll, push } from './support/sync.ts';
 // mit einer Laterne die Lücke. Der ausgelieferte Katalog hat noch keine Level-Freischaltungen (#214, #217);
 // sie prüft `level-up.test.ts` mit dem Test-Katalog.
 
-const levelOccasion = (world: LevelUpWorld, level: number) => `level:${world.islandId}:${level}`;
+const levelOccasion = (world: LevelUpWorld, level: number) => levelOccasionKey(world.islandId, level);
 
 async function closeTheGap(world: LevelUpWorld) {
   const operation = buildOp({ fieldId: world.fieldId(closingField) });
@@ -59,6 +60,41 @@ describe('Levelaufstieg im Baubefehl', { timeout: 60_000 }, () => {
         text: { title: 'Momo ist jetzt auf Level 2 🎉', body: 'Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.' },
       });
     }
+  });
+
+  it('auch eine Aufwertung hebt die Insel im selben Befehl: Philipps Sitzbank auf Stufe 2 schließt die Lücke', async () => {
+    const world = await levelUpWorld();
+
+    const [result] = await push(world.backend, world.actor, [upgradeOp({ islandObjectId: world.philippsSitzbank })]);
+
+    expect(result).toMatchObject({ type: 'applied' });
+    if (result?.type !== 'applied') return;
+    expect(result.changes?.find((change) => change.entityType === 'island_progress')).toMatchObject({ data: { level: 2 } });
+    expect(result.changes?.find((change) => change.entityType === 'island_event')).toMatchObject({ data: { type: 'levelaufstieg', occasionKey: levelOccasion(world, 2) } });
+    expect(await levelIntents(world)).toHaveLength(2);
+  });
+
+  it('mehrere Level in einem Baubefehl: je Level ein Ereignis, aber nur ein Intent je Empfänger mit dem höchsten Level', async () => {
+    const world = await builtWorld();
+    // Philipp sammelt 32 Energie mehr (36). Verbaut steht direkt in der Datenbank, ohne neuen Fortschritt: Anna 36,
+    // Philipp 33. Die Projektion steht also noch auf Level 1, und Philipps nächste Laterne erreicht Schwelle(4) = 36.
+    await earnEnergy(world.backend, world.philipp, ['2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13']);
+    await spendWithoutProjection(world, world.anna, { fieldKey: 'grundinsel:12:1', amount: 36 });
+    await spendWithoutProjection(world, world.philipp, { fieldKey: 'grundinsel:0:1', amount: 33 });
+
+    const [result] = await push(world.backend, world.actor, [buildOp({ fieldId: world.fieldId(fieldKeys.philippsEcke) })]);
+
+    expect(result).toMatchObject({ type: 'applied' });
+    if (result?.type !== 'applied') return;
+    expect(result.changes?.find((change) => change.entityType === 'island_progress')).toMatchObject({ data: { level: 4 } });
+    expect(result.changes?.filter((change) => change.entityType === 'island_event').map((change) => change.entityId)).toEqual(
+      [2, 3, 4].map((level) => islandEventId(world.islandId, levelOccasionKey(world.islandId, level))),
+    );
+    const intents = await levelIntents(world);
+    expect(intents.map((intent) => [intent.recipientPersonId, intent.payload]).sort()).toEqual(
+      [[world.anna.personId, { level: 4 }], [world.philipp.personId, { level: 4 }]].sort(),
+    );
+    expect(new Set(intents.map((intent) => intent.sourceEventId))).toEqual(new Set([islandEventId(world.islandId, levelOccasionKey(world.islandId, 4))]));
   });
 
   it('Anna bekommt Ereignis und Projektion mit ihrem nächsten Pull', async () => {

@@ -1,5 +1,6 @@
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { openVisitFacts, planVisitors, visitorSlotOf } from '@abnehm/game-rules/events';
+import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { EntityId, LocalDate } from '../src/base.ts';
 import { BuildObject, buildObjectKey, PlaceObject, placeObjectKey } from '../src/island.ts';
@@ -489,7 +490,7 @@ const annasLueckenBauten: readonly SeedBuild[] = [
 /** Das gemeinsame Ereignis „Levelaufstieg“, wie `level-up.ts` im Backend es schreibt (#200). */
 function levelEvent(level: number): SeedEntity {
   const islandId = seedIds.island.philippAnna;
-  const occasionKey = `level:${islandId}:${level}`;
+  const occasionKey = levelOccasionKey(islandId, level);
   return {
     table: 'island_event',
     entityType: 'island_event',
@@ -528,13 +529,28 @@ function levelIntent(level: number, recipientPersonId: string): SeedRow {
   };
 }
 
+/**
+ * Das zuletzt gefeierte Level je Installation, im Gerätezustand der App (`momo_levelfeier` in
+ * `apps/mobile/src/island/level-celebration.ts`): Beide Geräte haben Level 3 schon gesehen. Ohne gemerktes
+ * Level übernähme die App das erste, das sie sieht, still; dann hinge die Feier daran, ob die Oberfläche vor
+ * dem ersten Pull steht.
+ */
+function celebratedLevel(state: SeedState, level: number): SeedState {
+  const row = { key: 'momo_levelfeier', value: { islandId: seedIds.island.philippAnna, level }, updated_at: haelfteVollBauten.at(-1)!.at };
+  const devices = Object.fromEntries(Object.entries(state.devices).map(([key, device]) => [key, { ...device, rows: { ...device.rows, device_state: [...(device.rows.device_state ?? []), row] } }]));
+  return { server: state.server, devices };
+}
+
 function levelaufstiegAusstehend() {
   const ops = seedIds.operation.levelaufstiegAusstehend;
-  const synced = buildSeedState({
-    parts: gekoppeltPartsBuilt(haelfteVollBauten),
-    createdAt: now,
-    devices: { [iphone]: { personId: philipp, cursor: 'latest' }, [android]: { personId: anna, cursor: 'latest' } },
-  });
+  const synced = celebratedLevel(
+    buildSeedState({
+      parts: gekoppeltPartsBuilt(haelfteVollBauten),
+      createdAt: now,
+      devices: { [iphone]: { personId: philipp, cursor: 'latest' }, [android]: { personId: anna, cursor: 'latest' } },
+    }),
+    3,
+  );
   const arrivals = annasLueckenBauten.map((build, index) => ({ build, n: firstBuild + index, operationId: ops[index]! }));
   const initial = changedOffline(synced, android, arrivals.map(({ build, n, operationId }) => offlineBuild(build, n, operationId)));
   // Jeder Bau berechnet den Fortschritt aus allen bisherigen; erst der dritte erreicht Level 4.

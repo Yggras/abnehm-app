@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { islandEventId } from '@abnehm/contracts/island-records';
 import { testCatalog } from '@abnehm/game-rules/fixtures';
+import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { progressChanges } from '../src/island/progress-change.ts';
 import { builtWorld, type BuildWorld } from './support/building.ts';
@@ -41,14 +42,14 @@ describe('Levelaufstieg mit Test-Katalog', { timeout: 60_000 }, () => {
     expect(changes.filter((change) => change.entityType === 'blueprint_unlock')).toHaveLength(4);
 
     const events = await levelEventsOf(world);
-    expect(events.map((event) => [event.type, event.occasionKey])).toEqual([2, 3, 4].map((level) => ['levelaufstieg', `level:${world.islandId}:${level}`]));
+    expect(events.map((event) => [event.type, event.occasionKey])).toEqual([2, 3, 4].map((level) => ['levelaufstieg', levelOccasionKey(world.islandId, level)]));
     expect(changes.filter((change) => change.entityType === 'island_event').map((change) => change.entityId)).toEqual(events.map((event) => event.id));
 
     // Nur einmal je Empfänger, mit dem höchsten Level.
     const intents = await levelIntents(world);
     expect(intents).toHaveLength(2);
     for (const intent of intents) {
-      expect(intent).toMatchObject({ sourceEventId: islandEventId(world.islandId, `level:${world.islandId}:4`), payload: { level: 4 } });
+      expect(intent).toMatchObject({ sourceEventId: islandEventId(world.islandId, levelOccasionKey(world.islandId, 4)), payload: { level: 4 } });
     }
   });
 
@@ -60,7 +61,7 @@ describe('Levelaufstieg mit Test-Katalog', { timeout: 60_000 }, () => {
     const changes = await spendBoth(world, 12, 2);
 
     expect(changes.map((change) => change.entityType)).toEqual(['island_progress', 'island_event']);
-    expect((await levelEventsOf(world)).map((event) => event.occasionKey)).toEqual([2, 3].map((level) => `level:${world.islandId}:${level}`));
+    expect((await levelEventsOf(world)).map((event) => event.occasionKey)).toEqual([2, 3].map((level) => levelOccasionKey(world.islandId, level)));
     const intents = await levelIntents(world);
     expect(intents.map((intent) => (intent.payload as { level: number }).level).sort()).toEqual([2, 2, 3, 3]);
   });

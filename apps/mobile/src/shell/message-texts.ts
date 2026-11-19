@@ -47,17 +47,37 @@ const MomoEnergyValues = z.strictObject({
   gesternEnergie: z.int().nonnegative(),
 });
 
-/** Die Zeilen von `momo.energie` (siehe dort): eine je Tag mit Gutschriften. */
-function energyLines({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }: z.output<typeof MomoEnergyValues>): MessageLines {
+/** Was Momos Reaktion auf Gutschriften je Tag sagt, ohne Betrag; `null` ohne Gutschrift an diesem Tag. */
+function energyParts({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }: z.output<typeof MomoEnergyValues>) {
   const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
-  const todayText = bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`;
-  const today: ToastLine = { text: `${todayText} · +${energie} Energie`, energy: true };
-  const yesterday: ToastLine = {
-    text: `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''} · +${gesternEnergie} Energie`,
-    energy: true,
+  return {
+    yesterday: gesternEnergie === 0 ? null : `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''}`,
+    today: energie === 0 ? null : bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`,
   };
-  if (gesternEnergie === 0) return today;
-  return energie === 0 ? yesterday : [yesterday, today];
+}
+
+const energyLine = (text: string, amount: number): ToastLine => ({ text: `${text} · +${amount} Energie`, energy: true });
+
+/** Die Zeilen von `momo.energie` (siehe dort): eine je Tag mit Gutschriften, gestern über heute. */
+function energyLines(values: z.output<typeof MomoEnergyValues>): MessageLines {
+  const { yesterday, today } = energyParts(values);
+  if (yesterday !== null && today !== null) return [energyLine(yesterday, values.gesternEnergie), energyLine(today, values.energie)];
+  return yesterday !== null ? energyLine(yesterday, values.gesternEnergie) : energyLine(today!, values.energie);
+}
+
+/**
+ * Gutschriften als eine Zeile, wenn neben ihnen nur eine Zeile Platz hat: gestern und heute zusammen mit der
+ * Summe, etwa „Gestern im Kalorienbudget, heute Wasserziel erfüllt · +2 Energie“ (Wortlaut ist ein Designwert
+ * aus #200, nicht belegt).
+ */
+function energyLineCombined(values: z.output<typeof MomoEnergyValues>): ToastLine {
+  const { yesterday, today } = energyParts(values);
+  if (yesterday === null || today === null) {
+    const lines = energyLines(values);
+    return 'text' in lines ? lines : lines[0];
+  }
+  // Bausteinnamen sind Substantive und bleiben groß; nur „Alle drei geschafft“ steht mitten im Satz klein.
+  return energyLine(`${yesterday}, heute ${values.bonus ? 'alle drei geschafft' : today}`, values.gesternEnergie + values.energie);
 }
 
 export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
@@ -123,14 +143,13 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /**
    * Spezifikation 4, Abschnitt 6: Momos Feier eines Levelaufstiegs, „Momo ist jetzt auf Level N“ (#200); bei
    * mehreren übersprungenen Leveln das höchste. Kommen im selben Commit Gutschriften dazu, steht ihre Zeile
-   * davor, bei gestern und heute nur die von heute, weil eine Meldung höchstens zwei Zeilen hat. Die Levelzeile
+   * davor, gestern und heute zusammengefasst, weil eine Meldung höchstens zwei Zeilen hat. Die Levelzeile
    * steht zuletzt: Steht eine Meldung mit „Rückgängig“, hängt der Host nur sie an.
    */
   'momo.levelaufstieg': messageText(MomoEnergyValues.extend({ level: z.int().min(2) }), ({ level, ...energy }) => {
     const levelLine: ToastLine = { text: `Momo ist jetzt auf Level ${level}` };
     if (energy.energie + energy.gesternEnergie === 0) return levelLine;
-    const lines = energyLines(energy);
-    return ['text' in lines ? lines : lines[1], levelLine];
+    return [energyLineCombined(energy), levelLine];
   }),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),

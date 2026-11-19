@@ -7,7 +7,7 @@ import { islandEventId } from '@abnehm/contracts/island-records';
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import type { GameCatalog } from '@abnehm/game-rules/catalog';
-import { unlocksAt } from '@abnehm/game-rules/unlocks';
+import { levelOccasionKey, unlocksAt } from '@abnehm/game-rules/unlocks';
 
 import { batchChangeWriter, changeWriter } from '../coupling/change-writer.ts';
 import type { DbExecutor } from '../database.ts';
@@ -36,9 +36,6 @@ export type LevelUp = Readonly<{
   at: Date;
   catalog: GameCatalog;
 }>;
-
-/** Anlassschlüssel des Levelaufstiegs auf Level `level`. */
-export const levelOccasionKey = (islandId: EntityId, level: number) => `level:${islandId}:${level}`;
 
 /** Schreibt Freischaltungen, Ereignisse und Intents der neu erreichten Level; liefert die kanonischen Änderungen. */
 export async function levelUpChanges(tx: DbExecutor, { islandId, couplingId, fromLevel, toLevel, at, catalog }: LevelUp): Promise<CanonicalChange[]> {

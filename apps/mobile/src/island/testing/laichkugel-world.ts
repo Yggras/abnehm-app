@@ -12,6 +12,7 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { visitorOccasionKey } from '@abnehm/game-rules/events';
 import { hatching } from '@abnehm/game-rules/hatching';
 import { levelNeed } from '@abnehm/game-rules/progress';
+import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { dailyGoalCompletionEntity } from '../../daily-goals';
 import { insertCompletionForTest, insertDailyGoalForTest, insertPersonForTest } from '../../daily-goals/testing/persisted';
@@ -222,7 +223,7 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
         });
         adapterOf('island_progress').applyCanonical(tx, { entityId: EntityId.parse(row.id), serverVersion: progress.serverVersion, data: progress });
         for (const eventLevel of events) {
-          const occasionKey = `level:${islandId}:${eventLevel}`;
+          const occasionKey = levelOccasionKey(islandId, eventLevel);
           const id = islandEventId(islandId, occasionKey);
           const data = IslandEventRecord.parse({
             islandId, couplingId, type: 'levelaufstieg', templateKey: null, responsiblePersonId: null, occasionKey, status: 'abgeschlossen', reward: null,
