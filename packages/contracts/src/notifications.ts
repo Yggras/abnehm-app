@@ -4,6 +4,7 @@ import { type AreaKey, CatalogKey, DisplayName, EntityId, Instant, MessageKey } 
 import { uuidV5 } from './ids.ts';
 import { EncouragementKey } from './partner.ts';
 import type { RouteTarget } from './routes.ts';
+import { InstallationId } from './sync.ts';
 
 // Benachrichtigungsabsichten (Spezifikation 0, Abschnitt 2). Fachmodule erzeugen sie in der
 // Transaktion des auslösenden Ereignisses, Spezifikation 5 stellt sie höchstens einmal zu.
@@ -207,3 +208,32 @@ const notificationSettingNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b66';
 export function notificationSettingId(personId: EntityId): EntityId {
   return EntityId.parse(uuidV5(notificationSettingNamespace, `notification_setting:${personId}`));
 }
+
+/** Plattform einer Push-Installation. */
+export const PushPlatform = z.enum(['ios', 'android']);
+export type PushPlatform = z.infer<typeof PushPlatform>;
+
+/**
+ * Expo-Push-Token, wie `getExpoPushTokenAsync` es liefert. Die Form folgt `Expo.isExpoPushToken` aus
+ * `expo-server-sdk` (https://github.com/expo/expo-server-sdk-node/blob/main/src/ExpoClient.ts):
+ * `ExponentPushToken[…]` oder `ExpoPushToken[…]`. Die Höchstlänge ist ein Designwert gegen
+ * übergroße Nutzlasten, nicht belegt.
+ */
+export const ExpoPushToken = z
+  .string()
+  .max(256)
+  .regex(/^Expo(nent)?PushToken\[[^\]]+\]$/);
+export type ExpoPushToken = z.infer<typeof ExpoPushToken>;
+
+/**
+ * „Registrieren oder aktualisieren“ der Push-Installation dieses Geräts (Spezifikation 5, Abschnitt 9).
+ * Die Person und die Sitzung kommen aus der Sitzung, nie aus der Nutzlast. Die Installationskennung ist
+ * dieselbe wie im Sync. Das Token gelangt nur über diesen Endpunkt zum Server, nie über den Fach-Sync.
+ */
+export const RegisterPushInstallationRequest = z.strictObject({
+  installationKey: InstallationId,
+  platform: PushPlatform,
+  expoPushToken: ExpoPushToken,
+  permission: NotificationPermission,
+});
+export type RegisterPushInstallationRequest = z.infer<typeof RegisterPushInstallationRequest>;

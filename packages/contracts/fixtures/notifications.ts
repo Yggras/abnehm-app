@@ -1,10 +1,13 @@
 import {
   defaultNotificationSetting,
   EncouragementNotificationPayload,
+  ExpoPushToken,
   NotificationIntent,
   NotificationPermission,
   NotificationSettingRecord,
   NotificationSettingUpsert,
+  PushPlatform,
+  RegisterPushInstallationRequest,
   RoleRequestPayload,
   WallClockTime,
 } from '../src/notifications.ts';
@@ -27,6 +30,14 @@ const encouragement = {
 
 /** Philipp stellt den Abend-Check-in auf 20:30 und nimmt Gewicht heraus (#132). */
 const philippsSetting = { ...defaultNotificationSetting, eveningTime: '20:30', trackerGewicht: false } as const;
+
+/** Philipps iPhone meldet sich nach erteilter Erlaubnis an (#139). */
+const pushRegistration = {
+  installationKey: '5d1a7c3e-2b4f-4e6a-9c8d-1f2e3a4b5c6d',
+  platform: 'ios',
+  expoPushToken: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+  permission: 'granted',
+} as const;
 
 export const notificationFixtures = {
   WallClockTime: fixtures(WallClockTime, {
@@ -59,6 +70,32 @@ export const notificationFixtures = {
     invalid: {
       'ohne Eigentümer': { ...philippsSetting, createdAt: now, updatedAt: now },
       'Abend vor Mittag': { personId: philipp, ...philippsSetting, eveningTime: '12:00', createdAt: now, updatedAt: now },
+    },
+  }),
+  PushPlatform: fixtures(PushPlatform, {
+    valid: { iPhone: 'ios', Android: 'android' },
+    invalid: { 'Web gibt es nicht': 'web', 'großgeschrieben': 'iOS' },
+  }),
+  ExpoPushToken: fixtures(ExpoPushToken, {
+    valid: { 'Exponent-Form': 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]', 'Expo-Form': 'ExpoPushToken[yyyyyyyyyyyyyyyyyyyyyy]' },
+    invalid: {
+      'natives Gerätetoken': 'a1b2c3d4e5f6',
+      'leere Klammern': 'ExponentPushToken[]',
+      'ohne schließende Klammer': 'ExponentPushToken[xxxx',
+      'übergroß': `ExponentPushToken[${'x'.repeat(256)}]`,
+    },
+  }),
+  RegisterPushInstallationRequest: fixtures(RegisterPushInstallationRequest, {
+    valid: {
+      'iPhone mit Erlaubnis': pushRegistration,
+      'Android, Erlaubnis entzogen': { ...pushRegistration, platform: 'android', permission: 'denied' },
+    },
+    invalid: {
+      'Person gehört nicht in die Nutzlast': { ...pushRegistration, personId: philipp },
+      'Sitzung gehört nicht in die Nutzlast': { ...pushRegistration, sessionId: anna },
+      'Installationskennung keine UUID': { ...pushRegistration, installationKey: 'geraet-1' },
+      'ohne Token': without(pushRegistration, 'expoPushToken'),
+      'ohne Erlaubnisstatus': without(pushRegistration, 'permission'),
     },
   }),
   NotificationPermission: fixtures(NotificationPermission, {
