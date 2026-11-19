@@ -51,9 +51,11 @@ test('Tracer Bullet: Der neue Besuch steht unter „Neu auf der Insel“; nach d
   await openEvents();
 
   expect(screen.getByRole('header', { name: 'Ereignisse' })).toBeOnTheScreen();
+  // Neu angekommen, und zugleich ein offener Wunsch ohne Frist.
   expect(section('Neu auf der Insel')).toBeOnTheScreen();
-  expect(section('Offene Wünsche')).toBeNull();
-  expect(screen.getByText('Igel Ilse ist zu Besuch')).toBeOnTheScreen();
+  expect(section('Offene Wünsche')).toBeOnTheScreen();
+  expect(screen.getByText('Kein Zeitdruck. Wünsche warten, bis du so weit bist.')).toBeOnTheScreen();
+  expect(screen.getAllByText('Igel Ilse ist zu Besuch')).toHaveLength(2);
   expect(screen.getByText('Wünscht sich: Laterne')).toBeOnTheScreen();
   expect(screen.getByText('Bringt den Bauplan Brunnen mit')).toBeOnTheScreen();
   expect(screen.getByText('Wenn du den Bauplan Laterne baust, kannst du die Belohnung abholen.')).toBeOnTheScreen();
@@ -64,10 +66,10 @@ test('Tracer Bullet: Der neue Besuch steht unter „Neu auf der Insel“; nach d
   await act(async () => buildLater(world, 'laterne'));
   await openView('ereignisse');
 
-  // Gesehen: Der Wunsch steht jetzt unter „Offene Wünsche“, ohne Frist.
+  // Gesehen: Der Besuch ist nicht mehr neu, der Wunsch steht weiter unter „Offene Wünsche“.
   expect(section('Neu auf der Insel')).toBeNull();
   expect(section('Offene Wünsche')).toBeOnTheScreen();
-  expect(screen.getByText('Kein Zeitdruck. Wünsche warten, bis du so weit bist.')).toBeOnTheScreen();
+  expect(screen.getAllByText('Igel Ilse ist zu Besuch')).toHaveLength(1);
   await user.press(screen.getByRole('button', { name: 'Belohnung von Igel Ilse abholen' }));
 
   expect(within(screen.getByTestId('message-slot')).getByText('Neuer Bauplan: Brunnen')).toBeOnTheScreen();
@@ -79,10 +81,11 @@ test('Tracer Bullet: Der neue Besuch steht unter „Neu auf der Insel“; nach d
   expect(screen.getByText('Brunnen')).toBeOnTheScreen();
 });
 
-test('Deko als Belohnung liegt danach im Lager', async () => {
+test('Deko als Belohnung liegt danach im Lager, wenn kein Besucher-Bauplan der Rolle mehr frei ist', async () => {
   await openIslandScreen(clock, cleanups, {
     energy: 5,
     arrange: (w) => {
+      w.unlockOnServer(['brunnen', 'vogelhaus', 'wegweiser']);
       w.visitOnServer({ to: 'philipp', n: 1, templateKey: 'fuchs_fridolin', details: sitzbankForMuschel, seen: true });
       buildLater(w, 'sitzbank');
     },
@@ -110,7 +113,7 @@ test('Ein Bau vor dem Besuch zählt nicht; der Besuch der Partnerin erscheint ni
 
   await openEvents();
 
-  expect(screen.getByText('Igel Ilse ist zu Besuch')).toBeOnTheScreen();
+  expect(screen.getAllByText('Igel Ilse ist zu Besuch').length).toBeGreaterThan(0);
   expect(screen.queryByText('Eule Otto ist zu Besuch')).toBeNull();
   expect(screen.queryByRole('button', { name: /Belohnung/ })).toBeNull();
 });

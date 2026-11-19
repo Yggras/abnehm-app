@@ -8,9 +8,11 @@ import type { CanonicalChange } from '@abnehm/contracts/sync';
 import {
   cappedEventKinds,
   isWishFulfilled,
+  openVisitFacts,
   personalEventKinds,
   planVisitors,
   resolveClaimedReward,
+  visitorSlotOf,
   type VisitorPerson,
 } from '@abnehm/game-rules/events';
 import { gameCatalog } from '@abnehm/game-rules/content';
@@ -86,7 +88,10 @@ export const generateIslandEvents: PrePullStep = async (tx, { personId, now }) =
     .select({ owner: islandObject.ownerPersonId, key: islandObject.catalogKey })
     .from(islandObject)
     .where(and(eq(islandObject.islandId, current.islandId), eq(islandObject.origin, 'gebaut'), isNull(islandObject.deletedAt)));
-  const openVisits = open.filter((event) => event.type === 'besuch');
+  const openVisits = open.flatMap((event) => {
+    const details = VisitorEventDetails.safeParse(event.reward);
+    return event.type === 'besuch' && event.templateKey !== null && details.success ? [{ templateKey: event.templateKey, details: details.data }] : [];
+  });
 
   const persons: VisitorPerson[] = members.map((member) => ({
     personId: member.personId,
@@ -99,13 +104,9 @@ export const generateIslandEvents: PrePullStep = async (tx, { personId, now }) =
     islandId: current.islandId,
     date,
     cappedToday: today.length,
-    visitorSlotsUsed: new Set(today.flatMap((event) => slotOf(event.occasionKey, date))),
+    visitorSlotsUsed: new Set(today.flatMap((event) => visitorSlotOf(event.occasionKey, date) ?? [])),
     unlockedBlueprints: new Set(unlocked.map((row) => row.key)),
-    openTemplates: new Set(openVisits.flatMap((event) => (event.templateKey === null ? [] : [event.templateKey]))),
-    promisedBlueprints: new Set(openVisits.flatMap((event) => {
-      const details = VisitorEventDetails.safeParse(event.reward);
-      return details.success && details.data.reward.type === 'bauplan' ? [details.data.reward.key] : [];
-    })),
+    ...openVisitFacts(openVisits),
     persons,
   });
 
@@ -136,14 +137,6 @@ export const generateIslandEvents: PrePullStep = async (tx, { personId, now }) =
     });
   }
 };
-
-/** `n` eines Anlassschlüssels `tag:‹datum›:‹n›` dieses Tags. */
-function slotOf(occasionKey: string, date: string): number[] {
-  const prefix = `tag:${date}:`;
-  if (!occasionKey.startsWith(prefix)) return [];
-  const n = Number(occasionKey.slice(prefix.length));
-  return Number.isInteger(n) && n > 0 ? [n] : [];
-}
 
 /**
  * Setzt offene Besucherwünsche der Person auf erfüllbar, die ihr neuer Bau erfüllt; im Befehl `buildObject`.
@@ -225,9 +218,10 @@ export const claimEventRewardCommand: ServerCommand<ClaimEventReward> = {
     if (businessKey !== claimEventRewardKey(stateId)) throw new CommandRejection('invalid_payload');
     const couplingId = EntityId.parse(resource.couplingId);
     const { state, event } = await stateWithEvent(tx, stateId);
+    const { templateKey } = event;
     // Bisher hat nur der Besucher eine Belohnung mit Bedingung; Momos Wunsch (#206), Inselwetter (#207)
     // und Entdeckung (#204) melden sich mit ihren Tickets hier an.
-    if (event.type !== 'besuch' || state.claimedAt !== null || event.responsiblePersonId !== actor.personId) return refuse(tx, stateId);
+    if (event.type !== 'besuch' || templateKey === null || state.claimedAt !== null || event.responsiblePersonId !== actor.personId) return refuse(tx, stateId);
     const islandId = EntityId.parse(event.islandId);
     const role = await playingRole(tx, { islandId, couplingId, personId: actor.personId });
     if (role === null) return refuse(tx, stateId);
@@ -245,7 +239,7 @@ export const claimEventRewardCommand: ServerCommand<ClaimEventReward> = {
     const unlocked = await tx.select({ key: blueprintUnlock.catalogKey }).from(blueprintUnlock).where(eq(blueprintUnlock.islandId, islandId));
     const reward = resolveClaimedReward(catalog, {
       eventId: event.id,
-      templateKey: event.templateKey ?? '',
+      templateKey,
       planned: details.reward,
       role,
       unlockedBlueprints: new Set(unlocked.map((row) => row.key)),

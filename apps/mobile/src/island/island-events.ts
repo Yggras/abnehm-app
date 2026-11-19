@@ -5,7 +5,7 @@ import { ClaimEventReward, claimEventRewardKey, IslandEventKind, MarkEventsSeen,
 import { eventRewardId, IslandObjectOrigin, VisitorEventDetails, type VisitorReward } from '@abnehm/contracts/island-records';
 import { indexCatalog, type ArtKey } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { isWishFulfilled, resolveClaimedReward } from '@abnehm/game-rules/events';
+import { isWishFulfilled, resolveClaimedReward, type WishObject } from '@abnehm/game-rules/events';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
@@ -79,9 +79,7 @@ export function readIslandEvents(tx: ReadContext, { islandId, personId }: Readon
       const details = VisitorEventDetails.safeParse(event.reward);
       if (event.type !== 'besuch' || event.templateKey === null || !details.success) return [];
       const template = catalog.find('besuchervorlage', event.templateKey);
-      const claimable =
-        event.status === 'erfuellbar' ||
-        (event.status === 'offen' && isWishFulfilled({ wish: details.data.wish, responsiblePersonId: personId, occurredAt: event.occurredAt }, built));
+      const claimable = claimableOf(event, details.data, personId, built);
       return [{
         kind: 'besuch' as const,
         eventId: EntityId.parse(event.id),
@@ -95,6 +93,20 @@ export function readIslandEvents(tx: ReadContext, { islandId, personId }: Readon
       }];
     }),
   };
+}
+
+/**
+ * Ob ein Wunsch erfüllbar ist: Der Server hat ihn erfüllbar gesetzt, oder ein eigener Bau nach dem Erzeugen
+ * erfüllt ihn lokal, etwa offline (Spezifikation 4, Abschnitt 9).
+ */
+function claimableOf(
+  event: Readonly<{ status: string; occurredAt: string }>,
+  details: VisitorEventDetails,
+  personId: EntityId,
+  built: readonly WishObject[],
+): boolean {
+  if (event.status === 'erfuellbar') return true;
+  return event.status === 'offen' && isWishFulfilled({ wish: details.wish, responsiblePersonId: personId, occurredAt: event.occurredAt }, built);
 }
 
 /** Eigene, mit Energie gebaute Objekte der Insel, wie die Bedingung eines Wunschs sie sieht. */
@@ -164,9 +176,7 @@ export function claimEventReward(tx: TransactionContext, { writer, clock }: Pick
   const details = VisitorEventDetails.safeParse(event.reward);
   if (role === null || !details.success) return { type: 'verboten', reason: 'kein_eigenes_ereignis' };
   const islandId = EntityId.parse(event.islandId);
-  const fulfilled =
-    event.status === 'erfuellbar' || isWishFulfilled({ wish: details.data.wish, responsiblePersonId: personId, occurredAt: event.occurredAt }, ownBuilt(tx, islandId, personId));
-  if (!fulfilled) return { type: 'verboten', reason: 'nicht_erfuellt' };
+  if (!claimableOf(event, details.data, personId, ownBuilt(tx, islandId, personId))) return { type: 'verboten', reason: 'nicht_erfuellt' };
 
   const db = sqliteOf(tx);
   const unlocked = db.select({ key: blueprintUnlock.catalogKey }).from(blueprintUnlock).where(eq(blueprintUnlock.islandId, islandId)).all();

@@ -1,4 +1,6 @@
 import { EntityId } from '../src/base.ts';
+import { visitorOccasionKey } from '@abnehm/game-rules/events';
+
 import { islandEventId, islandEventStateId, VisitorEventDetails } from '../src/island-records.ts';
 import type { SeedEntity } from './build.ts';
 import { seedIds } from './ids.ts';
@@ -22,7 +24,7 @@ export type SeedVisit = Readonly<{
 
 /** Ereignis und Ereignisstand eines offenen, noch nicht gesehenen Besuchs. */
 export function visitEntities(visit: SeedVisit): SeedEntity[] {
-  const occasionKey = `tag:${visit.date}:${visit.n}`;
+  const occasionKey = visitorOccasionKey(visit.date, visit.n);
   const eventId = islandEventId(islandId, occasionKey);
   return [
     {
@@ -63,13 +65,14 @@ export function visitEntities(visit: SeedVisit): SeedEntity[] {
   ];
 }
 
-const wish = (blueprintKey: string, reward: VisitorEventDetails['reward']): VisitorEventDetails => ({ wish: { type: 'bauplan_bauen', blueprintKey }, reward });
+/** Wunsch nach einem Bauplan samt Belohnung. */
+export const visitWish = (blueprintKey: string, reward: VisitorEventDetails['reward']): VisitorEventDetails => ({ wish: { type: 'bauplan_bauen', blueprintKey }, reward });
 
 /**
  * Die Besucher von heute in `gekoppelt`: Beim ersten Pull am Morgen hat der Generator den Tagesdeckel mit
  * je einem Besuch für Philipp und Anna gefüllt. Keiner der Wünsche ist erfüllt.
  */
 export const gekoppeltBesuche: readonly SeedVisit[] = [
-  { personId: seedIds.person.philipp, date: '2026-10-14', n: 1, templateKey: 'igel_ilse', details: wish('sitzbank', { type: 'bauplan', key: 'brunnen' }), at: '2026-10-14T05:30:00.000Z' },
-  { personId: seedIds.person.anna, date: '2026-10-14', n: 2, templateKey: 'eule_otto', details: wish('blumenwiese', { type: 'bauplan', key: 'sonnenblumen' }), at: '2026-10-14T05:30:00.000Z' },
+  { personId: seedIds.person.philipp, date: '2026-10-14', n: 1, templateKey: 'igel_ilse', details: visitWish('sitzbank', { type: 'bauplan', key: 'brunnen' }), at: '2026-10-14T05:30:00.000Z' },
+  { personId: seedIds.person.anna, date: '2026-10-14', n: 2, templateKey: 'eule_otto', details: visitWish('blumenwiese', { type: 'bauplan', key: 'sonnenblumen' }), at: '2026-10-14T05:30:00.000Z' },
 ];

@@ -1,12 +1,11 @@
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { planVisitors } from '@abnehm/game-rules/events';
+import { openVisitFacts, planVisitors, visitorSlotOf } from '@abnehm/game-rules/events';
 
 import { EntityId, LocalDate } from '../src/base.ts';
 import { BuildObject, buildObjectKey, PlaceObject, placeObjectKey } from '../src/island.ts';
-import type { VisitorEventDetails } from '../src/island-records.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
 import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
-import { visitEntities, type SeedVisit } from './ereignisse.ts';
+import { visitEntities, visitWish, type SeedVisit } from './ereignisse.ts';
 import { gekoppeltExtensions, gekoppeltParts, gekoppeltPartsBuilt, gekoppeltPartsVisited, vorDemSchluepfenParts } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow, type SeedState } from './manifest.ts';
@@ -392,8 +391,6 @@ export const feldkonfliktManifest = SeedManifest.parse({
   extensions: gekoppeltExtensions,
 });
 
-const visitWish = (blueprintKey: string, reward: VisitorEventDetails['reward']): VisitorEventDetails => ({ wish: { type: 'bauplan_bauen', blueprintKey }, reward });
-
 /**
  * `ereignisse-voll`: Philipp hat seit vier Tagen je einen Besuch nicht abgeholt, Anna seit gestern einen.
  * Die Besuchs-Baupläne von Bauen sind alle versprochen, der vierte Besuch bringt deshalb Deko.
@@ -428,8 +425,7 @@ function heutigeBesuche(): SeedVisit[] {
     cappedToday: 0,
     visitorSlotsUsed: new Set(),
     unlockedBlueprints: new Set(gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start').map((blueprint) => blueprint.key)),
-    openTemplates: new Set(open.map((visit) => visit.templateKey)),
-    promisedBlueprints: new Set(open.flatMap((visit) => (visit.details.reward.type === 'bauplan' ? [visit.details.reward.key] : []))),
+    ...openVisitFacts(open),
     persons: [
       { personId: philipp, role: 'bauen', personalToday: 0, openPersonal: open.filter((visit) => visit.personId === philipp).length, builtBlueprints: built(philipp) },
       { personId: anna, role: 'natur', personalToday: 0, openPersonal: open.filter((visit) => visit.personId === anna).length, builtBlueprints: built(anna) },
@@ -438,7 +434,7 @@ function heutigeBesuche(): SeedVisit[] {
   return planned.map((visit) => ({
     personId: visit.responsiblePersonId,
     date: seedDays.heute,
-    n: Number(visit.occasionKey.split(':').at(-1)),
+    n: visitorSlotOf(visit.occasionKey, seedDays.heute)!,
     templateKey: visit.templateKey,
     details: visit.details,
     at: now,

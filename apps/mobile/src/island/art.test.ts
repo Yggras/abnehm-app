@@ -8,10 +8,10 @@ import { artBounds, artOf } from './art';
 // seinem Feld und ist höchstens zwei Felder hoch; jede Stufe ist etwas größer und hat ein Detail mehr.
 // Gerechnet in dp bei Zoom 1 um die Feldmitte; ein Feld ist `island-tile` breit und halb so hoch.
 
-const startBlueprints = gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start' || blueprint.origin === 'besucher');
+const drawnBlueprints = gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start' || blueprint.origin === 'besucher');
 const tile = size.islandTile;
 const fieldHeight = tile / 2;
-const stages = startBlueprints.flatMap((blueprint) => blueprint.art.map((art, index) => [blueprint.key, index + 1, art] as const));
+const stages = drawnBlueprints.flatMap((blueprint) => blueprint.art.map((art, index) => [blueprint.key, index + 1, art] as const));
 
 test.each(stages)('%s, Stufe %d, hat eine eigene Zeichnung', (_, stage, art) => {
   const spec = artOf(art);
@@ -32,7 +32,7 @@ test.each(stages)('%s, Stufe %d, ist höchstens zwei Felder hoch, steht mittig u
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(fieldHeight / 2);
 });
 
-test.each(startBlueprints.map((blueprint) => [blueprint.key, blueprint.art] as const))(
+test.each(drawnBlueprints.map((blueprint) => [blueprint.key, blueprint.art] as const))(
   '%s: jede Stufe ist etwas größer und hat ein Detail mehr',
   (_, [first, second, third]) => {
     const [one, two, three] = [first, second, third].map(artOf);
@@ -51,7 +51,7 @@ test.each(startBlueprints.map((blueprint) => [blueprint.key, blueprint.art] as c
 test('nur die Laterne leuchtet abends, auf jeder Stufe am Licht ihrer Grafik', () => {
   const lit = stages.filter(([, , art]) => artOf(art).lit).map(([key, stage]) => `${key} ${stage}`);
   expect(lit).toEqual(['laterne 1', 'laterne 2', 'laterne 3']);
-  for (const art of startBlueprints.find((blueprint) => blueprint.key === 'laterne')!.art) {
+  for (const art of drawnBlueprints.find((blueprint) => blueprint.key === 'laterne')!.art) {
     const { light } = artOf(art);
     const bounds = artBounds(artOf(art));
     expect(light).not.toBeNull();

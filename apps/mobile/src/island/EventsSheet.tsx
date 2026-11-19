@@ -7,10 +7,11 @@ import { ObjectPreview } from './ObjectPreview';
 import { eventTexts } from './texts';
 
 // Inhalt des Sheets „Ereignisse“ (Spezifikation 4, Abschnitt 9; #202), geöffnet über „Ereignisse“ in der
-// Leiste oder die Route `momo` mit `view: 'ereignisse'`. Oben „Neu auf der Insel“ mit allem, was beim
-// Öffnen neu war, darunter „Offene Wünsche“ mit „Kein Zeitdruck“. Jede Karte zeigt den Besucher, seinen
-// Wunsch und die Belohnung; ist der Wunsch erfüllt, holt „Belohnung abholen“ sie ab. Ereignisse verfallen
-// nie, es gibt keine Frist und keinen Zähler. Wie Bau-Sheet und Lager in voller Höhe mit scrollender Liste.
+// Leiste oder die Route `momo` mit `view: 'ereignisse'`. Oben „Neu auf der Insel“: wer seit dem letzten
+// Ansehen angekommen ist, also was beim Öffnen neu war. Darunter „Offene Wünsche“ mit „Kein Zeitdruck“ und
+// einer Karte je Wunsch, neue eingeschlossen. Jede Karte zeigt den Besucher, seinen Wunsch und die
+// Belohnung; ist der Wunsch erfüllt, holt „Belohnung abholen“ sie ab. Ereignisse verfallen nie, es gibt
+// keine Frist und keinen Zähler. Wie Bau-Sheet und Lager in voller Höhe mit scrollender Liste.
 
 export type EventsSheetProps = Readonly<{
   events: readonly VisitorWish[];
@@ -21,7 +22,6 @@ export type EventsSheetProps = Readonly<{
 
 export function EventsSheet({ events, freshAtOpen, onClaim }: EventsSheetProps) {
   const fresh = events.filter((event) => freshAtOpen.has(event.stateId));
-  const wishes = events.filter((event) => !freshAtOpen.has(event.stateId));
   return (
     <View style={styles.sheet}>
       <Text variant="title" accessibilityRole="header">
@@ -37,23 +37,24 @@ export function EventsSheet({ events, freshAtOpen, onClaim }: EventsSheetProps) 
                 {eventTexts.fresh}
               </Text>
               {fresh.map((event) => (
-                <VisitorCard key={event.stateId} event={event} onClaim={onClaim} />
+                <View key={event.stateId} style={styles.arrival}>
+                  <ObjectPreview art={event.visitor.animal} />
+                  <Text style={styles.text}>{eventTexts.visiting(event.visitor.name)}</Text>
+                </View>
               ))}
             </View>
           )}
-          {wishes.length > 0 && (
-            <View style={styles.section}>
-              <Text variant="bodyStrong" accessibilityRole="header">
-                {eventTexts.wishes}
-              </Text>
-              <Text variant="label" tone="inkMuted">
-                {eventTexts.noPressure}
-              </Text>
-              {wishes.map((event) => (
-                <VisitorCard key={event.stateId} event={event} onClaim={onClaim} />
-              ))}
-            </View>
-          )}
+          <View style={styles.section}>
+            <Text variant="bodyStrong" accessibilityRole="header">
+              {eventTexts.wishes}
+            </Text>
+            <Text variant="label" tone="inkMuted">
+              {eventTexts.noPressure}
+            </Text>
+            {events.map((event) => (
+              <VisitorCard key={event.stateId} event={event} onClaim={onClaim} />
+            ))}
+          </View>
         </ScrollView>
       )}
     </View>
@@ -101,6 +102,7 @@ const styles = StyleSheet.create({
     boxShadow: boxShadow.card,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  arrival: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   reward: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   text: { flexGrow: 1, flexShrink: 1, flexBasis: 120, gap: space[1] },
 });

@@ -9,6 +9,7 @@ import { energyBookingId } from '@abnehm/contracts/energy';
 import type { IslandRole } from '@abnehm/contracts/island';
 import { islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { visitorOccasionKey } from '@abnehm/game-rules/events';
 import { hatching } from '@abnehm/game-rules/hatching';
 
 import { dailyGoalCompletionEntity } from '../../daily-goals';
@@ -66,6 +67,8 @@ export type LaichkugelWorld = Readonly<{
    * Ein Besucher mit Wunsch, wie der Pull ihn ablegt (#202): das Ereignis und, für Philipp, sein Ereignisstand;
    * den Stand der Partnerin bekommt Philipps Gerät nie. Liefert die ID des Ereignisstands.
    */
+  /** Vom Server bestätigte Freischaltungen, etwa Besucher-Baupläne früherer Besuche (#202). */
+  unlockOnServer(catalogKeys: readonly string[]): void;
   visitOnServer(visit: Readonly<{ to: 'philipp' | 'anna'; n: number; templateKey: string; details: VisitorEventDetails; status?: 'offen' | 'erfuellbar'; seen?: boolean }>): EntityId;
   operations(): ReturnType<typeof pendingOperations>;
   close(): void;
@@ -179,8 +182,15 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
       );
       return id;
     },
+    unlockOnServer(catalogKeys) {
+      database.transaction((tx) => {
+        for (const catalogKey of catalogKeys) {
+          sqliteOf(tx).insert(blueprintUnlock).values({ id: newId(), islandId, couplingId, catalogKey, reason: 'besucher', unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+        }
+      });
+    },
     visitOnServer({ to, n, templateKey, details, status = 'offen', seen = false }) {
-      const occasionKey = `tag:2026-10-14:${n}`;
+      const occasionKey = visitorOccasionKey('2026-10-14', n);
       const eventId = islandEventId(islandId, occasionKey);
       const responsible = to === 'philipp' ? philipp : anna;
       const stateId = islandEventStateId(eventId, EntityId.parse(responsible));

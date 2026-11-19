@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { testCatalog } from '../fixtures/index.ts';
 import {
   chooseWish,
+  openVisitFacts,
+  visitorOccasionKey,
+  visitorSlotOf,
   freeEventSlots,
   isWishFulfilled,
   personalEventAllowed,
@@ -44,6 +47,24 @@ describe('Grenze je Person', () => {
     [1, 3, false],
   ])('heute %i, offen %i → %s', (personalToday, openPersonal, allowed) => {
     expect(personalEventAllowed({ personalToday, openPersonal })).toBe(allowed);
+  });
+});
+
+describe('Anlassschlüssel und offene Besuche', () => {
+  it('baut und zerlegt `tag:‹datum›:‹n›`', () => {
+    expect(visitorOccasionKey('2026-10-14', 2)).toBe('tag:2026-10-14:2');
+    expect(visitorSlotOf('tag:2026-10-14:2', '2026-10-14')).toBe(2);
+    expect(visitorSlotOf('tag:2026-10-13:1', '2026-10-14')).toBeNull();
+    expect(visitorSlotOf('jahreszeit:2026:herbst', '2026-10-14')).toBeNull();
+    expect(visitorSlotOf('tag:2026-10-14:x', '2026-10-14')).toBeNull();
+  });
+
+  it('nennt Besucher auf der Insel und versprochene Baupläne', () => {
+    const facts = openVisitFacts([
+      { templateKey: 't_igel', details: { wish: { type: 'bauplan_bauen', blueprintKey: 't_weg' }, reward: { type: 'bauplan', key: 't_bes_bauen_a' } } },
+      { templateKey: 't_fuchs', details: { wish: { type: 'bauplan_bauen', blueprintKey: 't_bank' }, reward: { type: 'deko', key: 't_bes_deko_2' } } },
+    ]);
+    expect(facts).toEqual({ openTemplates: new Set(['t_igel', 't_fuchs']), promisedBlueprints: new Set(['t_bes_bauen_a']) });
   });
 });
 
@@ -110,7 +131,10 @@ describe('Belohnung des Besuchers', () => {
     expect(resolve({ type: 'bauplan', key: 't_bes_bauen_a' }, [...startBlueprints, 't_bes_bauen_a'])).toEqual({ type: 'bauplan', key: 't_bes_bauen_b' });
     // Nach einem Rollentausch passt der geplante Bauplan nicht mehr zur Rolle.
     expect(resolve({ type: 'bauplan', key: 't_bes_bauen_a' }, startBlueprints, 'natur')).toEqual({ type: 'bauplan', key: 't_bes_natur_a' });
-    expect(resolve({ type: 'deko', key: 't_bes_deko_1' }, startBlueprints)).toEqual({ type: 'deko', key: 't_bes_deko_1' });
+    // Eine geplante Deko bleibt nur, wenn wirklich kein Besucher-Bauplan der Rolle mehr frei ist: Versprochen
+    // war er nur einem anderen offenen Besuch (Spec-Review zu #202).
+    expect(resolve({ type: 'deko', key: 't_bes_deko_1' }, startBlueprints)).toEqual({ type: 'bauplan', key: 't_bes_bauen_a' });
+    expect(resolve({ type: 'deko', key: 't_bes_deko_1' }, [...startBlueprints, 't_bes_bauen_a', 't_bes_bauen_b'])).toEqual({ type: 'deko', key: 't_bes_deko_1' });
   });
 });
 

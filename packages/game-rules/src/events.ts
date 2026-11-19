@@ -46,6 +46,27 @@ export function visitorOccasionKey(date: string, n: number): string {
   return `tag:${date}:${n}`;
 }
 
+/** `n` eines Anlassschlüssels `tag:‹datum›:‹n›` an diesem Tag; `null` bei jedem anderen Schlüssel. */
+export function visitorSlotOf(occasionKey: string, date: string): number | null {
+  const prefix = `tag:${date}:`;
+  if (!occasionKey.startsWith(prefix)) return null;
+  const n = Number(occasionKey.slice(prefix.length));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * Was offene Besuche für die Planung neuer bedeuten: welche Besucher gerade auf der Insel sind und welche
+ * Baupläne ihnen versprochen sind (`openTemplates` und `promisedBlueprints` von `planVisitors`).
+ */
+export function openVisitFacts(
+  openVisits: readonly Readonly<{ templateKey: string; details: VisitorEventDetails }>[],
+): Pick<VisitorDayInput, 'openTemplates' | 'promisedBlueprints'> {
+  return {
+    openTemplates: new Set(openVisits.map((visit) => visit.templateKey)),
+    promisedBlueprints: new Set(openVisits.flatMap(({ details: { reward } }) => (reward.type === 'bauplan' ? [reward.key] : []))),
+  };
+}
+
 /**
  * Preisgrenze des gewünschten Bauplans: der Preis des neuesten freigeschalteten Level-Bauplans der Rolle.
  * Ohne einen gilt der teuerste Start-Bauplan der Rolle (Nutzerentscheidung in #202).
@@ -55,8 +76,8 @@ export function wishPriceCap(catalog: GameCatalog, role: IslandRole, unlockedBlu
     .filter((unlock) => unlock.role === role && unlockedBlueprints.has(unlock.blueprint))
     .reduce<{ level: number; blueprint: string } | undefined>((best, unlock) => (best === undefined || unlock.level > best.level ? unlock : best), undefined);
   const priced = (key: string) => catalog.blueprints.find((blueprint) => blueprint.key === key);
-  const level = newest && priced(newest.blueprint);
-  if (level !== undefined) return basePrice(level);
+  const newestBlueprint = newest && priced(newest.blueprint);
+  if (newestBlueprint !== undefined) return basePrice(newestBlueprint);
   return Math.max(0, ...catalog.blueprints.filter((b) => b.origin === 'start' && b.role === role).map(basePrice));
 }
 
@@ -105,7 +126,9 @@ export function visitorReward(
 /**
  * Die Belohnung beim Abholen: die geplante, solange sie noch gilt. Ist der geplante Bauplan inzwischen
  * freigeschaltet oder passt er nach einem Rollentausch nicht mehr zur Rolle, wird sie mit einem aus der
- * Ereignis-ID abgeleiteten Zufall neu bestimmt, auf Gerät und Server gleich.
+ * Ereignis-ID abgeleiteten Zufall neu bestimmt, auf Gerät und Server gleich. Geplante Deko gilt nur, solange
+ * kein Besucher-Bauplan der Rolle mehr frei ist; beim Planen war er womöglich nur einem anderen offenen
+ * Besuch versprochen („wenn keiner mehr übrig ist“, Spezifikation 4, Abschnitt 9).
  */
 export function resolveClaimedReward(
   catalog: GameCatalog,
@@ -117,9 +140,11 @@ export function resolveClaimedReward(
     unlockedBlueprints,
   }: Readonly<{ eventId: string; templateKey: string; planned: VisitorReward; role: IslandRole; unlockedBlueprints: ReadonlySet<string> }>,
 ): VisitorReward {
-  if (planned.type === 'deko') return planned;
-  const blueprint = catalog.blueprints.find((b) => b.key === planned.key);
-  if (blueprint?.role === role && !unlockedBlueprints.has(planned.key)) return planned;
+  const stillValid =
+    planned.type === 'deko'
+      ? !catalog.blueprints.some((b) => b.origin === 'besucher' && b.role === role && !unlockedBlueprints.has(b.key))
+      : catalog.blueprints.find((b) => b.key === planned.key)?.role === role && !unlockedBlueprints.has(planned.key);
+  if (stillValid) return planned;
   return visitorReward(catalog, { templateKey, role, unlockedBlueprints, random: seededRandom(`${eventId}:belohnung`) });
 }
 

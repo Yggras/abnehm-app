@@ -214,6 +214,7 @@ Trainings und Gewichte aus Apple Health bzw. Health Connect (Abschnitte 2, 3 und
 | `hatching` | `hatching(katalog, { proposerPersonId, proposerRole, partnerPersonId })`: Rollen, Felder der Grundinsel mit Besitzer, Start-Baupläne und Projekt 1 beim Schlüpfen; `otherRole(rolle)` (#184) |
 | `building` | `decideBuild(katalogIndex, anfrage)`: `erlaubt` mit Preis oder `verboten` mit Grund (`unbekannter_schluessel`, `nicht_freigeschaltet`, Platzierungsgründe, `zu_wenig_energie` samt `price` und `missing` (seit #194), `schutzgrenze`). `checkedBy: 'geraet'` verlangt ausreichenden angezeigten Bestand, `checkedBy: 'server'` nur die Schutzgrenze `serverDebtLimit` (−30) (#191). `nextStage(stufe)`, `decideUpgrade` (genau eine Stufe weiter, nur Gebautes: `nicht_aufwertbar`, `falsche_stufe`, Bestand wie beim Bauen) und `decidePlacement` (Platzierungsregeln für Gebautes mit der Rolle seines Bauplans und für Deko) (#194) |
 | `mood` | `momoMood(fakten)`, Momos Stimmung je Ansicht; `reactionMood(ereignisse)` und `strongestEvent(ereignisse)` für eigene Ereignisse (`MomoEvent`) eines Commits (#188, Abschnitt „Momo-Reaktionen und Stimmungen“) |
+| `events` | Ereignistakt und Besucher mit Wunsch (#202): `freeEventSlots`, `personalEventAllowed`, `planVisitors`, `chooseWish`, `wishPriceCap`, `visitorReward`, `resolveClaimedReward`, `isWishFulfilled`, `visitorOccasionKey`/`visitorSlotOf`, `openVisitFacts` (Abschnitt „Insel-Ereignisse“) |
 | `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `entriesOf`, `fieldPlans`, `fieldKey`, `endlessAreaKey` |
 | `catalog-check` | `checkCatalog`, die Prüfung von Format und Regeln |
 | `catalog-versions` | `catalogDedications` (Widmung je Schlüssel, bei Bauplänen Rolle und Herkunft), `catalogChanges` |
@@ -397,7 +398,7 @@ Spezifikation 4, Abschnitt 9; #202. Bisher gibt es nur den Ereignistyp **Besuche
   - Der Sync-Adapter `blueprint_unlock` räumt eine unbestätigte Freischaltung mit gleichem Schlüssel weg, bevor eine kanonische kommt.
 - **Oberfläche** (`EventsSheet.tsx`):
   - „Ereignisse“ in der Leiste und die Route `momo` mit `view: 'ereignisse'` öffnen das Sheet in voller Höhe.
-  - Was beim Öffnen neu war, gilt als gesehen und steht bis zum Schließen unter „Neu auf der Insel“. Alles andere steht unter „Offene Wünsche“ mit „Kein Zeitdruck“.
+  - Was beim Öffnen neu war, gilt als gesehen und steht bis zum Schließen unter „Neu auf der Insel“. „Offene Wünsche“ mit „Kein Zeitdruck“ zeigt jeden noch nicht abgeholten Wunsch als Karte, neue eingeschlossen.
   - „Belohnung abholen“ erscheint nur bei erfülltem Wunsch. Danach meldet die App „Neuer Bauplan: ‹Name›“ bzw. „‹Name› liegt jetzt in deinem Lager“.
   - Tiere, Besucher-Baupläne und Deko zeichnet `art.ts`. Motive und Sätze außer den Begriffen aus Abschnitt 9 sind Designwerte aus #202, nicht belegt.
 - **Tests:**
