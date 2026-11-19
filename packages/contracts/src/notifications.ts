@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
-import { type AreaKey, CatalogKey, DisplayName, EntityId, Instant, MessageKey } from './base.ts';
+import { AreaKey, CatalogKey, DisplayName, EntityId, Instant, MessageKey } from './base.ts';
+import { CheckInMoment } from './daily-goals.ts';
 import { uuidV5 } from './ids.ts';
+import { IslandEventKind } from './island.ts';
 import { EncouragementKey } from './partner.ts';
 import { RouteTarget } from './routes.ts';
 import { InstallationId } from './sync.ts';
@@ -215,6 +217,45 @@ const checkInTrackerFields = {
 export function checkInTrackerField(area: AreaKey): (typeof checkInTrackerFields)[AreaKey] {
   return checkInTrackerFields[area];
 }
+
+/**
+ * Ein Anlass eines Tages-Check-ins (Spezifikation 5, Abschnitt 7; #135), je Tracker im Feld `type`.
+ * Werte trägt nur das Wasser, und nur für heute (`progress`); künftige Tage planen ohne Werte. Kalorien-,
+ * Budget- oder Gewichtswerte haben hier keinen Platz.
+ */
+const CheckInTopic = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('ernaehrung') }),
+  z.strictObject({
+    type: z.literal('wasser'),
+    progress: z.strictObject({ countedMl: z.int().nonnegative(), targetMl: z.int().positive() }).nullable(),
+  }),
+  z.strictObject({ type: z.literal('sport') }),
+  z.strictObject({ type: z.literal('gewicht') }),
+]);
+export type CheckInTopic = z.infer<typeof CheckInTopic>;
+
+const topicRank = (topic: CheckInTopic) => AreaKey.options.indexOf(topic.type);
+
+/**
+ * Werte des Katalogeintrags `tages_checkin`: der Zeitpunkt, mindestens ein Anlass in der festen
+ * Reihenfolge Ernährung, Wasser, Sport, Gewicht und der optionale Insel-Zusatz. Sport fragt nur abends.
+ */
+export const CheckInTextValues = z
+  .strictObject({
+    moment: CheckInMoment,
+    topics: z
+      .array(CheckInTopic)
+      .min(1)
+      .refine((topics) => topics.every((topic, index) => index === 0 || topicRank(topics[index - 1] as CheckInTopic) < topicRank(topic)), {
+        message: 'Jeder Tracker höchstens einmal, in der Reihenfolge Ernährung, Wasser, Sport, Gewicht',
+      }),
+    islandEventKind: IslandEventKind.nullable(),
+  })
+  .refine((values) => values.moment === 'abend' || values.topics.every((topic) => topic.type !== 'sport'), {
+    message: 'Sport fragt nur abends',
+    path: ['topics'],
+  });
+export type CheckInTextValues = z.infer<typeof CheckInTextValues>;
 
 const notificationSettingNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b66';
 
