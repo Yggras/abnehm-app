@@ -12,6 +12,7 @@ import type { ObserveNetwork } from '../sync/triggers';
 import { readCouplingState, type CouplingState } from './coupling-state';
 import { readEncourageSheet, sendEncouragement, type EncourageOutcome, type EncourageSheet } from './encouragement';
 import { partnerCardOf, wirPartnerOf, type PartnerReading, type WirPartner } from './partner-view';
+import { changeSharing, readSharing, type Sharing, type SharingChange, type SharingOutcome } from './sharing';
 
 // Partnerbereich der App (Spezifikation 5, Abschnitte 2 und 3; #121) über der Datenbank eines Kontos.
 // Er liest den Partner ausschließlich aus dem widerrufbaren Partnercache (#106): Jede Pull-Seite mit
@@ -37,6 +38,9 @@ export type PartnerDependencies = Readonly<{
 /** Sheet `partner.encourage` samt Netzstatus, der die Bestätigung bestimmt; `loading` bis zur ersten Lesung. */
 export type EncourageView = Readonly<{ type: 'loading' }> | (EncourageSheet & Readonly<{ online: boolean }>);
 
+/** Eigene Freigaben samt Netzstatus, der bestimmt, ob das Abschalten erst mit der nächsten Verbindung wirkt. */
+export type SharingView = Sharing & Readonly<{ online: boolean }>;
+
 export type Partner = Readonly<{
   /** Partnerzustand für „Wir“: lädt, solo oder gekoppelt mit Übersicht. */
   wir: Source<WirPartner>;
@@ -50,6 +54,10 @@ export type Partner = Readonly<{
   encourage(messageKey: EncouragementKey): EncourageOutcome;
   /** Stand der Kopplung für `partner.invite` und `partner.redeem` (#120): solo oder gekoppelt, und ob Momo geschlüpft ist. */
   couplingState: Source<CouplingState>;
+  /** „Partner & Freigaben“ und Onboarding-Schritt `partner` (#129): Kopplung und eigene Freigaben. */
+  sharing: Source<SharingView>;
+  /** Ein Schalterwechsel: sofort lokal, der Upsert geht mit dem nächsten Push raus. */
+  share(change: SharingChange): SharingOutcome;
 }>;
 
 function readPartner(tx: ReadContext): PartnerReading {
@@ -117,5 +125,7 @@ export function createPartner(dependencies: PartnerDependencies): Partner {
     encourageSheet,
     encourage: (messageKey) => database.transaction((tx) => sendEncouragement(tx, { writer, newId, clock }, messageKey)),
     couplingState: followedReading(dependencies, readCouplingState, (state) => state),
+    sharing: followedReading(dependencies, readSharing, (sharing, online): SharingView => ({ ...sharing, online })),
+    share: (change) => database.transaction((tx) => changeSharing(tx, { writer, clock }, change)),
   };
 }

@@ -6,5 +6,6 @@ export { AccountScreen } from './AccountScreen';
 /** „Abmelden“ samt Bestätigung, auch für den Sperrbildschirm unter 18 im Onboarding (#141). */
 export { LogoutArea } from './LogoutArea';
 export { NotificationsScreen } from './NotificationsScreen';
+export { PartnerSharingScreen } from './PartnerSharingScreen';
 export { followOwnDisplayName, type OwnDisplayName, type RenameResult } from './own-display-name';
 export { SettingsOverview } from './SettingsOverview';

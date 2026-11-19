@@ -1,8 +1,8 @@
-import type { AreaKey } from '@abnehm/contracts/base';
+import type { AreaKey, LocalDate } from '@abnehm/contracts/base';
 import type { InviteCode } from '@abnehm/contracts/coupling';
 import type { PartnerDailyGoalStage, PartnerSummaryEnvelope } from '@abnehm/contracts/partner';
 
-import { titleOf } from '../shell/texts';
+import { monthNames, titleOf } from '../shell/texts';
 import type { DataAge } from './partner-view';
 
 // Texte des Partnerbereichs nach Spezifikation 5, Abschnitt 2 (#121). Angezeigt wird die kurze Form,
@@ -177,3 +177,31 @@ export function standText(age: DataAge, stale: boolean): Spoken {
     ? { shown: `Offline · letzter Stand ${shown}`, spoken: `Offline, letzter Stand ${spoken}` }
     : { shown: `Stand ${shown}`, spoken: `Stand ${spoken}` };
 }
+
+/**
+ * Texte von „Partner & Freigaben“ und dem Onboarding-Schritt `partner` (Spezifikation 5, Abschnitte 5 und 6; #129).
+ * Wörtlich aus der Spezifikation: „Nicht gekoppelt“, „Mit … gekoppelt“, „Momo und Insel seit …“, die Abschnitte,
+ * die Untertitel der Schalter und der Infotext. Die übrigen Sätze sind Designwerte (nicht belegt).
+ */
+export const sharingTexts = {
+  notCoupled: 'Nicht gekoppelt',
+  soloBody: 'Lade deinen Partner ein oder gib seinen Code ein. Danach legst du hier fest, was er von dir sieht.',
+  coupledWith: (name: string) => `Mit ${name} gekoppelt`,
+  /** Lokales Datum im Kalender des Geräts, etwa „1. Oktober 2026“. */
+  since: (localDate: LocalDate) => {
+    const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
+    return `Momo und Insel seit ${day}. ${monthNames[month - 1]} ${year}`;
+  },
+  areasTitle: 'Gesundheitsbereiche',
+  areaSubtitles: {
+    ernaehrung: 'Anzahl erfasster Mahlzeiten',
+    wasser: 'Anteil am Wasserziel in Prozent',
+    sport: 'Wochenminuten und Wochenziel',
+    gewicht: 'Nur Trend und Veränderung, nie dein absolutes Gewicht',
+  } satisfies Readonly<Record<AreaKey, string>>,
+  photosTitle: 'Fotos',
+  photos: 'Mahlzeitenfotos teilen',
+  photosSubtitle: 'Unabhängig von der Ernährungs-Freigabe. Einzelne Fotos kannst du beim Erfassen ausnehmen.',
+  info: 'Abschalten beendet den Zugriff sofort. Bereits gemachte Screenshots kann die App nicht zurückholen.',
+  loading: 'Freigaben werden geladen',
+} as const;

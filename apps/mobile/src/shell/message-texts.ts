@@ -163,6 +163,8 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   })),
   /** Spezifikation 5, Abschnitt 4: offline vorgemerkt; die Outbox sendet sie beim nächsten Push (#123). */
   'anfeuern.vorgemerkt': messageText(z.strictObject({}), () => ({ text: 'Wird gesendet, sobald du online bist' })),
+  /** Freigabe ohne Verbindung abgeschaltet: Der Partner sieht sie erst nach dem nächsten Push nicht mehr (#129). */
+  'freigaben.gilt_wenn_online': messageText(z.strictObject({}), () => ({ text: 'Gilt, sobald du wieder online bist' })),
   /** Spezifikation 1: „Ziele ändern“ hat eine Zielversion ab morgen angelegt (#147). */
   'ziele.ab_morgen_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Ziele gespeichert · gelten ab morgen' })),
   /** Spezifikation 5: Benachrichtigungseinstellung gespeichert (#132). */

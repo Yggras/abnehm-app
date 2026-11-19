@@ -4,6 +4,8 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { color, ListGroup, ListRow, size, Skeleton, space, Text, type IconName } from '../design';
 import { openTarget, type RouteScreenProps } from '../navigation';
 import { notificationTexts, useNotificationPermission } from '../notifications';
+import { useCouplingState, usePartner } from '../partner/app-partner';
+import { sharingTexts } from '../partner/texts';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 import { useAccountEmail, useDisplayName, type EmailState } from './AccountProvider';
@@ -50,9 +52,17 @@ function rowTitle(section: Section): string {
 
 export function SettingsOverview({ target }: RouteScreenProps<'settings'>) {
   const permission = useNotificationPermission();
-  // „Aus“, wenn Mitteilungen nicht erlaubt sind, auch solange die Person nicht entschieden hat (#125).
-  const subtitle = (section: Section) =>
-    section === 'notifications' && permission !== null && permission !== 'granted' ? notificationTexts.overviewOff : undefined;
+  const coupling = useCouplingState(usePartner());
+  const subtitle = (section: Section) => {
+    // „Aus“, wenn Mitteilungen nicht erlaubt sind, auch solange die Person nicht entschieden hat (#125).
+    if (section === 'notifications') return permission !== null && permission !== 'granted' ? notificationTexts.overviewOff : undefined;
+    // Mit wem gekoppelt, aus SQLite (#129); bis zur ersten Lesung ohne Untertitel.
+    if (section === 'partner_sharing') {
+      if (coupling.type === 'coupled') return sharingTexts.coupledWith(coupling.partnerDisplayName);
+      return coupling.type === 'solo' ? sharingTexts.notCoupled : undefined;
+    }
+    return undefined;
+  };
   return (
     <ScreenFrame title={titleOf(target)} presentation="page">
       <AccountHeader />

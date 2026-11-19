@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { createOpenedModule, useOpenedModule } from '../shell/opened-module';
 import type { Source } from '../shell/followed-source';
 import type { CouplingState } from './coupling-state';
-import type { EncourageView, Partner } from './partner';
+import type { EncourageView, Partner, SharingView } from './partner';
 import type { WirPartner } from './partner-view';
 
 // Der Partnerbereich des geöffneten Kontos für „Wir“. Die App-Sitzung meldet ihn an, sobald eine
@@ -19,7 +19,7 @@ export function usePartner(): Partner | null {
 type Loading = Readonly<{ type: 'loading' }>;
 
 /** Die Quellen des Partnerbereichs, die ein Bildschirm abonniert. */
-type SourceKey = 'wir' | 'encourageSheet' | 'couplingState';
+type SourceKey = 'wir' | 'encourageSheet' | 'couplingState' | 'sharing';
 type ValueOf<K extends SourceKey> = Partner[K] extends Source<infer V> ? V : never;
 
 /**
@@ -49,4 +49,9 @@ export function useEncourageView(partner: Partner | null): EncourageView {
 /** Stand der Kopplung für `partner.invite` und `partner.redeem` aus SQLite. */
 export function useCouplingState(partner: Partner | null): CouplingState {
   return usePartnerSource(partner, 'couplingState');
+}
+
+/** Kopplung und eigene Freigaben für „Partner & Freigaben“ und den Onboarding-Schritt `partner`. */
+export function useSharing(partner: Partner | null): SharingView | Readonly<{ type: 'loading' }> {
+  return usePartnerSource(partner, 'sharing');
 }

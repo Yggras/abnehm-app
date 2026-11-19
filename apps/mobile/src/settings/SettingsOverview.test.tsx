@@ -103,7 +103,6 @@ test('„Ziele“ öffnet die Seite des Plan-Moduls statt eines Platzhalters (#1
 
 test.each([
   ['Wochenplan', '/settings/weekly_plan', 'Wochenplan', 'Kommt mit: Ziele & Onboarding'],
-  ['Partner & Freigaben', '/settings/partner_sharing', 'Partner & Freigaben', 'Kommt mit: Partner & Benachrichtigungen'],
   ['Apple Health', '/settings/health', 'Gesundheitsdaten', 'Kommt mit: Wasser, Sport, Gewicht & Health'],
 ])('„%s“ öffnet %s mit deutschem Platzhalter, System-Zurück führt zur Übersicht', async (row, pathname, title, owner) => {
   await openOverview();
@@ -114,6 +113,18 @@ test.each([
   expect(await screen.findByRole('header', { name: title })).toBeOnTheScreen();
   expect(screen.getByText('Dieser Bereich ist noch in Arbeit.')).toBeOnTheScreen();
   expect(screen.getByText(owner)).toBeOnTheScreen();
+  await act(() => testRouter.back());
+  expect(screen).toHavePathname('/settings');
+});
+
+test('„Partner & Freigaben“ öffnet die Seite statt eines Platzhalters (#129)', async () => {
+  await openOverview();
+
+  await user.press(screen.getByRole('button', { name: 'Partner & Freigaben' }));
+
+  expect(screen).toHavePathname('/settings/partner_sharing');
+  expect(await screen.findByRole('header', { name: 'Partner & Freigaben' })).toBeOnTheScreen();
+  expect(screen.queryByText('Dieser Bereich ist noch in Arbeit.')).not.toBeOnTheScreen();
   await act(() => testRouter.back());
   expect(screen).toHavePathname('/settings');
 });
