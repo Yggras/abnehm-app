@@ -46,8 +46,13 @@ name: Challenge-Vorschlag
     env:
       LINK: seed?szenario=gekoppelt&installation=philipp-iphone&ziel=/challenge/propose
 - extendedWaitUntil:
-    visible: "Gut getrunken vorschlagen"
+    visible: "Gemeinsam dranbleiben"
     timeout: 30000
+# Auf dem iPhone SE liegt „Gut getrunken“ unter dem sichtbaren Bereich.
+- scrollUntilVisible:
+    element: "Gut getrunken vorschlagen"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Gut getrunken vorschlagen"
 - extendedWaitUntil:
     visible: "Vorschlag an Anna gesendet"

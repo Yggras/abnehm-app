@@ -44,7 +44,7 @@ export const challengeTemplates: readonly ChallengeTemplate[] = [
   {
     key: 'aktive_woche',
     name: 'Aktive Woche',
-    description: 'Es zählen eure geplanten Sporteinheiten; 80 % davon reichen.',
+    description: 'Es zählen eure geplanten Sporteinheiten.',
     measure: { type: 'baustein', baustein: 'sporteinheit', numerator: 4, denominator: 5 },
     deko: 'sportplatz',
   },
