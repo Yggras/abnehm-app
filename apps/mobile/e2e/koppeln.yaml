@@ -37,7 +37,6 @@ name: Koppeln per Code
 - tapOn: "Code teilen"
 - runFlow:
     file: teilablaeufe/teilen-menue.yaml
-- takeScreenshot: koppeln-2-teilen-menue
 
 # 2. Code eingeben → Reaktivierungsvorschau → gekoppelt ----------------------------------------------
 - launchApp:
@@ -47,8 +46,9 @@ name: Koppeln per Code
     file: teilablaeufe/link.yaml
     env:
       LINK: seed?szenario=einladung-nach-entkopplung&ziel=/partner/redeem
+# Den Hinweis „Sechs Ziffern“ lesen Screenreader als Hinweis des Felds; Maestro sieht deshalb nur das Feld.
 - extendedWaitUntil:
-    visible: "Sechs Ziffern"
+    visible: "Einladungscode"
     timeout: 30000
 - tapOn: "Einladungscode"
 - inputText: "271828"
@@ -66,7 +66,11 @@ name: Koppeln per Code
 - assertVisible: "Du und Anna kümmert euch ab jetzt gemeinsam um Momo."
 - takeScreenshot: koppeln-5-gekoppelt
 - tapOn: "Zum Schlüpfen"
+# Die Reaktivierung bringt die geschlüpfte Insel zurück; auf diesem frisch installierten Gerät erklärt beim
+# ersten Öffnen „So wächst Momo“ das Wachstum (wie in `schluepfen.yaml`).
 - extendedWaitUntil:
-    visible: "Momos Insel.*"
+    visible: "Tagesziele bringen Energie."
     timeout: 30000
 - takeScreenshot: koppeln-6-insel
+- tapOn: "Verstanden"
+- assertVisible: "Momos Insel.*"
