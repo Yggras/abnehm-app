@@ -29,7 +29,7 @@ const openOf = (phone: GamePhone) => islandOf(phone).events.open;
 
 function onlyVisit(phone: GamePhone) {
   const [visit, ...rest] = openOf(phone);
-  if (visit === undefined || rest.length > 0) throw new Error(`Genau ein offener Besuch erwartet: ${JSON.stringify(openOf(phone))}`);
+  if (visit?.kind !== 'besuch' || rest.length > 0) throw new Error(`Genau ein offener Besuch erwartet: ${JSON.stringify(openOf(phone))}`);
   return visit;
 }
 

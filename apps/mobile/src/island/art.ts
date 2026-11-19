@@ -259,6 +259,58 @@ function kuerbisbeet(stage: Stage): ArtPrimitive[] {
   return drawing;
 }
 
+// --- Entdeckungs-Baupläne von Gebiet 1 (#204) --------------------------------------------------------
+
+/** Steinmauer: zwei Steinblöcke; Stufe 2 mit einem Block obenauf, Stufe 3 mit Moos und einer Blüte. */
+function steinmauer(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [shadow(tile * 0.5), ...box({ x: -8, y: 0 }, 7, 9, 'islandStone', 'islandStone'), ...box({ x: 8, y: 0 }, 7, 9, 'islandStone', 'islandStone')];
+  if (stage >= 2) drawing.push(...box({ x: 0, y: -9 }, 6, 7, 'islandStone', 'islandStone'));
+  if (stage >= 3) drawing.push({ type: 'oval', x: -6, y: -20, width: 9, height: 4, tone: 'laub' }, dot(4, -13, 1.8, 'islandRoof'));
+  return drawing;
+}
+
+/** Briefkasten: Kasten auf einem Pfahl; Stufe 2 mit Fähnchen, Stufe 3 mit einem Brief im Schlitz. */
+function briefkasten(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [shadow(tile * 0.25), rect(-1.5, -20, 3, 20, 'islandWood'), ...box({ x: 0, y: -20 }, 6, 8, 'islandRoofAlt', 'islandRoofAlt')];
+  if (stage >= 2) drawing.push(rect(6, -34, 1.5, 9, 'islandWood'), { type: 'flaeche', points: [{ x: 7.5, y: -34 }, { x: 12, y: -32 }, { x: 7.5, y: -30 }], tone: 'islandRoof' });
+  if (stage >= 3) drawing.push(rect(-4, -33, 6, 3, 'surfaceCard'));
+  return drawing;
+}
+
+/** Seerose auf dem Wasser: ein Blatt mit Kerbe an (x, y). */
+function lilyPad(x: number, y: number, width: number): ArtPrimitive[] {
+  return [
+    { type: 'oval', x: x - width / 2, y: y - width / 4, width, height: width / 2, tone: 'laub' },
+    { type: 'flaeche', points: [{ x, y }, { x: x + width / 2, y: y - width / 8 }, { x: x + width / 2, y: y + width / 8 }], tone: 'islandWater' },
+  ];
+}
+
+/** Seerosenteich: Wasser mit zwei Blättern; Stufe 2 mit zwei Blättern mehr, Stufe 3 mit einer Blüte. */
+function seerosenteich(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [
+    { type: 'flaeche', points: [{ x: 0, y: -10 }, { x: 20, y: 0 }, { x: 0, y: 10 }, { x: -20, y: 0 }], tone: 'islandWater' },
+    { type: 'flaeche', points: [{ x: 0, y: 10 }, { x: 20, y: 0 }, { x: 20, y: 1.5 }, { x: 0, y: 11.5 }], tone: 'islandWaterDeep' },
+    ...lilyPad(-8, -1, 8),
+    ...lilyPad(5, -4, 7),
+  ];
+  if (stage >= 2) drawing.push(...lilyPad(-1, 4, 6), ...lilyPad(10, 2, 6));
+  if (stage >= 3) drawing.push(dot(5, -5, 2.4, 'islandRoof'), dot(5, -5, 1, 'islandLamp'));
+  return drawing;
+}
+
+/** Ein Halm Schilf mit Kolben an der Spitze, Fuß bei x, `h` hoch. */
+function reed(x: number, h: number): ArtPrimitive[] {
+  return [rect(x - 0.75, -h, 1.5, h, 'laub'), { type: 'oval', x: x - 1.6, y: -h + 1, width: 3.2, height: 7, tone: 'islandEarth' }];
+}
+
+/** Schilfgras: drei Halme; Stufe 2 mit zwei Halmen mehr, Stufe 3 mit zwei weiteren und Blättern am Fuß. */
+function schilfgras(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [shadow(tile * 0.3), ...reed(-4, 24), ...reed(1, 30), ...reed(6, 22)];
+  if (stage >= 2) drawing.push(...reed(-9, 18), ...reed(10, 26));
+  if (stage >= 3) drawing.push(...reed(-1, 16), ...reed(13, 15), { type: 'oval', x: -10, y: -4, width: 8, height: 3, tone: 'laub' }, { type: 'oval', x: 3, y: -3, width: 8, height: 3, tone: 'laub' });
+  return drawing;
+}
+
 // --- Besucher-Deko (#202) ----------------------------------------------------------------------------
 
 /** Deko je Grafikschlüssel; flach und klein, sie steht wie ein Objekt mittig auf ihrem Feld. */
@@ -317,6 +369,19 @@ const decorations: Readonly<Record<string, () => ArtPrimitive[]>> = {
     dot(4, -10, 5, 'islandStone'),
     { type: 'flaeche', points: [{ x: -8.8, y: -8.5 }, { x: 8.8, y: -8.5 }, { x: 0, y: 2 }], tone: 'islandStone' },
     { type: 'halbkreis', x: 4, y: -10, r: 5, tone: 'ink', opacity: opacity.shadeRight },
+  ],
+  /** Entdeckungs-Deko von Gebiet 1 (#204): ein Frosch aus Stein. */
+  steinfrosch: () => [
+    shadow(22),
+    { type: 'oval', x: -10, y: -11, width: 20, height: 12, tone: 'islandStone' },
+    { type: 'halbkreis', x: 0, y: -5, r: 6, tone: 'ink', opacity: opacity.shadeRight },
+    { type: 'oval', x: -11, y: -3, width: 7, height: 3.5, tone: 'islandStone' },
+    { type: 'oval', x: 4, y: -3, width: 7, height: 3.5, tone: 'islandStone' },
+    dot(-4.5, -12, 3, 'islandStone'),
+    dot(4.5, -12, 3, 'islandStone'),
+    dot(-4.5, -12.5, 1.2, 'ink'),
+    dot(4.5, -12.5, 1.2, 'ink'),
+    { type: 'flaeche', points: [{ x: -4, y: -7 }, { x: 4, y: -7 }, { x: 0, y: -6 }], tone: 'ink', opacity: opacity.shadeLeft },
   ],
 };
 
@@ -441,6 +506,10 @@ const motifs: Readonly<Record<string, Motif>> = {
   sonnenblumen: { draw: sonnenblumen, light: null },
   pilzkreis: { draw: pilzkreis, light: null },
   kuerbisbeet: { draw: kuerbisbeet, light: null },
+  steinmauer: { draw: steinmauer, light: null },
+  briefkasten: { draw: briefkasten, light: null },
+  seerosenteich: { draw: seerosenteich, light: null },
+  schilfgras: { draw: schilfgras, light: null },
 };
 
 /** Deko und Tiere haben keine Stufen; sie stehen als Stufe 1 ohne Licht. */

@@ -147,6 +147,17 @@ export function eventRewardId(islandEventStateId: EntityId, index = 0): EntityId
   return EntityId.parse(uuidV5(eventRewardNamespace, index === 0 ? islandEventStateId : `${islandEventStateId}:${index}`));
 }
 
+const islandContentNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b6b';
+
+/**
+ * ID einer Inselzeile, die je Insel über ihren Schlüssel eindeutig ist: Gebietsfreischaltung (Gebiet), Inselfeld
+ * (Feldschlüssel) oder Bauplanfreischaltung (Katalogschlüssel). Server und Seeds vergeben so dieselbe ID für eine
+ * Freischaltung, ohne Rückfrage (#204).
+ */
+export function islandContentId(entityType: 'area_unlock' | 'island_field' | 'blueprint_unlock', islandId: EntityId, key: string): EntityId {
+  return EntityId.parse(uuidV5(islandContentNamespace, `${entityType}:${islandId}:${key}`));
+}
+
 const startedStatuses: readonly ChallengeStatus[] = ['aktiv', 'geschafft', 'abgelaufen', 'beendet'];
 const openStatuses: readonly ChallengeStatus[] = ['vorgeschlagen', 'aktiv'];
 

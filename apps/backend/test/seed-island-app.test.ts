@@ -228,7 +228,7 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
 
     await runSyncSteps(seedManifests['ereignisse-voll'], world);
 
-    expect(islandOf(iphone).events.open.map((event) => event.visitor.name)).toEqual(['Eule Otto', 'Schwan Selma', 'Fuchs Fridolin', 'Igel Ilse']);
+    expect(islandOf(iphone).events.open.map((event) => (event.kind === 'besuch' ? event.visitor.name : event.area.name))).toEqual(['Eule Otto', 'Schwan Selma', 'Fuchs Fridolin', 'Igel Ilse']);
   });
 
   it('levelaufstieg-ausstehend: Vor dem Pull wartet Momo auf Anna; danach feiern beide Geräte Level 4 genau einmal, Philipp beim nächsten sichtbaren Moment (#200)', { timeout: 30_000 }, async () => {
@@ -252,10 +252,28 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
 
     for (const phone of [iphone, android]) {
       expect(islandOf(phone)).toMatchObject({ halves: { level: 4, waitingForPartner: false } });
-      expect(islandOf(phone).sharedEvents.map((event) => event.type)).toEqual(['momo_geschluepft', 'levelaufstieg']);
+      // Level 4 ist ein Formlevel: Dazu kommen Hüpfer, Schilfwiese und Entdeckung (#204).
+      expect(islandOf(phone).sharedEvents.map((event) => event.type).sort()).toEqual(['gebiet', 'levelaufstieg', 'momo_geschluepft']);
+      expect(islandOf(phone)).toMatchObject({ appearance: { formKey: 'huepfer' }, unlockedAreas: ['schilfwiese'] });
     }
     expect(philippsFeiern()).toEqual([4]);
     expect(annasFeiern()).toEqual([4]);
+  });
+
+  it('formwechsel: Beim nächsten Öffnen des Tabs „Momo“ verwandelt sich Momo in den Hüpfer, und beide sehen die Entdeckung (#204)', { timeout: 30_000 }, async () => {
+    const manifest = seedManifests.formwechsel;
+    const world = await seeded(manifest);
+    await runSyncSteps(manifest, world);
+
+    for (const phone of [world.phones['philipp-iphone']!, world.phones['anna-android']!]) {
+      expect(islandOf(phone)).toMatchObject({ appearance: { formKey: 'huepfer' }, unlockedAreas: ['schilfwiese'] });
+      // Neben den Besuchen von heute aus `gekoppelt` wartet die Entdeckung.
+      expect(islandOf(phone).events.open.filter((event) => event.kind === 'entdeckung')).toEqual([
+        expect.objectContaining({ area: { key: 'schilfwiese', name: 'Schilfwiese' }, seen: false, claimable: true }),
+      ]);
+      expect(phone.game.takeTransformation()).toEqual({ from: 'kaulquappe', to: 'huepfer', areas: ['schilfwiese'] });
+      expect(phone.game.takeTransformation()).toBeNull();
+    }
   });
 });
 

@@ -882,12 +882,39 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
     expect((server.notification_intent ?? []).map((row) => [row.recipient_person_id, row.payload])).toEqual(
       expect.arrayContaining([[philipp, { level: 4 }], [anna, { level: 4 }]]),
     );
-    expect(server.notification_intent).toHaveLength(2);
+    // Level 4 ist ein Formlevel: dazu je ein `gebiet`-Push an beide (#204).
+    expect((server.notification_intent ?? []).map((row) => [row.type, row.recipient_person_id]).sort()).toEqual(
+      [['gebiet', anna], ['gebiet', philipp], ['levelaufstieg', anna], ['levelaufstieg', philipp]].sort(),
+    );
     expect(server.processed_operation?.map(({ outcome, person_id }) => [outcome, person_id])).toEqual(Array(3).fill(['applied', anna]));
     for (const device of Object.values(devices)) {
       expect(device.outbox).toEqual([]);
       expect(progressOf(device.rows.island_progress)).toMatchObject({ level: 4 });
       expect(levelEvents(device.rows.island_event)).toHaveLength(1);
+    }
+  });
+
+  it('levelaufstieg-ausstehend und formwechsel: Mit Level 4 kommen Schilfwiese, Entdeckung und je Gerät nur der eigene Ereignisstand (#204)', () => {
+    const { server, devices } = seedManifests['levelaufstieg-ausstehend'].target;
+    expect(server.area_unlock).toEqual([expect.objectContaining({ area_key: 'schilfwiese', level: 4 })]);
+    expect((server.island_field ?? []).filter((row) => String(row.field_key).startsWith('schilfwiese:'))).toHaveLength(80);
+    const discovery = (server.island_event ?? []).filter((row) => row.type === 'entdeckung');
+    expect(discovery).toEqual([expect.objectContaining({ occasion_key: `gebiet:${seedIds.island.philippAnna}:schilfwiese`, status: 'erfuellbar' })]);
+    expect(server.island_event_state?.filter((row) => row.island_event_id === discovery[0]!.id)).toHaveLength(2);
+    for (const [key, person] of [['philipp-iphone', philipp], ['anna-android', anna]] as const) {
+      const states = (devices[key]!.rows.island_event_state ?? []).filter((row) => row.island_event_id === discovery[0]!.id);
+      expect(states.map((row) => row.person_id)).toEqual([person]);
+    }
+
+    const formwechsel = seedManifests.formwechsel;
+    expect(formwechsel.target).toEqual(formwechsel.initial);
+    for (const device of Object.values(formwechsel.initial.devices)) {
+      expect(device.rows.device_state).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: 'momo_levelfeier', value: { islandId: seedIds.island.philippAnna, level: 4 } }),
+          expect.objectContaining({ key: 'momo_verwandlung', value: { islandId: seedIds.island.philippAnna, level: 3 } }),
+        ]),
+      );
     }
   });
 });

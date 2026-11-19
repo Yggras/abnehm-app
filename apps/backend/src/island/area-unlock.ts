@@ -1,9 +1,7 @@
-import { randomUUID } from 'node:crypto';
-
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
-import { DiscoveryEventDetails, islandEventId, islandEventStateId } from '@abnehm/contracts/island-records';
+import { DiscoveryEventDetails, islandContentId, islandEventId, islandEventStateId } from '@abnehm/contracts/island-records';
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import { areaOccasionKey, areaUnlockAt, sidesOf, type AreaUnlock } from '@abnehm/game-rules/areas';
@@ -59,9 +57,10 @@ export async function areaUnlockChanges(tx: DbExecutor, { islandId, couplingId, 
   const unlocks = candidates.filter((unlock) => !known.has(areaOccasionKey(islandId, unlock.area.key)));
   if (unlocks.length === 0) return [];
 
-  const members = (await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(eq(couplingMember.couplingId, couplingId))).map((row) =>
-    EntityId.parse(row.personId),
-  );
+  // Nach Person geordnet, damit Ereignisstände und Intents in fester Reihenfolge entstehen (wie in den Seeds).
+  const members = (
+    await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(eq(couplingMember.couplingId, couplingId)).orderBy(asc(couplingMember.personId))
+  ).map((row) => EntityId.parse(row.personId));
   const changes: CanonicalChange[] = [];
   for (const unlock of unlocks) changes.push(...(await unlockArea(tx, { islandId, couplingId, members, at, unlock })));
 
@@ -89,13 +88,14 @@ async function unlockArea(
   const writeAll = batchChangeWriter(tx, at);
   const owned = { islandId, couplingId };
 
-  const areaId = EntityId.parse(randomUUID());
+  // IDs aus Insel und Schlüssel, wie in den Seeds (`islandContentId`).
+  const areaId = islandContentId('area_unlock', islandId, unlock.area.key);
   await write({ entityType: 'area_unlock', couplingId }, async (stamp) => {
     await tx.insert(areaUnlock).values({ id: areaId, ...owned, areaKey: unlock.area.key, level: unlock.level, unlockedAt: at, createdAt: stamp.createdAt, serverVersion: stamp.serverVersion });
     return areaId;
   });
 
-  const fields = unlock.fields.map((field) => ({ id: randomUUID(), ...field }));
+  const fields = unlock.fields.map((field) => ({ id: islandContentId('island_field', islandId, field.key), ...field }));
   await writeAll({ entityType: 'island_field', couplingId }, fields.map(({ id }) => id), async (stamped) => {
     await tx.insert(islandField).values(
       stamped.map(({ id, createdAt, serverVersion }, index) => ({
@@ -108,7 +108,9 @@ async function unlockArea(
   const ownedBlueprints = new Set(
     (await tx.select({ key: blueprintUnlock.catalogKey }).from(blueprintUnlock).where(eq(blueprintUnlock.islandId, islandId))).map((row) => row.key),
   );
-  const blueprints = unlock.discovery.blueprints.filter((key) => !ownedBlueprints.has(key)).map((key) => ({ id: randomUUID(), key }));
+  const blueprints = unlock.discovery.blueprints
+    .filter((key) => !ownedBlueprints.has(key))
+    .map((key) => ({ id: islandContentId('blueprint_unlock', islandId, key), key }));
   await writeAll({ entityType: 'blueprint_unlock', couplingId }, blueprints.map(({ id }) => id), async (stamped) => {
     await tx.insert(blueprintUnlock).values(
       stamped.map(({ id, createdAt, serverVersion }, index) => ({
@@ -148,8 +150,8 @@ async function unlockArea(
   // Person lesen darf. Beide kommen deshalb mit dem nächsten Pull.
   // Nacheinander: Eine Transaktion hat genau eine Verbindung.
   const changes = [await canonicalAfterWrite(tx, areaUnlockEntity, areaId)];
-  for (const { id } of fields) changes.push(await canonicalAfterWrite(tx, islandFieldEntity, EntityId.parse(id)));
-  for (const { id } of blueprints) changes.push(await canonicalAfterWrite(tx, blueprintUnlockEntity, EntityId.parse(id)));
+  for (const { id } of fields) changes.push(await canonicalAfterWrite(tx, islandFieldEntity, id));
+  for (const { id } of blueprints) changes.push(await canonicalAfterWrite(tx, blueprintUnlockEntity, id));
   changes.push(await canonicalAfterWrite(tx, islandEventEntity, eventId));
   return changes;
 }

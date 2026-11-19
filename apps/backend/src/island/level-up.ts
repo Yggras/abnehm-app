@@ -1,9 +1,7 @@
-import { randomUUID } from 'node:crypto';
-
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
-import { islandEventId } from '@abnehm/contracts/island-records';
+import { islandContentId, islandEventId } from '@abnehm/contracts/island-records';
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import type { GameCatalog } from '@abnehm/game-rules/catalog';
@@ -96,7 +94,7 @@ async function unlockBlueprints(
   const owned = new Set((await tx.select({ key: blueprintUnlock.catalogKey }).from(blueprintUnlock).where(eq(blueprintUnlock.islandId, islandId))).map((row) => row.key));
   const keys = [...new Set(levels.flatMap((level) => unlocksAt(catalog, level).blueprints.filter((b) => b.reason === 'level').map((b) => b.key)))].filter((key) => !owned.has(key));
   if (keys.length === 0) return [];
-  const rows = keys.map((key) => ({ id: randomUUID(), key }));
+  const rows = keys.map((key) => ({ id: islandContentId('blueprint_unlock', islandId, key), key }));
   await batchChangeWriter(tx, at)({ entityType: 'blueprint_unlock', couplingId }, rows.map(({ id }) => id), async (stamped) => {
     await tx.insert(blueprintUnlock).values(
       stamped.map(({ id, createdAt, serverVersion }, index) => ({
@@ -106,6 +104,6 @@ async function unlockBlueprints(
   });
   // Nacheinander: Eine Transaktion hat genau eine Verbindung.
   const changes: CanonicalChange[] = [];
-  for (const { id } of rows) changes.push(await canonicalAfterWrite(tx, blueprintUnlockEntity, EntityId.parse(id)));
+  for (const { id } of rows) changes.push(await canonicalAfterWrite(tx, blueprintUnlockEntity, id));
   return changes;
 }

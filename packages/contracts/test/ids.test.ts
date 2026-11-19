@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EntityId } from '../src/base.ts';
 import { uuidV5 } from '../src/ids.ts';
-import { eventRewardId } from '../src/island-records.ts';
+import { eventRewardId, islandContentId } from '../src/island-records.ts';
 import { importedSportEntryId, importedWeightEntryId } from '../src/trackers.ts';
 
 // Nachweis für #105: deterministische IDs nach RFC 9562, Abschnitt 5.5 (UUIDv5, SHA-1).
@@ -65,6 +65,23 @@ describe('IDs importierter Einträge (#183)', () => {
       importedSportEntryId(philipp, 'health_connect', key),
       importedSportEntryId(philipp, 'apple_health', `${key}-2`),
       importedWeightEntryId(philipp, 'apple_health', key),
+    ]);
+    expect(ids.size).toBe(5);
+  });
+});
+
+describe('IDs der Inselzeilen aus ihrem Schlüssel (#204)', () => {
+  const island = EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c02');
+  const other = EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c03');
+
+  it('sind deterministisch und unterscheiden Art, Insel und Schlüssel', () => {
+    expect(islandContentId('island_field', island, 'schilfwiese:0:-1')).toBe(islandContentId('island_field', island, 'schilfwiese:0:-1'));
+    const ids = new Set([
+      islandContentId('island_field', island, 'schilfwiese:0:-1'),
+      islandContentId('island_field', other, 'schilfwiese:0:-1'),
+      islandContentId('island_field', island, 'schilfwiese:1:-1'),
+      islandContentId('area_unlock', island, 'schilfwiese'),
+      islandContentId('blueprint_unlock', island, 'schilfwiese'),
     ]);
     expect(ids.size).toBe(5);
   });
