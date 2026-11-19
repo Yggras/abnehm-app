@@ -15,6 +15,7 @@ import { createLocalDatabases } from '../local-db/local-databases';
 import { encouragement } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
+import { appWirContributions } from '../shell/app-wir';
 import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
@@ -59,6 +60,7 @@ async function openPhilipp() {
   const online = new Set<(online: boolean) => void>();
   const ticks = new Set<() => void>();
   const partner = createPartner({
+    wirContributions: appWirContributions.source,
     database, clock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock, newId }), newId,
     observeOnline: (listener) => { online.add(listener); return () => online.delete(listener); },
     refresh: (update) => { ticks.add(update); return () => ticks.delete(update); },
