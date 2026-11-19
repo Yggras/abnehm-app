@@ -11,6 +11,8 @@ import { areaUnlock, islandEvent, islandEventState, islandField, notificationInt
 import { progressChanges } from '../src/island/progress-change.ts';
 import { builtWorld, type BuildWorld } from './support/building.ts';
 import { spendWithoutProjection, unlocksOf } from './support/level-up.ts';
+import { claimOp } from './support/island-events.ts';
+import { pullAll, push } from './support/sync.ts';
 
 // Nachweis für #204 am Server: Gebietsfreischaltung und Entdeckung im Befehl des Levelaufstiegs, mit dem
 // Test-Katalog der Spielregeln (Gebiete bei Level 4 und 8, zwei Landschaftsvorlagen). Verbaute Energie entsteht
@@ -101,6 +103,18 @@ describe('Gebietsfreischaltung im Befehl des Levelaufstiegs', { timeout: 60_000 
     expect({ area: await areaOf(world, 't_gebiet_1'), intents: await areaIntents(world), unlocks: await unlocksOf(world) }).toEqual(before);
   });
 
+  it('die Entdeckung zählt nicht zum Ereignisdeckel: Am selben Inseltag kommen danach noch beide Besucher', async () => {
+    const world = await builtWorld();
+    await reach(world, 4, 1);
+
+    await pullAll(world.backend, world.actor);
+
+    const today = await db(world).select({ type: islandEvent.type }).from(islandEvent).where(eq(islandEvent.islandId, world.islandId));
+    expect(today.filter((event) => event.type === 'entdeckung')).toHaveLength(1);
+    // Tagesdeckel 2 (Spezifikation 4, Abschnitt 9), voll mit Besuchern.
+    expect(today.filter((event) => event.type === 'besuch')).toHaveLength(2);
+  });
+
   it('zwischen den Formlevels schaltet kein Gebiet frei', async () => {
     const world = await builtWorld();
     await reach(world, 3, 1);
@@ -131,6 +145,9 @@ describe('Endlose Gebiete mit Test-Katalog', { timeout: 60_000 }, () => {
       reward: { areaKey: 'endlos_1_t_vorlage_erste', blueprints: ['t_ent_bauen_1a', 't_ent_natur_1a'], deko: [] },
     });
     expect(first.states).toHaveLength(2);
+    // Ohne Deko gibt es nichts abzuholen; der Server lehnt ab und nennt den Stand.
+    const [refused] = await push(world.backend, world.actor, [claimOp(islandEventStateId(first.eventId, EntityId.parse(world.philipp.personId)))]);
+    expect(refused).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' }, canonical: { entityType: 'island_event_state', data: { claimedAt: null } } });
     // Drei Gebiete in einem Befehl, aber nur ein Push je Empfänger: der des neuesten.
     const intents = await areaIntents(world);
     expect(intents).toHaveLength(2);
