@@ -19,6 +19,7 @@ import {
   seedWeightEntry,
   type SeedWeeklyPlan,
 } from './rows.ts';
+import { gekoppeltBesuche, type SeedVisit } from './ereignisse.ts';
 import { geschluepftePart } from './geschluepft.ts';
 import {
   philippThresholds,
@@ -581,11 +582,16 @@ const energieverlauf = energieverlaufPart([
  * (`hatched: false`, #180) wartet die Insel auf die Rollen, und kein Mitglied hat eine. Geschlüpft kommen
  * zuletzt der Energieverlauf seit dem Zielstart und die Inhalte der Insel samt Bauten (#184, #191), damit
  * die Positionen davor gleich bleiben. `annas` legt den Stand von Annas Projektionen fest (#113), `builds`
- * die Bauten auf der Insel.
+ * die Bauten auf der Insel, `visits` die Besucher mit Wunsch (#202).
  */
-const partnerParts = ({ hatched, annas, builds = gekoppeltBauten }: Readonly<{ hatched: boolean; annas: AnnasProjections; builds?: readonly SeedBuild[] }>): readonly SeedPart[] => [
+const partnerParts = ({
+  hatched,
+  annas,
+  builds = gekoppeltBauten,
+  visits = gekoppeltBesuche,
+}: Readonly<{ hatched: boolean; annas: AnnasProjections; builds?: readonly SeedBuild[]; visits?: readonly SeedVisit[] }>): readonly SeedPart[] => [
   ...philippParts, annaPerson, annaZiele, tracker, ernaehrung, energie, kopplungPart({ hatched }), projektionenOf(annas),
-  ...(hatched ? [energieverlauf, geschluepftePart(hatchedAt, builds)] : []),
+  ...(hatched ? [energieverlauf, geschluepftePart(hatchedAt, builds, visits)] : []),
 ];
 
 /** Beiträge des Szenarios, Annas Projektionen zu einem früheren Stand (#113). */
@@ -593,6 +599,9 @@ export const gekoppeltPartsWith = (annas: AnnasProjections): readonly SeedPart[]
 
 /** Beiträge von `gekoppelt` mit anderen Bauten auf der Insel, etwa `haelfte-voll` (#191). */
 export const gekoppeltPartsBuilt = (builds: readonly SeedBuild[]): readonly SeedPart[] => partnerParts({ hatched: true, annas: annasProjectionsNow, builds });
+
+/** Beiträge von `gekoppelt` mit anderen Besuchern auf der Insel, etwa `ereignisse-voll` (#202). */
+export const gekoppeltPartsVisited = (visits: readonly SeedVisit[]): readonly SeedPart[] => partnerParts({ hatched: true, annas: annasProjectionsNow, visits });
 
 /** Philipp hat die Benachrichtigungseinstellung nach der Kopplung gespeichert. */
 const notificationSettingSavedAt = '2026-10-01T18:50:00.000Z';
@@ -705,7 +714,8 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
-  // Revision 11: Tracker-Daten der Partner-Szenarien mit Importen, Ersetzung und Ausblendung; Zusammenfassungen der Projectors (#181).
+  // Revision 12: Tracker-Daten der Partner-Szenarien mit Importen, Ersetzung und Ausblendung; Zusammenfassungen der Projectors (#181).
+  // Revision 11: je ein Besucher mit Wunsch von heute für Philipp und Anna (#202).
   // Revision 10: Philipps drei Anfeuerungen an Anna von heute (#123).
   // Revision 9: Philipps Benachrichtigungseinstellung ohne Gewicht (#132).
   // Revision 8: Energieverlauf seit dem Zielstart und Bauten (#191): Level 3, Philipp mit 23 Energie.
@@ -715,7 +725,7 @@ export const gekoppeltManifest = SeedManifest.parse({
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 11,
+  revision: 12,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

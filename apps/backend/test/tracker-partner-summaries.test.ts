@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';
 
-import { EntityId, LocalDate, type AreaKey } from '@abnehm/contracts/base';
+import { EntityId, LocalDate } from '@abnehm/contracts/base';
 import { partnerSummaryPeriod, type PartnerSummaryContent } from '@abnehm/contracts/partner';
 
 import type { DbExecutor } from '../src/database.ts';

@@ -239,6 +239,33 @@ export function placeObjectKey(commandId: EntityId): string {
   return `platzieren:${commandId}`;
 }
 
+/**
+ * Nutzlast des Fachbefehls `markEventsSeen` (Spezifikation 4, Abschnitt 9; #202): Die Person hat ein für
+ * sie neues Ereignis angesehen. Je Ereignis eine Operation, weil die Autorisierung genau einen eigenen
+ * Ereignisstand prüft. Ansehen kostet keine Energie.
+ */
+export const MarkEventsSeen = z.strictObject({ islandEventStateId: EntityId });
+export type MarkEventsSeen = z.infer<typeof MarkEventsSeen>;
+
+/** Fachlicher Schlüssel von `markEventsSeen`: je Ereignisstand einmal; ein zweites Gerät ist ein Retry. */
+export function markEventsSeenKey(islandEventStateId: EntityId): string {
+  return `ereignis_gesehen:${islandEventStateId}`;
+}
+
+/**
+ * Nutzlast des Fachbefehls `claimEventReward` (Spezifikation 4, Abschnitt 9; #202): die Belohnung eines
+ * erfüllbaren Wunschs abholen. Offline möglich mit lokal vorläufiger Belohnung; der Server prüft die
+ * Bedingung und bestimmt die Belohnung kanonisch. Die IDs der Belohnung leiten Gerät und Server aus dem
+ * Ereignisstand ab (`eventRewardId`), die Nutzlast nennt deshalb keine.
+ */
+export const ClaimEventReward = z.strictObject({ islandEventStateId: EntityId });
+export type ClaimEventReward = z.infer<typeof ClaimEventReward>;
+
+/** Fachlicher Schlüssel von `claimEventReward`: je Ereignis und Person genau eine Belohnung. */
+export function claimEventRewardKey(islandEventStateId: EntityId): string {
+  return `ereignis_belohnung:${islandEventStateId}`;
+}
+
 /** Entwicklungsform zum Level (Kaulquappe ab Level 1 … Lagunendrache ab Level 43). */
 export const MomoForm = z.enum([
   'kaulquappe',

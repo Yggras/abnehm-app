@@ -2,6 +2,7 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { hatching } from '@abnehm/game-rules/hatching';
 
 import type { SeedEntity, SeedPart } from './build.ts';
+import { visitEntities, type SeedVisit } from './ereignisse.ts';
 import { seedIds } from './ids.ts';
 import { buildEntities, progressOf, type SeedBuild } from './spielverlauf.ts';
 
@@ -9,14 +10,15 @@ import { buildEntities, progressOf, type SeedBuild } from './spielverlauf.ts';
 // Regeln wie der Server (`@abnehm/game-rules/hatching`). Anna hat Natur vorgeschlagen, Philipp hat
 // angenommen und Bauen bekommen; Seite a gehört damit Philipp. Dazu die Start-Baupläne, Projekt 1, das
 // Ereignis „Momo ist geschlüpft“, die gebauten Objekte samt `build_debit` (#191) und der Inselfortschritt
-// aus diesen Bauten. Ohne Bauten steht die Insel auf Level 1 ohne verbaute Energie.
+// aus diesen Bauten, zuletzt die Besucher mit Wunsch (#202). Ohne Bauten steht die Insel auf Level 1 ohne
+// verbaute Energie.
 
 const philipp = seedIds.person.philipp;
 const anna = seedIds.person.anna;
 const couplingId = seedIds.coupling.philippAnna;
 const islandId = seedIds.island.philippAnna;
 
-export function geschluepftePart(hatchedAt: string, builds: readonly SeedBuild[] = []): SeedPart {
+export function geschluepftePart(hatchedAt: string, builds: readonly SeedBuild[] = [], visits: readonly SeedVisit[] = []): SeedPart {
   const plan = hatching(gameCatalog, { proposerPersonId: anna, proposerRole: 'natur', partnerPersonId: philipp });
   const owned = { island_id: islandId, coupling_id: couplingId };
   const entity = (table: string, row: SeedEntity['row']): SeedEntity => ({ table, entityType: table, couplingId, row });
@@ -78,6 +80,8 @@ export function geschluepftePart(hatchedAt: string, builds: readonly SeedBuild[]
         updated_at: projectedAt,
         deleted_at: null,
       }),
+      // Zuletzt, damit die Positionen davor gleich bleiben.
+      ...visits.flatMap(visitEntities),
     ],
   };
 }

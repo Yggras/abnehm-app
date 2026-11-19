@@ -12,6 +12,7 @@ import { WirContributionsState, type WirContribution } from '@abnehm/contracts/w
 import { dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
 import { insertDailyGoalForTest } from '../../../mobile/src/daily-goals/testing/persisted.ts';
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
+import { islandEventCommands } from '../../../mobile/src/island/island-events.ts';
 import { islandObjectCommands } from '../../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../../mobile/src/island/game-service.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
@@ -88,7 +89,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     }),
     clock,
     installationId: newId(),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands] }),
   });
   const game: GameService = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
@@ -137,14 +138,15 @@ export function proposalOn(phone: GamePhone) {
 
 /** Philipp und Anna mit je einem Gerät, noch ungekoppelt und auf dem Stand des Servers. */
 export async function gamePhones() {
-  const backend = await createTestBackend({ clock: createTestClock(worldStart) });
+  const clock = createTestClock(worldStart);
+  const backend = await createTestBackend({ clock });
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philippsPhone = await gamePhone(backend, philipp.accountId, philipp.device);
   const annasPhone = await gamePhone(backend, anna.accountId, anna.device);
   await philippsPhone.sync();
   await annasPhone.sync();
-  return { backend, philipp, anna, philippsPhone, annasPhone };
+  return { backend, clock, philipp, anna, philippsPhone, annasPhone };
 }
 
 /** Anna hat Natur vorgeschlagen, Philipp hat angenommen: Momo ist geschlüpft, beide Geräte sind auf dem Stand. */

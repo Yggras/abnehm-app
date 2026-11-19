@@ -171,6 +171,247 @@ function apfelbaum(stage: Stage): ArtPrimitive[] {
   return drawing;
 }
 
+// --- Besucher-Baupläne (#202) ------------------------------------------------------------------------
+
+/** Brunnen: Steinbecken mit Wasser; Stufe 2 mit zwei Pfosten, Stufe 3 mit Dach. */
+function brunnen(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [shadow(tile * 0.45), ...box({ x: 0, y: 0 }, 13, 8, 'islandWater', 'islandStone')];
+  if (stage >= 2) drawing.push(rect(-11, -26, 2, 22, 'islandWood'), rect(9, -26, 2, 22, 'islandWood'));
+  if (stage >= 3) drawing.push({ type: 'flaeche', points: [{ x: -15, y: -25 }, { x: 0, y: -34 }, { x: 15, y: -25 }], tone: 'islandRoof' });
+  return drawing;
+}
+
+/** Vogelhaus: Häuschen auf einem Pfahl; Stufe 2 mit Giebeldach, Stufe 3 mit einem Vogel darauf. */
+function vogelhaus(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [
+    shadow(tile * 0.25),
+    rect(-1.5, -22, 3, 22, 'islandWood'),
+    ...box({ x: 0, y: -22 }, 7, 9, 'islandRoof', 'islandWood'),
+    dot(-3.5, -26, 1.6, 'ink'),
+  ];
+  if (stage >= 2) drawing.push({ type: 'flaeche', points: [{ x: -9, y: -33 }, { x: 0, y: -39 }, { x: 9, y: -33 }], tone: 'islandRoofAlt' });
+  if (stage >= 3) drawing.push(dot(4, -40, 2.5, 'islandLamp'));
+  return drawing;
+}
+
+/** Wegweiser: Pfosten mit Schild; Stufe 2 mit zweitem Schild, Stufe 3 mit Kieseln am Fuß. */
+function wegweiser(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [
+    shadow(tile * 0.25),
+    rect(-1.5, -28, 3, 28, 'islandWood'),
+    { type: 'flaeche', points: [{ x: -8, y: -25 }, { x: 10, y: -25 }, { x: 13, y: -22 }, { x: 10, y: -19 }, { x: -8, y: -19 }], tone: 'islandSand' },
+  ];
+  if (stage >= 2) {
+    drawing.push({ type: 'flaeche', points: [{ x: 8, y: -16 }, { x: -10, y: -16 }, { x: -13, y: -13 }, { x: -10, y: -10 }, { x: 8, y: -10 }], tone: 'islandSand' });
+  }
+  if (stage >= 3) drawing.push(dot(-6, 1, 2.5, 'islandStone'), dot(6, 2, 2, 'islandStone'));
+  return drawing;
+}
+
+/** Sonnenblume mit Stiel und Korb, Kopf an (x, y). */
+function sunflower(x: number, y: number, r: number): ArtPrimitive[] {
+  return [rect(x - 0.75, y, 1.5, -y, 'laub'), dot(x, y, r, 'islandLamp'), dot(x, y, r * 0.4, 'islandEarth')];
+}
+
+/** Sonnenblumen: zwei Blumen; Stufe 2 mit Blättern, Stufe 3 mit einer dritten Blume. */
+function sonnenblumen(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [];
+  if (stage >= 3) drawing.push(...sunflower(0, -14, 4));
+  drawing.push(...sunflower(-6, -21, 5), ...sunflower(5, -25, 5));
+  if (stage >= 2) {
+    drawing.push({ type: 'oval', x: -12, y: -11, width: 6, height: 3, tone: 'laub' }, { type: 'oval', x: 6, y: -13, width: 6, height: 3, tone: 'laub' });
+  }
+  return drawing;
+}
+
+/** Pilz mit Stiel und roter Kappe an (x, y), Größe `k`. */
+function mushroom(x: number, y: number, k: number): ArtPrimitive[] {
+  return [
+    rect(x - k, y - 4 * k, 2 * k, 4 * k, 'surfaceCard'),
+    { type: 'oval', x: x - 4 * k, y: y - 6.5 * k, width: 8 * k, height: 4 * k, tone: 'islandRoof' },
+    dot(x - 1.5 * k, y - 5.2 * k, 0.8 * k, 'surfaceCard'),
+  ];
+}
+
+/** Pilzkreis: Pilze im Gras; jede Stufe ein Pilz mehr. */
+function pilzkreis(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [...mushroom(-7, -1, 1.1), ...mushroom(6, -3, 1.3)];
+  if (stage >= 2) drawing.push(...mushroom(0, 4, 0.9));
+  if (stage >= 3) drawing.push(...mushroom(-12, 4, 0.8));
+  return drawing;
+}
+
+/** Kürbis mit Schattenseite und Stiel an (x, y), Radius r. */
+function pumpkin(x: number, y: number, r: number): ArtPrimitive[] {
+  return [
+    { type: 'oval', x: x - r * 1.2, y: y - r, width: r * 2.4, height: r * 2, tone: 'islandFoliageAutumn' },
+    { type: 'halbkreis', x, y, r, tone: 'ink', opacity: opacity.shadeRight },
+    rect(x - 0.75, y - r - 2, 1.5, 2.5, 'laub'),
+  ];
+}
+
+/** Kürbisbeet: Erde mit Kürbissen; jede Stufe ein Kürbis mehr. */
+function kuerbisbeet(stage: Stage): ArtPrimitive[] {
+  const drawing: ArtPrimitive[] = [{ type: 'flaeche', points: [{ x: 0, y: -9 }, { x: 18, y: 0 }, { x: 0, y: 9 }, { x: -18, y: 0 }], tone: 'islandEarth' }];
+  if (stage >= 3) drawing.push(...pumpkin(2, -5, 3.5));
+  drawing.push(...pumpkin(-6, -1, 5));
+  if (stage >= 2) drawing.push(...pumpkin(7, 2, 4));
+  return drawing;
+}
+
+// --- Besucher-Deko (#202) ----------------------------------------------------------------------------
+
+/** Deko je Grafikschlüssel; flach und klein, sie steht wie ein Objekt mittig auf ihrem Feld. */
+const decorations: Readonly<Record<string, () => ArtPrimitive[]>> = {
+  muschel: () => [
+    shadow(16),
+    { type: 'flaeche', points: [{ x: -8, y: 0 }, { x: -6, y: -8 }, { x: 0, y: -10 }, { x: 6, y: -8 }, { x: 8, y: 0 }, { x: 0, y: 2 }], tone: 'islandSand' },
+    { type: 'flaeche', points: [{ x: -0.6, y: -9 }, { x: 0.6, y: -9 }, { x: 0.6, y: 1 }, { x: -0.6, y: 1 }], tone: 'ink', opacity: opacity.shadeRight },
+    { type: 'flaeche', points: [{ x: -4.5, y: -7.5 }, { x: -3.5, y: -7.5 }, { x: -1, y: 1 }, { x: -2, y: 1 }], tone: 'ink', opacity: opacity.shadeLeft },
+    { type: 'flaeche', points: [{ x: 3.5, y: -7.5 }, { x: 4.5, y: -7.5 }, { x: 2, y: 1 }, { x: 1, y: 1 }], tone: 'ink', opacity: opacity.shadeRight },
+  ],
+  treibholz: () => [
+    shadow(30),
+    { type: 'flaeche', points: [{ x: -15, y: -2 }, { x: -12, y: -6 }, { x: 15, y: -1 }, { x: 12, y: 3 }], tone: 'islandWood' },
+    { type: 'flaeche', points: [{ x: -15, y: -2 }, { x: 12, y: 3 }, { x: 15, y: -1 }, { x: 15, y: 1 }, { x: 12, y: 5 }, { x: -15, y: 0 }], tone: 'ink', opacity: opacity.shadeRight },
+    dot(-12, -4, 2, 'islandEarth'),
+  ],
+  flaschenpost: () => [
+    shadow(24),
+    { type: 'oval', x: -11, y: -8, width: 18, height: 9, tone: 'islandRoofAlt' },
+    rect(-5, -6, 7, 4, 'surfaceCard'),
+    rect(7, -5.5, 5, 3, 'islandRoofAlt'),
+    rect(11.5, -6, 2, 4, 'islandWood'),
+  ],
+  kieselturm: () => [shadow(20), ...ball(0, -3, 7, 'islandStone'), ...ball(0, -12, 5, 'islandStone'), ...ball(0, -19, 3.5, 'islandStone')],
+  seestern: () => [
+    shadow(20),
+    {
+      type: 'flaeche',
+      points: [
+        { x: 0, y: -12 }, { x: 3, y: -5 }, { x: 10, y: -5 }, { x: 4.5, y: -1 }, { x: 7, y: 6 },
+        { x: 0, y: 2 }, { x: -7, y: 6 }, { x: -4.5, y: -1 }, { x: -10, y: -5 }, { x: -3, y: -5 },
+      ],
+      tone: 'islandRoof',
+    },
+    dot(0, -3, 1.5, 'islandLamp'),
+  ],
+  windrad: () => [
+    shadow(14),
+    rect(-1, -24, 2, 24, 'islandWood'),
+    { type: 'flaeche', points: [{ x: 0, y: -26 }, { x: -2, y: -36 }, { x: 3, y: -34 }], tone: 'islandRoof' },
+    { type: 'flaeche', points: [{ x: 0, y: -26 }, { x: 10, y: -28 }, { x: 8, y: -23 }], tone: 'islandLamp' },
+    { type: 'flaeche', points: [{ x: 0, y: -26 }, { x: 2, y: -16 }, { x: -3, y: -18 }], tone: 'islandRoofAlt' },
+    { type: 'flaeche', points: [{ x: 0, y: -26 }, { x: -10, y: -24 }, { x: -8, y: -29 }], tone: 'surfaceCard' },
+    dot(0, -26, 1.5, 'ink'),
+  ],
+  vogeltraenke: () => [
+    shadow(26),
+    ...box({ x: 0, y: 0 }, 4, 10, 'islandStone', 'islandStone'),
+    { type: 'oval', x: -12, y: -15, width: 24, height: 8, tone: 'islandStone' },
+    { type: 'oval', x: -9, y: -14, width: 18, height: 5, tone: 'islandWater' },
+  ],
+  steinherz: () => [
+    shadow(20),
+    dot(-4, -10, 5, 'islandStone'),
+    dot(4, -10, 5, 'islandStone'),
+    { type: 'flaeche', points: [{ x: -8.8, y: -8.5 }, { x: 8.8, y: -8.5 }, { x: 0, y: 2 }], tone: 'islandStone' },
+    { type: 'halbkreis', x: 4, y: -10, r: 5, tone: 'ink', opacity: opacity.shadeRight },
+  ],
+};
+
+// --- Besucher (#202) ---------------------------------------------------------------------------------
+
+const eye = (x: number, y: number): ArtPrimitive => dot(x, y, 1.2, 'ink');
+
+/** Tiere der Besuchervorlagen, nach rechts schauend; Bildnisse im Sheet „Ereignisse“. */
+const animals: Readonly<Record<string, () => ArtPrimitive[]>> = {
+  tier_igel: () => [
+    shadow(28),
+    { type: 'flaeche', points: [{ x: -14, y: -2 }, { x: -12, y: -14 }, { x: -6, y: -20 }, { x: 2, y: -20 }, { x: 8, y: -14 }, { x: 8, y: -2 }], tone: 'islandEarth' },
+    { type: 'flaeche', points: [{ x: -10, y: -18 }, { x: -8, y: -24 }, { x: -4, y: -19 }, { x: 0, y: -24 }, { x: 3, y: -18 }], tone: 'islandEarth' },
+    { type: 'oval', x: 4, y: -12, width: 13, height: 9, tone: 'islandSand' },
+    dot(17, -7.5, 1.6, 'ink'),
+    eye(10, -10),
+  ],
+  tier_fuchs: () => [
+    shadow(30),
+    { type: 'oval', x: -16, y: -14, width: 12, height: 7, tone: 'islandRoof' },
+    dot(-16, -10.5, 2.5, 'surfaceCard'),
+    { type: 'oval', x: -8, y: -16, width: 18, height: 12, tone: 'islandRoof' },
+    dot(10, -20, 6, 'islandRoof'),
+    { type: 'flaeche', points: [{ x: 6, y: -24 }, { x: 7, y: -31 }, { x: 11, y: -25 }], tone: 'islandRoof' },
+    { type: 'flaeche', points: [{ x: 11, y: -25 }, { x: 14, y: -31 }, { x: 15, y: -23 }], tone: 'islandRoof' },
+    { type: 'flaeche', points: [{ x: 13, y: -20 }, { x: 19, y: -18 }, { x: 13, y: -16 }], tone: 'surfaceCard' },
+    eye(12, -21),
+    rect(-5, -5, 2, 5, 'islandRoof'),
+    rect(5, -5, 2, 5, 'islandRoof'),
+  ],
+  tier_schwan: () => [
+    { type: 'oval', x: -16, y: -5, width: 32, height: 7, tone: 'islandWater' },
+    { type: 'oval', x: -13, y: -14, width: 22, height: 12, tone: 'surfaceCard' },
+    { type: 'halbkreis', x: -2, y: -8, r: 6, tone: 'ink', opacity: opacity.shadeRight },
+    rect(5, -28, 3, 16, 'surfaceCard'),
+    dot(7.5, -29, 3.5, 'surfaceCard'),
+    { type: 'flaeche', points: [{ x: 10, y: -30 }, { x: 15, y: -28 }, { x: 10, y: -27 }], tone: 'islandRoof' },
+    eye(8.5, -30),
+  ],
+  tier_eule: () => [
+    shadow(22),
+    { type: 'oval', x: -10, y: -28, width: 20, height: 28, tone: 'islandWood' },
+    { type: 'oval', x: -6, y: -18, width: 12, height: 16, tone: 'islandSand' },
+    { type: 'flaeche', points: [{ x: -9, y: -25 }, { x: -8, y: -32 }, { x: -4, y: -27 }], tone: 'islandWood' },
+    { type: 'flaeche', points: [{ x: 4, y: -27 }, { x: 8, y: -32 }, { x: 9, y: -25 }], tone: 'islandWood' },
+    dot(-3.5, -22, 3.5, 'surfaceCard'),
+    dot(3.5, -22, 3.5, 'surfaceCard'),
+    eye(-3, -22),
+    eye(4, -22),
+    { type: 'flaeche', points: [{ x: -1.5, y: -19 }, { x: 1.5, y: -19 }, { x: 0, y: -15 }], tone: 'islandLamp' },
+  ],
+  tier_hase: () => [
+    shadow(26),
+    { type: 'oval', x: -13, y: -14, width: 20, height: 14, tone: 'islandStone' },
+    dot(-13, -8, 3, 'surfaceCard'),
+    dot(8, -16, 6, 'islandStone'),
+    { type: 'oval', x: 3, y: -34, width: 4, height: 14, tone: 'islandStone' },
+    { type: 'oval', x: 8, y: -33, width: 4, height: 13, tone: 'islandStone' },
+    eye(10, -17),
+    dot(13.5, -14.5, 1, 'islandRoof'),
+  ],
+  tier_ente: () => [
+    shadow(24),
+    { type: 'oval', x: -12, y: -14, width: 20, height: 12, tone: 'islandLamp' },
+    { type: 'flaeche', points: [{ x: -12, y: -10 }, { x: -16, y: -14 }, { x: -11, y: -13 }], tone: 'islandLamp' },
+    dot(6, -18, 6, 'islandLamp'),
+    { type: 'flaeche', points: [{ x: 10, y: -18 }, { x: 17, y: -17 }, { x: 10, y: -15 }], tone: 'islandRoof' },
+    eye(7, -20),
+    rect(-3, -3, 1.5, 3, 'islandRoof'),
+    rect(1, -3, 1.5, 3, 'islandRoof'),
+  ],
+  tier_eichhoernchen: () => [
+    shadow(24),
+    { type: 'oval', x: -18, y: -32, width: 13, height: 26, tone: 'islandEarth' },
+    { type: 'oval', x: -8, y: -18, width: 14, height: 17, tone: 'islandEarth' },
+    { type: 'oval', x: -4, y: -13, width: 7, height: 10, tone: 'islandSand' },
+    dot(5, -21, 5, 'islandEarth'),
+    { type: 'flaeche', points: [{ x: 2, y: -25 }, { x: 3, y: -31 }, { x: 6, y: -25 }], tone: 'islandEarth' },
+    eye(7, -22),
+    dot(6, -10, 2.5, 'islandWood'),
+  ],
+  tier_schildkroete: () => [
+    shadow(30),
+    rect(-10, -4, 3, 4, 'islandFoliage'),
+    rect(6, -4, 3, 4, 'islandFoliage'),
+    dot(13, -7, 4, 'islandFoliage'),
+    eye(14.5, -8),
+    { type: 'oval', x: -14, y: -16, width: 26, height: 14, tone: 'islandRoofAlt' },
+    { type: 'halbkreis', x: -1, y: -9, r: 7, tone: 'ink', opacity: opacity.shadeRight },
+    dot(-6, -11, 2, 'islandSand'),
+    dot(0, -13, 2, 'islandSand'),
+    dot(5, -10, 2, 'islandSand'),
+  ],
+};
+
 /** Neutraler Block für einen Schlüssel ohne Grafik. */
 const block: ArtSpec = {
   stage: 1,
@@ -194,10 +435,31 @@ const motifs: Readonly<Record<string, Motif>> = {
   blumenwiese: { draw: blumenwiese, light: null },
   beerenstrauch: { draw: beerenstrauch, light: null },
   apfelbaum: { draw: apfelbaum, light: null },
+  brunnen: { draw: brunnen, light: null },
+  vogelhaus: { draw: vogelhaus, light: null },
+  wegweiser: { draw: wegweiser, light: null },
+  sonnenblumen: { draw: sonnenblumen, light: null },
+  pilzkreis: { draw: pilzkreis, light: null },
+  kuerbisbeet: { draw: kuerbisbeet, light: null },
 };
 
-const byArt = new Map<ArtKey, ArtSpec>(
-  gameCatalog.blueprints.flatMap((blueprint) => {
+/** Deko und Tiere haben keine Stufen; sie stehen als Stufe 1 ohne Licht. */
+const flat = (drawing: readonly ArtPrimitive[]): ArtSpec => ({ stage: 1, lit: false, light: null, drawing });
+
+const flatArt: (readonly [ArtKey, ArtSpec])[] = [
+  ...gameCatalog.deko.flatMap((entry) => {
+    const draw = decorations[entry.art];
+    return draw === undefined ? [] : [[entry.art, flat(draw())] as const];
+  }),
+  ...gameCatalog.visitorTemplates.flatMap((visitor) => {
+    const draw = animals[visitor.animal];
+    return draw === undefined ? [] : [[visitor.animal, flat(draw())] as const];
+  }),
+];
+
+const byArt = new Map<ArtKey, ArtSpec>([
+  ...flatArt,
+  ...gameCatalog.blueprints.flatMap((blueprint) => {
     const motif = motifs[blueprint.key];
     if (motif === undefined) return [];
     return blueprint.art.map((art, index) => {
@@ -207,7 +469,7 @@ const byArt = new Map<ArtKey, ArtSpec>(
       return [art, { stage, lit: light !== null, light, drawing: scaled(motif.draw(stage), k) }] as const;
     });
   }),
-);
+]);
 
 export function artOf(art: ArtKey): ArtSpec {
   return byArt.get(art) ?? block;

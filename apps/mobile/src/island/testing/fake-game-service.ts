@@ -28,6 +28,8 @@ export function fakeGameService(stage: IslandStage, reactions: readonly MomoReac
     build: refuse,
     upgrade: refuse,
     place: refuse,
+    markEventsSeen: refuse,
+    claimEventReward: refuse,
     momoCharacter: {
       subscribe(listener) {
         listener(momoCharacterOf(stage));

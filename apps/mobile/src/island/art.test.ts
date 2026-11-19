@@ -3,14 +3,15 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { size } from '../design';
 import { artBounds, artOf } from './art';
 
-// Grafiken der Start-Baupläne je Stufe 1–3 (#192; Design-System › Insel): Ein Objekt steht mittig auf
+// Grafiken der Start-Baupläne (#192) und der Besucher-Baupläne (#202) je Stufe 1–3, der Besucher-Deko und
+// der Besucher (#202; Design-System › Insel): Ein Objekt steht mittig auf
 // seinem Feld und ist höchstens zwei Felder hoch; jede Stufe ist etwas größer und hat ein Detail mehr.
 // Gerechnet in dp bei Zoom 1 um die Feldmitte; ein Feld ist `island-tile` breit und halb so hoch.
 
-const startBlueprints = gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start');
+const drawnBlueprints = gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start' || blueprint.origin === 'besucher');
 const tile = size.islandTile;
 const fieldHeight = tile / 2;
-const stages = startBlueprints.flatMap((blueprint) => blueprint.art.map((art, index) => [blueprint.key, index + 1, art] as const));
+const stages = drawnBlueprints.flatMap((blueprint) => blueprint.art.map((art, index) => [blueprint.key, index + 1, art] as const));
 
 test.each(stages)('%s, Stufe %d, hat eine eigene Zeichnung', (_, stage, art) => {
   const spec = artOf(art);
@@ -31,7 +32,7 @@ test.each(stages)('%s, Stufe %d, ist höchstens zwei Felder hoch, steht mittig u
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(fieldHeight / 2);
 });
 
-test.each(startBlueprints.map((blueprint) => [blueprint.key, blueprint.art] as const))(
+test.each(drawnBlueprints.map((blueprint) => [blueprint.key, blueprint.art] as const))(
   '%s: jede Stufe ist etwas größer und hat ein Detail mehr',
   (_, [first, second, third]) => {
     const [one, two, three] = [first, second, third].map(artOf);
@@ -50,7 +51,7 @@ test.each(startBlueprints.map((blueprint) => [blueprint.key, blueprint.art] as c
 test('nur die Laterne leuchtet abends, auf jeder Stufe am Licht ihrer Grafik', () => {
   const lit = stages.filter(([, , art]) => artOf(art).lit).map(([key, stage]) => `${key} ${stage}`);
   expect(lit).toEqual(['laterne 1', 'laterne 2', 'laterne 3']);
-  for (const art of startBlueprints.find((blueprint) => blueprint.key === 'laterne')!.art) {
+  for (const art of drawnBlueprints.find((blueprint) => blueprint.key === 'laterne')!.art) {
     const { light } = artOf(art);
     const bounds = artBounds(artOf(art));
     expect(light).not.toBeNull();
@@ -62,4 +63,20 @@ test('nur die Laterne leuchtet abends, auf jeder Stufe am Licht ihrer Grafik', (
 test('einen unbekannten Schlüssel zeichnet die Insel als neutralen Block', () => {
   expect(artOf('gibt_es_nicht')).toMatchObject({ stage: 1, lit: false, light: null });
   expect(artOf('gibt_es_nicht').drawing.length).toBeGreaterThan(0);
+});
+
+const flatArt = [
+  ...gameCatalog.deko.filter((deko) => deko.origin === 'besucher').map((deko) => ['Deko', deko.art] as const),
+  ...gameCatalog.visitorTemplates.map((visitor) => ['Besucher', visitor.animal] as const),
+];
+
+test.each(flatArt)('%s %s hat eine eigene Zeichnung, passt auf ein Feld und leuchtet nicht', (_, art) => {
+  const spec = artOf(art);
+  const bounds = artBounds(spec);
+
+  expect(spec).not.toBe(artOf('unbekannt'));
+  expect(spec).toMatchObject({ stage: 1, lit: false });
+  expect(bounds.height).toBeLessThanOrEqual(2 * fieldHeight);
+  expect(bounds.width).toBeLessThanOrEqual(tile);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(fieldHeight / 2);
 });

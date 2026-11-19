@@ -17,6 +17,7 @@ import { canonicalAfterWrite } from '../sync/sync.ts';
 import { vacateField } from './field-occupancy.ts';
 import { gameRejection } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
+import { fulfillWishes } from './island-events.ts';
 import { playingRole } from './playing-role.ts';
 import { progressChange } from './progress-change.ts';
 
@@ -30,6 +31,8 @@ import { progressChange } from './progress-change.ts';
 // gilt die Server-Eingangsreihenfolge wie bei `placeObject` (`field-occupancy.ts`): Das ältere Objekt
 // wechselt atomar ins Lager. Festlegung in #191, weil die Spezifikation den Feldkonflikt nur für
 // `placeObject` nennt.
+//
+// Erfüllt der Bau einen offenen Besucherwunsch der Person, wird er im selben Befehl erfüllbar (#202).
 //
 // Levelaufstieg samt Freischaltungen, Ereignis und Intents im selben Befehl liefert #200.
 
@@ -95,6 +98,8 @@ export const buildObjectCommand: ServerCommand<BuildObject> = {
       }),
     );
     changes.push(await progressChange(tx, islandId, at));
+    // Ein Bau kann offene Besucherwünsche erfüllen (#202).
+    changes.push(...(await fulfillWishes(tx, { islandId, couplingId, personId: actor.personId, catalogKey: payload.blueprintKey, at })));
     return { changes, idMappings: [] };
   },
 };
