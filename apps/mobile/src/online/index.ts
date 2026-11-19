@@ -30,9 +30,21 @@ const byCode = (code: InviteCode) => code;
 
 /** „Code erzeugen“ für `partner.invite`; ein erneutes `create` nach dem Erfolg erzeugt einen neuen Code. */
 export function useCreateInvitationCode(): { state: FlowState<CreateInvitationResult, InvitationErrorCode>; create(): void; reset(): void } {
-  const { invitations } = useOnlineFlows();
-  const { state, start, reset } = useOnlineFlow((_: void, requestId) => invitations.createCode(requestId), sameIntent);
+  const { invitations, markInvitationCreated } = useOnlineFlows();
+  const { state, start, reset } = useOnlineFlow(async (_: void, requestId) => {
+    const result = await invitations.createCode(requestId);
+    if (result.type === 'ok') markInvitationCreated();
+    return result;
+  }, sameIntent);
   return { state, create: () => start(undefined), reset };
+}
+
+/**
+ * Ob in dieser Sitzung des Kontos schon ein Einladungscode entstand, auch wenn `partner.invite` inzwischen geschlossen
+ * ist. Der Onboarding-Schritt `partner` meldet dann `partner_invite_created`; die Kopplung kann später entstehen.
+ */
+export function useInvitationCreated(): boolean {
+  return useOnlineFlows().invitationCreated;
 }
 
 /** „Code prüfen“ für die Bestätigungsansicht von `partner.redeem`; verbraucht den Code nicht. */

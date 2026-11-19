@@ -1,7 +1,7 @@
 import type { Clock } from '@abnehm/clock';
 import { and, eq } from 'drizzle-orm';
 
-import { AreaKey, DisplayName, Instant } from '@abnehm/contracts/base';
+import { AreaKey, Instant, type DisplayName } from '@abnehm/contracts/base';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';

@@ -34,6 +34,7 @@ import { createPushInstallationTransport } from '../notifications/push-installat
 import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
+import { PartnerStep } from '../partner/PartnerStep';
 import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
@@ -313,6 +314,8 @@ export function deviceNotifications(): AppNotifications {
 
 /** Onboarding-Schritt 10 (Spezifikation 5): Erklärung und Systemdialog. */
 appOnboardingRegistry.register('partner', 'notifications', NotificationsStep);
+/** Onboarding-Schritt 11 (Spezifikation 5): Koppeln und danach die eigenen Freigaben (#129). */
+appOnboardingRegistry.register('partner', 'partner', PartnerStep);
 
 /** Das Onboarding-Modul des Geräts für die Routen `sitzung` und `onboarding`. */
 export function deviceOnboarding(): Onboarding {

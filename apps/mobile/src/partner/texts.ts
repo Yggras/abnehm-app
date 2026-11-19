@@ -204,4 +204,10 @@ export const sharingTexts = {
   photosSubtitle: 'Unabhängig von der Ernährungs-Freigabe. Einzelne Fotos kannst du beim Erfassen ausnehmen.',
   info: 'Abschalten beendet den Zugriff sofort. Bereits gemachte Screenshots kann die App nicht zurückholen.',
   loading: 'Freigaben werden geladen',
+  /** Onboarding-Schritt `partner`, solo und nach einem erzeugten Code. */
+  stepSolo: 'Zu zweit kümmert ihr euch gemeinsam um Momo. Lade deinen Partner ein oder gib seinen Code ein.',
+  stepInviteCreated: 'Dein Code ist erzeugt. Sobald dein Partner ihn eingibt, seid ihr gekoppelt, auch wenn du schon weiter bist.',
+  /** Onboarding-Schritt `partner` nach der Kopplung, über den Schaltern. */
+  stepCoupled: (name: string) => `Mit ${name} gekoppelt. Lege fest, was ${name} von dir sieht.`,
+  next: 'Weiter',
 } as const;
