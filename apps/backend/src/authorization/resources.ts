@@ -478,6 +478,49 @@ const sharedActionDecisionRule = byId(
   { onlyOperations: ['befehl'] },
 );
 
+async function challengeOf(db: DbExecutor, id: EntityId) {
+  return first(db.select({ couplingId: challenge.couplingId, proposer: challenge.proposerPersonId }).from(challenge).where(eq(challenge.id, id)));
+}
+
+/**
+ * Challenge vorschlagen (`proposeChallenge`, #210): nur als aktives Mitglied, in der eigenen Kopplung. Ein
+ * Retry derselben ID durch die vorschlagende Person ist erlaubt, damit der Fachbefehl idempotent bleibt.
+ */
+const challengeProposalRule = byId(
+  'kopplungsinhalte',
+  challenge,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await challengeOf(context.db, id);
+    if (found !== null && found.proposer !== personId) return denied;
+    const membership = await activeCouplingOf(context.db, personId);
+    if (membership === null || (found !== null && found.couplingId !== membership.couplingId)) return denied;
+    return allowed({ exists: found !== null, ownerPersonId: personId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
+/**
+ * Über einen Challenge-Vorschlag entscheiden (#210): nur aktive Mitglieder seiner Kopplung und nur in der
+ * beanspruchten Beteiligung. `partner` (annehmen, ablehnen) ist die Person, die nicht vorgeschlagen hat,
+ * `antragsteller` (zurückziehen) die vorschlagende.
+ */
+const challengeDecisionRule = byId(
+  'kopplungsinhalte',
+  challenge,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await challengeOf(context.db, id);
+    if (found === null) return denied;
+    const membership = await activeMembership(context.db, found.couplingId, personId);
+    if (membership === null) return denied;
+    const participation: SharedActionParticipation = found.proposer === personId ? 'antragsteller' : 'partner';
+    if (context.target.claimedParticipation !== participation) return denied;
+    return allowed({ ownerPersonId: found.proposer, couplingId: found.couplingId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
 /**
  * Auf ein Inselfeld bauen (`buildObject`): nur auf ein eigenes Feld und nur als aktives Mitglied der
  * Kopplung, der die Insel gehört. Felder des Partners und gemeinsame Bereiche ohne Besitzer sind damit
@@ -608,6 +651,8 @@ export const resourceEntities = {
   shared_action_request: sharedActionRequestRule,
   shared_action_decision: sharedActionDecisionRule,
   challenge: coupled('kopplungsinhalte', challenge, inCoupling(challenge)),
+  challenge_proposal: challengeProposalRule,
+  challenge_decision: challengeDecisionRule,
   blueprint_unlock: coupled('kopplungsinhalte', blueprintUnlock, inCoupling(blueprintUnlock)),
   area_unlock: coupled('kopplungsinhalte', areaUnlock, inCoupling(areaUnlock)),
   island_field: coupled('kopplungsinhalte', islandField, inCoupling(islandField)),

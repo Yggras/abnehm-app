@@ -11,6 +11,7 @@ import { Instant, TimeZone } from '@abnehm/contracts/base';
 
 import { routeScreen } from '../navigation';
 import { MessageHostProvider } from '../shell/MessageHost';
+import { placeholderRoute } from '../shell/Placeholder';
 import { appGameService } from './app-game-service';
 import { MomoTab } from './MomoTab';
 import { IslandHost, testScreen } from './testing/island-host';
@@ -51,7 +52,16 @@ async function openHatched(arrange: (world: LaichkugelWorld) => void = () => {})
       </MessageHostProvider>
     </IslandHost>
   );
-  await renderRouter({ _layout: Layout, index: () => null, momo: routeScreen('momo', MomoTab) }, { initialUrl: '/momo' });
+  await renderRouter(
+    {
+      _layout: Layout,
+      index: () => null,
+      momo: routeScreen('momo', MomoTab),
+      'challenge/propose': placeholderRoute('challenge.propose'),
+      'challenge/detail': placeholderRoute('challenge.detail'),
+    },
+    { initialUrl: '/momo' },
+  );
   return world;
 }
 
@@ -101,6 +111,25 @@ test('Momo antippen öffnet das Momo-Sheet mit Form und Level; dort lässt sich 
   for (const sentence of growthSentences) expect(screen.getByText(sentence)).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'Verstanden' }));
   expect(screen.queryByTestId('sheet')).toBeNull();
+});
+
+test('das Momo-Sheet führt zu den Challenges: „Challenge vorschlagen“, mit offenem Vorschlag „Zur Challenge“ (#210)', async () => {
+  const world = await openHatched();
+  await user.press(screen.getByRole('button', { name: 'Verstanden' }));
+  await layoutIsland();
+  await act(() => tapAt(184, 392));
+
+  await user.press(screen.getByRole('button', { name: 'Challenge vorschlagen' }));
+  expect(screen).toHavePathname('/challenge/propose');
+  expect(screen.queryByTestId('sheet')).toBeNull();
+
+  await act(() => router.replace('/momo'));
+  const challengeId = world.challengeOnServer('anna', 'gut_getrunken');
+  await layoutIsland();
+  await act(() => tapAt(184, 392));
+  await user.press(screen.getByRole('button', { name: 'Zur Challenge' }));
+  expect(screen).toHavePathname('/challenge/detail');
+  expect(screen).toHaveSearchParams({ challengeId });
 });
 
 test('schlüpft Momo, während die Person einen anderen Bildschirm sieht, erscheint „So wächst Momo“ erst beim Öffnen des Tabs', async () => {

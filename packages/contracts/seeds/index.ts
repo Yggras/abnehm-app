@@ -1,4 +1,5 @@
 import { budgetvorschlagManifests } from './budgetvorschlag.ts';
+import { challengePasstNichtManifest, challengeVerfallenManifest, challengeVorgeschlagenManifest } from './challenges.ts';
 import { einladungNachEntkopplungManifest } from './einladung-nach-entkopplung.ts';
 import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
@@ -57,6 +58,9 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   feldkonflikt: feldkonfliktManifest,
   'ereignisse-voll': ereignisseVollManifest,
   'levelaufstieg-ausstehend': levelaufstiegAusstehendManifest,
+  'challenge-vorgeschlagen': challengeVorgeschlagenManifest,
+  'challenge-verfallen': challengeVerfallenManifest,
+  'challenge-passt-nicht': challengePasstNichtManifest,
   ...randzustandManifests,
   ...ernaehrungRandzustandManifests,
   veralteter_partnerstand: veralteterPartnerstandManifest,

@@ -19,6 +19,7 @@ import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
 import { planCommandScenarios } from './support/plan.ts';
 import { sharedActionCommandScenarios } from './support/shared-actions.ts';
+import { challengeCommandScenarios } from './support/challenges.ts';
 import { push, pushRaw, testWaterEntity, upsertOp, water } from './support/sync.ts';
 import { EntityId, ServerVersion } from '@abnehm/contracts/base';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
@@ -107,7 +108,7 @@ describe('Fachbefehl über Push', () => {
     const real = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
       confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
       upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario,
-      markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+      markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario, ...challengeCommandScenarios } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(() => registeredCommandCases(backend, real)).toThrow('saveMealFavorite');
     const scenario = {
       policy: policies.resource('water_entry', 'befehl'),

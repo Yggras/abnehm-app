@@ -38,6 +38,9 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.
 import { signIn } from './support/auth-client.ts';
 import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
 import { encouragementEntity } from '../../mobile/src/partner/encouragement.ts';
+import { planReaderOf } from '../../mobile/src/plan/plan-reader.ts';
+import { pendingOperations } from '../../mobile/src/sync/outbox.ts';
+import { challengeLocalCommands, challengeSyncEntities, type ChallengeStage } from '../../mobile/src/island/challenges.ts';
 
 // Nachweis für #180: die Szenarien `solo-energie` und `rollenwahl-offen` (Spezifikation 4, Abschnitt 13)
 // auf Postgres und den Geräten, deren Engine, Adapter und Spieldienst auf echtem SQLite (better-sqlite3)
@@ -52,10 +55,10 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
-type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; sync(): Promise<void> }>;
+type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; challenges(): ChallengeStage; outbox(): number; sync(): Promise<void> }>;
 
 async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey): Promise<Phone> {
   const installation = manifest.installations.find((candidate) => candidate.key === key)!;
@@ -87,15 +90,20 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     }),
     clock,
     installationId: InstallationId.parse(installation.installationId),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...islandEventCommands] }),
   });
-  const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
+  // Die Vorschau der Challenge-Anteile liest den Wochenplan des Seeds aus der Gerätedatenbank (#210).
+  const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies, planReader: planReaderOf(database) });
   let stage: IslandStage | null = null;
   cleanups.push(game.observeStage((next) => (stage = next)));
+  let challenges: ChallengeStage | null = null;
+  cleanups.push(game.observeChallenges((next) => (challenges = next)));
   return {
     database,
     game,
     stage: () => stage!,
+    challenges: () => challenges!,
+    outbox: () => database.read((tx) => pendingOperations(tx, 100)).length,
     async sync() {
       expect(await engine.sync()).toEqual({ push: expect.stringMatching(/^(done|nothing_to_do)$/), pull: 'done' });
     },
@@ -131,7 +139,7 @@ async function runSyncSteps(manifest: SeedManifest, { phones }: World) {
   }
 }
 
-describe.each(['solo-energie', 'rollenwahl-offen', 'haelfte-voll'] as const)('Szenario %s', { timeout: 30_000 }, (scenario) => {
+describe.each(['solo-energie', 'rollenwahl-offen', 'haelfte-voll', 'challenge-vorgeschlagen', 'challenge-verfallen', 'challenge-passt-nicht'] as const)('Szenario %s', { timeout: 30_000 }, (scenario) => {
   const manifest = seedManifests[scenario];
 
   it('stellt Postgres und die Geräte exakt her, wiederholbar; nach den benannten Schritten gilt der Sollzustand', async () => {
@@ -248,6 +256,51 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     }
     expect(philippsFeiern()).toEqual([4]);
     expect(annasFeiern()).toEqual([4]);
+  });
+});
+
+describe('Challenges auf den geseedeten Geräten (#210)', () => {
+  it('challenge-vorgeschlagen: Anna muss auf Philipps Vorschlag antworten, Philipp sieht „Vorschlag gesendet“', { timeout: 30_000 }, async () => {
+    const { phones } = await seeded(seedManifests['challenge-vorgeschlagen']);
+    const [philipp, anna] = [phones['philipp-iphone']!, phones['anna-android']!];
+    const challengeId = seedIds.challenge.philippsVorschlag;
+
+    expect(anna.challenges()).toMatchObject({ type: 'vorschlag', partnerDisplayName: 'Philipp', proposal: { challengeId, by: 'partner', templateKey: 'gut_getrunken', expiresAt: '2026-10-16T07:00:00.000Z' } });
+    expect(philipp.challenges()).toMatchObject({ type: 'vorschlag', proposal: { challengeId, by: 'self' } });
+
+    // Vom geseedeten Stand aus lässt sich annehmen; der echte `PlanReader` über Postgres schreibt die Anteile fest.
+    expect(anna.game.acceptChallenge(EntityId.parse(challengeId))).toBe('vorgemerkt');
+    await anna.sync();
+    await philipp.sync();
+    // Philipp plant jeden Tag das Wasserziel (6), Anna ebenso.
+    expect(anna.challenges()).toMatchObject({ type: 'aktiv', challengeId, ownRequired: 6 });
+    expect(philipp.challenges()).toMatchObject({ type: 'aktiv', challengeId, ownRequired: 6 });
+  });
+
+  it('challenge-verfallen: lokal ab der Frist nicht mehr offen; der Pull schreibt den Verfall fest', { timeout: 30_000 }, async () => {
+    const manifest = seedManifests['challenge-verfallen'];
+    const world = await seeded(manifest);
+    const [philipp, anna] = [world.phones['philipp-iphone']!, world.phones['anna-android']!];
+    expect(anna.challenges()).toMatchObject({ type: 'frei' });
+
+    await runSyncSteps(manifest, world);
+
+    expect(anna.challenges()).toMatchObject({ type: 'frei' });
+    expect(philipp.game.proposeChallenge('gut_getrunken')).toBe('vorgemerkt');
+  });
+
+  it('challenge-passt-nicht: Anna sieht „Ernährung im Blick“ als unpassend; Philipps Vorschlag lehnt der Server ab', { timeout: 30_000 }, async () => {
+    const { phones } = await seeded(seedManifests['challenge-passt-nicht']);
+    const [philipp, anna] = [phones['philipp-iphone']!, phones['anna-android']!];
+
+    expect((await anna.game.challengeShares()).ernaehrung_im_blick).toEqual({ type: 'passt_nicht' });
+    // Philipp plant „Ernährung erfasst“ montags, freitags und sonntags: ceil(6/7 × 3) = 3.
+    expect((await philipp.game.challengeShares()).ernaehrung_im_blick).toEqual({ type: 'passt', required: 3, planned: 3, possible: 3 });
+
+    expect(philipp.game.proposeChallenge('ernaehrung_im_blick')).toBe('vorgemerkt');
+    await philipp.sync();
+    expect(philipp.outbox()).toBe(0);
+    expect(philipp.challenges()).toMatchObject({ type: 'frei', unfitToday: ['ernaehrung_im_blick'] });
   });
 });
 

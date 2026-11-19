@@ -1,4 +1,5 @@
 import {
+  ChallengeProposalPayload,
   DeactivatePushInstallationParams,
   defaultNotificationSetting,
   EncouragementNotificationPayload,
@@ -152,6 +153,26 @@ export const notificationFixtures = {
     invalid: {
       'ohne Absender': { actionId: sharedAction },
       'Grund als Freitext gibt es nicht': { actionId: sharedAction, senderDisplayName: 'Anna', reason: 'Es passt gerade nicht' },
+    },
+  }),
+  ChallengeProposalPayload: fixtures(ChallengeProposalPayload, {
+    valid: {
+      'Philipp schlägt „Gut getrunken“ vor': {
+        challengeId: challenge,
+        templateKey: 'gut_getrunken',
+        expiresAt: '2026-10-16T12:00:00.000Z',
+        senderDisplayName: 'Philipp',
+      },
+    },
+    invalid: {
+      'ohne Ablauf': { challengeId: challenge, templateKey: 'gut_getrunken', senderDisplayName: 'Philipp' },
+      'mit eigenem Anteil': {
+        challengeId: challenge,
+        templateKey: 'gut_getrunken',
+        expiresAt: '2026-10-16T12:00:00.000Z',
+        senderDisplayName: 'Philipp',
+        ownRequired: 6,
+      },
     },
   }),
   RoleRequestPayload: fixtures(RoleRequestPayload, {
