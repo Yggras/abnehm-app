@@ -8,8 +8,8 @@ import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
 import type { PlanReader } from '@abnehm/contracts/ports';
-import { IslandEventRecord, islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
-import { areaOccasionKey, areaUnlockAt, sidesOf } from '@abnehm/game-rules/areas';
+import { IslandEventRecord, islandContentId, islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
+import { areaOccasionKey, areaUnlockAt, discoveryStatus, sidesOf } from '@abnehm/game-rules/areas';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { visitorOccasionKey } from '@abnehm/game-rules/events';
 import { hatching } from '@abnehm/game-rules/hatching';
@@ -290,16 +290,18 @@ export async function createLaichkugelWorld(
         const unlock = sides === null ? null : areaUnlockAt(gameCatalog, { level, sides });
         if (unlock === null) throw new Error(`Kein Gebiet bei Level ${level}; zuerst hatch()`);
         const owned = { islandId, couplingId };
-        db.insert(areaUnlock).values({ id: newId(), ...owned, areaKey: unlock.area.key, level, unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+        // IDs wie auf dem Server (`islandContentId`).
+        const idOf = (entityType: Parameters<typeof islandContentId>[0], key: string) => islandContentId(entityType, islandId, key);
+        db.insert(areaUnlock).values({ id: idOf('area_unlock', unlock.area.key), ...owned, areaKey: unlock.area.key, level, unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
         for (const field of unlock.fields) {
-          db.insert(islandField).values({ id: newId(), ...owned, fieldKey: field.key, ownerPersonId: field.ownerPersonId, createdAt: at, serverVersion: '1' }).run();
+          db.insert(islandField).values({ id: idOf('island_field', field.key), ...owned, fieldKey: field.key, ownerPersonId: field.ownerPersonId, createdAt: at, serverVersion: '1' }).run();
         }
         for (const catalogKey of unlock.discovery.blueprints) {
-          db.insert(blueprintUnlock).values({ id: newId(), ...owned, catalogKey, reason: 'entdeckung', unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+          db.insert(blueprintUnlock).values({ id: idOf('blueprint_unlock', catalogKey), ...owned, catalogKey, reason: 'entdeckung', unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
         }
         const occasionKey = areaOccasionKey(islandId, unlock.area.key);
         const eventId = islandEventId(islandId, occasionKey);
-        const status = unlock.discovery.deko.length > 0 ? 'erfuellbar' : 'abgeschlossen';
+        const status = discoveryStatus(unlock.discovery);
         db.insert(islandEvent)
           .values({ id: eventId, ...owned, type: 'entdeckung', templateKey: null, responsiblePersonId: null, occasionKey, status, reward: unlock.discovery, occurredAt: at, ...synced })
           .run();

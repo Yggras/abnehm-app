@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { gameCatalog } from '../content/index.ts';
-import { areaUnlockAt, placeField } from '../src/areas.ts';
+import { areaUnlockAt, fieldPlacement } from '../src/areas.ts';
 import { indexCatalog } from '../src/catalog.ts';
 import { basePrice } from '../src/prices.ts';
 import { unlocksAt } from '../src/unlocks.ts';
@@ -80,6 +80,7 @@ describe('Besucher mit Wunsch (#202)', () => {
 });
 
 describe('Gebiet 1 (#204)', () => {
+  const placeField = fieldPlacement(gameCatalog);
   const sides = { a: 'person-a', b: 'person-b' } as const;
   const unlock = areaUnlockAt(gameCatalog, { level: 4, sides })!;
   const index = indexCatalog(gameCatalog);
@@ -90,12 +91,12 @@ describe('Gebiet 1 (#204)', () => {
 
   it('bringt je Person 10 Felder Ecke und 30 Felder Rollenbereich, angrenzend an die Grundinsel', () => {
     const kinds = (person: string) =>
-      unlock.fields.filter((field) => field.ownerPersonId === person).map((field) => placeField(gameCatalog, field.key)!.kind);
+      unlock.fields.filter((field) => field.ownerPersonId === person).map((field) => placeField(field.key)!.kind);
     for (const person of Object.values(sides)) {
       expect(kinds(person).filter((kind) => kind === 'ecke')).toHaveLength(10);
       expect(kinds(person).filter((kind) => kind === 'rollenbereich')).toHaveLength(30);
     }
-    expect(placeField(gameCatalog, 'schilfwiese:0:-1')).toEqual({ x: 0, y: -1, kind: 'ecke', side: 'a' });
+    expect(placeField('schilfwiese:0:-1')).toEqual({ x: 0, y: -1, kind: 'ecke', side: 'a' });
   });
 
   it('bringt zwei Entdeckungs-Baupläne je Rolle und Entdeckungs-Deko', () => {

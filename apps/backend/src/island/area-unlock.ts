@@ -4,7 +4,7 @@ import { EntityId, Instant } from '@abnehm/contracts/base';
 import { DiscoveryEventDetails, islandContentId, islandEventId, islandEventStateId } from '@abnehm/contracts/island-records';
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
-import { areaOccasionKey, areaUnlockAt, sidesOf, type AreaUnlock } from '@abnehm/game-rules/areas';
+import { areaOccasionKey, areaUnlockAt, discoveryStatus, sidesOf, type AreaUnlock } from '@abnehm/game-rules/areas';
 import { unlocksAt } from '@abnehm/game-rules/unlocks';
 import type { GameCatalog } from '@abnehm/game-rules/catalog';
 
@@ -144,8 +144,7 @@ async function unlockArea(
       templateKey: null,
       responsiblePersonId: null,
       occasionKey,
-      // Ohne Deko gibt es nichts abzuholen; die Entdeckung ist dann mit dem Freischalten abgeschlossen.
-      status: details.deko.length > 0 ? 'erfuellbar' : 'abgeschlossen',
+      status: discoveryStatus(details),
       reward: details,
       occurredAt: at,
       ...stamp,

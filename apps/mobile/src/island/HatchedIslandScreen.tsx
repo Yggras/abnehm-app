@@ -4,7 +4,7 @@ import type { RouteTarget } from '@abnehm/contracts/routes';
 import { indexCatalog } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
 import { Button, Sheet, space, Text } from '../design';
@@ -130,26 +130,15 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformatio
       if (takeGrowthIntro()) setSheet({ type: 'wachstum' });
     }, [takeGrowthIntro]),
   );
-  // Verwandlungsszene (#204): beim Öffnen des Tabs, und wenn ein Pull das Level hebt, während er offen ist.
+  // Verwandlungsszene (#204): beim nächsten Öffnen des Tabs (Spezifikation 4, Abschnitt 6). Hebt ein Pull das Level,
+  // während der Tab offen ist, feiert Momo dort zuerst; die Verwandlung folgt beim nächsten Öffnen.
   const [transformation, setTransformation] = useState<Transformation | null>(null);
-  const focused = useRef(false);
-  const showTransformation = useCallback(() => {
-    const next = takeTransformation();
-    if (next !== null) setTransformation(next);
-  }, [takeTransformation]);
   useFocusEffect(
     useCallback(() => {
-      focused.current = true;
-      showTransformation();
-      return () => {
-        focused.current = false;
-      };
-    }, [showTransformation]),
+      const next = takeTransformation();
+      if (next !== null) setTransformation(next);
+    }, [takeTransformation]),
   );
-  const level = island.progress.level;
-  useEffect(() => {
-    if (focused.current) showTransformation();
-  }, [level, showTransformation]);
   // Wer den Tab verlässt, bricht den Bau-Modus ab; zurück auf der Insel wird nicht unbemerkt weitergebaut.
   useFocusEffect(useCallback(() => () => setPlacing(null), []));
   // System-Zurück (Android) beendet zuerst den Bau-Modus, dann ein offenes Sheet (B11). Spätere

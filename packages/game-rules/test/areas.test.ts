@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { testCatalog } from '../fixtures/index.ts';
-import { areaOccasionKey, areaUnlockAt, placeField, sidesOf } from '../src/areas.ts';
+import { areaOccasionKey, areaUnlockAt, discoveryStatus, fieldPlacement, sidesOf } from '../src/areas.ts';
 import { hatching } from '../src/hatching.ts';
 
 // Nachweis für #204: Gebietsfreischaltung (Spezifikation 4, Abschnitte 3, 5 und 9) gegen den Test-Katalog
 // mit Gebieten bei Level 4 und 8 und zwei Landschaftsvorlagen.
 
 const catalog = testCatalog();
+const placeField = fieldPlacement(catalog);
 const bauen = '0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01';
 const natur = '0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02';
 const islandId = '5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c02';
@@ -29,7 +30,7 @@ describe('Gebietsfreischaltung', () => {
   it('materialisiert an einem Formlevel die Felder des Gebiets: je Person +10 Ecke und +30 Rollenbereich', () => {
     const unlock = areaUnlockAt(catalog, { level: 4, sides })!;
     const owned = (person: string, kind: string) =>
-      unlock.fields.filter((field) => field.ownerPersonId === person && placeField(catalog, field.key)?.kind === kind).length;
+      unlock.fields.filter((field) => field.ownerPersonId === person && placeField(field.key)?.kind === kind).length;
 
     expect(unlock.area).toEqual({ type: 'gebiet', key: 't_gebiet_1' });
     expect(unlock.fields).toHaveLength(80);
@@ -64,6 +65,11 @@ describe('Gebietsfreischaltung', () => {
     expect(second.discovery.blueprints).toEqual(['t_ent_bauen_2a', 't_ent_natur_2a']);
   });
 
+  it('die Entdeckung ist mit Deko erfüllbar, ohne Deko abgeschlossen', () => {
+    expect(discoveryStatus(areaUnlockAt(catalog, { level: 4, sides })!.discovery)).toBe('erfuellbar');
+    expect(discoveryStatus(areaUnlockAt(catalog, { level: 49, sides })!.discovery)).toBe('abgeschlossen');
+  });
+
   it('hat den Anlassschlüssel `gebiet:‹insel›:‹gebiet›`', () => {
     expect(areaOccasionKey(islandId, 't_gebiet_1')).toBe(`gebiet:${islandId}:t_gebiet_1`);
     expect(areaOccasionKey(islandId, 'endlos_1_t_vorlage_erste')).toBe(`gebiet:${islandId}:endlos_1_t_vorlage_erste`);
@@ -72,25 +78,25 @@ describe('Gebietsfreischaltung', () => {
 
 describe('Lage der Felder auf der Insel', () => {
   it('Grundinsel und feste Gebiete liegen auf dem gemeinsamen Raster', () => {
-    expect(placeField(catalog, 'grundinsel:7:7')).toEqual({ x: 7, y: 7, kind: 'lichtung' });
-    expect(placeField(catalog, 't_gebiet_2:15:-6')).toEqual({ x: 15, y: -6, kind: 'ecke', side: 'b' });
+    expect(placeField('grundinsel:7:7')).toEqual({ x: 7, y: 7, kind: 'lichtung' });
+    expect(placeField('t_gebiet_2:15:-6')).toEqual({ x: 15, y: -6, kind: 'ecke', side: 'b' });
   });
 
   it('endlose Gebiete liegen in Bändern von 5 Zeilen übereinander oberhalb des obersten festen Gebiets', () => {
     // Das oberste feste Gebiet reicht bis y = −10. Die Lage hängt nur an k, nicht an der Reihenfolge der
     // Vorlagen, damit eine spätere Vorlage keine bestehende Ausprägung verschiebt.
-    expect(placeField(catalog, 'endlos_1_t_vorlage_erste:0:0')).toEqual({ x: 0, y: -15, kind: 'ecke', side: 'a' });
-    expect(placeField(catalog, 'endlos_1_t_vorlage_erste:15:4')).toEqual({ x: 15, y: -11, kind: 'ecke', side: 'b' });
-    expect(placeField(catalog, 'endlos_2_t_vorlage_zweite:0:0')).toEqual({ x: 0, y: -20, kind: 'ecke', side: 'a' });
-    expect(placeField(catalog, 'endlos_3_t_vorlage_erste:0:4')).toEqual({ x: 0, y: -21, kind: 'ecke', side: 'a' });
+    expect(placeField('endlos_1_t_vorlage_erste:0:0')).toEqual({ x: 0, y: -15, kind: 'ecke', side: 'a' });
+    expect(placeField('endlos_1_t_vorlage_erste:15:4')).toEqual({ x: 15, y: -11, kind: 'ecke', side: 'b' });
+    expect(placeField('endlos_2_t_vorlage_zweite:0:0')).toEqual({ x: 0, y: -20, kind: 'ecke', side: 'a' });
+    expect(placeField('endlos_3_t_vorlage_erste:0:4')).toEqual({ x: 0, y: -21, kind: 'ecke', side: 'a' });
   });
 
   it('kennt keine Felder außerhalb der Feldpläne', () => {
-    expect(placeField(catalog, 'grundinsel:99:99')).toBeUndefined();
+    expect(placeField('grundinsel:99:99')).toBeUndefined();
     // Koordinaten nur in kanonischer Schreibweise, wie beim Nachschlagen im Katalog.
-    expect(placeField(catalog, 'grundinsel:07:7')).toBeUndefined();
-    expect(placeField(catalog, 'endlos_1_t_vorlage_erste:00:0')).toBeUndefined();
-    expect(placeField(catalog, 'endlos_1_t_vorlage_erste:16:0')).toBeUndefined();
-    expect(placeField(catalog, 'endlos_1_unbekannt:0:0')).toBeUndefined();
+    expect(placeField('grundinsel:07:7')).toBeUndefined();
+    expect(placeField('endlos_1_t_vorlage_erste:00:0')).toBeUndefined();
+    expect(placeField('endlos_1_t_vorlage_erste:16:0')).toBeUndefined();
+    expect(placeField('endlos_1_unbekannt:0:0')).toBeUndefined();
   });
 });

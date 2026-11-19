@@ -59,7 +59,7 @@ async function openTab(arrange: (world: LaichkugelWorld) => void = () => {}) {
   return world;
 }
 
-test('Tracer: Kommt Level 4 per Pull, während der Tab offen ist, verwandelt sich Momo, und der Nebel zieht von der Schilfwiese ab', async () => {
+test('Tracer: Kommt Level 4 per Pull, während der Tab offen ist, folgt die Verwandlung beim nächsten Öffnen; danach zieht der Nebel von der Schilfwiese ab', async () => {
   const world = await openTab();
   // Vor Level 4 liegt die Schilfwiese unter Nebel.
   expect(fog()).toHaveLength(1);
@@ -69,10 +69,16 @@ test('Tracer: Kommt Level 4 per Pull, während der Tab offen ist, verwandelt sic
     world.areaOnServer(4);
   });
 
-  // Die Schilfwiese ist freigeschaltet; über ihr liegt der Nebel, der gleich abzieht.
+  // Im offenen Tab feiert Momo; die Schilfwiese ist schon freigeschaltet, die Verwandlung wartet.
   expect(screen.getByRole('image', { name: 'Momos Insel, Level 4, 0 eigene Objekte' })).toBeOnTheScreen();
-  expect(fog()).toHaveLength(1);
+  expect(fog()).toHaveLength(0);
 
+  await act(() => router.replace('/'));
+  await act(() => router.replace('/momo'));
+  await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, ...testScreen } } });
+
+  // Über der Schilfwiese liegt der Nebel, der nach der Überblendung abzieht.
+  expect(fog()).toHaveLength(1);
   // Überblendung und Abziehen dauern je `duration-celebrate`; danach ist der Nebel weg.
   await act(() => jest.advanceTimersByTime(2 * 1200));
   expect(fog()).toHaveLength(0);

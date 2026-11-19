@@ -14,6 +14,14 @@ export type IslandSides = Readonly<Record<FieldSide, string>>;
 /** Was eine Entdeckung bringt: die Baupläne für die Insel und die Deko, die jede Person abholt. */
 export type Discovery = Readonly<{ areaKey: string; blueprints: readonly string[]; deko: readonly string[] }>;
 
+/**
+ * Status der Entdeckung beim Freischalten: mit Deko `erfuellbar`, denn jede Person kann sie abholen; ohne Deko
+ * (endlose Gebiete) gibt es nichts abzuholen, und sie ist `abgeschlossen`.
+ */
+export function discoveryStatus(discovery: Discovery): 'erfuellbar' | 'abgeschlossen' {
+  return discovery.deko.length > 0 ? 'erfuellbar' : 'abgeschlossen';
+}
+
 export type AreaUnlock = Readonly<{
   level: number;
   area: UnlockedArea;
@@ -87,9 +95,4 @@ export function fieldPlacement(catalog: GameCatalog): (key: string) => FieldPlan
     const entry = endless && templates.get(endless.template)?.find((field) => field.x === parsed!.x && field.y === parsed!.y);
     return entry === undefined ? undefined : { ...entry, y: top - endless!.k * landscapeBand.height + entry.y };
   };
-}
-
-/** Lage eines einzelnen Inselfelds (`fieldPlacement`). */
-export function placeField(catalog: GameCatalog, key: string): FieldPlanEntry | undefined {
-  return fieldPlacement(catalog)(key);
 }

@@ -69,8 +69,11 @@ export type Discovery = Readonly<{
   /** Name des Gebiets; bei einem endlosen Gebiet der Name seiner Landschaftsvorlage. */
   area: Readonly<{ key: string; name: string }>;
   blueprints: readonly Readonly<{ key: string; name: string }>[];
-  /** Grafik der ersten Stufe des ersten neuen Bauplans, als Bild einer Entdeckung ohne Deko. */
-  blueprintArt: ArtKey | null;
+  /**
+   * Bild der Entdeckung: die Deko zum Abholen, ohne Deko die erste Stufe des ersten neuen Bauplans. Die Katalogprüfung
+   * verlangt Entdeckungs-Baupläne je Rolle, eines von beiden gibt es also immer.
+   */
+  art: ArtKey;
   /** Entdeckungs-Deko für das eigene Lager; leer bei endlosen Gebieten. */
   deko: readonly ShownReward[];
   seen: boolean;
@@ -141,7 +144,7 @@ function discoveryOf(
     occurredAt: Instant.parse(event.occurredAt),
     area: { key: areaKey, name: endless === undefined ? nameOf('gebiet', areaKey) : nameOf('landschaftsvorlage', endless.template) },
     blueprints: blueprints.map((key) => ({ key, name: nameOf('bauplan', key) })),
-    blueprintArt: blueprints[0] === undefined ? null : shownReward({ type: 'bauplan', key: blueprints[0] }).art,
+    art: shownReward(deko[0] !== undefined ? { type: 'deko', key: deko[0] } : { type: 'bauplan', key: blueprints[0] ?? areaKey }).art,
     deko: deko.map((key) => shownReward({ type: 'deko', key })),
     seen: state.seenAt !== null,
     claimable: deko.length > 0 && state.claimedAt === null,

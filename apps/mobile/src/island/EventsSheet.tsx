@@ -55,8 +55,8 @@ export function EventsSheet({ events, freshAtOpen, claimed, onClaim }: EventsShe
               </Text>
               {fresh.map((event) => (
                 <View key={event.stateId} style={styles.arrival}>
-                  <ObjectPreview art={event.kind === 'besuch' ? event.visitor.animal : discoveryArt(event)} />
-                  <Text style={styles.text}>{event.kind === 'besuch' ? eventTexts.visiting(event.visitor.name) : eventTexts.newArea(event.area.name)}</Text>
+                  <ObjectPreview art={arrivalOf(event).art} />
+                  <Text style={styles.text}>{arrivalOf(event).text}</Text>
                 </View>
               ))}
             </View>
@@ -90,9 +90,14 @@ export function EventsSheet({ events, freshAtOpen, claimed, onClaim }: EventsShe
   );
 }
 
-/** Bild einer Entdeckung: die Deko zum Abholen, ohne Deko der erste neue Bauplan. */
-function discoveryArt(event: Discovery): string {
-  return event.deko[0]?.art ?? event.blueprintArt ?? event.area.key;
+/** Bild und Zeile einer Ankunft unter „Neu auf der Insel“, je Ereignisart. */
+function arrivalOf(event: IslandEvent): Readonly<{ art: string; text: string }> {
+  switch (event.kind) {
+    case 'besuch':
+      return { art: event.visitor.animal, text: eventTexts.visiting(event.visitor.name) };
+    case 'entdeckung':
+      return { art: event.art, text: eventTexts.newArea(event.area.name) };
+  }
 }
 
 function DiscoveryCard({ event, onClaim }: Readonly<{ event: Discovery; onClaim(event: Discovery): void }>) {
@@ -100,7 +105,7 @@ function DiscoveryCard({ event, onClaim }: Readonly<{ event: Discovery; onClaim(
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <ObjectPreview art={discoveryArt(event)} />
+        <ObjectPreview art={event.art} />
         <View style={styles.text}>
           <Text variant="bodyStrong">{eventTexts.discovered(event.area.name)}</Text>
           {event.blueprints.length > 0 && <Text>{eventTexts.areaBlueprints(event.blueprints.map((blueprint) => blueprint.name))}</Text>}

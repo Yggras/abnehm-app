@@ -1,4 +1,4 @@
-import { areaOccasionKey, areaUnlockAt } from '@abnehm/game-rules/areas';
+import { areaOccasionKey, areaUnlockAt, discoveryStatus } from '@abnehm/game-rules/areas';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { openVisitFacts, planVisitors, visitorSlotOf } from '@abnehm/game-rules/events';
 import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
@@ -518,11 +518,6 @@ function levelEvent(level: number): SeedEntity {
   };
 }
 
-/**
- * Gebiet und Entdeckung eines Formlevels, wie `area-unlock.ts` im Backend sie schreibt (#204): Freischaltung,
- * Felder beider Personen (Seite a Philipp mit Bauen, Seite b Anna), die Entdeckungs-Baupläne, die Entdeckung und
- * je Person ein Ereignisstand, in derselben Reihenfolge wie auf dem Server.
- */
 /** Philipp und Anna nach Person geordnet, wie der Server Ereignisstände und Intents schreibt. */
 const membersInOrder = [philipp, anna].sort();
 
@@ -533,6 +528,11 @@ function areaAt(level: number) {
   return unlock;
 }
 
+/**
+ * Gebiet und Entdeckung eines Formlevels, wie `area-unlock.ts` im Backend sie schreibt (#204): Freischaltung,
+ * Felder beider Personen (Seite a Philipp mit Bauen, Seite b Anna), die Entdeckungs-Baupläne, die Entdeckung und
+ * je Person ein Ereignisstand, in derselben Reihenfolge wie auf dem Server.
+ */
 function areaEntities(level: number): SeedEntity[] {
   const islandId = EntityId.parse(seedIds.island.philippAnna);
   const unlock = areaAt(level);
@@ -556,7 +556,7 @@ function areaEntities(level: number): SeedEntity[] {
       template_key: null,
       responsible_person_id: null,
       occasion_key: occasionKey,
-      status: discovery.deko.length > 0 ? 'erfuellbar' : 'abgeschlossen',
+      status: discoveryStatus(discovery),
       reward: discovery,
       occurred_at: now,
       created_at: now,

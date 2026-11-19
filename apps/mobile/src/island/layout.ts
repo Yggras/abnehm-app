@@ -16,10 +16,10 @@ export type IslandLayoutRequest = Readonly<{
 }>;
 
 export function islandLayout(catalog: GameCatalog, { fields, unlockedAreas }: IslandLayoutRequest): Pick<IslandSceneInput, 'fields' | 'fog'> {
-  const placeField = fieldPlacement(catalog);
+  const placementOf = fieldPlacement(catalog);
   return {
     fields: fields.map(({ key, ownerPersonId }): SceneField => {
-      const entry = placeField(key);
+      const entry = placementOf(key);
       if (entry === undefined) throw new Error(`Inselfeld ${key} fehlt im Spielkatalog`);
       return { key, x: entry.x, y: entry.y, kind: entry.kind, ownerPersonId };
     }),
