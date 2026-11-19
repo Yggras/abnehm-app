@@ -255,10 +255,11 @@ describe('Tagesprotokoll', () => {
             { id: expect.any(String), name: 'Hafer Flocken', displayUnit: 'g', displayAmountMilli: 60_000, kcal: 209, fromPhoto: false, aiEstimate: false },
             { id: expect.any(String), name: 'Apfel roh', displayUnit: 'g', displayAmountMilli: 150_000, kcal: 87, fromPhoto: false, aiEstimate: false },
           ],
+          photoIds: [],
         },
-        { meal: 'mittagessen', kcal: 0, entries: [] },
-        { meal: 'abendessen', kcal: 0, entries: [] },
-        { meal: 'snacks', kcal: 139, entries: [{ id: expect.any(String), name: 'Hafer Flocken', displayUnit: 'g', displayAmountMilli: 40_000, kcal: 139, fromPhoto: false, aiEstimate: false }] },
+        { meal: 'mittagessen', kcal: 0, entries: [], photoIds: [] },
+        { meal: 'abendessen', kcal: 0, entries: [], photoIds: [] },
+        { meal: 'snacks', kcal: 139, entries: [{ id: expect.any(String), name: 'Hafer Flocken', displayUnit: 'g', displayAmountMilli: 40_000, kcal: 139, fromPhoto: false, aiEstimate: false }], photoIds: [] },
       ],
     });
   });

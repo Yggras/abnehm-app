@@ -288,8 +288,12 @@ export const nutritionTexts = {
   /** Eigene Mahlzeitenfotos im Protokoll und in der Fotoansicht (Spezifikation 2, Abschnitt 9; #164). */
   photo: {
     title: 'Mahlzeitenfoto',
-    /** Zugänglicher Name eines Fotos, wie bei Partnerfotos „Mahlzeitenfoto, <Mahlzeit>“ (Spezifikation 2, Abschnitt 12). */
-    name: (meal: MealKey) => `Mahlzeitenfoto, ${mealNames[meal]}`,
+    /**
+     * Zugänglicher Name eines Fotos, wie bei Partnerfotos „Mahlzeitenfoto, <Mahlzeit>“ (Spezifikation 2, Abschnitt 12).
+     * Hat eine Mahlzeit mehrere Fotos, unterscheidet sie die Nummer („Mahlzeitenfoto 2 von 2, Mittagessen“).
+     */
+    name: (meal: MealKey, of?: Readonly<{ position: number; count: number }>) =>
+      `Mahlzeitenfoto${of === undefined ? '' : ` ${of.position} von ${of.count}`}, ${mealNames[meal]}`,
     loading: 'Foto lädt',
     /** Die Fotoansicht ist geöffnet, das Bild kommt aber nicht an. */
     unavailable: 'Das Foto lässt sich gerade nicht laden. Es braucht Internet.',

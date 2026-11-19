@@ -274,6 +274,10 @@ _Avoid_: Fotoentwurf, Ernährungseintrag
 Der geschützte Speicher des Servers für die Bilder der Mahlzeitenfotos, je Foto als Vorschau und vergrößerte Fassung. Die Bilder sind nur über die angemeldete Schnittstelle abrufbar, nie auf dem Gerät gespeichert.
 _Avoid_: Fotospeicher, Bildordner
 
+**Verwaistes Mahlzeitenfoto**:
+Ein nicht gelöschtes Mahlzeitenfoto, das mit keinem nicht gelöschten Ernährungseintrag mehr verknüpft ist. Bis zu 24 Stunden lang kann „Rückgängig“ es wieder verknüpfen, danach löscht der Server es.
+_Avoid_: herrenloses Foto, Fotoleiche
+
 **Lebensmittelfavorit**:
 Ein als häufig verwendet markiertes einzelnes Lebensmittel. Er folgt Änderungen am referenzierten Lebensmittel, bleibt durch seine letzte bekannte Fassung aber auch ohne die Quelle nutzbar.
 _Avoid_: Favorit, sofern dadurch eine Zusammenstellung gemeint sein könnte

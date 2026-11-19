@@ -35,14 +35,20 @@ export function MealPhotoStrip({
   if (photoIds.length === 0) return null;
   return (
     <View style={styles.strip}>
-      {photoIds.map((photoId) => (
-        <PhotoThumb key={photoId} nutrition={nutrition} meal={meal} photoId={photoId} onOpen={() => onOpen(photoId)} />
+      {photoIds.map((photoId, index) => (
+        <PhotoThumb
+          key={photoId}
+          nutrition={nutrition}
+          name={texts.name(meal, photoIds.length > 1 ? { position: index + 1, count: photoIds.length } : undefined)}
+          photoId={photoId}
+          onOpen={() => onOpen(photoId)}
+        />
       ))}
     </View>
   );
 }
 
-function PhotoThumb({ nutrition, meal, photoId, onOpen }: { nutrition: Nutrition; meal: MealKey; photoId: EntityId; onOpen: () => void }) {
+function PhotoThumb({ nutrition, name, photoId, onOpen }: { nutrition: Nutrition; name: string; photoId: EntityId; onOpen: () => void }) {
   const { state } = useOnlineRead(['mahlzeitenfoto', photoId, 'vorschau'], () => nutrition.mealPhotoImage(photoId, 'vorschau'));
   if (state.type === 'pending') {
     return (
@@ -55,7 +61,7 @@ function PhotoThumb({ nutrition, meal, photoId, onOpen }: { nutrition: Nutrition
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={texts.name(meal)}
+      accessibilityLabel={name}
       onPress={onOpen}
       style={({ pressed }) => [styles.thumb, pressed && pressedEdge('card', 'cardPressed')]}
     >

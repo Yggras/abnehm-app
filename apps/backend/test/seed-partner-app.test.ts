@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
@@ -23,7 +23,7 @@ import { couplingMember as localMember } from '../../mobile/src/local-db/schema/
 import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
-import { photoDraft, revocationNotice } from '../src/db/schema/index.ts';
+import { mealPhoto, photoDraft, revocationNotice } from '../src/db/schema/index.ts';
 import type { PartnerSummaryProjector } from '../src/partner-projections/projector.ts';
 import { postgresPlanReader } from '../src/plan/plan-reader.ts';
 import { trackerPartnerSummaryProjectors } from '../src/trackers/partner-summaries.ts';
@@ -134,6 +134,10 @@ describe('Szenario gekoppelt', () => {
         expect(await probe(backend, 'meal_photo', deviceOf(viewer), photo.id)).toBe('erlaubt');
         expect(await probe(backend, 'partner_photo_list', deviceOf(viewer))).toBe('erlaubt');
       }
+      // Philipps vom Teilen ausgenommenes und sein verwaistes Foto (#164) sieht Anna nicht.
+      for (const other of (['philipp', 'anna'] as const).filter((account) => account !== photo.account && !photo.visibleTo.includes(account))) {
+        expect(await probe(backend, 'meal_photo', deviceOf(other), photo.id), `${other} ${photo.id}`).toBe('verweigert');
+      }
     }
   });
 
@@ -150,18 +154,25 @@ describe('Szenario gekoppelt', () => {
       expect([largeMeta.width, largeMeta.height]).toEqual([photo.image.width, photo.image.height]);
       expect(Math.max(previewMeta.width!, previewMeta.height!)).toBe(400);
       // Das Foto liegt mit seinem Bildschlüssel auf dem Gerät seiner Eigentümerin, nicht beim Partner.
-      const owner = Object.values(phones).find(({ personId }) => personId === seedIds.person[photo.account as 'philipp' | 'anna'])!;
-      expect(dumpLocalDatabase(owner.database).rows.meal_photo?.map((row) => [row.id, row.image_key])).toEqual([[photo.id, photo.imageKey]]);
+      for (const phone of Object.values(phones)) {
+        const local = dumpLocalDatabase(phone.database).rows.meal_photo?.map((row) => [row.id, row.image_key]) ?? [];
+        if (phone.personId === seedIds.person[photo.account as 'philipp' | 'anna']) expect(local).toContainEqual([photo.id, photo.imageKey]);
+        else expect(local.map(([id]) => id)).not.toContain(photo.id);
+      }
     }
     const [draft] = photos.expiredDrafts;
     expect(await backend.photoStorage.readDraft(draft!.imageKey)).not.toBeNull();
     expect((await backend.database.db.select().from(photoDraft)).map((row) => row.id)).toEqual([draft!.id]);
 
-    // Der Aufräumjob entfernt den abgelaufenen Entwurf samt Bild; die Fotos bleiben.
+    // Die Aufräumjobs entfernen den abgelaufenen Entwurf samt Bild und setzen das seit gestern verwaiste Foto
+    // auf Tombstone samt Dateien (#164); die übrigen Fotos bleiben.
     await backend.jobs.runDue();
     expect(await backend.database.db.select().from(photoDraft)).toEqual([]);
     expect((await backend.photoStorage.storedKeys()).drafts).toEqual([]);
-    expect((await backend.photoStorage.storedKeys()).photos).toEqual(photos.photos.map(({ imageKey }) => imageKey).sort());
+    const orphan = photos.photos.find(({ id }) => id === seedIds.mealPhoto.philippVerwaist)!;
+    expect((await backend.photoStorage.storedKeys()).photos).toEqual(photos.photos.filter((photo) => photo !== orphan).map(({ imageKey }) => imageKey).sort());
+    const tombstoned = await backend.database.db.select({ id: mealPhoto.id }).from(mealPhoto).where(isNotNull(mealPhoto.deletedAt));
+    expect(tombstoned.map(({ id }) => id)).toEqual([orphan.id]);
   });
 
   it('Projektionsübergang: Anna stellt Wasser auf privat; Philipps Gerät verliert genau diese Zusammenfassung', async () => {

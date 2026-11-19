@@ -23,6 +23,9 @@ import { createNutrition, InvalidNutritionInputError, mealPhotoEntity, nutrition
 const today = LocalDate.parse(seedDays.heute);
 const photoId = EntityId.parse(seedIds.mealPhoto.philippHeute);
 const annasPhoto = EntityId.parse(seedIds.mealPhoto.annaHeute);
+/** Philipps zweites Foto zum Mittagessen, einzeln vom Teilen ausgenommen; sein verwaistes Foto hat keinen Eintrag mehr. */
+const privatePhoto = EntityId.parse(seedIds.mealPhoto.philippNichtGeteilt);
+const orphanPhoto = EntityId.parse(seedIds.mealPhoto.philippVerwaist);
 const lunchEntry = EntityId.parse(seedIds.nutritionEntry.philippMittag);
 
 const cleanups: (() => void)[] = [];
@@ -71,7 +74,7 @@ describe('Mahlzeitenfotos im Tagesprotokoll', () => {
 
     const log = dayLog();
 
-    expect(lunchOf(log).photoIds).toEqual([photoId]);
+    expect(lunchOf(log).photoIds).toEqual([photoId, privatePhoto]);
     expect(log!.meals.filter((meal) => meal.meal !== 'mittagessen').map((meal) => meal.photoIds)).toEqual([[], [], []]);
   });
 
@@ -94,6 +97,14 @@ describe('Fotoansicht', () => {
     const { detail } = await setup();
 
     expect(detail()).toEqual({ id: photoId, sharedWithPartner: true, partnerCoupled: true });
+    expect(detail(privatePhoto)).toEqual({ id: privatePhoto, sharedWithPartner: false, partnerCoupled: true });
+  });
+
+  it('das verwaiste Foto zeigt das Protokoll nicht, die Fotoansicht kennt es aber noch', async () => {
+    const { dayLog, detail } = await setup();
+
+    expect(dayLog()!.meals.flatMap((meal) => meal.photoIds)).not.toContain(orphanPhoto);
+    expect(detail(orphanPhoto)).toMatchObject({ id: orphanPhoto });
   });
 
   it('ohne Kopplung verbirgt sie ihn', async () => {
@@ -163,7 +174,7 @@ describe('„Foto löschen“', () => {
     expect(operations).toEqual([expect.objectContaining({ type: 'delete_entity', entityType: 'meal_photo', entityId: photoId })]);
     expect(entries.find((row) => row.id === lunchEntry)).toMatchObject({ deletedAt: null, mealPhotoId: photoId });
     // Das Protokoll zeigt das Foto nicht mehr, der Eintrag behält sein Foto-/KI-Symbol.
-    expect(lunchOf(dayLog()).photoIds).toEqual([]);
+    expect(lunchOf(dayLog()).photoIds).toEqual([privatePhoto]);
     expect(lunchOf(dayLog()).entries.find((entry) => entry.id === lunchEntry)).toMatchObject({ fromPhoto: true });
     expect(detail()).toBeNull();
     expect(reports).toEqual([]);
@@ -183,12 +194,12 @@ describe('„Rückgängig“ nach dem Löschen eines Fotoeintrags', () => {
     const { nutrition, read, dayLog } = await setup();
 
     const { undoToken } = nutrition.deleteEntry(lunchEntry);
-    expect(lunchOf(dayLog()).photoIds).toEqual([]);
+    expect(lunchOf(dayLog()).photoIds).toEqual([privatePhoto]);
     nutrition.undo(undoToken);
 
     const restored = read().entries.find((row) => row.deletedAt === null && row.id !== lunchEntry && row.snapshotName === 'Linsensuppe');
     expect(restored).toMatchObject({ captureMethod: 'foto', mealPhotoId: photoId });
-    expect(lunchOf(dayLog()).photoIds).toEqual([photoId]);
+    expect(lunchOf(dayLog()).photoIds).toEqual(expect.arrayContaining([photoId, privatePhoto]));
   });
 
   it('Foto gelöscht, dann Rückgängig: Der neue Eintrag bleibt ohne Foto', async () => {

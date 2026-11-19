@@ -34,6 +34,11 @@ afterEach(() => {
 });
 
 const photoId = EntityId.parse(seedIds.mealPhoto.philippHeute);
+/** Philipps zweites Foto zum Mittagessen, einzeln vom Teilen ausgenommen (#164). */
+const privatePhotoId = EntityId.parse(seedIds.mealPhoto.philippNichtGeteilt);
+/** In `gekoppelt` hat Philipps Mittagessen zwei Fotos: zuerst das geteilte, dann das ausgenommene. */
+const sharedThumb = 'Mahlzeitenfoto 1 von 2, Mittagessen';
+const privateThumb = 'Mahlzeitenfoto 2 von 2, Mittagessen';
 const lunchEntry = EntityId.parse(seedIds.nutritionEntry.philippMittag);
 const lunchLabel = 'Mittagessen: Linsensuppe, 300 g, 270 kcal, KI-Schätzung';
 
@@ -79,27 +84,32 @@ async function openAccount(manifest: SeedManifest = seedManifests.gekoppelt) {
     source,
     photo: () => database.read((tx) => sqliteOf(tx).select().from(mealPhoto).all()).find((row) => row.id === photoId),
     entries: () => database.read((tx) => sqliteOf(tx).select().from(nutritionEntry).all()).filter((row) => row.deletedAt === null),
-    operations: () => database.read((tx) => pendingOperations(tx, 100)).map(({ type, entityType, payload }) => ({ type, entityType, payload })),
+    operations: () => database.read((tx) => pendingOperations(tx, 100)).map((operation) => ({
+      type: operation.type,
+      entityType: 'entityType' in operation ? operation.entityType : undefined,
+      payload: 'payload' in operation ? operation.payload : undefined,
+    })),
   };
 }
 
 const lunch = () => screen.getByTestId('mahlzeit-mittagessen');
 
-/** Öffnet die Fotoansicht über die Vorschau des Mittagessens. */
-async function openPhoto() {
-  await user.press(await within(lunch()).findByRole('button', { name: 'Mahlzeitenfoto, Mittagessen' }));
+/** Öffnet die Fotoansicht über eine Vorschau des Mittagessens. */
+async function openPhoto(name = sharedThumb) {
+  await user.press(await within(lunch()).findByRole('button', { name }));
   return screen.findByRole('header', { name: 'Mahlzeitenfoto' });
 }
 
 describe('Mahlzeitenfotos im Protokoll', () => {
-  it('online zeigt das Mittagessen die Vorschau seines Fotos, mit deutschem zugänglichem Namen und 48 dp', async () => {
+  it('online zeigt das Mittagessen die Vorschauen seiner Fotos, mit deutschen zugänglichen Namen und 48 dp', async () => {
     const { source } = await openAccount();
     await renderRouter(appDir, { initialUrl: '/log' });
 
-    const thumb = await within(lunch()).findByRole('button', { name: 'Mahlzeitenfoto, Mittagessen' });
+    const thumb = await within(lunch()).findByRole('button', { name: sharedThumb });
+    expect(await within(lunch()).findByRole('button', { name: privateThumb })).toBeOnTheScreen();
     expect(within(thumb).getByTestId('mahlzeitenfoto-vorschau', { includeHiddenElements: true }).props.source).toEqual({ uri: 'data:image/jpeg;base64,vorschau' });
     expect(Math.min(hitArea(thumb).width, hitArea(thumb).height)).toBeGreaterThanOrEqual(48);
-    expect(source.calls).toEqual([[photoId, 'vorschau']]);
+    expect(source.calls).toEqual([[photoId, 'vorschau'], [privatePhotoId, 'vorschau']]);
     // Der Eintrag behält sein Foto-/KI-Symbol; Mahlzeiten ohne Foto zeigen keine Vorschau.
     expect(within(lunch()).getByLabelText(lunchLabel)).toBeOnTheScreen();
     expect(within(screen.getByTestId('mahlzeit-fruehstueck')).queryByRole('button', { name: /Mahlzeitenfoto/ })).not.toBeOnTheScreen();
@@ -113,7 +123,7 @@ describe('Mahlzeitenfotos im Protokoll', () => {
     const entry = await within(lunch()).findByLabelText(lunchLabel);
     expect(within(entry).getByTestId('icon-camera', { includeHiddenElements: true })).toBeOnTheScreen();
     await waitFor(() => expect(within(lunch()).queryByLabelText('Foto lädt')).not.toBeOnTheScreen());
-    expect(within(lunch()).queryByRole('button', { name: 'Mahlzeitenfoto, Mittagessen' })).not.toBeOnTheScreen();
+    expect(within(lunch()).queryByRole('button', { name: /Mahlzeitenfoto/ })).not.toBeOnTheScreen();
   });
 });
 
@@ -130,12 +140,22 @@ describe('Fotoansicht', () => {
     const toggle = screen.getByRole('switch', { name: 'Mit Partner teilen' });
     expect(toggle).toBeChecked();
     expect(Math.min(hitArea(toggle).width, hitArea(toggle).height)).toBeGreaterThanOrEqual(48);
+    expect(screen.getByText('Dein Partner sieht das Foto heute unter „Wir“, ohne Namen, Mengen oder kcal.')).toBeOnTheScreen();
 
     await user.press(toggle);
 
     expect(screen.getByRole('switch', { name: 'Mit Partner teilen' })).not.toBeChecked();
     expect(photo()!.sharedWithPartner).toBe(false);
     expect(operations()).toEqual([{ type: 'upsert_entity', entityType: 'meal_photo', payload: { sharedWithPartner: false } }]);
+  });
+
+  it('ein einzeln vom Teilen ausgenommenes Foto zeigt den Schalter aus', async () => {
+    await openAccount();
+    await renderRouter(appDir, { initialUrl: '/log' });
+
+    await openPhoto(privateThumb);
+
+    expect(await screen.findByRole('switch', { name: 'Mit Partner teilen' })).not.toBeChecked();
   });
 
   it('ohne Kopplung ist der Schalter verborgen', async () => {
@@ -151,7 +171,7 @@ describe('Fotoansicht', () => {
     database.transaction((tx) => sqliteOf(tx).update(mealPhoto).set({ serverVersion: '42' }).run());
     await renderRouter(appDir, { initialUrl: '/log' });
 
-    await openPhoto();
+    await openPhoto('Mahlzeitenfoto, Mittagessen');
 
     expect(await screen.findByRole('image', { name: 'Mahlzeitenfoto, Mittagessen' })).toBeOnTheScreen();
     expect(screen.queryByRole('switch')).not.toBeOnTheScreen();
@@ -161,7 +181,7 @@ describe('Fotoansicht', () => {
   it('offline: Kommt das vergrößerte Foto nicht an, nennt die Ansicht den Grund und lädt erneut', async () => {
     const { source } = await openAccount();
     await renderRouter(appDir, { initialUrl: '/log' });
-    await within(lunch()).findByRole('button', { name: 'Mahlzeitenfoto, Mittagessen' });
+    await within(lunch()).findByRole('button', { name: sharedThumb });
     source.network.online = false;
 
     await openPhoto();
@@ -194,8 +214,9 @@ describe('Fotoansicht', () => {
     expect(screen.queryByRole('header', { name: 'Mahlzeitenfoto' })).not.toBeOnTheScreen();
     expect(photo()!.deletedAt).toBe(seedClock.instant);
     expect(operations()).toEqual([{ type: 'delete_entity', entityType: 'meal_photo', payload: undefined }]);
-    // Die Vorschau ist weg, der Eintrag bleibt mit seinem Foto-/KI-Symbol.
-    expect(within(lunch()).queryByRole('button', { name: 'Mahlzeitenfoto, Mittagessen' })).not.toBeOnTheScreen();
+    // Die Vorschau ist weg, nur das zweite Foto bleibt; der Eintrag behält sein Foto-/KI-Symbol.
+    expect(within(lunch()).queryByRole('button', { name: sharedThumb })).not.toBeOnTheScreen();
+    expect(within(lunch()).getByRole('button', { name: 'Mahlzeitenfoto, Mittagessen' })).toBeOnTheScreen();
     expect(within(lunch()).getByLabelText(lunchLabel)).toBeOnTheScreen();
     expect(entries().find((row) => row.id === lunchEntry)).toMatchObject({ mealPhotoId: photoId });
   });

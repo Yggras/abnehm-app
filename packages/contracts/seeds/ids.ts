@@ -37,7 +37,12 @@ const person = { philipp: id('0002', 1), anna: id('0002', 2) };
  */
 const imageKey = (name: string) => `seed_${name}`.padEnd(43, '0');
 export const seedImageKeys = {
-  mealPhoto: { philippHeute: imageKey('mahlzeitenfoto_philipp_heute'), annaHeute: imageKey('mahlzeitenfoto_anna_heute') },
+  mealPhoto: {
+    philippHeute: imageKey('mahlzeitenfoto_philipp_heute'),
+    annaHeute: imageKey('mahlzeitenfoto_anna_heute'),
+    philippNichtGeteilt: imageKey('mahlzeitenfoto_philipp_privat'),
+    philippVerwaist: imageKey('mahlzeitenfoto_philipp_verwaist'),
+  },
   photoDraft: { philippAbgelaufen: imageKey('fotoentwurf_philipp_abgelaufen') },
 } as const;
 
@@ -106,6 +111,8 @@ export const seedIds = {
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   // 0031/5–7: Philipps Mahlzeiten von gestern, nur in den Randzuständen zum Tagesende (#113).
   // 0031/8–9: Philipps Frühstück und Mittagessen von heute, nur in den Randzuständen der Ernährung (#166).
+  // 0031/13–14: Philipps Fotoeinträge in `gekoppelt` (#164): der zum nicht geteilten Foto von heute und der
+  // gestern gelöschte des verwaisten Fotos.
   nutritionEntry: {
     philippMittag: id('0031', 1),
     annaMittag: id('0031', 2),
@@ -114,6 +121,8 @@ export const seedIds = {
     philippRandzustand: { fruehstueck: id('0031', 8), mittag: id('0031', 9) },
     /** `solo`: Einträge am Vortag ohne Abendessen (#156). */
     philippVortag: [id('0031', 10), id('0031', 11), id('0031', 12)],
+    philippNichtGeteilt: id('0031', 13),
+    philippVerwaist: id('0031', 14),
   },
   /**
    * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten` (#113)
@@ -148,7 +157,11 @@ export const seedIds = {
     ernaehrungErfuellt: [id('0090', 52)],
     kalorienbudgetInnerhalb: [id('0090', 53)],
   },
-  mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
+  /**
+   * Mahlzeitenfotos in `gekoppelt`: je Person ein geteiltes von heute (#162), dazu Philipps einzeln vom Teilen
+   * ausgenommenes Foto und als Randzustand sein verwaistes Foto, dessen einziger Eintrag seit gestern gelöscht ist (#164).
+   */
+  mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2), philippNichtGeteilt: id('0032', 3), philippVerwaist: id('0032', 4) },
   /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */
   ownFood: { philippBircher: id('0034', 1), philippApfel: id('0034', 2) },
   /** Server-only; ein abgelaufener Fotoentwurf als Randzustand (#162). */

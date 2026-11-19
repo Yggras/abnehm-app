@@ -39,7 +39,8 @@ import { energieverlaufPart, gekoppeltBauten, type SeedBuild } from './spielverl
 // geschlüpft. Beide haben Ziele, Wochenplan, drei Tagesziele von heute und teilweise erfüllte Tracker:
 // Philipp hat ein Tagesziel erfüllt, Anna zwei, jeweils mit `+1`-Gutschrift. Philipp teilt alle vier
 // Bereiche, Anna hält Ernährung privat und teilt die übrigen drei. Beide teilen ihre Mahlzeitenfotos;
-// jede Person hat heute ein geteiltes Foto zum Mittagessen. Der Server hat die Zusammenfassungen und den
+// jede Person hat heute ein geteiltes Foto zum Mittagessen. Philipp hat dazu ein zweites, einzeln vom Teilen
+// ausgenommenes Foto und als Randzustand ein verwaistes Foto von gestern (#164). Der Server hat die Zusammenfassungen und den
 // groben Tageszielstand für den jeweiligen Partner zur festen Uhr berechnet; beide Geräte sind auf dem
 // Stand des Servers. Philipps eigene Daten sind die aus `solo`, nur seine Tracker-Daten sind die der
 // Partner-Szenarien (Spezifikation 3, Abschnitt 9; #181): Philipp (Apple Health) hat eine Sportwoche mit
@@ -259,7 +260,10 @@ const tracker: SeedPart = {
   ],
 };
 
-/** Ein Mittagessen aus einem KI-Foto: Menge und Werte je 100 g in den Einheiten aus Abschnitt 8. */
+/**
+ * Ein Mittagessen aus einem KI-Foto: Menge und Werte je 100 g in den Einheiten aus Abschnitt 8. Ohne
+ * `localDate` von heute; mit `deletedAt` ist der Eintrag seitdem gelöscht.
+ */
 function photoLunch(options: {
   id: string;
   person: string;
@@ -268,13 +272,15 @@ function photoLunch(options: {
   name: string;
   grams: number;
   per100g: Readonly<{ milliKcal: number; proteinMg: number; carbsMg: number; fatMg: number }>;
+  localDate?: string;
+  deletedAt?: string;
 }): SeedRow {
   const factor = options.grams / 100;
   return {
     id: options.id,
     person_id: options.person,
     consumed_at: options.at,
-    ...day(seedDays.heute),
+    ...day(options.localDate ?? seedDays.heute),
     meal: 'mittagessen',
     capture_method: 'foto',
     food_ref_type: null,
@@ -298,8 +304,18 @@ function photoLunch(options: {
     total_fat_mg: options.per100g.fatMg * factor,
     meal_photo_id: options.photoId,
     ...created(options.at),
+    ...(options.deletedAt !== undefined && { updated_at: options.deletedAt, deleted_at: options.deletedAt }),
   };
 }
+
+/** Philipps Obstsalat von heute: ein zweites Foto zum Mittagessen, einzeln vom Teilen ausgenommen (#164). */
+const privateLunchAt = '2026-10-14T10:50:00.000Z';
+/**
+ * Philipps verwaistes Foto (#164): gestern zum Mittagessen aufgenommen, sein einziger Eintrag gestern gelöscht.
+ * Seit mehr als 24 Stunden mit keinem nicht gelöschten Eintrag verknüpft, setzt der Aufräumjob es beim nächsten
+ * Lauf auf Tombstone und löscht seine Dateien.
+ */
+const orphan = { at: '2026-10-13T10:30:00.000Z', deletedAt: '2026-10-13T10:45:00.000Z' } as const;
 
 /** Ein abgelaufener Fotoentwurf von Philipp: gestern analysiert, seit heute 08:54 UTC nicht mehr bestätigbar. */
 const expiredDraft = {
@@ -313,19 +329,23 @@ const expiredDraft = {
 /**
  * Ernährung (Spezifikation 2): je Person ein geteiltes Mahlzeitenfoto von heute samt Eintrag, seit #162
  * mit festem Bildschlüssel und im Änderungsprotokoll; die synthetischen Bilder beschreibt der
- * Erweiterungspunkt `mealPhotos` (Fassung 2). Dazu Philipps abgelaufener Fotoentwurf (nur Server).
+ * Erweiterungspunkt `mealPhotos` (Fassung 2). Dazu Philipps abgelaufener Fotoentwurf (nur Server) und seit
+ * #164 Philipps einzeln vom Teilen ausgenommener Obstsalat von heute sowie sein verwaistes Foto: Dessen
+ * einziger Eintrag ist seit gestern gelöscht, steht also nur als Löschmarkierung im Änderungsprotokoll.
  */
 const ernaehrung: SeedPart = {
   area: 'ernaehrung',
   entities: [
     ...[
-      { id: seedIds.mealPhoto.philippHeute, imageKey: seedImageKeys.mealPhoto.philippHeute, person: philipp, at: '2026-10-14T10:30:00.000Z' },
-      { id: seedIds.mealPhoto.annaHeute, imageKey: seedImageKeys.mealPhoto.annaHeute, person: anna, at: '2026-10-14T10:45:00.000Z' },
-    ].map(({ id, imageKey, person, at }) => ({
+      { id: seedIds.mealPhoto.philippHeute, imageKey: seedImageKeys.mealPhoto.philippHeute, person: philipp, at: '2026-10-14T10:30:00.000Z', shared: true },
+      { id: seedIds.mealPhoto.annaHeute, imageKey: seedImageKeys.mealPhoto.annaHeute, person: anna, at: '2026-10-14T10:45:00.000Z', shared: true },
+      { id: seedIds.mealPhoto.philippNichtGeteilt, imageKey: seedImageKeys.mealPhoto.philippNichtGeteilt, person: philipp, at: privateLunchAt, shared: false },
+      { id: seedIds.mealPhoto.philippVerwaist, imageKey: seedImageKeys.mealPhoto.philippVerwaist, person: philipp, at: orphan.at, shared: true },
+    ].map(({ id, imageKey, person, at, shared }) => ({
       table: 'meal_photo',
       entityType: 'meal_photo',
       ownerPersonId: person,
-      row: { id, person_id: person, image_key: imageKey, captured_at: at, shared_with_partner: true, ...created(at) },
+      row: { id, person_id: person, image_key: imageKey, captured_at: at, shared_with_partner: shared, ...created(at) },
     })),
     {
       table: 'photo_draft',
@@ -368,6 +388,36 @@ const ernaehrung: SeedPart = {
         name: 'Gemüsecurry mit Reis',
         grams: 350,
         per100g: { milliKcal: 120_000, proteinMg: 4_000, carbsMg: 18_000, fatMg: 3_500 },
+      }),
+    },
+    {
+      table: 'nutrition_entry',
+      entityType: 'nutrition_entry',
+      ownerPersonId: philipp,
+      row: photoLunch({
+        id: seedIds.nutritionEntry.philippNichtGeteilt,
+        person: philipp,
+        photoId: seedIds.mealPhoto.philippNichtGeteilt,
+        at: privateLunchAt,
+        name: 'Obstsalat',
+        grams: 150,
+        per100g: { milliKcal: 60_000, proteinMg: 700, carbsMg: 13_000, fatMg: 300 },
+      }),
+    },
+    {
+      table: 'nutrition_entry',
+      entityType: 'nutrition_entry',
+      ownerPersonId: philipp,
+      row: photoLunch({
+        id: seedIds.nutritionEntry.philippVerwaist,
+        person: philipp,
+        photoId: seedIds.mealPhoto.philippVerwaist,
+        at: orphan.at,
+        localDate: seedDays.gestern,
+        deletedAt: orphan.deletedAt,
+        name: 'Nudelauflauf',
+        grams: 350,
+        per100g: { milliKcal: 150_000, proteinMg: 6_000, carbsMg: 18_000, fatMg: 6_000 },
       }),
     },
   ],
@@ -693,6 +743,15 @@ export const gekoppeltExtensions = SeedExtensions.parse({
         id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'],
         imageKey: seedImageKeys.mealPhoto.annaHeute, image: { width: 960, height: 1_280, rgb: [214, 168, 40] },
       },
+      // Seit #164: Philipps einzeln vom Teilen ausgenommenes Foto und sein verwaistes Foto sieht nur er.
+      {
+        id: seedIds.mealPhoto.philippNichtGeteilt, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippNichtGeteilt, visibleTo: [],
+        imageKey: seedImageKeys.mealPhoto.philippNichtGeteilt, image: { width: 1_280, height: 1_280, rgb: [220, 90, 110] },
+      },
+      {
+        id: seedIds.mealPhoto.philippVerwaist, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippVerwaist, visibleTo: [],
+        imageKey: seedImageKeys.mealPhoto.philippVerwaist, image: { width: 1_280, height: 960, rgb: [150, 110, 60] },
+      },
     ],
     expiredDrafts: [
       { id: expiredDraft.id, account: 'philipp', imageKey: seedImageKeys.photoDraft.philippAbgelaufen, image: { width: 1_280, height: 960, rgb: [232, 200, 150] } },
@@ -714,6 +773,7 @@ export const gekoppeltState = buildSeedState({
 export const gekoppeltManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'gekoppelt',
+  // Revision 13: Philipps einzeln vom Teilen ausgenommenes Foto von heute und sein verwaistes Foto (#164).
   // Revision 12: Tracker-Daten der Partner-Szenarien mit Importen, Ersetzung und Ausblendung; Zusammenfassungen der Projectors (#181).
   // Revision 11: je ein Besucher mit Wunsch von heute für Philipp und Anna (#202).
   // Revision 10: Philipps drei Anfeuerungen an Anna von heute (#123).
@@ -725,7 +785,7 @@ export const gekoppeltManifest = SeedManifest.parse({
   // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Philipps Wiegetag.
   // Revision 3: Ernährungseinträge seit #155 im Änderungsprotokoll, dazu Philipps Frühstück aus `solo`;
   // Revision 2: Wassereinträge seit #171.
-  revision: 12,
+  revision: 13,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,
