@@ -234,7 +234,7 @@ const foodFavoriteNamespace = '8e4b2c6a-1d3f-4a5e-9b7c-0f2e4d6a8c10';
  * entsteht genau ein Favorit.
  */
 export function foodFavoriteId(personId: EntityId, foodRef: FoodRef): EntityId {
-  return EntityId.parse(uuidV5(foodFavoriteNamespace, `food_favorite:${personId}:${foodRef.type}:${foodRef.key}`));
+  return EntityId.parse(uuidV5(foodFavoriteNamespace, `food_favorite:${personId}:${foodRefKey(foodRef)}`));
 }
 
 /** Einheit, in der die Person eine Menge eingibt und sieht. */

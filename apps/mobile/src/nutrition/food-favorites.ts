@@ -9,7 +9,7 @@ import { lastUseByRef, latestAmountOf } from './entry-repository';
 import { foodFavoriteEntity } from './food-favorite-entity';
 import { markedFoodFavorites, readFoodFavorite, writeFoodFavorite, type MarkedFoodFavorite } from './food-favorite-repository';
 import type { NutritionDependencies } from './nutrition';
-import { ownFoodWithValues } from './own-food-repository';
+import { livingOwnFood, ownFoodWithValues } from './own-food-repository';
 import { saveOwnFood } from './own-foods';
 import { quickFood, resolveFood, uniqueFoods, type QuickFood } from './quick-foods';
 import { searchNames } from './search-text';
@@ -40,7 +40,8 @@ export type FavoriteTarget = Readonly<{ ref: FoodRef }> | Readonly<{ ref: null; 
 export function markFoodFavorite(tx: TransactionContext, dependencies: FavoriteDependencies, food: FavoriteFood): FoodRef {
   const choice = food.ref === null
     ? (ownFoodWithValues(tx, foodValuesOf(food.snapshot)) ?? saveOwnFood(tx, dependencies, null, foodValuesOf(food.snapshot)))
-    : { ref: food.ref, snapshot: food.snapshot };
+    : // Ein verfügbares eigenes Lebensmittel speichert seine aktuelle Fassung, nicht den älteren Snapshot eines Eintrags.
+      food.ref.type === 'eigen' ? (livingOwnFood(tx, food.ref.key) ?? { ref: food.ref, snapshot: food.snapshot }) : { ref: food.ref, snapshot: food.snapshot };
   const parsed = FoodFavoriteUpsert.safeParse({ foodRef: choice.ref, snapshot: choice.snapshot, removedAt: null });
   if (!parsed.success) throw new InvalidNutritionInputError(`Ungültiger Lebensmittelfavorit: ${parsed.error.message}`);
   const personId = EntityId.parse(requireOwnPerson(tx).id);
