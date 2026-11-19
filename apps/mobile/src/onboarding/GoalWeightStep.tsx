@@ -4,9 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import type { Pace } from '@abnehm/contracts/ports';
 
 import { useClock } from '../clock/clock-context';
-import { Chip, ListGroup, Notice, space, Text, TextField } from '../design';
-import { ValueRow } from '../plan-settings/BudgetDerivation';
-import { SectionTitle } from '../settings/SectionTitle';
+import { Card, Chip, Notice, space, Text, TextField } from '../design';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { gramsOfKgText } from '../trackers/kg-text';
 import { goalWeightTexts as texts } from './goal-texts';
@@ -97,7 +95,7 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
 
       {calculation === null || calculation.maintenanceReason !== null ? null : (
         <View style={styles.section}>
-          <SectionTitle>{texts.pace}</SectionTitle>
+          <Text variant="label">{texts.pace}</Text>
           <View style={styles.chips}>
             {paces.map((pace) => (
               <Chip
@@ -113,15 +111,25 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
       )}
 
       {calculation === null || calculation.forecast === null ? null : (
-        <ListGroup>
-          <ValueRow title={texts.forecastLabel} value={texts.forecast(calculation.forecast.year, calculation.forecast.month)} subtitle={texts.forecastNote} />
-        </ListGroup>
+        // Eigener Block statt Wertzeile: Daneben bräche der Hinweis auf dem iPhone SE in eine schmale Spalte (Impeccable-critique).
+        <Card>
+          <View style={styles.forecast} accessible accessibilityLabel={`${texts.forecastLabel}: ${texts.forecast(calculation.forecast.year, calculation.forecast.month)}. ${texts.forecastNote}`}>
+            <Text variant="label" tone="inkMuted">
+              {texts.forecastLabel}
+            </Text>
+            <Text variant="title">{texts.forecast(calculation.forecast.year, calculation.forecast.month)}</Text>
+            <Text variant="label" tone="inkMuted">
+              {texts.forecastNote}
+            </Text>
+          </View>
+        </Card>
       )}
     </OnboardingFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: space[3] },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  section: { gap: space[1] },
+  forecast: { gap: space[1] },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], paddingTop: space[1] },
 });

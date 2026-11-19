@@ -379,6 +379,7 @@ function Steppers() {
       <ListGroup>
         <Stepper label="Wasserziel" value={water} valueText={`${(water / 1_000).toLocaleString('de-DE')} l`} min={500} max={5_000} step={250} onChange={setWater} />
         <Stepper label="An der Obergrenze" value={600} valueText="600 min" min={30} max={600} step={10} onChange={noop} hint="„Erhöhen“ ist gesperrt" />
+        <Stepper label="Kalorienbudget pro Tag" value={1_650} valueText="1.650 kcal" min={1_540} max={2_150} step={10} onChange={noop} hint="Gestapelt: Beschriftung über der Bedienung" stacked />
       </ListGroup>
     </Section>
   );

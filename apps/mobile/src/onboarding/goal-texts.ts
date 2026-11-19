@@ -28,7 +28,7 @@ export const goalWeightTexts = {
   maintenanceForced: goalTexts.maintenanceForced,
   pace: goalTexts.pace,
   paceChoice: goalTexts.paceChoice,
-  forecastLabel: 'Zielgewicht voraussichtlich erreicht',
+  forecastLabel: 'Voraussichtlich erreicht',
   forecast: goalTexts.forecast,
   /** Die Prognose ist ausdrücklich eine Schätzung; die Verlangsamung nennt die S3-Leitlinie, Empf. 5.11. */
   forecastNote: `${goalTexts.estimate}. ${goalTexts.slowsDown}`,
@@ -39,12 +39,11 @@ export const resultTexts = {
   intro: 'Das schlägt die App für dich vor. Du kannst jeden Wert anpassen.',
   /** Nur, wenn der Entwurf keine gültige Berechnung mehr ergibt, etwa nach einer Änderung in Schritt 3. */
   incomplete: 'Deine Angaben ergeben gerade keine Berechnung. Prüfe sie bitte in den vorigen Schritten.',
-  budgetSection: goalTexts.sections.budget,
   budget: goalTexts.budget,
   budgetHint: (source: 'berechnet' | 'manuell', min: number, max: number) =>
     `${source === 'berechnet' ? 'Berechnet' : 'Selbst festgelegt'}. Möglich sind ${min.toLocaleString('de-DE')} bis ${kcalText(max)}.`,
-  budgetForced: 'Im Haltemodus entspricht dein Kalorienbudget deinem Gesamtumsatz.',
-  useCalculated: (kcal: number) => `Berechnetes Budget nehmen (${kcalText(kcal)})`,
+  /** Kurz, damit es auf dem iPhone SE einzeilig bleibt (Impeccable-critique). */
+  useCalculated: (kcal: number) => `Zurück zu ${kcalText(kcal)}`,
   showDerivation: 'So entsteht dein Budget',
   hideDerivation: 'Herleitung ausblenden',
   raised: goalTexts.raised,

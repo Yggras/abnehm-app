@@ -58,34 +58,38 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
           <Text>{texts.intro}</Text>
 
           <View style={styles.section}>
-            <SectionTitle>{texts.budgetSection}</SectionTitle>
             <ListGroup>
               {calculation.manualBudgetRange === null ? (
-                <ValueRow title={texts.budget} value={kcalText(calculation.calorieBudget.kcal)} subtitle={texts.budgetForced} />
+                // Warum es sich nicht ändern lässt, sagt der Hinweis zum Haltemodus direkt darunter.
+                <ValueRow title={texts.budget} value={kcalText(calculation.calorieBudget.kcal)} />
               ) : (
                 <Stepper
                   label={texts.budget}
                   value={calculation.calorieBudget.kcal}
                   valueText={kcalText(calculation.calorieBudget.kcal)}
                   {...calculation.manualBudgetRange}
+                  stacked
                   hint={texts.budgetHint(calculation.budgetSource, calculation.manualBudgetRange.min, calculation.manualBudgetRange.max)}
                   // Zurück auf genau den berechneten Wert heißt wieder „berechnet“.
                   onChange={(kcal) => change({ manualBudgetKcal: kcal === calculated?.kcal ? undefined : kcal })}
                 />
               )}
             </ListGroup>
-            {calculation.budgetSource === 'manuell' && calculated !== null ? (
-              <Button label={texts.useCalculated(calculated.kcal)} variant="text" onPress={() => change({ manualBudgetKcal: undefined })} />
-            ) : null}
+            {/* Hinweise direkt unter dem Budget, das sie erklären; danach die Textaktionen (Impeccable-critique). */}
             {calculation.budgetRaisedToLowerBound ? <Notice tone="hint" icon="info" text={texts.raised} /> : null}
             {calculation.hints.includes('maintenance_forced') ? (
               <Notice tone="hint" icon="info" text={texts.maintenanceForced(calculation.safetyTriggers)} />
             ) : null}
-            <Button
-              label={derivationShown ? texts.hideDerivation : texts.showDerivation}
-              variant="text"
-              onPress={() => setDerivationShown((shown) => !shown)}
-            />
+            <View style={styles.actions}>
+              {calculation.budgetSource === 'manuell' && calculated !== null ? (
+                <Button label={texts.useCalculated(calculated.kcal)} variant="text" onPress={() => change({ manualBudgetKcal: undefined })} />
+              ) : null}
+              <Button
+                label={derivationShown ? texts.hideDerivation : texts.showDerivation}
+                variant="text"
+                onPress={() => setDerivationShown((shown) => !shown)}
+              />
+            </View>
             {derivationShown ? (
               <ListGroup>
                 {budgetDerivationRows({
@@ -129,4 +133,6 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
 
 const styles = StyleSheet.create({
   section: { gap: space[3] },
+  /** Textaktionen linksbündig untereinander, wie die übrigen Inhalte. */
+  actions: { alignItems: 'flex-start' },
 });

@@ -709,7 +709,7 @@ describe('Schritt 7 „Ergebnis“', () => {
     expect(screen.getByText('Selbst festgelegt. Möglich sind 1.520 bis 2.120 kcal.')).toBeOnTheScreen();
     expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBe(1_630);
 
-    await user.press(screen.getByRole('button', { name: 'Berechnetes Budget nehmen (1.620 kcal)' }));
+    await user.press(screen.getByRole('button', { name: 'Zurück zu 1.620 kcal' }));
     expect(budgetValue('1.620 kcal')).toBeOnTheScreen();
     expect(screen.getByText('Berechnet. Möglich sind 1.520 bis 2.120 kcal.')).toBeOnTheScreen();
     expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBeUndefined();
@@ -742,7 +742,7 @@ describe('Schritt 7 „Ergebnis“', () => {
   it('im erzwungenen Haltemodus lässt sich das Budget nicht ändern', async () => {
     await openStepSeven({ pregnant: 'Ja' });
 
-    expect(screen.getByLabelText('Kalorienbudget pro Tag: 2.120 kcal, Im Haltemodus entspricht dein Kalorienbudget deinem Gesamtumsatz.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Kalorienbudget pro Tag: 2.120 kcal')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Kalorienbudget pro Tag verringern' })).toBeNull();
     expect(screen.getByText(/^Wegen Schwangerschaft oder Stillzeit rechnet die App/)).toBeOnTheScreen();
