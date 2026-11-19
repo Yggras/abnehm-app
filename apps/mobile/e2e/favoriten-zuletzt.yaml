@@ -1,0 +1,68 @@
+# Gerätelauf Lebensmittelfavoriten und „Zuletzt verwendet“ (Spezifikation 2, Abschnitte 6 und 7; #158): Seed
+# „solo“ öffnet das Protokoll. Das Frühstück hat heute Hafer Flocken und Apfel roh, gestern Bircher-Müsli-Mischung
+# und am 15.09. Knuspermüsli; Lebensmittelfavorit ist das selbst gemachte Bircher-Müsli
+# (`packages/contracts/seeds/solo.ts`). Hauptaufgabe: ein gewohntes Lebensmittel mit zwei Tipps erfassen, einmal
+# aus „Zuletzt verwendet“, einmal aus den Lebensmittelfavoriten. Dazwischen wird Hafer Flocken mit dem Stern
+# markiert. Die Bildschirmfotos sind die Vorlage der Impeccable-Kritik. Einzeln mit
+# `scripts/e2e-run --ablauf favoriten-zuletzt`.
+appId: ${APP_ID}
+name: Gewohntes mit zwei Tipps erfassen
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=solo&ziel=/log
+
+# Hinzufügen-Bildschirm mit beiden Listen ---------------------------------------------------------
+- extendedWaitUntil:
+    visible: "Frühstück hinzufügen"
+    timeout: 30000
+- tapOn: "Frühstück hinzufügen"
+- extendedWaitUntil:
+    visible: "Zuletzt verwendet"
+    timeout: 10000
+- assertVisible: "Hafer Flocken, 60 g, 209 kcal"
+- takeScreenshot: favoriten-zuletzt-1-hinzufuegen
+- scrollUntilVisible:
+    element: "Bircher-Müsli, selbst gemacht, 1 Portion, 375 kcal"
+    direction: DOWN
+- takeScreenshot: favoriten-zuletzt-2-favoriten
+
+# Zwei Tipps aus „Zuletzt verwendet“, dabei mit dem Stern markieren --------------------------------
+- scrollUntilVisible:
+    element: "Hafer Flocken, 60 g, 209 kcal"
+    direction: UP
+- tapOn: "Hafer Flocken, 60 g, 209 kcal"
+- extendedWaitUntil:
+    visible: "Lebensmittelfavorit"
+    timeout: 10000
+- takeScreenshot: favoriten-zuletzt-3-mengenpruefung
+- tapOn: "Lebensmittelfavorit"
+- takeScreenshot: favoriten-zuletzt-4-markiert
+- tapOn: "Hinzufügen"
+- extendedWaitUntil:
+    visible: "209 kcal zum Frühstück hinzugefügt"
+    timeout: 10000
+- takeScreenshot: favoriten-zuletzt-5-protokoll
+
+# Zwei Tipps aus den Lebensmittelfavoriten ---------------------------------------------------------
+- tapOn: "Snacks hinzufügen"
+- extendedWaitUntil:
+    visible: "Lebensmittelfavoriten"
+    timeout: 10000
+- scrollUntilVisible:
+    element: "Hafer Flocken, 60 g, 209 kcal"
+    direction: DOWN
+- takeScreenshot: favoriten-zuletzt-6-snacks
+- tapOn: "Hafer Flocken, 60 g, 209 kcal"
+- extendedWaitUntil:
+    visible: "Lebensmittelfavorit"
+    timeout: 10000
+- tapOn: "Hinzufügen"
+- extendedWaitUntil:
+    visible: "209 kcal zu den Snacks hinzugefügt"
+    timeout: 10000
+- takeScreenshot: favoriten-zuletzt-7-snacks-protokoll

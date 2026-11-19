@@ -3,7 +3,8 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { EntityId, Instant, ServerVersion } from '@abnehm/contracts/base';
+import { createTestClock } from '@abnehm/clock/testing';
+import { EntityId, Instant, ServerVersion, TimeZone } from '@abnehm/contracts/base';
 import { seedIds, seedManifests, SeedManifest } from '@abnehm/contracts/seeds';
 import { currentSyncSchemaVersion, type OutboxOperation } from '@abnehm/contracts/sync';
 
@@ -53,16 +54,20 @@ describe('Seed der lokalen Datenbank', () => {
     const unused = () => {
       throw new Error('Die Suche schreibt nichts');
     };
-    const nutrition = createNutrition({ ...withoutPhotos, database, clock: { read: unused }, writer: { upsert: unused, delete: unused, command: unused }, persistence: { reevaluateDailyGoals: unused }, newId: unused });
+    // Die Uhr des Manifests: „Zuletzt verwendet“ in der Suche reicht 30 Tage zurück (#158).
+    const clock = createTestClock({ instant: Instant.parse(solo.clock.instant), timeZone: TimeZone.parse(solo.clock.timeZone) });
+    const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer: { upsert: unused, delete: unused, command: unused }, persistence: { reevaluateDailyGoals: unused }, newId: unused });
 
     seedLocalDatabase(database, solo, 'philipp-iphone');
 
-    const result = nutrition.foodSearch(catalog.database, 'fruehstueck').search('Apfel roh');
+    // Das Abendessen hat in `solo` keine Einträge, also auch kein „Zuletzt verwendet“.
+    const result = nutrition.foodSearch(catalog.database, 'abendessen').search('Apfel roh');
     expect(result.type === 'treffer' && result.hits.map((hit) => `${hit.mark}: ${hit.snapshot.name}`)).toEqual([
       'eigen: Apfel roh', 'bls: Apfel geschält, roh', 'bls: Granatapfel roh',
     ]);
-    const muesli = nutrition.foodSearch(catalog.database, 'fruehstueck').search('Bircher');
-    expect(muesli.type === 'treffer' && muesli.hits[0]).toMatchObject({ mark: 'eigen', snapshot: { name: 'Bircher-Müsli, selbst gemacht' } });
+    const muesli = nutrition.foodSearch(catalog.database, 'abendessen').search('Bircher');
+    // Das selbst gemachte Bircher-Müsli ist in `solo` Lebensmittelfavorit (#158).
+    expect(muesli.type === 'treffer' && muesli.hits[0]).toMatchObject({ mark: 'favorit', snapshot: { name: 'Bircher-Müsli, selbst gemacht' } });
   });
 
   it('ist idempotent und setzt einen veränderten Stand zurück', async () => {
