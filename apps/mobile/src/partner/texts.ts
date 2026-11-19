@@ -36,6 +36,51 @@ export const partnerTexts = {
   offline: 'Offline',
 } as const;
 
+/**
+ * Texte der Kopplungsabläufe `partner.invite` und `partner.redeem` (Spezifikation 5, Abschnitt 5; #120).
+ * Wörtlich aus der Spezifikation: „gültig bis …“, „Code teilen“, „Ihr seid gekoppelt“, „Mit … koppeln?“,
+ * der Reaktivierungstext, „Koppeln“, die drei Fehlertexte und „Braucht Internet“ mit „Erneut versuchen“.
+ * Die übrigen Sätze sind Designwerte (nicht belegt).
+ */
+export const couplingTexts = {
+  creating: 'Code wird erzeugt …',
+  inviteIntro: 'Gib deinem Partner diesen Code. In der App tippt er auf „Code eingeben“.',
+  /** Zugänglicher Name des Codes: Ziffer für Ziffer statt „vierhundertzweiundachtzig …“. */
+  codeSpoken: (code: string) => `Einladungscode ${code.split('').join(' ')}`,
+  validUntil: (when: string) => `gültig bis ${when}`,
+  share: 'Code teilen',
+  /** Einladungstext im System-Teilen-Menü; der Code steht ohne Leerzeichen, damit er sich so einfügen lässt. */
+  shareMessage: (code: string) => `Lass uns gemeinsam mit Momo starten! Gib in der App unter „Code eingeben“ diesen Code ein: ${code}`,
+  waiting: 'Sobald dein Partner den Code eingibt, seid ihr gekoppelt. Lass diese Ansicht so lange offen oder schau später auf „Wir“.',
+  coupledTitle: 'Ihr seid gekoppelt',
+  coupledBody: (name: string) => `Du und ${name} kümmert euch ab jetzt gemeinsam um Momo.`,
+  /** Weg zum Schlüpfen: `momo` mit `view: "rollenwahl"`. */
+  toHatching: 'Zum Schlüpfen',
+  /** Aus dem Onboarding: zurück zu Schritt 11 statt zum Schlüpfen. */
+  continue: 'Weiter',
+  codeLabel: 'Einladungscode',
+  codeHint: 'Sechs Ziffern',
+  codeInvalid: 'Der Code hat genau sechs Ziffern.',
+  next: 'Weiter',
+  confirmTitle: (name: string) => `Mit ${name} koppeln?`,
+  reactivates: 'Ihr wart schon gekoppelt. Eure Insel und Momo kommen mit euren bisherigen Rollen und Freigaben zurück.',
+  couple: 'Koppeln',
+  otherCode: 'Anderen Code eingeben',
+  /** Derselbe Text für ungültige, abgelaufene, verbrauchte und eigene Codes: Er verrät nicht, ob es den Code gibt. */
+  codeMismatch: 'Dieser Code passt nicht. Prüfe ihn oder bitte um einen neuen.',
+  alreadyCoupled: 'Du bist bereits gekoppelt.',
+  rateLimited: 'Zu viele Versuche. Bitte später erneut.',
+  /** Unerwarteter Ausgang, etwa eine unlesbare Antwort. */
+  failed: 'Das hat gerade nicht geklappt. Versuch es erneut.',
+  offline: 'Braucht Internet',
+  retry: 'Erneut versuchen',
+} as const;
+
+/** Der Code in zwei Dreiergruppen, etwa „482 915“. */
+export function groupedCode(code: string): string {
+  return `${code.slice(0, 3)} ${code.slice(3)}`;
+}
+
 /** Grober Tageszielstand, ohne „X von 3“. */
 export const stageTexts: Readonly<Record<PartnerDailyGoalStage, string>> = {
   noch_nichts: 'noch am Anfang',
