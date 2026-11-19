@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ContractError } from './errors.ts';
 import {
+  ChallengeProposalPayload,
   EncouragementNotificationPayload,
   LevelUpPayload,
   RoleRequestPayload,
@@ -76,7 +77,10 @@ export const encouragementMessages: Readonly<Record<EncouragementKey, string>> =
 };
 
 /**
- * Der gemeinsame Katalog; Schlüssel ist der `messageKey` des Intents, Werte sind seine Payload. Die
+ * Der gemeinsame Katalog; Schlüssel ist der `messageKey` des Intents, Werte sind seine Payload. Der
+ * Push-Zusteller ergänzt zu jedem Katalogschlüssel `‹x›Key` der Payload dessen Namen als `‹x›Name`
+ * (`withCatalogNames` im Spielkatalog). Ein Eintrag, der einen solchen Namen zeigt, nimmt ihn in sein
+ * Werteschema auf (wie `challenge_vorschlag`); strikte Schemas ohne ihn weisen die Werte sonst ab. Die
  * Spieltexte sind Designwerte aus Spezifikation 4, Abschnitt 12 (nicht belegt), die Anfeuern-Texte stehen
  * in Spezifikation 5, Abschnitt 4. Weitere Einträge kommen mit den Tickets der Spezifikationen 4 und 5 hinzu.
  */
@@ -94,6 +98,17 @@ export const notificationTexts = defineNotificationTexts({
   'rollen_anfrage.rollenwahl': notificationText(
     RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),
     ({ senderDisplayName }) => ({ title: `${senderDisplayName} schlägt eure Rollen vor`, body: 'Wenn du zustimmst, schlüpft Momo 🐣' }),
+  ),
+  /**
+   * Spezifikation 4, Abschnitt 12: an den Partner (#210). Den Namen der Vorlage ergänzt der Zusteller aus
+   * dem Spielkatalog (`templateName`); die Payload selbst trägt nur den Schlüssel.
+   */
+  challenge_vorschlag: notificationText(
+    ChallengeProposalPayload.extend({ templateName: z.string().min(1).max(80) }),
+    ({ senderDisplayName, templateName }) => ({
+      title: `${senderDisplayName} schlägt eine Challenge vor`,
+      body: `${templateName} – sieben Tage gemeinsam. Magst du mitmachen?`,
+    }),
   ),
   /** Spezifikation 5, Abschnitt 9: Information an den Partner, keine Anfrage. */
   entkopplung: notificationText(UncouplingNotificationPayload, ({ senderDisplayName }) => ({

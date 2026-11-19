@@ -289,6 +289,11 @@ export function isWeighDay(bausteine: readonly string[]): boolean {
   return bausteine.includes('gewogen');
 }
 
+/** Sporttag: ein Wochenplantag mit dem Baustein Sporteinheit, gleich auf welchem Platz (`CONTEXT.md`). */
+export function isSportDay(bausteine: readonly string[]): boolean {
+  return bausteine.includes('sporteinheit');
+}
+
 /** Plausibilitätsgrenze in g (Designwert aus #38): Ab mehr als 2 kg Abweichung fragt das Formular. */
 export const typoLimitG = 2000;
 

@@ -266,6 +266,55 @@ export function claimEventRewardKey(islandEventStateId: EntityId): string {
   return `ereignis_belohnung:${islandEventStateId}`;
 }
 
+/**
+ * Nutzlast des Fachbefehls `proposeChallenge` (Spezifikation 4, Abschnitt 10; #210): eine Person schlägt
+ * dem Partner eine Challenge-Vorlage vor. Die ID vergibt das Gerät; Person und Kopplung kommen aus der
+ * Sitzung. Offline ist der Vorschlag nur vorgemerkt; ob die Vorlage zu beiden Wochenplänen passt und ob
+ * schon ein Vorschlag offen oder eine Challenge aktiv ist, entscheidet der Server.
+ */
+export const ProposeChallenge = z.strictObject({ challengeId: EntityId, templateKey: CatalogKey });
+export type ProposeChallenge = z.infer<typeof ProposeChallenge>;
+
+/** Fachlicher Schlüssel von `proposeChallenge`: je Challenge genau ein Vorschlag. */
+export function proposeChallengeKey(challengeId: EntityId): string {
+  return `challenge:${challengeId}:vorschlag`;
+}
+
+/**
+ * Kontext der Ablehnung (`ContractError.context`) von `proposeChallenge` und `decideChallengeProposal` mit
+ * `conflict`, wenn die Vorlage für eine Person an keinem der sieben Tage geplant ist: „Passt gerade nicht zu
+ * euren Wochenplänen“ (Spezifikation 4, Abschnitt 10). Ohne diesen Kontext war der Grund der Wächter.
+ */
+export const challengeUnfitContext = { grund: 'passt_nicht' } as const;
+
+/** Annehmen oder ablehnen; beides darf nur der Partner der vorschlagenden Person. */
+export const ChallengeProposalDecision = z.enum(['annehmen', 'ablehnen']);
+export type ChallengeProposalDecision = z.infer<typeof ChallengeProposalDecision>;
+
+/**
+ * Nutzlast des Fachbefehls `decideChallengeProposal`: Der Partner nimmt einen offenen Vorschlag an oder
+ * lehnt ihn neutral ab. Mit der Annahme startet die Challenge beim Server sofort.
+ */
+export const DecideChallengeProposal = z.strictObject({ challengeId: EntityId, decision: ChallengeProposalDecision });
+export type DecideChallengeProposal = z.infer<typeof DecideChallengeProposal>;
+
+/**
+ * Fachlicher Schlüssel von `decideChallengeProposal`: je Vorschlag und Person eine Entscheidung. Eine
+ * zweite, andere Entscheidung derselben Person ist damit ein `operation_conflict`.
+ */
+export function decideChallengeProposalKey(challengeId: EntityId): string {
+  return `challenge:${challengeId}:entscheidung`;
+}
+
+/** Nutzlast des Fachbefehls `withdrawChallengeProposal`: Die vorschlagende Person zieht neutral zurück. */
+export const WithdrawChallengeProposal = z.strictObject({ challengeId: EntityId });
+export type WithdrawChallengeProposal = z.infer<typeof WithdrawChallengeProposal>;
+
+/** Fachlicher Schlüssel von `withdrawChallengeProposal`: je Vorschlag einmal. */
+export function withdrawChallengeProposalKey(challengeId: EntityId): string {
+  return `challenge:${challengeId}:rueckzug`;
+}
+
 /** Entwicklungsform zum Level (Kaulquappe ab Level 1 … Lagunendrache ab Level 43). */
 export const MomoForm = z.enum([
   'kaulquappe',

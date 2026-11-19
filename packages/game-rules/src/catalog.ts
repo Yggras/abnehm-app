@@ -1,4 +1,5 @@
 import type { ContractError } from '@abnehm/contracts/errors';
+import type { BausteinKey } from '@abnehm/contracts/base';
 import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
 
 // Format des versionierten Spielkatalogs (Spezifikation 4, Abschnitt 4). Der Katalog wird mit App und
@@ -111,7 +112,16 @@ export type ProjectTemplate = Readonly<{
   site: string;
 }>;
 
-export type ChallengeTemplate = Readonly<{ key: string; name: string; deko: string }>;
+/**
+ * Was eine Challenge-Vorlage je Person verlangt (Spezifikation 4, Abschnitt 10): eine feste Zahl
+ * erfüllter Tagesziele oder, für einen Baustein, `ceil(Zähler / Nenner × geplante Tage)`.
+ */
+export type ChallengeMeasure =
+  | Readonly<{ type: 'tagesziele'; required: number }>
+  | Readonly<{ type: 'baustein'; baustein: BausteinKey; numerator: number; denominator: number }>;
+
+/** Challenge-Vorlage mit sichtbarem Namen, kurzer Erklärung, Maß und der Challenge-Deko für den Erfolg. */
+export type ChallengeTemplate = Readonly<{ key: string; name: string; description: string; measure: ChallengeMeasure; deko: string }>;
 
 export type GameCatalog = Readonly<{
   /** Steigt mit jeder Änderung; je Version gibt es einen Schnappschuss (`catalog-versions/`). */
@@ -258,6 +268,22 @@ export function indexCatalog(catalog: GameCatalog): CatalogIndex {
       return { type: 'contract_error', error: { code: 'unknown_catalog_key', context: { kind }, retryable: false } };
     },
   };
+}
+
+/**
+ * Werte eines Benachrichtigungstexts samt Namen aus dem Katalog (Spezifikation 4, Abschnitt 12: „Platzhalter
+ * kommen aus der Payload bzw. aus dem Katalog“). Zu jedem Feld `‹x›Key`, dessen Wert ein Katalogschlüssel
+ * ist, kommt dessen sichtbarer Name als `‹x›Name` hinzu, etwa `templateName` zu `templateKey`. Schlüssel
+ * sind über alle Arten eindeutig (`checkCatalog`), deshalb braucht es dafür die Intent-Art nicht.
+ */
+export function withCatalogNames(catalog: GameCatalog, values: unknown): unknown {
+  if (typeof values !== 'object' || values === null || Array.isArray(values)) return values;
+  const names = new Map(keyedEntryKinds.flatMap((kind) => entriesOf(catalog, kind).map((entry) => [entry.key, entry.name] as const)));
+  const added = Object.entries(values).flatMap(([field, value]) => {
+    const name = field.endsWith('Key') && typeof value === 'string' ? names.get(value) : undefined;
+    return name === undefined ? [] : [[`${field.slice(0, -'Key'.length)}Name`, name] as const];
+  });
+  return { ...values, ...Object.fromEntries(added) };
 }
 
 /** Zerlegt `‹gebiet›:‹x›:‹y›`; Koordinaten nur in kanonischer Schreibweise. */

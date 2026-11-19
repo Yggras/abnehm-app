@@ -5,6 +5,7 @@ import { canonicalRows, seedManifests, type SeedManifest } from '@abnehm/contrac
 import { InstallationId } from '@abnehm/contracts/sync';
 
 import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
+import { challengeSyncEntities } from '../../mobile/src/island/challenges.ts';
 import type { SessionStore, StoredSession } from '../../mobile/src/auth/app-auth.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
@@ -200,7 +201,7 @@ describe('Seed-Deep-Link „solo“ gegen das Development-Backend', () => {
     expect(dumpLocalDatabase(device.session.databases.current()!)).toEqual(canonicalDevice(manifest.initial.devices['philipp-iphone']!));
 
     const registry = createSyncRegistry([
-      ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
+      ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
     ]);
     const installationId = InstallationId.parse(manifest.installations[0]!.installationId);
     const transport = createHttpSyncTransport({ baseUrl: testBaseUrl, fetch: device.session.auth.fetch });

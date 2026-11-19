@@ -40,8 +40,13 @@ describe('Randzustände der Tagesziele', () => {
     },
   );
 
-  it('nach_erfuellung_korrigiert: Wasser ist wieder teilweise, die Erfüllung bleibt festgehalten („bereits gutgeschrieben“)', async () => {
+  it('nach_erfuellung_korrigiert: Wasser ist wieder teilweise, die Erfüllung bleibt festgehalten („bereits gutgeschrieben“), keine Gegenbuchung', async () => {
+    // Mit dem echten Wasserziel-Evaluator aus #178; die Korrektur kommt über den Pull und `reevaluateDailyGoals`.
     const world = await seeded(seedManifests.nach_erfuellung_korrigiert);
+    expect(evaluation(world, seedIds.dailyGoal.philippHeute[1])).toMatchObject({ currentState: 'erfuellt', progress: { countedMl: 2_500 } });
+    const bookingsBefore = dumpLocalDatabase(world.phones[iphone]!.database).rows.energy_booking ?? [];
+    expect(bookingsBefore.map((row) => row.type)).toEqual(['daily_goal_credit']);
+
     await runSteps(world);
 
     expect(evaluation(world, seedIds.dailyGoal.philippHeute[1])).toMatchObject({
@@ -50,6 +55,10 @@ describe('Randzustände der Tagesziele', () => {
       progress: { countedMl: 2_000, targetMl: 2_500 },
       completion: { type: 'festgehalten', firstCompletedAt: '2026-10-14T11:30:00.000Z' },
     });
+    const local = dumpLocalDatabase(world.phones[iphone]!.database);
+    expect(local.rows.daily_goal_completion).toHaveLength(1);
+    expect(withoutVersion(local.rows.energy_booking)).toEqual(withoutVersion(bookingsBefore));
+    expect(local.outbox).toEqual([]);
   });
 
   it('tagesende_offen: Das Kalorienbudget zeigt bis zum Tagesende „tagesende“ und ist nie erfüllt', async () => {

@@ -14,10 +14,11 @@ export {
   type PlanDependencies,
 } from './plan';
 export { appGoalSettings, appPlan, useAppPlan, useGoalSettings } from './app-plan';
+export type { BudgetSuggestionCheck, BudgetSuggestionReaders, NoBudgetSuggestionReason } from './budget-suggestion';
 export { followDailyGoalTriggers } from './daily-goal-triggers';
 export { previewGoals, type GoalDraft } from './goal-draft';
 export type { GoalChangeCheck, GoalChangeIntent, GoalSettings, GoalSettingsState, GoalVersionField, GoalVersionView } from './goal-settings';
-export { goalVersionEntity, planCommands, weeklyPlanVersionEntity } from './plan-entities';
+export { budgetSuggestionEntity, goalVersionEntity, planCommands, weeklyPlanVersionEntity } from './plan-entities';
 export { planReaderOf } from './plan-reader';
 export type { DailyGoalEvaluator, PlanToday } from './today-contributions';
 export {

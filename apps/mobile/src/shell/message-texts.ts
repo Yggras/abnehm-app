@@ -163,6 +163,14 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'anfeuern.gesendet': messageText(z.strictObject({ partnerDisplayName: DisplayName }), ({ partnerDisplayName }) => ({
     text: `Anfeuerung an ${partnerDisplayName} gesendet`,
   })),
+  /**
+   * Spezifikation 4, Abschnitt 10: Challenge vorgeschlagen (#210). Der Wortlaut stimmt online wie offline,
+   * denn offline sendet die Outbox den Vorschlag beim nächsten Push; ob er schon beim Server ist, zeigt
+   * `challenge.detail` (Impeccable-Kritik in #210, Designwert, nicht belegt).
+   */
+  'challenge.vorgeschlagen': messageText(z.strictObject({ partnerDisplayName: DisplayName }), ({ partnerDisplayName }) => ({
+    text: `Dein Vorschlag ist auf dem Weg zu ${partnerDisplayName}`,
+  })),
   /** Spezifikation 5, Abschnitt 4: offline vorgemerkt; die Outbox sendet sie beim nächsten Push (#123). */
   'anfeuern.vorgemerkt': messageText(z.strictObject({}), () => ({ text: 'Wird gesendet, sobald du online bist' })),
   /** Spezifikation 1: „Ziele ändern“ hat eine Zielversion ab morgen angelegt (#147). */

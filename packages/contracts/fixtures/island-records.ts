@@ -1,6 +1,8 @@
 import {
   AreaUnlockRecord,
   BlueprintUnlockRecord,
+  ChallengeRecord,
+  ChallengeRequirementRecord,
   CommunityProjectRecord,
   IslandEventRecord,
   IslandEventStateRecord,
@@ -11,7 +13,7 @@ import {
   VisitorReward,
 } from '../src/island-records.ts';
 import { fixtures } from './define.ts';
-import { coupling, island, islandEvent, islandField, now, philipp } from './ids.ts';
+import { anna, challenge, coupling, island, islandEvent, islandField, now, philipp } from './ids.ts';
 
 const owned = { islandId: island, couplingId: coupling };
 
@@ -51,7 +53,54 @@ const hatched = {
   updatedAt: now,
 } as const;
 
+const proposedChallenge = {
+  couplingId: coupling,
+  templateKey: 'gut_getrunken',
+  proposerPersonId: philipp,
+  status: 'vorgeschlagen',
+  proposedAt: '2026-10-14T07:00:00.000Z',
+  proposalExpiresAt: '2026-10-16T07:00:00.000Z',
+  startedAt: null,
+  endsAt: null,
+  endedAt: null,
+  commonStage: null,
+  challengeDecoKey: null,
+  createdAt: '2026-10-14T07:00:00.000Z',
+  updatedAt: '2026-10-14T07:00:00.000Z',
+} as const;
+
+const activeChallenge = {
+  ...proposedChallenge,
+  status: 'aktiv',
+  startedAt: now,
+  endsAt: '2026-10-21T12:00:00.000Z',
+  commonStage: 'gestartet',
+  updatedAt: now,
+} as const;
+
 export const islandRecordFixtures = {
+  ChallengeRecord: fixtures(ChallengeRecord, {
+    valid: {
+      'Philipps Vorschlag': proposedChallenge,
+      'angenommen und aktiv': activeChallenge,
+      'verfallen': { ...proposedChallenge, status: 'verfallen', endedAt: '2026-10-16T07:00:00.000Z' },
+    },
+    invalid: {
+      'aktiv ohne Start': { ...activeChallenge, startedAt: null, endsAt: null },
+      'Vorschlag mit Start': { ...proposedChallenge, startedAt: now, endsAt: '2026-10-21T12:00:00.000Z' },
+      'abgelehnt ohne Ende': { ...proposedChallenge, status: 'abgelehnt' },
+      'mit Partneranteil': { ...activeChallenge, partnerRequired: 6 },
+    },
+  }),
+  ChallengeRequirementRecord: fixtures(ChallengeRequirementRecord, {
+    valid: { 'Annas Anteil': { challengeId: challenge, couplingId: coupling, personId: anna, requiredCount: 6, createdAt: now, updatedAt: now } },
+    invalid: {
+      'ohne Bedarf': { challengeId: challenge, couplingId: coupling, personId: anna, requiredCount: 0, createdAt: now, updatedAt: now },
+      'mit Stand des Partners': {
+        challengeId: challenge, couplingId: coupling, personId: anna, requiredCount: 6, partnerCount: 3, createdAt: now, updatedAt: now,
+      },
+    },
+  }),
   BlueprintUnlockRecord: fixtures(BlueprintUnlockRecord, {
     valid: { 'Start-Bauplan beim Schlüpfen': { ...owned, catalogKey: 'laterne', reason: 'start', unlockedAt: now, createdAt: now } },
     invalid: { 'unbekannter Grund': { ...owned, catalogKey: 'laterne', reason: 'gekauft', unlockedAt: now, createdAt: now } },

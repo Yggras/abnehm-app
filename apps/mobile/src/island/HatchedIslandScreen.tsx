@@ -1,5 +1,6 @@
 import type { EntityId } from '@abnehm/contracts/base';
 import type { MomoAppearance, PlacementTarget } from '@abnehm/contracts/island';
+import type { RouteTarget } from '@abnehm/contracts/routes';
 import { indexCatalog } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { useFocusEffect } from 'expo-router';
@@ -7,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
 import { Button, Sheet, space, Text } from '../design';
-import type { TargetOf } from '../navigation';
+import { openTarget, type TargetOf } from '../navigation';
 import { useMessageHost } from '../shell/MessageHost';
 import { MomoAppearanceProvider, MomoFigure } from '../momo';
 import type { BuildOutcome } from './build-object';
@@ -67,6 +68,12 @@ export type HatchedIslandScreenProps = Readonly<{
   claimEventReward(stateId: EntityId): ClaimOutcome;
   onOpen(view: Exclude<IslandEntry, SheetView>): void;
   /**
+   * Einstieg zu den gemeinsamen Challenges im Momo-Sheet (#210, Nutzerentscheidung vom 19.11.2026):
+   * „Challenge vorschlagen“ oder, bei offenem Vorschlag bzw. laufender Challenge, „Zur Challenge“. Ohne
+   * Kopplung `null`.
+   */
+  challengeEntry?: Readonly<{ label: string; target: RouteTarget }> | null;
+  /**
    * Ansicht aus der Route `momo`; `bauen` öffnet das Bau-Sheet, `lager` das Lager-Sheet, danach meldet
    * `onViewHandled` sie als erledigt.
    */
@@ -106,7 +113,7 @@ function placingTitleOf(placing: Placing): string {
   return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placing(placing.name);
 }
 
-export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, markEventsSeen, claimEventReward, onOpen, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
+export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, markEventsSeen, claimEventReward, onOpen, challengeEntry = null, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
   const [sheet, setSheet] = useState<SheetContent | null>(null);
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [appearing, setAppearing] = useState<string | null>(null);
@@ -262,7 +269,23 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
       />
       <Sheet visible={sheet !== null} onClose={() => setSheet(null)} height={sheet?.type === 'bauen' || sheet?.type === 'lager' || sheet?.type === 'ereignisse' ? 'full' : 'content'}>
         {sheet?.type === 'momo' ? (
-          <MomoSheet appearance={island.appearance} level={island.progress.level} onGrowth={() => setSheet({ type: 'wachstum' })} />
+          <MomoSheet
+            appearance={island.appearance}
+            level={island.progress.level}
+            onGrowth={() => setSheet({ type: 'wachstum' })}
+            challenge={
+              challengeEntry === null
+                ? null
+                : {
+                    label: challengeEntry.label,
+                    // Erst das native Sheet schließen; sonst läge es über dem Challenge-Bildschirm.
+                    open: () => {
+                      setSheet(null);
+                      openTarget(challengeEntry.target);
+                    },
+                  }
+            }
+          />
         ) : sheet?.type === 'bauen' ? (
           <BuildSheet onField={sheet.field !== null} energy={island.energy} options={options.blueprints(sheet.field)} onChoose={choose} />
         ) : sheet?.type === 'lager' ? (
@@ -292,8 +315,21 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
   );
 }
 
-/** Momo-Sheet: Form und Level, dazu die Erklärung zum erneuten Öffnen. Den Schrank ergänzt #206. */
-function MomoSheet({ appearance, level, onGrowth }: { appearance: MomoAppearance; level: number; onGrowth(): void }) {
+/**
+ * Momo-Sheet: Form und Level, dazu die Erklärung zum erneuten Öffnen und der Einstieg zu den gemeinsamen
+ * Challenges (#210). Den Schrank ergänzt #206.
+ */
+function MomoSheet({
+  appearance,
+  level,
+  onGrowth,
+  challenge,
+}: {
+  appearance: MomoAppearance;
+  level: number;
+  onGrowth(): void;
+  challenge: Readonly<{ label: string; open(): void }> | null;
+}) {
   return (
     <View style={styles.sheet}>
       <View style={styles.momo}>
@@ -305,6 +341,7 @@ function MomoSheet({ appearance, level, onGrowth }: { appearance: MomoAppearance
           {appearance.formKey !== null && <Text tone="inkMuted">{momoSheetTexts.formAndLevel(appearance.formKey, level)}</Text>}
         </View>
       </View>
+      {challenge === null ? null : <Button block variant="secondary" label={challenge.label} onPress={challenge.open} />}
       <Button block variant="secondary" label={momoSheetTexts.growth} onPress={onGrowth} />
     </View>
   );

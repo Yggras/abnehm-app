@@ -216,7 +216,8 @@ export function createSync({ database, clock, authorization, pullPageSize = 500 
     } catch (error) {
       const code = error instanceof Rejection || error instanceof CommandRejection ? error.code : integrityViolation(error);
       if (code === null) throw error;
-      return rejected(operation, code, error instanceof CommandRejection && error.canonical !== null ? error.canonical : absent(operation));
+      const command = error instanceof CommandRejection ? error : null;
+      return rejected(operation, code, command?.canonical ?? absent(operation), command?.context);
     }
   }
 
@@ -529,8 +530,8 @@ function forbidden(operation: OutboxOperation): PushResult {
   return { type: 'permanently_rejected', operationId: operation.operationId, error: forbiddenError, canonical: absent(operation) };
 }
 
-function rejected(operation: OutboxOperation, code: ContractErrorCode, canonical: CanonicalState): PushResult {
-  return { type: 'permanently_rejected', operationId: operation.operationId, error: { code, retryable: false }, canonical };
+function rejected(operation: OutboxOperation, code: ContractErrorCode, canonical: CanonicalState, context?: ContractError['context']): PushResult {
+  return { type: 'permanently_rejected', operationId: operation.operationId, error: { code, ...(context !== undefined && { context }), retryable: false }, canonical };
 }
 
 /**

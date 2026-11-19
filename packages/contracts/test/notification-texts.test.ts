@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { notificationFixtures } from '../fixtures/notifications.ts';
-import { sharedAction } from '../fixtures/ids.ts';
+import { challenge, sharedAction } from '../fixtures/ids.ts';
 import { defineNotificationTexts, notificationText, notificationTexts } from '../src/notification-texts.ts';
 import { NotificationIntent } from '../src/notifications.ts';
 
@@ -68,6 +68,16 @@ describe('Textkatalog für Benachrichtigungen', () => {
       body: 'Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.',
     });
     expect(notificationTexts.renderStored('levelaufstieg', { level: 1 })).toMatchObject({ type: 'contract_error', error: { code: 'invalid_payload' } });
+  });
+
+  it('der gemeinsame Katalog: Challenge-Vorschlag mit dem Namen der Vorlage aus dem Spielkatalog (Spezifikation 4, Abschnitt 12; #210)', () => {
+    const payload = { challengeId: challenge, templateKey: 'gut_getrunken', expiresAt: '2026-10-16T12:00:00.000Z', senderDisplayName: 'Anna' };
+    expect(notificationTexts.render('challenge_vorschlag', { ...payload, templateName: 'Gut getrunken' })).toEqual({
+      title: 'Anna schlägt eine Challenge vor',
+      body: 'Gut getrunken – sieben Tage gemeinsam. Magst du mitmachen?',
+    });
+    // Ohne den Namen, den der Zusteller ergänzt, kann der Katalog den Intent nicht darstellen.
+    expect(notificationTexts.renderStored('challenge_vorschlag', payload)).toMatchObject({ type: 'contract_error', error: { code: 'invalid_payload' } });
   });
 
   it('der Eintrag passt zu Schlüssel und Werten des Intents aus den Fixtures', () => {

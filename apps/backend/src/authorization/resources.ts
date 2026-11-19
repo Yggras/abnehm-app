@@ -214,22 +214,31 @@ async function activeCouplingOf(db: DbExecutor, personId: string): Promise<{ cou
 /** Ob die Operation eine Ressource anlegen kann, wenn es die ID noch nicht gibt. */
 const creates = (operation: Operation) => operation === 'upsert' || operation === 'befehl';
 
+/** Regel einer eigenen Ressource; eine engere Auswahl der Operationen steht auch im Typ, damit `DimensionsOf` die verbotene Operation kennt. */
+type OwnedRule<C extends ResourceClass, O extends readonly Operation[] | undefined> = EntityRule<C, 'id'> &
+  (O extends readonly Operation[] ? Readonly<{ onlyOperations: O }> : unknown);
+
 /**
  * Ressource mit einem Eigentümer. Lesen, Ändern und Fachbefehle nur durch ihn; eine unbekannte ID
  * legt die handelnde Person nur an, wo die Ressource vom Client stammt (`creatable`).
  */
-function owned<C extends ResourceClass>(
+function owned<C extends ResourceClass, const O extends readonly Operation[] | undefined = undefined>(
   resourceClass: C,
   table: PgTable,
   columns: { id: IdColumn; owner: IdColumn },
-  { creatable }: { creatable: boolean },
-): EntityRule<C, 'id'> {
-  return byId(resourceClass, table, async (context, id) => {
-    const { personId } = context.actor;
-    const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
-    if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
-    return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
-  });
+  { creatable, onlyOperations }: { creatable: boolean; onlyOperations?: O },
+): OwnedRule<C, O> {
+  return byId(
+    resourceClass,
+    table,
+    async (context, id) => {
+      const { personId } = context.actor;
+      const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
+      if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
+      return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
+    },
+    onlyOperations === undefined ? {} : { onlyOperations },
+  ) as OwnedRule<C, O>;
 }
 
 /** Inhalt einer Kopplung: nur aktive Mitglieder, und nur über Fachbefehle bzw. den Server. */
@@ -495,6 +504,49 @@ const sharedActionDecisionRule = byId(
   { onlyOperations: ['befehl'] },
 );
 
+async function challengeOf(db: DbExecutor, id: EntityId) {
+  return first(db.select({ couplingId: challenge.couplingId, proposer: challenge.proposerPersonId }).from(challenge).where(eq(challenge.id, id)));
+}
+
+/**
+ * Challenge vorschlagen (`proposeChallenge`, #210): nur als aktives Mitglied, in der eigenen Kopplung. Ein
+ * Retry derselben ID durch die vorschlagende Person ist erlaubt, damit der Fachbefehl idempotent bleibt.
+ */
+const challengeProposalRule = byId(
+  'kopplungsinhalte',
+  challenge,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await challengeOf(context.db, id);
+    if (found !== null && found.proposer !== personId) return denied;
+    const membership = await activeCouplingOf(context.db, personId);
+    if (membership === null || (found !== null && found.couplingId !== membership.couplingId)) return denied;
+    return allowed({ exists: found !== null, ownerPersonId: personId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
+/**
+ * Über einen Challenge-Vorschlag entscheiden (#210): nur aktive Mitglieder seiner Kopplung und nur in der
+ * beanspruchten Beteiligung. `partner` (annehmen, ablehnen) ist die Person, die nicht vorgeschlagen hat,
+ * `antragsteller` (zurückziehen) die vorschlagende.
+ */
+const challengeDecisionRule = byId(
+  'kopplungsinhalte',
+  challenge,
+  async (context, id) => {
+    const { personId } = context.actor;
+    const found = await challengeOf(context.db, id);
+    if (found === null) return denied;
+    const membership = await activeMembership(context.db, found.couplingId, personId);
+    if (membership === null) return denied;
+    const participation: SharedActionParticipation = found.proposer === personId ? 'antragsteller' : 'partner';
+    if (context.target.claimedParticipation !== participation) return denied;
+    return allowed({ ownerPersonId: found.proposer, couplingId: found.couplingId, ...membership });
+  },
+  { onlyOperations: ['befehl'] },
+);
+
 /**
  * Auf ein Inselfeld bauen (`buildObject`): nur auf ein eigenes Feld und nur als aktives Mitglied der
  * Kopplung, der die Insel gehört. Felder des Partners und gemeinsame Bereiche ohne Besitzer sind damit
@@ -605,11 +657,14 @@ export const resourceEntities = {
   nutrition_entry: owned('eigene_eintraege', nutritionEntry, ownedBy(nutritionEntry), { creatable: true }),
   photo_draft: owned('eigene_eintraege', photoDraft, ownedBy(photoDraft), { creatable: false }),
   notification_setting: owned('eigene_eintraege', notificationSetting, ownedBy(notificationSetting), { creatable: true }),
-  // Ziel-/Wochenplanversion, Tagesziel und der Budgetvorschlag, den nur `acceptBudgetSuggestion` ändert.
+  // Der Budgetvorschlag (Spezifikation 1, Abschnitte 7 und 11; #150): Die App legt ihn per Upsert an und setzt
+  // ihn auf `abgelehnt` oder `ueberholt`; `angenommen` setzt nur `acceptBudgetSuggestion` (#151). Gelöscht wird
+  // er nie (Nutzerentscheidung, https://github.com/Yggras/abnehm-app/issues/71#issuecomment-7014230206).
+  budget_suggestion: owned('eigene_eintraege', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true, onlyOperations: ['lesen', 'upsert', 'befehl'] }),
+  // Ziel-/Wochenplanversion und Tagesziel.
   goal_version: owned('zielversionen', goalVersion, ownedBy(goalVersion), { creatable: true }),
   weekly_plan_version: owned('zielversionen', weeklyPlanVersion, ownedBy(weeklyPlanVersion), { creatable: true }),
   daily_goal: owned('zielversionen', dailyGoal, ownedBy(dailyGoal), { creatable: true }),
-  budget_suggestion: owned('zielversionen', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true }),
   // Tageszielerfüllung, Energiebuchung, Projekteinzahlung.
   daily_goal_completion: owned('fachbuchungen', dailyGoalCompletion, ownedBy(dailyGoalCompletion), { creatable: true }),
   energy_booking: owned('fachbuchungen', energyBooking, ownedBy(energyBooking), { creatable: true }),
@@ -622,6 +677,8 @@ export const resourceEntities = {
   shared_action_request: sharedActionRequestRule,
   shared_action_decision: sharedActionDecisionRule,
   challenge: coupled('kopplungsinhalte', challenge, inCoupling(challenge)),
+  challenge_proposal: challengeProposalRule,
+  challenge_decision: challengeDecisionRule,
   blueprint_unlock: coupled('kopplungsinhalte', blueprintUnlock, inCoupling(blueprintUnlock)),
   area_unlock: coupled('kopplungsinhalte', areaUnlock, inCoupling(areaUnlock)),
   island_field: coupled('kopplungsinhalte', islandField, inCoupling(islandField)),

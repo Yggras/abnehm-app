@@ -30,6 +30,15 @@ export function fakeGameService(stage: IslandStage, reactions: readonly MomoReac
     place: refuse,
     markEventsSeen: refuse,
     claimEventReward: refuse,
+    observeChallenges(listener) {
+      listener({ type: 'ohne_kopplung' });
+      return () => {};
+    },
+    challengeShares: async () => ({}),
+    proposeChallenge: refuse,
+    acceptChallenge: refuse,
+    declineChallenge: refuse,
+    withdrawChallenge: refuse,
     momoCharacter: {
       subscribe(listener) {
         listener(momoCharacterOf(stage));

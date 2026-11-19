@@ -1,4 +1,5 @@
 import { createSystemClock, type Clock } from '@abnehm/clock';
+import type { PlanReader } from '@abnehm/contracts/ports';
 
 import { createApp } from './app.ts';
 import { createAuthModule, type AuthSettings } from './auth/auth-module.ts';
@@ -13,6 +14,7 @@ import { createUncoupling } from './coupling/uncoupling.ts';
 import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/completions.ts';
 import { energyBookingEntity } from './energy/bookings.ts';
 import { buildObjectCommand } from './island/build-object.ts';
+import { challengeSyncEntities, createChallenges } from './island/challenges.ts';
 import { placeObjectCommand, upgradeObjectCommand } from './island/object-commands.ts';
 import { islandSyncEntities } from './island/island-entities.ts';
 import { generateIslandEvents, islandEventCommands } from './island/island-events.ts';
@@ -34,9 +36,10 @@ import { createPhotoStorage } from './nutrition/photo-storage.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
 import { invalidatingPartnerSummaries } from './partner-projections/invalidations.ts';
 import { createPartnerProjections } from './partner-projections/projections.ts';
-import type { AnyPartnerSummaryProjector } from './partner-projections/projector.ts';
+import type { AnyPartnerSummaryProjector, ReaderPort } from './partner-projections/projector.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
+import { budgetSuggestionEntity } from './plan/budget-suggestion-entity.ts';
 import { createGoalVersionCommand, goalVersionEntity } from './plan/goal-versions.ts';
 import { postgresPlanReader } from './plan/plan-reader.ts';
 import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/weekly-plan-versions.ts';
@@ -67,7 +70,8 @@ export function createBackend({
   photoStorageDirectory,
   mealVisionAnalyzer,
   expoPush,
-  partnerSummaryProjectors = Object.values(trackerPartnerSummaryProjectors({ planReader: postgresPlanReader })),
+  planReader = postgresPlanReader,
+  partnerSummaryProjectors = Object.values(trackerPartnerSummaryProjectors({ planReader })),
 }: {
   database: Database;
   authSettings: AuthSettings;
@@ -88,6 +92,11 @@ export function createBackend({
   clock?: Clock;
   /** Einträge je Pull-Seite; Tests wählen wenige, um mehrere Seiten zu erzwingen. */
   syncPullPageSize?: number;
+  /**
+   * `PlanReader` von Spezifikation 1 in der Transaktion des Aufrufers, standardmäßig über Postgres. Tests
+   * der Challenge-Anteile (#210) geben den Fake mit hinterlegten Wochenplänen.
+   */
+  planReader?: ReaderPort<PlanReader>;
   /**
    * Partner-Projectors der Bereiche, standardmäßig die echten über Postgres. Nur Tests des
    * Projektionsmechanismus (#106) geben eigene, etwa mit dem `PlanReader`-Fake aus #104.
@@ -119,9 +128,18 @@ export function createBackend({
   sync.registerPrePullStep('island_events', generateIslandEvents);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
-  // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.
+  // Gemeinsame Challenges (#210): Vorschlag, Annahme mit den Anteilen aus dem Wochenplan und der Verfall nach
+  // 48 Stunden vor jedem Pull; beim Entkoppeln enden offene Vorschläge neutral.
+  const challenges = createChallenges({ planReader });
+  for (const entity of challengeSyncEntities) sync.registerEntity(entity);
+  for (const command of challenges.commands) sync.registerCommand(command);
+  sync.registerPrePullStep('challenge_proposals', challenges.expireProposals);
+  uncoupling.registerObserver('challenges', challenges.withdrawOnUncoupling);
+  // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle; der Budgetvorschlag als
+  // Upsert innerhalb der eigenen Eigentumsgrenze (#150).
   sync.registerEntity(goalVersionEntity);
   sync.registerEntity(weeklyPlanVersionEntity);
+  sync.registerEntity(budgetSuggestionEntity);
   sync.registerCommand(createGoalVersionCommand);
   sync.registerCommand(createWeeklyPlanVersionCommand);
   sync.registerEntity(dailyGoalCompletionEntity);
