@@ -20,7 +20,7 @@ import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import type { Refresh, Source } from '../shell/followed-source';
 import { updateOwnPerson, type SyncWriter } from '../sync';
 import { createDailyGoalMaterialization } from './daily-goals';
-import { calculatorInput, keptSuggestedBudget, type GoalDraft } from './goal-draft';
+import { calculatorInput, keptSuggestedBudget, previewGoals, type GoalDraft } from './goal-draft';
 import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
@@ -150,7 +150,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
   const dailyGoals = createDailyGoalMaterialization({ clock, writer, persistence });
 
   return {
-    preview: (draft) => calculateGoals(calculatorInput(draft, readClock().today)),
+    preview: (draft) => previewGoals(draft, readClock().today),
 
     async saveInitialPlan(draft) {
       // Eine Ablesung für Messzeitpunkt, Tag und Zeitstempel, damit alles zum selben Moment gehört.
