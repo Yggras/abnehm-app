@@ -338,7 +338,7 @@ describe('Szenario einladung-nach-entkopplung (#120)', () => {
   it('ein anderer Code passt nicht; der geseedete Code ist kein Klartext in Postgres', async () => {
     const world = await seeded(manifest);
     const philipp = world.phones['philipp-iphone']!;
-    const other = seedInviteCodes.annasEinladung === '000000' ? '000001' : '000000';
+    const other = '000000';
 
     expect(await call(world.backend, 'POST', '/v1/invitations/check', philipp.device, { code: other })).toMatchObject({
       status: 422,

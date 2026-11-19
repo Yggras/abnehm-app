@@ -10,14 +10,21 @@ import { couplingTexts } from './texts';
 // Gemeinsame Teile der Kopplungsabläufe `partner.invite` und `partner.redeem` (Spezifikation 5,
 // Abschnitt 5; #120): der gescheiterte Ablauf und die Ansicht „Ihr seid gekoppelt“.
 
-/** Satz mit nächstem Schritt; „Braucht Internet“ und unerwartete Fehler mit „Erneut versuchen“. */
+/**
+ * Satz mit nächstem Schritt; „Braucht Internet“ und unerwartete Fehler mit „Erneut versuchen“. `problem` nur für
+ * Technik und einen nicht passenden Code, Begrenzung und bestehende Kopplung als neutraler Hinweis.
+ */
 export function CouplingProblemNotice({ problem, onRetry }: { problem: CouplingProblem; onRetry: () => void }) {
   const action = problem.retry ? { label: couplingTexts.retry, onPress: onRetry } : undefined;
-  return problem.offline || problem.retry ? (
-    <Notice tone="problem" cause="technik" icon={problem.offline ? 'offline' : undefined} text={problem.text} action={action} />
-  ) : (
-    <Notice tone="hint" text={problem.text} />
-  );
+  switch (problem.cause) {
+    case 'offline':
+      return <Notice tone="problem" cause="technik" icon="offline" text={problem.text} action={action} />;
+    case 'technik':
+    case 'ungueltige_eingabe':
+      return <Notice tone="problem" cause={problem.cause} text={problem.text} action={action} />;
+    case 'hinweis':
+      return <Notice tone="hint" text={problem.text} action={action} />;
+  }
 }
 
 /**

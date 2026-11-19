@@ -113,7 +113,7 @@ describe('partner.invite', () => {
 
   it('„Code teilen“ öffnet das System-Teilen-Menü mit einem deutschen Einladungstext samt Code', async () => {
     await openPhilipp();
-    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
     await renderRouter(appDir, { initialUrl: '/partner/invite' });
 
     await user().press(await screen.findByRole('button', { name: 'Code teilen' }));
