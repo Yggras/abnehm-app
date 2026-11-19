@@ -1,0 +1,79 @@
+# Gerätelauf Challenge-Vorschlag (Spezifikation 4, Abschnitt 10; #210). Die Bildschirmfotos sind die Vorlage
+# der Impeccable-Kritik von `challenge.propose` mit der Hauptaufgabe „eine passende Challenge auswählen und
+# vorschlagen“.
+#
+# Teil 1: Seed `challenge-passt-nicht` als Anna. Ihr Wochenplan ab morgen plant „Ernährung erfasst“ nie, die
+# Karte „Ernährung im Blick“ steht deshalb ohne „Vorschlagen“ und mit Grund da.
+# Teil 2: Seed `gekoppelt` als Philipp. Er schlägt „Gut getrunken“ vor; der Meldungs-Host bestätigt.
+# Teil 3: Seed `challenge-vorgeschlagen` als Anna. Der Bildschirm führt zu Philipps offenem Vorschlag, Anna
+# nimmt an, und mit dem Sync läuft die Challenge. Nicht im Standardumfang von `scripts/e2e-run`; Aufruf mit
+# `--ablauf challenge-vorschlag`.
+appId: ${APP_ID}
+name: Challenge-Vorschlag
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+
+# Teil 1: vier Vorlagen, eine passt nicht ---------------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=challenge-passt-nicht&installation=anna-android&ziel=/challenge/propose
+- extendedWaitUntil:
+    visible: "Gemeinsam dranbleiben"
+    timeout: 30000
+- assertVisible: "Dein Anteil: 17 erfüllte Tagesziele"
+- takeScreenshot: challenge-1-vorlagen-oben
+- scrollUntilVisible:
+    element: "Aktive Woche vorschlagen"
+    direction: DOWN
+    timeout: 10000
+- assertVisible: "Passt gerade nicht zu euren Wochenplänen"
+- takeScreenshot: challenge-2-vorlagen-unten
+
+# Teil 2: Philipp schlägt „Gut getrunken“ vor ----------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&installation=philipp-iphone&ziel=/challenge/propose
+- extendedWaitUntil:
+    visible: "Gut getrunken vorschlagen"
+    timeout: 30000
+- tapOn: "Gut getrunken vorschlagen"
+- extendedWaitUntil:
+    visible: "Vorschlag an Anna gesendet"
+    timeout: 10000
+- takeScreenshot: challenge-3-gesendet
+
+# Teil 3: Anna nimmt Philipps Vorschlag an ---------------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=challenge-vorgeschlagen&installation=anna-android&ziel=/challenge/propose
+- extendedWaitUntil:
+    visible: "Gerade ist schon ein Vorschlag offen."
+    timeout: 30000
+- takeScreenshot: challenge-4-schon-offen
+- tapOn: "Ansehen"
+- extendedWaitUntil:
+    visible: "Philipp schlägt vor"
+    timeout: 10000
+- assertVisible: "Dein Anteil: 6 von 7 Tagen mit „Wasserziel“"
+- takeScreenshot: challenge-5-vorschlag
+- tapOn: "Annehmen"
+- extendedWaitUntil:
+    visible: "Die Challenge läuft."
+    timeout: 30000
+- takeScreenshot: challenge-6-angenommen

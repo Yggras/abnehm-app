@@ -145,15 +145,14 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
       ({ island, challenge }) => {
         const run = ++latest;
         const islandState = wirContributionsOf(island);
-        const proposal = challenge.type === 'vorschlag' ? challenge.proposal : null;
-        const { proposedAt = null, expiresAt = null } = proposal ?? {};
-        if (islandState.type !== 'ready' || challenge.type !== 'vorschlag' || proposal === null || proposedAt === null || expiresAt === null || proposal.accepted) {
+        const proposal = challenge.type === 'vorschlag' ? confirmedOpenProposal(challenge.proposal) : null;
+        if (islandState.type !== 'ready' || challenge.type !== 'vorschlag' || proposal === null) {
           emit(islandState);
           return;
         }
         void ownChallengeShare(planReader, challenge.personId, proposal.templateKey, LocalDate.parse(clock.read().localDate)).then((share) => {
           if (stopped || run !== latest) return;
-          const contribution = challengeContributionOf({ ...proposal, proposedAt, expiresAt }, share);
+          const contribution = challengeContributionOf(proposal, share);
           emit(contribution === null ? islandState : { type: 'ready', data: [contribution, ...islandState.data] });
         });
       },
@@ -220,6 +219,14 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
   };
 }
 
+type ConfirmedProposal = ChallengeProposal & Readonly<{ proposedAt: Instant; expiresAt: Instant }>;
+
+/** Ein vom Server bestätigter Vorschlag, den die Person nicht schon selbst angenommen hat; sonst `null`. */
+function confirmedOpenProposal(proposal: ChallengeProposal): ConfirmedProposal | null {
+  const { proposedAt, expiresAt } = proposal;
+  return proposedAt === null || expiresAt === null || proposal.accepted ? null : { ...proposal, proposedAt, expiresAt };
+}
+
 /**
  * Beitrag `challenge` an „Wir“ für einen vom Server bestätigten Vorschlag (#210): beim Partner ein
  * antwortbedürftiger Vorgang, bei der vorschlagenden Person neutral „Vorschlag gesendet“
@@ -228,10 +235,7 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
  * Vorschlags. Passt die Vorlage inzwischen nicht mehr zum eigenen Plan, entfällt der Beitrag: Annehmen
  * ginge dann nicht, und der Vorschlag verfällt neutral.
  */
-export function challengeContributionOf(
-  proposal: ChallengeProposal & Readonly<{ proposedAt: Instant; expiresAt: Instant }>,
-  share: OwnChallengeShare,
-): WirContribution | null {
+export function challengeContributionOf(proposal: ConfirmedProposal, share: OwnChallengeShare): WirContribution | null {
   if (share.type === 'passt_nicht') return null;
   const { challengeId, templateKey, proposedAt, expiresAt, by } = proposal;
   return {
