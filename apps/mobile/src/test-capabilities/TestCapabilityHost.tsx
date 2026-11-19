@@ -57,7 +57,7 @@ function statusNotice(status: TestStatus) {
         : <Notice tone="problem" cause="technik" text={`Gerätetest ${phaseText[phase]}: ${failed.length} von ${results.length} fehlgeschlagen. ${failed.map((result) => `${result.title}: ${result.error}`).join(' · ')}`} />;
     }
     case 'health_gestellt':
-      return <Notice tone="neutral" text={`Health-Attrappe „${status.scenario}“: ${healthOutcomeText[status.outcome]}`} />;
+      return <Notice tone="neutral" text={`${status.scenario === 'geraet' ? 'Health des Geräts' : `Health-Attrappe „${status.scenario}“`}: ${healthOutcomeText[status.outcome]}`} />;
     case 'mitteilungen_gestellt':
       return <Notice tone="neutral" text={notificationModeText(status.mode)} />;
     case 'momo_galerie':

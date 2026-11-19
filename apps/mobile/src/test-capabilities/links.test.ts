@@ -42,6 +42,7 @@ describe('Link `health` (#183)', () => {
   it('nennt ein Szenario der Health-Attrappe; unbekannte Szenarien und fehlende Parameter sind ungültig', () => {
     expect(parseTestLink('abnehmapp-dev://health?szenario=erstimport')).toEqual({ type: 'health', scenario: 'erstimport' });
     expect(parseTestLink('abnehmapp-e2e://health?szenario=token_verfallen')).toEqual({ type: 'health', scenario: 'token_verfallen' });
+    expect(parseTestLink('abnehmapp-dev://health?szenario=geraet')).toEqual({ type: 'health', scenario: 'geraet' });
     expect(parseTestLink('abnehmapp-dev://health?szenario=zufall')).toEqual({ type: 'ungueltig', capability: 'health' });
     expect(parseTestLink('abnehmapp-dev://health')).toEqual({ type: 'ungueltig', capability: 'health' });
   });
