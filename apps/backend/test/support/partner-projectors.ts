@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, between, eq, gte, isNull, lte } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, LocalDate, type MealKey } from '@abnehm/contracts/base';
 import { EffectivePlan, type PlanReader } from '@abnehm/contracts/ports';
@@ -10,9 +10,9 @@ import { nutritionEntry, sportEntry, waterEntry, weightEntry } from '../../src/d
 import type { PartnerSummaryProjector, ReaderPort } from '../../src/partner-projections/projector.ts';
 import type { ConformanceRecorders } from './partner-projector-conformance.ts';
 
-// Test-Projectors für den Projektionsmechanismus (#106) und das Konformitäts-Testkit. Die echten
-// Projectors liefern Spezifikation 2 (`ernaehrung`) und 3 (`wasser`, `sport`, `gewicht`); diese hier
-// rechnen bewusst schlicht, lesen aber wie dort nur die Tabelle ihres Bereichs und den `PlanReader`.
+// Testgerüst für den Projektionsmechanismus (#106) und das Konformitäts-Testkit: der `PlanReader`-Fake,
+// Schreiber für die Bereichsdaten und ein Test-Projector für Ernährung, bis Spezifikation 2 den echten
+// liefert. Wasser, Sport und Gewicht haben seit #181 ihre echten Projectors.
 
 const now = new Date('2026-10-14T12:00:00.000Z');
 const stamps = { createdAt: now, updatedAt: now, serverVersion: 1n };
@@ -58,8 +58,6 @@ export function testPlans() {
   };
 }
 
-type Ports = { planReader: ReaderPort<PlanReader> };
-
 export function testNutritionProjector(): PartnerSummaryProjector<'ernaehrung'> {
   return {
     area: 'ernaehrung',
@@ -73,68 +71,7 @@ export function testNutritionProjector(): PartnerSummaryProjector<'ernaehrung'> 
   };
 }
 
-export function testWaterProjector({ planReader }: Ports): PartnerSummaryProjector<'wasser'> {
-  return {
-    area: 'wasser',
-    async project(tx, { ownerPersonId, period }) {
-      const plan = await planReader(tx).effectivePlan(ownerPersonId, period.localDate);
-      const rows = await tx
-        .select({ amountMl: waterEntry.amountMl })
-        .from(waterEntry)
-        .where(and(eq(waterEntry.personId, ownerPersonId), eq(waterEntry.localDate, period.localDate), isNull(waterEntry.deletedAt)));
-      const ml = rows.reduce((sum, row) => sum + row.amountMl, 0);
-      if (plan.type === 'leer') return { progressPercent: 0 };
-      return { progressPercent: Math.min(100, Math.round((100 * ml) / plan.goal.waterTargetMl)) };
-    },
-  };
-}
-
-/** Wochenziel aus der Fassung, die am Ende der Woche gilt; ausgeblendete Importe zählen nicht. */
-export function testSportProjector({ planReader }: Ports): PartnerSummaryProjector<'sport'> {
-  return {
-    area: 'sport',
-    async project(tx, { ownerPersonId, period }) {
-      const plan = await planReader(tx).effectivePlan(ownerPersonId, period.to);
-      const rows = await tx
-        .select({ minutes: sportEntry.durationMinutes })
-        .from(sportEntry)
-        .where(
-          and(
-            eq(sportEntry.personId, ownerPersonId),
-            between(sportEntry.localDate, period.from, period.to),
-            isNull(sportEntry.deletedAt),
-            isNull(sportEntry.hiddenAt),
-            isNull(sportEntry.replacedByEntryId),
-          ),
-        );
-      return {
-        countedMinutes: rows.reduce((sum, row) => sum + row.minutes, 0),
-        weeklyTargetMinutes: plan.type === 'leer' ? 150 : plan.goal.weeklySportTargetMinutes,
-      };
-    },
-  };
-}
-
-/** Schlichte Veränderung erstes zu letztem Tagesgewicht im Zeitraum; der echte Trend kommt aus #38. */
-export function testWeightProjector(): PartnerSummaryProjector<'gewicht'> {
-  return {
-    area: 'gewicht',
-    async project(tx, { ownerPersonId, period }) {
-      const rows = await tx
-        .select({ localDate: weightEntry.localDate, weightG: weightEntry.weightG })
-        .from(weightEntry)
-        .where(and(eq(weightEntry.personId, ownerPersonId), gte(weightEntry.localDate, period.from), lte(weightEntry.localDate, period.to),
-          isNull(weightEntry.deletedAt), isNull(weightEntry.hiddenAt)))
-        .orderBy(weightEntry.localDate);
-      const days = new Set(rows.map((row) => row.localDate));
-      if (days.size < 3) return { changeKg: null, direction: 'noch_nicht_verfuegbar' };
-      const changeKg = Math.round((rows.at(-1)!.weightG - rows[0]!.weightG) / 100) / 10 || 0;
-      return { changeKg, direction: changeKg < 0 ? 'sinkend' : changeKg > 0 ? 'steigend' : 'stabil' };
-    },
-  };
-}
-
-/** Schreibt die Bereichsdaten der Test-Projectors direkt in Postgres. */
+/** Schreibt die Bereichsdaten für das Konformitäts-Testkit direkt in Postgres. */
 export const testRecorders: ConformanceRecorders = {
   ernaehrung: {
     async meal(tx, ownerPersonId, localDate, meal: MealKey, { deleted = false } = {}) {

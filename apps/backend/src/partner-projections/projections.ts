@@ -98,8 +98,8 @@ export function createPartnerProjections({ clock }: { clock: Clock }): PartnerPr
 }
 
 /**
- * Hält genau eine nicht gelöschte Zusammenfassung des Bereichs: die des aktuellen Zeitraums. Ältere
- * Zeiträume werden zur Löschmarkierung. Gerechnet wird nur, wenn die Zusammenfassung fehlt,
+ * Hält höchstens eine nicht gelöschte Zusammenfassung des Bereichs: die des aktuellen Zeitraums, sofern der
+ * Projector etwas zu zeigen hat. Ältere Zeiträume werden zur Löschmarkierung. Gerechnet wird nur, wenn die Zusammenfassung fehlt,
  * invalidiert ist oder ihr `dataAsOf` bestätigt werden muss; geschrieben nur bei neuem Stand.
  */
 async function materializeSummary(tx: DbExecutor, registered: AnyPartnerSummaryProjector, recipient: Recipient, invalidated: boolean) {
@@ -114,7 +114,12 @@ async function materializeSummary(tx: DbExecutor, registered: AnyPartnerSummaryP
 
   const fresh = current !== undefined && !needsRefresh(current.dataAsOf, recipient.at);
   if (fresh && !invalidated) return;
-  const content = await projector.project(tx, { ownerPersonId: EntityId.parse(recipient.ownerPersonId), period });
+  const content = await projector.project(tx, { ownerPersonId: EntityId.parse(recipient.ownerPersonId), period, today: recipient.today });
+  // „Noch nichts zu zeigen“: Für diesen Zeitraum gibt es keine Zusammenfassung, auch keine frühere Fassung.
+  if (content === null) {
+    if (current !== undefined) await tombstoneProjection(tx, partnerSummary, current, recipient.at);
+    return;
+  }
   if (fresh && canonicalJson(current.content) === canonicalJson(content)) return;
 
   const serverVersion = await nextServerVersion(tx);

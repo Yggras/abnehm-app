@@ -10,7 +10,6 @@ import { createTestBackend, type TestBackend } from './support/app.ts';
 import { call, defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession } from './support/authorization.ts';
 import { coupledWorld } from './support/coupled-world.ts';
-import { testSportProjector, testWaterProjector } from './support/partner-projectors.ts';
 import { insertDailyGoals } from './support/daily-goals.ts';
 import { goalVersionOp, planCommandScenarios, referenceGoal, standardDays, weeklyPlanOp } from './support/plan.ts';
 import { installationB, pullAll, push } from './support/sync.ts';
@@ -351,10 +350,8 @@ describe('PlanReader über Postgres', () => {
 
 describe('Partnerdaten', () => {
   it('enthalten aus Zielversion und Personenfeldern nur das Sportwochenziel, keine Sicherheitsangaben', async () => {
+    // Das Backend meldet die echten Projectors für Wasser, Sport und Gewicht über den Postgres-`PlanReader` an (#181).
     const world = await coupledWorld();
-    for (const projector of [testWaterProjector({ planReader: postgresPlanReader }), testSportProjector({ planReader: postgresPlanReader })]) {
-      world.backend.partnerProjections.registerProjector(projector as never);
-    }
     const anna = world.anna;
     const pregnant = { ...referenceGoal, calorieBudgetMilliKcal: 2_120_000, deficitMilliKcal: null, maintenanceReason: 'sicherheits_check', pace: null,
       waterTargetMl: 2_250, weeklySportTargetMinutes: 210, goalWeightG: 77_700 };
@@ -370,7 +367,7 @@ describe('Partnerdaten', () => {
     // Philipps eigene Person gehört ihm; alles Übrige im Pull betrifft Anna.
     const { changes } = reply.body as { changes: { entityType: string; entityId: string }[] };
     const aboutAnna = changes.filter((change) => !(change.entityType === 'person' && change.entityId === world.philipp.personId));
-    expect(aboutAnna.map((change) => change.entityType)).toEqual(['partner_summary', 'partner_summary', 'partner_daily_goal_status']);
+    expect(aboutAnna.map((change) => change.entityType)).toEqual(['partner_summary', 'partner_summary', 'partner_summary', 'partner_daily_goal_status']);
     const serialized = JSON.stringify(aboutAnna);
 
     expect(serialized).toContain('"weeklyTargetMinutes":210');

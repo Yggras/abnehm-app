@@ -23,12 +23,13 @@ import {
 import { coupling } from '../src/db/schema/index.ts';
 import { invalidatePartnerSummaries } from '../src/partner-projections/invalidations.ts';
 import { revokeCoupling } from '../src/partner-projections/revocation.ts';
+import { trackerPartnerSummaryProjectors } from '../src/trackers/partner-summaries.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import type { Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
 import { coupleByInvitation, worldStart, worldToday } from './support/coupled-world.ts';
 import { completeOp, insertDailyGoals } from './support/daily-goals.ts';
-import { testPlans, testRecorders, testWaterProjector } from './support/partner-projectors.ts';
+import { testPlans, testRecorders } from './support/partner-projectors.ts';
 import { push } from './support/sync.ts';
 
 // Tracer Bullet für #106 auf echten Geräten: Engine, Outbox und Partnercache der App auf echtem SQLite
@@ -80,9 +81,9 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
 
 async function setup() {
   const clock = createTestClock(worldStart);
-  const backend = await createTestBackend({ clock });
   const plans = testPlans();
-  backend.partnerProjections.registerProjector(testWaterProjector(plans));
+  const water = trackerPartnerSummaryProjectors({ planReader: plans.planReader }).filter((projector) => projector.area === 'wasser');
+  const backend = await createTestBackend({ clock, partnerSummaryProjectors: water });
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   plans.set(anna.personId, { validFrom: '2026-10-01', waterTargetMl: 1500, weeklySportTargetMinutes: 150 });

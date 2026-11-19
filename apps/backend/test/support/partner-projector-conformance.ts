@@ -205,9 +205,11 @@ export function partnerProjectorConformanceCases<A extends AreaKey>(area: A, har
 
       const content = await backend.database.db.transaction(async (tx) => {
         await conformance.arrange(harness.record, tx, owner.personId);
-        return projector.project(tx, { ownerPersonId: EntityId.parse(owner.personId), period });
+        return projector.project(tx, { ownerPersonId: EntityId.parse(owner.personId), period, today: conformanceToday });
       });
 
+      // Jeder Fall hat eine gültige Zielversion, also etwas zu zeigen.
+      if (content === null) throw new Error(`${area}: Projector liefert trotz Zielversion „noch nichts zu zeigen“`);
       // Dieselbe Prüfung wie vor jeder Partnerantwort: genau die Felder des Vertrags, nichts weiter.
       const envelope = { type: area, id: randomUUID(), generation: 1, ownerPersonId: owner.personId, recipientPersonId: randomUUID(),
         couplingId: randomUUID(), period, dataAsOf: '2026-10-14T12:00:00.000Z', serverVersion: '1', content };

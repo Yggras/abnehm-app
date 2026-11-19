@@ -29,14 +29,18 @@ import { ownFoodEntity } from './nutrition/own-food-entity.ts';
 import { createPhotoDrafts } from './nutrition/photo-drafts.ts';
 import { createPhotoStorage } from './nutrition/photo-storage.ts';
 import { partnerProjectionEntities } from './partner-projections/entities.ts';
+import { invalidatingPartnerSummaries } from './partner-projections/invalidations.ts';
 import { createPartnerProjections } from './partner-projections/projections.ts';
+import type { AnyPartnerSummaryProjector } from './partner-projections/projector.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
 import { createGoalVersionCommand, goalVersionEntity } from './plan/goal-versions.ts';
+import { postgresPlanReader } from './plan/plan-reader.ts';
 import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/weekly-plan-versions.ts';
 import { createSecurityLog } from './security-log/security-log.ts';
 import { personEntity } from './sync/person-entity.ts';
 import { createSync } from './sync/sync.ts';
+import { trackerPartnerSummaryProjectors } from './trackers/partner-summaries.ts';
 import { sportEntryEntity } from './trackers/sport-entity.ts';
 import { waterEntryEntity } from './trackers/water-entity.ts';
 import { weightEntryEntity } from './trackers/weight-entity.ts';
@@ -59,6 +63,7 @@ export function createBackend({
   syncPullPageSize,
   photoStorageDirectory,
   mealVisionAnalyzer,
+  partnerSummaryProjectors = trackerPartnerSummaryProjectors({ planReader: postgresPlanReader }),
 }: {
   database: Database;
   authSettings: AuthSettings;
@@ -74,6 +79,11 @@ export function createBackend({
   clock?: Clock;
   /** Einträge je Pull-Seite; Tests wählen wenige, um mehrere Seiten zu erzwingen. */
   syncPullPageSize?: number;
+  /**
+   * Partner-Projectors der Bereiche, standardmäßig die echten über Postgres. Nur Tests des
+   * Projektionsmechanismus (#106) geben eigene, etwa mit dem `PlanReader`-Fake aus #104.
+   */
+  partnerSummaryProjectors?: readonly AnyPartnerSummaryProjector[];
 }) {
   const securityLog = createSecurityLog({ database, clock });
   const auth = createAuthModule({ database, clock, securityLog, passwordBlocklist: bundledPasswordBlocklist(), settings: authSettings });
@@ -114,12 +124,14 @@ export function createBackend({
   const mealPhotos = createMealPhotos({ database, storage: photoStorage, entries: nutritionEntries });
   sync.registerEntity(mealPhotos.entity);
   sync.registerCommand(mealPhotos.confirmCommand);
-  // Wasser, Sport und Gewicht (Spezifikation 3).
-  sync.registerEntity(waterEntryEntity);
-  sync.registerEntity(weightEntryEntity);
-  sync.registerEntity(sportEntryEntity);
-  // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an.
+  // Wasser, Sport und Gewicht (Spezifikation 3); jede Push-Annahme invalidiert die Zusammenfassung ihres Bereichs (#181).
+  sync.registerEntity(invalidatingPartnerSummaries('wasser', waterEntryEntity));
+  sync.registerEntity(invalidatingPartnerSummaries('gewicht', weightEntryEntity));
+  sync.registerEntity(invalidatingPartnerSummaries('sport', sportEntryEntity));
+  // Partner-Projektionen: Die Bereiche melden ihre Projectors an `partnerProjections` an, Spezifikation 3
+  // die für Wasser, Sport und Gewicht (#181).
   const partnerProjections = createPartnerProjections({ clock });
+  for (const projector of partnerSummaryProjectors) partnerProjections.registerProjector(projector);
   for (const entity of [...partnerProjectionEntities, ...sharingSyncEntities({ clock, securityLog })]) sync.registerEntity(entity);
   sync.registerPrePullStep('partner_projections', partnerProjections.prePullStep);
   // Partner & Benachrichtigungen (Spezifikation 5): die Benachrichtigungseinstellung je Person (#132) und Anfeuern (#123).

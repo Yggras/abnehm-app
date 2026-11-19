@@ -328,10 +328,15 @@ describe('Einladung annehmen', () => {
       entityType: 'partner_daily_goal_status',
       data: expect.objectContaining({ couplingId, recipientPersonId, stage: 'noch_nichts' }),
     });
+    // Seit #181 auch die Gewichts-Zusammenfassung; Wasser und Sport haben ohne Zielversion noch nichts zu zeigen.
+    const partnerWeightFor = (recipientPersonId: string) => ({
+      entityType: 'partner_summary',
+      data: expect.objectContaining({ type: 'gewicht', couplingId, recipientPersonId, content: { changeKg: null, direction: 'noch_nicht_verfuegbar' } }),
+    });
     for (const own of [philipp, anna]) {
       const rows = await coupledRows(backend, own.device);
-      expect(rows).toEqual(expect.arrayContaining([...shared, ...sharingsOf(own.personId), partnerStatusFor(own.personId)]));
-      expect(rows).toHaveLength(shared.length + 6);
+      expect(rows).toEqual(expect.arrayContaining([...shared, ...sharingsOf(own.personId), partnerStatusFor(own.personId), partnerWeightFor(own.personId)]));
+      expect(rows).toHaveLength(shared.length + 7);
     }
     expect((await securityLogEntries(backend)).filter((entry) => entry.eventType === 'kopplung')).toEqual([
       { eventType: 'kopplung', accountId: anna.accountId, details: { accountId: anna.accountId, couplingId, reactivated: false } },

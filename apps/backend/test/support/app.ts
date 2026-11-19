@@ -13,6 +13,7 @@ import { createServerClock, type ServerClock } from '../../dev/server-clock.ts';
 import { createBackend, serverSystemClock, type Backend } from '../../src/backend.ts';
 import type { Database } from '../../src/database.ts';
 import type { MealVisionAnalyzer } from '../../src/nutrition/meal-vision.ts';
+import type { AnyPartnerSummaryProjector } from '../../src/partner-projections/projector.ts';
 import { migratedTemplate } from './postgres-server.ts';
 import { createTestDatabase } from './postgres.ts';
 
@@ -32,7 +33,7 @@ export type TestBackend = Backend & {
  * Ohne `clock` gilt die Systemuhr; Better Auth rechnet Sitzungsablauf ohnehin mit `Date`, deshalb
  * steuern Tests die Zeit dort mit `vi.setSystemTime`. Die Fotoanalyse läuft über den Fake.
  */
-export function createTestApp(database: Database, { clock, syncPullPageSize, mealVisionAnalyzer }: TestAppOptions = {}): TestBackend {
+export function createTestApp(database: Database, { clock, syncPullPageSize, mealVisionAnalyzer, partnerSummaryProjectors }: TestAppOptions = {}): TestBackend {
   const authSettings = { secret: 'test-secret-mit-mindestens-zweiunddreissig-zeichen', baseUrl: testBaseUrl, trustedProxies: [] };
   const invitationSettings = { codeSecret: 'test-einladungs-secret-mit-mindestens-32-zeichen' };
   const photoStorageDirectory = join(tmpdir(), `abnehm-fotos-${randomUUID()}`);
@@ -45,11 +46,18 @@ export function createTestApp(database: Database, { clock, syncPullPageSize, mea
     syncPullPageSize,
     photoStorageDirectory,
     mealVisionAnalyzer: mealVisionAnalyzer ?? fakeMealVision.analyzer,
+    ...(partnerSummaryProjectors !== undefined && { partnerSummaryProjectors }),
   });
   return { ...backend, database, photoStorageDirectory, fakeMealVision };
 }
 
-export type TestAppOptions = { clock?: Clock; syncPullPageSize?: number; mealVisionAnalyzer?: MealVisionAnalyzer };
+export type TestAppOptions = {
+  clock?: Clock;
+  syncPullPageSize?: number;
+  mealVisionAnalyzer?: MealVisionAnalyzer;
+  /** Statt der echten Partner-Projectors; nur für Tests des Projektionsmechanismus (#106). */
+  partnerSummaryProjectors?: readonly AnyPartnerSummaryProjector[];
+};
 
 /** Frisch migrierte, eigene Datenbank samt App; wird nach dem Test verworfen, ebenso die Fotoentwürfe. */
 export async function createTestBackend(options: TestAppOptions = {}): Promise<TestBackend> {
