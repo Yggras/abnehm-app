@@ -48,24 +48,27 @@ export type AreaUnlocks = Readonly<{
  * gültig bleiben“).
  */
 export async function areaUnlockChanges(tx: DbExecutor, { islandId, couplingId, level, at, catalog }: AreaUnlocks): Promise<CanonicalChange[]> {
-  const levels = Array.from({ length: Math.max(level - 1, 0) }, (_, index) => index + 2).filter((candidate) => unlocksAt(catalog, candidate).area !== null);
-  if (levels.length === 0) return [];
-  const occasionOf = (candidate: number) => areaOccasionKey(islandId, unlocksAt(catalog, candidate).area!.key);
+  // Je Level mit Gebiet das Paar aus Level und Anlassschlüssel.
+  const candidates = Array.from({ length: Math.max(level - 1, 0) }, (_, index) => index + 2).flatMap((candidate) => {
+    const { area } = unlocksAt(catalog, candidate);
+    return area === null ? [] : [{ level: candidate, occasionKey: areaOccasionKey(islandId, area.key) }];
+  });
+  if (candidates.length === 0) return [];
   const known = new Set(
     (
       await tx
         .select({ occasionKey: islandEvent.occasionKey })
         .from(islandEvent)
-        .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.occasionKey, levels.map(occasionOf))))
+        .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.occasionKey, candidates.map((candidate) => candidate.occasionKey))))
     ).map((row) => row.occasionKey),
   );
-  const missing = levels.filter((candidate) => !known.has(occasionOf(candidate)));
+  const missing = candidates.filter((candidate) => !known.has(candidate.occasionKey));
   if (missing.length === 0) return [];
 
   const fields = await tx.select({ key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId }).from(islandField).where(eq(islandField.islandId, islandId));
   const sides = sidesOf(catalog, fields);
   if (sides === null) throw new Error('Gebietsfreischaltung ohne materialisierte Grundinsel');
-  const unlocks = missing.flatMap((candidate) => areaUnlockAt(catalog, { level: candidate, sides }) ?? []);
+  const unlocks = missing.flatMap((candidate) => areaUnlockAt(catalog, { level: candidate.level, sides }) ?? []);
   if (unlocks.length === 0) return [];
 
   // Nach Person geordnet, damit Ereignisstände und Intents in fester Reihenfolge entstehen (wie in den Seeds).
