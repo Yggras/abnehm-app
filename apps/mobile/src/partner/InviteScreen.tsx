@@ -40,7 +40,9 @@ export function InviteScreen({ target }: RouteScreenProps<'partner.invite'>) {
   return (
     <ScreenFrame title={titleOf(target)} presentation="modal">
       {partnerDisplayName !== null ? (
-        <CoupledView partnerDisplayName={partnerDisplayName} />
+        // Ob die Annahme reaktiviert hat, erfährt nur die annehmende Person; hier gilt der Weg zum Schlüpfen, und
+        // der Tab „Momo“ zeigt nach einer Reaktivierung ohnehin die Insel.
+        <CoupledView partnerDisplayName={partnerDisplayName} reactivated={false} />
       ) : state.type === 'ok' ? (
         <InviteCode invitation={state.value} />
       ) : problem !== null ? (

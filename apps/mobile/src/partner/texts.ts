@@ -44,7 +44,8 @@ export const partnerTexts = {
  */
 export const couplingTexts = {
   creating: 'Code wird erzeugt …',
-  inviteIntro: 'Gib deinem Partner diesen Code. In der App tippt er auf „Code eingeben“.',
+  /** Ohne Pronomen: Im Paar lädt mal die eine, mal die andere Person ein (Impeccable-Kritik zu #120). */
+  inviteIntro: 'Gib deinem Partner diesen Code. Er wird in der App unter „Code eingeben“ eingetragen.',
   /** Zugänglicher Name des Codes: Ziffer für Ziffer statt „vierhundertzweiundachtzig …“. */
   codeSpoken: (code: string) => `Einladungscode ${code.split('').join(' ')}`,
   validUntil: (when: string) => `gültig bis ${when}`,
@@ -56,6 +57,13 @@ export const couplingTexts = {
   coupledBody: (name: string) => `Du und ${name} kümmert euch ab jetzt gemeinsam um Momo.`,
   /** Weg zum Schlüpfen: `momo` mit `view: "rollenwahl"`. */
   toHatching: 'Zum Schlüpfen',
+  /**
+   * Nach einer Reaktivierung ist Momo längst geschlüpft; Insel, Rollen und Freigaben sind zurück (Spezifikation 5,
+   * Abschnitt 5). Statt „Zum Schlüpfen“ führt der Weg dann zur Insel (Impeccable-Kritik zu #120).
+   */
+  reactivatedTitle: 'Ihr seid wieder gekoppelt',
+  reactivatedBody: (name: string) => `Du und ${name}: Eure Insel und Momo sind wieder da.`,
+  toIsland: 'Zu eurer Insel',
   /** Aus dem Onboarding: zurück zu Schritt 11 statt zum Schlüpfen. */
   continue: 'Weiter',
   codeLabel: 'Einladungscode',

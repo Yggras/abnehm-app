@@ -1,5 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
+import type { RouteTarget } from '@abnehm/contracts/routes';
+
 import { Button, Card, Notice, size, space, Text } from '../design';
 import { MomoFigure } from '../momo';
 import { closeRoute, openTarget } from '../navigation';
@@ -28,33 +30,38 @@ export function CouplingProblemNotice({ problem, onRetry }: { problem: CouplingP
 }
 
 /**
- * „Ihr seid gekoppelt“ mit dem Weg zum Schlüpfen (`momo` mit `view: "rollenwahl"`). Aus dem Onboarding
- * aufgerufen, steht dort die Sitzungs-Weiche auf `onboarding`, und „Weiter“ kehrt zu Schritt 11 zurück.
+ * „Ihr seid gekoppelt“ mit dem Weg zum Schlüpfen (`momo` mit `view: "rollenwahl"`). Nach einer Reaktivierung ist
+ * Momo schon geschlüpft; dann heißt es „Ihr seid wieder gekoppelt“, und der Weg führt zur Insel. Aus dem Onboarding
+ * aufgerufen, steht die Sitzungs-Weiche auf `onboarding`, und „Weiter“ kehrt zu Schritt 11 zurück.
  */
-export function CoupledView({ partnerDisplayName }: { partnerDisplayName: string }) {
+export function CoupledView({ partnerDisplayName, reactivated }: { partnerDisplayName: string; reactivated: boolean }) {
   const fromOnboarding = useSessionGate() === 'onboarding';
   return (
-    <Card variant="empty">
+    <Card>
       <View testID="kopplung-gekoppelt" style={styles.coupled}>
         <MomoFigure mood="freut_sich" size={size.momoToday} />
         <Text variant="title" accessibilityRole="header" style={styles.center}>
-          {couplingTexts.coupledTitle}
+          {reactivated ? couplingTexts.reactivatedTitle : couplingTexts.coupledTitle}
         </Text>
-        <Text style={styles.center}>{couplingTexts.coupledBody(partnerDisplayName)}</Text>
+        <Text style={styles.center}>
+          {reactivated ? couplingTexts.reactivatedBody(partnerDisplayName) : couplingTexts.coupledBody(partnerDisplayName)}
+        </Text>
         {fromOnboarding ? (
           <Button block label={couplingTexts.continue} onPress={closeRoute} />
+        ) : reactivated ? (
+          <Button block label={couplingTexts.toIsland} onPress={() => leaveFor({ type: 'momo' })} />
         ) : (
-          <Button block label={couplingTexts.toHatching} onPress={toHatching} />
+          <Button block label={couplingTexts.toHatching} onPress={() => leaveFor({ type: 'momo', view: 'rollenwahl' })} />
         )}
       </View>
     </Card>
   );
 }
 
-/** Schließt den modalen Ablauf und öffnet die Rollenwahl im Tab „Momo“. */
-function toHatching() {
+/** Schließt den modalen Ablauf und öffnet das Ziel im Tab „Momo“. */
+function leaveFor(target: Extract<RouteTarget, { type: 'momo' }>) {
   closeRoute();
-  openTarget({ type: 'momo', view: 'rollenwahl' });
+  openTarget(target);
 }
 
 const styles = StyleSheet.create({

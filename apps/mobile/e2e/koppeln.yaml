@@ -5,8 +5,8 @@
 # 2. Code eines geseedeten zweiten Kontos eingeben → Reaktivierungsvorschau → gekoppelt: Seed
 #    `einladung-nach-entkopplung` (`packages/contracts/seeds/einladung.ts`). Anna hat entkoppelt und danach
 #    den Code 271828 erzeugt. Philipp gibt ihn unter „Code eingeben“ ein, sieht „Mit Anna koppeln?“ samt
-#    Reaktivierungstext und koppelt. Danach führt „Zum Schlüpfen“ in den Tab „Momo“; dort ist die Insel
-#    wieder da, weil die Reaktivierung Rollen und Insel zurückbringt.
+#    Reaktivierungstext und koppelt. „Ihr seid wieder gekoppelt“ führt mit „Zu eurer Insel“ in den Tab „Momo“;
+#    dort ist die Insel wieder da, weil die Reaktivierung Rollen und Insel zurückbringt.
 #
 # Fehlercodes, Offline und die Rückkehr zum Aufrufer belegen die Komponententests
 # (`src/partner/Coupling.test.tsx`). Die Bildschirmfotos sind die Vorlage der Impeccable-Kritik. Einzeln mit
@@ -61,11 +61,11 @@ name: Koppeln per Code
 - takeScreenshot: koppeln-4-reaktivierung
 - tapOn: "Koppeln"
 - extendedWaitUntil:
-    visible: "Ihr seid gekoppelt"
+    visible: "Ihr seid wieder gekoppelt"
     timeout: 15000
-- assertVisible: "Du und Anna kümmert euch ab jetzt gemeinsam um Momo."
+- assertVisible: "Du und Anna: Eure Insel und Momo sind wieder da."
 - takeScreenshot: koppeln-5-gekoppelt
-- tapOn: "Zum Schlüpfen"
+- tapOn: "Zu eurer Insel"
 # Die Reaktivierung bringt die geschlüpfte Insel zurück; auf diesem frisch installierten Gerät erklärt beim
 # ersten Öffnen „So wächst Momo“ das Wachstum (wie in `schluepfen.yaml`).
 - extendedWaitUntil:

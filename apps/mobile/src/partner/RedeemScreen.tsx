@@ -30,7 +30,7 @@ export function RedeemScreen({ target }: RouteScreenProps<'partner.redeem'>) {
 
   let content;
   if (check.state.type === 'ok' && accept.state.type === 'ok') {
-    content = <CoupledView partnerDisplayName={check.state.value.inviterDisplayName} />;
+    content = <CoupledView partnerDisplayName={check.state.value.inviterDisplayName} reactivated={accept.state.value.reactivated} />;
   } else if (check.state.type === 'ok') {
     const checkedCode = code;
     content = (

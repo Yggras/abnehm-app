@@ -269,15 +269,24 @@ describe('partner.redeem', () => {
     expect(screen).toHaveSearchParams({ view: 'rollenwahl' });
   });
 
-  it('zeigt bei reactivates die Reaktivierungsvorschau', async () => {
+  it('zeigt bei reactivates die Reaktivierungsvorschau und danach den Weg zur Insel statt zum Schlüpfen', async () => {
     const { flows } = await openPhilipp();
     flows.respond('checkCode', { type: 'ok', value: { inviterDisplayName: 'Anna', reactivates: true } });
+    flows.respond('acceptCode', { type: 'ok', value: { ...flows.defaults.acceptCode, reactivated: true } });
     await renderRouter(appDir, { initialUrl: '/partner/redeem' });
 
     await enter('482915');
 
     expect(await screen.findByRole('header', { name: 'Mit Anna koppeln?' })).toBeOnTheScreen();
     expect(screen.getByText('Ihr wart schon gekoppelt. Eure Insel und Momo kommen mit euren bisherigen Rollen und Freigaben zurück.')).toBeOnTheScreen();
+    await user().press(screen.getByRole('button', { name: 'Koppeln' }));
+
+    expect(await screen.findByRole('header', { name: 'Ihr seid wieder gekoppelt' })).toBeOnTheScreen();
+    expect(screen.getByText('Du und Anna: Eure Insel und Momo sind wieder da.')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Zum Schlüpfen' })).toBeNull();
+    await user().press(screen.getByRole('button', { name: 'Zu eurer Insel' }));
+    expect(screen).toHavePathname('/momo');
+    expect(screen).toHaveSearchParams({});
   });
 
   it.each(problemCodes)('„Code prüfen“ mit %s zeigt den generischen, nicht verratenden Text', async (code) => {
