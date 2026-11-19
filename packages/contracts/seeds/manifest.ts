@@ -69,6 +69,7 @@ export const SeedScenarioKey = z.enum([
   'haelfte-voll',
   'doppelausgabe',
   'feldkonflikt',
+  'ereignisse-voll',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

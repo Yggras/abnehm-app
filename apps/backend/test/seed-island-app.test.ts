@@ -211,6 +211,16 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
       expect(islandOf(phone).energy).toBe(23);
     }
   });
+
+  it('ereignisse-voll: Philipp sieht seine 4 offenen Wünsche; der Pull bringt ihm keinen neuen Besuch (#202)', { timeout: 30_000 }, async () => {
+    const world = await seeded(seedManifests['ereignisse-voll']);
+    const iphone = world.phones['philipp-iphone']!;
+    expect(islandOf(iphone).events.open).toHaveLength(4);
+
+    await runSyncSteps(seedManifests['ereignisse-voll'], world);
+
+    expect(islandOf(iphone).events.open.map((event) => event.visitor.name)).toEqual(['Eule Otto', 'Schwan Selma', 'Fuchs Fridolin', 'Igel Ilse']);
+  });
 });
 
 function islandOf(phone: Phone) {

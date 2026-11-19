@@ -1,8 +1,13 @@
+import { gameCatalog } from '@abnehm/game-rules/content';
+import { planVisitors } from '@abnehm/game-rules/events';
+
 import { EntityId, LocalDate } from '../src/base.ts';
 import { BuildObject, buildObjectKey, PlaceObject, placeObjectKey } from '../src/island.ts';
+import type { VisitorEventDetails } from '../src/island-records.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
-import { buildSeedState, changedOnServer, type SeedEntity, type SeedPart } from './build.ts';
-import { gekoppeltExtensions, gekoppeltParts, gekoppeltPartsBuilt, vorDemSchluepfenParts } from './gekoppelt.ts';
+import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
+import { visitEntities, type SeedVisit } from './ereignisse.ts';
+import { gekoppeltExtensions, gekoppeltParts, gekoppeltPartsBuilt, gekoppeltPartsVisited, vorDemSchluepfenParts } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedExtensions, SeedManifest, type SeedRow, type SeedState } from './manifest.ts';
 import { seedCompletion, seedCreated as created, seedDailyGoals } from './rows.ts';
@@ -28,6 +33,10 @@ import { afterSync, changedOffline, processed, type OfflineChange } from './sync
 //   Philipp. Offline stellt das iPhone seine erste Laterne auf das freie Feld `grundinsel:2:2`, das iPad
 //   die zweite auf dasselbe Feld. Der Server nimmt beide an, in Eingangsreihenfolge: Die zuerst platzierte
 //   Laterne wechselt ins Lager, die zweite steht auf dem Feld. Keine Energie geht verloren.
+// - `ereignisse-voll` („volles Ereignis-Kontingent (4 offen)“, #202): `gekoppelt` ohne die Besucher von
+//   heute. Philipp hat vier Besuche der letzten vier Tage nicht abgeholt, Anna einen von gestern. Philipps
+//   Pull am Mittag erzeugt die Besucher des Tages: Philipp bekommt wegen der Grenze von 4 offenen keinen,
+//   Anna einen; ihren Ereignisstand sieht nur sie.
 //
 // Alle Werte sind erfunden. Die Erfüllungen passen zu Philipps Einträgen aus `solo`: Gewogen hat er
 // vorgestern (Montag), eine Radtour von 35 Minuten gestern (Dienstag) erfüllt die Sporteinheit.
@@ -380,5 +389,86 @@ export const feldkonfliktManifest = SeedManifest.parse({
     { type: 'sync', installation: iphone },
   ],
   target: feldkonfliktStates.target,
+  extensions: gekoppeltExtensions,
+});
+
+const visitWish = (blueprintKey: string, reward: VisitorEventDetails['reward']): VisitorEventDetails => ({ wish: { type: 'bauplan_bauen', blueprintKey }, reward });
+
+/**
+ * `ereignisse-voll`: Philipp hat seit vier Tagen je einen Besuch nicht abgeholt, Anna seit gestern einen.
+ * Die Besuchs-Baupläne von Bauen sind alle versprochen, der vierte Besuch bringt deshalb Deko.
+ */
+const vollBesuche: readonly SeedVisit[] = [
+  ...(['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13'] as const).map((date, index): SeedVisit => ({
+    personId: philipp,
+    date,
+    n: 1,
+    templateKey: ['igel_ilse', 'fuchs_fridolin', 'schwan_selma', 'eule_otto'][index]!,
+    details: [
+      visitWish('sitzbank', { type: 'bauplan', key: 'brunnen' }),
+      visitWish('holzweg', { type: 'bauplan', key: 'vogelhaus' }),
+      visitWish('sitzbank', { type: 'bauplan', key: 'wegweiser' }),
+      visitWish('holzweg', { type: 'deko', key: 'kieselturm' }),
+    ][index]!,
+    at: `${date}T05:30:00.000Z`,
+  })),
+  { personId: anna, date: '2026-10-13', n: 2, templateKey: 'hase_hanna', details: visitWish('blumenwiese', { type: 'bauplan', key: 'kuerbisbeet' }), at: '2026-10-13T05:30:00.000Z' },
+];
+
+/**
+ * Was der Ereignisgenerator beim ersten Pull des Tages erzeugt, mit denselben Spielregeln wie der Server:
+ * Philipp hat 4 offene und bekommt nichts, Anna füllt mit einem Besuch den Tagesdeckel auf.
+ */
+function heutigeBesuche(): SeedVisit[] {
+  const open = vollBesuche;
+  const built = (personId: string) => new Set(gekoppeltBauten.filter((build) => build.personId === personId).map((build) => build.blueprintKey));
+  const planned = planVisitors(gameCatalog, {
+    islandId: seedIds.island.philippAnna,
+    date: seedDays.heute,
+    cappedToday: 0,
+    visitorSlotsUsed: new Set(),
+    unlockedBlueprints: new Set(gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start').map((blueprint) => blueprint.key)),
+    openTemplates: new Set(open.map((visit) => visit.templateKey)),
+    promisedBlueprints: new Set(open.flatMap((visit) => (visit.details.reward.type === 'bauplan' ? [visit.details.reward.key] : []))),
+    persons: [
+      { personId: philipp, role: 'bauen', personalToday: 0, openPersonal: open.filter((visit) => visit.personId === philipp).length, builtBlueprints: built(philipp) },
+      { personId: anna, role: 'natur', personalToday: 0, openPersonal: open.filter((visit) => visit.personId === anna).length, builtBlueprints: built(anna) },
+    ],
+  });
+  return planned.map((visit) => ({
+    personId: visit.responsiblePersonId,
+    date: seedDays.heute,
+    n: Number(visit.occasionKey.split(':').at(-1)),
+    templateKey: visit.templateKey,
+    details: visit.details,
+    at: now,
+  }));
+}
+
+function ereignisseVoll() {
+  const initial = buildSeedState({
+    parts: gekoppeltPartsVisited(vollBesuche),
+    createdAt: seedClock.instant,
+    devices: { [iphone]: { personId: philipp, cursor: 'latest' } },
+  });
+  const server = changedOnServer(initial, { createdAt: now, changes: heutigeBesuche().flatMap(visitEntities) });
+  return { initial, target: pulledBy(server, iphone, philipp) };
+}
+
+const ereignisseVollStates = ereignisseVoll();
+
+export const ereignisseVollManifest = SeedManifest.parse({
+  formatVersion: 1,
+  scenario: 'ereignisse-voll',
+  revision: 1,
+  clock: seedClock,
+  localDates: seedDays,
+  catalogVersion: null,
+  accounts: [seedAccounts.philipp, seedAccounts.anna],
+  installations: [seedInstallations.philippIphone],
+  initial: ereignisseVollStates.initial,
+  // Philipps Pull erzeugt die Besucher des Tages: nur Annas; ihren Ereignisstand sieht Philipps Gerät nicht.
+  steps: [{ type: 'sync', installation: iphone }],
+  target: ereignisseVollStates.target,
   extensions: gekoppeltExtensions,
 });

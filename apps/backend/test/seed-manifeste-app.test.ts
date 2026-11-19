@@ -101,3 +101,4 @@ manifestSuite('zeitzonen_reisen');
 manifestSuite('haelfte-voll');
 manifestSuite('doppelausgabe');
 manifestSuite('feldkonflikt');
+manifestSuite('ereignisse-voll');
