@@ -109,9 +109,9 @@ export function daysBefore(at: Instant, days: number): Instant {
 }
 
 /**
- * Adapter ohne Plattform: Health ist nicht verfügbar, gelesen wird nichts. Er gilt im Produktionsbuild,
- * bis HealthKit (#193) und Health Connect (#195) ihre Adapter liefern; ohne Verbindung bleibt alles
- * manuell nutzbar.
+ * Adapter ohne Plattform: Health ist nicht verfügbar, gelesen wird nichts; ohne Verbindung bleibt alles
+ * manuell nutzbar. Er steht in Jest für die Plattform des Geräts (`jest/setup.js`) und dient Tests als
+ * Plattform des Builds.
  */
 export function unavailableHealthPlatform(origin: ImportOrigin): HealthPlatformAdapter {
   return {

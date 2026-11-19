@@ -6,6 +6,14 @@ type AppVariant = 'development' | 'e2e' | 'production';
 /** Exact-Alarm-Berechtigungen, die die App nie haben darf (Spezifikation 5, Abschnitt 8). */
 export const exactAlarmPermissions = ['android.permission.SCHEDULE_EXACT_ALARM', 'android.permission.USE_EXACT_ALARM'];
 
+/** HealthKit nur lesend (Spezifikation 3, Abschnitt 6; #193): deutsche Lese-, keine Schreib-Nutzungsbeschreibung. */
+export const healthKitPlugin = {
+  NSHealthShareUsageDescription:
+    'Die App liest deine Trainings und dein Gewicht aus Apple Health, damit sie als Sport und Gewicht zählen. Sie schreibt nichts in Apple Health.',
+  NSHealthUpdateUsageDescription: false,
+  background: false,
+} as const;
+
 /**
  * `APP_VARIANT=development` erzeugt den Development Build (mit expo-dev-client), `APP_VARIANT=e2e`
  * den E2E-Build (#114), alles andere den Produktionsbuild. Der Standard ist bewusst die Produktion:
@@ -135,6 +143,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // react-native/gradle/libs.versions.toml).
       'react-native-health-connect',
       ['expo-build-properties', { android: { minSdkVersion: 26 } }],
+      // HealthKit (Spezifikation 3, Abschnitt 6; #193): Das Plugin setzt das Entitlement
+      // `com.apple.developer.healthkit` und die Lese-Nutzungsbeschreibung, die Pflicht ist
+      // (https://developer.apple.com/documentation/healthkit/protecting-user-privacy). Die App schreibt nie:
+      // keine Schreib-Nutzungsbeschreibung (`false`). Background Delivery und ihr Entitlement kommen mit dem
+      // Hintergrund-Import (#197); bis dahin bleibt es aus (`background: false`, README von
+      // @kingstinct/react-native-healthkit 16.2.0).
+      ['@kingstinct/react-native-healthkit', healthKitPlugin],
     ],
     experiments: {
       reactCompiler: true,

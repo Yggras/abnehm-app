@@ -1,7 +1,7 @@
 import type { ConfigContext } from 'expo/config';
 import { AndroidConfig, type ExportedConfig } from 'expo/config-plugins';
 
-import createConfig, { exactAlarmPermissions } from '../app.config';
+import createConfig, { exactAlarmPermissions, healthKitPlugin } from '../app.config';
 
 const original = {
   variant: process.env.APP_VARIANT,
@@ -32,6 +32,14 @@ async function androidApplicationAttributes(config: ExportedConfig): Promise<Rec
   if (mod === undefined) return {};
   const result = await mod({ modRequest: {}, modResults: { manifest: { application: [{ $: {} }] } } } as never);
   return (result as unknown as { modResults: { manifest: { application: [{ $: Record<string, string> }] } } }).modResults.manifest.application[0].$;
+}
+
+/** Wendet einen iOS-Mod der Konfiguration auf eine leere Plist an. */
+async function runIosMod(config: ExportedConfig, name: 'infoPlist' | 'entitlements'): Promise<Record<string, unknown>> {
+  const mod = config.mods?.ios?.[name];
+  if (mod === undefined) return {};
+  const result = await mod({ modRequest: {}, modResults: {} } as never);
+  return (result as unknown as { modResults: Record<string, unknown> }).modResults;
 }
 
 test('erlaubt lokales HTTP (ATS) nur im Development- und im E2E-Build', () => {
@@ -112,6 +120,22 @@ test('Health Connect: nur Lesezugriff auf Trainings und Gewicht, ohne ältere Hi
     // Health Connect verlangt mindestens API 26; React Native 0.88 setzt 24.
     expect(config.plugins).toContainEqual(['expo-build-properties', { android: { minSdkVersion: 26 } }]);
   }
+});
+
+test('HealthKit: deutsche Lese-Nutzungsbeschreibung, keine Schreib-Nutzungsbeschreibung, noch kein Background Delivery (#193)', async () => {
+  for (const config of [configFor(undefined), configFor('development'), configFor('e2e', 'true')]) {
+    expect(config.plugins).toContainEqual(['@kingstinct/react-native-healthkit', healthKitPlugin]);
+  }
+  // Das Plugin der Bibliothek auf eine leere Konfiguration angewandt: so landet es in Info.plist und Entitlements.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const plugin = (require('@kingstinct/react-native-healthkit/app.plugin.js') as { default: (config: ExportedConfig, props: typeof healthKitPlugin) => ExportedConfig }).default;
+  const applied = plugin({ name: 'Abnehm-App', slug: 'abnehm-app', _internal: { projectRoot: `${__dirname}/..` } } as ExportedConfig, healthKitPlugin);
+  const infoPlist = await runIosMod(applied, 'infoPlist');
+  const entitlements = await runIosMod(applied, 'entitlements');
+
+  expect(infoPlist.NSHealthShareUsageDescription).toBe(healthKitPlugin.NSHealthShareUsageDescription);
+  expect(infoPlist).not.toHaveProperty('NSHealthUpdateUsageDescription');
+  expect(entitlements).toEqual({ 'com.apple.developer.healthkit': true });
 });
 
 test('Development- und E2E-Build dürfen das lokale Backend per HTTP ansprechen', () => {
