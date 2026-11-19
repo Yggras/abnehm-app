@@ -21,11 +21,6 @@ export function foodIdentity(tx: ReadContext, ref: FoodRef): FoodRef {
   return ref.type === 'eigen' ? ref : (overlayingOwnFood(tx, ref)?.ref ?? ref);
 }
 
-/** Schlüssel einer Referenz für Mengen und Maps. */
-export function refKey(ref: FoodRef): string {
-  return `${ref.type}:${ref.key}`;
-}
-
 export type CurrentFoods = Readonly<{
   /**
    * Aktuelle Werte genau dieser Referenz, ohne Überdeckung: das nicht gelöschte eigene Lebensmittel, der

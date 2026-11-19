@@ -138,7 +138,7 @@ async function setup({ catalogFoods = testCatalogFoods }: { catalogFoods?: typeo
     favoriteNames: () => quick().favorites.map(({ snapshot }) => snapshot.name),
     isFavorite(ref: FoodRef) {
       let marked: boolean | undefined;
-      nutrition.observeFoodFavorite(ref, (value) => (marked = value))();
+      nutrition.observeFoodFavorite({ ref }, (value) => (marked = value))();
       return marked;
     },
     search: (input: string, meal: MealKey = 'fruehstueck') => hitsOf(nutrition.foodSearch(catalog.database, meal).search(input)),
@@ -185,7 +185,7 @@ describe('Lebensmittelfavorit markieren und entfernen', () => {
     nutrition.markFoodFavorite(oats);
     clock.advanceBy(60_000);
 
-    nutrition.unmarkFoodFavorite(oats.ref);
+    nutrition.unmarkFoodFavorite(oats);
 
     const id = foodFavoriteId(philipp, oats.ref);
     expect(favorites()).toEqual([expect.objectContaining({ id, removedAt: '2026-10-14T06:31:00.000Z', deletedAt: null })]);
@@ -206,7 +206,7 @@ describe('Lebensmittelfavorit markieren und entfernen', () => {
   it('Entfernen ohne Favorit ändert nichts', async () => {
     const { nutrition, operations } = await setup();
 
-    nutrition.unmarkFoodFavorite(oats.ref);
+    nutrition.unmarkFoodFavorite(oats);
 
     expect(operations()).toEqual([]);
   });
@@ -231,6 +231,35 @@ describe('Lebensmittelfavorit markieren und entfernen', () => {
     expect(favoriteNames()).toEqual(['Bratkartoffeln']);
   });
 
+  it('erkennt eine schon markierte KI-Schätzung wieder: kein zweites eigenes Lebensmittel, Stern und Entfernen wirken', async () => {
+    const { nutrition, ownFoods, favorites, operations, favoriteNames } = await setup();
+    const estimate = { ref: null, snapshot: aiPotatoes } as const;
+    const marked = () => {
+      let value: boolean | undefined;
+      nutrition.observeFoodFavorite(estimate, (current) => (value = current))();
+      return value;
+    };
+    expect(marked()).toBe(false);
+    const ref = nutrition.markFoodFavorite(estimate);
+
+    // Erneut geöffnete Eintragsdetails kennen nur den Eintrag ohne Referenz.
+    expect(marked()).toBe(true);
+    expect(nutrition.markFoodFavorite(estimate)).toEqual(ref);
+    nutrition.unmarkFoodFavorite(estimate);
+    expect(marked()).toBe(false);
+    expect(favoriteNames()).toEqual([]);
+    expect(nutrition.markFoodFavorite(estimate)).toEqual(ref);
+
+    expect(ownFoods()).toHaveLength(1);
+    expect(favorites()).toEqual([expect.objectContaining({ foodRefKey: ref.key, removedAt: null })]);
+    expect(operations().map((operation) => `${operation.type} ${'entityType' in operation ? operation.entityType : ''}`)).toEqual([
+      'upsert_entity own_food',
+      'upsert_entity food_favorite',
+      'upsert_entity food_favorite',
+      'upsert_entity food_favorite',
+    ]);
+  });
+
   it('weist eine Fassung zurück, die nicht zur Referenz passt, ohne etwas zu schreiben', async () => {
     const { nutrition, favorites, operations } = await setup();
 
@@ -247,7 +276,7 @@ describe('Lebensmittelfavorit markieren und entfernen', () => {
     expect(isFavorite(corrected.ref)).toBe(true);
     expect(quick().favorites).toEqual([expect.objectContaining({ ref: corrected.ref, available: true })]);
 
-    nutrition.unmarkFoodFavorite(corrected.ref);
+    nutrition.unmarkFoodFavorite(corrected);
 
     expect(isFavorite(apple.ref)).toBe(false);
     expect(favoriteNames()).toEqual([]);
@@ -385,15 +414,18 @@ describe('Zuletzt verwendet', () => {
     ]);
   });
 
-  it('nutzt den Snapshot des Eintrags, wenn der BLS-Schlüssel fehlt, und lässt gelöschte eigene Lebensmittel weg', async () => {
+  it('nutzt den Snapshot des Eintrags, wenn der BLS-Schlüssel fehlt oder das eigene Lebensmittel gelöscht ist', async () => {
     const { nutrition, add, recent, quick } = await setup({ catalogFoods: testCatalogFoods.filter((food) => food.key !== 'C133000') });
     add(oats, 60);
     const own = nutrition.saveOwnFood(null, muesli);
     add(own, 250);
     nutrition.deleteOwnFood(own.ref.key);
 
-    expect(recent()).toEqual(['Hafer Flocken · 60 g']);
-    expect(quick().recent[0]).toMatchObject({ available: false, snapshot: oats.snapshot });
+    expect(recent()).toEqual(['Bircher-Müsli im Glas · 250 g', 'Hafer Flocken · 60 g']);
+    expect(quick().recent).toEqual([
+      expect.objectContaining({ ref: own.ref, available: false, snapshot: own.snapshot, kcal: 375 }),
+      expect.objectContaining({ ref: oats.ref, available: false, snapshot: oats.snapshot, kcal: 209 }),
+    ]);
   });
 
   it('lässt gelöschte Einträge weg', async () => {

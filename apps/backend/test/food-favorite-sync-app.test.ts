@@ -119,7 +119,7 @@ describe('Lebensmittelfavorit im Sync', () => {
     await a.sync();
     await b.sync();
 
-    b.nutrition.unmarkFoodFavorite(oats.ref);
+    b.nutrition.unmarkFoodFavorite(oats);
     await b.sync();
     await a.sync();
 

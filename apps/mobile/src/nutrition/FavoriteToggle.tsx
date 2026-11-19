@@ -1,4 +1,3 @@
-import type { FoodRef } from '@abnehm/contracts/nutrition';
 import { useEffect, useState } from 'react';
 
 import { IconButton } from '../design';
@@ -8,18 +7,17 @@ import { nutritionTexts } from './texts';
 
 // Stern-Schalter „Lebensmittelfavorit“ in Mengenprüfung und Eintragsdetails (Spezifikation 2, Abschnitt 7;
 // #158). Eingeschaltet zeigt er Fläche und Icon in `primary`, nie nur Farbe, und ist für Screenreader ein
-// Schalter. Eine KI-Schätzung ohne Referenz wird beim Markieren zum eigenen Lebensmittel; ab dann folgt
-// der Schalter dessen Referenz.
+// Schalter. Eine KI-Schätzung ohne Referenz wird beim ersten Markieren zum eigenen Lebensmittel; danach
+// steht sie für dieses, auch nach erneutem Öffnen der Eintragsdetails.
 
 export function FavoriteToggle({ nutrition, food, onFailed }: { nutrition: Nutrition; food: FavoriteFood; onFailed: (error: unknown) => void }) {
-  const [ref, setRef] = useState<FoodRef | null>(food.ref);
   const [marked, setMarked] = useState(false);
-  useEffect(() => (ref === null ? undefined : nutrition.observeFoodFavorite(ref, setMarked)), [nutrition, ref]);
+  useEffect(() => nutrition.observeFoodFavorite(food, setMarked), [nutrition, food]);
 
   const toggle = () => {
     try {
-      if (marked && ref !== null) nutrition.unmarkFoodFavorite(ref);
-      else setRef(nutrition.markFoodFavorite({ ref, snapshot: food.snapshot }));
+      if (marked) nutrition.unmarkFoodFavorite(food);
+      else nutrition.markFoodFavorite(food);
     } catch (error) {
       onFailed(error);
     }

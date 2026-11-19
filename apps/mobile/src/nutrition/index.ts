@@ -13,7 +13,7 @@ export { appNutrition, useNutrition } from './app-nutrition';
 export { nutritionDailyGoals, readNutritionDayFacts, type NutritionDayFacts } from './daily-goal-evaluators';
 export type { DayLog, DayLogEntry, DayLogMeal, EntryDetail } from './day-log';
 export type { FoodChoice } from './current-foods';
-export type { FavoriteFood } from './food-favorites';
+export type { FavoriteFood, FavoriteTarget } from './food-favorites';
 export { foodFavoriteEntity } from './food-favorite-entity';
 export { intakeReaderOf } from './intake-reader';
 export { InvalidNutritionInputError, type EntryChange, type NewEntry } from './entries';

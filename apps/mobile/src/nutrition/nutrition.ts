@@ -23,7 +23,7 @@ import { createCurrentFoods } from './current-foods';
 import { readDayLog, readEntryDetail, type DayLog, type EntryDetail } from './day-log';
 import { addEntry, deleteEntry, undoEntry, updateEntry, type EntryChange, type EntryUndo, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
-import { favoriteFoods, isFoodFavorite, markFoodFavorite, refreshFoodFavorites, unmarkFoodFavorite, type FavoriteFood } from './food-favorites';
+import { favoriteFoods, isFoodFavorite, markFoodFavorite, refreshFoodFavorites, unmarkFoodFavorite, type FavoriteFood, type FavoriteTarget } from './food-favorites';
 import { createFoodSearch, type FoodSearch } from './food-search';
 import { confirmPhotoDraft, deletePhoto, readMealPhotoDetail, setPhotoSharing, type MealPhotoDetail, type PhotoDraftConfirmation } from './meal-photos';
 import type { MealPhotoImage, MealPhotoImages } from './photo-images';
@@ -148,8 +148,11 @@ export type Nutrition = Readonly<{
    * die Referenz des Favoriten verfügbar, wird seine gespeicherte Fassung auf ihre aktuellen Werte gebracht.
    */
   recordFavoriteUse(catalog: CatalogDatabase, ref: FoodRef): void;
-  /** Beobachtet, ob ein Lebensmittelfavorit für dieses Lebensmittel steht, auch über eine Überdeckung. */
-  observeFoodFavorite(ref: FoodRef, listener: (marked: boolean) => void): () => void;
+  /**
+   * Beobachtet, ob ein Lebensmittelfavorit für dieses Lebensmittel steht, auch über eine Überdeckung. Eine
+   * KI-Schätzung ohne Referenz steht für das eigene Lebensmittel, das ein früheres Markieren aus ihr angelegt hat.
+   */
+  observeFoodFavorite(food: FavoriteTarget, listener: (marked: boolean) => void): () => void;
   /**
    * Markiert ein Lebensmittel als Lebensmittelfavorit in einer eigenen lokalen Transaktion samt
    * Outbox-Operation und liefert die Referenz des Favoriten. Eine KI-Schätzung ohne Referenz wird zuerst
@@ -157,7 +160,7 @@ export type Nutrition = Readonly<{
    */
   markFoodFavorite(food: FavoriteFood): FoodRef;
   /** Entfernt die Markierung in einer eigenen lokalen Transaktion; ein erneutes Markieren bleibt möglich. */
-  unmarkFoodFavorite(ref: FoodRef): void;
+  unmarkFoodFavorite(food: FavoriteTarget): void;
 }>;
 
 /**
@@ -195,7 +198,7 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
     foodSearch: (catalog, meal) =>
       createFoodSearch({
         catalog,
-        ownFoods: {
+        account: {
           search: (query, limit) => database.read((tx) => searchOwnFoods(tx, query, limit)),
           overlaidOrigins: () => database.read(overlaidOrigins),
           quickFoods: () => database.read((tx) => quickFoodsOf(tx, catalog, meal)) ?? { recent: [], favorites: [] },
@@ -204,9 +207,9 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
     observeQuickFoods: (catalog, meal, listener) => database.observe((tx) => quickFoodsOf(tx, catalog, meal), listener),
     recordFavoriteUse: (catalog, ref) =>
       database.transaction((tx) => refreshFoodFavorites(tx, dependencies, createCurrentFoods(createBlsCatalog(catalog)), ref)),
-    observeFoodFavorite: (ref, listener) => database.observe((tx) => readOwnPerson(tx) !== undefined && isFoodFavorite(tx, ref), listener),
+    observeFoodFavorite: (food, listener) => database.observe((tx) => readOwnPerson(tx) !== undefined && isFoodFavorite(tx, food), listener),
     markFoodFavorite: (food) => database.transaction((tx) => markFoodFavorite(tx, dependencies, food)),
-    unmarkFoodFavorite: (ref) => database.transaction((tx) => unmarkFoodFavorite(tx, dependencies, ref)),
+    unmarkFoodFavorite: (food) => database.transaction((tx) => unmarkFoodFavorite(tx, dependencies, food)),
   };
 
   /** Beide Listen des Hinzufügen-Bildschirms; `null` ohne eigene Person. „Zuletzt verwendet“ endet heute. */

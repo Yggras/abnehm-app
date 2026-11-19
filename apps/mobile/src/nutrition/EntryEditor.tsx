@@ -1,6 +1,6 @@
 import { MealKey, type LocalDate } from '@abnehm/contracts/base';
 import { roundKcal } from '@abnehm/contracts/nutrition';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button, Chip, IconButton, ListGroup, ListRow, space, Text } from '../design';
@@ -52,6 +52,7 @@ export function EntryEditor({
   const draft = useAmountDraft(snapshot, entry);
   const [meal, setMeal] = useState<MealKey>(entry.meal);
   const [detailsShown, setDetailsShown] = useState(false);
+  const favoriteFood = useMemo(() => ({ ref: entry.foodRef, snapshot: entry.snapshot }), [entry]);
 
   const save = () => {
     const checked = draft.submit();
@@ -76,7 +77,7 @@ export function EntryEditor({
               {captureTargetText(entry.meal, entry.localDate, today)}
             </Text>
           </View>
-          <FavoriteToggle nutrition={nutrition} food={{ ref: entry.foodRef, snapshot }} onFailed={onFailed} />
+          <FavoriteToggle nutrition={nutrition} food={favoriteFood} onFailed={onFailed} />
           <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
         </View>
         <AmountFields snapshot={snapshot} draft={draft} />

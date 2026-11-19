@@ -58,6 +58,11 @@ export const FoodRef = z.discriminatedUnion('type', [
 ]);
 export type FoodRef = z.infer<typeof FoodRef>;
 
+/** Eindeutiger Schlüssel einer Lebensmittelreferenz, etwa für Mengen und Maps: `<type>:<key>`. */
+export function foodRefKey(ref: FoodRef): string {
+  return `${ref.type}:${ref.key}`;
+}
+
 /** Höchstlänge eines Lebensmittelnamens in Zeichen (Designwert, nicht belegt). */
 export const foodNameMaxLength = 200;
 

@@ -244,8 +244,10 @@ export const nutritionTexts = {
   slotInWork: 'Kommt noch',
   /** „Zuletzt verwendet“ und Lebensmittelfavoriten auf dem Hinzufügen-Bildschirm (#158). */
   quick: {
-    /** Unterzeile und zugänglicher Name einer Zeile: vorbelegte Menge und ihre kcal. */
-    row: (amount: string, kcal: number | null) => `${amount} · ${kcal === null ? '– kcal' : kcalText(kcal)}`,
+    /** Unterzeile einer Zeile: vorbelegte Menge und ihre kcal. */
+    row: (amount: string, kcal: number) => `${amount} · ${kcalText(kcal)}`,
+    /** Zugänglicher Name einer Zeile: Name, vorbelegte Menge und kcal. */
+    rowLabel: (name: string, amount: string, kcal: number) => `${name}, ${amount}, ${kcalText(kcal)}`,
     showAll: (count: number) => `Alle ${count} anzeigen`,
     showFewer: 'Weniger anzeigen',
     noRecent: (meal: MealKey) => `Was du in den letzten 30 Tagen ${mealPhrases[meal]} eingetragen hast, steht hier.`,

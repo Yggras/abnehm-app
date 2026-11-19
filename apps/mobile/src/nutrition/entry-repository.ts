@@ -1,13 +1,12 @@
 import { and, asc, between, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { CaptureMethod, DisplayUnit, FoodRef, NutritionEntryUpsert, NutritionSnapshot, SnapshotSource, type NutritionEntryRecord } from '@abnehm/contracts/nutrition';
+import { CaptureMethod, DisplayUnit, FoodRef, foodRefKey, NutritionEntryUpsert, NutritionSnapshot, SnapshotSource, type NutritionEntryRecord } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { nutritionEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { refKey } from './current-foods';
 
 // Repository der Ernährungseinträge: neben dem Sync-Adapter die einzige Stelle des Moduls, die Drizzle
 // und die Tabelle `nutrition_entry` sieht. Andere Bereiche lesen sie nie (Spezifikation 2, Abschnitt 1).
@@ -207,7 +206,7 @@ export function usedFoodsOfMeal(tx: ReadContext, personId: EntityId, meal: MealK
     }));
 }
 
-/** Je Lebensmittelreferenz (`refKey`) der Erfassungszeitpunkt des letzten nicht gelöschten Eintrags der Person. */
+/** Je Lebensmittelreferenz (`foodRefKey`) der Erfassungszeitpunkt des letzten nicht gelöschten Eintrags der Person. */
 export function lastUseByRef(tx: ReadContext, personId: EntityId): ReadonlyMap<string, Instant> {
   const rows = sqliteOf(tx)
     .select({ type: nutritionEntry.foodRefType, key: nutritionEntry.foodRefKey, at: sql<string>`max(${nutritionEntry.consumedAt})` })
@@ -215,7 +214,7 @@ export function lastUseByRef(tx: ReadContext, personId: EntityId): ReadonlyMap<s
     .where(and(eq(nutritionEntry.personId, personId), isNotNull(nutritionEntry.foodRefType), isNull(nutritionEntry.deletedAt)))
     .groupBy(nutritionEntry.foodRefType, nutritionEntry.foodRefKey)
     .all();
-  return new Map(rows.map(({ type, key, at }) => [refKey(FoodRef.parse({ type, key })), at as Instant]));
+  return new Map(rows.map(({ type, key, at }) => [foodRefKey(FoodRef.parse({ type, key })), at as Instant]));
 }
 
 /** Die nicht gelöschten Einträge einer Person an einem lokalen Tag, in Erfassungsreihenfolge. */

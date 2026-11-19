@@ -1,5 +1,5 @@
 import type { LocalDate, MealKey } from '@abnehm/contracts/base';
-import { entryAmount, entryTotals, foodValuesOf, roundKcal, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
+import { foodRefKey, foodValuesOf, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -145,12 +145,17 @@ function AddSlots({
     setSelected({ ...saved.value, captureMethod, unit });
   };
 
-  /** Ein Favorit oder ein Treffer aus „Zuletzt verwendet“: immer in die Mengenprüfung, mit vorbelegter Menge. */
-  const pick = (food: QuickFood, captureMethod: Extract<CaptureMethod, 'zuletzt' | 'lebensmittelfavorit'>) => {
-    // Beim Verwenden eines Favoriten folgt seine gespeicherte Fassung den aktuellen Werten (Spezifikation 2, Abschnitt 7).
-    if (captureMethod === 'lebensmittelfavorit' && !attempt(() => recordFavoriteUse(food.ref)).done) return;
-    setSelected({ ref: food.ref, snapshot: food.snapshot, captureMethod, prefill: food.prefill, available: food.available });
+  /**
+   * Ein Lebensmittel aus Suche, „Zuletzt verwendet“ oder den Favoriten öffnet die Mengenprüfung, mit
+   * vorbelegter Menge. Beim Verwenden eines Favoriten folgt seine gespeicherte Fassung den aktuellen Werten
+   * (Spezifikation 2, Abschnitt 7).
+   */
+  const pick = (selection: Selection, favorite: boolean) => {
+    if (favorite && !attempt(() => recordFavoriteUse(selection.ref)).done) return;
+    setSelected(selection);
   };
+  const pickQuick = ({ ref, snapshot, prefill, available }: QuickFood, captureMethod: 'zuletzt' | 'lebensmittelfavorit') =>
+    pick({ ref, snapshot, captureMethod, prefill, available }, captureMethod === 'lebensmittelfavorit');
 
   const create = (name = '') =>
     setForm({ base: null, initial: emptyOwnFoodDraft(name), title: nutritionTexts.ownFood.create, captureMethod: 'eigenes_lebensmittel' });
@@ -220,19 +225,16 @@ function AddSlots({
         <SearchHits
           hits={result.hits}
           query={query}
-          onSelect={(hit) => {
-            if (hit.mark === 'favorit' && !attempt(() => recordFavoriteUse(hit.ref)).done) return;
-            setSelected({ ref: hit.ref, snapshot: hit.snapshot, captureMethod: 'suche', prefill: hit.prefill, available: hit.available });
-          }}
+          onSelect={({ ref, snapshot, prefill, available, mark }) => pick({ ref, snapshot, captureMethod: 'suche', prefill, available }, mark === 'favorit')}
           onCreate={create}
         />
       ) : (
-        <Slots meal={meal} quick={quick} onPick={pick} onCreate={() => create()} />
+        <Slots meal={meal} quick={quick} onPick={pickQuick} onCreate={() => create()} />
       )}
       <Sheet visible={selected !== null} onClose={() => setSelected(null)} height="full">
         {selected === null ? null : (
           <AmountReview
-            key={`${selected.ref.type}:${selected.ref.key}:${ownFoodChanges}`}
+            key={`${foodRefKey(selected.ref)}:${ownFoodChanges}`}
             selection={selected}
             target={target}
             nutrition={nutrition}
@@ -282,7 +284,7 @@ function SearchHits({
         // Quellenmarke in derselben Zeile: So passen auf das iPhone SE mit Tastatur mehr Treffer.
         return (
           <ListRow
-            key={`${hit.ref.type}:${hit.ref.key}`}
+            key={foodRefKey(hit.ref)}
             title={hit.snapshot.name}
             subtitle={`${per100} · ${markNames[hit.mark]}`}
             onPress={() => onSelect(hit)}
@@ -374,14 +376,13 @@ function QuickList({
         <ListGroup>
           {shown.map((food) => {
             const amount = amountText(food.prefill.displayUnit, food.prefill.displayAmountMilli);
-            const row = nutritionTexts.quick.row(amount, prefillKcal(food));
             return (
               <ListRow
-                key={`${food.ref.type}:${food.ref.key}`}
+                key={foodRefKey(food.ref)}
                 title={food.snapshot.name}
-                subtitle={row}
+                subtitle={nutritionTexts.quick.row(amount, food.kcal)}
                 onPress={() => onPick(food)}
-                accessibilityLabel={`${food.snapshot.name}, ${row.replace(' · ', ', ')}`}
+                accessibilityLabel={nutritionTexts.quick.rowLabel(food.snapshot.name, amount, food.kcal)}
               />
             );
           })}
@@ -392,12 +393,6 @@ function QuickList({
       ) : null}
     </View>
   );
-}
-
-/** Ganze kcal der vorbelegten Menge; `null`, wenn sie nicht zum Snapshot passt. */
-function prefillKcal({ snapshot, prefill }: QuickFood): number | null {
-  const amount = entryAmount(snapshot, prefill.displayUnit, prefill.displayAmountMilli);
-  return amount.type === 'menge' ? roundKcal(entryTotals(snapshot, amount.amount).milliKcal) : null;
 }
 
 function CaptureSkeleton() {

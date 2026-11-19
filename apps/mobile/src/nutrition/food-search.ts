@@ -1,9 +1,8 @@
-import { entryAmount, entryTotals, roundKcal, type FoodRef, type NutritionSnapshot, type OwnFoodOrigin } from '@abnehm/contracts/nutrition';
+import { entryAmount, entryTotals, foodRefKey, roundKcal, type FoodRef, type NutritionSnapshot, type OwnFoodOrigin } from '@abnehm/contracts/nutrition';
 
 import type { CatalogDatabase } from '../local-db';
 import type { AmountPrefill } from './amount-prefill';
 import { createBlsCatalog } from './bls-catalog';
-import { refKey } from './current-foods';
 import type { OwnFoodChoice } from './own-food-repository';
 import type { QuickFood, QuickFoods } from './quick-foods';
 import { rankName } from './ranked-search';
@@ -46,8 +45,8 @@ const maxHits = 50;
 /** Eine Gruppe liefert ihre Treffer in Rangfolge, höchstens `limit`. */
 type SearchGroup = (query: SearchQuery, limit: number) => FoodSearchHit[];
 
-/** Die eigenen Lebensmittel der Kontodatenbank, wie die Suche sie braucht. */
-export type OwnFoodLookup = Readonly<{
+/** Was die Suche aus der Kontodatenbank braucht: eigene Lebensmittel, Favoriten und „Zuletzt verwendet“. */
+export type AccountFoods = Readonly<{
   /** Nicht gelöschte eigene Lebensmittel zur Anfrage, in Rangfolge, höchstens `limit`. */
   search(query: SearchQuery, limit: number): OwnFoodChoice[];
   /** Überdeckte Quellen: die Herkunftsreferenzen der nicht gelöschten eigenen Lebensmittel. */
@@ -56,9 +55,9 @@ export type OwnFoodLookup = Readonly<{
   quickFoods(): QuickFoods;
 }>;
 
-export function createFoodSearch(sources: { catalog: CatalogDatabase; ownFoods: OwnFoodLookup }): FoodSearch {
+export function createFoodSearch(sources: { catalog: CatalogDatabase; account: AccountFoods }): FoodSearch {
   const bls = createBlsCatalog(sources.catalog);
-  const { ownFoods } = sources;
+  const { account } = sources;
   /** Die Treffer einer kurzen Liste in der Rangfolge aus `ranked-search.ts`, sonst in ihrer Reihenfolge. */
   const quickGroup = (mark: 'favorit' | 'zuletzt', foods: readonly QuickFood[], query: SearchQuery, limit: number) =>
     foods
@@ -72,10 +71,10 @@ export function createFoodSearch(sources: { catalog: CatalogDatabase; ownFoods: 
   const groups = (quick: () => QuickFoods): readonly SearchGroup[] => [
     (query, limit) => quickGroup('favorit', quick().favorites, query, limit),
     (query, limit) => quickGroup('zuletzt', quick().recent, query, limit),
-    (query, limit) => ownFoods.search(query, limit).map(({ ref, snapshot }) => hit('eigen', ref, snapshot)),
+    (query, limit) => account.search(query, limit).map(({ ref, snapshot }) => hit('eigen', ref, snapshot)),
     (query, limit) => {
       // Überdeckte BLS-Lebensmittel fallen heraus; so viele mehr werden gelesen, damit `limit` reicht.
-      const overlaid = new Set(ownFoods.overlaidOrigins().flatMap((origin) => (origin.type === 'bls' ? [origin.key] : [])));
+      const overlaid = new Set(account.overlaidOrigins().flatMap((origin) => (origin.type === 'bls' ? [origin.key] : [])));
       return bls
         .search(query, limit + overlaid.size)
         .filter(({ key }) => !overlaid.has(key))
@@ -93,11 +92,11 @@ export function createFoodSearch(sources: { catalog: CatalogDatabase; ownFoods: 
       const hits: FoodSearchHit[] = [];
       // Jedes Lebensmittel erscheint einmal, in der ersten Gruppe, die es trifft.
       const shown = new Set<string>();
-      for (const group of groups(() => (quick ??= ownFoods.quickFoods()))) {
+      for (const group of groups(() => (quick ??= account.quickFoods()))) {
         if (hits.length >= maxHits) break;
-        const fresh = group(query, maxHits - hits.length + shown.size).filter((candidate) => !shown.has(refKey(candidate.ref)));
+        const fresh = group(query, maxHits - hits.length + shown.size).filter((candidate) => !shown.has(foodRefKey(candidate.ref)));
         for (const candidate of fresh.slice(0, maxHits - hits.length)) {
-          shown.add(refKey(candidate.ref));
+          shown.add(foodRefKey(candidate.ref));
           hits.push(candidate);
         }
       }

@@ -1,17 +1,17 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
-import { foodFavoriteId, FoodFavoriteUpsert, foodValuesOf, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import { foodFavoriteId, FoodFavoriteUpsert, foodRefKey, foodValuesOf, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
-import { amountPrefill } from './amount-prefill';
-import { foodIdentity, refKey, type CurrentFoods } from './current-foods';
+import { foodIdentity, type CurrentFoods } from './current-foods';
 import { InvalidNutritionInputError } from './entries';
 import { lastUseByRef, latestAmountOf } from './entry-repository';
 import { foodFavoriteEntity } from './food-favorite-entity';
 import { markedFoodFavorites, readFoodFavorite, writeFoodFavorite, type MarkedFoodFavorite } from './food-favorite-repository';
 import type { NutritionDependencies } from './nutrition';
+import { ownFoodWithValues } from './own-food-repository';
 import { saveOwnFood } from './own-foods';
-import type { QuickFood } from './quick-foods';
+import { quickFood, resolveFood, uniqueFoods, type QuickFood } from './quick-foods';
 import { searchNames } from './search-text';
 
 // Lebensmittelfavoriten (Spezifikation 2, Abschnitt 7; #158): Markieren und Entfernen in Mengenprüfung
@@ -28,14 +28,19 @@ type FavoriteDependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'ne
 /** Ein Lebensmittel, das die Person markiert: mit Referenz oder als KI-Schätzung ohne (`ref: null`). */
 export type FavoriteFood = Readonly<{ ref: FoodRef | null; snapshot: NutritionSnapshot }>;
 
+/** Wofür ein Favorit stehen kann: eine Referenz oder eine KI-Schätzung ohne, erkannt an ihrem Snapshot. */
+export type FavoriteTarget = Readonly<{ ref: FoodRef }> | Readonly<{ ref: null; snapshot: NutritionSnapshot }>;
+
 /**
  * Markiert ein Lebensmittel als Favorit und liefert die Referenz des Favoriten. Eine KI-Schätzung ohne
- * Referenz wird zuerst zu einem eigenen Lebensmittel aus ihrem Snapshot. Ein schon markierter Favorit
- * bleibt, wie er ist. Wirft `InvalidNutritionInputError`, ohne zu schreiben, wenn Referenz und Fassung
- * nicht zusammenpassen.
+ * Referenz wird zuerst zu einem eigenen Lebensmittel aus ihrem Snapshot; hat ein früheres Markieren es schon
+ * angelegt, gilt dieses. Ein schon markierter Favorit bleibt, wie er ist. Wirft `InvalidNutritionInputError`,
+ * ohne zu schreiben, wenn Referenz und Fassung nicht zusammenpassen.
  */
 export function markFoodFavorite(tx: TransactionContext, dependencies: FavoriteDependencies, food: FavoriteFood): FoodRef {
-  const choice = food.ref === null ? saveOwnFood(tx, dependencies, null, foodValuesOf(food.snapshot)) : { ref: food.ref, snapshot: food.snapshot };
+  const choice = food.ref === null
+    ? (ownFoodWithValues(tx, foodValuesOf(food.snapshot)) ?? saveOwnFood(tx, dependencies, null, foodValuesOf(food.snapshot)))
+    : { ref: food.ref, snapshot: food.snapshot };
   const parsed = FoodFavoriteUpsert.safeParse({ foodRef: choice.ref, snapshot: choice.snapshot, removedAt: null });
   if (!parsed.success) throw new InvalidNutritionInputError(`Ungültiger Lebensmittelfavorit: ${parsed.error.message}`);
   const personId = EntityId.parse(requireOwnPerson(tx).id);
@@ -46,16 +51,16 @@ export function markFoodFavorite(tx: TransactionContext, dependencies: FavoriteD
 }
 
 /** Entfernt die Markierung aller Favoriten, die für dieses Lebensmittel stehen; ohne Favorit bleibt alles, wie es ist. */
-export function unmarkFoodFavorite(tx: TransactionContext, dependencies: FavoriteDependencies, ref: FoodRef): void {
+export function unmarkFoodFavorite(tx: TransactionContext, dependencies: FavoriteDependencies, food: FavoriteTarget): void {
   const personId = EntityId.parse(requireOwnPerson(tx).id);
   const removedAt = Instant.parse(dependencies.clock.read().instant);
-  for (const favorite of favoritesOf(tx, personId, ref)) persist(tx, dependencies, favorite.id, personId, { ...favorite.content, removedAt });
+  for (const favorite of favoritesOf(tx, personId, food)) persist(tx, dependencies, favorite.id, personId, { ...favorite.content, removedAt });
 }
 
 /** Ob ein markierter Favorit für dieses Lebensmittel steht. */
-export function isFoodFavorite(tx: ReadContext, ref: FoodRef): boolean {
+export function isFoodFavorite(tx: ReadContext, food: FavoriteTarget): boolean {
   const own = requireOwnPerson(tx);
-  return favoritesOf(tx, EntityId.parse(own.id), ref).length > 0;
+  return favoritesOf(tx, EntityId.parse(own.id), food).length > 0;
 }
 
 /**
@@ -65,7 +70,7 @@ export function isFoodFavorite(tx: ReadContext, ref: FoodRef): boolean {
  */
 export function refreshFoodFavorites(tx: TransactionContext, dependencies: FavoriteDependencies, foods: CurrentFoods, ref: FoodRef): void {
   const personId = EntityId.parse(requireOwnPerson(tx).id);
-  for (const favorite of favoritesOf(tx, personId, ref)) {
+  for (const favorite of favoritesOf(tx, personId, { ref })) {
     const snapshot = foods.exact(tx, favorite.content.foodRef);
     if (snapshot === null || sameSnapshot(snapshot, favorite.content.snapshot)) continue;
     persist(tx, dependencies, favorite.id, personId, { ...favorite.content, snapshot });
@@ -80,27 +85,26 @@ export function refreshFoodFavorites(tx: TransactionContext, dependencies: Favor
 export function favoriteFoods(tx: ReadContext, foods: CurrentFoods, personId: EntityId): QuickFood[] {
   const lastUse = lastUseByRef(tx, personId);
   const resolved = markedFoodFavorites(tx, personId).map((favorite) => {
-    const current = foods.current(tx, favorite.content.foodRef);
-    const choice = current ?? { ref: favorite.content.foodRef, snapshot: favorite.content.snapshot };
-    return { choice, available: current !== null, lastUse: lastUse.get(refKey(choice.ref)) ?? null, sortName: searchNames(choice.snapshot.name).searchName };
+    const food = resolveFood(tx, foods, favorite.content.foodRef, favorite.content.snapshot);
+    return { ...food, lastUse: lastUse.get(foodRefKey(food.choice.ref)) ?? null, sortName: searchNames(food.choice.snapshot.name).searchName };
   });
   resolved.sort((a, b) => {
     if (a.lastUse !== b.lastUse) return a.lastUse === null ? 1 : b.lastUse === null ? -1 : a.lastUse < b.lastUse ? 1 : -1;
     return a.sortName < b.sortName ? -1 : a.sortName > b.sortName ? 1 : 0;
   });
-  const seen = new Set<string>();
-  return resolved.flatMap(({ choice, available }) => {
-    const key = refKey(choice.ref);
-    if (seen.has(key)) return [];
-    seen.add(key);
-    return [{ ...choice, available, prefill: amountPrefill(choice.snapshot, latestAmountOf(tx, personId, choice.ref)) }];
-  });
+  return uniqueFoods(resolved).map((food) => quickFood(food, latestAmountOf(tx, personId, food.choice.ref)));
 }
 
-/** Die markierten Favoriten der Person, die für dasselbe Lebensmittel stehen wie `ref`. */
-function favoritesOf(tx: ReadContext, personId: EntityId, ref: FoodRef): MarkedFoodFavorite[] {
-  const identity = refKey(foodIdentity(tx, ref));
-  return markedFoodFavorites(tx, personId).filter((favorite) => refKey(foodIdentity(tx, favorite.content.foodRef)) === identity);
+/**
+ * Die markierten Favoriten der Person, die für dasselbe Lebensmittel stehen. Eine KI-Schätzung ohne
+ * Referenz (`snapshot` gegeben) steht für das eigene Lebensmittel, das ein früheres Markieren aus ihr
+ * angelegt hat; ohne ein solches gibt es keinen Favoriten.
+ */
+function favoritesOf(tx: ReadContext, personId: EntityId, food: FavoriteTarget): MarkedFoodFavorite[] {
+  const ref = food.ref ?? ownFoodWithValues(tx, foodValuesOf(food.snapshot))?.ref;
+  if (ref === undefined) return [];
+  const identity = foodRefKey(foodIdentity(tx, ref));
+  return markedFoodFavorites(tx, personId).filter((favorite) => foodRefKey(foodIdentity(tx, favorite.content.foodRef)) === identity);
 }
 
 function persist(tx: TransactionContext, { clock, writer }: FavoriteDependencies, entityId: EntityId, personId: EntityId, payload: FoodFavoriteUpsert): void {

@@ -587,7 +587,7 @@ describe('Zuletzt verwendet und Lebensmittelfavoriten (#158)', () => {
   });
 
   it('nennt ohne Einträge und Favoriten, was dort künftig steht', async () => {
-    await openCapture('abendessen', ({ nutrition }) => nutrition.unmarkFoodFavorite({ type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) }));
+    await openCapture('abendessen', ({ nutrition }) => nutrition.unmarkFoodFavorite({ ref: { type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) } }));
 
     expect(within(recent()).getByText('Was du in den letzten 30 Tagen zum Abendessen eingetragen hast, steht hier.')).toBeOnTheScreen();
     expect(within(favorites()).getByText('Markiere ein Lebensmittel mit dem Stern, dann steht es hier.')).toBeOnTheScreen();
@@ -648,9 +648,14 @@ describe('Zuletzt verwendet und Lebensmittelfavoriten (#158)', () => {
     const potatoes = ownFoods().find((food) => food.name === 'Bratkartoffeln');
     expect(potatoes).toMatchObject({ referenceAmount: 180_000, milliKcal: 270_000, originType: null });
     expect(stored()).toEqual(expect.arrayContaining([expect.objectContaining({ foodRefType: 'eigen', foodRefKey: potatoes!.id })]));
-    // Ein zweiter Tipp entfernt die Markierung des neuen eigenen Lebensmittels.
+    // Erneut geöffnet erkennt der Stern das schon angelegte eigene Lebensmittel; ein zweiter Tipp entfernt die
+    // Markierung, statt ein weiteres anzulegen.
+    await user.press(within(sheet()).getByRole('button', { name: 'Schließen' }));
+    await user.press(screen.getByRole('button', { name: 'Mittagessen: Bratkartoffeln, 180 g, 270 kcal, KI-Schätzung' }));
+    expect(star()).toBeChecked();
     await user.press(star());
     expect(star()).not.toBeChecked();
+    expect(ownFoods().filter((food) => food.name === 'Bratkartoffeln')).toHaveLength(1);
   });
 });
 
