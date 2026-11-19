@@ -18,9 +18,10 @@ import { createGameService } from '../island/game-service';
 import { islandObjectCommands } from '../island/object-commands';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
+import { composeAreaPorts } from '../area-ports';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
+import { appNutrition, createNutrition, intakeReaderOf, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
@@ -139,24 +140,35 @@ function deviceState() {
     // Kontobezogene Beobachter an der geöffneten Datenbank; beim Sperren lösen sie sich wieder.
     onAccountOpened(database) {
       const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError });
-      // Baustein-Auswertung (Spezifikation 0, Abschnitt 3); die Evaluatoren registrieren die Spezifikationen 2 und 3.
-      const dailyGoalRegistry = createDailyGoalRegistry({ bausteine: [], checkIns: [] });
+      // Baustein-Auswertung und Tages-Check-in (Spezifikation 0, Abschnitt 3): Die Ernährung registriert
+      // „Ernährung erfasst“, „Im Kalorienbudget“ und den Check-in `ernaehrung` (#166); Wasser, Sport und
+      // Gewicht folgen mit Spezifikation 3 (#178).
+      const dailyGoalRegistry = createDailyGoalRegistry({
+        bausteine: [...nutritionDailyGoals.bausteine],
+        checkIns: [...nutritionDailyGoals.checkIns],
+      });
       const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
       // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
-      // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`). Die Ports
-      // `weightRecorder` und `weightTrendReader` gibt der Composition Root an `composeAreaPorts` weiter,
-      // sobald alle Pflichtports angemeldet sind.
+      // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`).
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Ports zwischen Bereichen (Spezifikation 0, Abschnitt 3): vollständig geprüft, jede Rückgabe gegen ihr
+      // Vertragsschema validiert. Die konsumierenden Module bekommen nur diese Ports.
+      const ports = composeAreaPorts(database, {
+        planReader: planReaderOf,
+        intakeReader: intakeReaderOf,
+        weightRecorder: () => trackers.weightRecorder,
+        weightTrendReader: () => trackers.weightTrendReader,
+      });
       // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
       // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
       const health = createHealthImport({ database, platform: healthPlatform, trackers, clock: appClock, onError });
       // Plan-Modul (Spezifikation 1): Seine Materialisierung legt fehlende Tage im Nachholfenster an, bevor
       // der Persistenzdienst auswertet (#131). Das Startgewicht des Erstplans läuft über den `WeightRecorder`
       // des Tracker-Moduls.
-      const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
+      const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: ports.weightRecorder, newId });
       persistence.registerMissingDaysHook(plan.materializeMissingDays);
       // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
       const planToday = plan.today(dailyGoalRegistry);
@@ -185,17 +197,17 @@ function deviceState() {
         appTrackers.opened(trackers),
         appHealthImport.opened(health),
         health.startForegroundTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground }),
-        waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
-        weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
-        appWeightDetail.opened(trackers.weightDetail(planReaderOf(database), appTodayRefresh)),
-        appSportWeeks.opened((week) => trackers.sportWeek(planReaderOf(database), appTodayRefresh, week)),
-        sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
+        waterTodayOpened(trackers.waterToday(ports.planReader, appTodayRefresh)),
+        weightTodayOpened(trackers.weightToday(ports.planReader, appTodayRefresh)),
+        appWeightDetail.opened(trackers.weightDetail(ports.planReader, appTodayRefresh)),
+        appSportWeeks.opened((week) => trackers.sportWeek(ports.planReader, appTodayRefresh, week)),
+        sportTodayOpened(trackers.sportToday(ports.planReader, appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
         dailyGoalsTodayOpened(planToday.dailyGoals(appTodayRefresh)), budgetTodayOpened(planToday.budget(appTodayRefresh)),
         // Einstellungsseite „Ziele“ (#147): das Plan-Modul für „Ziele ändern“ und sein Lesemodell mit dem
         // Basisgewicht der Prognose aus dem `WeightTrendReader` des Tracker-Moduls.
-        appPlan.opened(plan), appGoalSettings.opened(plan.goalSettings(trackers.weightTrendReader, appTodayRefresh)),
+        appPlan.opened(plan), appGoalSettings.opened(plan.goalSettings(ports.weightTrendReader, appTodayRefresh)),
         // Benachrichtigungseinstellung (Spezifikation 5, #132): die Seite „Benachrichtigungen“ spricht nur mit diesem Modul.
         appNotificationSettings.opened(createNotificationSettings({ database, writer: syncWriter, clock: appClock })),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).

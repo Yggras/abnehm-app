@@ -77,6 +77,9 @@ export const philippThresholds = {
   sporteinheit: { minimumSingleSessionMinutes: 20 },
 } as const;
 
+/** Schwellen der Tagesziele je Baustein, wie sie `seedDailyGoals` in die Snapshots schreibt. */
+export type SeedThresholds = Parameters<typeof seedDailyGoals>[0]['thresholds'];
+
 /**
  * Wochenplan von `solo`: Wiegetage sind Montag, Mittwoch, Donnerstag und Sonntag. Heute (Mittwoch) ist
  * Wiegetag und noch offen (Spezifikation 3, Abschnitt 9; #175), daneben vier Sporttage.
@@ -125,8 +128,11 @@ const haltemodus = {
 /** Tempo der Zielversion: wie in `solo` „entspannt“ oder der Haltemodus (#176). */
 type SoloGoal = 'tempo' | 'haltemodus';
 
-/** Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). */
-export const soloZieleOf = (plan: SoloWeeklyPlan, goal: SoloGoal = 'tempo'): SeedPart => ({
+/**
+ * Ziele (Spezifikation 1): Zielversion, Wochenplan und die drei Tagesziele von heute (Mittwoch). Ohne
+ * `thresholds` gelten Philipps Schwellen (`philippThresholds`).
+ */
+export const soloZieleOf = (plan: SoloWeeklyPlan, goal: SoloGoal = 'tempo', thresholds: SeedThresholds = philippThresholds): SeedPart => ({
   area: 'ziele',
   entities: [
     seedGoalVersion({
@@ -169,7 +175,7 @@ export const soloZieleOf = (plan: SoloWeeklyPlan, goal: SoloGoal = 'tempo'): See
       createdAt: '2026-10-14T05:00:00.000Z',
       bausteine: plan.mittwoch,
       // Gewogen hat keine Schwelle.
-      thresholds: philippThresholds,
+      thresholds,
     }),
   ],
 });
