@@ -20,7 +20,7 @@ export function createDevelopmentApp({
   fakeMealVision,
   serverClock,
 }: {
-  backend: Pick<Backend, 'app' | 'uncoupling' | 'photoStorage'>;
+  backend: Pick<Backend, 'app' | 'uncoupling' | 'photoStorage' | 'inviteCodes'>;
   database: Database;
   /** Fake der Fotoanalyse (#161); `POST /dev/fotoanalyse` stellt seine Antwort um, etwa für E2E-Abläufe. */
   fakeMealVision: FakeMealVision;

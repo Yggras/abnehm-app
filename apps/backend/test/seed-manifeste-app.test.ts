@@ -92,6 +92,7 @@ manifestSuite('nach_erfuellung_korrigiert');
 manifestSuite('tagesende_offen');
 manifestSuite('tagesende_abgeschlossen');
 manifestSuite('veralteter_partnerstand');
+manifestSuite('einladung-nach-entkopplung');
 manifestSuite('zwei_installationen');
 manifestSuite('offline_sync');
 manifestSuite('solo-energie');

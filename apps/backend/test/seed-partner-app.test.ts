@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
@@ -11,6 +11,7 @@ import {
   gekoppeltParts,
   SeedManifest,
   seedIds,
+  seedInviteCodes,
   seedManifests,
   uncoupledState,
   type SeedKey,
@@ -26,13 +27,14 @@ import { photoDraft, revocationNotice } from '../src/db/schema/index.ts';
 import type { TestBackend } from './support/app.ts';
 import type { Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
+import { call } from './support/auth-client.ts';
 import { coupleByInvitation } from './support/coupled-world.ts';
 import { completeOp } from './support/daily-goals.ts';
 import { canonical, runSteps, seeded, seedPhone as phone, stateOf } from './support/seed-world.ts';
 import { push, upsertOp } from './support/sync.ts';
 
 // Nachweis für #117: die Partner-Szenarien `gekoppelt` und `nach_entkopplung` (Spezifikation 0,
-// Abschnitt 12) auf Postgres und auf beiden Geräten, deren Engine und Adapter auf echtem SQLite
+// Abschnitt 12), dazu `einladung-nach-entkopplung` aus #120, auf Postgres und auf beiden Geräten, deren Engine und Adapter auf echtem SQLite
 // (better-sqlite3) gegen die echte Hono-App laufen. Ausgangszustand, Idempotenz und Sollzustand nach
 // den Schritten prüft für jedes Manifest `seed-manifeste-app.test.ts` (#113). Hier führen die Tests
 // Kopplungs-, Projektions- und Entkopplungsübergänge aus und prüfen die widerrufbaren Daten auf beiden
@@ -302,5 +304,48 @@ describe('Szenario nach_entkopplung', () => {
     expect(philipp.partner().dailyGoalStatus?.id).not.toBe(seedIds.partnerDailyGoalStatus.anna);
     expect(anna.partner().dailyGoalStatus).toMatchObject({ stage: 'unterwegs' });
     expect(anna.partner().dailyGoalStatus?.id).not.toBe(seedIds.partnerDailyGoalStatus.philipp);
+  });
+});
+
+describe('Szenario einladung-nach-entkopplung (#120)', () => {
+  const manifest = seedManifests['einladung-nach-entkopplung'];
+
+  it('ist der Sollzustand von nach_entkopplung plus Annas offene Einladung', () => {
+    const { invitation, ...rest } = manifest.initial.server;
+    expect(rest).toEqual(nachEntkopplung.target.server);
+    expect(manifest.initial.devices).toEqual(nachEntkopplung.target.devices);
+    expect(invitation).toEqual([expect.objectContaining({ id: seedIds.invitation.annasEinladung, inviter_person_id: seedIds.person.anna, consumed_at: null })]);
+  });
+
+  it('Philipp prüft den geseedeten Code: Anna lädt ein, die Annahme reaktiviert; danach ist das Paar wieder gekoppelt', async () => {
+    const world = await seeded(manifest);
+    const philipp = world.phones['philipp-iphone']!;
+    const code = seedInviteCodes.annasEinladung;
+
+    const checked = await call(world.backend, 'POST', '/v1/invitations/check', philipp.device, { code });
+    expect(checked).toMatchObject({ status: 200, body: { inviterDisplayName: 'Anna', reactivates: true } });
+
+    const accepted = await call(world.backend, 'POST', '/v1/invitations/accept', philipp.device, { requestId: randomUUID(), code });
+    expect(accepted).toMatchObject({ status: 200, body: { couplingId: seedIds.coupling.philippAnna, reactivated: true } });
+    await philipp.sync();
+
+    expect(philipp.partner().partner).toMatchObject({ personId: seedIds.person.anna, displayName: 'Anna' });
+    const { server } = await stateOf(world);
+    expect(server.coupling).toEqual([expect.objectContaining({ status: 'aktiv' })]);
+    expect(server.invitation).toEqual([expect.objectContaining({ consumed_by_person_id: seedIds.person.philipp })]);
+  });
+
+  it('ein anderer Code passt nicht; der geseedete Code ist kein Klartext in Postgres', async () => {
+    const world = await seeded(manifest);
+    const philipp = world.phones['philipp-iphone']!;
+    const other = seedInviteCodes.annasEinladung === '000000' ? '000001' : '000000';
+
+    expect(await call(world.backend, 'POST', '/v1/invitations/check', philipp.device, { code: other })).toMatchObject({
+      status: 422,
+      body: { code: 'invite_invalid' },
+    });
+    const rows = await world.backend.database.db.execute<{ code_hmac: string }>(sql`select code_hmac from invitation`);
+    expect(rows.rows).toEqual([{ code_hmac: world.backend.inviteCodes.hmacOf(seedInviteCodes.annasEinladung) }]);
+    expect(rows.rows[0]!.code_hmac).not.toContain(seedInviteCodes.annasEinladung);
   });
 });

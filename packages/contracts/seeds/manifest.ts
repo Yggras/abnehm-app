@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { EntityId, Instant, LocalDate, SyncCursor, TimeZone } from '../src/base.ts';
+import { InviteCode } from '../src/coupling.ts';
 import { DailyGoalCause } from '../src/daily-goals.ts';
 import { NotificationPermission } from '../src/notifications.ts';
 import { PhotoImageKey } from '../src/nutrition.ts';
@@ -14,7 +15,8 @@ import { InstallationId, OutboxOperation } from '../src/sync.ts';
 // Messwerte als Ganzzahl, `server_version` und Positionen als Dezimalzeichenfolge, JSON-Spalten als
 // JSON. Konten und Sitzungen (Better-Auth-Tabellen) stehen nicht als Zeilen im Manifest: Der Seeder
 // legt sie aus `accounts` an; nur dort steht die E-Mail. Verarbeitete Operationen nennt ein Sollzustand
-// ohne Hashes und gespeicherte Antwort (`derivedColumns` in `canonical.ts`).
+// ohne Hashes und gespeicherte Antwort (`derivedColumns` in `canonical.ts`), Einladungen ohne den HMAC ihres
+// Codes (`inviteCodes`).
 
 /** Version des Formats; ein inkompatibles Format zählt sie hoch. */
 export const seedFormatVersion = 1;
@@ -29,6 +31,7 @@ export const seedFormatVersion = 1;
  * `veralteter_partnerstand` sind die Randzustände aus Abschnitt 12 (#113), `zwei_installationen` und
  * `offline_sync` die Mehrgeräte- und Sync-Szenarien (#116). `solo-energie` (Laichkugel solo mit
  * gesammelter Energie) und `rollenwahl-offen` stammen aus Spezifikation 4, Abschnitt 13 (#180).
+ * `einladung-nach-entkopplung` ist der Ausgangszustand der Reaktivierung per Code aus Spezifikation 5 (#120).
  * `tage_ohne_app_oeffnung` und `zeitzonen_reisen` sind „Tage ohne App-Öffnung“ und „Zeitzonen“ aus
  * Spezifikation 1, Abschnitt 12 (#131). `solo-haltemodus-*` (je Sicherheitsgrund), `solo-budget-angehoben`
  * und `solo-ziele-ab-morgen` sind „erzwungener Haltemodus“, „Budget angehoben“ und „bevorstehende Fassung
@@ -64,6 +67,7 @@ export const SeedScenarioKey = z.enum([
   'offline_sync',
   'solo-energie',
   'rollenwahl-offen',
+  'einladung-nach-entkopplung',
   'tage_ohne_app_oeffnung',
   'zeitzonen_reisen',
   'haelfte-voll',
@@ -243,6 +247,16 @@ export const SeedExtensions = z.strictObject({
       z.strictObject({ version: z.literal(1), state: z.literal('reserviert'), actionId: EntityId, from: SeedKey, to: SeedKey }),
     ])
     .optional(),
+  /**
+   * Klartext der Codes offener Einladungen (#120), je Zeile in `invitation`. Der Server speichert nur den HMAC
+   * eines Codes unter seinem Einladungs-Secret; der Seeder bildet ihn beim Einfügen. Die Zeilen im Manifest
+   * nennen deshalb keinen `code_hmac`, und der kanonische Vergleich lässt ihn aus (`derivedColumns`).
+   */
+  inviteCodes: z
+    .discriminatedUnion('version', [
+      z.strictObject({ version: z.literal(1), codes: z.array(z.strictObject({ invitationId: EntityId, code: InviteCode })) }),
+    ])
+    .optional(),
 });
 export type SeedExtensions = z.infer<typeof SeedExtensions>;
 
@@ -301,7 +315,7 @@ export const SeedManifest = z
     ];
     for (const value of duplicates(operationIds)) problem(`Operations-ID doppelt: ${value}`);
 
-    const { mealPhotos, decoGift } = manifest.extensions ?? {};
+    const { mealPhotos, decoGift, inviteCodes } = manifest.extensions ?? {};
     const personOf = new Map(manifest.accounts.map((account) => [account.key, account.personId]));
     const rows = (table: string) => manifest.initial.server[table] ?? [];
     for (const photo of mealPhotos?.photos ?? []) {
@@ -320,6 +334,17 @@ export const SeedManifest = z
       const row = rows('photo_draft').find((candidate) => candidate.id === draft.id);
       if (row === undefined || row.person_id !== owner || row.image_key !== draft.imageKey) problem(`Fotoentwurf ${draft.id} fehlt im Ausgangszustand`);
       else if (String(row.expires_at) > manifest.clock.instant) problem(`Fotoentwurf ${draft.id} ist nicht abgelaufen`);
+    }
+    const codes = inviteCodes?.codes ?? [];
+    for (const value of duplicates(codes.map((entry) => entry.invitationId))) problem(`Einladungscode doppelt: ${value}`);
+    for (const [name, state] of [['initial', manifest.initial], ['target', manifest.target]] as const) {
+      for (const row of state.server.invitation ?? []) {
+        if ('code_hmac' in row) problem(`${name}: Einladung ${String(row.id)} nennt ihren HMAC; der Seeder bildet ihn aus \`inviteCodes\``);
+        if (!codes.some((entry) => entry.invitationId === row.id)) problem(`${name}: Einladung ${String(row.id)} ohne Code in \`inviteCodes\``);
+      }
+    }
+    for (const entry of codes) {
+      if (!rows('invitation').some((row) => row.id === entry.invitationId)) problem(`Einladungscode ${entry.invitationId}: Einladung fehlt im Ausgangszustand`);
     }
     if (decoGift !== undefined) {
       for (const key of [decoGift.from, decoGift.to]) if (!accountKeys.has(key)) problem(`Deko-Geschenk: unbekanntes Konto ${key}`);

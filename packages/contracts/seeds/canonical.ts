@@ -34,6 +34,8 @@ export function canonicalRows(rows: SeedRows): SeedRows {
  */
 const derivedColumns: Readonly<Record<string, readonly string[]>> = {
   processed_operation: ['request_hash', 'payload_hash', 'result'],
+  // Der HMAC eines Einladungscodes hängt am Einladungs-Secret des Servers; das Manifest nennt den Klartext (`inviteCodes`).
+  invitation: ['code_hmac'],
 };
 
 /** Zeilen ohne die abgeleiteten Spalten aus `derivedColumns`, für den Vergleich mit einem Sollzustand. */

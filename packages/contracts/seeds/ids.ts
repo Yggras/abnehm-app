@@ -163,7 +163,15 @@ export const seedIds = {
   partnerDailyGoalStatus: { philipp: id('0051', 1), anna: id('0051', 2) },
   /** Philipps drei Anfeuerungen an Anna von heute in `gekoppelt` (#123). */
   encouragement: { philippHeute: [id('0055', 1), id('0055', 2), id('0055', 3)] },
+  /** Annas offene Einladung in `einladung-nach-entkopplung` (#120). */
+  invitation: { annasEinladung: id('0056', 1) },
 } as const;
+
+/**
+ * Klartext der geseedeten Einladungscodes (#120). Der Server speichert nur ihren HMAC unter dem Einladungs-Secret;
+ * der Seeder bildet ihn beim Einfügen (`inviteCodes` im Manifest). Nur in Development- und Testartefakten.
+ */
+export const seedInviteCodes = { annasEinladung: '271828' } as const;
 
 /** Dokumentiertes Testpasswort aller Seed-Konten; nur in Development- und Testartefakten. */
 export const seedPassword = 'momo-insel-testpasswort';
