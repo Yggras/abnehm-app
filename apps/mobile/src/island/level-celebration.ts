@@ -29,8 +29,8 @@ type IslandLevel = z.infer<typeof CelebratedLevel>;
 /** Was beim nächsten Beanspruchen geschieht: still merken oder feiern; `null`, wenn nichts ansteht. */
 type PendingLevel = Readonly<{ celebrate: boolean; next: IslandLevel }> | null;
 
-/** Die geschlüpfte Insel der aktiven Kopplung mit dem Level ihrer Projektion; `null` ohne sie. */
-function projectedLevel(tx: ReadContext, personId: EntityId): IslandLevel | null {
+/** Die geschlüpfte Insel der aktiven Kopplung mit dem Level ihrer Projektion; `null` ohne sie. Auch für die Verwandlung (#204). */
+export function projectedLevel(tx: ReadContext, personId: EntityId): IslandLevel | null {
   const db = sqliteOf(tx);
   const found = db
     .select({ islandId: island.id, level: islandProgress.level })

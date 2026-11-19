@@ -2,7 +2,7 @@ import type { EntityId } from '@abnehm/contracts/base';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { boxShadow, Button, color, radius, size, space, Text } from '../design';
-import type { ShownReward, VisitorWish } from './island-events';
+import type { Discovery, IslandEvent, ShownReward, VisitorWish } from './island-events';
 import { ObjectPreview } from './ObjectPreview';
 import { eventTexts } from './texts';
 
@@ -13,18 +13,24 @@ import { eventTexts } from './texts';
 // Belohnung; ist der Wunsch erfüllt, holt „Belohnung abholen“ sie ab. Was abgeholt ist, bestätigt das Sheet
 // oben selbst, denn eine Meldung des Meldungs-Hosts läge auf dem Gerät hinter dem nativen Sheet. Ereignisse verfallen nie, es gibt
 // keine Frist und keinen Zähler. Wie Bau-Sheet und Lager in voller Höhe mit scrollender Liste.
+//
+// Entdeckungen (#204): Ein neues Gebiet steht unter „Neu auf der Insel“ und mit einer Karte unter „Neue
+// Gebiete“: die Baupläne, die mit ihm für die Insel freigeschaltet sind, und die Entdeckungs-Deko zum
+// Abholen. Ohne Deko (endlose Gebiete) verschwindet die Karte, sobald sie gesehen ist.
 
 export type EventsSheetProps = Readonly<{
-  events: readonly VisitorWish[];
+  events: readonly IslandEvent[];
   /** Ereignisstände, die beim Öffnen des Sheets neu waren; sie bleiben bis zum Schließen oben. */
   freshAtOpen: ReadonlySet<EntityId>;
   /** Seit dem Öffnen abgeholte Belohnungen; sie stehen als Bestätigung oben. */
   claimed: readonly ShownReward[];
-  onClaim(event: VisitorWish): void;
+  onClaim(event: IslandEvent): void;
 }>;
 
 export function EventsSheet({ events, freshAtOpen, claimed, onClaim }: EventsSheetProps) {
   const fresh = events.filter((event) => freshAtOpen.has(event.stateId));
+  const discoveries = events.filter((event): event is Discovery => event.kind === 'entdeckung');
+  const wishes = events.filter((event): event is VisitorWish => event.kind === 'besuch');
   return (
     <View style={styles.sheet}>
       <Text variant="title" accessibilityRole="header">
@@ -49,25 +55,65 @@ export function EventsSheet({ events, freshAtOpen, claimed, onClaim }: EventsShe
               </Text>
               {fresh.map((event) => (
                 <View key={event.stateId} style={styles.arrival}>
-                  <ObjectPreview art={event.visitor.animal} />
-                  <Text style={styles.text}>{eventTexts.visiting(event.visitor.name)}</Text>
+                  <ObjectPreview art={event.kind === 'besuch' ? event.visitor.animal : discoveryArt(event)} />
+                  <Text style={styles.text}>{event.kind === 'besuch' ? eventTexts.visiting(event.visitor.name) : eventTexts.newArea(event.area.name)}</Text>
                 </View>
               ))}
             </View>
           )}
-          <View style={styles.section}>
-            <Text variant="bodyStrong" accessibilityRole="header">
-              {eventTexts.wishes}
-            </Text>
-            <Text variant="label" tone="inkMuted">
-              {eventTexts.noPressure}
-            </Text>
-            {events.map((event) => (
-              <VisitorCard key={event.stateId} event={event} onClaim={onClaim} />
-            ))}
-          </View>
+          {discoveries.length > 0 && (
+            <View style={styles.section}>
+              <Text variant="bodyStrong" accessibilityRole="header">
+                {eventTexts.areas}
+              </Text>
+              {discoveries.map((event) => (
+                <DiscoveryCard key={event.stateId} event={event} onClaim={onClaim} />
+              ))}
+            </View>
+          )}
+          {wishes.length > 0 && (
+            <View style={styles.section}>
+              <Text variant="bodyStrong" accessibilityRole="header">
+                {eventTexts.wishes}
+              </Text>
+              <Text variant="label" tone="inkMuted">
+                {eventTexts.noPressure}
+              </Text>
+              {wishes.map((event) => (
+                <VisitorCard key={event.stateId} event={event} onClaim={onClaim} />
+              ))}
+            </View>
+          )}
         </ScrollView>
       )}
+    </View>
+  );
+}
+
+/** Bild einer Entdeckung: die Deko zum Abholen, ohne Deko der erste neue Bauplan. */
+function discoveryArt(event: Discovery): string {
+  return event.deko[0]?.art ?? event.blueprintArt ?? event.area.key;
+}
+
+function DiscoveryCard({ event, onClaim }: Readonly<{ event: Discovery; onClaim(event: Discovery): void }>) {
+  const deko = event.deko.map((piece) => piece.name);
+  return (
+    <View style={styles.card}>
+      <View style={styles.head}>
+        <ObjectPreview art={discoveryArt(event)} />
+        <View style={styles.text}>
+          <Text variant="bodyStrong">{eventTexts.discovered(event.area.name)}</Text>
+          {event.blueprints.length > 0 && <Text>{eventTexts.areaBlueprints(event.blueprints.map((blueprint) => blueprint.name))}</Text>}
+        </View>
+      </View>
+      {event.claimable ? (
+        <>
+          <Text variant="label" tone="inkMuted">
+            {eventTexts.areaDeko(deko)}
+          </Text>
+          <Button block label={eventTexts.claim} accessibilityLabel={eventTexts.claimDeko(deko)} onPress={() => onClaim(event)} />
+        </>
+      ) : null}
     </View>
   );
 }

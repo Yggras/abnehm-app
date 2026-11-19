@@ -31,19 +31,21 @@ describe('Levelaufstieg mit Test-Katalog', { timeout: 60_000 }, () => {
     const changes = await spendBoth(world, 36);
 
     expect(changes[0]).toMatchObject({ entityType: 'island_progress', data: { level: 4 } });
-    // Level-Freischaltungen von 2 und 4; Gebiet und Entdeckung von Level 4 schaltet #204 frei.
+    // Level-Freischaltungen von 2 und 4; Gebiet und Entdeckung von Level 4 prüft `area-unlock.test.ts` (#204).
     const unlocks = await unlocksOf(world);
-    expect(unlocks.filter((unlock) => !startKeys.includes(unlock.key))).toEqual([
+    expect(unlocks.filter((unlock) => !startKeys.includes(unlock.key) && unlock.reason === 'level')).toEqual([
       { key: 't_bauen_2', reason: 'level' },
       { key: 't_bauen_4', reason: 'level' },
       { key: 't_natur_2', reason: 'level' },
       { key: 't_natur_4', reason: 'level' },
     ]);
-    expect(changes.filter((change) => change.entityType === 'blueprint_unlock')).toHaveLength(4);
+    expect(changes.filter((change) => change.entityType === 'blueprint_unlock' && change.type === 'record' && change.data.reason === 'level')).toHaveLength(4);
 
     const events = await levelEventsOf(world);
     expect(events.map((event) => [event.type, event.occasionKey])).toEqual([2, 3, 4].map((level) => ['levelaufstieg', levelOccasionKey(world.islandId, level)]));
-    expect(changes.filter((change) => change.entityType === 'island_event').map((change) => change.entityId)).toEqual(events.map((event) => event.id));
+    expect(changes.filter((change) => change.entityType === 'island_event' && change.type === 'record' && change.data.type === 'levelaufstieg').map((change) => change.entityId)).toEqual(
+      events.map((event) => event.id),
+    );
 
     // Nur einmal je Empfänger, mit dem höchsten Level.
     const intents = await levelIntents(world);

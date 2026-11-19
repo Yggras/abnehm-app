@@ -27,6 +27,7 @@ import {
   type ChallengeStage,
 } from './challenges';
 import { takeGrowthIntro } from './growth-intro';
+import { takeTransformation, type Transformation } from './transformation';
 import { claimEventReward, markEventsSeen, type ClaimOutcome } from './island-events';
 import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
 import { createMoodState, distinct } from './mood-state';
@@ -92,6 +93,11 @@ export type GameService = Readonly<{
    * gemerkt (Einmal-Flag ohne Sync).
    */
   takeGrowthIntro(): boolean;
+  /**
+   * Die Verwandlungsszene, wenn Momo seit dem letzten Öffnen des Tabs „Momo“ eine neue Form erreicht hat; sonst
+   * `null`. Merkt das gezeigte Level je Installation (#204).
+   */
+  takeTransformation(): Transformation | null;
   /**
    * Meldet, wo das Paar mit Challenges steht, und jede Änderung nach einem Commit (#210); liefert die
    * Abmeldung. Ein verfallener Vorschlag ist ab seiner Frist nicht mehr offen.
@@ -208,6 +214,11 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     proposeRoles: (role) => database.transaction((tx) => commands.propose(tx, role)),
     acceptRoles: (actionId) => database.transaction((tx) => commands.accept(tx, actionId)),
     takeGrowthIntro: () => database.transaction((tx) => takeGrowthIntro(tx, clock.read().instant)),
+    takeTransformation: () =>
+      database.transaction((tx) => {
+        const own = readOwnPerson(tx);
+        return own === undefined ? null : takeTransformation(tx, EntityId.parse(own.id), clock.read().instant);
+      }),
     declineRoles: (actionId) => database.transaction((tx) => commands.decline(tx, actionId)),
     withdrawRoles: (actionId) => database.transaction((tx) => commands.withdraw(tx, actionId)),
     build: (request) => database.transaction((tx) => buildObject(tx, { writer, newId, clock }, request)),

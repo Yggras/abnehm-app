@@ -1,6 +1,11 @@
 import { LocalDate } from '@abnehm/contracts/base';
 import type { MomoAppearance } from '@abnehm/contracts/island';
 
+import { areaUnlockAt, sidesOf } from '@abnehm/game-rules/areas';
+import { gameCatalog } from '@abnehm/game-rules/content';
+import { hatching } from '@abnehm/game-rules/hatching';
+
+import { areaCells, islandLayout } from './layout';
 import { islandScene, type IslandSceneInput, type IslandSceneRequest, type SceneItem } from './scene-model';
 import { anna, philipp } from './testing/persons';
 
@@ -142,7 +147,7 @@ describe('Zeichenreihenfolge', () => {
     const items = islandScene(withObjects).items;
 
     expect(ofType(items, 'momo')).toEqual([
-      { layer: 'objekte', type: 'momo', field: 'grundinsel:1:0', at: { x: 32, y: 32 }, appearance: momo },
+      { layer: 'objekte', type: 'momo', field: 'grundinsel:1:0', at: { x: 32, y: 32 }, appearance: momo, from: null },
     ]);
     expect(ofType(items, 'objekt').find((item) => item.id === 'a')).toEqual({
       layer: 'objekte', type: 'objekt', id: 'a', field: 'grundinsel:2:1', at: { x: 32, y: 64 }, art: 'laterne_1', appearing: false,
@@ -192,7 +197,7 @@ describe('Nebel', () => {
     // Feld (0, −1): obere Ecke (32, −16); Feld (1, −1): obere Ecke (64, 0).
     expect(ofType(items, 'nebel')).toEqual([
       {
-        layer: 'nebel', type: 'nebel', area: 'nordstrand', tone: 'surfaceCard', opacity: 0.85,
+        layer: 'nebel', type: 'nebel', area: 'nordstrand', tone: 'surfaceCard', opacity: 0.85, lifting: false,
         cells: [
           [{ x: 32, y: -16 }, { x: 64, y: 0 }, { x: 32, y: 16 }, { x: 0, y: 0 }],
           [{ x: 64, y: 0 }, { x: 96, y: 16 }, { x: 64, y: 32 }, { x: 32, y: 16 }],
@@ -220,6 +225,46 @@ describe('Nebel', () => {
     expect(sides).not.toContain('nordstrand:1:-1 links');
   });
 });
+
+describe('Gebietsfreischaltung (#204)', () => {
+  // Die ausgelieferte Insel: Grundinsel nach dem Schlüpfen, Gebiet 1 (Schilfwiese) bis Level 4 unter Nebel.
+  const hatched = hatching(gameCatalog, { proposerPersonId: anna, proposerRole: 'natur', partnerPersonId: philipp }).fields;
+  const unlocked = areaUnlockAt(gameCatalog, { level: 4, sides: sidesOf(gameCatalog, hatched)! })!;
+  const sceneOf = (fields: typeof hatched, unlockedAreas: readonly string[], transformation: IslandSceneRequest['transformation'] = null) =>
+    islandScene(request({ island: { ...islandLayout(gameCatalog, { fields, unlockedAreas }), objects: [], momo }, transformation }));
+
+  test('der Nebel ist weg, sobald ein Gebiet freigeschaltet ist; seine Felder gehören dann ihren Personen', () => {
+    const before = sceneOf(hatched, []);
+    const after = sceneOf([...hatched, ...unlocked.fields], ['schilfwiese']);
+
+    expect(ofType(before.items, 'nebel').map((item) => item.area)).toEqual(['schilfwiese']);
+    expect(before.hitAt(centerOf(before, 'schilfwiese:0:-1'))).toEqual({ type: 'nebel', area: 'schilfwiese' });
+    expect(ofType(after.items, 'nebel')).toEqual([]);
+    expect(after.hitAt(centerOf(after, 'schilfwiese:0:-1'))).toEqual({ type: 'feld', field: 'schilfwiese:0:-1', kind: 'ecke', owner: 'self' });
+    expect(after.hitAt(centerOf(after, 'schilfwiese:15:-1'))).toMatchObject({ owner: 'partner' });
+  });
+
+  test('während der Verwandlung blendet Momo von der alten Form über, und über dem neuen Gebiet liegt Nebel, der abzieht', () => {
+    const from: MomoAppearance = { ...momo, formKey: 'kaulquappe' };
+    const scene = sceneOf([...hatched, ...unlocked.fields], ['schilfwiese'], { from, lifting: areaCells(gameCatalog, ['schilfwiese']) });
+
+    expect(ofType(scene.items, 'momo')).toMatchObject([{ from }]);
+    expect(ofType(scene.items, 'nebel')).toMatchObject([{ area: 'schilfwiese', lifting: true, opacity: 0.85 }]);
+    expect(ofType(scene.items, 'nebel')[0]!.cells).toHaveLength(80);
+    // Der abziehende Nebel sperrt nichts: Ein Tipp trifft schon das Feld.
+    expect(scene.hitAt(centerOf(scene, 'schilfwiese:0:-1'))).toMatchObject({ type: 'feld' });
+  });
+
+  test('ohne Verwandlung steht Momo nur in der aktuellen Form', () => {
+    expect(ofType(sceneOf(hatched, []).items, 'momo')).toMatchObject([{ from: null }]);
+  });
+});
+
+/** Mitte eines Felds in der Szene, aus seiner Raute. */
+function centerOf(scene: ReturnType<typeof islandScene>, field: string) {
+  const diamond = ofType(scene.items, 'feld').find((item) => item.field === field)!.polygon;
+  return { x: diamond[0]!.x, y: (diamond[0]!.y + diamond[2]!.y) / 2 };
+}
 
 describe('Abend', () => {
   const lantern = { ...island, objects: [

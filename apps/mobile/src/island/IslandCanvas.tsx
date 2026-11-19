@@ -5,7 +5,7 @@ import { GestureDetector, useCompetingGestures, usePanGesture, usePinchGesture, 
 import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
 
 import { color, useReducedMotion, type ColorToken } from '../design';
-import { fogPath, LampGlow, MomoOnIsland, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
+import { fogPath, LampGlow, LiftingFog, MomoOnIsland, MomoTransforming, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
 import type { IslandScene, Polygon, Rect, SceneHit, SceneItem } from './scene-model';
 import { useLoop, usePulse } from './use-loop';
 import { panBy, resizeView, startView, toScene, zoomAt, type Size, type Viewport } from './viewport';
@@ -129,7 +129,15 @@ function drawScene(scene: IslandScene, transform: SharedValue<Transforms3d>, mot
     } else {
       // Objekte behalten ihren Schlüssel, wenn ein neues dazukommt; sonst begänne ihr Erscheinen neu. Feld und
       // Grafik gehören dazu: Ein umgestelltes oder aufgewertetes Objekt erscheint wieder mit Feder (#194).
-      const key = item.type === 'objekt' ? `objekt-${item.id}-${item.field}-${item.art}` : index;
+      // Momo und abziehender Nebel behalten ihren Schlüssel, damit die Verwandlung (#204) nicht neu beginnt.
+      const key =
+        item.type === 'objekt'
+          ? `objekt-${item.id}-${item.field}-${item.art}`
+          : item.type === 'momo'
+            ? `momo-${item.from === null ? 'ruhig' : 'verwandelt'}`
+            : item.type === 'nebel'
+              ? `nebel-${item.area}-${item.lifting}`
+              : index;
       run.push(<Item key={key} item={item} foliage={scene.foliage} motion={motion} />);
     }
   });
@@ -173,9 +181,17 @@ function Item({ item, foliage, motion: { progress, pulse, reduceMotion } }: { it
     case 'objekt':
       return <ObjectArt at={item.at} art={item.art} foliage={foliage} appearing={item.appearing} />;
     case 'momo':
-      return <MomoOnIsland at={item.at} appearance={item.appearance} reduceMotion={reduceMotion} />;
+      return item.from === null ? (
+        <MomoOnIsland at={item.at} appearance={item.appearance} reduceMotion={reduceMotion} />
+      ) : (
+        <MomoTransforming at={item.at} from={item.from} appearance={item.appearance} reduceMotion={reduceMotion} />
+      );
     case 'nebel':
-      return <Path path={fogPath(item.cells)} color={color[item.tone]} opacity={item.opacity} />;
+      return item.lifting ? (
+        <LiftingFog cells={item.cells} tone={item.tone} opacity={item.opacity} reduceMotion={reduceMotion} />
+      ) : (
+        <Path path={fogPath(item.cells)} color={color[item.tone]} opacity={item.opacity} />
+      );
     case 'partikel':
       return <Particle at={item.at} phase={item.phase} tone={item.tone} progress={progress} />;
     case 'licht':

@@ -3,7 +3,7 @@ import { and, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { readingOf } from '@abnehm/clock';
 import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
 import { ClaimEventReward, claimEventRewardKey, type IslandEventKind, IslandRole, MarkEventsSeen, markEventsSeenKey } from '@abnehm/contracts/island';
-import { eventRewardId, islandEventId, islandEventStateId, IslandObjectOrigin, VisitorEventDetails } from '@abnehm/contracts/island-records';
+import { DiscoveryEventDetails, eventRewardId, islandEventId, islandEventStateId, IslandObjectOrigin, VisitorEventDetails } from '@abnehm/contracts/island-records';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import {
   cappedEventKinds,
@@ -218,10 +218,12 @@ export const claimEventRewardCommand: ServerCommand<ClaimEventReward> = {
     if (businessKey !== claimEventRewardKey(stateId)) throw new CommandRejection('invalid_payload');
     const couplingId = EntityId.parse(resource.couplingId);
     const { state, event } = await stateWithEvent(tx, stateId);
+    if (state.claimedAt !== null || state.personId !== actor.personId) return refuse(tx, stateId);
+    // Besucher und Entdeckung haben eine Belohnung; Momos Wunsch (#206) und Inselwetter (#207) melden sich mit
+    // ihren Tickets hier an.
+    if (event.type === 'entdeckung') return claimDiscovery(tx, { personId: actor.personId, couplingId, stateId, event, seenAt: state.seenAt, at });
     const { templateKey } = event;
-    // Bisher hat nur der Besucher eine Belohnung mit Bedingung; Momos Wunsch (#206), Inselwetter (#207)
-    // und Entdeckung (#204) melden sich mit ihren Tickets hier an.
-    if (event.type !== 'besuch' || templateKey === null || state.claimedAt !== null || event.responsiblePersonId !== actor.personId) return refuse(tx, stateId);
+    if (event.type !== 'besuch' || templateKey === null || event.responsiblePersonId !== actor.personId) return refuse(tx, stateId);
     const islandId = EntityId.parse(event.islandId);
     const role = await playingRole(tx, { islandId, couplingId, personId: actor.personId });
     if (role === null) return refuse(tx, stateId);
@@ -274,5 +276,43 @@ export const claimEventRewardCommand: ServerCommand<ClaimEventReward> = {
     return { changes, idMappings: [] };
   },
 };
+
+/**
+ * Entdeckung (#204): Jede Person holt die Entdeckungs-Deko des Gebiets einmal ab, eindeutig je Ereignis und
+ * Person über ihren Ereignisstand. Die Stücke kommen in ihr Lager; das `index`-te Stück trägt die ID
+ * `eventRewardId(stand, index)`, wie auf dem Gerät. Die Baupläne sind schon mit dem Ereignis freigeschaltet.
+ * Ein Gebiet ohne Deko (endlose Gebiete) hat nichts zum Abholen.
+ */
+async function claimDiscovery(
+  tx: DbExecutor,
+  { personId, couplingId, stateId, event, seenAt, at }: Readonly<{
+    personId: EntityId;
+    couplingId: EntityId;
+    stateId: EntityId;
+    event: typeof islandEvent.$inferSelect;
+    seenAt: Date | null;
+    at: Date;
+  }>,
+) {
+  const details = DiscoveryEventDetails.safeParse(event.reward);
+  if (!details.success || details.data.deko.length === 0) return refuse(tx, stateId);
+  const islandId = EntityId.parse(event.islandId);
+  const write = changeWriter(tx, at);
+  const changes: CanonicalChange[] = [];
+  for (const [index, key] of details.data.deko.entries()) {
+    const rewardId = eventRewardId(stateId, index);
+    await write({ entityType: 'island_object', couplingId }, async (stamp) => {
+      await tx.insert(islandObject).values({ id: rewardId, islandId, couplingId, ownerPersonId: personId, catalogKey: key, origin: 'entdeckung', level: 1, fieldId: null, ...stamp });
+      return rewardId;
+    });
+    changes.push(await canonicalAfterWrite(tx, islandObjectEntity, rewardId));
+  }
+  await write({ entityType: 'island_event_state', ownerPersonId: personId }, async (stamp) => {
+    await tx.update(islandEventState).set({ claimedAt: at, seenAt: seenAt ?? at, ...updated(stamp) }).where(eq(islandEventState.id, stateId));
+    return stateId;
+  });
+  changes.unshift(await canonicalAfterWrite(tx, islandEventStateEntity, stateId));
+  return { changes, idMappings: [] };
+}
 
 export const islandEventCommands = [markEventsSeenCommand, claimEventRewardCommand] as const;

@@ -4,13 +4,14 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useClock } from '../clock/clock-context';
-import { color, space } from '../design';
+import { color, space, useReducedMotion } from '../design';
 import type { IslandHalves } from './halves';
 import { BuildModeBar, IslandBar, type IslandEntry } from './IslandBar';
 import { IslandCanvas } from './IslandCanvas';
 import { IslandHud } from './IslandHud';
-import { islandScene, type IslandSceneInput, type LocalTime, type SceneHit } from './scene-model';
+import { islandScene, type IslandSceneInput, type IslandSceneRequest, type LocalTime, type SceneHit } from './scene-model';
 import { islandTexts } from './texts';
+import { transformationDuration } from './transformation-motion';
 
 /** Bau-Modus der Inselansicht: was gebaut oder umgestellt wird (#194), wohin es darf und wie man abbricht. */
 export type BuildMode = Readonly<{ title: string; fields: ReadonlySet<string>; onCancel: () => void }>;
@@ -36,6 +37,10 @@ export type IslandViewProps = {
   building?: BuildMode | null;
   /** Das eben gebaute, aufgewertete oder umgestellte Objekt; es erscheint mit Feder. */
   appearing?: string | null;
+  /** Verwandlungsszene (#204): alte Form und die Gebiete, von denen danach der Nebel abzieht. */
+  transformation?: IslandSceneRequest['transformation'];
+  /** Die Verwandlungsszene ist vorbei. */
+  onTransformationEnd?: () => void;
 };
 
 /**
@@ -57,6 +62,8 @@ export function IslandView({
   bottomInset = 0,
   building = null,
   appearing = null,
+  transformation = null,
+  onTransformationEnd,
 }: IslandViewProps) {
   const localTime = useLocalTime(useClock());
   const [areas, setAreas] = useState(false);
@@ -74,9 +81,19 @@ export function IslandView({
         // Im Bau-Modus leuchten die gültigen Felder; eine Auswahl darüber verwischte sie.
         selectedField: buildable !== null ? null : selectedField,
         appearing,
+        transformation,
       }),
-    [island, viewerPersonId, buildable, areas, localTime, selectedField, appearing],
+    [island, viewerPersonId, buildable, areas, localTime, selectedField, appearing, transformation],
   );
+  // Die Szene endet nach Überblendung und Abziehen des Nebels; danach steht Momo wieder ruhig in der neuen Form.
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    if (transformation === null) return undefined;
+    const timer = setTimeout(() => onTransformationEnd?.(), transformationDuration(reduceMotion, transformation.lifting.length > 0));
+    return () => clearTimeout(timer);
+    // Die Dauer gilt der begonnenen Szene; ein späterer Wechsel der Einstellung verlängert sie nicht.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transformation]);
   const ownObjects = island.objects.filter((object) => object.ownerPersonId === viewerPersonId).length;
 
   return (

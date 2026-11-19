@@ -145,13 +145,18 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .all()
       .map((row) => row.key),
     appearance: appearanceAt(progress.level),
+    // Die Entdeckung eines Gebiets ist zugleich das gemeinsame Ereignis „neues Gebiet“ (#204).
     sharedEvents: db
       .select({ eventId: islandEvent.id, type: islandEvent.type, occurredAt: islandEvent.occurredAt })
       .from(islandEvent)
-      .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.type, SharedEventType.options)))
+      .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.type, [...SharedEventType.options, 'entdeckung'])))
       .orderBy(asc(islandEvent.occurredAt))
       .all()
-      .map((row) => ({ eventId: EntityId.parse(row.eventId), type: SharedEventType.parse(row.type), occurredAt: Instant.parse(row.occurredAt) })),
+      .map((row) => ({
+        eventId: EntityId.parse(row.eventId),
+        type: row.type === 'entdeckung' ? 'gebiet' : SharedEventType.parse(row.type),
+        occurredAt: Instant.parse(row.occurredAt),
+      })),
     events: readIslandEvents(tx, { islandId, personId }),
   };
 }
