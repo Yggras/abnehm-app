@@ -29,7 +29,12 @@ git rev-parse --show-toplevel >/dev/null 2>&1 || {
   echo "Fehler: Nicht in einem Git-Repository." >&2
   exit 1
 }
-primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+# Pfade aller Worktrees dieses Repos, der primäre Checkout zuerst.
+worktree_paths() {
+  git worktree list --porcelain | sed -n 's/^worktree //p'
+}
+
+primary=$(worktree_paths | head -n 1)
 worktrees_dir="$(dirname "$primary")/$(basename "$primary")-worktrees"
 
 # Kanonischer Pfad eines existierenden Verzeichnisses (Symlinks aufgelöst).
@@ -79,15 +84,15 @@ delete_folders() {
     rm -rf "$dir"
     total=$((total + size))
     count=$((count + 1))
-    printf 'Gelöscht: %s (%s)\n' "$dir" "$(human "$size")"
+    printf 'Gelöscht: %s (%s)\n' "$dir" "$(format_kb "$size")"
   done < "$1"
   if [ "$count" -eq 0 ]; then
     echo "Keine DerivedData zu löschen."
   fi
-  printf 'Frei geworden: %s in %d DerivedData-Ordner(n)\n' "$(human "$total")" "$count"
+  printf 'Frei geworden: %s in %d DerivedData-Ordner(n)\n' "$(format_kb "$total")" "$count"
 }
 
-human() {
+format_kb() {
   awk -v k="$1" 'BEGIN {
     if (k >= 1048576) printf "%.1f GB", k / 1048576
     else if (k >= 1024) printf "%.1f MB", k / 1024
@@ -154,7 +159,7 @@ while IFS= read -r worktree; do
     break
   fi
 done <<EOF
-$(git worktree list --porcelain | sed -n 's/^worktree //p')
+$(worktree_paths)
 EOF
 if [ "$registered" -ne 1 ]; then
   echo "Fehler: Kein Worktree dieses Repos (git worktree list): $target" >&2
