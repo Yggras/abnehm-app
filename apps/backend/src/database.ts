@@ -17,8 +17,19 @@ export type DbExecutor = PgDatabase<NodePgQueryResultHKT>;
 
 export type Database = {
   db: NodePgDatabase;
+  /**
+   * Hört auf `NOTIFY` im Kanal `channel` (https://www.postgresql.org/docs/current/sql-listen.html) über
+   * eine eigene Verbindung des Pools. Postgres stellt eine Benachrichtigung aus einer Transaktion erst nach
+   * deren Commit zu, nach einem Rollback nie (https://www.postgresql.org/docs/current/sql-notify.html).
+   * Bricht die Verbindung ab, verbindet sich der Listener nach kurzer Pause neu; Benachrichtigungen
+   * dazwischen gehen verloren. Liefert die Funktion zum Beenden.
+   */
+  listen(channel: string, onNotify: () => void): Promise<() => Promise<void>>;
   close(): Promise<void>;
 };
+
+/** Pause vor dem erneuten Verbinden eines abgebrochenen Listeners; Designwert, nicht belegt. */
+const LISTEN_RECONNECT_MS = 5_000;
 
 export function openDatabase(settings: DatabaseSettings): Database {
   const pool = new pg.Pool({ ...pgConnection(settings), max: 10, connectionTimeoutMillis: 5_000 });
@@ -27,8 +38,59 @@ export function openDatabase(settings: DatabaseSettings): Database {
   pool.on('error', (error) => {
     console.error('[datenbank] Ruhende Verbindung verloren:', errorCodeForLog(error));
   });
+
+  async function listen(channel: string, onNotify: () => void) {
+    if (!/^[a-z_][a-z0-9_]*$/.test(channel)) throw new Error(`Ungültiger Kanal: ${channel}`);
+    let stopped = false;
+    let client: pg.PoolClient | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+
+    async function connect() {
+      const connected = await pool.connect();
+      // Eine Verbindung mit LISTEN gehört dem Listener, bis er endet; Fehler beenden sie (`release(error)`).
+      connected.on('notification', (message) => {
+        if (message.channel === channel) onNotify();
+      });
+      connected.on('error', (error) => {
+        console.error(`[datenbank] Listener ${channel} verloren:`, errorCodeForLog(error));
+        connected.release(error);
+        if (client === connected) client = null;
+        if (!stopped) retry = setTimeout(() => void connect().catch(reconnectLater), LISTEN_RECONNECT_MS);
+      });
+      try {
+        await connected.query(`LISTEN ${channel}`);
+      } catch (error) {
+        connected.release(error instanceof Error ? error : true);
+        throw error;
+      }
+      // Beendet, während die Verbindung entstand (etwa ein Reconnect beim Herunterfahren): gleich zurückgeben,
+      // sonst hielte sie `pool.end()` auf.
+      if (stopped) {
+        connected.release();
+        return;
+      }
+      client = connected;
+    }
+    function reconnectLater(error: unknown) {
+      console.error(`[datenbank] Listener ${channel} nicht verbunden:`, errorCodeForLog(error));
+      if (!stopped) retry = setTimeout(() => void connect().catch(reconnectLater), LISTEN_RECONNECT_MS);
+    }
+
+    await connect();
+    return async () => {
+      stopped = true;
+      if (retry !== null) clearTimeout(retry);
+      const current = client;
+      client = null;
+      if (current === null) return;
+      await current.query(`UNLISTEN ${channel}`).catch(() => {});
+      current.release();
+    };
+  }
+
   return {
     db: drizzle({ client: pool }),
+    listen,
     close: () => pool.end(),
   };
 }

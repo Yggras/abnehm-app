@@ -23,7 +23,9 @@ import { createLogout } from './logout/logout.ts';
 import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 import { createMealPhotos } from './nutrition/meal-photos.ts';
-import { encouragementEntity, sendEncouragementCommand } from './notifications/encouragement.ts';
+import { encouragementEntity, sendEncouragementCommand, writeBackEncouragementPushStatus } from './notifications/encouragement.ts';
+import type { ExpoPushPort } from './notifications/expo-push.ts';
+import { createPushDelivery } from './notifications/push-delivery.ts';
 import { notificationSettingEntity } from './notifications/notification-setting-entity.ts';
 import { createPushInstallations } from './notifications/push-installations.ts';
 import { ownFoodEntity } from './nutrition/own-food-entity.ts';
@@ -64,6 +66,7 @@ export function createBackend({
   syncPullPageSize,
   photoStorageDirectory,
   mealVisionAnalyzer,
+  expoPush,
   partnerSummaryProjectors = Object.values(trackerPartnerSummaryProjectors({ planReader: postgresPlanReader })),
 }: {
   database: Database;
@@ -76,6 +79,11 @@ export function createBackend({
    * Development-Backend der Fake der Testfähigkeit `fake-fotoanalyse`.
    */
   mealVisionAnalyzer: MealVisionAnalyzer;
+  /**
+   * Expo-Push-Port des Zustellers: produktiv und im Development-Backend der HTTP-Adapter
+   * (`createExpoPushClient`), in Tests der Fake der Testfähigkeit `fake-expo-push`.
+   */
+  expoPush: ExpoPushPort;
   /** Der Server rechnet in UTC; lokale Tage einer Person liest er mit `clock.read(person.timeZone)`. */
   clock?: Clock;
   /** Einträge je Pull-Seite; Tests wählen wenige, um mehrere Seiten zu erzwingen. */
@@ -157,10 +165,14 @@ export function createBackend({
   // Push-Installation (Spezifikation 5, Abschnitt 9; #139): eigener Endpunkt, das Abmelden deaktiviert sie.
   const pushInstallations = createPushInstallations({ database, clock });
   logout.registerHook(pushInstallations.logoutHook);
+  // Push-Zusteller (#142): stellt die Intents aller Bereiche zu; Anfeuern erhält seinen Endstatus zurück.
+  const pushDelivery = createPushDelivery({ database, clock, port: expoPush, sessions: auth.sessions });
+  pushDelivery.onFinalStatus('anfeuern', writeBackEncouragementPushStatus);
   const jobs = createJobRegistry({ clock });
   jobs.register(securityLog.cleanupJob);
   jobs.register(photoDrafts.cleanupJob);
   jobs.register(mealPhotos.storageCleanupJob);
+  for (const job of pushDelivery.jobs) jobs.register(job);
   return {
     app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts, pushInstallations }),
     clock,
@@ -175,6 +187,7 @@ export function createBackend({
     uncoupling,
     inviteCodes,
     jobs,
+    pushDelivery,
   };
 }
 

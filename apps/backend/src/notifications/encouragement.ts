@@ -11,18 +11,20 @@ import {
 } from '@abnehm/contracts/partner';
 
 import { policies } from '../authorization/authorization.ts';
-import { changeWriter } from '../coupling/change-writer.ts';
+import { changeWriter, updated } from '../coupling/change-writer.ts';
 import { couplingMember, encouragement } from '../db/schema/index.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { insertNotificationIntent } from '../sync/notification-intents.ts';
 import { iso, isoOrNull, serverManaged } from '../sync/registry.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
+import type { FinalStatusObserver } from './push-delivery.ts';
 
 // Anfeuern auf dem Server (Spezifikation 5, Abschnitte 4, 10 und 11; #123). Die Anfeuerung entsteht nur
 // über `sendEncouragement`, gedankt wird nur über `thankEncouragements`; ein generisches Update gibt es
 // nicht. Die Autorisierung (`encouragement_send`) lässt nur aktive Mitglieder senden und liefert die
 // Kopplung samt Partner als Fakten: Der Empfänger kommt allein daraus, nie aus der Nutzlast. Den Push
-// stellt der Zusteller aus #142 zu; keine Energiebuchung und keine Verbindung zu Tageszielen.
+// stellt der Zusteller aus #142 zu und meldet seinen Endstatus zurück; keine Energiebuchung und keine
+// Verbindung zu Tageszielen.
 
 /** Die Anfeuerung im Sync: lesbar für beide aktiven Mitglieder der Kopplung. */
 export const encouragementEntity = serverManaged({
@@ -45,6 +47,21 @@ export const encouragementEntity = serverManaged({
       updatedAt: iso(row.updatedAt),
     }),
 });
+
+/**
+ * Schreibt den Endstatus des `anfeuern`-Intents auf die Anfeuerung zurück (Spezifikation 5, Abschnitt 9);
+ * `keine_installation` erscheint dort als `fehlgeschlagen`. Die Änderung bekommt eine Serverversion und
+ * kommt per Pull an. Angemeldet am Push-Zusteller (#142).
+ */
+export const writeBackEncouragementPushStatus: FinalStatusObserver = async (tx, intent) => {
+  const [row] = await tx.select({ couplingId: encouragement.couplingId }).from(encouragement).where(eq(encouragement.id, intent.sourceEventId));
+  if (row === undefined) return;
+  const pushStatus = intent.status === 'keine_installation' ? 'fehlgeschlagen' : intent.status;
+  await changeWriter(tx, intent.at)({ entityType: 'encouragement', couplingId: row.couplingId }, async (stamp) => {
+    await tx.update(encouragement).set({ pushStatus, ...updated(stamp) }).where(eq(encouragement.id, intent.sourceEventId));
+    return intent.sourceEventId;
+  });
+};
 
 export const sendEncouragementCommand: ServerCommand<SendEncouragement> = {
   type: 'sendEncouragement',

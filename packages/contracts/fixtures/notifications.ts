@@ -10,6 +10,8 @@ import {
   PushPlatform,
   RegisterPushInstallationRequest,
   RoleRequestPayload,
+  ServerPushData,
+  UncouplingNotificationPayload,
   WallClockTime,
 } from '../src/notifications.ts';
 import { fixtures, without } from './define.ts';
@@ -40,7 +42,29 @@ const pushRegistration = {
   permission: 'granted',
 } as const;
 
+/** `data` des Anfeuern-Pushes an Philipp: Intent und Ziel „partner“ mit Fokus auf die erhaltene Anfeuerung (#142). */
+const pushData = {
+  intentId: encouragement.intentId,
+  target: { type: 'partner', focus: 'received_encouragement' },
+} as const;
+
 export const notificationFixtures = {
+  ServerPushData: fixtures(ServerPushData, {
+    valid: {
+      'Anfeuern öffnet „Wir“ bei der Anfeuerung': pushData,
+      'Projektabschluss öffnet das Projekt auf der Insel': {
+        intentId: `${sharedEvent}:${anna}:projektabschluss`,
+        target: { type: 'momo', view: 'projekt' },
+      },
+    },
+    invalid: {
+      'ohne Ziel': without(pushData, 'target'),
+      'ohne Intent': without(pushData, 'intentId'),
+      'unbekanntes Ziel': { ...pushData, target: { type: 'chat' } },
+      'Gesundheitswert gehört nicht in die Daten': { ...pushData, partnerWaterPercent: 64 },
+      'Text gehört nicht in die Daten': { ...pushData, body: 'Gemeinsam für Momo 🐣' },
+    },
+  }),
   WallClockTime: fixtures(WallClockTime, {
     valid: { 'Mitternacht': '00:00', 'Mittag': '13:00', 'letzte Minute': '23:59' },
     invalid: {
@@ -116,6 +140,13 @@ export const notificationFixtures = {
     invalid: {
       'Freitext': { senderDisplayName: 'Anna', encouragementKey: 'Kleiner Stups: Trink was 💧' },
       'mit Empfänger': { senderDisplayName: 'Anna', encouragementKey: 'stark_heute', recipientPersonId: philipp },
+    },
+  }),
+  UncouplingNotificationPayload: fixtures(UncouplingNotificationPayload, {
+    valid: { 'Anna hat entkoppelt': { actionId: sharedAction, senderDisplayName: 'Anna' } },
+    invalid: {
+      'ohne Absender': { actionId: sharedAction },
+      'Grund als Freitext gibt es nicht': { actionId: sharedAction, senderDisplayName: 'Anna', reason: 'Es passt gerade nicht' },
     },
   }),
   RoleRequestPayload: fixtures(RoleRequestPayload, {

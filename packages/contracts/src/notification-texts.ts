@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { ContractError } from './errors.ts';
-import { EncouragementNotificationPayload, RoleRequestPayload } from './notifications.ts';
+import { EncouragementNotificationPayload, RoleRequestPayload, UncouplingNotificationPayload } from './notifications.ts';
 import type { EncouragementKey } from './partner.ts';
 
 // Deutscher Textkatalog für Benachrichtigungen (Spezifikation 0, Abschnitt 2). App (Tages-Check-ins,
@@ -85,4 +85,9 @@ export const notificationTexts = defineNotificationTexts({
     RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),
     ({ senderDisplayName }) => ({ title: `${senderDisplayName} schlägt eure Rollen vor`, body: 'Wenn du zustimmst, schlüpft Momo 🐣' }),
   ),
+  /** Spezifikation 5, Abschnitt 9: Information an den Partner, keine Anfrage. */
+  entkopplung: notificationText(UncouplingNotificationPayload, ({ senderDisplayName }) => ({
+    title: `${senderDisplayName} hat eure Kopplung beendet`,
+    body: 'Momo und eure Insel sind archiviert.',
+  })),
 });
