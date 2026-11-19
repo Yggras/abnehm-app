@@ -17,11 +17,11 @@ import { runSteps, seeded, type SeedWorld } from './support/seed-world.ts';
 const iphone = 'philipp-iphone';
 const withoutVersion = (rows: readonly SeedRow[] = []) => rows.map((row) => ({ ...row, server_version: null }));
 
-/** Auswertung eines Tagesziels von Philipp auf dem iPhone zur Uhr des Manifests. */
-function evaluation({ phones }: SeedWorld, dailyGoalId: string) {
+/** Auswertung eines Tagesziels von Philipp auf dem iPhone, ohne `at` zur Uhr des Manifests. */
+function evaluation({ phones }: SeedWorld, dailyGoalId: string, at: string = seedClock.instant) {
   const goal = dumpLocalDatabase(phones[iphone]!.database).rows.daily_goal!.find((row) => row.id === dailyGoalId)!;
   return phones[iphone]!.database.read((tx) =>
-    seedDailyGoalRegistry().evaluateDailyGoal(tx, DailyGoalSnapshot.parse(goal.snapshot), Instant.parse(seedClock.instant)));
+    seedDailyGoalRegistry().evaluateDailyGoal(tx, DailyGoalSnapshot.parse(goal.snapshot), Instant.parse(at)));
 }
 
 describe('Randzustände der Tagesziele', () => {
@@ -71,6 +71,88 @@ describe('Randzustände der Tagesziele', () => {
       progress: { intakeKcal: 2_010 },
       completion: { type: 'festgehalten', firstCompletedAt: seedClock.instant },
     });
+  });
+});
+
+describe('Randzustände der Ernährung (#166) mit den echten Evaluatoren der Ernährung', () => {
+  const [mealsGoal] = seedIds.dailyGoal.philippHeute;
+  const nachTagesende = '2026-10-14T22:30:00.000Z';
+
+  it.each([
+    ['ernaehrung-offen', 'offen', 0],
+    ['ernaehrung-teilweise', 'teilweise', 1],
+  ] as const)('%s: „Ernährung erfasst“ ist %s mit %i Mahlzeiten, ohne Erfüllung', async (scenario, currentState, meals) => {
+    const world = await seeded(seedManifests[scenario]);
+    await runSteps(world);
+
+    expect(evaluation(world, mealsGoal)).toMatchObject({
+      type: 'evaluated', currentState, progress: { recordedMealCategories: meals, minimumMealCategories: 2 }, completion: { type: 'nie' },
+    });
+  });
+
+  it('ernaehrung-erfuellt: Die App-Öffnung erfüllt „Ernährung erfasst“; der nächste Sync bringt Erfüllung und +1 unverändert auf den Server', async () => {
+    const world = await seeded(seedManifests['ernaehrung-erfuellt']);
+    await runSteps(world);
+    expect(evaluation(world, mealsGoal)).toMatchObject({
+      currentState: 'erfuellt', progress: { recordedMealCategories: 2 }, completion: { type: 'festgehalten', firstCompletedAt: seedClock.instant },
+    });
+    const local = dumpLocalDatabase(world.phones[iphone]!.database);
+
+    await world.phones[iphone]!.sync();
+
+    const server = await dumpServer(world.backend.database.db);
+    for (const table of ['daily_goal_completion', 'energy_booking']) expect(withoutVersion(server[table])).toEqual(withoutVersion(local.rows[table]));
+    expect(dumpLocalDatabase(world.phones[iphone]!.database).outbox).toEqual([]);
+  });
+
+  it('ernaehrung-nach-erfuellung-korrigiert: wieder teilweise, die Erfüllung bleibt festgehalten, keine Gegenbuchung', async () => {
+    const world = await seeded(seedManifests['ernaehrung-nach-erfuellung-korrigiert']);
+    expect(evaluation(world, mealsGoal)).toMatchObject({ currentState: 'erfuellt', completion: { type: 'festgehalten' } });
+
+    await runSteps(world);
+
+    expect(evaluation(world, mealsGoal)).toMatchObject({
+      currentState: 'teilweise',
+      progress: { recordedMealCategories: 1 },
+      completion: { type: 'festgehalten', firstCompletedAt: '2026-10-14T11:00:00.000Z' },
+    });
+    const bookings = dumpLocalDatabase(world.phones[iphone]!.database).rows.energy_booking ?? [];
+    expect(bookings.map((row) => row.type)).toEqual(['daily_goal_credit']);
+  });
+
+  it.each([
+    ['kalorienbudget-unter-untergrenze', 1_881, 'offen'],
+    ['kalorienbudget-im-budget', 2_010, 'erfuellt'],
+    ['kalorienbudget-ueber-budget', 2_418, 'offen'],
+  ] as const)('%s: vor dem Tagesende „tagesende“ mit %i kcal, nach dem Tagesabschluss %s', async (scenario, intakeKcal, afterDayEnd) => {
+    const world = await seeded(seedManifests[scenario]);
+    const [budgetGoal] = seedIds.dailyGoal.philippHeute;
+    expect(evaluation(world, budgetGoal)).toMatchObject({
+      currentState: 'tagesende', dayClosed: false, progress: { intakeKcal, budgetKcal: 2_417, lowerBoundKcal: 1_882 }, completion: { type: 'nie' },
+    });
+
+    await runSteps(world);
+
+    expect(evaluation(world, budgetGoal, nachTagesende)).toMatchObject({
+      currentState: afterDayEnd,
+      dayClosed: true,
+      progress: { intakeKcal },
+      completion: afterDayEnd === 'erfuellt' ? { type: 'festgehalten', firstCompletedAt: nachTagesende } : { type: 'nie' },
+    });
+  });
+
+  it('kalorienbudget-im-budget: Der nächste Sync bringt die Tagesende-Erfüllung auf den Server', async () => {
+    const world = await seeded(seedManifests['kalorienbudget-im-budget']);
+    await runSteps(world);
+
+    await world.phones[iphone]!.sync();
+
+    const server = await dumpServer(world.backend.database.db);
+    expect(server.daily_goal_completion).toEqual([
+      expect.objectContaining({ id: expect.any(String), baustein: 'im_kalorienbudget', slot: 1, first_completed_at: nachTagesende }),
+    ]);
+    expect((server.energy_booking ?? []).map((row) => row.type)).toEqual(['daily_goal_credit']);
+    expect(dumpLocalDatabase(world.phones[iphone]!.database).outbox).toEqual([]);
   });
 });
 
