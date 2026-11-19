@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { ContractError } from './errors.ts';
 import {
   ChallengeProposalPayload,
+  CheckInTextValues,
+  type CheckInTopic,
   EncouragementNotificationPayload,
   LevelUpPayload,
   RoleRequestPayload,
@@ -77,6 +79,43 @@ export const encouragementMessages: Readonly<Record<EncouragementKey, string>> =
 };
 
 /**
+ * Liter mit einer Nachkommastelle aus ml, kaufmännisch gerundet, mit deutschem Komma. Ohne
+ * `toLocaleString`, weil Hermes und Node dort verschieden runden (beobachtet in #171).
+ */
+function litres(ml: number): string {
+  const tenths = Math.round(ml / 100);
+  return `${Math.floor(tenths / 10)},${tenths % 10}`;
+}
+
+/**
+ * Eine Zeile je Anlass. „Schon trainiert? …“, „0,4 von 1,5 l getrunken 💧“, „Heute ist Wiegetag ⚖️ –
+ * kurz auf die Waage?“ und „Schon was gegessen? 🍎 Frühstück oder Mittag eintragen“ stehen wörtlich in
+ * Spezifikation 5, Abschnitt 7; die übrigen Zeilen sind eigene Formulierungen im selben Ton (nicht belegt).
+ */
+function checkInLine(topic: CheckInTopic, moment: CheckInTextValues['moment']): string {
+  switch (topic.type) {
+    case 'ernaehrung':
+      return moment === 'mittag' ? 'Schon was gegessen? 🍎 Frühstück oder Mittag eintragen' : 'Was gab’s heute zu essen? 🍎 Kurz eintragen';
+    case 'wasser':
+      return topic.progress === null
+        ? 'Schon was getrunken? 💧 Kurz eintragen'
+        : `${litres(topic.progress.countedMl)} von ${litres(topic.progress.targetMl)} l getrunken 💧`;
+    case 'sport':
+      return 'Schon trainiert? Öffne die App, damit Momo es mitbekommt';
+    case 'gewicht':
+      return 'Heute ist Wiegetag ⚖️ – kurz auf die Waage?';
+  }
+}
+
+/** Insel-Zusatz je Ereignisart; „… und auf der Insel wartet Besuch 🦊“ steht wörtlich in Spezifikation 5, Abschnitt 7. */
+const islandHints: Readonly<Record<NonNullable<CheckInTextValues['islandEventKind']>, string>> = {
+  besuch: '… und auf der Insel wartet Besuch 🦊',
+  momos_wunsch: '… und Momo hat einen Wunsch ✨',
+  inselwetter: '… und auf der Insel gibt es neues Wetter 🌦️',
+  entdeckung: '… und auf der Insel gibt es etwas zu entdecken 🧭',
+};
+
+/**
  * Der gemeinsame Katalog; Schlüssel ist der `messageKey` des Intents, Werte sind seine Payload. Der
  * Push-Zusteller ergänzt zu jedem Katalogschlüssel `‹x›Key` der Payload dessen Namen als `‹x›Name`
  * (`withCatalogNames` im Spielkatalog). Ein Eintrag, der einen solchen Namen zeigt, nimmt ihn in sein
@@ -110,6 +149,14 @@ export const notificationTexts = defineNotificationTexts({
       body: `${templateName} – sieben Tage gemeinsam. Magst du mitmachen?`,
     }),
   ),
+  /**
+   * Spezifikation 5, Abschnitt 7: ein lokaler Tages-Check-in, der alle Anlässe bündelt. Momo spricht
+   * freundlich, ohne Schuld und ohne Verlust-Framing; nie mit Kalorien-, Budget- oder Gewichtswerten.
+   */
+  tages_checkin: notificationText(CheckInTextValues, ({ moment, topics, islandEventKind }) => ({
+    title: 'Momo fragt nach',
+    body: [...topics.map((topic) => checkInLine(topic, moment)), ...(islandEventKind === null ? [] : [islandHints[islandEventKind]])].join('\n'),
+  })),
   /** Spezifikation 5, Abschnitt 9: Information an den Partner, keine Anfrage. */
   entkopplung: notificationText(UncouplingNotificationPayload, ({ senderDisplayName }) => ({
     title: `${senderDisplayName} hat eure Kopplung beendet`,
