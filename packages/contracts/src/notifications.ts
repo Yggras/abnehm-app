@@ -28,6 +28,9 @@ export const ChallengeProposalPayload = z.strictObject({
 /** Nutzlast von `levelaufstieg`: das höchste neu erreichte Level (Spezifikation 0, Abschnitt 4). */
 export const LevelUpPayload = z.strictObject({ level: z.int().min(2) });
 
+/** Nutzlast von `gebiet`: das neue Gebiet bzw. die Ausprägung einer Landschaftsvorlage (Spezifikation 4, Abschnitt 12; #204). */
+export const AreaUnlockedPayload = z.strictObject({ gebietKey: CatalogKey });
+
 /** Nutzlast von `anfeuern`: Absender-Anzeigename und fester Botschaftsschlüssel (Spezifikation 5, Abschnitt 4). */
 export const EncouragementNotificationPayload = z.strictObject({ senderDisplayName: DisplayName, encouragementKey: EncouragementKey });
 
@@ -37,7 +40,7 @@ export const UncouplingNotificationPayload = z.strictObject({ actionId: EntityId
 const payloads = {
   anfeuern: EncouragementNotificationPayload,
   levelaufstieg: LevelUpPayload,
-  gebiet: z.strictObject({ gebietKey: CatalogKey }),
+  gebiet: AreaUnlockedPayload,
   projektabschluss: z.strictObject({ templateKey: CatalogKey }),
   challenge_vorschlag: ChallengeProposalPayload,
   challenge_erfolg: z.strictObject({ challengeId: EntityId, templateKey: CatalogKey }),

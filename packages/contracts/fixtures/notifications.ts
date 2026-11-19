@@ -1,4 +1,5 @@
 import {
+  AreaUnlockedPayload,
   ChallengeProposalPayload,
   DeactivatePushInstallationParams,
   defaultNotificationSetting,
@@ -140,6 +141,10 @@ export const notificationFixtures = {
   LevelUpPayload: fixtures(LevelUpPayload, {
     valid: { 'Level 2': { level: 2 }, 'Level 61': { level: 61 } },
     invalid: { 'Level 1 ist kein Aufstieg': { level: 1 }, 'kein ganzes Level': { level: 2.5 }, 'mit Energiemenge': { level: 4, energy: 12 } },
+  }),
+  AreaUnlockedPayload: fixtures(AreaUnlockedPayload, {
+    valid: { 'Gebiet 1': { gebietKey: 'schilfwiese' }, 'endloses Gebiet': { gebietKey: 'endlos_1_duenen' } },
+    invalid: { 'ohne Gebiet': {}, 'Feldschlüssel': { gebietKey: 'schilfwiese:0:-1' }, 'mit Level': { gebietKey: 'schilfwiese', level: 4 } },
   }),
   EncouragementNotificationPayload: fixtures(EncouragementNotificationPayload, {
     valid: { 'Anna, Gemeinsam für Momo': { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' } },

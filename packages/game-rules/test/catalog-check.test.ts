@@ -87,6 +87,11 @@ describe('Katalogprüfung', () => {
     expect(checkCatalog({ ...catalog, areas: fractional })).toContainEqual({ rule: 'feld_koordinate', key: 't_gebiet_2:0.5:-10' });
   });
 
+  it('verlangt Landschaftsvorlagen im Band von 16 × 5 Feldern ab (0, 0), damit endlose Gebiete übereinander passen (#204)', () => {
+    const shifted = replace(catalog.landscapeTemplates, 't_vorlage_zweite', (template) => ({ ...template, fields: areaFields(0, 1) }));
+    expect(checkCatalog({ ...catalog, landscapeTemplates: shifted })).toContainEqual({ rule: 'feld_koordinate', key: 't_vorlage_zweite:0:5' });
+  });
+
   it('verlangt feste Gebiete nur an Formlevels, je Formlevel höchstens eines', () => {
     const at = (level: number) => ({ ...catalog, areas: replace(catalog.areas, 't_gebiet_2', (area) => ({ ...area, unlockLevel: level })) });
     expect(checkCatalog(at(5))).toContainEqual({ rule: 'gebiet_level', key: 't_gebiet_2' });
