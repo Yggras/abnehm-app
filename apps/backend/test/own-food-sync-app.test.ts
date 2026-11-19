@@ -70,7 +70,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
   });
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: () => {} });
   const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
-  const search = nutrition.foodSearch(catalog.database);
+  const search = nutrition.foodSearch(catalog.database, 'fruehstueck');
   return {
     nutrition,
     sync: () => engine.sync(),

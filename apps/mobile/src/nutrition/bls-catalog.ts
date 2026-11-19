@@ -13,6 +13,8 @@ export type BlsFood = Readonly<{ key: string; snapshot: NutritionSnapshot }>;
 export type BlsCatalog = {
   /** Treffer in der Rangfolge aus `ranked-search.ts` (#154). */
   search(query: SearchQuery, limit: number): BlsFood[];
+  /** Das Lebensmittel zu einem Schlüssel; `null`, wenn er nicht (mehr) im Katalog steht (#158). */
+  byKey(key: string): BlsFood | null;
 };
 
 type FoodRow = {
@@ -46,15 +48,15 @@ export function createBlsCatalog(database: CatalogDatabase): BlsCatalog {
     };
   };
 
+  const columns = 'key, name, milli_kcal_per_100 AS milliKcal, protein_mg_per_100 AS proteinMg, carbs_mg_per_100 AS carbsMg, fat_mg_per_100 AS fatMg';
   return {
     search(query, limit) {
-      const { sql, params } = rankedSearch(query, limit, {
-        table: 'food',
-        fts: 'food_search',
-        key: 'key',
-        columns: 'key, name, milli_kcal_per_100 AS milliKcal, protein_mg_per_100 AS proteinMg, carbs_mg_per_100 AS carbsMg, fat_mg_per_100 AS fatMg',
-      });
+      const { sql, params } = rankedSearch(query, limit, { table: 'food', fts: 'food_search', key: 'key', columns });
       return database.all<FoodRow>(sql, params).map(snapshotOf);
+    },
+    byKey(key) {
+      const row = database.all<FoodRow>(`SELECT ${columns} FROM food WHERE key = ?`, [key])[0];
+      return row === undefined ? null : snapshotOf(row);
     },
   };
 }

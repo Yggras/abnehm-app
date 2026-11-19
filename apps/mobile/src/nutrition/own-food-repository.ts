@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 
 import { EntityId, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { BaseUnit, foodValuesOf, OwnFoodOrigin, ownFoodSnapshot, type FoodRef, type NutritionSnapshot, type OwnFoodRecord, type OwnFoodUpsert } from '@abnehm/contracts/nutrition';
@@ -100,6 +100,27 @@ export function overlaidOrigins(tx: ReadContext): OwnFoodOrigin[] {
     .where(and(isNull(ownFood.deletedAt), isNotNull(ownFood.originType)))
     .all()
     .map((origin) => OwnFoodOrigin.parse(origin));
+}
+
+/** Ein nicht gelöschtes eigenes Lebensmittel als Lebensmittel der Suche; sonst `undefined`. */
+export function livingOwnFood(tx: ReadContext, entityId: EntityId): OwnFoodChoice | undefined {
+  const row = sqliteOf(tx)
+    .select()
+    .from(ownFood)
+    .where(and(eq(ownFood.id, entityId), isNull(ownFood.deletedAt)))
+    .get();
+  return row && { ref: { type: 'eigen', key: entityId }, snapshot: ownFoodSnapshot(valuesOf(row)) };
+}
+
+/** Das nicht gelöschte eigene Lebensmittel, das diese Quelle überdeckt; sonst `undefined` (Spezifikation 2, Abschnitt 3). */
+export function overlayingOwnFood(tx: ReadContext, origin: OwnFoodOrigin): OwnFoodChoice | undefined {
+  const row = sqliteOf(tx)
+    .select({ id: ownFood.id })
+    .from(ownFood)
+    .where(and(eq(ownFood.originType, origin.type), eq(ownFood.originKey, origin.key), isNull(ownFood.deletedAt)))
+    .orderBy(desc(ownFood.updatedAt), asc(ownFood.id))
+    .get();
+  return row && livingOwnFood(tx, EntityId.parse(row.id));
 }
 
 /** Die nicht gelöschten eigenen Lebensmittel zur Anfrage, in der Rangfolge aus `ranked-search.ts`. */

@@ -23,6 +23,7 @@ import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
 import { createLogout } from './logout/logout.ts';
 import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
+import { foodFavoriteEntity } from './nutrition/food-favorite-entity.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 import { createMealPhotos } from './nutrition/meal-photos.ts';
 import { encouragementEntity, sendEncouragementCommand, writeBackEncouragementPushStatus } from './notifications/encouragement.ts';
@@ -145,10 +146,11 @@ export function createBackend({
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
-  // Ernährung (Spezifikation 2): Einträge, eigene Lebensmittel, Fotoentwürfe und Mahlzeitenfotos samt Fotoablage.
+  // Ernährung (Spezifikation 2): Einträge, eigene Lebensmittel, Lebensmittelfavoriten, Fotoentwürfe und Mahlzeitenfotos samt Fotoablage.
   const nutritionEntries = nutritionEntryEntity({ clock });
   sync.registerEntity(nutritionEntries);
   sync.registerEntity(ownFoodEntity);
+  sync.registerEntity(foodFavoriteEntity);
   const photoStorage = createPhotoStorage({ directory: photoStorageDirectory });
   const photoDrafts = createPhotoDrafts({ database, clock, analyzer: mealVisionAnalyzer, storage: photoStorage });
   const mealPhotos = createMealPhotos({ database, clock, storage: photoStorage, entries: nutritionEntries });

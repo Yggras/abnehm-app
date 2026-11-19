@@ -1,8 +1,6 @@
 import type { Clock } from '@abnehm/clock';
-import { EntityId, type LocalDate } from '@abnehm/contracts/base';
+import { EntityId, type LocalDate, type MealKey } from '@abnehm/contracts/base';
 import {
-  entryAmount,
-  type DisplayUnit,
   type FoodRef,
   type FoodValues,
   type NutritionEntryAddedOutcome,
@@ -14,20 +12,24 @@ import {
 } from '@abnehm/contracts/nutrition';
 
 import type { DailyGoalPersistence } from '../daily-goals';
-import type { CatalogDatabase, LocalDatabase } from '../local-db';
-import { requireOwnPerson } from '../local-db/person-header';
+import type { CatalogDatabase, LocalDatabase, ReadContext } from '../local-db';
+import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import type { OnlineResult } from '../online/online-result';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
-import { defaultAmountMilli } from './amount-input';
+import { amountPrefill, type AmountPrefill } from './amount-prefill';
+import { createBlsCatalog } from './bls-catalog';
+import { createCurrentFoods } from './current-foods';
 import { readDayLog, readEntryDetail, type DayLog, type EntryDetail } from './day-log';
 import { addEntry, deleteEntry, undoEntry, updateEntry, type EntryChange, type EntryUndo, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
+import { favoriteFoods, isFoodFavorite, markFoodFavorite, refreshFoodFavorites, unmarkFoodFavorite, type FavoriteFood } from './food-favorites';
 import { createFoodSearch, type FoodSearch } from './food-search';
 import { confirmPhotoDraft, deletePhoto, readMealPhotoDetail, setPhotoSharing, type MealPhotoDetail, type PhotoDraftConfirmation } from './meal-photos';
 import type { MealPhotoImage, MealPhotoImages } from './photo-images';
 import { overlaidOrigins, searchOwnFoods, type OwnFoodChoice } from './own-food-repository';
 import { deleteOwnFood, saveOwnFood, type OwnFoodBase } from './own-foods';
+import { recentFoods, type QuickFoods } from './quick-foods';
 
 export type NutritionDependencies = Readonly<{
   /** Die geöffnete Kontodatenbank; jeder Befehl ist genau eine Transaktion darin. */
@@ -48,8 +50,7 @@ export type NutritionDependencies = Readonly<{
   observeOnline: (listener: (online: boolean) => void) => () => void;
 }>;
 
-/** Vorbelegung der Mengenprüfung: Anzeigeeinheit und Menge in Tausendsteln. */
-export type AmountPrefill = Readonly<{ displayUnit: DisplayUnit; displayAmountMilli: number }>;
+export type { AmountPrefill } from './amount-prefill';
 
 export type Nutrition = Readonly<{
   /**
@@ -132,9 +133,31 @@ export type Nutrition = Readonly<{
   deleteOwnFood(id: EntityId): void;
   /**
    * Die lokale Lebensmittelsuche (Spezifikation 2, Abschnitt 4) über den geöffneten BLS-Katalog und
-   * die eigenen Lebensmittel dieses Kontos. Jede Suche liest den aktuellen Stand.
+   * die Lebensmittel dieses Kontos; „Zuletzt verwendet“ gilt für die gewählte Mahlzeit. Jede Suche liest
+   * den aktuellen Stand.
    */
-  foodSearch(catalog: CatalogDatabase): FoodSearch;
+  foodSearch(catalog: CatalogDatabase, meal: MealKey): FoodSearch;
+  /**
+   * Beobachtet „Zuletzt verwendet“ der Mahlzeit und die Lebensmittelfavoriten (Spezifikation 2, Abschnitt
+   * 7), je vollständig und in Rangfolge, mit vorbelegter Menge: sofort und nach jedem Commit der
+   * Kontodatenbank. `null`, bis die eigene Person mit dem ersten Pull angekommen ist.
+   */
+  observeQuickFoods(catalog: CatalogDatabase, meal: MealKey, listener: (foods: QuickFoods | null) => void): () => void;
+  /**
+   * „Verwenden“ eines Lebensmittels, für das ein Favorit steht, in einer eigenen lokalen Transaktion: Ist
+   * die Referenz des Favoriten verfügbar, wird seine gespeicherte Fassung auf ihre aktuellen Werte gebracht.
+   */
+  recordFavoriteUse(catalog: CatalogDatabase, ref: FoodRef): void;
+  /** Beobachtet, ob ein Lebensmittelfavorit für dieses Lebensmittel steht, auch über eine Überdeckung. */
+  observeFoodFavorite(ref: FoodRef, listener: (marked: boolean) => void): () => void;
+  /**
+   * Markiert ein Lebensmittel als Lebensmittelfavorit in einer eigenen lokalen Transaktion samt
+   * Outbox-Operation und liefert die Referenz des Favoriten. Eine KI-Schätzung ohne Referenz wird zuerst
+   * zu einem eigenen Lebensmittel aus ihrem Snapshot. Wirft `InvalidNutritionInputError`, ohne zu schreiben.
+   */
+  markFoodFavorite(food: FavoriteFood): FoodRef;
+  /** Entfernt die Markierung in einer eigenen lokalen Transaktion; ein erneutes Markieren bleibt möglich. */
+  unmarkFoodFavorite(ref: FoodRef): void;
 }>;
 
 /**
@@ -165,23 +188,33 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
     observeOnline: (listener) => dependencies.observeOnline(listener),
     setPhotoSharing: (photoId, sharedWithPartner) => database.transaction((tx) => setPhotoSharing(tx, dependencies, photoId, sharedWithPartner)),
     deletePhoto: (photoId) => database.transaction((tx) => deletePhoto(tx, dependencies, photoId)),
-    prefillAmount(foodRef, snapshot) {
-      const latest = database.read((tx) => latestAmountOf(tx, EntityId.parse(requireOwnPerson(tx).id), foodRef));
-      // Die letzte Menge gilt nur, wenn ihre Einheit im aktuellen Snapshot noch bekannt ist.
-      if (latest !== undefined && entryAmount(snapshot, latest.displayUnit, latest.displayAmountMilli).type === 'menge') return latest;
-      const portion = snapshot.portions.find((conversion) => conversion.unit === 'portion') ?? snapshot.portions[0];
-      const displayUnit = portion?.unit ?? snapshot.baseUnit;
-      return { displayUnit, displayAmountMilli: defaultAmountMilli(snapshot, displayUnit) };
-    },
+    prefillAmount: (foodRef, snapshot) =>
+      amountPrefill(snapshot, database.read((tx) => latestAmountOf(tx, EntityId.parse(requireOwnPerson(tx).id), foodRef))),
     saveOwnFood: (base, values) => database.transaction((tx) => saveOwnFood(tx, dependencies, base, values)),
     deleteOwnFood: (id) => database.transaction((tx) => deleteOwnFood(tx, dependencies, id)),
-    foodSearch: (catalog) =>
+    foodSearch: (catalog, meal) =>
       createFoodSearch({
         catalog,
         ownFoods: {
           search: (query, limit) => database.read((tx) => searchOwnFoods(tx, query, limit)),
           overlaidOrigins: () => database.read(overlaidOrigins),
+          quickFoods: () => database.read((tx) => quickFoodsOf(tx, catalog, meal)) ?? { recent: [], favorites: [] },
         },
       }),
+    observeQuickFoods: (catalog, meal, listener) => database.observe((tx) => quickFoodsOf(tx, catalog, meal), listener),
+    recordFavoriteUse: (catalog, ref) =>
+      database.transaction((tx) => refreshFoodFavorites(tx, dependencies, createCurrentFoods(createBlsCatalog(catalog)), ref)),
+    observeFoodFavorite: (ref, listener) => database.observe((tx) => readOwnPerson(tx) !== undefined && isFoodFavorite(tx, ref), listener),
+    markFoodFavorite: (food) => database.transaction((tx) => markFoodFavorite(tx, dependencies, food)),
+    unmarkFoodFavorite: (ref) => database.transaction((tx) => unmarkFoodFavorite(tx, dependencies, ref)),
   };
+
+  /** Beide Listen des Hinzufügen-Bildschirms; `null` ohne eigene Person. „Zuletzt verwendet“ endet heute. */
+  function quickFoodsOf(tx: ReadContext, catalog: CatalogDatabase, meal: MealKey): QuickFoods | null {
+    const person = readOwnPerson(tx);
+    if (person === undefined) return null;
+    const personId = EntityId.parse(person.id);
+    const foods = createCurrentFoods(createBlsCatalog(catalog));
+    return { recent: recentFoods(tx, foods, personId, meal, dependencies.clock.read().localDate), favorites: favoriteFoods(tx, foods, personId) };
+  }
 }

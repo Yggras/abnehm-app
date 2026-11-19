@@ -43,6 +43,13 @@
       "when": 1794999427598,
       "tag": "0005_sync_cursor_pulled_at",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795116069684,
+      "tag": "0006_food_favorite_removed_at",
+      "breakpoints": true
     }
   ]
 }

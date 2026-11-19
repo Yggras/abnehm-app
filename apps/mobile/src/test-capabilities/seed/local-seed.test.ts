@@ -57,11 +57,11 @@ describe('Seed der lokalen Datenbank', () => {
 
     seedLocalDatabase(database, solo, 'philipp-iphone');
 
-    const result = nutrition.foodSearch(catalog.database).search('Apfel roh');
+    const result = nutrition.foodSearch(catalog.database, 'fruehstueck').search('Apfel roh');
     expect(result.type === 'treffer' && result.hits.map((hit) => `${hit.mark}: ${hit.snapshot.name}`)).toEqual([
       'eigen: Apfel roh', 'bls: Apfel geschält, roh', 'bls: Granatapfel roh',
     ]);
-    const muesli = nutrition.foodSearch(catalog.database).search('Bircher');
+    const muesli = nutrition.foodSearch(catalog.database, 'fruehstueck').search('Bircher');
     expect(muesli.type === 'treffer' && muesli.hits[0]).toMatchObject({ mark: 'eigen', snapshot: { name: 'Bircher-Müsli, selbst gemacht' } });
   });
 

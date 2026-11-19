@@ -23,6 +23,8 @@ import {
   NutritionEntryUpdatedOutcome,
   NutritionEntryUpsert,
   NutritionSnapshot,
+  FoodFavoriteRecord,
+  FoodFavoriteUpsert,
   OwnFoodOrigin,
   OwnFoodRecord,
   OwnFoodUpsert,
@@ -362,6 +364,25 @@ export const nutritionFixtures = {
     invalid: {
       'ohne Eigentümer': { ...correctedOats, createdAt: now, updatedAt: now },
       'Makros schwerer als die Bezugsmenge': { ...correctedOats, proteinMg: 100_000, personId: philipp, createdAt: now, updatedAt: now },
+    },
+  }),
+  FoodFavoriteUpsert: fixtures(FoodFavoriteUpsert, {
+    valid: {
+      'BLS-Lebensmittel markiert': { foodRef: { type: 'bls', key: 'C133000' }, snapshot: blsSnapshot, removedAt: null },
+      'eigenes Lebensmittel, Markierung entfernt': { foodRef: { type: 'eigen', key: ownFood }, snapshot: ownSnapshot, removedAt: now },
+    },
+    invalid: {
+      'Fassung aus einer anderen Quelle': { foodRef: { type: 'eigen', key: ownFood }, snapshot: blsSnapshot, removedAt: null },
+      'KI-Schätzung ohne Referenz': { foodRef: null, snapshot: { ...ownSnapshot, source: 'ki' }, removedAt: null },
+      'ohne Markierungsstand statt null': { foodRef: { type: 'bls', key: 'C133000' }, snapshot: blsSnapshot },
+      'mit Eigentümer': { foodRef: { type: 'bls', key: 'C133000' }, snapshot: blsSnapshot, removedAt: null, personId: philipp },
+    },
+  }),
+  FoodFavoriteRecord: fixtures(FoodFavoriteRecord, {
+    valid: { 'kanonisch': { foodRef: { type: 'bls', key: 'C133000' }, snapshot: blsSnapshot, removedAt: null, personId: philipp, createdAt: now, updatedAt: now } },
+    invalid: {
+      'ohne Eigentümer': { foodRef: { type: 'bls', key: 'C133000' }, snapshot: blsSnapshot, removedAt: null, createdAt: now, updatedAt: now },
+      'Fassung aus einer anderen Quelle': { foodRef: { type: 'eigen', key: ownFood }, snapshot: blsSnapshot, removedAt: null, personId: philipp, createdAt: now, updatedAt: now },
     },
   }),
   NutritionEntryAddedValues: fixtures(NutritionEntryAddedValues, {

@@ -1,0 +1,1 @@
+ALTER TABLE `food_favorite` ADD `removed_at` text;

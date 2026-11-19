@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EntityId } from '../src/base.ts';
 import { uuidV5 } from '../src/ids.ts';
+import { foodFavoriteId } from '../src/nutrition.ts';
 import { importedSportEntryId, importedWeightEntryId } from '../src/trackers.ts';
 
 // Nachweis für #105: deterministische IDs nach RFC 9562, Abschnitt 5.5 (UUIDv5, SHA-1).
@@ -64,6 +65,28 @@ describe('IDs importierter Einträge (#183)', () => {
       importedSportEntryId(philipp, 'health_connect', key),
       importedSportEntryId(philipp, 'apple_health', `${key}-2`),
       importedWeightEntryId(philipp, 'apple_health', key),
+    ]);
+    expect(ids.size).toBe(5);
+  });
+});
+
+describe('ID des Lebensmittelfavoriten (#158)', () => {
+  const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
+  const anna = EntityId.parse('7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f');
+  const oats = { type: 'bls', key: 'C133000' } as const;
+
+  it('ist deterministisch aus Person und Lebensmittelreferenz', () => {
+    expect(foodFavoriteId(philipp, oats)).toBe(foodFavoriteId(philipp, { ...oats }));
+    expect(EntityId.safeParse(foodFavoriteId(philipp, oats)).success).toBe(true);
+  });
+
+  it('unterscheidet Person, Art und Schlüssel der Referenz', () => {
+    const ids = new Set([
+      foodFavoriteId(philipp, oats),
+      foodFavoriteId(anna, oats),
+      foodFavoriteId(philipp, { type: 'bls', key: 'C133032' }),
+      foodFavoriteId(philipp, { type: 'off', key: '40060400' }),
+      foodFavoriteId(philipp, { type: 'eigen', key: anna }),
     ]);
     expect(ids.size).toBe(5);
   });

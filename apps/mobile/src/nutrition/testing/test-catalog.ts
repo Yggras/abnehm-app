@@ -35,4 +35,4 @@ function food(key: string, name: string, milliKcal: number, proteinMg: number, c
 }
 
 /** Für Tests nur über den BLS-Katalog: ein Konto ohne eigene Lebensmittel. */
-export const noOwnFoods: OwnFoodLookup = { search: () => [], overlaidOrigins: () => [] };
+export const noOwnFoods: OwnFoodLookup = { search: () => [], overlaidOrigins: () => [], quickFoods: () => ({ recent: [], favorites: [] }) };

@@ -1,7 +1,7 @@
-import { and, asc, between, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, between, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { CaptureMethod, DisplayUnit, NutritionEntryUpsert, SnapshotSource, type FoodRef, type NutritionEntryRecord } from '@abnehm/contracts/nutrition';
+import { CaptureMethod, DisplayUnit, FoodRef, NutritionEntryUpsert, NutritionSnapshot, SnapshotSource, type NutritionEntryRecord } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
@@ -148,23 +148,73 @@ export function readEntryContent(tx: ReadContext, entityId: EntityId): StoredEnt
       meal: row.meal,
       captureMethod: row.captureMethod,
       foodRef: row.foodRefType === null ? null : { type: row.foodRefType, key: row.foodRefKey },
-      snapshot: {
-        name: row.snapshotName,
-        baseUnit: row.snapshotBaseUnit,
-        referenceAmount: row.snapshotReferenceAmount,
-        milliKcal: row.snapshotMilliKcal,
-        proteinMg: row.snapshotProteinMg,
-        carbsMg: row.snapshotCarbsMg,
-        fatMg: row.snapshotFatMg,
-        portions: row.snapshotPortions,
-        source: row.snapshotSource,
-        attribution: row.snapshotAttribution,
-      },
+      snapshot: snapshotFields(row),
       amount: { baseAmount: row.baseAmount, displayUnit: row.displayUnit, displayAmountMilli: row.displayAmountMilli },
       totals: { milliKcal: row.totalMilliKcal, proteinMg: row.totalProteinMg, carbsMg: row.totalCarbsMg, fatMg: row.totalFatMg },
       mealPhotoId: row.mealPhotoId,
     }),
   };
+}
+
+/** Die Snapshot-Spalten einer Zeile als Felder des Snapshots, noch ungeprüft. */
+function snapshotFields(row: typeof nutritionEntry.$inferSelect) {
+  return {
+    name: row.snapshotName,
+    baseUnit: row.snapshotBaseUnit,
+    referenceAmount: row.snapshotReferenceAmount,
+    milliKcal: row.snapshotMilliKcal,
+    proteinMg: row.snapshotProteinMg,
+    carbsMg: row.snapshotCarbsMg,
+    fatMg: row.snapshotFatMg,
+    portions: row.snapshotPortions,
+    source: row.snapshotSource,
+    attribution: row.snapshotAttribution,
+  };
+}
+
+/** Ein früherer Eintrag mit Lebensmittelreferenz, wie ihn „Zuletzt verwendet“ braucht. */
+export type UsedFood = Readonly<{
+  ref: FoodRef;
+  /** Der Snapshot des Eintrags: der Rückfall, wenn die Referenz nicht mehr verfügbar ist. */
+  snapshot: NutritionSnapshot;
+  displayUnit: DisplayUnit;
+  displayAmountMilli: number;
+}>;
+
+/**
+ * Die nicht gelöschten Einträge der Person mit Lebensmittelreferenz in einer Mahlzeit von `from` bis `to`,
+ * zuletzt erfasste zuerst (#158). Einträge ohne Referenz (KI-Schätzungen) fehlen.
+ */
+export function usedFoodsOfMeal(tx: ReadContext, personId: EntityId, meal: MealKey, from: LocalDate, to: LocalDate): UsedFood[] {
+  return sqliteOf(tx)
+    .select()
+    .from(nutritionEntry)
+    .where(and(
+      eq(nutritionEntry.personId, personId),
+      eq(nutritionEntry.meal, meal),
+      between(nutritionEntry.localDate, from, to),
+      isNotNull(nutritionEntry.foodRefType),
+      isNull(nutritionEntry.deletedAt),
+    ))
+    .orderBy(desc(nutritionEntry.consumedAt), desc(nutritionEntry.createdAt), desc(nutritionEntry.id))
+    .all()
+    .map((row) => ({
+      ref: FoodRef.parse({ type: row.foodRefType, key: row.foodRefKey }),
+      snapshot: NutritionSnapshot.parse(snapshotFields(row)),
+      displayUnit: DisplayUnit.parse(row.displayUnit),
+      displayAmountMilli: row.displayAmountMilli,
+    }));
+}
+
+/** Je Lebensmittelreferenz der Erfassungszeitpunkt des letzten nicht gelöschten Eintrags der Person. */
+export function lastUseByRef(tx: ReadContext, personId: EntityId): ReadonlyMap<string, Instant> {
+  const rows = sqliteOf(tx)
+    .select({ type: nutritionEntry.foodRefType, key: nutritionEntry.foodRefKey, at: sql<string>`max(${nutritionEntry.consumedAt})` })
+    .from(nutritionEntry)
+    .where(and(eq(nutritionEntry.personId, personId), isNotNull(nutritionEntry.foodRefType), isNull(nutritionEntry.deletedAt)))
+    .groupBy(nutritionEntry.foodRefType, nutritionEntry.foodRefKey)
+    .all();
+  return new Map(rows.map(({ type, key, at }) => [`${type}:${key}`, at as Instant]));
 }
 
 /** Die nicht gelöschten Einträge einer Person an einem lokalen Tag, in Erfassungsreihenfolge. */
