@@ -110,3 +110,4 @@ manifestSuite('haelfte-voll');
 manifestSuite('doppelausgabe');
 manifestSuite('feldkonflikt');
 manifestSuite('ereignisse-voll');
+manifestSuite('levelaufstieg-ausstehend');

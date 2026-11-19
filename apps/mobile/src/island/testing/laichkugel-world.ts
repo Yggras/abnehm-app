@@ -26,7 +26,7 @@ import type { Refresh } from '../../shell/followed-source';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncWriter } from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
 import { createGameService, type GameService } from '../game-service';
-import { islandSyncEntities } from '../island-entities';
+import { islandProgressOf, islandSyncEntities } from '../island-entities';
 import { anna, philipp } from './persons';
 import { quietGameDependencies } from './quiet-game';
 
@@ -213,14 +213,14 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
     pullProgress(level, events = []) {
       const adapterOf = (entityType: string) => islandSyncEntities.find((entity) => entity.entityType === entityType)!;
       database.transaction((tx) => {
-        const current = sqliteOf(tx).select().from(islandProgress).where(eq(islandProgress.islandId, islandId)).get();
-        if (current === undefined) throw new Error('Inselfortschritt fehlt; zuerst hatch()');
-        const members = current.content.members.map(({ personId }) => ({ personId, halfPercent: 0, halfFull: false }));
+        const row = sqliteOf(tx).select().from(islandProgress).where(eq(islandProgress.islandId, islandId)).get();
+        if (row === undefined) throw new Error('Inselfortschritt fehlt; zuerst hatch()');
+        const current = islandProgressOf(row);
+        const members = current.members.map(({ personId }) => ({ personId, halfPercent: 0, halfFull: false }));
         const progress = IslandProgress.parse({
-          islandId, couplingId, level, levelNeed: levelNeed(level), members, activeProject: current.content.activeProject, dataAsOf: at,
-          serverVersion: String(Number(current.serverVersion) + 1),
+          ...current, level, levelNeed: levelNeed(level), members, dataAsOf: at, serverVersion: String(Number(current.serverVersion) + 1),
         });
-        adapterOf('island_progress').applyCanonical(tx, { entityId: EntityId.parse(current.id), serverVersion: progress.serverVersion, data: progress });
+        adapterOf('island_progress').applyCanonical(tx, { entityId: EntityId.parse(row.id), serverVersion: progress.serverVersion, data: progress });
         for (const eventLevel of events) {
           const occasionKey = `level:${islandId}:${eventLevel}`;
           const id = islandEventId(islandId, occasionKey);

@@ -23,13 +23,14 @@ import { sqliteOf } from '../local-db/sqlite';
 
 const stateKey = 'momo_levelfeier';
 const CelebratedLevel = z.strictObject({ islandId: EntityId, level: z.int().min(1) });
-type CelebratedLevel = z.infer<typeof CelebratedLevel>;
+/** Insel und Level, gemerkt oder aus der Projektion. */
+type IslandLevel = z.infer<typeof CelebratedLevel>;
 
 /** Was beim nächsten Beanspruchen geschieht: still merken oder feiern; `null`, wenn nichts ansteht. */
-type PendingLevel = Readonly<{ celebrate: boolean; next: CelebratedLevel }> | null;
+type PendingLevel = Readonly<{ celebrate: boolean; next: IslandLevel }> | null;
 
 /** Die geschlüpfte Insel der aktiven Kopplung mit dem Level ihrer Projektion; `null` ohne sie. */
-function projectedLevel(tx: ReadContext, personId: EntityId): CelebratedLevel | null {
+function projectedLevel(tx: ReadContext, personId: EntityId): IslandLevel | null {
   const db = sqliteOf(tx);
   const found = db
     .select({ islandId: island.id, level: islandProgress.level })

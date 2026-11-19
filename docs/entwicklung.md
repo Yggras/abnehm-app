@@ -301,7 +301,7 @@ Nimmt der Partner die Rollenwahl an, schlüpft Momo (Abschnitte 2.1, 2.4, 5 und 
 
 ### Bauen und eigene Hälfte
 
-Ein Bauplan auf ein eigenes freies Feld (Abschnitte 2.5, 3, 7 und 11 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83), [#191](https://github.com/Yggras/abnehm-app/issues/191)). Den Bau-Modus der Oberfläche liefert #192, den Levelaufstieg im selben Befehl #200, Aufwerten, Umstellen und Lager #194.
+Ein Bauplan auf ein eigenes freies Feld (Abschnitte 2.5, 3, 7 und 11 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83), [#191](https://github.com/Yggras/abnehm-app/issues/191)). Den Bau-Modus der Oberfläche liefert #192, den Levelaufstieg im selben Befehl #200 (siehe „Levelaufstieg“), Aufwerten, Umstellen und Lager #194.
 
 - **Vertrag:** Nutzlast `BuildObject` (`commandId`, `islandObjectId`, `fieldId`, `blueprintKey`, `localDate`) mit dem fachlichen Schlüssel `buildObjectKey(commandId)` = `bauen:‹commandId›` (`@abnehm/contracts/island`). Alle IDs vergibt das Gerät. Einen Preis nennt die Nutzlast nicht, beide Seiten rechnen ihn mit `decideBuild`. Die Buchung heißt `energyBookingId(commandId)`, ihr Buchungsschlüssel ist die `commandId` (Spezifikation 0, Abschnitt 4). Das Objekt überträgt `IslandObjectRecord` (`@abnehm/contracts/island-records`); `IslandObjectOrigin` ist zugleich die Liste beider Datenbankschemas.
 - **Server** (`apps/backend/src/island/build-object.ts`):
@@ -429,6 +429,25 @@ Momo reagiert auf eigene Tageszielerfüllungen und Gutschriften und zeigt je bet
 - **Zweizeilige Meldungen** (`src/shell/MessageHost.tsx`, #188): Ein Eintrag im Textkatalog darf zwei Zeilen liefern (`MessageLines`); der Host zeigt beide, jede mit ihrem Symbol, und sagt beide an. Solche Meldungen haben nie „Rückgängig“. Steht eine Meldung mit „Rückgängig“, hängt der Host nur die letzte Zeile an, bei Momos Reaktion also die von heute.
 - **Auf dem Gerät:** Erfüllungen entstehen auf dem Gerät bisher nur für die Bausteine der Ernährung, deren Evaluatoren angemeldet sind (#166). Für Wasser, Sport und Gewicht kommt eine Reaktion bis #178 nur über den Pull, etwa im Seed `gekoppelt`, in dem Philipp heute ein Tagesziel samt `+1` erfüllt hat.
 - **Tests:** `packages/game-rules/test/mood.test.ts` (Wahrheitstabellen für Priorität, 19:59/20:00, 05:59/06:00 und die Grenze von „döst“), `src/island/momo-reactions.test.ts` (echte SQLite-Datei, echter Persistenzdienst mit den Test-Evaluatoren aus #104: genau einmal trotz Re-Render, erneuter Auswertung, Retry, Pull und Neustart, gebündelte Tagesende-Meldung, stille Übernahme, Stimmung im Dienst) und `src/shell/AppShell.test.tsx` (Meldungstexte über den Meldungs-Host).
+
+### Levelaufstieg
+
+Steigt die Insel durch eine Ausgabe auf ein neues Level, entstehen Freischaltungen, Ereignis und Push-Intents im selben Befehl, und beide Geräte feiern beim nächsten sichtbaren Moment (Abschnitte 2.2, 5, 6 und 12 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83), Abschnitt 4 der [Spezifikation 0](https://github.com/Yggras/abnehm-app/issues/71), [#200](https://github.com/Yggras/abnehm-app/issues/200)). Gebiete, Formen und Entdeckung an den Formlevels liefert #204.
+
+- **Server** (`apps/backend/src/island/level-up.ts`, `progress-change.ts`):
+  - `progressChanges(tx, islandId, at)` berechnet den Inselfortschritt neu und liefert ihn als erste kanonische Änderung. Bauen, Aufwerten und die Gegenbuchung rufen es in ihrer Transaktion auf, später auch das Einzahlen in Gemeinschaftsprojekte.
+  - Liegt das neue Level über dem gespeicherten, schreibt `levelUpChanges` für jedes neue Level ab 2 die Level-Freischaltung je Rolle aus dem Katalog (`unlocksAt`, Grund `level`) und das gemeinsame Ereignis `levelaufstieg` mit dem Anlassschlüssel `level:<insel>:<L>` und der ID `islandEventId(insel, anlass)`.
+  - Je Mitglied entsteht genau ein Intent `levelaufstieg` mit dem höchsten neuen Level über `insertNotificationIntent`; Quelle ist das Ereignis dieses Levels. Den Text „Momo ist jetzt auf Level {level} 🎉“ / „Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.“ führt der gemeinsame Katalog (`notificationTexts`, Schlüssel `levelaufstieg`).
+  - **Idempotenz:** Ein Level, dessen Ereignis schon besteht, gilt als gefeiert. Erreicht die Insel es nach einer Gegenbuchung erneut, entsteht nichts Neues, auch kein Push. Ein Retry derselben Operation ist ohnehin `already_applied`.
+  - Den Katalog nimmt `progressChanges` als optionalen Parameter, damit Tests mit dem Test-Katalog der Spielregeln Level-Freischaltungen prüfen können; der ausgelieferte Katalog hat noch keine (#214, #217).
+- **App** (`src/island/level-celebration.ts`, `momo-reactions.ts`):
+  - Jede Installation merkt sich im Gerätezustand (`momo_levelfeier`, ohne Sync) Insel und zuletzt gefeiertes Level. Meldet die Projektion ein höheres, gehört der Aufstieg zur nächsten Reaktion (`MomoReaction.level`): Momo „begeistert“ mit den drei Energie-Funken des Rigs, eine Haptik `levelaufstieg` und die Meldung `momo.levelaufstieg` „Momo ist jetzt auf Level N“. Mehrere übersprungene Level ergeben eine Feier mit dem höchsten.
+  - Ohne gemerktes Level für diese Insel, etwa direkt nach dem Schlüpfen, nach einer Neuanmeldung oder auf einer neuen Insel, übernimmt die Installation das aktuelle still. Sinkt das Level nach einer Gegenbuchung, bleibt das gemerkte stehen. Beides ist eine Festlegung in #200, nicht belegt.
+  - Kommen Gutschriften im selben Commit, steht ihre Zeile über der Levelzeile, bei gestern und heute nur die von heute. Die Levelzeile steht zuletzt, damit der Meldungs-Host sie an eine Meldung mit „Rückgängig“ anhängt.
+  - Reduzierte Bewegung zeigt „begeistert“ als Schlüsselpose mit den Funken (Momo-Rig, `rig/clips.ts`); Konfetti gibt es nicht.
+  - „Wir“ bekommt je Level ein `shared_event` „Levelaufstieg“ aus den gemeinsamen Ereignissen der Insel.
+- **Seed `levelaufstieg-ausstehend`** (`packages/contracts/seeds/spiel.ts`, „Levelaufstieg ausstehend vor und nach dem Pull“): `haelfte-voll` mit Philipps iPhone und Annas Android, auf dem drei Bauten offline warten. Annas Sync hebt die Insel auf Level 4, Philipps Pull bringt den Aufstieg.
+- **Tests:** `apps/backend/test/level-up-app.test.ts` (Tracer im Baubefehl, Pull der Partnerin, Retry, Bauten ohne neues Level, erneutes Erreichen nach einer Gegenbuchung), `apps/backend/test/level-up.test.ts` (Test-Katalog: Freischaltungen je Rolle, mehrere Level in einem Befehl, Level ohne Katalogeintrag), `src/island/level-celebration.test.ts` (echte SQLite-Datei: Feier nach dem Pull, je Installation gemerkt, zusammengefasst, stille Übernahme, „Wir“), dazu der Seed in `seeds.test.ts`, der Manifest-Suite und `seed-island-app.test.ts`.
 
 ### Momo-Rig
 

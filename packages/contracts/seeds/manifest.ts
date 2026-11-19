@@ -37,7 +37,8 @@ export const seedFormatVersion = 1;
  * und `solo-ziele-ab-morgen` sind „erzwungener Haltemodus“, „Budget angehoben“ und „bevorstehende Fassung
  * ‚ab morgen‘“ aus Spezifikation 1, Abschnitt 12, für die Einstellungsseite „Ziele“ (#147).
  * `ernaehrung-*` und `kalorienbudget-*` sind die Randzustände der Ernährung aus Spezifikation 2,
- * Abschnitt 13 (#166).
+ * Abschnitt 13 (#166). `levelaufstieg-ausstehend` ist „Levelaufstieg ausstehend vor und nach dem Pull“ aus
+ * Spezifikation 4, Abschnitt 13 (#200).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -83,6 +84,7 @@ export const SeedScenarioKey = z.enum([
   'doppelausgabe',
   'feldkonflikt',
   'ereignisse-voll',
+  'levelaufstieg-ausstehend',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

@@ -140,6 +140,8 @@ export const seedIds = {
     },
     /** Offline-Platzierungen in `feldkonflikt` (#194): je Gerät eine. */
     feldkonflikt: { iphone: id('0090', 50), ipad: id('0090', 51) },
+    /** Annas Offline-Bauten in `levelaufstieg-ausstehend` (#200), in Entstehungsreihenfolge. */
+    levelaufstiegAusstehend: Array.from({ length: 3 }, (_, index) => id('0090', 54 + index)),
     /** Erfüllungen in den Randzuständen der Ernährung (#166). */
     ernaehrungErfuellt: [id('0090', 52)],
     kalorienbudgetInnerhalb: [id('0090', 53)],
