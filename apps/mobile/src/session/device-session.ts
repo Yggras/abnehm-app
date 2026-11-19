@@ -22,11 +22,13 @@ import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
 import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
-import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
+import { createNotifications, NotificationsStep, type AppNotifications, type NotificationPort } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
 import { appNotificationSettings } from '../notifications/app-notification-settings';
 import { createNotificationSettings } from '../notifications/notification-setting';
 import { notificationSettingEntity } from '../notifications/notification-setting-entity';
+import { createPushInstallationTransport } from '../notifications/push-installation-transport';
+import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
 import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
@@ -163,9 +165,10 @@ function deviceState() {
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       // Stimmungen folgen der Uhr im Takt von „Heute“; die Erfolgshaptik löst nur dieser Dienst aus (#188).
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh });
+      const installation = installationId(database, appClock, newId);
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
-        installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
+        installationId: installation, onCanonicalChanges: persistence.onCanonicalChanges,
         commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...islandObjectCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
       });
       activeEngine = engine;
@@ -198,6 +201,13 @@ function deviceState() {
         appPlan.opened(plan), appGoalSettings.opened(plan.goalSettings(trackers.weightTrendReader, appTodayRefresh)),
         // Benachrichtigungseinstellung (Spezifikation 5, #132): die Seite „Benachrichtigungen“ spricht nur mit diesem Modul.
         appNotificationSettings.opened(createNotificationSettings({ database, writer: syncWriter, clock: appClock })),
+        // Push-Installation (Spezifikation 5, Abschnitt 9; #139): nach erteilter Erlaubnis, bei jedem Start mit
+        // Erlaubnis und bei geänderter Erlaubnis im Vordergrund; die Kennung ist die des Syncs.
+        startPushRegistration({
+          database, clock: appClock, notifications: deviceNotifications(), port: deviceNotificationPort(),
+          transport: createPushInstallationTransport({ baseUrl, fetch: session.auth.fetch }),
+          installationKey: installation, platform: Platform.OS === 'ios' ? 'ios' : 'android', onError,
+        }),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
         followDailyGoalTriggers({
           ensure: plan.ensureDailyGoals,
@@ -262,6 +272,13 @@ function deviceState() {
 }
 
 let notifications: AppNotifications | null = null;
+let notificationPort: NotificationPort | null = null;
+
+/** Der Mitteilungs-Port des Geräts; in Test-Artefakten mit dem Umschalter auf den Fake davor (#125). */
+function deviceNotificationPort(): NotificationPort {
+  notificationPort ??= testCapabilities?.adapters.notifications(expoNotificationPort) ?? expoNotificationPort;
+  return notificationPort;
+}
 
 /**
  * Mitteilungen des Geräts (Spezifikation 5, Abschnitt 8). Das Wurzel-Layout ruft das beim Start auf:
@@ -271,8 +288,7 @@ let notifications: AppNotifications | null = null;
  */
 export function deviceNotifications(): AppNotifications {
   if (notifications !== null) return notifications;
-  const port = testCapabilities?.adapters.notifications(expoNotificationPort) ?? expoNotificationPort;
-  const created = createNotifications({ port, onError });
+  const created = createNotifications({ port: deviceNotificationPort(), onError });
   AppState.addEventListener('change', (state) => {
     if (state === 'active') void created.refresh();
   });
