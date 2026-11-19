@@ -7,6 +7,8 @@ import {
   type FoodValues,
   type NutritionEntryAddedOutcome,
   type NutritionEntryAddedValues,
+  type NutritionEntryDeletedOutcome,
+  type NutritionEntryUpdatedOutcome,
   type NutritionSnapshot,
 } from '@abnehm/contracts/nutrition';
 
@@ -16,8 +18,8 @@ import { requireOwnPerson } from '../local-db/person-header';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { defaultAmountMilli } from './amount-input';
-import { readDayLog, type DayLog } from './day-log';
-import { addEntry, removeEntry, type NewEntry } from './entries';
+import { readDayLog, readEntryDetail, type DayLog, type EntryDetail } from './day-log';
+import { addEntry, deleteEntry, undoEntry, updateEntry, type EntryChange, type EntryUndo, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
 import { createFoodSearch, type FoodSearch } from './food-search';
 import { confirmPhotoDraft, type PhotoDraftConfirmation } from './meal-photos';
@@ -54,7 +56,23 @@ export type Nutrition = Readonly<{
    * inkonsistenten Mahlzeit, ohne etwas zu schreiben.
    */
   confirmPhotoDraft(input: PhotoDraftConfirmation): NutritionEntryAddedValues;
-  /** „Rückgängig“: entfernt den Eintrag zum Token höchstens einmal, in einer eigenen Transaktion. */
+  /**
+   * Ändert Menge, Einheit und Mahlzeit eines Eintrags in einer eigenen lokalen Transaktion; die Summen
+   * entstehen aus demselben Snapshot neu, der Tag bleibt. Das Ergebnis enthält Meldung und Undo-Token.
+   * Wirft `InvalidNutritionInputError` bei einer ungültigen Menge oder einem unbekannten oder gelöschten
+   * Eintrag, ohne etwas zu schreiben.
+   */
+  updateEntry(entryId: EntityId, change: EntryChange): NutritionEntryUpdatedOutcome;
+  /**
+   * Löscht einen Eintrag ohne Bestätigungsdialog in einer eigenen lokalen Transaktion. „Rückgängig“ legt
+   * einen neuen Eintrag mit neuer ID und identischem Inhalt an. Wirft `InvalidNutritionInputError` für
+   * einen unbekannten oder schon gelöschten Eintrag.
+   */
+  deleteEntry(entryId: EntityId): NutritionEntryDeletedOutcome;
+  /**
+   * „Rückgängig“ zu einem Token aus `addEntry`, `updateEntry` oder `deleteEntry`: höchstens einmal, in einer
+   * eigenen Transaktion.
+   */
   undo(undoToken: string): UndoOutcome;
   /** Beendet einen Token, sobald seine Meldung kein „Rückgängig“ mehr anbietet. */
   expire(undoToken: string): void;
@@ -63,6 +81,8 @@ export type Nutrition = Readonly<{
    * der Kontodatenbank. `null`, bis die eigene Person mit dem ersten Pull angekommen ist.
    */
   observeDayLog(localDate: LocalDate, listener: (log: DayLog | null) => void): () => void;
+  /** Ein nicht gelöschter eigener Eintrag für die Mengenansicht; sonst `null`. */
+  entry(entryId: EntityId): EntryDetail | null;
   /**
    * Vorbelegung der Mengenprüfung (Spezifikation 2, Abschnitt 6): die letzte Menge und Einheit dieses
    * Lebensmittels aus den eigenen Einträgen, sonst eine bekannte Portion, sonst 100 g bzw. 100 ml.
@@ -92,16 +112,22 @@ export type Nutrition = Readonly<{
 export function createNutrition(dependencies: NutritionDependencies): Nutrition {
   const { database } = dependencies;
   const tokens = createUndoTokens();
+  /** Meldung und Werte eines Befehls nach seiner Transaktion, samt Undo-Token. */
+  const outcome = <K extends string, V>({ messageKey, values, undo }: Readonly<{ messageKey: K; values: V; undo: EntryUndo }>) => ({
+    messageKey,
+    values,
+    undoToken: tokens.issue(database, (tx) => undoEntry(tx, dependencies, undo)),
+  });
 
   return {
-    addEntry(input) {
-      const { messageKey, values, undo } = database.transaction((tx) => addEntry(tx, dependencies, input));
-      return { messageKey, values, undoToken: tokens.issue(database, (tx) => removeEntry(tx, dependencies, undo.entryId, 'rueckgaengig')) };
-    },
+    addEntry: (input) => outcome(database.transaction((tx) => addEntry(tx, dependencies, input))),
+    updateEntry: (entryId, change) => outcome(database.transaction((tx) => updateEntry(tx, dependencies, entryId, change))),
+    deleteEntry: (entryId) => outcome(database.transaction((tx) => deleteEntry(tx, dependencies, entryId))),
     confirmPhotoDraft: (input) => database.transaction((tx) => confirmPhotoDraft(tx, dependencies, input)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
     observeDayLog: (localDate, listener) => database.observe((tx) => readDayLog(tx, localDate), listener),
+    entry: (entryId) => database.read((tx) => readEntryDetail(tx, entryId)),
     prefillAmount(foodRef, snapshot) {
       const latest = database.read((tx) => latestAmountOf(tx, EntityId.parse(requireOwnPerson(tx).id), foodRef));
       // Die letzte Menge gilt nur, wenn ihre Einheit im aktuellen Snapshot noch bekannt ist.

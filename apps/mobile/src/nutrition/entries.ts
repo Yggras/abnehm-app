@@ -16,7 +16,7 @@ import {
 import type { TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { nutritionEntryEntity } from './entry-entity';
-import { readEntry, tombstoneEntry, writeEntry } from './entry-repository';
+import { readEntry, readEntryContent, tombstoneEntry, writeEntry, type StoredEntryContent } from './entry-repository';
 import type { NutritionDependencies } from './nutrition';
 
 // Befehle des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 6). Sie laufen in der Transaktion des
@@ -40,10 +40,18 @@ export type NewEntry = Readonly<{
   displayAmountMilli: number;
 }>;
 
-/** Was „Rückgängig“ nach dem Hinzufügen braucht; flüchtig und nie synchronisiert. */
-export type EntryUndo = Readonly<{ type: 'entry_added'; entryId: EntityId }>;
+/** Was die Mengenansicht an einem bestehenden Eintrag ändert; der Tag bleibt (Spezifikation 2, Abschnitt 6). */
+export type EntryChange = Readonly<{ meal: MealKey; displayUnit: DisplayUnit; displayAmountMilli: number }>;
+
+/** Was „Rückgängig“ braucht; flüchtig und nie synchronisiert. */
+export type EntryUndo =
+  | Readonly<{ type: 'entry_added'; entryId: EntityId }>
+  | Readonly<{ type: 'entry_updated'; entryId: EntityId; previous: EntryChange }>
+  | Readonly<{ type: 'entry_deleted'; deleted: NutritionEntryUpsert }>;
 
 export type EntryAdded = Readonly<{ messageKey: 'ernaehrung.eintrag_hinzugefuegt'; values: NutritionEntryAddedValues; undo: EntryUndo }>;
+export type EntryUpdated = Readonly<{ messageKey: 'ernaehrung.eintrag_gespeichert'; values: Record<string, never>; undo: EntryUndo }>;
+export type EntryDeleted = Readonly<{ messageKey: 'ernaehrung.eintrag_geloescht'; values: Record<string, never>; undo: EntryUndo }>;
 
 export type EntryDependencies = Pick<NutritionDependencies, 'clock' | 'writer' | 'persistence' | 'newId'>;
 
@@ -101,4 +109,92 @@ export function removeEntry(tx: TransactionContext, { clock, writer, persistence
   tombstoneEntry(tx, entryId, Instant.parse(clock.read().instant));
   writer.delete(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, knownServerVersion: entry.serverVersion });
   persistence.reevaluateDailyGoals(tx, entry.personId, [entry.localDate], cause);
+}
+
+/**
+ * Ändert Menge, Einheit und Mahlzeit eines Eintrags (Spezifikation 2, Abschnitt 6). Die Summen entstehen
+ * neu aus demselben Snapshot; Tag, Erfassungszeitpunkt, Zone, Offset, Lebensmittel, Erfassungsart und
+ * Fotoverknüpfung bleiben. Meldet den gespeicherten Tag. Wirft `InvalidNutritionInputError`, ohne zu
+ * schreiben, für eine ungültige Menge und einen unbekannten oder gelöschten Eintrag.
+ */
+export function updateEntry(tx: TransactionContext, dependencies: EntryDependencies, entryId: EntityId, change: EntryChange): EntryUpdated {
+  const existing = requireLiving(tx, entryId);
+  const { meal, amount } = existing.content;
+  writeChange(tx, dependencies, entryId, existing, change, 'eingabe');
+  return {
+    messageKey: 'ernaehrung.eintrag_gespeichert',
+    values: {},
+    undo: { type: 'entry_updated', entryId, previous: { meal, displayUnit: amount.displayUnit, displayAmountMilli: amount.displayAmountMilli } },
+  };
+}
+
+/**
+ * Löscht einen Eintrag ohne Bestätigungsdialog als Tombstone und meldet seinen Tag (Spezifikation 2,
+ * Abschnitt 6). Wirft `InvalidNutritionInputError`, ohne zu schreiben, für einen unbekannten oder schon
+ * gelöschten Eintrag.
+ */
+export function deleteEntry(tx: TransactionContext, dependencies: EntryDependencies, entryId: EntityId): EntryDeleted {
+  const existing = requireLiving(tx, entryId);
+  removeEntry(tx, dependencies, entryId, 'eingabe');
+  return { messageKey: 'ernaehrung.eintrag_geloescht', values: {}, undo: { type: 'entry_deleted', deleted: existing.content } };
+}
+
+/**
+ * Nimmt einen Befehl zurück und meldet den Tag mit `rueckgaengig`. Sync-sicher, weil Tombstones für
+ * Clientoperationen endgültig sind (Spezifikation 0, Abschnitt 10):
+ * - Hinzufügen: Der Eintrag wird gelöscht.
+ * - Ändern: Menge, Einheit und Mahlzeit von vorher werden zurückgeschrieben (Last-Write-Wins).
+ * - Löschen: Ein **neuer** Eintrag mit neuer ID und identischem Inhalt entsteht: Snapshot, Menge, Tag,
+ *   Mahlzeit, Erfassungsart, Erfassungszeitpunkt samt Zone und Fotoverknüpfung.
+ *
+ * Ist der Eintrag inzwischen gelöscht, etwa durch einen Pull, bleibt beim Hinzufügen und Ändern alles, wie es ist.
+ */
+export function undoEntry(tx: TransactionContext, dependencies: EntryDependencies, undo: EntryUndo): void {
+  switch (undo.type) {
+    case 'entry_added':
+      removeEntry(tx, dependencies, undo.entryId, 'rueckgaengig');
+      return;
+    case 'entry_updated': {
+      const existing = readEntryContent(tx, undo.entryId);
+      if (existing === undefined || existing.deletedAt !== null) return;
+      writeChange(tx, dependencies, undo.entryId, existing, undo.previous, 'rueckgaengig');
+      return;
+    }
+    case 'entry_deleted': {
+      const { clock, writer, persistence, newId } = dependencies;
+      const personId = EntityId.parse(requireOwnPerson(tx).id);
+      const entryId = newId();
+      writeEntry(tx, entryId, personId, undo.deleted, Instant.parse(clock.read().instant));
+      writer.upsert(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, payload: undo.deleted, knownServerVersion: null });
+      persistence.reevaluateDailyGoals(tx, personId, [undo.deleted.localDate], 'rueckgaengig');
+      return;
+    }
+  }
+}
+
+/** Schreibt Menge, Einheit und Mahlzeit samt neu gerechneter Summen und Outbox-Operation; prüft vor dem Schreiben. */
+function writeChange(
+  tx: TransactionContext,
+  { clock, writer, persistence }: EntryDependencies,
+  entryId: EntityId,
+  existing: StoredEntryContent,
+  change: EntryChange,
+  cause: DailyGoalCause,
+): void {
+  const { content } = existing;
+  const amount = entryAmount(content.snapshot, change.displayUnit, change.displayAmountMilli);
+  if (amount.type === 'problem') throw new InvalidNutritionInputError(`Ungültige Menge: ${amount.problem}`);
+  const parsed = NutritionEntryUpsert.safeParse({ ...content, meal: change.meal, amount: amount.amount, totals: entryTotals(content.snapshot, amount.amount) });
+  if (!parsed.success) throw new InvalidNutritionInputError(`Ungültiger Eintrag: ${parsed.error.message}`);
+  const payload = parsed.data;
+  writeEntry(tx, entryId, existing.personId, payload, Instant.parse(clock.read().instant));
+  writer.upsert(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, payload, knownServerVersion: existing.serverVersion });
+  persistence.reevaluateDailyGoals(tx, existing.personId, [payload.localDate], cause);
+}
+
+/** Ein nicht gelöschter Eintrag; sonst `InvalidNutritionInputError`. */
+function requireLiving(tx: TransactionContext, entryId: EntityId): StoredEntryContent {
+  const existing = readEntryContent(tx, entryId);
+  if (existing === undefined || existing.deletedAt !== null) throw new InvalidNutritionInputError(`Eintrag ${entryId} ist unbekannt oder gelöscht`);
+  return existing;
 }

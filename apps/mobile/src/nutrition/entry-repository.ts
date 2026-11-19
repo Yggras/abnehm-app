@@ -1,7 +1,7 @@
 import { and, asc, between, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { CaptureMethod, DisplayUnit, SnapshotSource, type FoodRef, type NutritionEntryRecord, type NutritionEntryUpsert } from '@abnehm/contracts/nutrition';
+import { CaptureMethod, DisplayUnit, NutritionEntryUpsert, SnapshotSource, type FoodRef, type NutritionEntryRecord } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { nutritionEntry } from '../local-db/schema';
@@ -29,6 +29,9 @@ export type LoggedEntry = Readonly<{
   displayUnit: DisplayUnit;
   displayAmountMilli: number;
   totalMilliKcal: number;
+  totalProteinMg: number;
+  totalCarbsMg: number;
+  totalFatMg: number;
 }>;
 
 /** Die fachlichen Spalten einer Nutzlast bzw. eines kanonischen Datensatzes. */
@@ -113,6 +116,45 @@ export function readEntry(tx: ReadContext, entityId: EntityId): StoredEntry | un
   };
 }
 
+/** Ein gespeicherter Eintrag mit seinem vollständigen fachlichen Inhalt, wie ihn die Outbox überträgt. */
+export type StoredEntryContent = StoredEntry & Readonly<{ content: NutritionEntryUpsert }>;
+
+/** Der vollständige Inhalt eines Eintrags; Ändern und „Rückgängig“ nach dem Löschen bauen darauf auf. */
+export function readEntryContent(tx: ReadContext, entityId: EntityId): StoredEntryContent | undefined {
+  const row = sqliteOf(tx).select().from(nutritionEntry).where(eq(nutritionEntry.id, entityId)).get();
+  if (row === undefined) return undefined;
+  return {
+    personId: EntityId.parse(row.personId),
+    localDate: LocalDate.parse(row.localDate),
+    deletedAt: row.deletedAt as Instant | null,
+    serverVersion: row.serverVersion as ServerVersion | null,
+    content: NutritionEntryUpsert.parse({
+      consumedAt: row.consumedAt,
+      localDate: row.localDate,
+      timeZone: row.timeZone,
+      utcOffsetMinutes: row.utcOffsetMinutes,
+      meal: row.meal,
+      captureMethod: row.captureMethod,
+      foodRef: row.foodRefType === null ? null : { type: row.foodRefType, key: row.foodRefKey },
+      snapshot: {
+        name: row.snapshotName,
+        baseUnit: row.snapshotBaseUnit,
+        referenceAmount: row.snapshotReferenceAmount,
+        milliKcal: row.snapshotMilliKcal,
+        proteinMg: row.snapshotProteinMg,
+        carbsMg: row.snapshotCarbsMg,
+        fatMg: row.snapshotFatMg,
+        portions: row.snapshotPortions,
+        source: row.snapshotSource,
+        attribution: row.snapshotAttribution,
+      },
+      amount: { baseAmount: row.baseAmount, displayUnit: row.displayUnit, displayAmountMilli: row.displayAmountMilli },
+      totals: { milliKcal: row.totalMilliKcal, proteinMg: row.totalProteinMg, carbsMg: row.totalCarbsMg, fatMg: row.totalFatMg },
+      mealPhotoId: row.mealPhotoId,
+    }),
+  };
+}
+
 /** Die nicht gelöschten Einträge einer Person an einem lokalen Tag, in Erfassungsreihenfolge. */
 export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: LocalDate): LoggedEntry[] {
   return sqliteOf(tx)
@@ -125,6 +167,9 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
       displayUnit: nutritionEntry.displayUnit,
       displayAmountMilli: nutritionEntry.displayAmountMilli,
       totalMilliKcal: nutritionEntry.totalMilliKcal,
+      totalProteinMg: nutritionEntry.totalProteinMg,
+      totalCarbsMg: nutritionEntry.totalCarbsMg,
+      totalFatMg: nutritionEntry.totalFatMg,
     })
     .from(nutritionEntry)
     .where(and(eq(nutritionEntry.personId, personId), eq(nutritionEntry.localDate, localDate), isNull(nutritionEntry.deletedAt)))
