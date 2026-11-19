@@ -23,6 +23,7 @@ export function fakeGameService(stage: IslandStage, reactions: readonly MomoReac
     proposeRoles: refuse,
     acceptRoles: refuse,
     takeGrowthIntro: () => false,
+    takeTransformation: () => null,
     declineRoles: refuse,
     withdrawRoles: refuse,
     build: refuse,

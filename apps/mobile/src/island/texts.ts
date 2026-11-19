@@ -119,9 +119,9 @@ export const objectTexts = {
 };
 
 /**
- * Texte des Sheets „Ereignisse“ (#202). „Neu auf der Insel“, „Offene Wünsche“ und „Kein Zeitdruck“ stehen in
+ * Texte des Sheets „Ereignisse“ (#202, #204). „Neu auf der Insel“, „Offene Wünsche“ und „Kein Zeitdruck“ stehen in
  * Spezifikation 4, Abschnitt 9; „‹Besucher› ist zu Besuch“ folgt dem Prototyp aus #28
- * (prototypes/momos-insel/app.js). Die übrigen Sätze sind Designwerte dieses Tickets (nicht belegt).
+ * (prototypes/momos-insel/app.js). Die übrigen Sätze sind Designwerte der Tickets (nicht belegt).
  */
 export const eventTexts = {
   title: 'Ereignisse',
@@ -140,7 +140,19 @@ export const eventTexts = {
     reward.type === 'bauplan' ? `Neuer Bauplan: ${reward.name}` : `${reward.name} liegt jetzt in deinem Lager`,
   /** Zugänglicher Name von „Belohnung abholen“ in einer Karte. */
   claimFor: (visitor: string) => `Belohnung von ${visitor} abholen`,
+  /** Entdeckung (#204): Abschnitt, Ankunft, Karte und zugänglicher Name des Abholens. */
+  areas: 'Neue Gebiete',
+  newArea: (area: string) => `Neues Gebiet: ${area}`,
+  discovered: (area: string) => `${area} entdeckt`,
+  areaBlueprints: (names: readonly string[]) => `Neue Baupläne für eure Insel: ${listOf(names)}`,
+  areaDeko: (names: readonly string[]) => `Für dein Lager: ${listOf(names)}`,
+  claimDeko: (names: readonly string[]) => `${listOf(names)} abholen`,
 };
+
+/** „A“, „A und B“, „A, B und C“. */
+function listOf(names: readonly string[]): string {
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} und ${names.at(-1)}`;
+}
 
 /**
  * Texte der Challenge-Bildschirme `challenge.propose` und `challenge.detail` (#210). „Passt gerade nicht zu

@@ -72,7 +72,11 @@ export async function unlocksOf(world: Pick<BuildWorld, 'backend' | 'islandId'>)
  * Ausgabe in beliebiger Höhe. So entsteht der Stand, den sonst erst viele Bauten ergeben; den Levelaufstieg
  * prüft der Test danach selbst (`progressChanges`).
  */
-export async function spendWithoutProjection(world: BuildWorld, person: WorldPerson, { fieldKey, amount }: Readonly<{ fieldKey: string; amount: number }>) {
+export async function spendWithoutProjection(
+  world: Pick<BuildWorld, 'backend' | 'clock' | 'couplingId' | 'islandId' | 'fieldId'>,
+  person: Pick<WorldPerson, 'personId'>,
+  { fieldKey, amount }: Readonly<{ fieldKey: string; amount: number }>,
+) {
   const at = new Date(world.clock.read().instant);
   const objectId = EntityId.parse(randomUUID());
   const commandId = EntityId.parse(randomUUID());

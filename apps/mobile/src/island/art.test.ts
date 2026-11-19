@@ -3,12 +3,12 @@ import { gameCatalog } from '@abnehm/game-rules/content';
 import { size } from '../design';
 import { artBounds, artOf } from './art';
 
-// Grafiken der Start-Baupläne (#192) und der Besucher-Baupläne (#202) je Stufe 1–3, der Besucher-Deko und
-// der Besucher (#202; Design-System › Insel): Ein Objekt steht mittig auf
+// Grafiken der Start-Baupläne (#192), der Besucher-Baupläne (#202) und der Entdeckungs-Baupläne (#204) je Stufe
+// 1–3, der Besucher- und Entdeckungs-Deko und der Besucher (#202, #204; Design-System › Insel): Ein Objekt steht mittig auf
 // seinem Feld und ist höchstens zwei Felder hoch; jede Stufe ist etwas größer und hat ein Detail mehr.
 // Gerechnet in dp bei Zoom 1 um die Feldmitte; ein Feld ist `island-tile` breit und halb so hoch.
 
-const drawnBlueprints = gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start' || blueprint.origin === 'besucher');
+const drawnBlueprints = gameCatalog.blueprints.filter((blueprint) => blueprint.origin === 'start' || blueprint.origin === 'besucher' || blueprint.origin === 'entdeckung');
 const tile = size.islandTile;
 const fieldHeight = tile / 2;
 const stages = drawnBlueprints.flatMap((blueprint) => blueprint.art.map((art, index) => [blueprint.key, index + 1, art] as const));
@@ -66,7 +66,7 @@ test('einen unbekannten Schlüssel zeichnet die Insel als neutralen Block', () =
 });
 
 const flatArt = [
-  ...gameCatalog.deko.filter((deko) => deko.origin === 'besucher').map((deko) => ['Deko', deko.art] as const),
+  ...gameCatalog.deko.filter((deko) => deko.origin === 'besucher' || deko.origin === 'entdeckung').map((deko) => ['Deko', deko.art] as const),
   ...gameCatalog.visitorTemplates.map((visitor) => ['Besucher', visitor.animal] as const),
 ];
 

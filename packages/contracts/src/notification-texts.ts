@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ContractError } from './errors.ts';
 import {
+  AreaUnlockedPayload,
   ChallengeProposalPayload,
   CheckInTextValues,
   type CheckInTopic,
@@ -137,6 +138,14 @@ export const notificationTexts = defineNotificationTexts({
   levelaufstieg: notificationText(LevelUpPayload, ({ level }) => ({
     title: `Momo ist jetzt auf Level ${level} 🎉`,
     body: 'Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.',
+  })),
+  /**
+   * Spezifikation 4, Abschnitt 12: an beide (#204). Für ein festes Gebiet ergänzt der Zusteller dessen Namen
+   * (`gebietName`); der Text nennt ihn nicht, endlose Gebiete haben keinen.
+   */
+  gebiet: notificationText(AreaUnlockedPayload.extend({ gebietName: z.string().min(1).max(80).optional() }), () => ({
+    title: 'Neues Gebiet auf eurer Insel 🏝️',
+    body: 'Der Nebel zieht ab – es gibt etwas zu entdecken.',
   })),
   'rollen_anfrage.rollenwahl': notificationText(
     RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),

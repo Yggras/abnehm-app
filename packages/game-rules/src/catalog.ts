@@ -151,7 +151,8 @@ export function endlessAreaKey(k: number, template: string): string {
   return `${endlessPrefix}${k}_${template}`;
 }
 
-function parseEndlessAreaKey(area: string): { k: number; template: string } | undefined {
+/** Zerlegt den Schlüssel einer Ausprägung `endlos_‹k›_‹vorlage›`; `undefined` bei einem festen Gebiet. */
+export function parseEndlessAreaKey(area: string): { k: number; template: string } | undefined {
   const match = new RegExp(`^${endlessPrefix}([1-9][0-9]*)_(.+)$`).exec(area);
   return match === null ? undefined : { k: Number(match[1]), template: match[2]! };
 }
@@ -287,7 +288,7 @@ export function withCatalogNames(catalog: GameCatalog, values: unknown): unknown
 }
 
 /** Zerlegt `‹gebiet›:‹x›:‹y›`; Koordinaten nur in kanonischer Schreibweise. */
-function parseFieldKey(key: string): { area: string; x: number; y: number } | undefined {
+export function parseFieldKey(key: string): { area: string; x: number; y: number } | undefined {
   const match = /^([a-z][a-z0-9_]*):(-?[0-9]+):(-?[0-9]+)$/.exec(key);
   if (match === null) return undefined;
   const [, area = '', x = '', y = ''] = match;

@@ -19,7 +19,8 @@ test('die Grundinsel des ausgelieferten Katalogs mit den Besitzern der Inselfeld
   expect(field('grundinsel:0:0')).toEqual({ key: 'grundinsel:0:0', x: 0, y: 0, kind: 'ecke', ownerPersonId: philipp });
   expect(field('grundinsel:10:5')).toEqual({ key: 'grundinsel:10:5', x: 10, y: 5, kind: 'rollenbereich', ownerPersonId: anna });
   expect(field('grundinsel:7:7')).toEqual({ key: 'grundinsel:7:7', x: 7, y: 7, kind: 'lichtung', ownerPersonId: null });
-  expect(fog).toEqual([]);
+  // Gebiet 1 liegt bis Level 4 unter Nebel (#204).
+  expect(fog.map(({ area, cells }) => [area, cells.length])).toEqual([['schilfwiese', 80]]);
 });
 
 test('gesperrte Gebiete liegen mit ihren Rasterzellen unter Nebel', () => {
@@ -44,6 +45,13 @@ test('ein freigeschaltetes Gebiet verlässt den Nebel; seine Felder kommen mit B
   expect(fields.find((field) => field.key === 't_gebiet_1:0:-5')).toEqual({ key: 't_gebiet_1:0:-5', x: 0, y: -5, kind: 'ecke', ownerPersonId: philipp });
   expect(fields.find((field) => field.key === 't_gebiet_1:15:-1')).toMatchObject({ kind: 'ecke', ownerPersonId: anna });
   expect(fog.map(({ area }) => area)).toEqual(['t_gebiet_2']);
+});
+
+test('Felder endloser Gebiete liegen in ihrem Band über den festen Gebieten (#204)', () => {
+  const endless = [{ key: 'endlos_1_t_vorlage_erste:0:0', ownerPersonId: philipp }];
+  const { fields } = islandLayout(testCatalog(), { fields: [...hatched(testCatalog()), ...endless], unlockedAreas: ['t_gebiet_1', 't_gebiet_2', 'endlos_1_t_vorlage_erste'] });
+
+  expect(fields.find((field) => field.key === 'endlos_1_t_vorlage_erste:0:0')).toEqual({ key: 'endlos_1_t_vorlage_erste:0:0', x: 0, y: -15, kind: 'ecke', ownerPersonId: philipp });
 });
 
 test('ein Inselfeld, das der Katalog nicht kennt, ist ein Integrationsfehler', () => {

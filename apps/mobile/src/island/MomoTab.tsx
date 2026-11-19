@@ -42,6 +42,7 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
     <HatchedIslandScreen
       island={stage.island}
       takeGrowthIntro={game.takeGrowthIntro}
+      takeTransformation={game.takeTransformation}
       build={game.build}
       upgrade={game.upgrade}
       place={game.place}

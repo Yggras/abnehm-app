@@ -102,6 +102,13 @@ describe('Textkatalog für Benachrichtigungen', () => {
     });
   });
 
+  it('der gemeinsame Katalog: neues Gebiet, mit und ohne Namen aus dem Spielkatalog (Spezifikation 4, Abschnitt 12; #204)', () => {
+    const text = { title: 'Neues Gebiet auf eurer Insel 🏝️', body: 'Der Nebel zieht ab – es gibt etwas zu entdecken.' };
+    expect(notificationTexts.render('gebiet', { gebietKey: 'schilfwiese', gebietName: 'Schilfwiese' })).toEqual(text);
+    // Endlose Gebiete stehen nicht im Katalog; der Zusteller ergänzt dann keinen Namen.
+    expect(notificationTexts.renderStored('gebiet', { gebietKey: 'endlos_1_duenen' })).toEqual({ type: 'rendered', text });
+  });
+
   describe('Tages-Check-in (Spezifikation 5, Abschnitt 7; #135)', () => {
     const render = (values: CheckInTextValues) => notificationTexts.render('tages_checkin', values);
 
@@ -184,7 +191,7 @@ describe('Textkatalog für Benachrichtigungen', () => {
 
   it('Schlüssel ohne Eintrag sind ein Typfehler', () => {
     // @ts-expect-error – Einträge kommen mit den Tickets der Spezifikationen 4 und 5
-    expect(() => notificationTexts.render('gebiet', { gebietKey: 'gebiet_1' })).toThrow();
-    expect(notificationTexts.renderStored('gebiet', { gebietKey: 'gebiet_1' })).toMatchObject({ type: 'contract_error' });
+    expect(() => notificationTexts.render('projektabschluss', { templateKey: 'gartenhaeuschen' })).toThrow();
+    expect(notificationTexts.renderStored('projektabschluss', { templateKey: 'gartenhaeuschen' })).toMatchObject({ type: 'contract_error' });
   });
 });

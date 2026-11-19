@@ -138,10 +138,24 @@ export function islandEventStateId(islandEventId: EntityId, personId: EntityId):
 
 /**
  * ID der Belohnung eines Ereignisstands: Freischaltung oder Inselobjekt. Gerät und Server vergeben dieselbe,
- * damit eine offline vorläufig abgeholte Belohnung auf zwei Geräten genau einmal entsteht.
+ * damit eine offline vorläufig abgeholte Belohnung auf zwei Geräten genau einmal entsteht. Bringt ein
+ * Ereignis mehrere Stücke, etwa die Entdeckungs-Deko eines Gebiets (#204), trägt das `index`-te Stück die ID
+ * mit diesem Index; das erste behält die ID ohne Index.
  */
-export function eventRewardId(islandEventStateId: EntityId): EntityId {
-  return EntityId.parse(uuidV5(eventRewardNamespace, islandEventStateId));
+export function eventRewardId(islandEventStateId: EntityId, index = 0): EntityId {
+  if (!Number.isInteger(index) || index < 0) throw new RangeError(`Index einer Belohnung muss eine ganze Zahl ab 0 sein: ${index}`);
+  return EntityId.parse(uuidV5(eventRewardNamespace, index === 0 ? islandEventStateId : `${islandEventStateId}:${index}`));
+}
+
+const islandContentNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b6b';
+
+/**
+ * ID einer Inselzeile, die je Insel über ihren Schlüssel eindeutig ist: Gebietsfreischaltung (Gebiet), Inselfeld
+ * (Feldschlüssel) oder Bauplanfreischaltung (Katalogschlüssel). Server und Seeds vergeben so dieselbe ID für eine
+ * Freischaltung, ohne Rückfrage (#204).
+ */
+export function islandContentId(entityType: 'area_unlock' | 'island_field' | 'blueprint_unlock', islandId: EntityId, key: string): EntityId {
+  return EntityId.parse(uuidV5(islandContentNamespace, `${entityType}:${islandId}:${key}`));
 }
 
 const startedStatuses: readonly ChallengeStatus[] = ['aktiv', 'geschafft', 'abgelaufen', 'beendet'];
@@ -224,3 +238,15 @@ export const VisitorEventDetails = z.strictObject({
   reward: VisitorReward,
 });
 export type VisitorEventDetails = z.infer<typeof VisitorEventDetails>;
+
+/**
+ * Inhalt von `reward` bei einer Entdeckung (Spezifikation 4, Abschnitt 9; #204): das freigeschaltete Gebiet,
+ * die Entdeckungs-Baupläne, die mit dem Ereignis für die Insel freigeschaltet sind, und die Entdeckungs-Deko,
+ * die jede Person einzeln abholt. Endlose Gebiete bringen keine Deko.
+ */
+export const DiscoveryEventDetails = z.strictObject({
+  areaKey: CatalogKey,
+  blueprints: z.array(CatalogKey),
+  deko: z.array(CatalogKey),
+});
+export type DiscoveryEventDetails = z.infer<typeof DiscoveryEventDetails>;
