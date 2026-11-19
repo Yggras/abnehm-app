@@ -13,6 +13,8 @@ import { MomoAppearanceProvider, MomoFigure } from '../momo';
 import type { BuildOutcome } from './build-object';
 import { buildOptions, type BlueprintOption } from './build-options';
 import { BuildSheet } from './BuildSheet';
+import { EventsSheet } from './EventsSheet';
+import type { ClaimOutcome, VisitorWish } from './island-events';
 import type { HatchedIsland } from './hatched-island';
 import type { IslandEntry } from './IslandBar';
 import { IslandView } from './IslandView';
@@ -42,6 +44,10 @@ import { buildTexts, momoSheetTexts, objectTexts } from './texts';
 // über die Route `momo` mit `view: 'lager'`) öffnet das Lager-Sheet mit „Platzieren“. Umstellen und
 // Platzieren nutzen denselben Modus wie das Bauen: Die passenden freien eigenen Felder leuchten, ein Tippen
 // setzt das Objekt dorthin, kostenlos. Ein aufgewertetes oder umgestelltes Objekt erscheint mit Feder.
+//
+// Ereignisse (#202): „Ereignisse“ in der Leiste (auch über die Route `momo` mit `view: 'ereignisse'`) öffnet
+// das Sheet „Ereignisse“. Was beim Öffnen neu war, gilt damit als gesehen (`markEventsSeen`) und bleibt bis
+// zum Schließen oben unter „Neu auf der Insel“. Ein erfüllter Wunsch lässt sich dort abholen, auch offline.
 
 const catalog = indexCatalog(gameCatalog);
 
@@ -55,6 +61,10 @@ export type HatchedIslandScreenProps = Readonly<{
   upgrade(islandObjectId: EntityId): UpgradeOutcome;
   /** Platziert über den Spieldienst (`GameService.place`). */
   place(islandObjectId: EntityId, target: PlacementTarget): PlaceOutcome;
+  /** Merkt Ereignisse als gesehen vor (`GameService.markEventsSeen`). */
+  markEventsSeen(stateIds: readonly EntityId[]): void;
+  /** Holt eine Belohnung ab (`GameService.claimEventReward`). */
+  claimEventReward(stateId: EntityId): ClaimOutcome;
   onOpen(view: Exclude<IslandEntry, SheetView>): void;
   /**
    * Ansicht aus der Route `momo`; `bauen` öffnet das Bau-Sheet, `lager` das Lager-Sheet, danach meldet
@@ -70,7 +80,9 @@ type SheetContent =
   | Readonly<{ type: 'wachstum' }>
   | Readonly<{ type: 'bauen'; field: string | null }>
   | Readonly<{ type: 'objekt'; field: string }>
-  | Readonly<{ type: 'lager' }>;
+  | Readonly<{ type: 'lager' }>
+  /** `freshAtOpen`: die beim Öffnen neuen Ereignisstände. */
+  | Readonly<{ type: 'ereignisse'; freshAtOpen: ReadonlySet<EntityId> }>;
 
 /** Was im Modus mit leuchtenden Feldern gesetzt wird: ein Bauplan oder ein eigenes Objekt von der Insel bzw. aus dem Lager. */
 type Placing =
@@ -81,6 +93,7 @@ type Placing =
 const sheetForView = {
   bauen: { type: 'bauen', field: null },
   lager: { type: 'lager' },
+  ereignisse: { type: 'ereignisse', freshAtOpen: new Set() },
 } as const satisfies Partial<Record<NonNullable<TargetOf<'momo'>['view']>, SheetContent>>;
 
 type SheetView = keyof typeof sheetForView;
@@ -93,7 +106,7 @@ function placingTitleOf(placing: Placing): string {
   return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placing(placing.name);
 }
 
-export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, onOpen, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
+export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, markEventsSeen, claimEventReward, onOpen, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
   const [sheet, setSheet] = useState<SheetContent | null>(null);
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [appearing, setAppearing] = useState<string | null>(null);
@@ -124,11 +137,22 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
     }, [placing, sheet]),
   );
 
-  const openSheet = useCallback((content: SheetContent) => {
-    setPlacing(null);
-    setSheet(content);
-  }, []);
-  // Die Route `momo` mit `view: 'bauen'` bzw. `'lager'` öffnet das Sheet, sobald sie ankommt; danach
+  const openSheet = useCallback(
+    (content: SheetContent) => {
+      setPlacing(null);
+      setSheet(
+        content.type === 'ereignisse'
+          ? { type: 'ereignisse', freshAtOpen: new Set(island.events.open.filter((event) => !event.seen).map((event) => event.stateId)) }
+          : content,
+      );
+    },
+    [island.events],
+  );
+  // Was beim Öffnen von „Ereignisse“ neu war, ist damit gesehen; Ansehen kostet nichts (#202).
+  useEffect(() => {
+    if (sheet?.type === 'ereignisse' && sheet.freshAtOpen.size > 0) markEventsSeen([...sheet.freshAtOpen]);
+  }, [sheet, markEventsSeen]);
+  // Die Route `momo` mit `view: 'bauen'`, `'lager'` bzw. `'ereignisse'` öffnet das Sheet, sobald sie ankommt; danach
   // verlässt die Ansicht die Route, damit derselbe Link sie erneut öffnen kann
   // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
   const [arrivedView, setArrivedView] = useState<TargetOf<'momo'>['view']>(undefined);
@@ -205,6 +229,12 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
     setPlacing({ type: 'umstellen', objectId: item.id, name: item.name, from: 'lager' });
   };
 
+  const claim = (event: VisitorWish) => {
+    const outcome = claimEventReward(event.stateId);
+    if (outcome.type === 'abgeholt') showMessage({ messageKey: 'insel.belohnung_abgeholt', values: { art: outcome.reward.type, name: outcome.reward.name } });
+    else notDone();
+  };
+
   const placingTitle = placing === null ? null : placingTitleOf(placing);
 
   return (
@@ -228,13 +258,15 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
         building={placingTitle === null || placingFields === null ? null : { title: placingTitle, fields: placingFields, onCancel: () => setPlacing(null) }}
         appearing={appearing}
       />
-      <Sheet visible={sheet !== null} onClose={() => setSheet(null)} height={sheet?.type === 'bauen' || sheet?.type === 'lager' ? 'full' : 'content'}>
+      <Sheet visible={sheet !== null} onClose={() => setSheet(null)} height={sheet?.type === 'bauen' || sheet?.type === 'lager' || sheet?.type === 'ereignisse' ? 'full' : 'content'}>
         {sheet?.type === 'momo' ? (
           <MomoSheet appearance={island.appearance} level={island.progress.level} onGrowth={() => setSheet({ type: 'wachstum' })} />
         ) : sheet?.type === 'bauen' ? (
           <BuildSheet onField={sheet.field !== null} energy={island.energy} options={options.blueprints(sheet.field)} onChoose={choose} />
         ) : sheet?.type === 'lager' ? (
           <StorageSheet items={objects.storage} onPlace={placeFromStorage} />
+        ) : sheet?.type === 'ereignisse' ? (
+          <EventsSheet events={island.events.open} freshAtOpen={sheet.freshAtOpen} onClaim={claim} />
         ) : sheet?.type === 'objekt' ? (
           objectSheet !== null && (
             <ObjectSheet

@@ -8,7 +8,7 @@ import type { Clock } from '@abnehm/clock';
 
 import { color } from '../../design';
 import { routeScreen } from '../../navigation';
-import { MessageHostProvider } from '../../shell/MessageHost';
+import { MessageHostProvider, MessageSlot } from '../../shell/MessageHost';
 import { appGameService } from '../app-game-service';
 import { MomoTab } from '../MomoTab';
 import { IslandHost, testScreen } from './island-host';
@@ -48,6 +48,7 @@ export async function openIslandScreen(
     <IslandHost clock={clock}>
       <MessageHostProvider>
         <Slot />
+        <MessageSlot />
       </MessageHostProvider>
     </IslandHost>
   );

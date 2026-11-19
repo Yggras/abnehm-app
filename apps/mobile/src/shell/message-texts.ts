@@ -130,6 +130,13 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'benachrichtigungen.gespeichert': messageText(z.strictObject({}), () => ({ text: 'Benachrichtigungen gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */
   'konto.passwort_geaendert': messageText(z.strictObject({}), () => ({ text: 'Passwort geändert. Deine anderen Geräte sind abgemeldet.' })),
+  /**
+   * Spezifikation 4: Belohnung eines Besuchers abgeholt (#202), auch offline vorläufig. Wortlaute sind
+   * Designwerte, nicht belegt. Ohne „Rückgängig“: Abholen lässt sich nicht zurücknehmen.
+   */
+  'insel.belohnung_abgeholt': messageText(z.strictObject({ art: z.enum(['bauplan', 'deko']), name: z.string().min(1).max(80) }), ({ art, name }) => ({
+    text: art === 'bauplan' ? `Neuer Bauplan: ${name}` : `${name} liegt jetzt in deinem Lager`,
+  })),
   /** Ein unbekanntes oder ungültiges Ziel, etwa ein veralteter Link, hat „Heute“ geöffnet. */
   'shell.ziel_unbekannt': messageText(z.strictObject({}), () => ({ text: 'Das gibt es nicht mehr.' })),
 };
