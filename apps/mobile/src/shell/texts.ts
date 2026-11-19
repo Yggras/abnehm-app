@@ -1,4 +1,4 @@
-import type { BausteinKey, Weekday } from '@abnehm/contracts/base';
+import type { BausteinKey, LocalDate, Weekday } from '@abnehm/contracts/base';
 import type { OnboardingStepKey } from '@abnehm/contracts/onboarding';
 import type { ActivityType } from '@abnehm/contracts/trackers';
 import type { RouteName, RouteTarget } from '@abnehm/contracts/routes';
@@ -130,6 +130,12 @@ export function quickCommandOwnerName(commandKey: QuickCommandKey): string {
 
 /** Monatsnamen, Januar zuerst, etwa für „13. Dezember 2026“ oder „etwa Mai 2027“. */
 export const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'] as const;
+
+/** Datum ausgeschrieben, etwa „13. Dezember 2026“. */
+export function longDateText(localDate: LocalDate): string {
+  const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
+  return `${day}. ${monthNames[month - 1]} ${year}`;
+}
 
 /**
  * Tausendstel als ganze Einheit mit einer Nachkommastelle, etwa g als kg („91,8“) oder ml als l;

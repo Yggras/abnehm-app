@@ -10,10 +10,25 @@ import { useSessionGate } from '../session/use-session-gate';
 import { useSyncRefresh } from '../shell/SyncRefresh';
 import type { Coupled } from './coupling-state';
 import type { CouplingProblem } from './coupling-view';
-import { couplingTexts } from './texts';
+import { partnerActions } from './partner-view';
+import { couplingTexts, partnerTexts } from './texts';
 
 // Gemeinsame Teile der Kopplungsabläufe `partner.invite` und `partner.redeem` (Spezifikation 5,
 // Abschnitt 5; #120): der gescheiterte Ablauf, das Warten auf den Pull und die Ansicht „Ihr seid gekoppelt“.
+
+/**
+ * „Partner einladen“ und „Code eingeben“ ohne Kopplung: dieselben modalen Abläufe wie auf „Wir“ und „Heute“, die zum
+ * Aufrufer zurückkehren. `invitePrimary` macht „Partner einladen“ zur Hauptaktion.
+ */
+export function CouplingButtons({ invitePrimary = true }: { invitePrimary?: boolean }) {
+  return (
+    <>
+      <Button block icon="invite" variant={invitePrimary ? 'primary' : 'secondary'} label={partnerTexts.invite}
+        onPress={() => openTarget(partnerActions.invite.target)} />
+      <Button block variant="secondary" label={partnerTexts.redeem} onPress={() => openTarget(partnerActions.redeem.target)} />
+    </>
+  );
+}
 
 /** Takt des Pulls, solange ein Ablauf auf die Kopplung in SQLite wartet (Spezifikation 5, Abschnitt 5). */
 export const couplingPullIntervalMs = 10_000;

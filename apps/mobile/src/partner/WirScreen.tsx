@@ -1,9 +1,9 @@
-import type { AreaKey } from '@abnehm/contracts/base';
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Card, color, Icon, Notice, size, Skeleton, space, Text, useLargeTextLayout, type IconName } from '../design';
+import { Button, Card, color, Icon, Notice, size, Skeleton, space, Text, useLargeTextLayout } from '../design';
 import { openTarget } from '../navigation';
 import { MomoFigure } from '../momo';
+import { areaIcons } from '../shell/area-icons';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner } from './app-partner';
 import { PartnerAvatar } from './PartnerAvatar';
@@ -17,7 +17,6 @@ import { areaNames, partnerHeadline, partnerTexts, standText, summaryText, type 
 // samt „Danke“ (#126) ergänzen ihre Tickets. Partnerinhalte tragen die Partnerfarbe und stehen nie neben
 // eigenen Werten.
 
-const areaIcons: Readonly<Record<AreaKey, IconName>> = { ernaehrung: 'plate', wasser: 'drop', sport: 'sport', gewicht: 'scale' };
 
 export function WirScreen() {
   const partner = usePartner();

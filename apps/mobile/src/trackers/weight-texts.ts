@@ -1,7 +1,7 @@
 import type { LocalDate } from '@abnehm/contracts/base';
 import { changeInTenthKg, type WeightChange } from '@abnehm/contracts/tracker-rules';
 
-import { thousandthsWithOneDecimal as kg, monthNames as months } from '../shell/texts';
+import { longDateText, thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { dayText } from './entry-texts';
 
 // Texte des Gewicht-Detailbildschirms (Spezifikation 3, Abschnitt 5). Gewichte stehen in g und werden nur
@@ -35,12 +35,6 @@ export function changeText(change: WeightChange): string {
 export function spokenChange(change: WeightChange): string {
   if (change.changeKg === null) return changeText(change);
   return `Trend ${signedTenthKgText(change.changeKg, true)} in 2 Wochen`;
-}
-
-/** Datum ausgeschrieben, etwa „13. Dezember 2026“. */
-function longDateText(localDate: LocalDate): string {
-  const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
-  return `${day}. ${months[month - 1]} ${year}`;
 }
 
 export const weightTexts = {
