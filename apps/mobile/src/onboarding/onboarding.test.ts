@@ -262,3 +262,36 @@ describe('Schritt 3 „Körperdaten“', () => {
     expect(device.onboarding.confirmBodyData()).toEqual({ type: 'minderjaehrig' });
   });
 });
+
+describe('Schritte 5–7: eigenes Budget im Entwurf', () => {
+  const answered = {
+    calculationSex: 'weiblich', birthDate: LocalDate.parse('1991-04-02'), heightCm: 168, weightG: 80_000,
+    pregnantOrBreastfeeding: false, knownEatingDisorder: false,
+  } as const;
+
+  async function registered() {
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+  }
+
+  it('bleibt bei Wasser, Sport und einer unveränderten Aktivitätsstufe erhalten', async () => {
+    await registered();
+    device.onboarding.updateDraft({ ...answered, activityLevel: 'wenig_aktiv', manualBudgetKcal: 1_700 });
+
+    device.onboarding.updateDraft({ waterTargetMl: 2_000, weeklySportTargetMinutes: 160 });
+    device.onboarding.updateDraft({ activityLevel: 'wenig_aktiv' });
+
+    expect(device.onboarding.readDraft()).toEqual(expect.objectContaining({ manualBudgetKcal: 1_700, waterTargetMl: 2_000 }));
+  });
+
+  it('entfällt, wenn eine Eingabe die Rechnung ändert; Wasser und Sport bleiben', async () => {
+    await registered();
+    device.onboarding.updateDraft({ ...answered, manualBudgetKcal: 1_700, waterTargetMl: 2_000 });
+
+    const draft = device.onboarding.updateDraft({ activityLevel: 'aktiv' });
+
+    expect(draft.manualBudgetKcal).toBeUndefined();
+    expect(draft).toEqual(expect.objectContaining({ activityLevel: 'aktiv', waterTargetMl: 2_000 }));
+    expect(device.onboarding.readDraft()).toEqual(draft);
+  });
+});

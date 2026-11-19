@@ -7,6 +7,7 @@ import { readOwnPerson } from '../local-db/person-header';
 import { updateOwnPerson, type SyncCycleResult, type SyncWriter } from '../sync';
 import { checkBodyData, type BodyDataCheck, type BodyDataProblem } from './body-data';
 import { readOnboardingDraft, updateOnboardingDraft, type OnboardingDraft, type OnboardingDraftChange } from './draft';
+import { keepsManualBudget } from './goals';
 
 // Onboarding-Modul (Spezifikation 1, Abschnitte 1 und 9): der Weg vom Willkommen bis „Heute“. Vor dem
 // Konto führt es durch Schritt 1 und 2 der Route `sitzung`: Es registriert bzw. meldet an und richtet
@@ -57,6 +58,10 @@ export type Onboarding = {
   /** Schritt 1 mit Konto, etwa nach einer Anmeldung ohne Bestätigung: setzt `disclaimer_accepted_at` auf jetzt. */
   acceptDisclaimer(): void;
   readDraft(): OnboardingDraft;
+  /**
+   * Übernimmt eine Eingabe in den Entwurf. Ändert sie die Rechnung hinter einem eigenen Budget aus Schritt 7,
+   * etwa über die Aktivitätsstufe, entfällt dieses, und es gilt wieder das berechnete (`keepsManualBudget`).
+   */
   updateDraft(change: OnboardingDraftChange): OnboardingDraft;
   /**
    * „Weiter“ in Schritt 3: prüft die Körperdaten des Entwurfs mit den Grenzen des Zielrechners und dem
@@ -172,7 +177,15 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
 
     readDraft: () => requireDatabase().read(readOnboardingDraft),
 
-    updateDraft: (change) => requireDatabase().transaction((tx) => updateOnboardingDraft(tx, change, clock.read().instant)),
+    updateDraft(change) {
+      const { instant, localDate } = clock.read();
+      return requireDatabase().transaction((tx) => {
+        const before = readOnboardingDraft(tx);
+        const after = updateOnboardingDraft(tx, change, instant);
+        if (after.manualBudgetKcal === undefined || 'manualBudgetKcal' in change || keepsManualBudget(before, after, localDate)) return after;
+        return updateOnboardingDraft(tx, { manualBudgetKcal: undefined }, instant);
+      });
+    },
 
     bodyData: () => requireDatabase().read((tx) => checkBodyData(readOnboardingDraft(tx), clock.read().localDate)),
 

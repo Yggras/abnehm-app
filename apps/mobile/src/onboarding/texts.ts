@@ -1,5 +1,6 @@
 import { passwordPolicy } from '@abnehm/contracts/auth';
 import { bodyInputLimits, type SafetyTrigger } from '@abnehm/contracts/goal-calculator';
+import type { ActivityLevel } from '@abnehm/contracts/person';
 
 import type { PasswordRejection } from '../auth';
 import { germanList, thousandthsWithOneDecimal as kg } from '../shell/texts';
@@ -135,6 +136,17 @@ export const underageTexts = {
   typo: 'Hast du dich beim Geburtsdatum vertippt? Dann korrigiere es einfach.',
   correctDate: 'Datum korrigieren',
 } as const;
+
+/**
+ * Kurzbeschriftungen der Aktivitätsstufen, eigene Vereinfachungen der DGE-Stufen (Spezifikation 1,
+ * Abschnitt 3; Designwert): Stufe und Alltag. Schritt 5 zeigt beides als Karte, die Seite „Ziele“ als
+ * „wenig aktiv – überwiegend sitzend“.
+ */
+export const activityLevelParts: Readonly<Record<ActivityLevel, Readonly<{ level: string; everyday: string }>>> = {
+  wenig_aktiv: { level: 'wenig aktiv', everyday: 'überwiegend sitzend' },
+  maessig_aktiv: { level: 'mäßig aktiv', everyday: 'sitzend, zeitweise gehend oder stehend' },
+  aktiv: { level: 'aktiv', everyday: 'überwiegend gehend oder stehend' },
+};
 
 export const passwordRejectionTexts: Record<PasswordRejection, string> = {
   password_too_short: `Dein Passwort braucht mindestens ${passwordPolicy.minLength} Zeichen.`,

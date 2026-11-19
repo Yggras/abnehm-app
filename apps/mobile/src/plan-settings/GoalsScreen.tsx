@@ -14,7 +14,8 @@ import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { thousandthsWithOneDecimal, titleOf } from '../shell/texts';
 import { gramsOfKgText } from '../trackers/kg-text';
-import { activityLevelNames, goalTexts as texts, kcalText, kgText, litreText, paceNames, paceRates, rowLabel } from './texts';
+import { budgetDerivationRows, ValueRow } from './BudgetDerivation';
+import { goalTexts as texts, kcalText, kgText, litreText, paceNames, paceRates, rowLabel } from './texts';
 
 /**
  * Einstellungsseite „Ziele“ (Spezifikation 1, Abschnitt 10; #147), unter „Dein Plan“ in der Übersicht der
@@ -60,11 +61,6 @@ function Overview({ settings, current, onEdit }: { settings: GoalSettings; curre
   );
 }
 
-/** Eine Zeile mit Wert; ihr zugänglicher Name nennt Titel, Wert und Unterzeile. */
-function ValueRow({ title, value, subtitle, label }: { title: string; value: string; subtitle?: string; label?: string }) {
-  return <ListRow title={title} value={value} subtitle={subtitle} accessibilityLabel={label ?? rowLabel(title, value, subtitle)} />;
-}
-
 type ShownField = Readonly<{ title: string; text: (view: GoalVersionView) => string }>;
 
 /** Die Werte, die „ab morgen“ nennt; Zwischenwerte der Herleitung zeigt die Seite erst, wenn sie gelten. */
@@ -106,35 +102,19 @@ function Upcoming({ current, upcoming }: { current: GoalVersionView; upcoming: G
 
 function BudgetDerivation({ view }: { view: GoalVersionView }) {
   const { values } = view;
-  const factor = view.activityFactor;
   return (
     <View style={styles.section}>
       <SectionTitle>{texts.sections.budget}</SectionTitle>
       <ListGroup>
         <ValueRow title={texts.budget} value={kcalText(kcalOf(values.calorieBudgetMilliKcal))} subtitle={texts.budgetSources[values.budgetSource]} />
-        <ValueRow title={texts.basal} value={kcalText(kcalOf(values.basalMetabolicRateMilliKcal))} />
-        {factor === null ? null : (
-          <ValueRow
-            title={texts.activity}
-            subtitle={activityLevelNames[values.activityLevel]}
-            value={texts.activityFactor(factor)}
-            label={rowLabel(`${texts.activity} ${activityLevelNames[values.activityLevel]}`, texts.activityFactorSpoken(factor))}
-          />
-        )}
-        <ValueRow title={texts.total} value={kcalText(kcalOf(values.totalEnergyExpenditureMilliKcal))} />
-        {values.deficitMilliKcal === null || values.pace === null ? null : (
-          <ValueRow
-            title={texts.deficit(values.pace)}
-            value={texts.deficitValue(kcalOf(values.deficitMilliKcal))}
-            label={rowLabel(texts.deficit(values.pace), texts.deficitSpoken(kcalOf(values.deficitMilliKcal)))}
-          />
-        )}
-        <ValueRow
-          title={texts.lowerBound}
-          value={kcalText(kcalOf(values.lowerBoundMilliKcal))}
-          subtitle={texts.lowerBoundHint}
-          label={rowLabel(texts.lowerBound, kcalText(kcalOf(values.lowerBoundMilliKcal)))}
-        />
+        {budgetDerivationRows({
+          basalKcal: kcalOf(values.basalMetabolicRateMilliKcal),
+          activityLevel: values.activityLevel,
+          activityFactor: view.activityFactor,
+          totalKcal: kcalOf(values.totalEnergyExpenditureMilliKcal),
+          deficit: values.deficitMilliKcal === null || values.pace === null ? null : { pace: values.pace, kcal: kcalOf(values.deficitMilliKcal) },
+          lowerBoundKcal: kcalOf(values.lowerBoundMilliKcal),
+        })}
       </ListGroup>
       {view.budgetRaisedToLowerBound ? <Notice tone="hint" text={texts.raised} /> : null}
     </View>

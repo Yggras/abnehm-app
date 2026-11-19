@@ -1,5 +1,5 @@
 import { LocalDate } from '@abnehm/contracts/base';
-import { ageOn, type GoalCalculatorInput } from '@abnehm/contracts/goal-calculator';
+import { ageOn, calculateGoals, type GoalCalculatorInput, type GoalCalculatorResult } from '@abnehm/contracts/goal-calculator';
 import type { ActivityLevel, CalculationSex } from '@abnehm/contracts/person';
 import type { Pace } from '@abnehm/contracts/ports';
 
@@ -47,6 +47,14 @@ export function calculatorInput(draft: GoalDraft, calculationDate: LocalDate, we
     waterTargetMl: draft.waterTargetMl,
     weeklySportTargetMinutes: draft.weeklySportTargetMinutes,
   };
+}
+
+/**
+ * Vorschau des Zielrechners zu einem Entwurf am Berechnungstag, ohne zu schreiben: im Onboarding für die
+ * Schritte 4–7, als `Plan.preview` mit dem heutigen Tag.
+ */
+export function previewGoals(draft: GoalDraft, calculationDate: LocalDate): GoalCalculatorResult {
+  return calculateGoals(calculatorInput(draft, calculationDate));
 }
 
 /**
