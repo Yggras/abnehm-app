@@ -270,6 +270,22 @@ export function indexCatalog(catalog: GameCatalog): CatalogIndex {
   };
 }
 
+/**
+ * Werte eines Benachrichtigungstexts samt Namen aus dem Katalog (Spezifikation 4, Abschnitt 12: „Platzhalter
+ * kommen aus der Payload bzw. aus dem Katalog“). Zu jedem Feld `‹x›Key`, dessen Wert ein Katalogschlüssel
+ * ist, kommt dessen sichtbarer Name als `‹x›Name` hinzu, etwa `templateName` zu `templateKey`. Schlüssel
+ * sind über alle Arten eindeutig (`checkCatalog`), deshalb braucht es dafür die Intent-Art nicht.
+ */
+export function withCatalogNames(catalog: GameCatalog, values: unknown): unknown {
+  if (typeof values !== 'object' || values === null || Array.isArray(values)) return values;
+  const names = new Map(keyedEntryKinds.flatMap((kind) => entriesOf(catalog, kind).map((entry) => [entry.key, entry.name] as const)));
+  const added = Object.entries(values).flatMap(([field, value]) => {
+    const name = field.endsWith('Key') && typeof value === 'string' ? names.get(value) : undefined;
+    return name === undefined ? [] : [[`${field.slice(0, -'Key'.length)}Name`, name] as const];
+  });
+  return { ...values, ...Object.fromEntries(added) };
+}
+
 /** Zerlegt `‹gebiet›:‹x›:‹y›`; Koordinaten nur in kanonischer Schreibweise. */
 function parseFieldKey(key: string): { area: string; x: number; y: number } | undefined {
   const match = /^([a-z][a-z0-9_]*):(-?[0-9]+):(-?[0-9]+)$/.exec(key);

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { onTestFinished } from 'vitest';
 
 import type { Clock } from '@abnehm/clock';
+import type { PlanReader } from '@abnehm/contracts/ports';
 
 import { createDevelopmentApp } from '../../dev/app.ts';
 import { createFakeMealVision, type FakeMealVision } from '../../dev/meal-vision/fake-analyzer.ts';
@@ -14,7 +15,7 @@ import { createServerClock, type ServerClock } from '../../dev/server-clock.ts';
 import { createBackend, serverSystemClock, type Backend } from '../../src/backend.ts';
 import type { Database } from '../../src/database.ts';
 import type { MealVisionAnalyzer } from '../../src/nutrition/meal-vision.ts';
-import type { AnyPartnerSummaryProjector } from '../../src/partner-projections/projector.ts';
+import type { AnyPartnerSummaryProjector, ReaderPort } from '../../src/partner-projections/projector.ts';
 import { migratedTemplate } from './postgres-server.ts';
 import { createTestDatabase } from './postgres.ts';
 
@@ -38,7 +39,7 @@ export type TestBackend = Backend & {
  */
 export function createTestApp(
   database: Database,
-  { clock, syncPullPageSize, mealVisionAnalyzer, partnerSummaryProjectors, fakeExpoPush = createFakeExpoPush() }: TestAppOptions = {},
+  { clock, syncPullPageSize, mealVisionAnalyzer, partnerSummaryProjectors, planReader, fakeExpoPush = createFakeExpoPush() }: TestAppOptions = {},
 ): TestBackend {
   const authSettings = { secret: 'test-secret-mit-mindestens-zweiunddreissig-zeichen', baseUrl: testBaseUrl, trustedProxies: [] };
   const invitationSettings = { codeSecret: 'test-einladungs-secret-mit-mindestens-32-zeichen' };
@@ -54,6 +55,7 @@ export function createTestApp(
     mealVisionAnalyzer: mealVisionAnalyzer ?? fakeMealVision.analyzer,
     expoPush: fakeExpoPush.port,
     ...(partnerSummaryProjectors !== undefined && { partnerSummaryProjectors }),
+    ...(planReader !== undefined && { planReader }),
   });
   return { ...backend, database, photoStorageDirectory, fakeMealVision, fakeExpoPush };
 }
@@ -66,6 +68,8 @@ export type TestAppOptions = {
   fakeExpoPush?: FakeExpoPush;
   /** Statt der echten Partner-Projectors; nur für Tests des Projektionsmechanismus (#106). */
   partnerSummaryProjectors?: readonly AnyPartnerSummaryProjector[];
+  /** Statt des `PlanReader` über Postgres, etwa mit hinterlegten Wochenplänen für die Challenge-Anteile (#210). */
+  planReader?: ReaderPort<PlanReader>;
 };
 
 /** Frisch migrierte, eigene Datenbank samt App; wird nach dem Test verworfen, ebenso die Fotoentwürfe. */

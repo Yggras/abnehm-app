@@ -4,7 +4,7 @@ import { ContractError } from '@abnehm/contracts/errors';
 
 import { gameCatalog } from '../content/index.ts';
 import { testCatalog } from '../fixtures/index.ts';
-import { indexCatalog } from '../src/catalog.ts';
+import { indexCatalog, withCatalogNames } from '../src/catalog.ts';
 
 // Nachweis für #179: Katalogformat nach Abschnitt 4 von #83; unbekannte Schlüssel ergeben
 // `unknown_catalog_key`.
@@ -80,5 +80,14 @@ describe('Felder', () => {
     'endlos_1_t_vorlage_erste:99:0',
   ])('kennt %s nicht', (key) => {
     expect(test.find('feld', key)).toMatchObject({ type: 'contract_error', error: { code: 'unknown_catalog_key' } });
+  });
+});
+
+describe('withCatalogNames', () => {
+  it('ergänzt zu jedem Katalogschlüssel `‹x›Key` den Namen als `‹x›Name` und lässt alles andere unverändert (#210)', () => {
+    const payload = { challengeId: 'c', templateKey: 'gut_getrunken', senderDisplayName: 'Anna', encouragementKey: 'stark_heute', decoKey: 'muschel' };
+    expect(withCatalogNames(gameCatalog, payload)).toEqual({ ...payload, templateName: 'Gut getrunken', decoName: 'Muschel' });
+    expect(withCatalogNames(gameCatalog, { templateKey: 'gibt_es_nicht' })).toEqual({ templateKey: 'gibt_es_nicht' });
+    expect(withCatalogNames(gameCatalog, null)).toBeNull();
   });
 });
