@@ -10,7 +10,7 @@ import { openCatalog } from '../local-db/testing/better-sqlite-catalog';
 import { blsCatalogVersion } from './bls-catalog-version';
 import { createFoodSearch, type FoodSearchResult } from './food-search';
 import { searchNames } from './search-text';
-import { noOwnFoods } from './testing/test-catalog';
+import { emptyAccount } from './testing/test-catalog';
 
 // Nachweis für #154: Das eingecheckte Asset passt zum Code. Schlägt ein Test fehl, das Asset mit
 // `npm run bls-katalog --workspace @abnehm/mobile` neu bauen und `blsCatalogVersion` erhöhen, damit
@@ -79,7 +79,7 @@ describe('BLS-Katalog-Asset', () => {
   });
 
   it('findet typische Lebensmittel', () => {
-    const foods = createFoodSearch({ catalog, ownFoods: noOwnFoods });
+    const foods = createFoodSearch({ catalog, account: emptyAccount });
 
     expect(names(foods.search('Haferflocken')).slice(0, 2)).toEqual(['Hafer Flocken', 'Hafer Flocken, gekocht']);
     expect(names(foods.search('Musli'))).toEqual(names(foods.search('Muesli')));

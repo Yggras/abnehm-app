@@ -14,6 +14,8 @@ import {
   photoDraftSnapshot,
   roundKcal,
   roundMacroGrams,
+  sameFoodValues,
+  sameSnapshot,
   type EntryAmount,
 } from '../src/nutrition.ts';
 
@@ -32,6 +34,23 @@ const haferflocken = NutritionSnapshot.parse({
   portions: [],
   source: 'bls',
   attribution: 'Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0',
+});
+
+describe('Werte vergleichen (#158)', () => {
+  const ownOats = NutritionSnapshot.parse({ ...haferflocken, portions: [{ unit: 'portion', label: '1 Schale', baseAmount: 40_000 }], source: 'eigen', attribution: null });
+
+  it('vergleicht Werte unabhängig von der Reihenfolge der Schlüssel, Umrechnungen samt Reihenfolge', () => {
+    const reordered = { portions: ownOats.portions, fatMg: 6_650, carbsMg: 53_300, proteinMg: 13_220, milliKcal: 348_000, referenceAmount: 100_000, baseUnit: 'g' as const, name: 'Hafer Flocken' };
+    expect(sameFoodValues(ownOats, reordered)).toBe(true);
+    expect(sameFoodValues(ownOats, { ...ownOats, fatMg: 6_651 })).toBe(false);
+    expect(sameFoodValues(ownOats, { ...ownOats, portions: [{ unit: 'portion', label: '1 Becher', baseAmount: 40_000 }] })).toBe(false);
+    expect(sameFoodValues(ownOats, haferflocken)).toBe(false);
+  });
+
+  it('vergleicht Snapshots samt Quelle und Quellenangabe', () => {
+    expect(sameSnapshot(haferflocken, NutritionSnapshot.parse({ ...haferflocken }))).toBe(true);
+    expect(sameSnapshot(haferflocken, { ...haferflocken, source: 'eigen', attribution: null })).toBe(false);
+  });
 });
 
 describe('entryTotals', () => {

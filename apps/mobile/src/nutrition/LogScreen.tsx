@@ -116,6 +116,8 @@ function DayLogView({ nutrition, log, today, onDay }: { nutrition: Nutrition; lo
             key={editing.id}
             entry={editing}
             today={today}
+            nutrition={nutrition}
+            onFailed={message.failed}
             onClose={() => setEditing(null)}
             onSave={(change: EntryChange) => run(() => nutrition.updateEntry(editing.id, change))}
             onDelete={() => run(() => nutrition.deleteEntry(editing.id))}

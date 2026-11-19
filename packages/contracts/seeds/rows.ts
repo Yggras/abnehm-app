@@ -3,7 +3,7 @@ import { seedClock, seedUtcOffsetMinutes } from './ids.ts';
 import { EntityId, LocalDate, type BausteinKey, type MealKey } from '../src/base.ts';
 import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { dailyBonusKey, energyBookingId } from '../src/energy.ts';
-import { entryAmount, entryTotals, NutritionSnapshot, OwnFoodUpsert } from '../src/nutrition.ts';
+import { entryAmount, entryTotals, FoodFavoriteUpsert, foodFavoriteId, NutritionSnapshot, OwnFoodUpsert } from '../src/nutrition.ts';
 
 // Zeilenhelfer der Bereichsbeiträge: wiederkehrende Zeilenformen der Spezifikationen 1–3 in der
 // kanonischen Form des Manifests. Der Baukasten (`build.ts`) kennt sie nicht; er setzt nur zusammen.
@@ -210,6 +210,28 @@ export function seedOwnFood(options: { id: string; personId: string; at: string;
       portions: food.portions,
       origin_type: food.origin?.type ?? null,
       origin_key: food.origin?.key ?? null,
+      ...seedCreated(options.at),
+    },
+  };
+}
+
+/**
+ * Markierter Lebensmittelfavorit (Spezifikation 2, Abschnitt 7), seit #158 beim Sync angemeldet. Die ID
+ * folgt deterministisch aus Person und Lebensmittelreferenz; Referenz und Fassung prüft der Vertrag.
+ */
+export function seedFoodFavorite(options: { personId: string; at: string; favorite: FoodFavoriteUpsert }): SeedEntity {
+  const favorite = FoodFavoriteUpsert.parse(options.favorite);
+  return {
+    table: 'food_favorite',
+    entityType: 'food_favorite',
+    ownerPersonId: options.personId,
+    row: {
+      id: foodFavoriteId(EntityId.parse(options.personId), favorite.foodRef),
+      person_id: options.personId,
+      food_ref_type: favorite.foodRef.type,
+      food_ref_key: favorite.foodRef.key,
+      snapshot: favorite.snapshot,
+      removed_at: favorite.removedAt,
       ...seedCreated(options.at),
     },
   };

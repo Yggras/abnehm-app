@@ -7,6 +7,7 @@ import m0002 from './0002_pretty_puppet_master.sql';
 import m0003 from './0003_dirty_day_revision.sql';
 import m0004 from './0004_own_food_search.sql';
 import m0005 from './0005_sync_cursor_pulled_at.sql';
+import m0006 from './0006_food_favorite_removed_at.sql';
 
   export default {
     journal,
@@ -16,7 +17,8 @@ m0001,
 m0002,
 m0003,
 m0004,
-m0005
+m0005,
+m0006
     }
   }
   

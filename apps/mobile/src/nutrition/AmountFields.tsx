@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Chip, space, Text, TextField } from '../design';
 import { checkAmountInput, defaultAmountMilli, type AmountCheck } from './amount-input';
-import type { AmountPrefill } from './nutrition';
+import type { AmountPrefill } from './amount-prefill';
 import { amountProblemText, kcalText, macrosText, milliText, nutritionTexts, unitChipText, unitText } from './texts';
 
 // Die Mengenansicht (Spezifikation 2, Abschnitt 6), gemeinsam für die Mengenprüfung beim Hinzufügen und

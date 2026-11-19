@@ -59,6 +59,8 @@ export const foodFavorite = pgTable(
     foodRefType: text('food_ref_type').notNull(),
     foodRefKey: text('food_ref_key').notNull(),
     snapshot: json<NutritionSnapshotJson>('snapshot').notNull(),
+    /** Entfernte Markierung; kein Tombstone, weil die ID deterministisch ist (#158). */
+    removedAt: instant('removed_at'),
     ...mutable(),
   },
   (t) => [

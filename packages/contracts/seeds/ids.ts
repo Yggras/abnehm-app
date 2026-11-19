@@ -115,6 +115,7 @@ export const seedIds = {
   // 0031/8–9: Philipps Frühstück und Mittagessen von heute, nur in den Randzuständen der Ernährung (#166).
   // 0031/13–14: Philipps Fotoeinträge in `gekoppelt` (#164): der zum nicht geteilten Foto von heute und der
   // gestern gelöschte des verwaisten Fotos.
+  // 0031/39–40: Philipps Frühstück in und vor dem 30-Tage-Fenster von „Zuletzt verwendet“ in `solo` (#158).
   nutritionEntry: {
     philippMittag: id('0031', 1),
     annaMittag: id('0031', 2),
@@ -128,6 +129,8 @@ export const seedIds = {
     /** `gekoppelt`: Philipps einzeln vom Teilen ausgenommener Obstsalat und der gelöschte Eintrag seines verwaisten Fotos (#164). */
     philippNichtGeteilt: id('0031', 37),
     philippVerwaist: id('0031', 38),
+    /** `solo`: Frühstück am ersten Tag in und am letzten Tag vor dem 30-Tage-Fenster von „Zuletzt verwendet“ (#158). */
+    philippZuletztFenster: { innerhalb: id('0031', 39), ausserhalb: id('0031', 40) },
   },
   /**
    * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten` (#113)

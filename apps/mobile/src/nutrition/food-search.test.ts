@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { createFoodSearch, type FoodSearch, type FoodSearchResult } from './food-search';
-import { noOwnFoods, openTestCatalog } from './testing/test-catalog';
+import { emptyAccount, openTestCatalog } from './testing/test-catalog';
 
 // Lokale Suche des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 4; #154) über einem kleinen
 // BLS-Testkatalog, gebaut vom selben Skript wie das echte Asset.
@@ -12,7 +12,7 @@ let foods: FoodSearch;
 
 beforeEach(() => {
   catalog = openTestCatalog();
-  foods = createFoodSearch({ catalog: catalog.database, ownFoods: noOwnFoods });
+  foods = createFoodSearch({ catalog: catalog.database, account: emptyAccount });
 });
 
 afterEach(() => catalog.close());
@@ -108,6 +108,7 @@ describe('Treffer', () => {
           mark: 'bls',
           ref: { type: 'bls', key: 'R123100' },
           kcalPer100: 18,
+          available: true,
           snapshot: {
             name: 'Apfelessig',
             baseUnit: 'g',

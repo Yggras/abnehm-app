@@ -1,10 +1,10 @@
 import type { LocalDate, MealKey } from '@abnehm/contracts/base';
-import { foodValuesOf, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
+import { foodRefKey, foodValuesOf, sameFoodValues, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
-import { ListGroup, ListRow, Sheet, size, Skeleton, space, Text, TextField, type IconName } from '../design';
+import { Button, ListGroup, ListRow, Sheet, size, Skeleton, space, Text, TextField, type IconName } from '../design';
 import { closeRoute, openTarget, type RouteScreenProps } from '../navigation';
 import { Placeholder } from '../shell/Placeholder';
 import { ScreenFrame } from '../shell/ScreenFrame';
@@ -13,33 +13,37 @@ import { useUndoableMessage } from '../shell/use-undoable-message';
 import { isTestArtifact } from '../test-artifact';
 import { useNutrition } from './app-nutrition';
 import { AmountReview, type Selection } from './AmountReview';
-import { BlsCatalogProvider, useFoodSearch } from './BlsCatalogProvider';
+import { BlsCatalogProvider, useFoodSearch, useQuickFoods, useRecordFavoriteUse } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
 import type { Nutrition } from './nutrition';
 import { editableBaseOf, emptyOwnFoodDraft, ownFoodDraftOf, type OwnFoodDraft } from './own-food-input';
 import type { OwnFoodBase } from './own-foods';
 import { OwnFoodForm } from './OwnFoodForm';
-import { captureTargetText, markNames, nutritionTexts } from './texts';
+import type { QuickFood, QuickFoods } from './quick-foods';
+import { amountText, captureTargetText, markNames, nutritionTexts } from './texts';
 import { useLocalToday } from './use-day-log';
 
 // Hinzufügen-Bildschirm (Spezifikation 2, Abschnitt 6) für die Route `capture.food`: feste Plätze in
 // der Reihenfolge Suche, „Barcode scannen“, „Foto aufnehmen“, Mahlzeitenfavoriten, „Zuletzt verwendet“,
 // Lebensmittelfavoriten und „Eigenes Lebensmittel anlegen“. #155 füllt die Suche, #157 den letzten Platz
-// samt Formular; die übrigen Plätze füllen ihre Tickets (#158–#163). Vor jedem Speichern prüft die
+// samt Formular, #158 „Zuletzt verwendet“ und die Lebensmittelfavoriten; die übrigen Plätze füllen ihre
+// Tickets (#159–#163). Ein Tipp auf „Zuletzt verwendet“ oder einen Favoriten führt immer in die Mengenprüfung,
+// mit vorbelegter Menge. Vor jedem Speichern prüft die
 // Person Menge und Einheit im Sheet. Das Formular „Eigenes Lebensmittel“ ist ein Schritt dieses
 // Bildschirms, kein Sheet: Es braucht Tastatur und Platz, und Sheets liegen nie in Sheets.
 
-/** Plätze, die spätere Tickets füllen, in fester Reihenfolge zwischen Suche und eigenem Lebensmittel. */
-const laterSlots = ['barcode', 'foto', 'mahlzeitenfavoriten', 'zuletzt', 'lebensmittelfavoriten'] as const;
+/** Plätze, die spätere Tickets füllen, in fester Reihenfolge zwischen Suche und „Zuletzt verwendet“. */
+const laterSlots = ['barcode', 'foto', 'mahlzeitenfavoriten'] as const;
 type LaterSlot = (typeof laterSlots)[number];
 
 const slotIcons: Readonly<Record<LaterSlot, IconName>> = {
   barcode: 'barcode',
   foto: 'camera',
   mahlzeitenfavoriten: 'plate',
-  zuletzt: 'undo',
-  lebensmittelfavoriten: 'star',
 };
+
+/** So viele Einträge zeigt jede Liste, danach „Alle anzeigen“ (Spezifikation 2, Abschnitt 6; Designwert, nicht belegt). */
+const listPreview = 5;
 
 export function FoodCaptureScreen({ target }: RouteScreenProps<'capture.food'>) {
   const today = useLocalToday(useClock());
@@ -81,8 +85,6 @@ type FormStep = Readonly<{
   from?: Selection;
 }>;
 
-const sameValues = (a: FoodValues, b: FoodValues) => JSON.stringify(foodValuesOf(a)) === JSON.stringify(foodValuesOf(b));
-
 function AddSlots({
   nutrition,
   meal,
@@ -95,7 +97,9 @@ function AddSlots({
   /** Mahlzeit und Tag, die auch der Mengenschritt nennt. */
   target: string;
 }) {
-  const search = useFoodSearch(nutrition);
+  const search = useFoodSearch(nutrition, meal);
+  const quick = useQuickFoods(nutrition, meal);
+  const recordFavoriteUse = useRecordFavoriteUse(nutrition);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Selection | null>(null);
   const [form, setForm] = useState<FormStep | null>(null);
@@ -139,6 +143,18 @@ function AddSlots({
     setSelected({ ...saved.value, captureMethod, unit });
   };
 
+  /**
+   * Ein Lebensmittel aus Suche, „Zuletzt verwendet“ oder den Favoriten öffnet die Mengenprüfung, mit
+   * vorbelegter Menge. Beim Verwenden eines Favoriten folgt seine gespeicherte Fassung den aktuellen Werten
+   * (Spezifikation 2, Abschnitt 7).
+   */
+  const pick = (selection: Selection, favorite: boolean) => {
+    if (favorite && !attempt(() => recordFavoriteUse(selection.ref)).done) return;
+    setSelected(selection);
+  };
+  const pickQuick = ({ ref, snapshot, prefill, available }: QuickFood, captureMethod: 'zuletzt' | 'lebensmittelfavorit') =>
+    pick({ ref, snapshot, captureMethod, prefill, available }, captureMethod === 'lebensmittelfavorit');
+
   const create = (name = '') =>
     setForm({ base: null, initial: emptyOwnFoodDraft(name), title: nutritionTexts.ownFood.create, captureMethod: 'eigenes_lebensmittel' });
 
@@ -160,7 +176,7 @@ function AddSlots({
 
   /** Ohne Änderung entsteht nichts: Erst eine geänderte Fassung wird zum eigenen Lebensmittel (#157). */
   const submit = (step: FormStep, values: FoodValues) => {
-    if (step.from !== undefined && sameValues(values, step.from.snapshot)) {
+    if (step.from !== undefined && sameFoodValues(values, step.from.snapshot)) {
       setForm(null);
       setSelected(step.from);
       return;
@@ -207,22 +223,23 @@ function AddSlots({
         <SearchHits
           hits={result.hits}
           query={query}
-          onSelect={(hit) => setSelected({ ref: hit.ref, snapshot: hit.snapshot, captureMethod: 'suche' })}
+          onSelect={({ ref, snapshot, prefill, available, mark }) => pick({ ref, snapshot, captureMethod: 'suche', prefill, available }, mark === 'favorit')}
           onCreate={create}
         />
       ) : (
-        <Slots onCreate={() => create()} />
+        <Slots meal={meal} quick={quick} onPick={pickQuick} onCreate={() => create()} />
       )}
       <Sheet visible={selected !== null} onClose={() => setSelected(null)} height="full">
         {selected === null ? null : (
           <AmountReview
-            key={`${selected.ref.type}:${selected.ref.key}:${ownFoodChanges}`}
+            key={`${foodRefKey(selected.ref)}:${ownFoodChanges}`}
             selection={selected}
             target={target}
             nutrition={nutrition}
             onClose={() => setSelected(null)}
             onAdd={(displayUnit, displayAmountMilli) => add(selected, displayUnit, displayAmountMilli)}
             onEdit={() => edit(selected)}
+            onFailed={(error) => message.failed(error)}
             onConversion={(conversion) => {
               const base = editableBaseOf(selected.ref);
               if (base === undefined) return;
@@ -265,7 +282,7 @@ function SearchHits({
         // Quellenmarke in derselben Zeile: So passen auf das iPhone SE mit Tastatur mehr Treffer.
         return (
           <ListRow
-            key={`${hit.ref.type}:${hit.ref.key}`}
+            key={foodRefKey(hit.ref)}
             title={hit.snapshot.name}
             subtitle={`${per100} · ${markNames[hit.mark]}`}
             onPress={() => onSelect(hit)}
@@ -278,23 +295,101 @@ function SearchHits({
 }
 
 /**
- * Die Plätze unter der Suche, „Eigenes Lebensmittel anlegen“ als letzter. Plätze, die spätere Tickets
- * füllen, zeigen Test-Artefakte als „Kommt noch“, damit die Reihenfolge sichtbar bleibt; im Release ist
- * ein fehlender Platz ein Integrationsfehler wie ein fehlender Bildschirm.
+ * Die Plätze unter der Suche: die noch fehlenden Plätze, „Zuletzt verwendet“, Lebensmittelfavoriten und
+ * „Eigenes Lebensmittel anlegen“ als letzter. Plätze, die spätere Tickets füllen, zeigen Test-Artefakte als
+ * „Kommt noch“, damit die Reihenfolge sichtbar bleibt; im Release ist ein fehlender Platz ein
+ * Integrationsfehler wie ein fehlender Bildschirm.
  */
-function Slots({ onCreate }: { onCreate: () => void }) {
+function Slots({
+  meal,
+  quick,
+  onPick,
+  onCreate,
+}: {
+  meal: MealKey;
+  /** `null`, bis die erste Abfrage gelaufen ist. */
+  quick: QuickFoods | null;
+  onPick: (food: QuickFood, captureMethod: 'zuletzt' | 'lebensmittelfavorit') => void;
+  onCreate: () => void;
+}) {
   if (!isTestArtifact()) throw new Error(`Integrationsfehler: Auf dem Hinzufügen-Bildschirm fehlen die Plätze ${laterSlots.join(', ')}.`);
   return (
-    <ListGroup>
-      {laterSlots.map((slot) => (
-        <View key={slot} testID={`platz-${slot}`}>
-          <ListRow icon={slotIcons[slot]} title={nutritionTexts.slots[slot]} subtitle={nutritionTexts.slotInWork} disabled />
-        </View>
-      ))}
+    <>
+      <ListGroup>
+        {laterSlots.map((slot) => (
+          <View key={slot} testID={`platz-${slot}`}>
+            <ListRow icon={slotIcons[slot]} title={nutritionTexts.slots[slot]} subtitle={nutritionTexts.slotInWork} disabled />
+          </View>
+        ))}
+      </ListGroup>
+      <QuickList
+        slot="zuletzt"
+        foods={quick?.recent ?? null}
+        empty={nutritionTexts.quick.noRecent(meal)}
+        onPick={(food) => onPick(food, 'zuletzt')}
+      />
+      <QuickList
+        slot="lebensmittelfavoriten"
+        foods={quick?.favorites ?? null}
+        empty={nutritionTexts.quick.noFavorites}
+        onPick={(food) => onPick(food, 'lebensmittelfavorit')}
+      />
       <View testID="platz-eigenes_lebensmittel">
-        <ListRow icon="pencil" title={nutritionTexts.slots.eigenes_lebensmittel} onPress={onCreate} />
+        <ListGroup>
+          <ListRow icon="pencil" title={nutritionTexts.slots.eigenes_lebensmittel} onPress={onCreate} />
+        </ListGroup>
       </View>
-    </ListGroup>
+    </>
+  );
+}
+
+/** Eine Liste unter ihrer Überschrift: höchstens fünf Lebensmittel, danach „Alle anzeigen“. */
+function QuickList({
+  slot,
+  foods,
+  empty,
+  onPick,
+}: {
+  slot: 'zuletzt' | 'lebensmittelfavoriten';
+  foods: readonly QuickFood[] | null;
+  /** Satz ohne Einträge: was hier künftig steht. */
+  empty: string;
+  onPick: (food: QuickFood) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const title = nutritionTexts.slots[slot];
+  const shown = foods === null ? [] : all ? foods : foods.slice(0, listPreview);
+  return (
+    <View testID={`platz-${slot}`} style={styles.section}>
+      <Text variant="headline" accessibilityRole="header">
+        {title}
+      </Text>
+      {foods === null ? (
+        <Skeleton height={size.rowMin} radius="lg" />
+      ) : foods.length === 0 ? (
+        <Text variant="label" tone="inkMuted">
+          {empty}
+        </Text>
+      ) : (
+        <ListGroup>
+          {shown.map((food) => {
+            const amount = amountText(food.prefill.displayUnit, food.prefill.displayAmountMilli);
+            return (
+              <ListRow
+                key={foodRefKey(food.ref)}
+                title={food.snapshot.name}
+                subtitle={nutritionTexts.quick.row(amount, food.kcal)}
+                onPress={() => onPick(food)}
+                accessibilityLabel={nutritionTexts.quick.rowLabel(food.snapshot.name, amount, food.kcal)}
+              />
+            );
+          })}
+        </ListGroup>
+      )}
+      {foods !== null && foods.length > listPreview ? (
+        <Button variant="text" label={all ? nutritionTexts.quick.showFewer : nutritionTexts.quick.showAll(foods.length)} onPress={() => setAll((shownAll) => !shownAll)} />
+      ) : null}
+    </View>
   );
 }
 
@@ -309,4 +404,5 @@ function CaptureSkeleton() {
 
 const styles = StyleSheet.create({
   skeleton: { gap: space[4] },
+  section: { gap: space[2] },
 });

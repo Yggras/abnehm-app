@@ -24,7 +24,18 @@ import { sharedActionCommands } from '../island/shared-action-commands';
 import { composeAreaPorts } from '../area-ports';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createHttpMealPhotoImages, createNutrition, intakeReaderOf, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
+import {
+  appNutrition,
+  confirmPhotoDraftCommand,
+  createHttpMealPhotoImages,
+  createNutrition,
+  foodFavoriteEntity,
+  intakeReaderOf,
+  mealPhotoEntity,
+  nutritionDailyGoals,
+  nutritionEntryEntity,
+  ownFoodEntity,
+} from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications, type NotificationPort } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
@@ -68,7 +79,7 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, foodFavoriteEntity, waterEntryEntity,
   weightEntryEntity, sportEntryEntity, ...islandSyncEntities, ...challengeSyncEntities, notificationSettingEntity, encouragementEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */

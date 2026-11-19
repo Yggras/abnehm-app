@@ -6,7 +6,7 @@ import { blsCatalogVersion } from './bls-catalog-version';
 import { useCatalogDatabase } from '../local-db/CatalogProvider';
 import { BlsCatalogProvider } from './BlsCatalogProvider';
 import { createFoodSearch } from './food-search';
-import { noOwnFoods } from './testing/test-catalog';
+import { emptyAccount } from './testing/test-catalog';
 import type * as TestCatalogModule from './testing/test-catalog';
 
 // Nachweis für #154: Die App öffnet den BLS-Katalog über `SQLiteProvider` mit `assetSource`, getrennt
@@ -43,7 +43,7 @@ jest.mock('expo-sqlite', () => {
 });
 
 function FirstHit({ query }: { query: string }) {
-  const result = createFoodSearch({ catalog: useCatalogDatabase(), ownFoods: noOwnFoods }).search(query);
+  const result = createFoodSearch({ catalog: useCatalogDatabase(), account: emptyAccount }).search(query);
   return <Text>{result.type === 'treffer' ? result.hits[0]?.snapshot.name : result.type}</Text>;
 }
 

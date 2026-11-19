@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { EntityId, Instant, LocalDate, MealKey, TimeZone, UtcOffsetMinutes } from './base.ts';
 import { addDays } from './calendar.ts';
 import { ContractErrorCode } from './errors.ts';
+import { uuidV5 } from './ids.ts';
 import { QuickCommandOutcome } from './today.ts';
 
 // Ernährung (Spezifikation 2, Abschnitte 2–4): Lebensmittelreferenz, Nährwert-Snapshot, Eintragsmenge
@@ -57,6 +58,11 @@ export const FoodRef = z.discriminatedUnion('type', [
 ]);
 export type FoodRef = z.infer<typeof FoodRef>;
 
+/** Eindeutiger Schlüssel einer Lebensmittelreferenz, etwa für Mengen und Maps: `<type>:<key>`. */
+export function foodRefKey(ref: FoodRef): string {
+  return `${ref.type}:${ref.key}`;
+}
+
 /** Höchstlänge eines Lebensmittelnamens in Zeichen (Designwert, nicht belegt). */
 export const foodNameMaxLength = 200;
 
@@ -97,6 +103,24 @@ export type FoodValues = Readonly<FoodValueFields>;
 /** Die Werte eines Snapshots, eines eigenen Lebensmittels oder seines Datensatzes, ohne alle übrigen Felder. */
 export function foodValuesOf({ name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions }: FoodValues): FoodValues {
   return { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions };
+}
+
+/** Ob zwei Lebensmittel dieselben Werte haben: Name, Einheit, Bezugsmenge, Nährwerte und Umrechnungen in derselben Reihenfolge. */
+export function sameFoodValues(a: FoodValues, b: FoodValues): boolean {
+  const scalar = (['name', 'baseUnit', 'referenceAmount', 'milliKcal', 'proteinMg', 'carbsMg', 'fatMg'] as const).every((key) => a[key] === b[key]);
+  return (
+    scalar &&
+    a.portions.length === b.portions.length &&
+    a.portions.every((portion, index) => {
+      const other = b.portions[index];
+      return other !== undefined && portion.unit === other.unit && portion.label === other.label && portion.baseAmount === other.baseAmount;
+    })
+  );
+}
+
+/** Ob zwei Snapshots gleich sind: dieselben Werte, dieselbe Quelle und Quellenangabe. */
+export function sameSnapshot(a: NutritionSnapshot, b: NutritionSnapshot): boolean {
+  return sameFoodValues(a, b) && a.source === b.source && a.attribution === b.attribution;
 }
 
 /**
@@ -181,6 +205,54 @@ export type OwnFoodRecord = z.infer<typeof OwnFoodRecord>;
  */
 export function ownFoodSnapshot(food: FoodValues): NutritionSnapshot {
   return NutritionSnapshot.parse({ ...foodValuesOf(food), source: 'eigen', attribution: null });
+}
+
+// Lebensmittelfavorit (Spezifikation 2, Abschnitt 7) ------------------------------------------------
+
+const foodFavoriteFields = {
+  foodRef: FoodRef,
+  /** Letzte vollständige Fassung; gilt, wenn die Referenz nicht mehr verfügbar ist. */
+  snapshot: NutritionSnapshot,
+  /**
+   * Zeitpunkt, zu dem die Person die Markierung entfernt hat; `null` solange markiert. Entfernen ist
+   * kein Tombstone, weil die ID deterministisch ist und Tombstones für Clientoperationen endgültig sind
+   * (Spezifikation 0, Abschnitt 10): Ein erneutes Markieren wäre sonst nie mehr möglich
+   * (Nutzerentscheidung vom 19.11.2026, https://github.com/Yggras/abnehm-app/issues/158).
+   */
+  removedAt: Instant.nullable(),
+};
+
+type FoodFavoriteFields = { foodRef: FoodRef; snapshot: NutritionSnapshot };
+
+/** Die Fassung passt zur Referenz: Ihre Quelle ist die Art der Referenz, nie die KI-Schätzung. */
+function withFavoriteRules<T extends z.ZodType<FoodFavoriteFields>>(schema: T) {
+  return schema.refine((favorite) => favorite.foodRef.type === favorite.snapshot.source, {
+    message: 'Die Fassung passt nicht zur Lebensmittelreferenz',
+    path: ['snapshot', 'source'],
+  });
+}
+
+/**
+ * Nutzlast eines Lebensmittelfavoriten im Sync (Spezifikation 2, Abschnitt 11): generisches Upsert,
+ * Last-Write-Wins pro Zeile. Markieren, Entfernen (`removedAt`) und erneutes Markieren sind Upserts
+ * derselben deterministischen ID (`foodFavoriteId`); gelöscht wird ein Favorit nicht über den Sync.
+ */
+export const FoodFavoriteUpsert = withFavoriteRules(z.strictObject(foodFavoriteFields));
+export type FoodFavoriteUpsert = z.infer<typeof FoodFavoriteUpsert>;
+
+/** Kanonischer Lebensmittelfavorit des Servers: Nutzlast samt Eigentümer und Zeitpunkten. */
+export const FoodFavoriteRecord = withFavoriteRules(z.strictObject({ ...foodFavoriteFields, personId: EntityId, createdAt: Instant, updatedAt: Instant }));
+export type FoodFavoriteRecord = z.infer<typeof FoodFavoriteRecord>;
+
+const foodFavoriteNamespace = '8e4b2c6a-1d3f-4a5e-9b7c-0f2e4d6a8c10';
+
+/**
+ * Deterministische ID des Lebensmittelfavoriten aus Person und Lebensmittelreferenz (Spezifikation 2,
+ * Abschnitt 7; Spezifikation 0, Abschnitt 8): Markieren zwei Geräte offline dasselbe Lebensmittel,
+ * entsteht genau ein Favorit.
+ */
+export function foodFavoriteId(personId: EntityId, foodRef: FoodRef): EntityId {
+  return EntityId.parse(uuidV5(foodFavoriteNamespace, `food_favorite:${personId}:${foodRefKey(foodRef)}`));
 }
 
 /** Einheit, in der die Person eine Menge eingibt und sieht. */

@@ -1,0 +1,1 @@
+ALTER TABLE "food_favorite" ADD COLUMN "removed_at" timestamp with time zone;

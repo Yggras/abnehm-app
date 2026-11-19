@@ -92,7 +92,7 @@ async function setup() {
     newId,
     persistence: { reevaluateDailyGoals: (_tx, _personId, localDates) => void reports.push([...localDates]) },
   });
-  const search = nutrition.foodSearch(catalog.database);
+  const search = nutrition.foodSearch(catalog.database, 'fruehstueck');
   return {
     database,
     catalog: catalog.database,
@@ -251,7 +251,7 @@ describe('Suche über eigene Lebensmittel', () => {
     const { nutrition, catalog } = await setup();
     nutrition.saveOwnFood(null, { ...muesli, name: 'Eistee', baseUnit: 'ml', referenceAmount: 250, milliKcal: 70_000, proteinMg: 0, carbsMg: 17_500, fatMg: 0, portions: [] });
 
-    const result = nutrition.foodSearch(catalog).search('Eistee');
+    const result = nutrition.foodSearch(catalog, 'fruehstueck').search('Eistee');
 
     expect(result).toEqual({ type: 'treffer', hits: [expect.objectContaining({ mark: 'eigen', kcalPer100: 28 })] });
   });
