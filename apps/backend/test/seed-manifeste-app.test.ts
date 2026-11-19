@@ -111,3 +111,5 @@ manifestSuite('doppelausgabe');
 manifestSuite('feldkonflikt');
 manifestSuite('ereignisse-voll');
 manifestSuite('levelaufstieg-ausstehend');
+manifestSuite('budgetvorschlag-senken');
+manifestSuite('budgetvorschlag-anheben');

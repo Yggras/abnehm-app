@@ -544,6 +544,34 @@ describe('Seed-Szenarien der Einstellungsseite „Ziele“ (#147)', () => {
   });
 });
 
+describe('Seed-Szenarien „Budgetvorschlag fällig“ (#150)', () => {
+  const scenarios = ['budgetvorschlag-senken', 'budgetvorschlag-anheben'];
+  const module = 'packages/contracts/seeds/budgetvorschlag.ts';
+  const seed = testCapabilities.find(({ key }) => key === 'seed')!;
+
+  it('sind als Marker der Fähigkeit seed registriert, ihr Modul liegt in deren Ordner', () => {
+    expect(seed.markers).toEqual(expect.arrayContaining(scenarios));
+    expect(belongsTo(module, seed.modules)).toBe(true);
+  });
+
+  it('fehlen samt Modul im Produktions-Bundle der App und im Produktions-Image des Backends', () => {
+    for (const bundle of bundles.production) {
+      expect(bundle.sources, bundle.platform).not.toContain(module);
+      for (const scenario of scenarios) expect(bundle.js.includes(scenario), `${bundle.platform}: ${scenario}`).toBe(false);
+    }
+    const production = imageFiles('production');
+    expect(production).not.toContain(module);
+    for (const file of production) for (const scenario of scenarios) expect(read(file).includes(scenario), `${file}: ${scenario}`).toBe(false);
+  });
+
+  it('Gegenprobe: Development- und E2E-Bundle enthalten Modul und Schlüssel', () => {
+    for (const bundle of [...bundles.development, ...bundles.e2e]) {
+      expect(bundle.sources, bundle.platform).toContain(module);
+      for (const scenario of scenarios) expect(bundle.js.includes(scenario), `${bundle.platform}: ${scenario}`).toBe(true);
+    }
+  });
+});
+
 // E2E-Build (#114) ---------------------------------------------------------------------------------
 //
 // Der E2E-Build ist ein Release-Binary: Metro bündelt ohne `__DEV__`, minifiziert und faltet
