@@ -1,9 +1,8 @@
-import type { DailyGoalState } from '@abnehm/contracts/daily-goals';
-import { countedWaterMl, countingSportEntries, isCountingWeightEntry, isWeighDay } from '@abnehm/contracts/tracker-rules';
+import { countingSportEntries, isCountingWeightEntry, isSportDay, isWeighDay } from '@abnehm/contracts/tracker-rules';
 
-import { bausteinEvaluation, isDayClosed, type BausteinEvaluator, type CheckInEvaluator, type DayFactsReader } from '../daily-goals';
+import { bausteinEvaluation, gradedState, isDayClosed, type BausteinEvaluator, type CheckInEvaluator, type DayFactsReader } from '../daily-goals';
 import { sportEntriesOfDay } from './sport-repository';
-import { waterEntriesOfDay } from './water-repository';
+import { countedWaterMlOfDay } from './water-repository';
 import { weightEntriesOfDay } from './weight-repository';
 
 // Beiträge von Wasser, Sport und Gewicht zur Baustein-Auswertung und zum Tages-Check-in (Spezifikation 3,
@@ -17,10 +16,10 @@ export type WaterDayFacts = Readonly<{ countedMl: number }>;
 /** Sport eines Tags: die Dauer jeder zählenden Einheit in Minuten, aufsteigend nach Beginn. */
 export type SportDayFacts = Readonly<{ countingSessionMinutes: readonly number[] }>;
 /** Gewicht eines Tags: Zahl der zählenden Messungen, manuell oder importiert. */
-export type WeightDayFacts = Readonly<{ countingEntries: number }>;
+export type WeightDayFacts = Readonly<{ weightEntryCount: number }>;
 
 const readWaterDayFacts: DayFactsReader<WaterDayFacts> = (tx, personId, localDate) => ({
-  countedMl: countedWaterMl(waterEntriesOfDay(tx, personId, localDate), localDate),
+  countedMl: countedWaterMlOfDay(tx, personId, localDate),
 });
 
 // Die Abfrage liefert auch ersetzende Importe von Nachbartagen; gezählt werden nur Einheiten dieses Tags.
@@ -31,13 +30,8 @@ const readSportDayFacts: DayFactsReader<SportDayFacts> = (tx, personId, localDat
 });
 
 const readWeightDayFacts: DayFactsReader<WeightDayFacts> = (tx, personId, localDate) => ({
-  countingEntries: weightEntriesOfDay(tx, personId, localDate).filter(isCountingWeightEntry).length,
+  weightEntryCount: weightEntriesOfDay(tx, personId, localDate).filter(isCountingWeightEntry).length,
 });
-
-/** 0 `offen`, unter der Schwelle `teilweise`, ab der Schwelle `erfuellt` (Spezifikation 0, Abschnitt 3). */
-function graded(value: number, threshold: number): DailyGoalState {
-  return value === 0 ? 'offen' : value < threshold ? 'teilweise' : 'erfuellt';
-}
 
 const longestSession = ({ countingSessionMinutes }: SportDayFacts) => Math.max(0, ...countingSessionMinutes);
 
@@ -47,7 +41,7 @@ const waterGoal: BausteinEvaluator<'wasserziel', WaterDayFacts> = {
   readFacts: readWaterDayFacts,
   evaluate(snapshot, at, { countedMl }) {
     const { targetMl } = snapshot;
-    return bausteinEvaluation(graded(countedMl, targetMl), isDayClosed(snapshot, at), { type: snapshot.type, countedMl, targetMl });
+    return bausteinEvaluation(gradedState(countedMl, targetMl), isDayClosed(snapshot, at), { type: snapshot.type, countedMl, targetMl });
   },
 };
 
@@ -58,7 +52,7 @@ const sportGoal: BausteinEvaluator<'sporteinheit', SportDayFacts> = {
   evaluate(snapshot, at, facts) {
     const { minimumSingleSessionMinutes } = snapshot;
     const longestSessionMinutes = longestSession(facts);
-    return bausteinEvaluation(graded(longestSessionMinutes, minimumSingleSessionMinutes), isDayClosed(snapshot, at), {
+    return bausteinEvaluation(gradedState(longestSessionMinutes, minimumSingleSessionMinutes), isDayClosed(snapshot, at), {
       type: snapshot.type,
       longestSessionMinutes,
       minimumSingleSessionMinutes,
@@ -70,11 +64,8 @@ const sportGoal: BausteinEvaluator<'sporteinheit', SportDayFacts> = {
 const weighedGoal: BausteinEvaluator<'gewogen', WeightDayFacts> = {
   baustein: 'gewogen',
   readFacts: readWeightDayFacts,
-  evaluate(snapshot, at, { countingEntries }) {
-    return bausteinEvaluation(countingEntries === 0 ? 'offen' : 'erfuellt', isDayClosed(snapshot, at), {
-      type: snapshot.type,
-      weightEntryCount: countingEntries,
-    });
+  evaluate(snapshot, at, { weightEntryCount }) {
+    return bausteinEvaluation(weightEntryCount === 0 ? 'offen' : 'erfuellt', isDayClosed(snapshot, at), { type: snapshot.type, weightEntryCount });
   },
 };
 
@@ -100,7 +91,7 @@ const sportCheckIn: CheckInEvaluator<'sport', SportDayFacts> = {
   tracker: 'sport',
   readFacts: readSportDayFacts,
   evaluate({ moment, plan }, { countingSessionMinutes }) {
-    const sportDay = plan.weeklyPlanDay.bausteine.includes('sporteinheit');
+    const sportDay = isSportDay(plan.weeklyPlanDay.bausteine);
     const hasCountingEntry = countingSessionMinutes.length > 0;
     return {
       behind: moment === 'abend' && sportDay && !hasCountingEntry,
@@ -113,9 +104,9 @@ const sportCheckIn: CheckInEvaluator<'sport', SportDayFacts> = {
 const weightCheckIn: CheckInEvaluator<'gewicht', WeightDayFacts> = {
   tracker: 'gewicht',
   readFacts: readWeightDayFacts,
-  evaluate({ plan }, { countingEntries }) {
+  evaluate({ plan }, { weightEntryCount }) {
     const weighDay = isWeighDay(plan.weeklyPlanDay.bausteine);
-    const hasCountingEntry = countingEntries > 0;
+    const hasCountingEntry = weightEntryCount > 0;
     return { behind: weighDay && !hasCountingEntry, reason: { type: 'gewicht', weighDay, hasCountingEntry } };
   },
 };

@@ -19,6 +19,7 @@ import {
   isInFuture,
   isValidManualWeight,
   isValidWaterAmount,
+  isSportDay,
   isWeighDay,
   lastWeightG,
   manualWeightG,
@@ -134,6 +135,14 @@ describe('Wiegetag', () => {
     expect(isWeighDay(['gewogen', 'wasserziel', 'sporteinheit'])).toBe(true);
     expect(isWeighDay(['ernaehrung_erfasst', 'wasserziel', 'gewogen'])).toBe(true);
     expect(isWeighDay(['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'])).toBe(false);
+  });
+});
+
+describe('Sporttag', () => {
+  it('ist ein Wochenplantag mit dem Baustein Sporteinheit, auf jedem Platz', () => {
+    expect(isSportDay(['sporteinheit', 'wasserziel', 'gewogen'])).toBe(true);
+    expect(isSportDay(['ernaehrung_erfasst', 'wasserziel', 'sporteinheit'])).toBe(true);
+    expect(isSportDay(['ernaehrung_erfasst', 'wasserziel', 'gewogen'])).toBe(false);
   });
 });
 

@@ -18,7 +18,7 @@ import { bausteinConformanceCases, checkInConformanceCases, type BausteinTruthRo
 import { insertDailyGoalForTest } from '../daily-goals/testing/persisted';
 import { dailyGoalCompletion, energyBooking } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { sportEntryEntity, trackerDailyGoals, type SportDayFacts, type WaterDayFacts, type WeightDayFacts } from '.';
+import { sportCheckInMessageKey, sportEntryEntity, trackerDailyGoals, type SportDayFacts, type WaterDayFacts, type WeightDayFacts } from '.';
 import type { SportInput } from './sport';
 import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld } from './testing/tracker-world';
 
@@ -70,7 +70,7 @@ const restDay = validPlan(today, ['ernaehrung_erfasst', 'im_kalorienbudget', 'wa
 
 const water = (countedMl: number): WaterDayFacts => ({ countedMl });
 const sport = (...countingSessionMinutes: number[]): SportDayFacts => ({ countingSessionMinutes });
-const weight = (countingEntries: number): WeightDayFacts => ({ countingEntries });
+const weight = (weightEntryCount: number): WeightDayFacts => ({ weightEntryCount });
 
 describe('Konformitäts-Testkit: Wasserziel', () => {
   const progress = (countedMl: number) => ({ type: 'wasserziel' as const, countedMl, targetMl: 2_500 });
@@ -153,7 +153,7 @@ describe('Konformitäts-Testkit: Tages-Check-in Wasser', () => {
 });
 
 describe('Konformitäts-Testkit: Tages-Check-in Sport', () => {
-  const reason = (sportDay: boolean, hasCountingEntry: boolean) => ({ type: 'sport' as const, sportDay, hasCountingEntry, messageKey: 'checkin.sport.schon_trainiert' });
+  const reason = (sportDay: boolean, hasCountingEntry: boolean) => ({ type: 'sport' as const, sportDay, hasCountingEntry, messageKey: sportCheckInMessageKey });
   const row = (moment: 'mittag' | 'abend', plan: ValidPlan, facts: SportDayFacts, behind: boolean): CheckInTruthRow<'sport', SportDayFacts> => {
     const sportDay = plan === allTrackers;
     const hasEntry = facts.countingSessionMinutes.length > 0;
@@ -369,14 +369,14 @@ describe('Bereichsreader', () => {
     const created = await world();
     const facts = () => created.database.read((tx) => weighedGoal.readFacts(tx, philipp, today));
     created.trackers.recordWeight({ weightG: 82_000, measuredAt: yesterdayMorning });
-    expect(facts()).toEqual({ countingEntries: 0 });
+    expect(facts()).toEqual({ weightEntryCount: 0 });
 
     created.trackers.recordWeight({ weightG: 81_400, measuredAt: morning });
     const scale = created.importWeight(Instant.parse('2026-10-14T05:30:00.000Z'), 81_350);
-    expect(facts()).toEqual({ countingEntries: 2 });
+    expect(facts()).toEqual({ weightEntryCount: 2 });
 
     created.trackers.hideImported(scale);
-    expect(facts()).toEqual({ countingEntries: 1 });
+    expect(facts()).toEqual({ weightEntryCount: 1 });
   });
 });
 
@@ -465,6 +465,25 @@ describe('Tagesziele über Tracker-Modul, Registry und Persistenzdienst', () => 
     expect(created.bookings()).toHaveLength(1);
   });
 
+  it('Gewogen: der wiederholte Befehl des WeightRecorder mit derselben entryId erzeugt keine zweite Erfüllung', async () => {
+    const created = await world();
+    created.goal('gewogen', weighedSnapshot);
+    const entryId = EntityId.parse(randomUUID());
+    const input = { entryId, personId: philipp, weightG: 81_400, measuredAt: morning };
+
+    await expect(created.trackers.weightRecorder.recordManualWeight(input)).resolves.toMatchObject({ type: 'recorded' });
+    const completions = created.completions();
+    const bookings = created.bookings();
+    expect(completions).toHaveLength(1);
+
+    created.clock.set(Instant.parse('2026-10-14T17:30:00.000Z'));
+    await expect(created.trackers.weightRecorder.recordManualWeight(input)).resolves.toMatchObject({ type: 'recorded' });
+
+    expect(created.weights()).toHaveLength(1);
+    expect(created.completions()).toEqual(completions);
+    expect(created.bookings()).toEqual(bookings);
+  });
+
   it('Gewogen: Nachtragen für gestern erfüllt das Tagesziel von gestern', async () => {
     const created = await world();
     created.goal('gestern', { ...weighedSnapshot, localDate: yesterday, dayEndsAt: Instant.parse('2026-10-13T22:00:00.000Z') });
@@ -501,7 +520,7 @@ describe('Tages-Check-in über die Registry', () => {
       tracker: 'sport',
       moment: 'abend',
       behind: true,
-      reason: { type: 'sport', sportDay: true, hasCountingEntry: false, messageKey: 'checkin.sport.schon_trainiert' },
+      reason: { type: 'sport', sportDay: true, hasCountingEntry: false, messageKey: sportCheckInMessageKey },
     });
     expect(created.checkIn('sport', 'abend', restDay)).toMatchObject({ behind: false, reason: { sportDay: false } });
 

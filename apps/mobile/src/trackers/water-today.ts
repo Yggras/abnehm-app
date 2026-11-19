@@ -1,13 +1,13 @@
 import { EntityId, LocalDate } from '@abnehm/contracts/base';
 import type { EffectivePlan, PlanReader } from '@abnehm/contracts/ports';
-import { countedWaterMl, trackerStatus } from '@abnehm/contracts/tracker-rules';
+import { trackerStatus } from '@abnehm/contracts/tracker-rules';
 
 import type { ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import { observedTodaySource, type Refresh } from './today-source';
 import type { TrackerDependencies } from './trackers';
-import { waterEntriesOfDay } from './water-repository';
+import { countedWaterMlOfDay } from './water-repository';
 
 // Beitrag `trackers.water` für „Heute“ (Spezifikation 3, Abschnitt 7): heute gezählte ml nach der
 // Wasser-Zählregel und das Wasserziel der gültigen Zielversion aus dem `PlanReader`.
@@ -27,7 +27,7 @@ export function waterTodaySource(
     if (person === undefined) return null;
     const personId = EntityId.parse(person.id);
     const localDate = LocalDate.parse(clock.read().localDate);
-    return { personId, localDate, countedMl: countedWaterMl(waterEntriesOfDay(tx, personId, localDate), localDate) };
+    return { personId, localDate, countedMl: countedWaterMlOfDay(tx, personId, localDate) };
   };
   return observedTodaySource(database, refresh, readDay, async (day) => stateOf(day, await planReader.effectivePlan(day.personId, day.localDate)));
 }
