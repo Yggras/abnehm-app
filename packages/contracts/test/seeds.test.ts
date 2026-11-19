@@ -13,9 +13,10 @@ import {
   type SeedPart,
 } from '../seeds/index.ts';
 import { soloParts } from '../seeds/solo.ts';
-import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
+import { foodFavoriteId } from '../src/nutrition.ts';
 import { EncouragementKey, PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
 import { CreateGoalVersion } from '../src/plan.ts';
 import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, weekMinutes, weightChange, weightForecast, weightTrend } from '../src/tracker-rules.ts';
@@ -27,6 +28,8 @@ import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, week
 
 const solo = seedManifests.solo;
 const philipp = seedIds.person.philipp;
+/** Der Lebensmittelfavorit „Bircher-Müsli, selbst gemacht“ in `solo` (#158), ID aus Person und Referenz. */
+const bircherFavorite = foodFavoriteId(EntityId.parse(philipp), { type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) });
 
 const orNull = (value: unknown) => (value === null || value === undefined ? null : String(value));
 
@@ -81,8 +84,26 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.ownFood.philippBircher, seedIds.ownFood.philippApfel].map((id) =>
         expect.objectContaining({ entity_type: 'own_food', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      expect.objectContaining({ entity_type: 'food_favorite', entity_id: bircherFavorite, owner_person_id: philipp, operation: 'upsert' }),
+      ...[seedIds.nutritionEntry.philippZuletztFenster.innerhalb, seedIds.nutritionEntry.philippZuletztFenster.ausserhalb].map((id) =>
+        expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.sportEntry.philippVorwoche.map((id) =>
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+    ]);
+  });
+
+  it('enthält einen Lebensmittelfavoriten und Frühstücke in und vor dem 30-Tage-Fenster von „Zuletzt verwendet“ (#158)', () => {
+    const rows = solo.initial.devices['philipp-iphone']!.rows;
+
+    expect(rows.food_favorite).toEqual([
+      expect.objectContaining({ id: bircherFavorite, food_ref_type: 'eigen', food_ref_key: seedIds.ownFood.philippBircher, removed_at: null, deleted_at: null }),
+    ]);
+    expect(solo.initial.server.food_favorite).toEqual(rows.food_favorite);
+    const window = rows.nutrition_entry!.filter((row) => row.local_date < seedDays.zielstart).map(({ local_date, meal, food_ref_key }) => ({ local_date, meal, food_ref_key }));
+    // Heute ist der 14.10.: Das Fenster beginnt am 15.09.
+    expect(window).toEqual([
+      { local_date: '2026-09-15', meal: 'fruehstueck', food_ref_key: 'C514300' },
+      { local_date: '2026-09-14', meal: 'fruehstueck', food_ref_key: 'D701700' },
     ]);
   });
 

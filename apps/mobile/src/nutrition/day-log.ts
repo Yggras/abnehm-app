@@ -5,6 +5,7 @@ import {
   type CaptureMethod,
   type DisplayUnit,
   type EntryTotals,
+  type FoodRef,
   type NutritionSnapshot,
 } from '@abnehm/contracts/nutrition';
 
@@ -100,6 +101,8 @@ export type EntryDetail = Readonly<{
   localDate: LocalDate;
   meal: MealKey;
   captureMethod: CaptureMethod;
+  /** Die Lebensmittelreferenz; `null` bei einer KI-Schätzung ohne Ersatz durch ein Suchergebnis. */
+  foodRef: FoodRef | null;
   /** Der gespeicherte Snapshot; eine neue Menge rechnet aus ihm. */
   snapshot: NutritionSnapshot;
   displayUnit: DisplayUnit;
@@ -119,6 +122,7 @@ export function readEntryDetail(tx: ReadContext, entryId: EntityId): EntryDetail
     localDate: content.localDate,
     meal: content.meal,
     captureMethod: content.captureMethod,
+    foodRef: content.foodRef,
     snapshot: content.snapshot,
     displayUnit: content.amount.displayUnit,
     displayAmountMilli: content.amount.displayAmountMilli,

@@ -7,6 +7,8 @@ import { Button, Chip, IconButton, ListGroup, ListRow, space, Text } from '../de
 import { AmountFields, useAmountDraft } from './AmountFields';
 import type { EntryDetail } from './day-log';
 import type { EntryChange } from './entries';
+import { FavoriteToggle } from './FavoriteToggle';
+import type { Nutrition } from './nutrition';
 import {
   captureMethodNames,
   captureTargetText,
@@ -21,7 +23,7 @@ import {
 } from './texts';
 
 // Mengenansicht eines bestehenden Eintrags (Spezifikation 2, Abschnitt 6): dieselbe Mengenansicht wie beim
-// Hinzufügen, dazu Mahlzeit, aufklappbare Details und „Löschen“. Der Tag eines bestehenden Eintrags ist
+// Hinzufügen samt Stern „Lebensmittelfavorit“ (#158), dazu Mahlzeit, aufklappbare Details und „Löschen“. Der Tag eines bestehenden Eintrags ist
 // nicht änderbar: Kopf und Details nennen ihn nur; Duplizieren gibt es nicht. Eine neue Menge rechnet das Modul
 // aus demselben Snapshot.
 
@@ -30,12 +32,17 @@ const texts = nutritionTexts.edit;
 export function EntryEditor({
   entry,
   today,
+  nutrition,
+  onFailed,
   onClose,
   onSave,
   onDelete,
 }: {
   entry: EntryDetail;
   today: LocalDate;
+  nutrition: Nutrition;
+  /** Ein Befehl des Favoriten-Schalters ist technisch gescheitert. */
+  onFailed: (error: unknown) => void;
   onClose: () => void;
   /** Nur mit einer Änderung; ohne Änderung schließt „Speichern“ das Sheet. */
   onSave: (change: EntryChange) => void;
@@ -69,6 +76,7 @@ export function EntryEditor({
               {captureTargetText(entry.meal, entry.localDate, today)}
             </Text>
           </View>
+          <FavoriteToggle nutrition={nutrition} food={{ ref: entry.foodRef, snapshot }} onFailed={onFailed} />
           <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
         </View>
         <AmountFields snapshot={snapshot} draft={draft} />

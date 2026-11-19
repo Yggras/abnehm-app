@@ -108,6 +108,7 @@ describe('Treffer', () => {
           mark: 'bls',
           ref: { type: 'bls', key: 'R123100' },
           kcalPer100: 18,
+          available: true,
           snapshot: {
             name: 'Apfelessig',
             baseUnit: 'g',

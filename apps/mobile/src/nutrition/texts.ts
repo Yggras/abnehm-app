@@ -27,6 +27,14 @@ export const mealNames: Readonly<Record<MealKey, string>> = {
   snacks: 'Snacks',
 };
 
+/** Mahlzeit als Ergänzung, etwa „zum Frühstück“ oder „als Snack“. */
+const mealPhrases: Readonly<Record<MealKey, string>> = {
+  fruehstueck: 'zum Frühstück',
+  mittagessen: 'zum Mittagessen',
+  abendessen: 'zum Abendessen',
+  snacks: 'als Snack',
+};
+
 const weekdays = { montag: 'Montag', dienstag: 'Dienstag', mittwoch: 'Mittwoch', donnerstag: 'Donnerstag', freitag: 'Freitag', samstag: 'Samstag', sonntag: 'Sonntag' } as const;
 
 /** Lokaler Tag mit Wochentag, etwa „Mittwoch, 14.10.2026“. */
@@ -234,6 +242,17 @@ export const nutritionTexts = {
     eigenes_lebensmittel: 'Eigenes Lebensmittel anlegen',
   },
   slotInWork: 'Kommt noch',
+  /** „Zuletzt verwendet“ und Lebensmittelfavoriten auf dem Hinzufügen-Bildschirm (#158). */
+  quick: {
+    /** Unterzeile und zugänglicher Name einer Zeile: vorbelegte Menge und ihre kcal. */
+    row: (amount: string, kcal: number | null) => `${amount} · ${kcal === null ? '– kcal' : kcalText(kcal)}`,
+    showAll: (count: number) => `Alle ${count} anzeigen`,
+    showFewer: 'Weniger anzeigen',
+    noRecent: (meal: MealKey) => `Was du in den letzten 30 Tagen ${mealPhrases[meal]} eingetragen hast, steht hier.`,
+    noFavorites: 'Markiere ein Lebensmittel mit dem Stern, dann steht es hier.',
+  },
+  /** Schalter in Mengenprüfung und Eintragsdetails (#158). */
+  favorite: 'Lebensmittelfavorit',
   /** Ohne Suchtreffer: das eigene Lebensmittel mit dem Suchtext als Namen anlegen. */
   createNamed: (name: string) => `„${name.trim()}“ als eigenes Lebensmittel anlegen`,
   ownFood: {

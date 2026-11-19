@@ -20,7 +20,7 @@ import { quietGameDependencies } from '../../mobile/src/island/testing/quiet-gam
 import type { LocalDatabase } from '../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
-import { mealPhotoEntity, nutritionEntryEntity, ownFoodEntity } from '../../mobile/src/nutrition/index.ts';
+import { foodFavoriteEntity, mealPhotoEntity, nutritionEntryEntity, ownFoodEntity } from '../../mobile/src/nutrition/index.ts';
 import { goalVersionEntity, weeklyPlanVersionEntity } from '../../mobile/src/plan/index.ts';
 import {
   createHttpSyncTransport,
@@ -55,7 +55,7 @@ afterEach(() => {
 
 /** Alle Sync-Entitäten der App, wie im Composition Root (`src/session/device-session.ts`). */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, foodFavoriteEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
 type Phone = Readonly<{ database: LocalDatabase; game: GameService; stage(): IslandStage; challenges(): ChallengeStage; outbox(): number; sync(): Promise<void> }>;
