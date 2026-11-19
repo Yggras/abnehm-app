@@ -209,22 +209,31 @@ async function activeCouplingOf(db: DbExecutor, personId: string): Promise<{ cou
 /** Ob die Operation eine Ressource anlegen kann, wenn es die ID noch nicht gibt. */
 const creates = (operation: Operation) => operation === 'upsert' || operation === 'befehl';
 
+/** Regel einer eigenen Ressource; eine engere Auswahl der Operationen steht auch im Typ, damit `DimensionsOf` die verbotene Operation kennt. */
+type OwnedRule<C extends ResourceClass, O extends readonly Operation[] | undefined> = EntityRule<C, 'id'> &
+  (O extends readonly Operation[] ? Readonly<{ onlyOperations: O }> : unknown);
+
 /**
  * Ressource mit einem Eigentümer. Lesen, Ändern und Fachbefehle nur durch ihn; eine unbekannte ID
  * legt die handelnde Person nur an, wo die Ressource vom Client stammt (`creatable`).
  */
-function owned<C extends ResourceClass>(
+function owned<C extends ResourceClass, const O extends readonly Operation[] | undefined = undefined>(
   resourceClass: C,
   table: PgTable,
   columns: { id: IdColumn; owner: IdColumn },
-  { creatable }: { creatable: boolean },
-): EntityRule<C, 'id'> {
-  return byId(resourceClass, table, async (context, id) => {
-    const { personId } = context.actor;
-    const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
-    if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
-    return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
-  });
+  { creatable, onlyOperations }: { creatable: boolean; onlyOperations?: O },
+): OwnedRule<C, O> {
+  return byId(
+    resourceClass,
+    table,
+    async (context, id) => {
+      const { personId } = context.actor;
+      const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
+      if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
+      return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
+    },
+    onlyOperations === undefined ? {} : { onlyOperations },
+  ) as OwnedRule<C, O>;
 }
 
 /** Inhalt einer Kopplung: nur aktive Mitglieder, und nur über Fachbefehle bzw. den Server. */
@@ -622,11 +631,14 @@ export const resourceEntities = {
   nutrition_entry: owned('eigene_eintraege', nutritionEntry, ownedBy(nutritionEntry), { creatable: true }),
   photo_draft: owned('eigene_eintraege', photoDraft, ownedBy(photoDraft), { creatable: false }),
   notification_setting: owned('eigene_eintraege', notificationSetting, ownedBy(notificationSetting), { creatable: true }),
-  // Ziel-/Wochenplanversion, Tagesziel und der Budgetvorschlag, den nur `acceptBudgetSuggestion` ändert.
+  // Der Budgetvorschlag (Spezifikation 1, Abschnitte 7 und 11; #150): Die App legt ihn per Upsert an und setzt
+  // ihn auf `abgelehnt` oder `ueberholt`; `angenommen` setzt nur `acceptBudgetSuggestion` (#151). Gelöscht wird
+  // er nie (Nutzerentscheidung, https://github.com/Yggras/abnehm-app/issues/71#issuecomment-7014230206).
+  budget_suggestion: owned('eigene_eintraege', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true, onlyOperations: ['lesen', 'upsert', 'befehl'] }),
+  // Ziel-/Wochenplanversion und Tagesziel.
   goal_version: owned('zielversionen', goalVersion, ownedBy(goalVersion), { creatable: true }),
   weekly_plan_version: owned('zielversionen', weeklyPlanVersion, ownedBy(weeklyPlanVersion), { creatable: true }),
   daily_goal: owned('zielversionen', dailyGoal, ownedBy(dailyGoal), { creatable: true }),
-  budget_suggestion: owned('zielversionen', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true }),
   // Tageszielerfüllung, Energiebuchung, Projekteinzahlung.
   daily_goal_completion: owned('fachbuchungen', dailyGoalCompletion, ownedBy(dailyGoalCompletion), { creatable: true }),
   energy_booking: owned('fachbuchungen', energyBooking, ownedBy(energyBooking), { creatable: true }),

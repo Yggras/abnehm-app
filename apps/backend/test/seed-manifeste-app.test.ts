@@ -114,3 +114,5 @@ manifestSuite('levelaufstieg-ausstehend');
 manifestSuite('challenge-vorgeschlagen');
 manifestSuite('challenge-verfallen');
 manifestSuite('challenge-passt-nicht');
+manifestSuite('budgetvorschlag-senken');
+manifestSuite('budgetvorschlag-anheben');

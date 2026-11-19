@@ -1,8 +1,7 @@
 import type { AreaKey, BausteinKey, EntityId, LocalDate } from '@abnehm/contracts/base';
-import type { DailyGoalState } from '@abnehm/contracts/daily-goals';
 
 import type { BausteinEvaluator, CheckInEvaluator, DayFactsReader } from '../evaluators';
-import { bausteinEvaluation, isDayClosed } from '../rules';
+import { bausteinEvaluation, gradedState, isDayClosed } from '../rules';
 
 // Test-Evaluatoren für Registry, Orchestrator und Konformitäts-Testkit. Sie folgen den Regeln aus
 // Spezifikation 0, Abschnitt 3, lesen ihre Fakten aber aus einem Speicher im Test statt aus den
@@ -38,17 +37,13 @@ export function createTestFactsStore(): { set(personId: EntityId, localDate: Loc
 
 const longest = (facts: TestDayFacts) => Math.max(0, ...facts.sessionMinutes);
 
-function graded(value: number, threshold: number): DailyGoalState {
-  return value === 0 ? 'offen' : value < threshold ? 'teilweise' : 'erfuellt';
-}
-
 /** Je Baustein ein Test-Evaluator; `Object.values` ergibt die Liste für die Registry. */
 export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>): { [K in BausteinKey]: BausteinEvaluator<K, TestDayFacts> } {
   const ernaehrung: BausteinEvaluator<'ernaehrung_erfasst', TestDayFacts> = {
     baustein: 'ernaehrung_erfasst',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      bausteinEvaluation(graded(facts.recordedMealCategories, snapshot.minimumMealCategories), isDayClosed(snapshot, at), {
+      bausteinEvaluation(gradedState(facts.recordedMealCategories, snapshot.minimumMealCategories), isDayClosed(snapshot, at), {
         type: snapshot.type,
         recordedMealCategories: facts.recordedMealCategories,
         minimumMealCategories: snapshot.minimumMealCategories,
@@ -72,7 +67,7 @@ export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>):
     baustein: 'wasserziel',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      bausteinEvaluation(graded(facts.countedMl, snapshot.targetMl), isDayClosed(snapshot, at), {
+      bausteinEvaluation(gradedState(facts.countedMl, snapshot.targetMl), isDayClosed(snapshot, at), {
         type: snapshot.type,
         countedMl: facts.countedMl,
         targetMl: snapshot.targetMl,
@@ -82,7 +77,7 @@ export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>):
     baustein: 'sporteinheit',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      bausteinEvaluation(graded(longest(facts), snapshot.minimumSingleSessionMinutes), isDayClosed(snapshot, at), {
+      bausteinEvaluation(gradedState(longest(facts), snapshot.minimumSingleSessionMinutes), isDayClosed(snapshot, at), {
         type: snapshot.type,
         longestSessionMinutes: longest(facts),
         minimumSingleSessionMinutes: snapshot.minimumSingleSessionMinutes,

@@ -12,7 +12,7 @@ import { createLocalDatabases } from '../../local-db/local-databases';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createTodayRegistry, type TodayRegistry } from '../../shell/today-registry';
 import { createSyncRegistry, createSyncWriter, personEntity } from '../../sync';
-import { createPlan, goalVersionEntity, weeklyPlanVersionEntity, type InitialPlanDraft, type Plan } from '..';
+import { budgetSuggestionEntity, createPlan, goalVersionEntity, weeklyPlanVersionEntity, type InitialPlanDraft, type Plan } from '..';
 import { createPlanToday, type BudgetNoticeReaders } from '../today-contributions';
 
 // Testaufbau der „Heute“-Beiträge des Plan-Moduls (#136): echte SQLite-Datei mit den Migrationen der App,
@@ -50,7 +50,7 @@ export type PlanTodayWorldOptions = Readonly<{
   person?: boolean;
   /** Registry der Beiträge; ohne Angabe dieselbe wie im Persistenzdienst. */
   evaluator?: (registry: DailyGoalRegistry) => Pick<DailyGoalRegistry, 'evaluateDailyGoal'>;
-  /** Hinweis-Leser, bis #150 und #152 sie im Plan-Modul liefern; ohne Angabe die des Moduls über `Plan.today`. */
+  /** Hinweis-Leser statt der des Moduls, etwa bis #152 „Zielgewicht erreicht“ liefert; ohne Angabe die des Moduls über `Plan.today`. */
   notices?: BudgetNoticeReaders;
 }>;
 
@@ -85,7 +85,7 @@ export async function createPlanTodayWorld(
     checkIns: Object.values(testCheckInEvaluators(facts.read)),
   });
   const writer = createSyncWriter({
-    registry: createSyncRegistry([personEntity, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity]),
+    registry: createSyncRegistry([personEntity, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity]),
     clock,
     newId,
   });

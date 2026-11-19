@@ -32,6 +32,14 @@ export function bausteinEvaluation(state: DailyGoalState, dayClosed: boolean, pr
   return { currentState: state, dayClosed, progress, messageKey: `tagesziel.${type}.${state}`, values };
 }
 
+/**
+ * Stufung der zählenden Bausteine (Ernährung erfasst, Wasserziel, Sporteinheit): 0 `offen`, unter der
+ * Schwelle des Snapshots `teilweise`, ab der Schwelle `erfuellt` (Spezifikation 0, Abschnitt 3).
+ */
+export function gradedState(value: number, threshold: number): DailyGoalState {
+  return value === 0 ? 'offen' : value < threshold ? 'teilweise' : 'erfuellt';
+}
+
 /** Welche Regel ein Ergebnis verletzt; ein Token für den Kontext eines `ContractError`. */
 export type EvaluationIssue = 'result_shape' | 'progress_type' | 'threshold' | 'day_closed';
 

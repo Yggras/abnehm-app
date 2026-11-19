@@ -176,6 +176,24 @@ export function sportEntriesOfWeek(tx: ReadContext, personId: EntityId, localDat
     .map((row) => ({ ...row, origin: row.origin as SportOrigin }));
 }
 
+/**
+ * Alle Einträge einer Person an einem lokalen Tag, auch gelöschte und ausgeblendete, dazu die ersetzenden
+ * Importe dieser Einträge, auch von Nachbartagen; aufsteigend nach Beginn. Wie bei der Woche filtert die
+ * Zählregel selbst und braucht dafür den ersetzenden Import.
+ */
+export function sportEntriesOfDay(tx: ReadContext, personId: EntityId, localDate: LocalDate): SportRow[] {
+  const db = sqliteOf(tx);
+  const onDay = and(eq(sportEntry.personId, personId), eq(sportEntry.localDate, localDate));
+  const replacing = db.select({ id: sportEntry.replacedByEntryId }).from(sportEntry).where(and(onDay, isNotNull(sportEntry.replacedByEntryId)));
+  return db
+    .select(rowColumns)
+    .from(sportEntry)
+    .where(or(onDay, and(eq(sportEntry.personId, personId), inArray(sportEntry.id, replacing))))
+    .orderBy(asc(sportEntry.startedAt), asc(sportEntry.id))
+    .all()
+    .map((row) => ({ ...row, origin: row.origin as SportOrigin }));
+}
+
 /** Der importierte Sporteintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
 export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredImport<ImportedSportEntryUpsert> | undefined {
   const row = sqliteOf(tx).select().from(sportEntry).where(eq(sportEntry.id, entityId)).get();

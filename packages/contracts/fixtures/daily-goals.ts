@@ -50,6 +50,37 @@ const weighed = {
   values: {},
 } as const;
 
+const waterReached = {
+  ...waterHalf,
+  currentState: 'erfuellt',
+  progress: { type: 'wasserziel', countedMl: 1500, targetMl: 1500 },
+  messageKey: 'tagesziel.wasserziel.erfuellt',
+  values: { countedMl: 1500, targetMl: 1500 },
+} as const;
+
+const sportShort = {
+  currentState: 'teilweise',
+  dayClosed: false,
+  progress: { type: 'sporteinheit', longestSessionMinutes: 19, minimumSingleSessionMinutes: 20 },
+  messageKey: 'tagesziel.sporteinheit.teilweise',
+  values: { longestSessionMinutes: 19, minimumSingleSessionMinutes: 20 },
+} as const;
+
+const sportDone = {
+  ...sportShort,
+  currentState: 'erfuellt',
+  progress: { type: 'sporteinheit', longestSessionMinutes: 20, minimumSingleSessionMinutes: 20 },
+  messageKey: 'tagesziel.sporteinheit.erfuellt',
+  values: { longestSessionMinutes: 20, minimumSingleSessionMinutes: 20 },
+} as const;
+
+const notWeighed = {
+  ...weighed,
+  currentState: 'offen',
+  progress: { type: 'gewogen', weightEntryCount: 0 },
+  messageKey: 'tagesziel.gewogen.offen',
+} as const;
+
 const recorded = { type: 'festgehalten', firstCompletedAt: now } as const;
 
 const completionRecord = {
@@ -106,8 +137,22 @@ export const dailyGoalFixtures = {
     },
   }),
   BausteinEvaluation: fixtures(BausteinEvaluation, {
-    valid: { 'Wasser teilweise': waterHalf, 'Kalorienbudget vor Tagesende': budgetPending, 'Gewogen': weighed },
+    valid: {
+      'Wasser teilweise': waterHalf,
+      'Wasser genau auf dem Ziel erfüllt': waterReached,
+      'Kalorienbudget vor Tagesende': budgetPending,
+      'Sport: längste Einheit eine Minute unter der Mindestdauer': sportShort,
+      'Sport: längste Einheit genau auf der Mindestdauer': sportDone,
+      'Gewogen': weighed,
+      'Gewogen ohne Eintrag offen': notWeighed,
+    },
     invalid: {
+      'Wasser ohne Menge teilweise': { ...waterHalf, progress: { type: 'wasserziel', countedMl: 0, targetMl: 1500 } },
+      'Sport unter der Mindestdauer erfüllt': { ...sportShort, currentState: 'erfuellt' },
+      'Sport ohne Einheit teilweise': { ...sportShort, progress: { ...sportShort.progress, longestSessionMinutes: 0 } },
+      'Sport in Bruchteilen von Minuten': { ...sportDone, progress: { ...sportDone.progress, longestSessionMinutes: 20.5 } },
+      'Gewogen ohne Eintrag erfüllt': { ...notWeighed, currentState: 'erfuellt' },
+      'Gewogen mit Gewichtswert': { ...weighed, progress: { type: 'gewogen', weightEntryCount: 1, weightG: 81_400 } },
       'Gewicht teilweise': { ...weighed, currentState: 'teilweise' },
       'Kalorienbudget vor Tagesende erfüllt': { ...budgetPending, currentState: 'erfuellt' },
       'Kalorienbudget nach Tagesende über Budget erfüllt': { ...budgetMissed, currentState: 'erfuellt' },
@@ -141,6 +186,15 @@ export const dailyGoalFixtures = {
         completion: recorded,
       },
       'Kalorienbudget nach Tagesende verfehlt': { type: 'evaluated', ...budgetMissed, completion: { type: 'nie' } },
+      'Sport nach Löschen der Einheit offen, bereits gutgeschrieben': {
+        type: 'evaluated',
+        ...sportShort,
+        currentState: 'offen',
+        progress: { ...sportShort.progress, longestSessionMinutes: 0 },
+        completion: recorded,
+      },
+      'Gewogen nach Ausblenden des Imports offen, bereits gutgeschrieben': { type: 'evaluated', ...notWeighed, completion: recorded },
+      'Wasser erstmals erfüllt': { type: 'evaluated', ...waterReached, completion: recorded },
     },
     invalid: {
       'Kalorienbudget vor Tagesende festgehalten': { type: 'evaluated', ...budgetPending, completion: recorded },
@@ -220,6 +274,42 @@ export const dailyGoalFixtures = {
         behind: true,
         reason: { type: 'gewicht', weighDay: true, hasCountingEntry: false },
       },
+      'Wasser mittags knapp unter einem Drittel': {
+        tracker: 'wasser',
+        moment: 'mittag',
+        behind: true,
+        reason: { type: 'wasser', countedMl: 499, targetMl: 1500 },
+      },
+      'Wasser abends genau zwei Drittel': {
+        tracker: 'wasser',
+        moment: 'abend',
+        behind: false,
+        reason: { type: 'wasser', countedMl: 1000, targetMl: 1500 },
+      },
+      'Sport abends am Sporttag ohne Eintrag': {
+        tracker: 'sport',
+        moment: 'abend',
+        behind: true,
+        reason: { type: 'sport', sportDay: true, hasCountingEntry: false, messageKey: 'checkin.sport.schon_trainiert' },
+      },
+      'Sport abends ohne Sporttag': {
+        tracker: 'sport',
+        moment: 'abend',
+        behind: false,
+        reason: { type: 'sport', sportDay: false, hasCountingEntry: false, messageKey: 'checkin.sport.schon_trainiert' },
+      },
+      'Gewicht mittags am Wiegetag mit Eintrag': {
+        tracker: 'gewicht',
+        moment: 'mittag',
+        behind: false,
+        reason: { type: 'gewicht', weighDay: true, hasCountingEntry: true },
+      },
+      'Gewicht ohne Wiegetag': {
+        tracker: 'gewicht',
+        moment: 'abend',
+        behind: false,
+        reason: { type: 'gewicht', weighDay: false, hasCountingEntry: false },
+      },
     },
     invalid: {
       'Sport mittags hinterher': {
@@ -239,6 +329,31 @@ export const dailyGoalFixtures = {
         moment: 'abend',
         behind: false,
         reason: { type: 'ernaehrung', recordedMealCategories: 2 },
+      },
+      'Wasser mittags genau ein Drittel hinterher': {
+        tracker: 'wasser',
+        moment: 'mittag',
+        behind: true,
+        reason: { type: 'wasser', countedMl: 500, targetMl: 1500 },
+      },
+      'Wasser ohne Wasserziel': { tracker: 'wasser', moment: 'abend', behind: true, reason: { type: 'wasser', countedMl: 0 } },
+      'Sport abends am Sporttag ohne Eintrag nicht hinterher': {
+        tracker: 'sport',
+        moment: 'abend',
+        behind: false,
+        reason: { type: 'sport', sportDay: true, hasCountingEntry: false, messageKey: 'checkin.sport.schon_trainiert' },
+      },
+      'Gewicht am Wiegetag mit Eintrag hinterher': {
+        tracker: 'gewicht',
+        moment: 'abend',
+        behind: true,
+        reason: { type: 'gewicht', weighDay: true, hasCountingEntry: true },
+      },
+      'Gewichtswert im Grund des Check-ins': {
+        tracker: 'gewicht',
+        moment: 'mittag',
+        behind: false,
+        reason: { type: 'gewicht', weighDay: true, hasCountingEntry: true, weightG: 81_400 },
       },
       'Ernährung abends mit einer Mahlzeit nicht hinterher': {
         tracker: 'ernaehrung',

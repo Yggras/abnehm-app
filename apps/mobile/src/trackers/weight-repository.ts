@@ -121,6 +121,22 @@ export function weightEntriesOf(tx: ReadContext, personId: EntityId): WeightRow[
     .map((row) => ({ ...row, origin: row.origin as WeightOrigin }));
 }
 
+/** Alle Gewichtseinträge einer Person an einem lokalen Tag, auch gelöschte und ausgeblendete; die Regeln filtern selbst. */
+export function weightEntriesOfDay(tx: ReadContext, personId: EntityId, localDate: LocalDate): WeightEntryFacts[] {
+  return sqliteOf(tx)
+    .select({
+      weightG: weightEntry.weightG,
+      measuredAt: weightEntry.measuredAt,
+      localDate: weightEntry.localDate,
+      deletedAt: weightEntry.deletedAt,
+      hiddenAt: weightEntry.hiddenAt,
+    })
+    .from(weightEntry)
+    .where(and(eq(weightEntry.personId, personId), eq(weightEntry.localDate, localDate)))
+    .orderBy(asc(weightEntry.measuredAt), asc(weightEntry.id))
+    .all();
+}
+
 /** Der importierte Gewichtseintrag zur ID, auch gelöscht; `undefined` ohne Eintrag oder bei einem manuellen. */
 export function readImportedWeight(tx: ReadContext, entityId: EntityId): StoredImport<ImportedWeightEntryUpsert> | undefined {
   const row = sqliteOf(tx).select().from(weightEntry).where(eq(weightEntry.id, entityId)).get();

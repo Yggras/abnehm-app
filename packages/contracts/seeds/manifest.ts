@@ -88,6 +88,8 @@ export const SeedScenarioKey = z.enum([
   'challenge-vorgeschlagen',
   'challenge-verfallen',
   'challenge-passt-nicht',
+  'budgetvorschlag-senken',
+  'budgetvorschlag-anheben',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 
@@ -200,6 +202,13 @@ export const SeedStep = z.discriminatedUnion('type', [
     at: Instant.optional(),
     timeZone: TimeZone.optional(),
   }),
+  /**
+   * Die App-Öffnung prüft auf einer Installation den Budgetvorschlag über das Plan-Modul (Spezifikation 1,
+   * Abschnitt 7; #150), höchstens einmal je lokalem Tag. Die Operations-ID des Upserts eines neuen Vorschlags
+   * vergibt der Sync-Writer aus `operationIds`. Gewichtstrend und Tagesaufnahme liest die Prüfung über die
+   * Ports der Spezifikationen 2 und 3 aus der Gerätedatenbank.
+   */
+  z.strictObject({ type: z.literal('budgetvorschlag_pruefen'), installation: SeedKey, operationIds: z.array(EntityId) }),
   /**
    * Ein Mitglied entkoppelt über den Entkopplungs-Kern (#107) in eigener Transaktion, wie es der Befehl
    * `requestUncoupling` (Spezifikation 5) tun wird. Der Server nimmt die Entkopplung sofort an.

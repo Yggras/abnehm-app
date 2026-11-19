@@ -8,6 +8,7 @@ import type { DbExecutor } from '../database.ts';
 import { goalVersion } from '../db/schema/index.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
+import { supersedeOpenBudgetSuggestions } from './budget-suggestion-entity.ts';
 import { planCommandTarget, savePlanVersion } from './plan-versions.ts';
 
 // Zielversion auf dem Server (Spezifikation 1, Abschnitte 4 und 11). Sie entsteht nur über den
@@ -50,11 +51,14 @@ export const createGoalVersionCommand: ServerCommand<CreateGoalVersion> = {
     if (payload.budgetSource === 'budgetvorschlag' && !(await carriesSuggestedBudget(tx, actor.personId, payload))) {
       throw new CommandRejection('invalid_payload');
     }
-    return savePlanVersion(tx, { kind: 'zielversion', entity: goalVersionEntity, personId: actor.personId,
+    const saved = await savePlanVersion(tx, { kind: 'zielversion', entity: goalVersionEntity, personId: actor.personId,
       validFrom: payload.validFrom, businessKey, at, async write(id, serverVersion) {
         const fields = { ...payload, updatedAt: at, serverVersion };
         await tx.insert(goalVersion).values({ ...fields, id, personId: actor.personId, createdAt: at }).onConflictDoUpdate({ target: goalVersion.id, set: fields });
       } });
+    // Jede neue Zielversion überholt einen offenen Budgetvorschlag, auch einen, den das schreibende Gerät
+    // noch nicht kannte (Spezifikation 1, Abschnitt 7; #150).
+    return { ...saved, changes: [...saved.changes, ...(await supersedeOpenBudgetSuggestions(tx, actor.personId, at))] };
   },
 };
 

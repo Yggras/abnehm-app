@@ -17,9 +17,9 @@ import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
-import { mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../../../mobile/src/nutrition/index.ts';
+import { intakeReaderOf, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../../mobile/src/partner-cache/index.ts';
-import { createPlan, goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
+import { budgetSuggestionEntity, createPlan, goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
 import {
   createHttpSyncTransport,
   createLocalCommandRegistry,
@@ -53,7 +53,7 @@ import { encouragementEntity } from '../../../mobile/src/partner/encouragement.t
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
 export type SeedPhone = Readonly<{
@@ -68,6 +68,8 @@ export type SeedPhone = Readonly<{
   evaluate(step: Extract<SeedStep, { type: 'tagesziele_auswerten' }>): Promise<void>;
   /** Schritt `tagesziele_sicherstellen` über das Plan-Modul; der Writer vergibt genau die Operations-IDs des Schritts. */
   ensureDailyGoals(step: Extract<SeedStep, { type: 'tagesziele_sicherstellen' }>): Promise<void>;
+  /** Schritt `budgetvorschlag_pruefen` über das Plan-Modul mit den echten Readern der Gerätedatenbank (#150). */
+  checkBudgetSuggestion(step: Extract<SeedStep, { type: 'budgetvorschlag_pruefen' }>): Promise<void>;
   partner(): ReturnType<typeof readPartnerCache>;
   setSharing(area: AreaKey, level: PartnerSharingLevel): void;
   /** Alle gesendeten Operationen, in Reihenfolge; ein Retry sendet dieselbe noch einmal. */
@@ -101,8 +103,8 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
   // fehlende Tage meldet die Seed-Welt bewusst nicht an: Die Szenarien vor #131 beschreiben Pull und
   // Auswertung ohne Nachholen, und bis „Tagesziele auf dem Server“ (#133) lehnt der Server jede
   // Materialisierung ab. Den Haken belegt `apps/mobile/src/plan/daily-goals.test.ts`.
-  const plan = createPlan({ database, clock, writer, persistence, newId,
-    weightRecorder: createTrackers({ database, clock, writer, persistence, newId }).weightRecorder });
+  const trackers = createTrackers({ database, clock, writer, persistence, newId });
+  const plan = createPlan({ database, clock, writer, persistence, newId, weightRecorder: trackers.weightRecorder });
   const http = createHttpSyncTransport({
     baseUrl: testBaseUrl,
     fetch: async (input, init) => {
@@ -169,6 +171,13 @@ export async function seedPhone(backend: TestBackend, manifest: SeedManifest, ke
       expect(unused, 'Der Schritt legt weniger Fachbefehle an, als er Operations-IDs nennt').toEqual([]);
       await dispatcher.deliver();
     },
+    async checkBudgetSuggestion(step) {
+      operationIds.push(...step.operationIds);
+      // Gewichtstrend und Tagesaufnahme über die echten Ports wie im Composition Root.
+      await plan.checkBudgetSuggestion({ weightTrendReader: trackers.weightTrendReader, intakeReader: intakeReaderOf(database) });
+      const unused = operationIds.splice(0);
+      expect(unused, 'Der Schritt legt weniger Operationen an, als er Operations-IDs nennt').toEqual([]);
+    },
     partner: () => database.read((tx) => readPartnerCache(tx)),
     setSharing: (area, level) => database.transaction((tx) => setPartnerSharing(tx, writer, { area, level }, Instant.parse(clock.read().instant))),
     pushedOperations: () => [...pushedOperations],
@@ -200,6 +209,9 @@ export async function runSteps({ backend, manifest, phones }: SeedWorld): Promis
         break;
       case 'tagesziele_sicherstellen':
         await phones[step.installation]!.ensureDailyGoals(step);
+        break;
+      case 'budgetvorschlag_pruefen':
+        await phones[step.installation]!.checkBudgetSuggestion(step);
         break;
       case 'entkoppeln': {
         const { at, ...request } = uncouplingRequestOf(step, manifest.accounts);

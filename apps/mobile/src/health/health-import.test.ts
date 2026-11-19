@@ -10,14 +10,12 @@ import { importedSportEntryId, importedWeightEntryId } from '@abnehm/contracts/t
 
 import { fakeAreaPorts, fakePlanReader, type FakeGoalVersion, type FakeWeeklyPlanVersion } from '../area-ports/testing/fakes';
 import { insertDailyGoalForTest } from '../daily-goals/testing/persisted';
-import { noTestFacts, testBausteinEvaluators } from '../daily-goals/testing/test-evaluators';
 import { readDeviceState } from '../local-db/device-state';
 import { dailyGoalCompletion, sportEntry, weightEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { createTodayRegistry, type TodayState } from '../shell/today-registry';
+import { trackerDailyGoals } from '../trackers';
 import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld, type TrackerWorldOptions } from '../trackers/testing/tracker-world';
-import { weightEntriesOf } from '../trackers/weight-repository';
-import { isCountingWeightEntry } from '@abnehm/contracts/tracker-rules';
 import { createHealthImport, type HealthImport } from '.';
 import { applyHealthScenario, createFakeHealthPlatform, fakeWeight, fakeWorkout, fitbitApp, minutesFrom, type FakeHealthPlatform } from './testing/fake-platform';
 
@@ -492,11 +490,7 @@ describe('Transaktion je Stapel', () => {
   });
 
   it('wiederholter Import erzeugt keine doppelte Tageszielerfüllung', async () => {
-    const counted = (tx: Parameters<typeof weightEntriesOf>[0], personId: EntityId, localDate: LocalDate) => ({
-      ...noTestFacts,
-      weightEntryCount: weightEntriesOf(tx, personId).filter((entry) => entry.localDate === localDate && isCountingWeightEntry(entry)).length,
-    });
-    const world = await healthWorld({ bausteine: [testBausteinEvaluators(counted).gewogen] });
+    const world = await healthWorld({ bausteine: trackerDailyGoals.bausteine });
     const snapshot: DailyGoalSnapshot = {
       type: 'gewogen', personId: philipp, localDate: LocalDate.parse('2026-10-14'), slot: 1, timeZone: berlin, dayEndsAt: Instant.parse('2026-10-14T22:00:00.000Z'),
     };
