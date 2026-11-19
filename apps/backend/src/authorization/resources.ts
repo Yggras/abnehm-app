@@ -217,14 +217,19 @@ function owned<C extends ResourceClass>(
   resourceClass: C,
   table: PgTable,
   columns: { id: IdColumn; owner: IdColumn },
-  { creatable }: { creatable: boolean },
+  { creatable, onlyOperations }: { creatable: boolean } & Pick<EntityRule, 'onlyOperations'>,
 ): EntityRule<C, 'id'> {
-  return byId(resourceClass, table, async (context, id) => {
-    const { personId } = context.actor;
-    const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
-    if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
-    return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
-  });
+  return byId(
+    resourceClass,
+    table,
+    async (context, id) => {
+      const { personId } = context.actor;
+      const found = await first(context.db.select({ owner: columns.owner }).from(table).where(eq(columns.id, id)));
+      if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
+      return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
+    },
+    onlyOperations === undefined ? {} : { onlyOperations },
+  );
 }
 
 /** Inhalt einer Kopplung: nur aktive Mitglieder, und nur über Fachbefehle bzw. den Server. */
@@ -579,11 +584,14 @@ export const resourceEntities = {
   nutrition_entry: owned('eigene_eintraege', nutritionEntry, ownedBy(nutritionEntry), { creatable: true }),
   photo_draft: owned('eigene_eintraege', photoDraft, ownedBy(photoDraft), { creatable: false }),
   notification_setting: owned('eigene_eintraege', notificationSetting, ownedBy(notificationSetting), { creatable: true }),
-  // Ziel-/Wochenplanversion, Tagesziel und der Budgetvorschlag, den nur `acceptBudgetSuggestion` ändert.
+  // Der Budgetvorschlag (Spezifikation 1, Abschnitte 7 und 11; #150): Die App legt ihn per Upsert an und setzt
+  // ihn auf `abgelehnt` oder `ueberholt`; `angenommen` setzt nur `acceptBudgetSuggestion` (#151). Gelöscht wird
+  // er nie (Nutzerentscheidung in #150: eigene Einträge ohne Löschen).
+  budget_suggestion: owned('eigene_eintraege', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true, onlyOperations: ['lesen', 'upsert', 'befehl'] }),
+  // Ziel-/Wochenplanversion und Tagesziel.
   goal_version: owned('zielversionen', goalVersion, ownedBy(goalVersion), { creatable: true }),
   weekly_plan_version: owned('zielversionen', weeklyPlanVersion, ownedBy(weeklyPlanVersion), { creatable: true }),
   daily_goal: owned('zielversionen', dailyGoal, ownedBy(dailyGoal), { creatable: true }),
-  budget_suggestion: owned('zielversionen', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true }),
   // Tageszielerfüllung, Energiebuchung, Projekteinzahlung.
   daily_goal_completion: owned('fachbuchungen', dailyGoalCompletion, ownedBy(dailyGoalCompletion), { creatable: true }),
   energy_booking: owned('fachbuchungen', energyBooking, ownedBy(energyBooking), { creatable: true }),
