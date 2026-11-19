@@ -11,6 +11,7 @@ import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession, registeredCommandCases } from './support/authorization.ts';
 import { sendEncouragementScenario } from './support/encouragement.ts';
 import { buildObjectCommandScenario, placeObjectCommandScenario, upgradeObjectCommandScenario } from './support/building.ts';
+import { claimEventRewardScenario, markEventsSeenScenario } from './support/island-events.ts';
 import { bonusOp, completeOp, dailyGoalCommandScenarios, insertDailyGoals } from './support/daily-goals.ts';
 import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
@@ -142,7 +143,8 @@ describe('Autorisierung der Fachbefehle', () => {
     // `sendEncouragement` (#123) sowie `upgradeObject` und `placeObject` (#194) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
     const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
       confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
-      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario,
+      markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });
 

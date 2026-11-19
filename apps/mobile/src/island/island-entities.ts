@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 
 import { IslandProgress } from '@abnehm/contracts/island';
 import {
@@ -6,11 +6,12 @@ import {
   BlueprintUnlockRecord,
   CommunityProjectRecord,
   IslandEventRecord,
+  IslandEventStateRecord,
   IslandFieldRecord,
   IslandObjectRecord,
 } from '@abnehm/contracts/island-records';
 
-import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandField, islandObject, islandProgress } from '../local-db/schema';
+import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandEventState, islandField, islandObject, islandProgress } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { serverManagedEntity, sqliteEntity, type SyncEntityAdapter } from '../sync';
 
@@ -46,13 +47,33 @@ const islandObjectEntity: typeof objectEntity = {
   },
 };
 
+const unlockEntity = serverManagedEntity({ entityType: 'blueprint_unlock', ...coupled, record: BlueprintUnlockRecord, table: blueprintUnlock });
+
+/**
+ * Bauplanfreischaltungen; je Insel ist ein Bauplan höchstens einmal freigeschaltet. Eine vorläufig
+ * abgeholte Besucher-Belohnung (#202) steht lokal unbestätigt mit eigener ID; schaltet der Server denselben
+ * Bauplan anders frei, etwa über den Besuch der Partnerin, weicht die unbestätigte Zeile.
+ */
+const blueprintUnlockEntity: typeof unlockEntity = {
+  ...unlockEntity,
+  applyCanonical(tx, record) {
+    sqliteOf(tx)
+      .delete(blueprintUnlock)
+      .where(and(eq(blueprintUnlock.islandId, record.data.islandId), eq(blueprintUnlock.catalogKey, record.data.catalogKey), ne(blueprintUnlock.id, record.entityId), isNull(blueprintUnlock.serverVersion)))
+      .run();
+    unlockEntity.applyCanonical(tx, record);
+  },
+};
+
 export const islandSyncEntities: readonly SyncEntityAdapter[] = [
   serverManagedEntity({ entityType: 'island_field', ...coupled, record: IslandFieldRecord, table: islandField }),
   islandObjectEntity,
-  serverManagedEntity({ entityType: 'blueprint_unlock', ...coupled, record: BlueprintUnlockRecord, table: blueprintUnlock }),
+  blueprintUnlockEntity,
   serverManagedEntity({ entityType: 'area_unlock', ...coupled, record: AreaUnlockRecord, table: areaUnlock }),
   serverManagedEntity({ entityType: 'community_project', ...coupled, record: CommunityProjectRecord, table: communityProject }),
   serverManagedEntity({ entityType: 'island_event', ...coupled, record: IslandEventRecord, table: islandEvent }),
+  // Ereignisstand je Person (#202): nur der eigene kommt per Pull; ändern nur `markEventsSeen` und `claimEventReward`.
+  serverManagedEntity({ entityType: 'island_event_state', ownerField: 'personId', record: IslandEventStateRecord, table: islandEventState }),
   sqliteEntity({
     entityType: 'island_progress',
     ...coupled,

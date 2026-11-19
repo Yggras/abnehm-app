@@ -41,14 +41,6 @@ const classes = {
     manipulierte_id: withTarget(async (world) => ({ id: await insert.energyBooking(world, world.philipp) })),
     verbotene_operation: withOperation('energy_booking', 'loeschen'),
   }),
-  'Ereignisstand je Person (Fachbefehl)': authorizationCases({
-    ...probeScenario(policies.resource('island_event_state', 'befehl'), async (world) => ({
-      actor: world.anna,
-      target: { id: await insert.islandEventState(world, world.anna) },
-    })),
-    manipulierte_id: withTarget(async (world) => ({ id: await insert.islandEventState(world, world.philipp) })),
-    verbotene_operation: withOperation('island_event_state', 'upsert'),
-  }),
   'Partnerfreigabe (Ändern)': authorizationCases({
     ...probeScenario(policies.resource('partner_sharing', 'upsert'), async (world) => ({
       actor: world.anna,

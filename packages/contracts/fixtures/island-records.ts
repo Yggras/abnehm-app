@@ -3,12 +3,15 @@ import {
   BlueprintUnlockRecord,
   CommunityProjectRecord,
   IslandEventRecord,
+  IslandEventStateRecord,
   IslandFieldRecord,
   IslandObjectOrigin,
   IslandObjectRecord,
+  VisitorEventDetails,
+  VisitorReward,
 } from '../src/island-records.ts';
 import { fixtures } from './define.ts';
-import { coupling, island, islandField, now, philipp } from './ids.ts';
+import { coupling, island, islandEvent, islandField, now, philipp } from './ids.ts';
 
 const owned = { islandId: island, couplingId: coupling };
 
@@ -93,11 +96,41 @@ export const islandRecordFixtures = {
   IslandEventRecord: fixtures(IslandEventRecord, {
     valid: {
       'Momo geschlüpft': hatched,
-      'Besuch für Philipp': { ...hatched, type: 'besuch', templateKey: 'igel', responsiblePersonId: philipp, occasionKey: 'tag:2026-10-14:1', status: 'offen' },
+      'Besuch für Philipp': {
+        ...hatched,
+        type: 'besuch',
+        templateKey: 'igel_ilse',
+        responsiblePersonId: philipp,
+        occasionKey: 'tag:2026-10-14:1',
+        status: 'offen',
+        reward: { wish: { type: 'bauplan_bauen', blueprintKey: 'laterne' }, reward: { type: 'bauplan', key: 'brunnen' } },
+      },
     },
     invalid: {
       'individueller Bau ist kein Ereignis': { ...hatched, type: 'objekt_gebaut' },
       'leerer Anlassschlüssel': { ...hatched, occasionKey: '' },
+    },
+  }),
+  IslandEventStateRecord: fixtures(IslandEventStateRecord, {
+    valid: {
+      'neu': { islandEventId: islandEvent, personId: philipp, seenAt: null, claimedAt: null, createdAt: now, updatedAt: now },
+      'gesehen': { islandEventId: islandEvent, personId: philipp, seenAt: now, claimedAt: null, createdAt: now, updatedAt: now },
+      'abgeholt': { islandEventId: islandEvent, personId: philipp, seenAt: now, claimedAt: now, createdAt: now, updatedAt: now },
+    },
+    invalid: {
+      'abgeholt, aber nie gesehen': { islandEventId: islandEvent, personId: philipp, seenAt: null, claimedAt: now, createdAt: now, updatedAt: now },
+      'ohne Person': { islandEventId: islandEvent, seenAt: null, claimedAt: null, createdAt: now, updatedAt: now },
+    },
+  }),
+  VisitorReward: fixtures(VisitorReward, {
+    valid: { 'Besucher-Bauplan': { type: 'bauplan', key: 'brunnen' }, 'Deko': { type: 'deko', key: 'muschel' } },
+    invalid: { 'Accessoire': { type: 'accessoire', key: 'strohhuetchen' }, 'Energie': { type: 'energie', amount: 3 } },
+  }),
+  VisitorEventDetails: fixtures(VisitorEventDetails, {
+    valid: { 'Laterne bauen für einen Brunnen': { wish: { type: 'bauplan_bauen', blueprintKey: 'laterne' }, reward: { type: 'bauplan', key: 'brunnen' } } },
+    invalid: {
+      'ohne Wunsch': { reward: { type: 'deko', key: 'muschel' } },
+      'Wunsch ohne Bauplan': { wish: { type: 'bauplan_bauen' }, reward: { type: 'deko', key: 'muschel' } },
     },
   }),
 };

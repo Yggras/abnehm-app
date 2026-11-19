@@ -26,6 +26,7 @@ export type SeedVariant = Readonly<{
 
 const manifestSuite = 'apps/backend/test/seed-manifeste-app.test.ts';
 const randzustaende = 'apps/backend/test/seed-randzustaende-app.test.ts';
+const randzustaendeErnaehrung = 'packages/contracts/test/seeds-randzustaende-ernaehrung.test.ts';
 const syncSzenarien = 'apps/backend/test/seed-sync-szenarien-app.test.ts';
 const profiles = 'apps/mobile/src/test-capabilities/profiles.test.ts';
 
@@ -58,6 +59,13 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('nach_erfuellung_korrigiert', randzustaende),
   manifest('tagesende_offen', randzustaende),
   manifest('tagesende_abgeschlossen', randzustaende),
+  manifest('ernaehrung-offen', randzustaende, randzustaendeErnaehrung),
+  manifest('ernaehrung-teilweise', randzustaende, randzustaendeErnaehrung),
+  manifest('ernaehrung-erfuellt', randzustaende, randzustaendeErnaehrung),
+  manifest('ernaehrung-nach-erfuellung-korrigiert', randzustaende, randzustaendeErnaehrung),
+  manifest('kalorienbudget-unter-untergrenze', randzustaende, randzustaendeErnaehrung),
+  manifest('kalorienbudget-im-budget', randzustaende, randzustaendeErnaehrung),
+  manifest('kalorienbudget-ueber-budget', randzustaende, randzustaendeErnaehrung),
   manifest('veralteter_partnerstand', randzustaende),
   manifest('zwei_installationen', syncSzenarien),
   manifest('offline_sync', syncSzenarien),
@@ -66,6 +74,7 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('haelfte-voll', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('doppelausgabe', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('feldkonflikt', 'apps/backend/test/seed-island-app.test.ts'),
+  manifest('ereignisse-voll', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('tage_ohne_app_oeffnung', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   manifest('zeitzonen_reisen', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   profile('uhr-ungesichert-24h'),

@@ -126,6 +126,14 @@ describe('Katalogprüfung', () => {
     expect(checkCatalog({ ...catalog, projects: [...catalog.projects, onBeach] })).toContainEqual({ rule: 'bauplatz', key: 't_projekt_2' });
   });
 
+  it('verlangt Besucher mit Belohnungen der Herkunft `besucher` und mindestens einer Deko (#202)', () => {
+    const igel = catalog.visitorTemplates[0]!;
+    const withVisitor = (rewards: typeof igel.rewards) => ({ ...catalog, visitorTemplates: [{ ...igel, rewards }] });
+    expect(checkCatalog(withVisitor({ ...igel.rewards, blueprints: ['t_weg'] }))).toContainEqual({ rule: 'besucher', key: 't_igel' });
+    expect(checkCatalog(withVisitor({ ...igel.rewards, deko: ['t_ent_deko_1'] }))).toContainEqual({ rule: 'besucher', key: 't_igel' });
+    expect(checkCatalog(withVisitor({ ...igel.rewards, deko: [] }))).toContainEqual({ rule: 'besucher', key: 't_igel' });
+  });
+
   it('verlangt für Jahreszeiten-Deko einen ganzzahligen Jahresindex ab 1', () => {
     const deko = { key: 't_kuerbis', name: 'Kürbis', origin: 'jahreszeit', season: 'herbst', yearIndex: 0, art: 'kuerbis' } as const;
     expect(checkCatalog({ ...catalog, deko: [...catalog.deko, deko] })).toContainEqual({ rule: 'jahreszeit', key: 't_kuerbis' });

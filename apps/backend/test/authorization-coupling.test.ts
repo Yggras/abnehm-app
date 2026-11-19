@@ -26,6 +26,16 @@ const classes = {
     entkopplung: uncouple,
     verbotene_operation: withOperation('coupling', 'loeschen'),
   }),
+  // Ereignisstand je Person (#202): nur der eigene, und nur solange die Kopplung des Ereignisses aktiv ist.
+  'Ereignisstand je Person (Fachbefehl)': authorizationCases({
+    ...probeScenario(policies.resource('island_event_state', 'befehl'), async (world) => ({
+      actor: world.anna,
+      target: { id: await insert.islandEventState(world, world.anna) },
+    })),
+    manipulierte_id: withTarget(async (world) => ({ id: await insert.islandEventState(world, world.philipp) })),
+    entkopplung: uncouple,
+    verbotene_operation: withOperation('island_event_state', 'upsert'),
+  }),
   'Inselfortschritt': authorizationCases({
     ...probeScenario(
       policies.resource('island_progress', 'lesen'),

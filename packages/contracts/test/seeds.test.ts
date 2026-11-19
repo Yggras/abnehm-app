@@ -754,4 +754,23 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
       expect(fieldOf(device.rows.island_object, second)).toBe(field);
     }
   });
+
+  it('ereignisse-voll: Philipp hat 4 offene Besuche und bekommt keinen neuen, Anna einen; ihren Stand sieht Philipps Gerät nicht (#202)', () => {
+    const manifest = seedManifests['ereignisse-voll'];
+    const visits = (rows: readonly Record<string, unknown>[] | undefined) => (rows ?? []).filter((row) => row.type === 'besuch');
+    const open = (rows: readonly Record<string, unknown>[] | undefined, personId: string) =>
+      visits(rows).filter((row) => row.responsible_person_id === personId && row.status === 'offen');
+    expect(open(manifest.initial.server.island_event, philipp)).toHaveLength(4);
+    expect(open(manifest.initial.server.island_event, anna)).toHaveLength(1);
+    expect(visits(manifest.initial.server.island_event).some((row) => String(row.occasion_key).startsWith('tag:2026-10-14:'))).toBe(false);
+
+    const { server, devices } = manifest.target;
+    const today = visits(server.island_event).filter((row) => String(row.occasion_key).startsWith('tag:2026-10-14:'));
+    expect(today).toEqual([expect.objectContaining({ occasion_key: 'tag:2026-10-14:1', responsible_person_id: anna, status: 'offen' })]);
+    expect(open(server.island_event, philipp)).toHaveLength(4);
+    const iphone = devices['philipp-iphone']!;
+    expect(visits(iphone.rows.island_event).map((row) => row.id)).toContain(today[0]!.id);
+    expect((iphone.rows.island_event_state ?? []).every((row) => row.person_id === philipp)).toBe(true);
+    expect(iphone.rows.island_event_state).toHaveLength(4);
+  });
 });

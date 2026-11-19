@@ -94,11 +94,13 @@ export const seedIds = {
   },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   // 0031/5–7: Philipps Mahlzeiten von gestern, nur in den Randzuständen zum Tagesende (#113).
+  // 0031/8–9: Philipps Frühstück und Mittagessen von heute, nur in den Randzuständen der Ernährung (#166).
   nutritionEntry: {
     philippMittag: id('0031', 1),
     annaMittag: id('0031', 2),
     philippFruehstueck: [id('0031', 3), id('0031', 4)],
     philippGestern: [id('0031', 5), id('0031', 6), id('0031', 7)],
+    philippRandzustand: { fruehstueck: id('0031', 8), mittag: id('0031', 9) },
   },
   /**
    * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten` (#113)
@@ -127,6 +129,9 @@ export const seedIds = {
     },
     /** Offline-Platzierungen in `feldkonflikt` (#194): je Gerät eine. */
     feldkonflikt: { iphone: id('0090', 50), ipad: id('0090', 51) },
+    /** Erfüllungen in den Randzuständen der Ernährung (#166). */
+    ernaehrungErfuellt: [id('0090', 52)],
+    kalorienbudgetInnerhalb: [id('0090', 53)],
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */

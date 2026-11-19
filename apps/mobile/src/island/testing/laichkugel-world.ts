@@ -7,8 +7,9 @@ import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import type { IslandRole } from '@abnehm/contracts/island';
-import type { IslandObjectOrigin } from '@abnehm/contracts/island-records';
+import { islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { visitorOccasionKey } from '@abnehm/game-rules/events';
 import { hatching } from '@abnehm/game-rules/hatching';
 
 import { dailyGoalCompletionEntity } from '../../daily-goals';
@@ -17,7 +18,7 @@ import { appendBooking, energyBookingEntity } from '../../energy';
 import type { Haptics } from '../../haptics/haptics';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { blueprintUnlock, communityProject, coupling, couplingMember, island, islandEvent, islandField, islandObject, islandProgress, sharedAction } from '../../local-db/schema';
+import { blueprintUnlock, communityProject, coupling, couplingMember, island, islandEvent, islandEventState, islandField, islandObject, islandProgress, sharedAction } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import type { Refresh } from '../../shell/followed-source';
@@ -29,7 +30,7 @@ import { quietGameDependencies } from './quiet-game';
 
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
-// Insel, Vorschläge, die geschlüpfte Insel, Energie und Objekte (#194) legt der Test an, wie sie der Pull
+// Insel, Vorschläge, die geschlüpfte Insel, Energie, Objekte (#194) und Besucher (#202) legt der Test an, wie sie der Pull
 // ablegen würde.
 // Die Uhr gibt der Test hinein, auf Wunsch auch Haptik und Takt des Spieldienstes (#188).
 
@@ -62,6 +63,13 @@ export type LaichkugelWorld = Readonly<{
   fieldId(fieldKey: string): EntityId;
   /** Ein vom Server bestätigtes Inselobjekt, etwa eines des Partners, auf einem Feld oder im Lager (`null`) (#194). */
   objectOnServer(object: Readonly<{ owner: 'philipp' | 'anna'; fieldKey: string | null; catalogKey: string; level?: number; origin?: IslandObjectOrigin }>): EntityId;
+  /**
+   * Ein Besucher mit Wunsch, wie der Pull ihn ablegt (#202): das Ereignis und, für Philipp, sein Ereignisstand;
+   * den Stand der Partnerin bekommt Philipps Gerät nie. Liefert die ID des Ereignisstands.
+   */
+  /** Vom Server bestätigte Freischaltungen, etwa Besucher-Baupläne früherer Besuche (#202). */
+  unlockOnServer(catalogKeys: readonly string[]): void;
+  visitOnServer(visit: Readonly<{ to: 'philipp' | 'anna'; n: number; templateKey: string; details: VisitorEventDetails; status?: 'offen' | 'erfuellbar'; seen?: boolean }>): EntityId;
   operations(): ReturnType<typeof pendingOperations>;
   close(): void;
 }>;
@@ -173,6 +181,27 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
           .run(),
       );
       return id;
+    },
+    unlockOnServer(catalogKeys) {
+      database.transaction((tx) => {
+        for (const catalogKey of catalogKeys) {
+          sqliteOf(tx).insert(blueprintUnlock).values({ id: newId(), islandId, couplingId, catalogKey, reason: 'besucher', unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+        }
+      });
+    },
+    visitOnServer({ to, n, templateKey, details, status = 'offen', seen = false }) {
+      const occasionKey = visitorOccasionKey('2026-10-14', n);
+      const eventId = islandEventId(islandId, occasionKey);
+      const responsible = to === 'philipp' ? philipp : anna;
+      const stateId = islandEventStateId(eventId, EntityId.parse(responsible));
+      database.transaction((tx) => {
+        const db = sqliteOf(tx);
+        db.insert(islandEvent)
+          .values({ id: eventId, islandId, couplingId, type: 'besuch', templateKey, responsiblePersonId: responsible, occasionKey, status, reward: details, occurredAt: at, ...synced })
+          .run();
+        if (to === 'philipp') db.insert(islandEventState).values({ id: stateId, islandEventId: eventId, personId: philipp, seenAt: seen ? at : null, claimedAt: null, ...synced }).run();
+      });
+      return stateId;
     },
     operations: () => database.read((tx) => pendingOperations(tx, 100)),
     close() {

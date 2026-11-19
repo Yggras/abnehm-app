@@ -36,6 +36,8 @@ export const seedFormatVersion = 1;
  * Spezifikation 1, Abschnitt 12 (#131). `solo-haltemodus-*` (je Sicherheitsgrund), `solo-budget-angehoben`
  * und `solo-ziele-ab-morgen` sind „erzwungener Haltemodus“, „Budget angehoben“ und „bevorstehende Fassung
  * ‚ab morgen‘“ aus Spezifikation 1, Abschnitt 12, für die Einstellungsseite „Ziele“ (#147).
+ * `ernaehrung-*` und `kalorienbudget-*` sind die Randzustände der Ernährung aus Spezifikation 2,
+ * Abschnitt 13 (#166).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -62,6 +64,13 @@ export const SeedScenarioKey = z.enum([
   'nach_erfuellung_korrigiert',
   'tagesende_offen',
   'tagesende_abgeschlossen',
+  'ernaehrung-offen',
+  'ernaehrung-teilweise',
+  'ernaehrung-erfuellt',
+  'ernaehrung-nach-erfuellung-korrigiert',
+  'kalorienbudget-unter-untergrenze',
+  'kalorienbudget-im-budget',
+  'kalorienbudget-ueber-budget',
   'veralteter_partnerstand',
   'zwei_installationen',
   'offline_sync',
@@ -73,6 +82,7 @@ export const SeedScenarioKey = z.enum([
   'haelfte-voll',
   'doppelausgabe',
   'feldkonflikt',
+  'ereignisse-voll',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

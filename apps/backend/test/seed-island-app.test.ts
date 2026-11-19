@@ -10,6 +10,7 @@ import { InstallationId } from '@abnehm/contracts/sync';
 import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
+import { islandEventCommands } from '../../mobile/src/island/island-events.ts';
 import { islandObjectCommands } from '../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
@@ -85,7 +86,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     }),
     clock,
     installationId: InstallationId.parse(installation.installationId),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands] }),
   });
   const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
   let stage: IslandStage | null = null;
@@ -209,6 +210,16 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
       expect(islandOf(phone).storage.map((object) => object.id)).toEqual([first]);
       expect(islandOf(phone).energy).toBe(23);
     }
+  });
+
+  it('ereignisse-voll: Philipp sieht seine 4 offenen Wünsche; der Pull bringt ihm keinen neuen Besuch (#202)', { timeout: 30_000 }, async () => {
+    const world = await seeded(seedManifests['ereignisse-voll']);
+    const iphone = world.phones['philipp-iphone']!;
+    expect(islandOf(iphone).events.open).toHaveLength(4);
+
+    await runSyncSteps(seedManifests['ereignisse-voll'], world);
+
+    expect(islandOf(iphone).events.open.map((event) => event.visitor.name)).toEqual(['Eule Otto', 'Schwan Selma', 'Fuchs Fridolin', 'Igel Ilse']);
   });
 });
 
