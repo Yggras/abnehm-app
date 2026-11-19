@@ -153,7 +153,8 @@ describe('Challenges App ↔ Backend', () => {
     await philippsPhone.sync();
 
     expect(philippsPhone.outbox()).toEqual([]);
-    expect(philippsPhone.challenges()).toMatchObject({ type: 'frei' });
+    // Den Grund nennt der Server; das Gerät merkt sich die Vorlage für heute und zeigt den Hinweis.
+    expect(philippsPhone.challenges()).toMatchObject({ type: 'frei', unfitToday: ['ernaehrung_im_blick'] });
     expect(await backend.database.db.select().from(challenge)).toEqual([]);
     await annasPhone.sync();
     expect(annasPhone.challenges()).toMatchObject({ type: 'frei' });

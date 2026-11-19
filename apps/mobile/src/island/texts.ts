@@ -1,9 +1,9 @@
 import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
 import type { ChallengeMeasure, Season } from '@abnehm/game-rules/catalog';
+import type { ChallengeShare } from '@abnehm/game-rules/challenges';
 
 import { formNames } from '../momo';
 import { bausteinNames } from '../shell/texts';
-import type { OwnChallengeShare } from './challenges';
 import type { IslandEntry } from './IslandBar';
 import type { Daytime } from './scene-model';
 
@@ -150,13 +150,15 @@ export const eventTexts = {
  */
 export const challengeTexts = {
   intro: (partner: string) => `Sieben Tage, gemeinsam mit ${partner}. Jede Person erfüllt ihren eigenen Anteil.`,
-  share: (share: OwnChallengeShare, measure: ChallengeMeasure): string => {
+  share: (share: ChallengeShare, measure: ChallengeMeasure): string => {
     if (share.type === 'passt_nicht') return challengeTexts.unfit;
     if (measure.type === 'tagesziele') return `Dein Anteil: ${share.required} erfüllte Tagesziele`;
     if (measure.baustein === 'sporteinheit') return `Dein Anteil: ${share.required} von ${share.planned} geplanten Sporteinheiten`;
     return `Dein Anteil: ${share.required} von ${share.planned} Tagen mit „${bausteinNames[measure.baustein]}“`;
   },
   unfit: 'Passt gerade nicht zu euren Wochenplänen',
+  /** Hinweis oben auf `challenge.propose`, nachdem der Server einen Vorschlag abgelehnt hat. */
+  unfitRejected: (template: string) => `„${template}“ passt gerade nicht zu euren Wochenplänen.`,
   propose: 'Vorschlagen',
   /** Zugänglicher Name von „Vorschlagen“ in einer Vorlagenkarte. */
   proposeTemplate: (template: string) => `${template} vorschlagen`,

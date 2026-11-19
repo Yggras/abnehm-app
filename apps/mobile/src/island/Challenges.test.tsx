@@ -13,7 +13,9 @@ import { hitArea } from '../design/testing/hit-area';
 import { routeScreen } from '../navigation';
 import { MessageHostProvider, MessageSlot } from '../shell/MessageHost';
 import { appGameService } from './app-game-service';
+import { removeOperation } from '../sync/outbox';
 import { ChallengeDetailScreen } from './ChallengeDetailScreen';
+import { challengeLocalCommands } from './challenges';
 import { ChallengeProposeScreen } from './ChallengeProposeScreen';
 import { threeSportDaysPlan, weeklyPlanReader } from './testing/challenge-plans';
 import { createLaichkugelWorld, type LaichkugelWorld, type LaichkugelWorldOptions } from './testing/laichkugel-world';
@@ -101,6 +103,30 @@ describe('challenge.propose', () => {
     expect(card('ernaehrung_im_blick').queryByRole('button')).toBeNull();
     expect(card('aktive_woche').getByText('Dein Anteil: 3 von 3 geplanten Sporteinheiten')).toBeOnTheScreen();
     expect(card('aktive_woche').getByRole('button', { name: 'Aktive Woche vorschlagen' })).toBeOnTheScreen();
+  });
+
+  test('hat der Server einen Vorschlag heute als unpassend abgelehnt, nennt der Bildschirm den Grund und bietet die Vorlage nicht an', async () => {
+    const opened = await world();
+    // Wie die Sync-Engine nach der Ablehnung durch den Server (Plan des Partners, Kontext `passt_nicht`).
+    opened.game.proposeChallenge('ernaehrung_im_blick');
+    const [operation] = opened.operations();
+    opened.database.transaction((tx) => {
+      const command = challengeLocalCommands.find((candidate) => candidate.type === 'proposeChallenge')!;
+      if (!operation || !('businessKey' in operation)) throw new Error('Vorschlag fehlt in der Outbox');
+      command.reconcileRejected(tx, operation, {
+        type: 'permanently_rejected', operationId: operation.operationId,
+        error: { code: 'conflict', context: { grund: 'passt_nicht' }, retryable: false },
+        canonical: { type: 'absent', entityType: 'command_result', entityId: operation.operationId },
+      });
+      removeOperation(tx, operation.operationId);
+    });
+    await open('/challenge/propose', opened);
+
+    expect(screen.getByText('„Ernährung im Blick“ passt gerade nicht zu euren Wochenplänen.')).toBeOnTheScreen();
+    expect(card('ernaehrung_im_blick').getByText('Dein Anteil: 6 von 7 Tagen mit „Ernährung erfasst“')).toBeOnTheScreen();
+    expect(card('ernaehrung_im_blick').getByText('Passt gerade nicht zu euren Wochenplänen')).toBeOnTheScreen();
+    expect(card('ernaehrung_im_blick').queryByRole('button')).toBeNull();
+    expect(card('gut_getrunken').getByRole('button', { name: 'Gut getrunken vorschlagen' })).toBeOnTheScreen();
   });
 
   test('ohne Kopplung gibt es nichts vorzuschlagen', async () => {
@@ -226,13 +252,18 @@ describe('WirContribution.challenge gegen die Vertrags-Fixtures', () => {
     expect(otherStates.at(-1)).toEqual({ type: 'ready', data: [] });
   });
 
-  test('ein nur vorgemerkter eigener Vorschlag und ein Vorschlag, der nicht zum eigenen Plan passt, zeigen nichts', async () => {
+  test('ein nur vorgemerkter eigener Vorschlag zeigt nichts', async () => {
     const pending = await world();
     pending.game.proposeChallenge('gut_getrunken');
     expect((await contributionsOf(pending)).at(-1)).toEqual({ type: 'ready', data: [] });
+  });
 
+  test('passt der Vorschlag nicht mehr zum eigenen Plan, bleibt er antwortbedürftig, mit dem Anteil bei vollem Plan als Richtwert', async () => {
     const unfit = await world({ planReader: weeklyPlanReader(threeSportDaysPlan) });
-    unfit.challengeOnServer('anna', 'ernaehrung_im_blick');
-    expect((await contributionsOf(unfit)).at(-1)).toEqual({ type: 'ready', data: [] });
+    const challengeId = unfit.challengeOnServer('anna', 'ernaehrung_im_blick');
+    expect(WirContributionsState.parse((await contributionsOf(unfit)).at(-1))).toMatchObject({
+      type: 'ready',
+      data: [{ challengeId, templateKey: 'ernaehrung_im_blick', proposedBySelf: false, ownRequired: 6 }],
+    });
   });
 });

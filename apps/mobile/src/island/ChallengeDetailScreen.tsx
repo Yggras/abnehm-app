@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { minutesOfDay, readingOf } from '@abnehm/clock';
 import { weekdayOf, type Instant } from '@abnehm/contracts/base';
 import { wallClockTimeOf } from '@abnehm/contracts/notifications';
+import type { ChallengeShare } from '@abnehm/game-rules/challenges';
 
 import { useClock } from '../clock/clock-context';
 import { Button, Card, Notice, Skeleton, space, Text } from '../design';
@@ -10,7 +11,7 @@ import type { RouteScreenProps } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf, weekdayNames } from '../shell/texts';
 import { useChallengeShares, useChallengeStage, useGameService } from './app-game-service';
-import { challengeTemplate, type ChallengeProposal, type ChallengeStage, type OwnChallengeShare } from './challenges';
+import { challengeTemplate, type ChallengeProposal, type ChallengeStage } from './challenges';
 import type { GameService } from './game-service';
 import { challengeTexts } from './texts';
 
@@ -43,7 +44,7 @@ function Content({
 }: {
   game: GameService;
   stage: ChallengeStage;
-  shares: Readonly<Record<string, OwnChallengeShare>>;
+  shares: Readonly<Record<string, ChallengeShare>>;
   challengeId: string;
 }) {
   if (stage.type === 'vorschlag' && stage.proposal.challengeId === challengeId) {
@@ -63,7 +64,7 @@ function Content({
   return <Notice tone="neutral" text={challengeTexts.gone} />;
 }
 
-function Proposal({ game, proposal, partner, share }: { game: GameService; proposal: ChallengeProposal; partner: string; share: OwnChallengeShare | undefined }) {
+function Proposal({ game, proposal, partner, share }: { game: GameService; proposal: ChallengeProposal; partner: string; share: ChallengeShare | undefined }) {
   const template = challengeTemplate(proposal.templateKey);
   const fromPartner = proposal.by === 'partner';
   return (

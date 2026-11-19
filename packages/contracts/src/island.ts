@@ -280,6 +280,13 @@ export function proposeChallengeKey(challengeId: EntityId): string {
   return `challenge:${challengeId}:vorschlag`;
 }
 
+/**
+ * Kontext der Ablehnung (`ContractError.context`) von `proposeChallenge` und `decideChallengeProposal` mit
+ * `conflict`, wenn die Vorlage für eine Person an keinem der sieben Tage geplant ist: „Passt gerade nicht zu
+ * euren Wochenplänen“ (Spezifikation 4, Abschnitt 10). Ohne diesen Kontext war der Grund der Wächter.
+ */
+export const challengeUnfitContext = { grund: 'passt_nicht' } as const;
+
 /** Annehmen oder ablehnen; beides darf nur der Partner der vorschlagenden Person. */
 export const ChallengeProposalDecision = z.enum(['annehmen', 'ablehnen']);
 export type ChallengeProposalDecision = z.infer<typeof ChallengeProposalDecision>;

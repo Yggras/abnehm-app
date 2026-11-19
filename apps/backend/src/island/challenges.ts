@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 import { readingOf } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import {
+  challengeUnfitContext,
   DecideChallengeProposal,
   decideChallengeProposalKey,
   ProposeChallenge,
@@ -15,7 +16,7 @@ import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { PlanReader } from '@abnehm/contracts/ports';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import { indexCatalog, type ChallengeTemplate } from '@abnehm/game-rules/catalog';
-import { challengeDays, challengeEndsAt, challengeProposalExpiresAt, challengeShare } from '@abnehm/game-rules/challenges';
+import { challengeDays, challengeEndsAt, challengeProposalExpiresAt, challengeShare, proposalOpen } from '@abnehm/game-rules/challenges';
 import { gameCatalog } from '@abnehm/game-rules/content';
 
 import { policies } from '../authorization/authorization.ts';
@@ -44,7 +45,8 @@ import { canonicalAfterWrite, type PrePullStep } from '../sync/sync.ts';
 //   den der `PlanReader` von Spezifikation 1 liefert.
 //
 // Passt eine Vorlage für eine Person nicht, weil sie an keinem der sieben Tage geplant ist, lehnt der
-// Server Vorschlag und Annahme mit `conflict` ab („Passt gerade nicht zu euren Wochenplänen“).
+// Server Vorschlag und Annahme mit `conflict` und dem Kontext `challengeUnfitContext` ab („Passt gerade
+// nicht zu euren Wochenplänen“); die App kennt den Plan des Partners nicht und zeigt den Hinweis danach.
 
 const catalog = indexCatalog(gameCatalog);
 
@@ -114,8 +116,9 @@ function templateOf(templateKey: string): ChallengeTemplate {
   return found.entry;
 }
 
-/** Ein Vorschlag ist offen, solange er `vorgeschlagen` ist und seine Frist nicht erreicht hat. */
-const expired = (row: { proposalExpiresAt: Date }, at: Date) => row.proposalExpiresAt.getTime() <= at.getTime();
+/** Ein Vorschlag ist offen, solange er `vorgeschlagen` ist und seine Frist nicht erreicht hat (Spielregel). */
+const expired = (row: { proposalExpiresAt: Date }, at: Date) =>
+  !proposalOpen(Instant.parse(row.proposalExpiresAt.toISOString()), Instant.parse(at.toISOString()));
 
 /** Schreibt die verfallenen Vorschläge einer Kopplung als `verfallen` fest; ihr Ende ist die Frist. */
 async function expireProposalsOf(tx: DbExecutor, couplingId: EntityId, at: Date): Promise<void> {
@@ -152,7 +155,7 @@ export function createChallenges({ planReader }: ChallengeDependencies): Challen
     const shares = [];
     for (const personId of persons) {
       const share = await shareOf(tx, template, personId, at);
-      if (share.type === 'passt_nicht') throw new CommandRejection('conflict');
+      if (share.type === 'passt_nicht') throw new CommandRejection('conflict', null, challengeUnfitContext);
       shares.push({ personId, required: share.required });
     }
     return shares;

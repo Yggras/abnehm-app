@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type { EntityId } from '@abnehm/contracts/base';
+import type { ChallengeShare } from '@abnehm/game-rules/challenges';
 import { gameCatalog } from '@abnehm/game-rules/content';
 
 import { Button, Card, Notice, Skeleton, space, Text } from '../design';
@@ -10,7 +11,7 @@ import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 import { useChallengeShares, useChallengeStage, useGameService } from './app-game-service';
-import type { ChallengeStage, OwnChallengeShare } from './challenges';
+import { openChallengeIdOf, type ChallengeStage } from './challenges';
 import type { GameService } from './game-service';
 import { challengeTexts } from './texts';
 
@@ -32,17 +33,16 @@ export function ChallengeProposeScreen({ target }: RouteScreenProps<'challenge.p
   );
 }
 
-function Content({ game, stage, shares }: { game: GameService | null; stage: ChallengeStage | null; shares: Readonly<Record<string, OwnChallengeShare>> | null }) {
+function Content({ game, stage, shares }: { game: GameService | null; stage: ChallengeStage | null; shares: Readonly<Record<string, ChallengeShare>> | null }) {
   if (game === null || stage === null || stage.type === 'ohne_person') return <Loading />;
   switch (stage.type) {
     case 'ohne_kopplung':
       return <Notice tone="neutral" text={challengeTexts.solo} />;
     case 'vorschlag':
-      return <Elsewhere text={challengeTexts.alreadyProposed} challengeId={stage.proposal.challengeId} />;
     case 'aktiv':
-      return <Elsewhere text={challengeTexts.alreadyActive} challengeId={stage.challengeId} />;
+      return <Elsewhere text={stage.type === 'aktiv' ? challengeTexts.alreadyActive : challengeTexts.alreadyProposed} challengeId={openChallengeIdOf(stage)!} />;
     case 'frei':
-      return shares === null ? <Loading /> : <Templates game={game} partner={stage.partnerDisplayName} shares={shares} />;
+      return shares === null ? <Loading /> : <Templates game={game} partner={stage.partnerDisplayName} shares={shares} unfitToday={stage.unfitToday} />;
   }
 }
 
@@ -72,7 +72,17 @@ function Elsewhere({ text, challengeId }: { text: string; challengeId: EntityId 
   );
 }
 
-function Templates({ game, partner, shares }: { game: GameService; partner: string; shares: Readonly<Record<string, OwnChallengeShare>> }) {
+function Templates({
+  game,
+  partner,
+  shares,
+  unfitToday,
+}: {
+  game: GameService;
+  partner: string;
+  shares: Readonly<Record<string, ChallengeShare>>;
+  unfitToday: readonly string[];
+}) {
   const { showMessage } = useMessageHost();
   // Ein zweiter Tipp, bevor das Modal geschlossen ist, schlägt nicht noch einmal vor.
   const sent = useRef(false);
@@ -84,10 +94,17 @@ function Templates({ game, partner, shares }: { game: GameService; partner: stri
   };
   return (
     <View style={styles.list}>
+      {gameCatalog.challengeTemplates
+        .filter((template) => unfitToday.includes(template.key))
+        .map((template) => (
+          <Notice key={template.key} tone="hint" text={challengeTexts.unfitRejected(template.name)} />
+        ))}
       <Text>{challengeTexts.intro(partner)}</Text>
       {gameCatalog.challengeTemplates.map((template) => {
         const share = shares[template.key] ?? { type: 'passt_nicht' };
-        const fits = share.type === 'passt';
+        // Hat der Server den Vorschlag heute abgelehnt, passt die Vorlage nicht zum Plan des Partners.
+        const rejected = unfitToday.includes(template.key);
+        const fits = share.type === 'passt' && !rejected;
         return (
           <Card key={template.key}>
             <View testID={`challenge-vorlage-${template.key}`} style={styles.card}>
@@ -98,6 +115,7 @@ function Templates({ game, partner, shares }: { game: GameService; partner: stri
               <Text variant="label" tone={fits ? 'ink' : 'inkMuted'}>
                 {challengeTexts.share(share, template.measure)}
               </Text>
+              {rejected && share.type === 'passt' ? <Text tone="inkMuted">{challengeTexts.unfit}</Text> : null}
               {fits ? (
                 <Button
                   variant="secondary"

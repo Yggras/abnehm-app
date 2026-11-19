@@ -190,7 +190,10 @@ describe('Wächter: höchstens ein offener Vorschlag und eine aktive Challenge j
     await push(backend, philipp.device, [proposeOp('gut_getrunken')]);
 
     expect(await rejectionOf(backend, philipp.device, proposeOp('aktive_woche'))).toBe('conflict');
-    expect(await rejectionOf(backend, anna.device, proposeOp('aktive_woche'))).toBe('conflict');
+    // Der Wächter nennt keinen Grund; „passt nicht“ unterscheidet sich davon.
+    const [result] = await push(backend, anna.device, [proposeOp('aktive_woche')]);
+    expect(result).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' } });
+    expect(result?.type === 'permanently_rejected' && result.error.context).toBeFalsy();
     expect(await intentsOf(backend)).toHaveLength(1);
   });
 
@@ -231,8 +234,9 @@ describe('„Passt gerade nicht zu euren Wochenplänen“', () => {
   it('eine Vorlage ohne geplanten Tag bei einer Person lässt sich nicht vorschlagen', async () => {
     const { backend, philipp, anna } = await challengeCouple({ annaPlan: threeSportDays });
 
-    // Anna hat nie „Ernährung erfasst“ geplant; Philipp kennt ihren Plan nicht, der Server lehnt ab.
-    expect(await rejectionOf(backend, philipp.device, proposeOp('ernaehrung_im_blick'))).toBe('conflict');
+    // Anna hat nie „Ernährung erfasst“ geplant; Philipp kennt ihren Plan nicht, der Server lehnt mit Grund ab.
+    const [result] = await push(backend, philipp.device, [proposeOp('ernaehrung_im_blick')]);
+    expect(result).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict', context: { grund: 'passt_nicht' } } });
     // Für Anna selbst ebenso.
     expect(await rejectionOf(backend, anna.device, proposeOp('ernaehrung_im_blick'))).toBe('conflict');
     expect(await backend.database.db.select().from(challenge)).toEqual([]);

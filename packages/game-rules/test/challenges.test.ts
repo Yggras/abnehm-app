@@ -10,7 +10,9 @@ import {
   challengeEndsAt,
   challengeProposalExpiresAt,
   challengeShare,
+  fullPlanRequired,
   plannedCount,
+  proposalOpen,
 } from '../src/challenges.ts';
 import { gameCatalog } from '../content/index.ts';
 
@@ -99,7 +101,7 @@ describe('challengeShare: Wahrheitstabellen', () => {
     [2, 2],
     [1, 1],
   ])('Ernährung im Blick bei %i geplanten Tagen: %i', (days, required) => {
-    expect(challengeShare(template('ernaehrung_im_blick'), weekWith(days))).toEqual({ type: 'passt', required });
+    expect(challengeShare(template('ernaehrung_im_blick'), weekWith(days))).toEqual({ type: 'passt', required, planned: days });
   });
 
   it('Ernährung im Blick ohne geplanten Tag passt nicht', () => {
@@ -112,7 +114,7 @@ describe('challengeShare: Wahrheitstabellen', () => {
     [1, 1],
   ])('Gut getrunken bei %i Tagen mit Wasserziel: %i', (days, required) => {
     const week = challengeDays(start).map((day, index) => planned(day, index < days ? withSport : ['im_kalorienbudget', 'gewogen', 'sporteinheit']));
-    expect(challengeShare(template('gut_getrunken'), week)).toEqual({ type: 'passt', required });
+    expect(challengeShare(template('gut_getrunken'), week)).toEqual({ type: 'passt', required, planned: days });
   });
 
   it('Gut getrunken ohne Wasserziel passt nicht', () => {
@@ -130,7 +132,7 @@ describe('challengeShare: Wahrheitstabellen', () => {
     [2, 2],
     [1, 1],
   ])('Aktive Woche bei %i geplanten Sporteinheiten: %i', (days, required) => {
-    expect(challengeShare(template('aktive_woche'), weekWith(days))).toEqual({ type: 'passt', required });
+    expect(challengeShare(template('aktive_woche'), weekWith(days))).toEqual({ type: 'passt', required, planned: days });
   });
 
   it('Aktive Woche ohne Sporteinheit passt nicht', () => {
@@ -140,7 +142,7 @@ describe('challengeShare: Wahrheitstabellen', () => {
   // Gemeinsam dranbleiben: 17 erfüllte Tagesziele, sobald ein Tag geplant ist.
   it.each([7, 3, 1])('Gemeinsam dranbleiben bei %i geplanten Tagen: 17', (days) => {
     const week = challengeDays(start).map((day, index) => (index < days ? planned(day, withoutSport) : empty(day)));
-    expect(challengeShare(template('gemeinsam_dranbleiben'), week)).toEqual({ type: 'passt', required: 17 });
+    expect(challengeShare(template('gemeinsam_dranbleiben'), week)).toEqual({ type: 'passt', required: 17, planned: days });
   });
 
   it('ohne gültigen Plan passt keine Vorlage', () => {
@@ -151,7 +153,7 @@ describe('challengeShare: Wahrheitstabellen', () => {
   it('leere Tage zählen nicht als geplant', () => {
     const week = challengeDays(start).map((day, index) => (index < 2 ? planned(day, withSport) : empty(day)));
     expect(plannedCount(template('aktive_woche'), week)).toBe(2);
-    expect(challengeShare(template('aktive_woche'), week)).toEqual({ type: 'passt', required: 2 });
+    expect(challengeShare(template('aktive_woche'), week)).toEqual({ type: 'passt', required: 2, planned: 2 });
   });
 
   it('verlangt genau die sieben Tage ab dem Starttag in Reihenfolge', () => {
@@ -161,7 +163,24 @@ describe('challengeShare: Wahrheitstabellen', () => {
   });
 });
 
+describe('Anteil bei vollem Plan', () => {
+  it.each([
+    ['gemeinsam_dranbleiben', 17],
+    ['ernaehrung_im_blick', 6],
+    ['gut_getrunken', 6],
+    ['aktive_woche', 6],
+  ])('%s: %i', (key, required) => {
+    expect(fullPlanRequired(template(key))).toBe(required);
+  });
+});
+
 describe('Fristen', () => {
+  it('ein Vorschlag ist bis zu seiner Frist offen, ab ihr nicht mehr', () => {
+    const expiresAt = Instant.parse('2026-10-16T07:00:00.000Z');
+    expect(proposalOpen(expiresAt, Instant.parse('2026-10-16T06:59:59.999Z'))).toBe(true);
+    expect(proposalOpen(expiresAt, expiresAt)).toBe(false);
+  });
+
   it('ein Vorschlag verfällt 48 Stunden nach dem Vorschlagen', () => {
     expect(challengeProposalExpiresAt(Instant.parse('2026-10-14T07:00:00.000Z'))).toBe('2026-10-16T07:00:00.000Z');
   });

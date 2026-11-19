@@ -77,7 +77,10 @@ export const encouragementMessages: Readonly<Record<EncouragementKey, string>> =
 };
 
 /**
- * Der gemeinsame Katalog; Schlüssel ist der `messageKey` des Intents, Werte sind seine Payload. Die
+ * Der gemeinsame Katalog; Schlüssel ist der `messageKey` des Intents, Werte sind seine Payload. Der
+ * Push-Zusteller ergänzt zu jedem Katalogschlüssel `‹x›Key` der Payload dessen Namen als `‹x›Name`
+ * (`withCatalogNames` im Spielkatalog). Ein Eintrag, der einen solchen Namen zeigt, nimmt ihn in sein
+ * Werteschema auf (wie `challenge_vorschlag`); strikte Schemas ohne ihn weisen die Werte sonst ab. Die
  * Spieltexte sind Designwerte aus Spezifikation 4, Abschnitt 12 (nicht belegt), die Anfeuern-Texte stehen
  * in Spezifikation 5, Abschnitt 4. Weitere Einträge kommen mit den Tickets der Spezifikationen 4 und 5 hinzu.
  */

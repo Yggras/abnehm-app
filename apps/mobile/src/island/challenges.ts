@@ -1,7 +1,9 @@
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 
-import { EntityId, type Instant, type LocalDate } from '@abnehm/contracts/base';
+import { readingOf, type ClockReading } from '@abnehm/clock';
+import { EntityId, Instant, type LocalDate } from '@abnehm/contracts/base';
 import {
+  challengeUnfitContext,
   DecideChallengeProposal,
   decideChallengeProposalKey,
   ProposeChallenge,
@@ -12,11 +14,14 @@ import {
 } from '@abnehm/contracts/island';
 import { ChallengeRecord, ChallengeRequirementRecord } from '@abnehm/contracts/island-records';
 import type { PlanReader } from '@abnehm/contracts/ports';
+import type { WirContribution } from '@abnehm/contracts/wir';
 import { indexCatalog, type ChallengeTemplate } from '@abnehm/game-rules/catalog';
-import { challengeDays, challengeShare, plannedCount } from '@abnehm/game-rules/challenges';
+import { challengeDays, challengeShare, fullPlanRequired, proposalOpen, type ChallengeShare } from '@abnehm/game-rules/challenges';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { z } from 'zod';
 
 import type { ReadContext, TransactionContext } from '../local-db';
+import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 import { readOwnPerson } from '../local-db/person-header';
 import { challenge, challengeRequirement, couplingMember } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
@@ -26,12 +31,15 @@ import { pendingCommandPayloads } from '../sync/outbox';
 // Gemeinsame Challenges in der App: Vorschlag, Annahme und Verfall (Spezifikation 4, Abschnitte 10 und 11;
 // #210). Über den Lebenszyklus entscheidet nur der Server. Die Befehle sind offline nur vorgemerkt: Sie
 // ändern lokal keine Fachzeile und stehen nur in der Outbox. Das Lesemodell liest sie dort mit, wie die
-// Rollenwahl (#180). Lehnt der Server einen Befehl dauerhaft ab, etwa einen Vorschlag, der nicht zum
-// Wochenplan des Partners passt, verschwindet er mit seiner Outbox-Operation.
+// Rollenwahl (#180). Lehnt der Server einen Befehl dauerhaft ab, verschwindet er mit seiner
+// Outbox-Operation.
 //
 // Ob eine Vorlage zum eigenen Wochenplan passt und welchen Anteil sie verlangt, rechnet die App mit den
 // Spielregeln über den `PlanReader` als Vorschau. Den Plan des Partners kennt sie nicht; ob die Vorlage zu
-// beiden Plänen passt, entscheidet der Server.
+// beiden Plänen passt, entscheidet der Server. Lehnt er einen eigenen Vorschlag mit dem Grund
+// `challengeUnfitContext` ab, merkt sich das Gerät die Vorlage für den Tag (Gerätezustand, ohne Sync), und
+// `challenge.propose` zeigt sie mit „Passt gerade nicht zu euren Wochenplänen“ (Nutzerentscheidung vom
+// 19.11.2026 im Review von #210).
 
 const catalog = indexCatalog(gameCatalog);
 
@@ -60,8 +68,12 @@ export type ChallengeStage =
   | Readonly<{ type: 'ohne_person' }>
   /** Ohne aktive Kopplung gibt es keine gemeinsame Challenge. */
   | Readonly<{ type: 'ohne_kopplung' }>
-  /** Kein offener Vorschlag, keine aktive Challenge: Jede Person kann vorschlagen. */
-  | Readonly<{ type: 'frei'; personId: EntityId; partnerDisplayName: string }>
+  /**
+   * Kein offener Vorschlag, keine aktive Challenge: Jede Person kann vorschlagen. `unfitToday` sind die
+   * Vorlagen, deren eigenen Vorschlag der Server heute abgelehnt hat, weil sie nicht zum Plan des Partners
+   * passen.
+   */
+  | Readonly<{ type: 'frei'; personId: EntityId; partnerDisplayName: string; unfitToday: readonly string[] }>
   | Readonly<{ type: 'vorschlag'; personId: EntityId; partnerDisplayName: string; proposal: ChallengeProposal }>
   | Readonly<{
       type: 'aktiv';
@@ -86,7 +98,7 @@ const pendingWithdrawals = (tx: ReadContext) =>
  * schreibt der Server mit dem nächsten Pull fest. Abgelehnt oder zurückgezogen ist ein Vorschlag sofort weg,
  * angenommen bleibt er bis zum Sync sichtbar.
  */
-export function readChallengeStage(tx: ReadContext, now: Instant): ChallengeStage {
+export function readChallengeStage(tx: ReadContext, reading: ClockReading): ChallengeStage {
   const own = readOwnPerson(tx);
   if (own === undefined) return { type: 'ohne_person' };
   const personId = EntityId.parse(own.id);
@@ -112,7 +124,7 @@ export function readChallengeStage(tx: ReadContext, now: Instant): ChallengeStag
     .orderBy(asc(challenge.proposedAt))
     .all()
     .map(challengeOf)
-    .filter(({ record }) => record.status === 'aktiv' || record.proposalExpiresAt > now);
+    .filter(({ record }) => record.status === 'aktiv' || proposalOpen(record.proposalExpiresAt, reading.instant));
   const active = open.find(({ record }) => record.status === 'aktiv');
   if (active !== undefined) {
     const { record } = active;
@@ -157,7 +169,7 @@ export function readChallengeStage(tx: ReadContext, now: Instant): ChallengeStag
   // Ein bestätigter offener Vorschlag geht einem vorgemerkten vor: Gleichzeitig vorgemerkte Vorschläge lehnt
   // der Server ab, sobald einer offen ist.
   const pending = pendingProposals(tx).filter((proposal) => !gone.has(proposal.challengeId)).at(-1);
-  if (pending === undefined) return { type: 'frei', ...base };
+  if (pending === undefined) return { type: 'frei', ...base, unfitToday: unfitToday(tx, reading) };
   return {
     type: 'vorschlag',
     ...base,
@@ -170,18 +182,72 @@ function challengeOf(row: typeof challenge.$inferSelect) {
   return { id: EntityId.parse(id), record: ChallengeRecord.parse(data) };
 }
 
-/** Was eine Vorlage von der eigenen Person verlangt; `passt_nicht`, wenn sie an keinem Tag geplant ist. */
-export type OwnChallengeShare = Readonly<{ type: 'passt'; required: number; planned: number }> | Readonly<{ type: 'passt_nicht' }>;
-
 /**
  * Vorschau des eigenen Anteils: dieselbe Regel wie beim Start auf dem Server, mit den sieben lokalen Tagen
  * ab `today` aus dem eigenen Wochenplan. Festgeschrieben wird der Anteil erst mit der Annahme.
  */
-export async function ownChallengeShare(planReader: PlanReader, personId: EntityId, templateKey: string, today: LocalDate): Promise<OwnChallengeShare> {
-  const template = challengeTemplate(templateKey);
+export async function ownChallengeShare(planReader: PlanReader, personId: EntityId, templateKey: string, today: LocalDate): Promise<ChallengeShare> {
   const week = await Promise.all(challengeDays(today).map((day) => planReader.effectivePlan(personId, day)));
-  const share = challengeShare(template, week);
-  return share.type === 'passt_nicht' ? share : { ...share, planned: plannedCount(template, week) };
+  return challengeShare(challengeTemplate(templateKey), week);
+}
+
+/** Die Challenge, zu der „Zur Challenge“ führt: ein offener Vorschlag oder die laufende; sonst `null`. */
+export function openChallengeIdOf(stage: ChallengeStage | null): EntityId | null {
+  if (stage?.type === 'vorschlag') return stage.proposal.challengeId;
+  return stage?.type === 'aktiv' ? stage.challengeId : null;
+}
+
+const unfitKey = 'challenge_passt_nicht';
+/** Je Vorlage der Zeitpunkt, zu dem der Server den eigenen Vorschlag als unpassend abgelehnt hat. */
+const UnfitTemplates = z.record(z.string(), Instant);
+
+function unfitToday(tx: ReadContext, reading: ClockReading): string[] {
+  const stored = UnfitTemplates.safeParse(readDeviceState(tx, unfitKey));
+  if (!stored.success) return [];
+  return Object.entries(stored.data)
+    .filter(([, at]) => readingOf(at, reading.timeZone).localDate === reading.localDate)
+    .map(([templateKey]) => templateKey);
+}
+
+/** Merkt sich die Vorlage eines vom Server als unpassend abgelehnten eigenen Vorschlags. */
+function rememberUnfit(tx: TransactionContext, templateKey: string, at: Instant) {
+  const stored = UnfitTemplates.safeParse(readDeviceState(tx, unfitKey));
+  writeDeviceState(tx, unfitKey, { ...(stored.success ? stored.data : {}), [templateKey]: at }, at);
+}
+
+type ConfirmedProposal = ChallengeProposal & Readonly<{ proposedAt: Instant; expiresAt: Instant }>;
+
+/** Ein vom Server bestätigter Vorschlag, den die Person nicht schon selbst angenommen hat; sonst `null`. */
+export function confirmedOpenProposal(proposal: ChallengeProposal): ConfirmedProposal | null {
+  const { proposedAt, expiresAt } = proposal;
+  return proposedAt === null || expiresAt === null || proposal.accepted ? null : { ...proposal, proposedAt, expiresAt };
+}
+
+/**
+ * Beitrag `challenge` an „Wir“ für einen vom Server bestätigten Vorschlag: beim Partner ein
+ * antwortbedürftiger Vorgang, bei der vorschlagenden Person neutral „Vorschlag gesendet“
+ * (`proposedBySelf`). Stand und Bedarf sind die eigenen; vor dem Start ist der Stand 0 und der Bedarf die
+ * Vorschau aus dem eigenen Wochenplan, die gemeinsame Stufe `gestartet` und das Enddatum der Verfall des
+ * Vorschlags. Passt die Vorlage gerade nicht zum eigenen Plan, steht als Bedarf der Anteil bei vollem Plan
+ * als Richtwert; `challenge.detail` nennt dann den Grund und bietet nur „Ablehnen“ (Nutzerentscheidung vom
+ * 19.11.2026 im Review von #210).
+ */
+export function challengeContributionOf(proposal: ConfirmedProposal, share: ChallengeShare): WirContribution {
+  const { challengeId, templateKey, proposedAt, expiresAt, by } = proposal;
+  return {
+    type: 'challenge',
+    id: challengeId,
+    dataAsOf: proposedAt,
+    action: { actionId: by === 'partner' ? 'wir.answer_challenge' : 'wir.open_challenge', target: { type: 'challenge.detail', challengeId } },
+    challengeId,
+    templateKey,
+    status: 'vorgeschlagen',
+    proposedBySelf: by === 'self',
+    ownCount: 0,
+    ownRequired: share.type === 'passt' ? share.required : fullPlanRequired(challengeTemplate(templateKey)),
+    stage: 'gestartet',
+    endsAt: expiresAt,
+  };
 }
 
 /** Ergebnis eines Challenge-Befehls; `nicht_moeglich`, wenn der lokale Stand ihn nicht zulässt. */
@@ -195,8 +261,8 @@ export type ChallengeOutcome = 'vorgemerkt' | 'nicht_moeglich';
 export function challengeCommands({ writer, newId }: Readonly<{ writer: SyncWriter; newId: () => EntityId }>) {
   const command = (tx: TransactionContext, type: LocalCommand['type'], businessKey: string, payload: Record<string, unknown>) =>
     writer.command(tx, { type, businessKey, payload, knownServerVersion: null, affectedRefs: [], referencePaths: [] });
-  const decide = (tx: TransactionContext, now: Instant, challengeId: EntityId, decision: ChallengeProposalDecision): ChallengeOutcome => {
-    const stage = readChallengeStage(tx, now);
+  const decide = (tx: TransactionContext, reading: ClockReading, challengeId: EntityId, decision: ChallengeProposalDecision): ChallengeOutcome => {
+    const stage = readChallengeStage(tx, reading);
     if (stage.type !== 'vorschlag' || stage.proposal.by !== 'partner' || stage.proposal.challengeId !== challengeId || stage.proposal.accepted) {
       return 'nicht_moeglich';
     }
@@ -204,16 +270,16 @@ export function challengeCommands({ writer, newId }: Readonly<{ writer: SyncWrit
     return 'vorgemerkt';
   };
   return {
-    propose(tx: TransactionContext, now: Instant, templateKey: string): ChallengeOutcome {
-      if (readChallengeStage(tx, now).type !== 'frei' || catalog.find('challenge_vorlage', templateKey).type !== 'found') return 'nicht_moeglich';
+    propose(tx: TransactionContext, reading: ClockReading, templateKey: string): ChallengeOutcome {
+      if (readChallengeStage(tx, reading).type !== 'frei' || catalog.find('challenge_vorlage', templateKey).type !== 'found') return 'nicht_moeglich';
       const challengeId = newId();
       command(tx, 'proposeChallenge', proposeChallengeKey(challengeId), ProposeChallenge.parse({ challengeId, templateKey }));
       return 'vorgemerkt';
     },
-    accept: (tx: TransactionContext, now: Instant, challengeId: EntityId) => decide(tx, now, challengeId, 'annehmen'),
-    decline: (tx: TransactionContext, now: Instant, challengeId: EntityId) => decide(tx, now, challengeId, 'ablehnen'),
-    withdraw(tx: TransactionContext, now: Instant, challengeId: EntityId): ChallengeOutcome {
-      const stage = readChallengeStage(tx, now);
+    accept: (tx: TransactionContext, reading: ClockReading, challengeId: EntityId) => decide(tx, reading, challengeId, 'annehmen'),
+    decline: (tx: TransactionContext, reading: ClockReading, challengeId: EntityId) => decide(tx, reading, challengeId, 'ablehnen'),
+    withdraw(tx: TransactionContext, reading: ClockReading, challengeId: EntityId): ChallengeOutcome {
+      const stage = readChallengeStage(tx, reading);
       const proposal = stage.type === 'vorschlag' ? stage.proposal : null;
       if (proposal?.by !== 'self' || proposal.challengeId !== challengeId || proposal.proposedAt === null) return 'nicht_moeglich';
       command(tx, 'withdrawChallengeProposal', withdrawChallengeProposalKey(challengeId), WithdrawChallengeProposal.parse({ challengeId }));
@@ -224,9 +290,21 @@ export function challengeCommands({ writer, newId }: Readonly<{ writer: SyncWrit
 
 const onlyQueued = { referencePaths: [], apply: () => [], reconcileRejected: () => {} } as const;
 
-/** Lokale Fachbefehle für die Sync-Engine: nur vorgemerkt, ohne lokale Fachzeile und ohne Bereinigung. */
+/**
+ * Lokale Fachbefehle für die Sync-Engine: nur vorgemerkt, ohne lokale Fachzeile und ohne Bereinigung. Lehnt
+ * der Server einen eigenen Vorschlag ab, weil die Vorlage nicht zu beiden Wochenplänen passt, merkt sich das
+ * Gerät die Vorlage für den Tag.
+ */
 export const challengeLocalCommands: readonly LocalCommand[] = [
-  { type: 'proposeChallenge', payload: ProposeChallenge, ...onlyQueued },
+  {
+    type: 'proposeChallenge',
+    payload: ProposeChallenge,
+    ...onlyQueued,
+    reconcileRejected(tx, operation, { error }) {
+      if (error.context?.grund !== challengeUnfitContext.grund) return;
+      rememberUnfit(tx, ProposeChallenge.parse(operation.payload).templateKey, operation.createdAt);
+    },
+  },
   { type: 'decideChallengeProposal', payload: DecideChallengeProposal, ...onlyQueued },
   { type: 'withdrawChallengeProposal', payload: WithdrawChallengeProposal, ...onlyQueued },
 ];

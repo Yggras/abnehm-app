@@ -1,9 +1,10 @@
 import type { Clock } from '@abnehm/clock';
-import { EntityId, type Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole, PlacementTarget } from '@abnehm/contracts/island';
 import type { PlanReader } from '@abnehm/contracts/ports';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
+import type { ChallengeShare } from '@abnehm/game-rules/challenges';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { reactionMood, type MomoEvent } from '@abnehm/game-rules/mood';
 
@@ -16,7 +17,15 @@ import { messageStandingTime } from '../shell/message-timing';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
-import { challengeCommands, ownChallengeShare, readChallengeStage, type ChallengeOutcome, type ChallengeProposal, type ChallengeStage, type OwnChallengeShare } from './challenges';
+import {
+  challengeCommands,
+  challengeContributionOf,
+  confirmedOpenProposal,
+  ownChallengeShare,
+  readChallengeStage,
+  type ChallengeOutcome,
+  type ChallengeStage,
+} from './challenges';
 import { takeGrowthIntro } from './growth-intro';
 import { claimEventReward, markEventsSeen, type ClaimOutcome } from './island-events';
 import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
@@ -89,7 +98,7 @@ export type GameService = Readonly<{
    */
   observeChallenges(listener: (stage: ChallengeStage) => void): () => void;
   /** Vorschau des eigenen Anteils je Challenge-Vorlage aus dem eigenen Wochenplan ab heute. */
-  challengeShares(): Promise<Readonly<Record<string, OwnChallengeShare>>>;
+  challengeShares(): Promise<Readonly<Record<string, ChallengeShare>>>;
   /** Schlägt dem Partner eine Challenge-Vorlage vor; offline nur vorgemerkt. */
   proposeChallenge(templateKey: string): ChallengeOutcome;
   /** Nimmt den offenen Challenge-Vorschlag des Partners an; die Challenge startet mit dem nächsten Sync. */
@@ -119,10 +128,9 @@ const reactionMsOf = (events: readonly MomoEvent[]) => (events.includes('levelau
 export function createGameService({ database, writer, clock, newId, haptics, refresh, planReader }: GameServiceDependencies): GameService {
   const commands = roleChoiceCommands({ writer, newId, timeZone: () => TimeZone.parse(clock.read().timeZone) });
   const challenges = challengeCommands({ writer, newId });
-  const now = () => clock.read().instant;
 
   /** Eigener Anteil je Vorlage aus den sieben lokalen Tagen ab heute. */
-  async function challengeShares(): Promise<Record<string, OwnChallengeShare>> {
+  async function challengeShares(): Promise<Record<string, ChallengeShare>> {
     const own = database.read((tx) => readOwnPerson(tx));
     if (own === undefined) return {};
     const today = LocalDate.parse(clock.read().localDate);
@@ -141,7 +149,7 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     let stopped = false;
     const emit = distinct(listener);
     const stop = database.observe(
-      (tx) => ({ island: readIslandStage(tx), challenge: readChallengeStage(tx, now()) }),
+      (tx) => ({ island: readIslandStage(tx), challenge: readChallengeStage(tx, clock.read()) }),
       ({ island, challenge }) => {
         const run = ++latest;
         const islandState = wirContributionsOf(island);
@@ -152,8 +160,7 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
         }
         void ownChallengeShare(planReader, challenge.personId, proposal.templateKey, LocalDate.parse(clock.read().localDate)).then((share) => {
           if (stopped || run !== latest) return;
-          const contribution = challengeContributionOf(proposal, share);
-          emit(contribution === null ? islandState : { type: 'ready', data: [contribution, ...islandState.data] });
+          emit({ type: 'ready', data: [challengeContributionOf(proposal, share), ...islandState.data] });
         });
       },
     );
@@ -208,49 +215,14 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     place: (islandObjectId, target) => database.transaction((tx) => placeObject(tx, { writer, newId, clock }, { islandObjectId, target })),
     markEventsSeen: (stateIds) => void database.transaction((tx) => markEventsSeen(tx, { writer, clock }, stateIds)),
     claimEventReward: (stateId) => database.transaction((tx) => claimEventReward(tx, { writer, clock }, stateId)),
-    observeChallenges: (listener) => database.observe((tx) => readChallengeStage(tx, now()), distinct(listener)),
+    observeChallenges: (listener) => database.observe((tx) => readChallengeStage(tx, clock.read()), distinct(listener)),
     challengeShares,
-    proposeChallenge: (templateKey) => database.transaction((tx) => challenges.propose(tx, now(), templateKey)),
-    acceptChallenge: (challengeId) => database.transaction((tx) => challenges.accept(tx, now(), challengeId)),
-    declineChallenge: (challengeId) => database.transaction((tx) => challenges.decline(tx, now(), challengeId)),
-    withdrawChallenge: (challengeId) => database.transaction((tx) => challenges.withdraw(tx, now(), challengeId)),
+    proposeChallenge: (templateKey) => database.transaction((tx) => challenges.propose(tx, clock.read(), templateKey)),
+    acceptChallenge: (challengeId) => database.transaction((tx) => challenges.accept(tx, clock.read(), challengeId)),
+    declineChallenge: (challengeId) => database.transaction((tx) => challenges.decline(tx, clock.read(), challengeId)),
+    withdrawChallenge: (challengeId) => database.transaction((tx) => challenges.withdraw(tx, clock.read(), challengeId)),
     momoCharacter: { subscribe: (listener) => mood.observe(database, 'heute', (stage) => listener(momoCharacterOf(stage))) },
     wirContributions: { subscribe: observeWir },
-  };
-}
-
-type ConfirmedProposal = ChallengeProposal & Readonly<{ proposedAt: Instant; expiresAt: Instant }>;
-
-/** Ein vom Server bestätigter Vorschlag, den die Person nicht schon selbst angenommen hat; sonst `null`. */
-function confirmedOpenProposal(proposal: ChallengeProposal): ConfirmedProposal | null {
-  const { proposedAt, expiresAt } = proposal;
-  return proposedAt === null || expiresAt === null || proposal.accepted ? null : { ...proposal, proposedAt, expiresAt };
-}
-
-/**
- * Beitrag `challenge` an „Wir“ für einen vom Server bestätigten Vorschlag (#210): beim Partner ein
- * antwortbedürftiger Vorgang, bei der vorschlagenden Person neutral „Vorschlag gesendet“
- * (`proposedBySelf`). Stand und Bedarf sind die eigenen; vor dem Start ist der Stand 0 und der Bedarf die
- * Vorschau aus dem eigenen Wochenplan, die gemeinsame Stufe `gestartet` und das Enddatum der Verfall des
- * Vorschlags. Passt die Vorlage inzwischen nicht mehr zum eigenen Plan, entfällt der Beitrag: Annehmen
- * ginge dann nicht, und der Vorschlag verfällt neutral.
- */
-export function challengeContributionOf(proposal: ConfirmedProposal, share: OwnChallengeShare): WirContribution | null {
-  if (share.type === 'passt_nicht') return null;
-  const { challengeId, templateKey, proposedAt, expiresAt, by } = proposal;
-  return {
-    type: 'challenge',
-    id: challengeId,
-    dataAsOf: proposedAt,
-    action: { actionId: by === 'partner' ? 'wir.answer_challenge' : 'wir.open_challenge', target: { type: 'challenge.detail', challengeId } },
-    challengeId,
-    templateKey,
-    status: 'vorgeschlagen',
-    proposedBySelf: by === 'self',
-    ownCount: 0,
-    ownRequired: share.required,
-    stage: 'gestartet',
-    endsAt: expiresAt,
   };
 }
 

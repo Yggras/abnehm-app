@@ -26,6 +26,11 @@ export function challengeProposalExpiresAt(proposedAt: Instant): Instant {
   return after(proposedAt, challengeProposalLifetimeMs);
 }
 
+/** Ob ein Vorschlag zum Zeitpunkt `now` noch offen sein kann: bis zu seiner Frist, ausschließlich. */
+export function proposalOpen(expiresAt: Instant, now: Instant): boolean {
+  return Date.parse(now) < Date.parse(expiresAt);
+}
+
 /** Ende einer Challenge: Start (Annahme beim Server) plus 7 × 24 Stunden, unabhängig von Zeitumstellungen. */
 export function challengeEndsAt(startedAt: Instant): Instant {
   return after(startedAt, challengeDurationMs);
@@ -36,8 +41,11 @@ export function challengeDays(startDate: LocalDate): LocalDate[] {
   return Array.from({ length: challengeDayCount }, (_, index) => localDateAfter(startDate, index));
 }
 
-/** Festgeschriebener Anteil einer Person oder `passt_nicht`, wenn die Vorlage für sie an keinem Tag geplant ist. */
-export type ChallengeShare = Readonly<{ type: 'passt'; required: number }> | Readonly<{ type: 'passt_nicht' }>;
+/**
+ * Festgeschriebener Anteil einer Person samt der geplanten Tage, auf denen er beruht, oder `passt_nicht`,
+ * wenn die Vorlage für sie an keinem Tag geplant ist.
+ */
+export type ChallengeShare = Readonly<{ type: 'passt'; required: number; planned: number }> | Readonly<{ type: 'passt_nicht' }>;
 
 /** Geplante Tage der Vorlage in der Woche: Tage mit gültigem Plan bzw. mit dem gezählten Baustein. */
 export function plannedCount(template: ChallengeTemplate, week: readonly EffectivePlan[]): number {
@@ -60,10 +68,21 @@ export function plannedCount(template: ChallengeTemplate, week: readonly Effecti
 export function challengeShare(template: ChallengeTemplate, week: readonly EffectivePlan[]): ChallengeShare {
   const planned = plannedCount(template, week);
   if (planned === 0) return { type: 'passt_nicht' };
-  const { measure } = template;
-  if (measure.type === 'tagesziele') return { type: 'passt', required: measure.required };
+  return { type: 'passt', required: requiredFor(template, planned), planned };
+}
+
+/**
+ * Anteil bei vollem Plan, also an allen sieben Tagen geplant: 17 Tagesziele bzw. 6 für „Ernährung im Blick“,
+ * „Gut getrunken“ und „Aktive Woche“. Ein Richtwert, wo der eigene Plan die Vorlage gerade nicht trägt.
+ */
+export function fullPlanRequired(template: ChallengeTemplate): number {
+  return requiredFor(template, challengeDayCount);
+}
+
+function requiredFor({ measure }: ChallengeTemplate, planned: number): number {
+  if (measure.type === 'tagesziele') return measure.required;
   // Ganzzahlig gerechnet, damit kein Rundungsfehler das Aufrunden verschiebt.
-  return { type: 'passt', required: Math.ceil((measure.numerator * planned) / measure.denominator) };
+  return Math.ceil((measure.numerator * planned) / measure.denominator);
 }
 
 function assertWeek(week: readonly EffectivePlan[]) {

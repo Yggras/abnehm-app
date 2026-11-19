@@ -3,7 +3,7 @@ import { openTarget, setTargetParams, type RouteScreenProps } from '../navigatio
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
 import { useChallengeStage, useGameService, useIslandStage } from './app-game-service';
-import type { ChallengeStage } from './challenges';
+import { openChallengeIdOf, type ChallengeStage } from './challenges';
 import { HatchedIslandScreen } from './HatchedIslandScreen';
 import { LaichkugelScreen } from './LaichkugelScreen';
 import { RoleChoiceScreen } from './RoleChoiceScreen';
@@ -61,16 +61,11 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
  * Challenge „Challenge vorschlagen“, sonst „Zur Challenge“.
  */
 function challengeEntryOf(stage: ChallengeStage | null) {
-  switch (stage?.type) {
-    case 'frei':
-      return { label: challengeTexts.sheetPropose, target: { type: 'challenge.propose' } } as const;
-    case 'vorschlag':
-      return { label: challengeTexts.sheetOpen, target: { type: 'challenge.detail', challengeId: stage.proposal.challengeId } } as const;
-    case 'aktiv':
-      return { label: challengeTexts.sheetOpen, target: { type: 'challenge.detail', challengeId: stage.challengeId } } as const;
-    default:
-      return null;
-  }
+  if (stage === null || stage.type === 'ohne_person' || stage.type === 'ohne_kopplung') return null;
+  const challengeId = openChallengeIdOf(stage);
+  return challengeId === null
+    ? ({ label: challengeTexts.sheetPropose, target: { type: 'challenge.propose' } } as const)
+    : ({ label: challengeTexts.sheetOpen, target: { type: 'challenge.detail', challengeId } } as const);
 }
 
 /** Eine erledigte Ansicht verlässt die Route, damit derselbe Link sie erneut öffnen kann. */

@@ -300,7 +300,7 @@ describe('Challenges auf den geseedeten Geräten (#210)', () => {
     expect(philipp.game.proposeChallenge('ernaehrung_im_blick')).toBe('vorgemerkt');
     await philipp.sync();
     expect(philipp.outbox()).toBe(0);
-    expect(philipp.challenges()).toMatchObject({ type: 'frei' });
+    expect(philipp.challenges()).toMatchObject({ type: 'frei', unfitToday: ['ernaehrung_im_blick'] });
   });
 });
 
