@@ -1,5 +1,7 @@
-import type { EntityId } from '@abnehm/contracts/base';
+import { EntityId, Instant } from '@abnehm/contracts/base';
 import {
+  BudgetSuggestionRecord,
+  BudgetSuggestionUpsert,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   GoalVersionRecord,
@@ -12,7 +14,8 @@ import type { EntityData } from '@abnehm/contracts/sync';
 
 import { removeUnconfirmedDayCredits } from '../daily-goals';
 import type { ReadContext } from '../local-db';
-import { goalVersion } from '../local-db/schema';
+import { requireOwnPerson } from '../local-db/person-header';
+import { budgetSuggestion, goalVersion } from '../local-db/schema';
 import { sqliteEntity, type AffectedDay, type LocalCommand, type SyncEntityAdapter } from '../sync';
 import {
   applyWeeklyPlanRecord,
@@ -21,6 +24,7 @@ import {
   removeUnconfirmedWeeklyPlan,
   tombstoneWeeklyPlan,
 } from './plan-repository';
+import { readBudgetSuggestion, writeBudgetSuggestion } from './budget-suggestion-repository';
 import { removeUnconfirmedDailyGoals } from './daily-goal-repository';
 
 // Ziel- und Wochenplanversion im App-Sync (Spezifikation 0, Abschnitt 10; Spezifikation 1, Abschnitt
@@ -67,6 +71,28 @@ export const weeklyPlanVersionEntity: SyncEntityAdapter<EntityData, WeeklyPlanVe
     else tombstoneWeeklyPlan(tx, entityId, canonical.deletedAt, canonical.serverVersion);
   },
 };
+
+/**
+ * Budgetvorschlag (Spezifikation 1, Abschnitte 7 und 11): generisches Upsert innerhalb der eigenen
+ * Eigentumsgrenze, Last-Write-Wins, ohne Löschen. Anlegen (`offen`), `abgelehnt` und `ueberholt` reisen so;
+ * `angenommen` setzt nur der Fachbefehl `acceptBudgetSuggestion`. Einen Tag meldet er nicht: Der Hinweis
+ * auf „Heute“ liest den Vorschlag bei jedem Commit neu.
+ */
+export const budgetSuggestionEntity = sqliteEntity({
+  entityType: 'budget_suggestion',
+  ownerField: 'personId',
+  upsert: BudgetSuggestionUpsert,
+  deletable: false,
+  record: BudgetSuggestionRecord,
+  table: budgetSuggestion,
+  row: (entityId, data) => ({ ...data, id: entityId }),
+  // Eine offene Operation wirkt nach einer Ablehnung genau wie beim Prüfen oder Überholen.
+  replay(tx, entityId, change) {
+    if (change.type !== 'upsert_entity') return;
+    const owner = readBudgetSuggestion(tx, entityId)?.record.personId ?? EntityId.parse(requireOwnPerson(tx).id);
+    writeBudgetSuggestion(tx, entityId, owner, change.payload, Instant.parse(change.createdAt));
+  },
+});
 
 /**
  * Die Fachbefehle für die lokale Befehls-Registry. Erzeugen darf sie nur das Plan-Modul, zusammen mit

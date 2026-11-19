@@ -60,12 +60,13 @@ export const testCapabilities: readonly TestCapability[] = [
     // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138),
     // `solo-energie` und `rollenwahl-offen` (#180), `tage_ohne_app_oeffnung` und `zeitzonen_reisen`
     // (#131), `haelfte-voll` und `doppelausgabe` (#191), die Szenarien der Einstellungsseite „Ziele“ (#147) sowie
-    // `feldkonflikt` (#194), `ereignisse-voll` (#202), `einladung-nach-entkopplung` (#120) und `levelaufstieg-ausstehend` (#200) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
+    // `feldkonflikt` (#194), `ereignisse-voll` (#202), `einladung-nach-entkopplung` (#120), `levelaufstieg-ausstehend` (#200) sowie
+    // `budgetvorschlag-senken` und `budgetvorschlag-anheben` (#150) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
     // von `momo.character` zu Recht im Produktions-Bundle steht.
     markers: [
       '/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen', 'tage_ohne_app_oeffnung', 'zeitzonen_reisen',
       'haelfte-voll', 'doppelausgabe', 'solo-haltemodus-schwanger', 'solo-haltemodus-essstoerung', 'solo-haltemodus-untergewicht', 'solo-budget-angehoben', 'solo-ziele-ab-morgen',
-      'feldkonflikt', 'ereignisse-voll', 'einladung-nach-entkopplung', 'levelaufstieg-ausstehend',
+      'feldkonflikt', 'ereignisse-voll', 'einladung-nach-entkopplung', 'levelaufstieg-ausstehend', 'budgetvorschlag-senken', 'budgetvorschlag-anheben',
     ],
   },
   {

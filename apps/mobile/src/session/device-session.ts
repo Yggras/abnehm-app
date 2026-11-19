@@ -34,12 +34,13 @@ import { createPushInstallationTransport } from '../notifications/push-installat
 import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
-import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { appGoalSettings, appPlan, budgetSuggestionEntity, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { appWirContributions } from '../shell/app-wir';
+import { runOnForegroundEntry } from '../shell/foreground-entry';
 import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
@@ -62,7 +63,7 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
   weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity, encouragementEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
@@ -237,6 +238,12 @@ function deviceState() {
           observeTicks: appTodayRefresh,
           onError,
         }),
+        // Budgetvorschlag prüfen: beim App-Start und bei jeder Rückkehr in den Vordergrund, höchstens einmal je
+        // lokalem Tag; Gewichtstrend und Tagesaufnahme über die Ports der Spezifikationen 2 und 3 (#150).
+        runOnForegroundEntry(
+          { initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground },
+          () => void plan.checkBudgetSuggestion({ weightTrendReader: ports.weightTrendReader, intakeReader: ports.intakeReader }).catch(onError),
+        ),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

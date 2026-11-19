@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { addDays, isoWeekdayIndex } from './calendar.ts';
+import { addDays, daysBetween, isoWeekdayIndex } from './calendar.ts';
 
 /**
  * Fach-ID als UUID, immer kleingeschrieben: RFC 9562 gibt UUIDs kleingeschrieben aus
@@ -97,6 +97,11 @@ export function weekdayOf(localDate: LocalDate): Weekday {
 /** Der lokale Tag `days` Tage nach `localDate`, bei negativem `days` davor; ohne Zeitzone und Zeitumstellung. */
 export function localDateAfter(localDate: LocalDate, days: number): LocalDate {
   return LocalDate.parse(addDays(localDate, days));
+}
+
+/** Tage von `from` bis `to`, negativ, wenn `to` früher liegt; ohne Zeitzone und Zeitumstellung. */
+export function localDaysBetween(from: LocalDate, to: LocalDate): number {
+  return daysBetween(from, to);
 }
 
 /**

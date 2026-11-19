@@ -5,6 +5,7 @@ import { EntityId, Instant, LocalDate, TimeZone } from '../src/base.ts';
 import { dailyGoalId, dailyGoalsKey } from '../src/daily-goals.ts';
 import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from '../src/goal-calculator.ts';
 import {
+  budgetSuggestionId,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   dailyGoalSnapshotsOf,
@@ -189,6 +190,13 @@ describe('IDs und fachliche Schlüssel', () => {
     expect(goalVersionId(philipp, day('2026-10-14'))).not.toBe(goalVersionId(philipp, day('2026-10-15')));
     expect(goalVersionId(philipp, day('2026-10-14'))).not.toBe(goalVersionId(anna, day('2026-10-14')));
     expect(weeklyPlanVersionId(philipp, day('2026-10-14'))).not.toBe(goalVersionId(philipp, day('2026-10-14')));
+  });
+
+  it('leiten die ID des Budgetvorschlags aus Person und Zeitraumende ab: zwei Geräte, derselbe Vorschlag', () => {
+    expect(budgetSuggestionId(philipp, day('2026-10-13'))).toBe(budgetSuggestionId(philipp, day('2026-10-13')));
+    expect(budgetSuggestionId(philipp, day('2026-10-13'))).not.toBe(budgetSuggestionId(philipp, day('2026-10-14')));
+    expect(budgetSuggestionId(philipp, day('2026-10-13'))).not.toBe(budgetSuggestionId(anna, day('2026-10-13')));
+    expect(budgetSuggestionId(philipp, day('2026-10-13'))).not.toBe(goalVersionId(philipp, day('2026-10-13')));
   });
 
   it('tragen je Änderung einen eigenen Schlüssel, aus dem Person und valid_from hervorgehen', () => {

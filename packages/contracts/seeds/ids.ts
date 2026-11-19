@@ -85,11 +85,13 @@ export const seedIds = {
   // 0021/4–6: Philipps weitere Messungen in den Gewichts-Varianten von `solo` (#176).
   // 0021/7–15: Philipps frühere Messungen der letzten 30 Tage in den Partner-Szenarien (#181), 0021/16: sein Waagenimport.
   // 0021/17–20: Annas frühere Messungen in den Partner-Szenarien (#181).
+  // 0021/21–30: Philipps Startgewicht und Messungen der letzten 21 Tage in den Budgetvorschlag-Szenarien (#150).
   weightEntry: {
     philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3), philippVerlauf: [id('0021', 4), id('0021', 5), id('0021', 6)],
     philippMonat: Array.from({ length: 9 }, (_, index) => id('0021', 7 + index)),
     philippWaage: id('0021', 16),
     annaVerlauf: [id('0021', 17), id('0021', 18), id('0021', 19), id('0021', 20)],
+    philippBudgetvorschlag: Array.from({ length: 10 }, (_, index) => id('0021', 21 + index)),
   },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
   // 0022/5–8: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).
@@ -114,6 +116,8 @@ export const seedIds = {
     philippRandzustand: { fruehstueck: id('0031', 8), mittag: id('0031', 9) },
     /** `solo`: Einträge am Vortag ohne Abendessen (#156). */
     philippVortag: [id('0031', 10), id('0031', 11), id('0031', 12)],
+    /** Budgetvorschlag-Szenarien (#150): je erfasstem Tag Frühstück und Abendessen, 0031/13–36. */
+    philippBudgetvorschlag: Array.from({ length: 24 }, (_, index) => id('0031', 13 + index)),
   },
   /**
    * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten` (#113)
@@ -147,6 +151,8 @@ export const seedIds = {
     /** Erfüllungen in den Randzuständen der Ernährung (#166). */
     ernaehrungErfuellt: [id('0090', 52)],
     kalorienbudgetInnerhalb: [id('0090', 53)],
+    /** Upsert des neuen Budgetvorschlags im Schritt `budgetvorschlag_pruefen` (#150). */
+    budgetvorschlag: { senken: id('0090', 57), anheben: id('0090', 58) },
   },
   mealPhoto: { philippHeute: id('0032', 1), annaHeute: id('0032', 2) },
   /** Philipps eigene Lebensmittel in `solo` und seinen Varianten (#157): ein eigenes mit Portion, eine BLS-Korrektur. */
