@@ -155,11 +155,6 @@ export function Particle({ at, phase, tone, progress }: { at: Point; phase: numb
 const momoOnIslandFrame = 40;
 
 /**
- * Momo auf der Insel: das Skia-Rig (`src/momo`) mit dem Bodenpunkt auf der Feldmitte, darunter der
- * Schlagschatten. Momo steht in der Zeichenliste zwischen den Objekten, ein Objekt weiter vorn verdeckt
- * ihn also (Szenenmodell, Zeichenreihenfolge Zeile + Spalte).
- */
-/**
  * Verwandlungsszene (#204): Die alte Form blendet aus, die neue ein, beide werden dabei kurz größer und wieder
  * kleiner, um Momos Bodenpunkt. Takt und Größe aus `transformationMotion`; mit „Bewegung reduzieren“ eine reine
  * Überblendung in `duration-fast`.
@@ -201,6 +196,11 @@ export function LiftingFog({ cells, tone, opacity, reduceMotion }: { cells: read
   return <Path path={path} color={color[tone]} opacity={fade} />;
 }
 
+/**
+ * Momo auf der Insel: das Skia-Rig (`src/momo`) mit dem Bodenpunkt auf der Feldmitte, darunter der
+ * Schlagschatten. Momo steht in der Zeichenliste zwischen den Objekten, ein Objekt weiter vorn verdeckt
+ * ihn also (Szenenmodell, Zeichenreihenfolge Zeile + Spalte).
+ */
 export function MomoOnIsland({ at, appearance, reduceMotion }: { at: Point; appearance: MomoAppearance; reduceMotion: boolean }) {
   const visual = useMemo(() => momoVisual(appearance, appearance.moodKey ?? 'zufrieden', gameCatalog), [appearance]);
   const k = momoOnIslandFrame / 100;

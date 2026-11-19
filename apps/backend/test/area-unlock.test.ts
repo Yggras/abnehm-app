@@ -115,6 +115,25 @@ describe('Gebietsfreischaltung im Befehl des Levelaufstiegs', { timeout: 60_000 
     expect(today.filter((event) => event.type === 'besuch')).toHaveLength(2);
   });
 
+  it('zieht ein Gebiet nach, das ein Katalog-Update für ein schon erreichtes Formlevel bringt', async () => {
+    const world = await builtWorld();
+    // Level 5 mit einem Katalog ohne Gebiete: Die Insel hat Formlevel 4 hinter sich, aber kein Gebiet.
+    const spent = levelThreshold(5);
+    await spendWithoutProjection(world, world.anna, { fieldKey: 'grundinsel:12:1', amount: spent });
+    await spendWithoutProjection(world, world.philipp, { fieldKey: 'grundinsel:0:1', amount: spent });
+    const at = new Date(world.clock.read().instant);
+    await db(world).transaction((tx) => progressChanges(tx, world.islandId, at, { ...catalog, areas: [] }));
+    expect(await db(world).select().from(areaUnlock).where(eq(areaUnlock.islandId, world.islandId))).toEqual([]);
+
+    // Der nächste Spielbefehl mit dem neuen Katalog schaltet Gebiet 1 frei, ohne neues Level.
+    const changes = await db(world).transaction((tx) => progressChanges(tx, world.islandId, at, catalog));
+
+    expect(changes.filter((change) => change.entityType === 'island_event' && change.type === 'record' && change.data.type === 'levelaufstieg')).toEqual([]);
+    expect((await areaOf(world, 't_gebiet_1')).unlock).toMatchObject({ areaKey: 't_gebiet_1', level: 4 });
+    expect((await areaOf(world, 't_gebiet_1')).event).toMatchObject({ type: 'entdeckung', status: 'erfuellbar' });
+    expect(await areaIntents(world)).toHaveLength(2);
+  });
+
   it('zwischen den Formlevels schaltet kein Gebiet frei', async () => {
     const world = await builtWorld();
     await reach(world, 3, 1);

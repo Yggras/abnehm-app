@@ -1,4 +1,4 @@
-import { baseIslandKey, fieldKey, fieldPlans, type FieldPlanEntry, type FieldSide, type GameCatalog } from './catalog.ts';
+import { baseIslandKey, fieldKey, fieldPlans, parseEndlessAreaKey, parseFieldKey, type FieldPlanEntry, type FieldSide, type GameCatalog } from './catalog.ts';
 import type { IslandFieldOwner } from './hatching.ts';
 import { unlocksAt, type UnlockedArea } from './unlocks.ts';
 
@@ -67,28 +67,29 @@ export function areaUnlockAt(catalog: GameCatalog, { level, sides }: Readonly<{ 
  */
 export const landscapeBand = { width: 16, height: 5 } as const;
 
-/** Ein Feld auf dem Inselraster: Lage, Feldart und bei eigenen Feldern die Seite. */
-export type PlacedField = FieldPlanEntry;
-
 /**
- * Lage eines Inselfelds auf dem Raster; `undefined`, wenn der Katalog es nicht kennt. Grundinsel und feste
- * Gebiete liegen auf dem gemeinsamen Raster. Die k-te Ausprägung eines endlosen Gebiets liegt im k-ten Band
- * oberhalb der obersten Zeile aller festen Felder. Die Lage hängt nur an k, nicht an der Reihenfolge der
- * Vorlagen, damit eine spätere Vorlage keine bestehende Ausprägung verschiebt (Festlegung in #204, nicht belegt).
+ * Lage der Inselfelder auf dem Raster, einmal je Katalog vorbereitet; liefert zu einem Feldschlüssel Lage, Feldart
+ * und bei eigenen Feldern die Seite, `undefined`, wenn der Katalog ihn nicht kennt. Grundinsel und feste Gebiete
+ * liegen auf dem gemeinsamen Raster. Die k-te Ausprägung eines endlosen Gebiets liegt im k-ten Band oberhalb der
+ * obersten Zeile aller festen Felder. Die Lage hängt nur an k, nicht an der Reihenfolge der Vorlagen, damit eine
+ * spätere Vorlage keine bestehende Ausprägung verschiebt (Festlegung in #204, nicht belegt).
  */
-export function placeField(catalog: GameCatalog, key: string): PlacedField | undefined {
-  const match = /^([a-z][a-z0-9_]*):(-?[0-9]+):(-?[0-9]+)$/.exec(key);
-  if (match === null) return undefined;
-  const [, area = '', x = '', y = ''] = match;
-  const at = { x: Number(x), y: Number(y) };
+export function fieldPlacement(catalog: GameCatalog): (key: string) => FieldPlanEntry | undefined {
   const plans = fieldPlans(catalog);
-  const fixed = plans.find((plan) => plan.onIslandGrid && plan.area === area);
-  if (fixed !== undefined) return fixed.fields.find((field) => field.x === at.x && field.y === at.y);
+  const fixed = new Map(plans.filter((plan) => plan.onIslandGrid).flatMap((plan) => plan.fields.map((field) => [fieldKey(plan.area, field), field] as const)));
+  const templates = new Map(plans.filter((plan) => !plan.onIslandGrid).map((plan) => [plan.area, plan.fields] as const));
+  const top = Math.min(...[...fixed.values()].map((field) => field.y));
+  return (key) => {
+    const found = fixed.get(key);
+    if (found !== undefined) return found;
+    const parsed = parseFieldKey(key);
+    const endless = parsed === undefined ? undefined : parseEndlessAreaKey(parsed.area);
+    const entry = endless && templates.get(endless.template)?.find((field) => field.x === parsed!.x && field.y === parsed!.y);
+    return entry === undefined ? undefined : { ...entry, y: top - endless!.k * landscapeBand.height + entry.y };
+  };
+}
 
-  const endless = /^endlos_([1-9][0-9]*)_(.+)$/.exec(area);
-  const template = endless === null ? undefined : plans.find((plan) => !plan.onIslandGrid && plan.area === endless[2]);
-  const entry = template?.fields.find((field) => field.x === at.x && field.y === at.y);
-  if (entry === undefined) return undefined;
-  const top = Math.min(...plans.filter((plan) => plan.onIslandGrid).flatMap((plan) => plan.fields.map((field) => field.y)));
-  return { ...entry, y: top - Number(endless![1]) * landscapeBand.height + entry.y };
+/** Lage eines einzelnen Inselfelds (`fieldPlacement`). */
+export function placeField(catalog: GameCatalog, key: string): FieldPlanEntry | undefined {
+  return fieldPlacement(catalog)(key);
 }

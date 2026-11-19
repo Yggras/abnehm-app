@@ -271,7 +271,7 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
       expect(islandOf(phone).events.open.filter((event) => event.kind === 'entdeckung')).toEqual([
         expect.objectContaining({ area: { key: 'schilfwiese', name: 'Schilfwiese' }, seen: false, claimable: true }),
       ]);
-      expect(phone.game.takeTransformation()).toEqual({ from: 'kaulquappe', to: 'huepfer', areas: ['schilfwiese'] });
+      expect(phone.game.takeTransformation()).toEqual({ from: 'kaulquappe', areas: ['schilfwiese'] });
       expect(phone.game.takeTransformation()).toBeNull();
     }
   });

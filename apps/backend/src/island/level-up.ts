@@ -12,7 +12,6 @@ import type { DbExecutor } from '../database.ts';
 import { blueprintUnlock, couplingMember, islandEvent } from '../db/schema/index.ts';
 import { canonicalAfterWrite } from '../sync/sync.ts';
 import { insertNotificationIntent } from '../sync/notification-intents.ts';
-import { areaUnlockChanges } from './area-unlock.ts';
 import { blueprintUnlockEntity, islandEventEntity } from './island-entities.ts';
 
 // Levelaufstieg im selben Befehl (Spezifikation 4, Abschnitt 2.2; Spezifikation 0, Abschnitt 4; #200).
@@ -22,9 +21,9 @@ import { blueprintUnlockEntity, islandEventEntity } from './island-entities.ts';
 // Mitglied mit dem höchsten neuen Level.
 //
 // Idempotent über den Anlassschlüssel: Ein Level, dessen Ereignis schon besteht, gilt als gefeiert. Erreicht
-// die Insel es nach einer Gegenbuchung erneut, entsteht nichts Neues, auch kein Push. An den Formlevels und ab
-// Level 49 alle 6 Level kommen Gebiet und Entdeckung dazu (`area-unlock.ts`, #204); die Form selbst folgt aus
-// dem Level und wird nicht gespeichert.
+// die Insel es nach einer Gegenbuchung erneut, entsteht nichts Neues, auch kein Push. Gebiete und Entdeckung an den
+// Formlevels und ab Level 49 schreibt `area-unlock.ts` (#204) im selben Befehl (`progress-change.ts`); die Form
+// selbst folgt aus dem Level und wird nicht gespeichert.
 
 export type LevelUp = Readonly<{
   islandId: EntityId;
@@ -65,7 +64,6 @@ export async function levelUpChanges(tx: DbExecutor, { islandId, couplingId, fro
     });
     changes.push(await canonicalAfterWrite(tx, islandEventEntity, id));
   }
-  changes.push(...(await areaUnlockChanges(tx, { islandId, couplingId, levels, at, catalog })));
 
   // Nur ein Push je Empfänger, auch über mehrere Level: der des höchsten (Spezifikation 0, Abschnitt 4).
   const level = levels.at(-1)!;

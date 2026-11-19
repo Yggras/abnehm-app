@@ -523,10 +523,19 @@ function levelEvent(level: number): SeedEntity {
  * Felder beider Personen (Seite a Philipp mit Bauen, Seite b Anna), die Entdeckungs-Baupläne, die Entdeckung und
  * je Person ein Ereignisstand, in derselben Reihenfolge wie auf dem Server.
  */
-function areaEntities(level: number): SeedEntity[] {
-  const islandId = EntityId.parse(seedIds.island.philippAnna);
+/** Philipp und Anna nach Person geordnet, wie der Server Ereignisstände und Intents schreibt. */
+const membersInOrder = [philipp, anna].sort();
+
+/** Gebiet des Formlevels mit Seite a für Philipp (Bauen) und Seite b für Anna (Natur). */
+function areaAt(level: number) {
   const unlock = areaUnlockAt(gameCatalog, { level, sides: { a: philipp, b: anna } });
   if (unlock === null) throw new Error(`Seed: kein Gebiet bei Level ${level}`);
+  return unlock;
+}
+
+function areaEntities(level: number): SeedEntity[] {
+  const islandId = EntityId.parse(seedIds.island.philippAnna);
+  const unlock = areaAt(level);
   const owned = { island_id: islandId, coupling_id: couplingId };
   const entity = (table: string, row: SeedEntity['row']): SeedEntity => ({ table, entityType: table, couplingId, row });
   const occasionKey = areaOccasionKey(islandId, unlock.area.key);
@@ -554,7 +563,7 @@ function areaEntities(level: number): SeedEntity[] {
       updated_at: now,
       deleted_at: null,
     }),
-    ...[philipp, anna].sort().map(
+    ...membersInOrder.map(
       (personId): SeedEntity => ({
         table: 'island_event_state',
         entityType: 'island_event_state',
@@ -577,7 +586,7 @@ function areaEntities(level: number): SeedEntity[] {
 /** Der offene `gebiet`-Intent an eine Person; Quelle ist die Entdeckung (#204). */
 function areaIntent(level: number, recipientPersonId: string): SeedRow {
   const islandId = EntityId.parse(seedIds.island.philippAnna);
-  const { area } = areaUnlockAt(gameCatalog, { level, sides: { a: philipp, b: anna } })!;
+  const { area } = areaAt(level);
   const sourceEventId = islandEventId(islandId, areaOccasionKey(islandId, area.key));
   return {
     intent_id: notificationIntentId({ sourceEventId, recipientPersonId: EntityId.parse(recipientPersonId), type: 'gebiet' }),
@@ -641,7 +650,7 @@ function levelaufstiegAusstehend() {
     return level > progressOf(haelfteVollBauten).level ? [...built, levelEvent(level), ...areaEntities(level)] : built;
   });
   const server = changedOnServer(initial, { createdAt: now, changes });
-  const intents = [levelIntent(4, philipp), levelIntent(4, anna), ...[philipp, anna].sort().map((personId) => areaIntent(4, personId))];
+  const intents = [levelIntent(4, philipp), levelIntent(4, anna), ...membersInOrder.map((personId) => areaIntent(4, personId))];
   const withIntents = { ...server, server: { ...server.server, notification_intent: intents } };
   // Anna sendet und zieht, danach zieht Philipp.
   const target = afterSync(
@@ -688,7 +697,7 @@ export const levelaufstiegAusstehendManifest = SeedManifest.parse({
  */
 function shownLevels(state: SeedState, levels: Readonly<{ celebrated: number; transformed: number }>, at: string): SeedState {
   const islandId = seedIds.island.philippAnna;
-  const rows = [
+  const rows: SeedRow[] = [
     { key: 'momo_levelfeier', value: { islandId, level: levels.celebrated }, updated_at: at },
     { key: 'momo_verwandlung', value: { islandId, level: levels.transformed }, updated_at: at },
     { key: 'momo_so_waechst_momo', value: { shownAt: at }, updated_at: at },

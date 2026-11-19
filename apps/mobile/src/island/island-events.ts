@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { ClaimEventReward, claimEventRewardKey, IslandEventKind, MarkEventsSeen, markEventsSeenKey } from '@abnehm/contracts/island';
 import { DiscoveryEventDetails, eventRewardId, IslandObjectOrigin, VisitorEventDetails, type VisitorReward } from '@abnehm/contracts/island-records';
-import { indexCatalog, type ArtKey } from '@abnehm/game-rules/catalog';
+import { indexCatalog, parseEndlessAreaKey, type ArtKey } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { isWishFulfilled, resolveClaimedReward, type WishObject } from '@abnehm/game-rules/events';
 
@@ -133,13 +133,13 @@ function discoveryOf(
   const details = DiscoveryEventDetails.safeParse(event.reward);
   if (!details.success) return null;
   const { areaKey, blueprints, deko } = details.data;
-  const endless = /^endlos_[1-9][0-9]*_(.+)$/.exec(areaKey);
+  const endless = parseEndlessAreaKey(areaKey);
   return {
     kind: 'entdeckung',
     eventId: EntityId.parse(event.id),
     stateId: EntityId.parse(state.id),
     occurredAt: Instant.parse(event.occurredAt),
-    area: { key: areaKey, name: endless === null ? nameOf('gebiet', areaKey) : nameOf('landschaftsvorlage', endless[1]!) },
+    area: { key: areaKey, name: endless === undefined ? nameOf('gebiet', areaKey) : nameOf('landschaftsvorlage', endless.template) },
     blueprints: blueprints.map((key) => ({ key, name: nameOf('bauplan', key) })),
     blueprintArt: blueprints[0] === undefined ? null : shownReward({ type: 'bauplan', key: blueprints[0] }).art,
     deko: deko.map((key) => shownReward({ type: 'deko', key })),

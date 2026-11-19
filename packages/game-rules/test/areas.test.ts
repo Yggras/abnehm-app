@@ -87,6 +87,9 @@ describe('Lage der Felder auf der Insel', () => {
 
   it('kennt keine Felder außerhalb der Feldpläne', () => {
     expect(placeField(catalog, 'grundinsel:99:99')).toBeUndefined();
+    // Koordinaten nur in kanonischer Schreibweise, wie beim Nachschlagen im Katalog.
+    expect(placeField(catalog, 'grundinsel:07:7')).toBeUndefined();
+    expect(placeField(catalog, 'endlos_1_t_vorlage_erste:00:0')).toBeUndefined();
     expect(placeField(catalog, 'endlos_1_t_vorlage_erste:16:0')).toBeUndefined();
     expect(placeField(catalog, 'endlos_1_unbekannt:0:0')).toBeUndefined();
   });

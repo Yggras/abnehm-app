@@ -5,6 +5,7 @@ import { DiscoveryEventDetails, islandContentId, islandEventId, islandEventState
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import { areaOccasionKey, areaUnlockAt, sidesOf, type AreaUnlock } from '@abnehm/game-rules/areas';
+import { unlocksAt } from '@abnehm/game-rules/unlocks';
 import type { GameCatalog } from '@abnehm/game-rules/catalog';
 
 import { batchChangeWriter, changeWriter } from '../coupling/change-writer.ts';
@@ -28,33 +29,43 @@ import { areaUnlockEntity, blueprintUnlockEntity, islandEventEntity, islandField
 //
 // Dasselbe Ereignis erscheint auf „Wir“ als „neues Gebiet“ (`shared_event` vom Typ `gebiet`); ein zweites
 // Ereignis je Gebiet gibt es nicht. Idempotent über den Anlassschlüssel: Besteht die Entdeckung schon, entsteht
-// für dieses Gebiet nichts mehr.
+// für dieses Gebiet nichts mehr. Jeder Spielbefehl, der den Inselfortschritt neu berechnet, prüft alle Gebiete bis
+// zum aktuellen Level, nicht nur die neu erreichten Level (`progress-change.ts`).
 
 export type AreaUnlocks = Readonly<{
   islandId: EntityId;
   couplingId: EntityId;
-  /** Die neu erreichten Level, aufsteigend. */
-  levels: readonly number[];
+  /** Level der Projektion; jedes Gebiet bis zu ihm muss freigeschaltet sein. */
+  level: number;
   at: Date;
   catalog: GameCatalog;
 }>;
 
-/** Schreibt Gebiete, Felder, Entdeckungen und Intents der Level; liefert die kanonischen Änderungen. */
-export async function areaUnlockChanges(tx: DbExecutor, { islandId, couplingId, levels, at, catalog }: AreaUnlocks): Promise<CanonicalChange[]> {
-  const fields = await tx.select({ key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId }).from(islandField).where(eq(islandField.islandId, islandId));
-  const sides = sidesOf(catalog, fields);
-  if (sides === null) throw new Error('Gebietsfreischaltung ohne materialisierte Grundinsel');
-  const candidates = levels.flatMap((level) => areaUnlockAt(catalog, { level, sides }) ?? []);
-  if (candidates.length === 0) return [];
+/**
+ * Schreibt Gebiete, Felder, Entdeckungen und Intents aller Gebiete bis zum Level, die der Insel noch fehlen; liefert
+ * die kanonischen Änderungen. Auch Gebiete früherer Level zieht es nach, etwa wenn ein Katalog-Update ein Gebiet für
+ * ein Formlevel bringt, das die Insel schon hinter sich hat (Spezifikation 4, Abschnitt 4: „damit bestehende Inseln
+ * gültig bleiben“).
+ */
+export async function areaUnlockChanges(tx: DbExecutor, { islandId, couplingId, level, at, catalog }: AreaUnlocks): Promise<CanonicalChange[]> {
+  const levels = Array.from({ length: Math.max(level - 1, 0) }, (_, index) => index + 2).filter((candidate) => unlocksAt(catalog, candidate).area !== null);
+  if (levels.length === 0) return [];
+  const occasionOf = (candidate: number) => areaOccasionKey(islandId, unlocksAt(catalog, candidate).area!.key);
   const known = new Set(
     (
       await tx
         .select({ occasionKey: islandEvent.occasionKey })
         .from(islandEvent)
-        .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.occasionKey, candidates.map((unlock) => areaOccasionKey(islandId, unlock.area.key)))))
+        .where(and(eq(islandEvent.islandId, islandId), inArray(islandEvent.occasionKey, levels.map(occasionOf))))
     ).map((row) => row.occasionKey),
   );
-  const unlocks = candidates.filter((unlock) => !known.has(areaOccasionKey(islandId, unlock.area.key)));
+  const missing = levels.filter((candidate) => !known.has(occasionOf(candidate)));
+  if (missing.length === 0) return [];
+
+  const fields = await tx.select({ key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId }).from(islandField).where(eq(islandField.islandId, islandId));
+  const sides = sidesOf(catalog, fields);
+  if (sides === null) throw new Error('Gebietsfreischaltung ohne materialisierte Grundinsel');
+  const unlocks = missing.flatMap((candidate) => areaUnlockAt(catalog, { level: candidate, sides }) ?? []);
   if (unlocks.length === 0) return [];
 
   // Nach Person geordnet, damit Ereignisstände und Intents in fester Reihenfolge entstehen (wie in den Seeds).

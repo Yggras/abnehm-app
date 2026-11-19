@@ -31,7 +31,7 @@ describe('Verwandlungsszene', () => {
     world.pullProgress(4, [2, 3, 4]);
     world.areaOnServer(4);
 
-    expect(world.game.takeTransformation()).toEqual({ from: 'kaulquappe', to: 'huepfer', areas: ['schilfwiese'] });
+    expect(world.game.takeTransformation()).toEqual({ from: 'kaulquappe', areas: ['schilfwiese'] });
     // Einmal je Installation, auch nach einem Neustart.
     expect(world.game.takeTransformation()).toBeNull();
     await world.restart();
@@ -48,7 +48,7 @@ describe('Verwandlungsszene', () => {
     // Das gezeigte Level steht jetzt auf 3; von dort ist Level 4 die nächste Form.
     world.pullProgress(4, [4]);
     world.areaOnServer(4);
-    expect(world.game.takeTransformation()).toEqual({ from: 'kaulquappe', to: 'huepfer', areas: ['schilfwiese'] });
+    expect(world.game.takeTransformation()).toEqual({ from: 'kaulquappe', areas: ['schilfwiese'] });
   });
 
   it('ohne gemerktes Level übernimmt die Installation das aktuelle still, etwa nach einer Neuanmeldung', async () => {

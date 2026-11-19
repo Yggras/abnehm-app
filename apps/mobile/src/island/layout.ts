@@ -1,4 +1,4 @@
-import { placeField } from '@abnehm/game-rules/areas';
+import { fieldPlacement } from '@abnehm/game-rules/areas';
 import { fieldPlans, type GameCatalog } from '@abnehm/game-rules/catalog';
 import type { IslandFieldOwner } from '@abnehm/game-rules/hatching';
 
@@ -6,7 +6,7 @@ import type { FogArea, IslandSceneInput, SceneField } from './scene-model';
 
 // Felder und Nebel einer Insel (Spezifikation 4, Abschnitte 4 und 7): Die Inselfelder materialisiert der
 // Server beim Schlüpfen und bei jeder Gebietsfreischaltung samt Besitzer (#184, #204); Lage und Feldart stehen
-// im Spielkatalog, für endlose Gebiete in ihrer Landschaftsvorlage (`placeField`). Die festen Gebiete, die noch
+// im Spielkatalog, für endlose Gebiete in ihrer Landschaftsvorlage (`fieldPlacement`). Die festen Gebiete, die noch
 // nicht freigeschaltet sind, liegen unter Nebel. Endlose Gebiete zeigt die Insel erst mit ihrer Freischaltung.
 
 export type IslandLayoutRequest = Readonly<{
@@ -16,9 +16,10 @@ export type IslandLayoutRequest = Readonly<{
 }>;
 
 export function islandLayout(catalog: GameCatalog, { fields, unlockedAreas }: IslandLayoutRequest): Pick<IslandSceneInput, 'fields' | 'fog'> {
+  const placeField = fieldPlacement(catalog);
   return {
     fields: fields.map(({ key, ownerPersonId }): SceneField => {
-      const entry = placeField(catalog, key);
+      const entry = placeField(key);
       if (entry === undefined) throw new Error(`Inselfeld ${key} fehlt im Spielkatalog`);
       return { key, x: entry.x, y: entry.y, kind: entry.kind, ownerPersonId };
     }),
