@@ -81,6 +81,13 @@ describe('compose.prod.yaml', () => {
     expect(config.services.postgres.secrets?.map((secret) => secret.source)).toEqual(['postgres_password']);
   });
 
+  it('bindet das optionale Zugriffstoken der erweiterten Expo-Push-Sicherheit als Secret ein (#142)', () => {
+    const { backend } = config.services;
+    expect(backend.environment?.EXPO_ACCESS_TOKEN_FILE).toBe('/run/secrets/expo_access_token');
+    expect(backend.secrets?.map((secret) => secret.source)).toContain('expo_access_token');
+    expect(config.secrets.expo_access_token?.file).toBe(`${secretsDir}/expo_access_token`);
+  });
+
   it('nennt die HTTPS-Adresse und vertraut nur dem Gateway des eigenen Netzes', () => {
     const environment = config.services.backend.environment ?? {};
     expect(environment.AUTH_BASE_URL).toBe(productionUrl);

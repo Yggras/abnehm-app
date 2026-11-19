@@ -52,6 +52,9 @@ for name in postgres_password better_auth_secret invite_code_secret; do
   case "$out" in *"$value"*) fail "anlegen gibt den Wert von $name aus" ;; esac
 done
 [ "$(stat -f '%Lp' "$ABNEHM_PROD_SECRETS_DIR")" = 700 ] || fail "Secret-Verzeichnis nicht 0700"
+# Optionales Expo-Zugriffstoken (#142): angelegt, aber ohne Wert.
+[ "$(stat -f '%Lp' "$ABNEHM_PROD_SECRETS_DIR/expo_access_token")" = 600 ] || fail "expo_access_token nicht angelegt oder nicht 0600"
+[ -z "$(tr -d '[:space:]' < "$ABNEHM_PROD_SECRETS_DIR/expo_access_token")" ] || fail "expo_access_token nicht leer angelegt"
 first=$(cat "$ABNEHM_PROD_SECRETS_DIR/better_auth_secret")
 echo "sk-test" | "$secrets" setzen anthropic_api_key >/dev/null
 "$secrets" >/dev/null || fail "anlegen nach setzen schlägt fehl"
@@ -61,6 +64,12 @@ chmod 644 "$ABNEHM_PROD_SECRETS_DIR/invite_code_secret"
 "$secrets" pruefen >/dev/null 2>&1 && fail "pruefen übersieht 0644"
 chmod 600 "$ABNEHM_PROD_SECRETS_DIR/invite_code_secret"
 "$secrets" pruefen >/dev/null || fail "pruefen schlägt bei korrekten Secrets fehl"
+echo "expo-token" | "$secrets" setzen expo_access_token >/dev/null || fail "setzen expo_access_token schlägt fehl"
+"$secrets" >/dev/null || fail "anlegen nach gesetztem Expo-Token schlägt fehl"
+[ "$(cat "$ABNEHM_PROD_SECRETS_DIR/expo_access_token")" = expo-token ] || fail "anlegen überschreibt das Expo-Token"
+rm "$ABNEHM_PROD_SECRETS_DIR/expo_access_token"
+"$secrets" pruefen >/dev/null 2>&1 && fail "pruefen übersieht fehlende expo_access_token-Datei"
+"$secrets" >/dev/null || fail "anlegen legt fehlendes expo_access_token nicht wieder an"
 
 # Adresse ------------------------------------------------------------------------------------------
 "$prod" adresse http://heimserver.tail0000.ts.net >/dev/null 2>&1 && fail "adresse akzeptiert http"

@@ -301,10 +301,10 @@ describe('CHECK-Constraints', () => {
     const intent = {
       sourceEventId: uuid(60),
       recipientPersonId: ME,
-      type: 'levelaufstieg',
+      type: 'levelaufstieg' as const,
       messageKey: 'levelaufstieg',
       payload: { level: 2 },
-      status: 'offen',
+      status: 'offen' as const,
       createdAt: at,
       statusChangedAt: at,
     };

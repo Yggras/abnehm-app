@@ -358,7 +358,8 @@ export const soloTrackerOf = (water: WaterToday, sport: readonly SportUnit[] = s
 /**
  * Ernährung (Spezifikation 2): heute ein Frühstück aus der Suche, ohne Mahlzeitenfoto und damit ohne
  * Fotofreigabe (#155). Mittagessen, Abendessen und Snacks bleiben leer, damit das Protokoll seine
- * Leerzustände zeigt. Mit nur einer Mahlzeit bleibt „Ernährung erfasst“ (mindestens 3) offen.
+ * Leerzustände zeigt. Mit nur einer Mahlzeit bleibt „Ernährung erfasst“ (mindestens 3) offen. Die
+ * Einträge am Vortag stehen in `soloErnaehrungVortag`.
  */
 export const soloErnaehrung: SeedPart = {
   area: 'ernaehrung',
@@ -372,6 +373,34 @@ export const soloErnaehrung: SeedPart = {
       id: seedIds.nutritionEntry.philippFruehstueck[1], personId: philipp, at: '2026-10-14T06:41:00.000Z', localDate: seedDays.heute, meal: 'fruehstueck',
       food: { key: 'F110100', name: 'Apfel roh', milliKcal: 58_000, proteinMg: 424, carbsMg: 11_700, fatMg: 500 },
       grams: 150,
+    }),
+  ],
+};
+
+/**
+ * Ernährung am Vortag (Spezifikation 2, Abschnitt 6; #156), nur in `solo` und seinen Varianten: Frühstück,
+ * Mittagessen und Snacks, das Abendessen fehlt, damit die Person es im Protokoll nachtragen kann. Mit 423 kcal
+ * liegt der Tag unter der Untergrenze; „Im Kalorienbudget“ von gestern bliebe damit offen. Ohne Fotofreigabe.
+ * Werte je 100 g aus dem BLS 4.0 wie im Testkatalog der App (`apps/mobile/src/nutrition/testing/test-catalog.ts`).
+ * Die Randzustände bauen ihren Vortag selbst und nutzen diesen Teil nicht.
+ */
+export const soloErnaehrungVortag: SeedPart = {
+  area: 'ernaehrung',
+  entities: [
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippVortag[0], personId: philipp, at: '2026-10-13T06:15:00.000Z', localDate: seedDays.gestern, meal: 'fruehstueck',
+      food: { key: 'C512600', name: 'Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt', milliKcal: 366_000, proteinMg: 11_800, carbsMg: 49_400, fatMg: 11_000 },
+      grams: 60,
+    }),
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippVortag[1], personId: philipp, at: '2026-10-13T10:45:00.000Z', localDate: seedDays.gestern, meal: 'mittagessen',
+      food: { key: 'X537063', name: 'Rotkohl mit Apfel gedünstet', milliKcal: 62_000, proteinMg: 1_010, carbsMg: 4_900, fatMg: 3_740 },
+      grams: 200,
+    }),
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippVortag[2], personId: philipp, at: '2026-10-13T14:00:00.000Z', localDate: seedDays.gestern, meal: 'snacks',
+      food: { key: 'F506100', name: 'Granatapfel roh', milliKcal: 79_000, proteinMg: 700, carbsMg: 16_100, fatMg: 600 },
+      grams: 100,
     }),
   ],
 };
@@ -408,6 +437,7 @@ const soloPartsWith = ({ water, sport, plan, weights, goal, goalSettings }: Solo
   goalSettings === undefined ? soloZieleOf(plan, goal) : withGoalVersions(soloZieleOf(plan), goalSettings.goals),
   soloTrackerOf(water, sport, weights),
   soloErnaehrung,
+  soloErnaehrungVortag,
 ];
 
 /** Die Ziele von `solo` mit anderen Zielversionen; Wochenplan und Tagesziele von heute bleiben. */
@@ -428,13 +458,14 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 9: Ernährungseinträge am Vortag ohne Abendessen seit #156.
     // Revision 8: Sporteinträge der Vorwoche samt einem Tag mit zwei Einheiten seit #174.
     // Revision 7: unentschiedene Erlaubnis für Mitteilungen auf dem iPhone seit #125.
     // Revision 6: eigene Lebensmittel seit #157 (ein eigenes mit Portion, eine BLS-Korrektur).
     // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 8,
+    revision: 9,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,

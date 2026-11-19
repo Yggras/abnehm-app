@@ -2,6 +2,7 @@ import { createBackend } from '../backend.ts';
 import { readConfig } from '../config.ts';
 import { openDatabase } from '../database.ts';
 import { errorCodeForLog } from '../log.ts';
+import type { ExpoPushPort } from '../notifications/expo-push.ts';
 import type { MealVisionAnalyzer } from '../nutrition/meal-vision.ts';
 
 // Administrativer Passwort-Reset (Spezifikation 0, Abschnitt 9): einziger Weg zu einem neuen Passwort
@@ -23,6 +24,12 @@ const withoutPhotoAnalysis: MealVisionAnalyzer = {
   analyze: () => Promise.reject(new Error('Der Passwort-Reset analysiert keine Fotos')),
 };
 
+/** Der Reset startet keine Jobs und sendet keine Pushes; dieser Port wird nie aufgerufen. */
+const withoutPush: ExpoPushPort = {
+  send: () => Promise.reject(new Error('Der Passwort-Reset sendet keine Pushes')),
+  getReceipts: () => Promise.reject(new Error('Der Passwort-Reset sendet keine Pushes')),
+};
+
 const config = readConfig(process.env);
 const database = openDatabase(config.database);
 try {
@@ -32,6 +39,7 @@ try {
     invitationSettings: config.invitations,
     photoStorageDirectory: config.photoStorageDirectory,
     mealVisionAnalyzer: withoutPhotoAnalysis,
+    expoPush: withoutPush,
   });
   const result = await backend.auth.admin.resetPassword(email);
   if (result.type === 'unknown_account') {

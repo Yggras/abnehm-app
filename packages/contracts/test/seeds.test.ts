@@ -77,13 +77,25 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.weightEntry.philippVorgestern, seedIds.weightEntry.philippGestern].map((id) =>
         expect.objectContaining({ entity_type: 'weight_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
-      ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
+      ...[...seedIds.nutritionEntry.philippFruehstueck, ...seedIds.nutritionEntry.philippVortag].map((id) =>
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.ownFood.philippBircher, seedIds.ownFood.philippApfel].map((id) =>
         expect.objectContaining({ entity_type: 'own_food', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.sportEntry.philippVorwoche.map((id) =>
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
+  });
+
+  it('enthält Ernährungseinträge am Vortag ohne Abendessen und ohne Mahlzeitenfoto (#156)', () => {
+    const yesterday = solo.initial.devices['philipp-iphone']!.rows.nutrition_entry!.filter((row) => row.local_date === seedDays.gestern);
+
+    expect(yesterday.map(({ id, meal, meal_photo_id }) => ({ id, meal, meal_photo_id }))).toEqual([
+      { id: seedIds.nutritionEntry.philippVortag[0], meal: 'fruehstueck', meal_photo_id: null },
+      { id: seedIds.nutritionEntry.philippVortag[1], meal: 'mittagessen', meal_photo_id: null },
+      { id: seedIds.nutritionEntry.philippVortag[2], meal: 'snacks', meal_photo_id: null },
+    ]);
+    // 219,6 + 124 + 79 kcal: unter der Untergrenze von 1.882 kcal, „Im Kalorienbudget“ von gestern bliebe offen.
+    expect(yesterday.reduce((sum, row) => sum + Number(row.total_milli_kcal), 0)).toBe(422_600);
   });
 
   it('enthält ein eigenes Lebensmittel mit Portionsumrechnung und eine Korrektur eines BLS-Lebensmittels (#157)', () => {

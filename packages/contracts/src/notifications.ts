@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { type AreaKey, CatalogKey, DisplayName, EntityId, Instant, MessageKey } from './base.ts';
 import { uuidV5 } from './ids.ts';
 import { EncouragementKey } from './partner.ts';
-import type { RouteTarget } from './routes.ts';
+import { RouteTarget } from './routes.ts';
 import { InstallationId } from './sync.ts';
 
 // Benachrichtigungsabsichten (Spezifikation 0, Abschnitt 2). Fachmodule erzeugen sie in der
@@ -23,6 +23,9 @@ export const LevelUpPayload = z.strictObject({ level: z.int().min(2) });
 /** Nutzlast von `anfeuern`: Absender-Anzeigename und fester Botschaftsschlüssel (Spezifikation 5, Abschnitt 4). */
 export const EncouragementNotificationPayload = z.strictObject({ senderDisplayName: DisplayName, encouragementKey: EncouragementKey });
 
+/** Nutzlast von `entkopplung`: reine Information an den Partner, keine Anfrage (Spezifikation 5, Abschnitt 9). */
+export const UncouplingNotificationPayload = z.strictObject({ actionId: EntityId, senderDisplayName: DisplayName });
+
 const payloads = {
   anfeuern: EncouragementNotificationPayload,
   levelaufstieg: LevelUpPayload,
@@ -37,8 +40,7 @@ const payloads = {
   challenge_erfolg: z.strictObject({ challengeId: EntityId, templateKey: CatalogKey }),
   rollen_anfrage: RoleRequestPayload,
   deko_geschenk: z.strictObject({ actionId: EntityId, decoKey: CatalogKey, senderDisplayName: DisplayName }),
-  /** Reine Information, keine Anfrage. */
-  entkopplung: z.strictObject({ actionId: EntityId, senderDisplayName: DisplayName }),
+  entkopplung: UncouplingNotificationPayload,
 };
 
 type IntentType = keyof typeof payloads;
@@ -102,6 +104,15 @@ export function notificationTarget(intent: NotificationIntent): RouteTarget {
       return { type: 'partner' };
   }
 }
+
+/**
+ * `data` eines Server-Pushes (Spezifikation 5, Abschnitte 8 und 9): der Intent und sein Ziel aus
+ * `notificationTarget`. Titel und Text stehen nur in der Benachrichtigung selbst; Gesundheitswerte
+ * haben hier keinen Platz. Die App öffnet beim Antippen ein unbekanntes Ziel als `today`
+ * (`routeTargetOrToday`).
+ */
+export const ServerPushData = z.strictObject({ intentId: z.string().min(1).max(200), target: RouteTarget });
+export type ServerPushData = z.infer<typeof ServerPushData>;
 
 /**
  * Erlaubnis für Mitteilungen auf einem Gerät (Spezifikation 5, Abschnitt 8): `undetermined`, solange

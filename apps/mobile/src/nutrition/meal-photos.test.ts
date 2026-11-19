@@ -220,3 +220,28 @@ describe('Antwort des Servers auf confirmPhotoDraft', () => {
     expect(reports.at(-1)).toEqual({ personId: philipp, localDates: [today], cause: 'pull' });
   });
 });
+
+describe('Fotoeintrag löschen und „Rückgängig“ (#156)', () => {
+  it('legt den Eintrag neu an und behält die Fotoverknüpfung', async () => {
+    const { nutrition, read, dayLog } = await setup();
+    nutrition.confirmPhotoDraft(lunchFromPhoto);
+    const { photos, entries } = read();
+    const potatoEntry = EntityId.parse(entries[0]!.id);
+
+    const { undoToken } = nutrition.deleteEntry(potatoEntry);
+    nutrition.undo(undoToken);
+
+    const restored = read().entries.find((entry) => entry.deletedAt === null && entry.snapshotName === 'Bratkartoffeln');
+    expect(restored).toMatchObject({ captureMethod: 'foto', snapshotSource: 'ki', mealPhotoId: photos[0]!.id });
+    expect(restored!.id).not.toBe(potatoEntry);
+    // Die Testuhr steht still und die IDs sind zufällig: Bei gleicher Zeit ist die Reihenfolge beliebig.
+    const shown = dayLog()!.meals[1]!.entries.map(({ name, fromPhoto, aiEstimate }) => ({ name, fromPhoto, aiEstimate }));
+    expect(shown).toHaveLength(2);
+    expect(shown).toEqual(
+      expect.arrayContaining([
+        { name: 'Hühnerei gebraten', fromPhoto: true, aiEstimate: false },
+        { name: 'Bratkartoffeln', fromPhoto: true, aiEstimate: true },
+      ]),
+    );
+  });
+});

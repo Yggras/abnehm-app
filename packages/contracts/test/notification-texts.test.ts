@@ -77,6 +77,21 @@ describe('Textkatalog für Benachrichtigungen', () => {
     }
   });
 
+  it('Anfeuern: „Anna feuert dich an“ mit der Kurzbotschaft (Spezifikation 5, Abschnitt 9)', () => {
+    expect(notificationTexts.render('anfeuern', { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' })).toEqual({
+      title: 'Anna feuert dich an',
+      body: 'Gemeinsam für Momo 🐣',
+    });
+  });
+
+  it('Entkopplung: „Anna hat eure Kopplung beendet“ als Information (Spezifikation 5, Abschnitt 9)', () => {
+    const entkopplung = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid['Entkopplung']);
+    expect(notificationTexts.renderStored(entkopplung.messageKey, entkopplung.payload)).toEqual({
+      type: 'rendered',
+      text: { title: 'Anna hat eure Kopplung beendet', body: 'Momo und eure Insel sind archiviert.' },
+    });
+  });
+
   it('Schlüssel ohne Eintrag sind ein Typfehler', () => {
     // @ts-expect-error – Einträge kommen mit den Tickets der Spezifikationen 4 und 5
     expect(() => notificationTexts.render('gebiet', { gebietKey: 'gebiet_1' })).toThrow();

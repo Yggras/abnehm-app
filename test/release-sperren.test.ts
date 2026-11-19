@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { fakeMealVisionMarker } from '../apps/backend/dev/meal-vision/fake-analyzer.ts';
+import { fakeExpoPushMarker } from '../apps/backend/dev/push/fake-expo-push.ts';
 import { belongsTo, deepLinkHandler, testCapabilities, testCapabilityRoots, type TestCapability } from './test-capabilities.ts';
 
 // Release-Sperren (Spezifikation 0, Abschnitt 12 und Testing Decisions; #112): Für jede registrierte
@@ -310,6 +311,51 @@ describe('Fake der Fotoanalyse (#161)', () => {
 
   it('Gegenprobe: das Development-Image enthält den Fake', () => {
     expect(imageFiles('development')).toContain('apps/backend/dev/meal-vision/fake-analyzer.ts');
+  });
+
+  it('kein Modul der App erreicht den Fake', () => {
+    for (const bundle of [...bundles.production, ...bundles.development, ...bundles.e2e]) {
+      expect(bundle.sources.filter((source) => belongsTo(source, capability.modules)), bundle.platform).toEqual([]);
+    }
+  });
+});
+
+// Fake des Expo-Push-Ports (#142) --------------------------------------------------------------------
+//
+// #112: „Spätere Tickets müssen neue Testfähigkeiten zentral registrieren und ihren eigenen negativen
+// Produktionsartefakt-Test ergänzen.“ Die allgemeinen Prüfungen laufen für `fake-expo-push` über die
+// Registry; dieser Block belegt zusätzlich, dass das produktive Backend nur den HTTP-Adapter kennt und
+// keine Konfiguration den Fake erreicht.
+
+describe('Fake des Expo-Push-Ports (#142)', () => {
+  const capability = testCapabilities.find(({ key }) => key === 'fake-expo-push')!;
+  const production = imageFiles('production');
+
+  it('ist zentral registriert, mit Modul und Marker', () => {
+    expect(capability).toMatchObject({ modules: ['apps/backend/dev/push/'], entries: {} });
+    expect(capability.markers).toEqual([fakeExpoPushMarker]);
+  });
+
+  it('das Produktions-Image enthält weder den Fake noch einen Verweis auf ihn, wohl aber den HTTP-Adapter', () => {
+    expect(production).toContain('apps/backend/src/notifications/expo-push.ts');
+    expect(production.filter((file) => belongsTo(file, capability.modules))).toEqual([]);
+    for (const file of production.filter((path) => /\.[cm]?[jt]s$/.test(path))) {
+      const content = read(file);
+      for (const reference of ['dev/push/', 'fake-expo-push.ts', 'createFakeExpoPush', ...capability.markers]) {
+        expect(content.includes(reference), `${file}: ${reference}`).toBe(false);
+      }
+    }
+  });
+
+  it('der produktive Prozess baut den Port nur aus dem HTTP-Adapter; keine Umgebungsvariable wählt einen anderen', () => {
+    const serve = read('apps/backend/src/serve.ts');
+    expect(serve).toContain('expoPush: createExpoPushClient({ accessToken: config.expoPush.accessToken })');
+    expect(read('apps/backend/src/config.ts')).not.toMatch(/EXPO_PUSH_(?:PORT|ADAPTER|FAKE)|expoPushAdapter/);
+    expect(read('apps/backend/src/main.ts')).not.toMatch(/expoPush/);
+  });
+
+  it('Gegenprobe: das Development-Image enthält den Fake', () => {
+    expect(imageFiles('development')).toContain('apps/backend/dev/push/fake-expo-push.ts');
   });
 
   it('kein Modul der App erreicht den Fake', () => {

@@ -93,6 +93,10 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'ernaehrung.eintrag_hinzugefuegt': messageText(NutritionEntryAddedValues, ({ meal, kcal }) => ({
     text: `${kcal.toLocaleString('de-DE')} kcal ${toMeal[meal]} hinzugefügt`,
   })),
+  /** Spezifikation 2: Menge, Einheit oder Mahlzeit eines Eintrags geändert („Eintrag gespeichert · Rückgängig“; #156). */
+  'ernaehrung.eintrag_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Eintrag gespeichert' })),
+  /** Spezifikation 2, Abschnitt 6: Eintrag ohne Bestätigungsdialog gelöscht („Eintrag gelöscht · Rückgängig“; #156). */
+  'ernaehrung.eintrag_geloescht': messageText(z.strictObject({}), () => ({ text: 'Eintrag gelöscht' })),
   /** Spezifikation 3: Gewicht eingetragen („91,8 kg eingetragen · Rückgängig“); nur die Person selbst sieht es. */
   'gewicht.eingetragen': messageText(WeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
   /** Spezifikation 3: manuelle Messung bearbeitet („82,1 kg gespeichert · Rückgängig“; #176). */

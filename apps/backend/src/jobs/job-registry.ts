@@ -66,7 +66,9 @@ export function createJobRegistry({ clock }: { clock: Clock }): JobRegistry {
       jobs.set(job.name, { job, lastStartedAt: null, running: null });
     },
     runDue,
-    start({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS } = {}) {
+    // Ohne Angabe so oft wie der kürzeste angemeldete Job, höchstens im Standardabstand, damit jeder Job
+    // in seinem Intervall fällig wird.
+    start({ pollIntervalMs = Math.min(DEFAULT_POLL_INTERVAL_MS, ...[...jobs.values()].map((entry) => entry.job.intervalMs)) } = {}) {
       void runDue();
       const timer = setInterval(() => void runDue(), pollIntervalMs);
       return async () => {
