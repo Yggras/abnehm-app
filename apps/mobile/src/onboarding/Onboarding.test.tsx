@@ -940,6 +940,8 @@ describe('Schritt 8 „Wochenplan“', () => {
   it('zeigt die drei Tagesziele je Wochentag und die Mindestdauer einer Sporteinheit', async () => {
     await openStepEight();
 
+    // Plätze 1 und 2 stehen einmal über der Liste, je Zeile nur der dritte; der zugängliche Name nennt alle drei.
+    expect(screen.getByText('Jeden Tag: Ernährung erfasst und Wasserziel. Dazu je Wochentag:')).toBeOnTheScreen();
     expect(weekRow('Montag: Ernährung erfasst, Wasserziel und Gewogen')).toBeOnTheScreen();
     expect(weekRow('Dienstag: Ernährung erfasst, Wasserziel und Sporteinheit')).toBeOnTheScreen();
     expect(weekRow('Mittwoch: Ernährung erfasst, Wasserziel und Im Kalorienbudget')).toBeOnTheScreen();

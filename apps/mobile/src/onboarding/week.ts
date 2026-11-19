@@ -25,8 +25,10 @@ export function toggledSportDays(choice: WeekChoice, weekday: Weekday): Weekday[
 }
 
 export type WeekPreview = Readonly<{
-  /** Die drei Tagesziele je Wochentag, Montag zuerst. */
-  days: readonly Readonly<{ weekday: Weekday; bausteine: readonly BausteinKey[] }>[];
+  /** Plätze 1 und 2, im Standard-Wochenplan an jedem Tag gleich: Ernährung erfasst und Wasserziel. */
+  everyDay: readonly BausteinKey[];
+  /** Die drei Tagesziele je Wochentag, Montag zuerst; nur der dritte Platz unterscheidet die Tage. */
+  days: readonly Readonly<{ weekday: Weekday; bausteine: readonly BausteinKey[]; third: BausteinKey }>[];
   /** Mindestdauer einer Sporteinheit in Minuten; `null` ohne Sporttag. */
   minimumSessionMinutes: number | null;
   weeklySportTargetMinutes: number;
@@ -42,7 +44,8 @@ export function weekPreviewOf(draft: OnboardingDraft, today: LocalDate): WeekPre
   if (goals === null || goals.type !== 'berechnet' || week.type !== 'gueltig') return null;
   const weeklySportTargetMinutes = goals.sport.weeklyTargetMinutes;
   return {
-    days: Weekday.options.map((weekday) => ({ weekday, bausteine: week.days[weekday] })),
+    everyDay: week.days.montag.slice(0, 2),
+    days: Weekday.options.map((weekday) => ({ weekday, bausteine: week.days[weekday], third: week.days[weekday][2] })),
     minimumSessionMinutes: sportSessionThreshold(weeklySportTargetMinutes, weekChoiceOf(draft).sportDays.length),
     weeklySportTargetMinutes,
   };

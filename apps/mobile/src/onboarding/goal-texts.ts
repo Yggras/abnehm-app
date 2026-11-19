@@ -99,7 +99,9 @@ export const weeklyPlanTexts = {
   preview: 'Deine Woche',
   /** Zugänglicher Name einer Zeile der Vorschau, etwa „Montag: Ernährung erfasst, Wasserziel und Gewogen“. */
   dayLabel: (weekday: Weekday, bausteine: readonly BausteinKey[]) => `${weekdayNames[weekday]}: ${germanList(bausteine.map((key) => bausteinNames[key]))}`,
-  dayGoals: (bausteine: readonly BausteinKey[]) => bausteine.map((key) => bausteinNames[key]).join(' · '),
+  /** Über der Vorschau: die zwei Ziele, die jeden Tag gelten; je Wochentag steht dann nur das dritte. */
+  everyDay: (bausteine: readonly BausteinKey[]) => `Jeden Tag: ${germanList(bausteine.map((key) => bausteinNames[key]))}. Dazu je Wochentag:`,
+  baustein: (key: BausteinKey) => bausteinNames[key],
   /** Schwelle der Sporteinheit = Sportwochenziel ÷ Sporttage, aufgerundet (Abschnitt 3). */
   minimumSession: (minutes: number, weeklyMinutes: number, sportDays: number) =>
     `Eine Sporteinheit zählt ab ${minutes} Minuten: dein Sportziel von ${weeklyMinutes} Minuten pro Woche, verteilt auf ${sportDays} ${sportDays === 1 ? 'Sporttag' : 'Sporttage'}.`,

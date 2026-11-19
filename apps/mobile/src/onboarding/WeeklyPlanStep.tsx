@@ -82,6 +82,14 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
             );
           })}
         </View>
+        {/* Die Folge der Wahl direkt unter den Chips, die sie auslösen (Impeccable-critique). */}
+        {preview === null ? null : (
+          <Text variant="caption">
+            {preview.minimumSessionMinutes === null
+              ? texts.noSportDay(preview.weeklySportTargetMinutes)
+              : texts.minimumSession(preview.minimumSessionMinutes, preview.weeklySportTargetMinutes, choice.sportDays.length)}
+          </Text>
+        )}
         <Text variant="caption" tone="inkMuted">
           {texts.weighDayLocked(choice.weighDay)}
         </Text>
@@ -114,31 +122,27 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
         ) : null}
       </View>
 
-      {preview === null ? (
-        <Notice tone="hint" icon="info" text={texts.incomplete} />
-      ) : (
+      {/* Hinweise nach „Plan speichern“ über der Vorschau, damit sie ohne Scrollen sichtbar bleiben. */}
+      {state === 'fehlgeschlagen' ? <Notice tone="hint" icon="info" text={texts.failed} /> : null}
+      {state === 'unvollstaendig' || preview === null ? <Notice tone="hint" icon="info" text={texts.incomplete} /> : null}
+
+      {preview === null ? null : (
         <View style={styles.section}>
           <SectionTitle>{texts.preview}</SectionTitle>
+          {/* Plätze 1 und 2 gelten jeden Tag; je Zeile steht nur der dritte, der die Tage unterscheidet. */}
+          <Text>{texts.everyDay(preview.everyDay)}</Text>
           <ListGroup>
-            {preview.days.map(({ weekday, bausteine }) => (
+            {preview.days.map(({ weekday, bausteine, third }) => (
               <ListRow
                 key={weekday}
                 title={texts.weekday(weekday)}
-                subtitle={texts.dayGoals(bausteine)}
+                value={texts.baustein(third)}
                 accessibilityLabel={texts.dayLabel(weekday, bausteine)}
               />
             ))}
           </ListGroup>
-          <Text variant="caption" tone="inkMuted">
-            {preview.minimumSessionMinutes === null
-              ? texts.noSportDay(preview.weeklySportTargetMinutes)
-              : texts.minimumSession(preview.minimumSessionMinutes, preview.weeklySportTargetMinutes, choice.sportDays.length)}
-          </Text>
         </View>
       )}
-
-      {state === 'fehlgeschlagen' ? <Notice tone="hint" icon="info" text={texts.failed} /> : null}
-      {state === 'unvollstaendig' ? <Notice tone="hint" icon="info" text={texts.incomplete} /> : null}
     </OnboardingFrame>
   );
 }
