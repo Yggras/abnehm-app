@@ -36,7 +36,10 @@ import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
 import { PartnerStep } from '../partner/PartnerStep';
 import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
-import { followOwnDisplayName, type AccountPorts } from '../settings';
+// Direkt aus den Fachdateien, nicht über `../settings`: Das Sammelmodul exportiert Bildschirme, die über
+// `useSessionGate` wieder diese Datei laden (Importzyklus).
+import type { AccountPorts } from '../settings/AccountProvider';
+import { followOwnDisplayName } from '../settings/own-display-name';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
