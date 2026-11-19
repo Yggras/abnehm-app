@@ -17,6 +17,9 @@ export const RoleRequestPayload = z.strictObject({
   senderDisplayName: DisplayName,
 });
 
+/** Nutzlast von `levelaufstieg`: das höchste neu erreichte Level (Spezifikation 0, Abschnitt 4). */
+export const LevelUpPayload = z.strictObject({ level: z.int().min(2) });
+
 /** Nutzlast von `anfeuern`: Absender-Anzeigename und fester Botschaftsschlüssel (Spezifikation 5, Abschnitt 4). */
 export const EncouragementNotificationPayload = z.strictObject({ senderDisplayName: DisplayName, encouragementKey: EncouragementKey });
 
@@ -25,7 +28,7 @@ export const UncouplingNotificationPayload = z.strictObject({ actionId: EntityId
 
 const payloads = {
   anfeuern: EncouragementNotificationPayload,
-  levelaufstieg: z.strictObject({ level: z.int().min(2) }),
+  levelaufstieg: LevelUpPayload,
   gebiet: z.strictObject({ gebietKey: CatalogKey }),
   projektabschluss: z.strictObject({ templateKey: CatalogKey }),
   challenge_vorschlag: z.strictObject({

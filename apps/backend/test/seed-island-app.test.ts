@@ -13,6 +13,7 @@ import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
 import { islandEventCommands } from '../../mobile/src/island/island-events.ts';
 import { islandObjectCommands } from '../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
+import type { MomoReaction } from '../../mobile/src/island/momo-reactions.ts';
 import type { IslandStage } from '../../mobile/src/island/role-choice.ts';
 import { sharedActionCommands } from '../../mobile/src/island/shared-action-commands.ts';
 import { quietGameDependencies } from '../../mobile/src/island/testing/quiet-game.ts';
@@ -220,6 +221,33 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     await runSyncSteps(seedManifests['ereignisse-voll'], world);
 
     expect(islandOf(iphone).events.open.map((event) => event.visitor.name)).toEqual(['Eule Otto', 'Schwan Selma', 'Fuchs Fridolin', 'Igel Ilse']);
+  });
+
+  it('levelaufstieg-ausstehend: Vor dem Pull wartet Momo auf Anna; danach feiern beide Geräte Level 4 genau einmal, Philipp beim nächsten sichtbaren Moment (#200)', { timeout: 30_000 }, async () => {
+    const manifest = seedManifests['levelaufstieg-ausstehend'];
+    const world = await seeded(manifest);
+    const [iphone, android] = [world.phones['philipp-iphone']!, world.phones['anna-android']!];
+    const levelUps = (phone: Phone) => {
+      const reactions: MomoReaction[] = [];
+      cleanups.push(phone.game.observeReactions((reaction) => reactions.push(reaction)));
+      return () => reactions.flatMap((reaction) => (reaction.level === null ? [] : [reaction.level]));
+    };
+    // Anna sieht ihre Insel beim Sync; Philipps Oberfläche erscheint erst nach seinem Pull. Beide Geräte haben
+    // Level 3 schon gefeiert (Seed), die Feier hängt also nicht daran, ob die Oberfläche vor dem Pull steht.
+    const annasFeiern = levelUps(android);
+    expect(islandOf(iphone)).toMatchObject({ halves: { level: 3, own: { halfFull: true }, waitingForPartner: true } });
+    // Offline wirken Annas Bauten sofort auf ihre eigene Hälfte, das Level kommt erst über den Sync.
+    expect(islandOf(android)).toMatchObject({ halves: { level: 3, own: { halfFull: true }, partner: { halfFull: true }, waitingForPartner: false } });
+
+    await runSyncSteps(manifest, world);
+    const philippsFeiern = levelUps(iphone);
+
+    for (const phone of [iphone, android]) {
+      expect(islandOf(phone)).toMatchObject({ halves: { level: 4, waitingForPartner: false } });
+      expect(islandOf(phone).sharedEvents.map((event) => event.type)).toEqual(['momo_geschluepft', 'levelaufstieg']);
+    }
+    expect(philippsFeiern()).toEqual([4]);
+    expect(annasFeiern()).toEqual([4]);
   });
 });
 

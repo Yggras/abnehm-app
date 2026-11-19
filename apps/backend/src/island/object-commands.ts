@@ -20,7 +20,7 @@ import { vacateField } from './field-occupancy.ts';
 import { gameRejection, type GameRefusal } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
 import { playingRole } from './playing-role.ts';
-import { progressChange } from './progress-change.ts';
+import { progressChanges } from './progress-change.ts';
 
 // Aufwerten und Platzieren auf dem Server (Spezifikation 4, Abschnitte 2.5, 3, 7 und 11; Spezifikation 0,
 // Abschnitte 4 und 10; #194). Die Autorisierung (`island_object_own`) lässt nur eigene, nicht gelöschte
@@ -31,7 +31,8 @@ import { progressChange } from './progress-change.ts';
 // (Spezifikation 0, Abschnitt 10). So landet etwa eine auf zwei Geräten doppelt vorgemerkte Aufwertung
 // genau einmal auf dem Server, und das zweite Gerät zeigt danach die Stufe des ersten.
 //
-// Levelaufstieg samt Freischaltungen, Ereignis und Intents im selben Befehl liefert #200.
+// Hebt eine Aufwertung die Insel auf ein neues Level, entstehen Freischaltungen, Ereignis und Intents im
+// selben Befehl (`progressChanges`, #200).
 
 const catalog = indexCatalog(gameCatalog);
 
@@ -92,7 +93,7 @@ export const upgradeObjectCommand: ServerCommand<UpgradeObject> = {
         trigger: { commandId: payload.commandId, islandObjectId: payload.islandObjectId, toLevel: payload.toLevel },
       }),
     );
-    changes.push(await progressChange(tx, EntityId.parse(object.islandId), at));
+    changes.push(...(await progressChanges(tx, EntityId.parse(object.islandId), at)));
     return { changes, idMappings: [] };
   },
 };

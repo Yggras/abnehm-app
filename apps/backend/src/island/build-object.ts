@@ -19,7 +19,7 @@ import { gameRejection } from './game-rejection.ts';
 import { islandObjectEntity } from './island-entities.ts';
 import { fulfillWishes } from './island-events.ts';
 import { playingRole } from './playing-role.ts';
-import { progressChange } from './progress-change.ts';
+import { progressChanges } from './progress-change.ts';
 
 // Bauen auf dem Server (Spezifikation 4, Abschnitte 2.5, 3, 7 und 11; Spezifikation 0, Abschnitt 4): Objekt,
 // Feldbelegung und `build_debit` atomar in einem Fachbefehl, dazu der neu berechnete Inselfortschritt.
@@ -34,7 +34,8 @@ import { progressChange } from './progress-change.ts';
 //
 // Erfüllt der Bau einen offenen Besucherwunsch der Person, wird er im selben Befehl erfüllbar (#202).
 //
-// Levelaufstieg samt Freischaltungen, Ereignis und Intents im selben Befehl liefert #200.
+// Hebt der Bau die Insel auf ein neues Level, entstehen Freischaltungen, Ereignis und Intents im selben
+// Befehl (`progressChanges`, #200).
 
 const catalog = indexCatalog(gameCatalog);
 
@@ -97,7 +98,7 @@ export const buildObjectCommand: ServerCommand<BuildObject> = {
         trigger: { commandId: payload.commandId, islandObjectId: payload.islandObjectId },
       }),
     );
-    changes.push(await progressChange(tx, islandId, at));
+    changes.push(...(await progressChanges(tx, islandId, at)));
     // Ein Bau kann offene Besucherwünsche erfüllen (#202).
     changes.push(...(await fulfillWishes(tx, { islandId, couplingId, personId: actor.personId, catalogKey: payload.blueprintKey, at })));
     return { changes, idMappings: [] };

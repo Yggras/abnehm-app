@@ -3,6 +3,7 @@ import {
   defaultNotificationSetting,
   EncouragementNotificationPayload,
   ExpoPushToken,
+  LevelUpPayload,
   NotificationIntent,
   NotificationPermission,
   NotificationSettingRecord,
@@ -134,6 +135,10 @@ export const notificationFixtures = {
   NotificationPermission: fixtures(NotificationPermission, {
     valid: { 'unentschieden': 'undetermined', 'erlaubt': 'granted', 'verweigert': 'denied' },
     invalid: { 'vorläufig gibt es nicht (keine provisional-Erlaubnis)': 'provisional', 'leer': '' },
+  }),
+  LevelUpPayload: fixtures(LevelUpPayload, {
+    valid: { 'Level 2': { level: 2 }, 'Level 61': { level: 61 } },
+    invalid: { 'Level 1 ist kein Aufstieg': { level: 1 }, 'kein ganzes Level': { level: 2.5 }, 'mit Energiemenge': { level: 4, energy: 12 } },
   }),
   EncouragementNotificationPayload: fixtures(EncouragementNotificationPayload, {
     valid: { 'Anna, Gemeinsam für Momo': { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' } },

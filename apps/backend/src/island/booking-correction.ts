@@ -6,12 +6,12 @@ import type { CanonicalChange } from '@abnehm/contracts/sync';
 import type { DbExecutor } from '../database.ts';
 import { communityProject, energyBooking, islandObject } from '../db/schema/index.ts';
 import { bookCounterBooking } from '../energy/bookings.ts';
-import { progressChange } from './progress-change.ts';
+import { progressChanges } from './progress-change.ts';
 
 // Fehlerkorrektur an Spielbuchungen (Spezifikation 4, Abschnitt 1; Spezifikation 0, Abschnitt 4): nur als
 // Gegenbuchung mit exaktem Gegenzeichen, serverintern und ohne Client-Befehl. Eine Gegenbuchung wirkt mit
 // Gegenzeichen auf Bestand und `S_p`; war die ursprüngliche Buchung eine Ausgabe für eine Insel, berechnet
-// derselbe Aufruf deren Fortschritt neu. Levelaufstieg aus einer Korrektur liefert wie beim Bauen #200.
+// derselbe Aufruf deren Fortschritt neu, samt Levelaufstieg wie beim Bauen (#200).
 
 export type BookingCorrection = Readonly<{ originalBookingId: EntityId; at: Date }>;
 
@@ -19,7 +19,7 @@ export type BookingCorrection = Readonly<{ originalBookingId: EntityId; at: Date
 export async function correctBooking(tx: DbExecutor, { originalBookingId, at }: BookingCorrection): Promise<CanonicalChange[]> {
   const counter = await bookCounterBooking(tx, { originalBookingId, at });
   const islandId = await islandOfSpending(tx, originalBookingId);
-  return islandId === null ? [counter] : [counter, await progressChange(tx, islandId, at)];
+  return islandId === null ? [counter] : [counter, ...(await progressChanges(tx, islandId, at))];
 }
 
 /** Die Insel, für die eine Buchung ausgegeben wurde; `null` bei Gutschriften. */

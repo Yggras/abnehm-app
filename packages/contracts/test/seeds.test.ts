@@ -849,4 +849,29 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
     expect((iphone.rows.island_event_state ?? []).every((row) => row.person_id === philipp)).toBe(true);
     expect(iphone.rows.island_event_state).toHaveLength(4);
   });
+
+  it('levelaufstieg-ausstehend: Annas drei Offline-Bauten heben die Insel auf Level 4; danach haben beide Geräte Level 4 und das Ereignis (#200)', () => {
+    const manifest = seedManifests['levelaufstieg-ausstehend'];
+    const levelEvents = (rows: readonly Record<string, unknown>[] | undefined) => (rows ?? []).filter((row) => row.type === 'levelaufstieg');
+    const android = manifest.initial.devices['anna-android']!;
+    expect(android.outbox.map(({ type }) => type)).toEqual(Array(3).fill('buildObject'));
+    expect(progressOf(manifest.initial.server.island_progress)).toMatchObject({ level: 3 });
+    expect(levelEvents(manifest.initial.server.island_event)).toEqual([]);
+    expect(manifest.initial.server.notification_intent ?? []).toEqual([]);
+
+    const { server, devices } = manifest.target;
+    expect(progressOf(server.island_progress)).toMatchObject({ level: 4 });
+    const islandId = seedIds.island.philippAnna;
+    expect(levelEvents(server.island_event)).toEqual([expect.objectContaining({ occasion_key: `level:${islandId}:4`, status: 'abgeschlossen' })]);
+    expect((server.notification_intent ?? []).map((row) => [row.recipient_person_id, row.payload])).toEqual(
+      expect.arrayContaining([[philipp, { level: 4 }], [anna, { level: 4 }]]),
+    );
+    expect(server.notification_intent).toHaveLength(2);
+    expect(server.processed_operation?.map(({ outcome, person_id }) => [outcome, person_id])).toEqual(Array(3).fill(['applied', anna]));
+    for (const device of Object.values(devices)) {
+      expect(device.outbox).toEqual([]);
+      expect(progressOf(device.rows.island_progress)).toMatchObject({ level: 4 });
+      expect(levelEvents(device.rows.island_event)).toHaveLength(1);
+    }
+  });
 });
