@@ -135,6 +135,7 @@ export type SportRow = SportEntryFacts &
     startedAt: string;
     timeZone: string;
     activeMilliKcal: number | null;
+    sourceAppId: string | null;
     sourceAppName: string | null;
   }>;
 
@@ -146,6 +147,7 @@ const rowColumns = {
   startedAt: sportEntry.startedAt,
   durationMinutes: sportEntry.durationMinutes,
   activeMilliKcal: sportEntry.activeMilliKcal,
+  sourceAppId: sportEntry.sourceAppId,
   sourceAppName: sportEntry.sourceAppName,
   localDate: sportEntry.localDate,
   timeZone: sportEntry.timeZone,
@@ -193,7 +195,7 @@ export function readImportedSport(tx: ReadContext, entityId: EntityId): StoredIm
     timeZone: row.timeZone,
     utcOffsetMinutes: row.utcOffsetMinutes,
   });
-  return { payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
+  return { personId: EntityId.parse(row.personId), payload, deletedAt: row.deletedAt as Instant | null, serverVersion: row.serverVersion as ServerVersion | null };
 }
 
 /** Nicht gelöschte Importe einer Person aus einer Herkunft: externer Schlüssel und Beginn. */
@@ -204,4 +206,17 @@ export function importedSportKeys(tx: ReadContext, personId: EntityId, origin: I
     .where(and(eq(sportEntry.personId, personId), eq(sportEntry.origin, origin), isNull(sportEntry.deletedAt)))
     .all()
     .flatMap(({ externalKey, at }) => (externalKey === null ? [] : [{ externalKey, at }]));
+}
+
+/**
+ * Lokale Tage der manuellen Einträge, die dieser Import ersetzt und deren Zählen an ihm hängt: nicht gelöscht
+ * und nicht reaktiviert. Sie können auf dem Nachbartag liegen (Spezifikation 3, Abschnitt 3).
+ */
+export function daysReplacedBy(tx: ReadContext, importId: EntityId): LocalDate[] {
+  return sqliteOf(tx)
+    .selectDistinct({ localDate: sportEntry.localDate })
+    .from(sportEntry)
+    .where(and(eq(sportEntry.replacedByEntryId, importId), isNull(sportEntry.deletedAt), isNull(sportEntry.reactivatedAt)))
+    .all()
+    .map(({ localDate }) => LocalDate.parse(localDate));
 }

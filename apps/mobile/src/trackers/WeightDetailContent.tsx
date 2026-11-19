@@ -6,25 +6,28 @@ import { manualOrigin } from '@abnehm/contracts/tracker-rules';
 import { Button, Card, color, ListGroup, ListRow, Notice, radius, Sheet, space, Text } from '../design';
 import { openTarget } from '../navigation';
 import type { WeightDetail, WeightHistoryEntry } from './weight-detail';
-import { dayText, originNames, shortDayText, timeText } from './entry-texts';
+import { dayText, originNames, shortDayText, sourceAppText, timeText } from './entry-texts';
 import { changeText, kgText, spokenChange, weightTexts } from './weight-texts';
+import { ImportedEntrySheet, type ImportedSheetTrackers } from './ImportedEntrySheet';
 import { WeightEntryForm, type EditedWeight, type WeightFormTrackers } from './WeightEntryForm';
 
 // Inhalt des Gewicht-Detailbildschirms `capture.weight` (Spezifikation 3, Abschnitt 5; #38), von oben nach
 // unten: Trendgewicht groß und Tagesgewicht klein, „seit Start“, Veränderung in 2 Wochen und Prognose als
 // „Schätzung“; darunter alle Messungen mit Herkunft, das Tagesgewicht gekennzeichnet. Das Diagramm
 // dazwischen liefert #177. Steigende Werte stehen neutral als Zahl mit Vorzeichen, nie in `problem`.
-// Manuelle Messungen öffnen das Bearbeitungs-Sheet; das schreibgeschützte Sheet importierter liefert #186.
+// Manuelle Messungen öffnen das Bearbeitungs-Sheet, importierte ihr schreibgeschütztes Sheet mit
+// „Ausblenden“ (#186).
 
 export type WeightDetailContentProps = {
   detail: WeightDetail;
-  trackers: WeightFormTrackers;
+  trackers: WeightFormTrackers & ImportedSheetTrackers;
 };
 
 const addTarget = { type: 'capture.weight', newEntry: true } as const;
 
 export function WeightDetailContent({ detail, trackers }: WeightDetailContentProps) {
   const [editing, setEditing] = useState<EditedWeight | null>(null);
+  const [viewing, setViewing] = useState<WeightHistoryEntry | null>(null);
   if (detail.entries.length === 0) return <EmptyWeight />;
   return (
     <>
@@ -36,7 +39,7 @@ export function WeightDetailContent({ detail, trackers }: WeightDetailContentPro
         </Text>
         <ListGroup>
           {detail.entries.map((entry) => (
-            <MeasurementRow key={entry.id} entry={entry} today={detail.today} onEdit={setEditing} />
+            <MeasurementRow key={entry.id} entry={entry} today={detail.today} onEdit={setEditing} onView={setViewing} />
           ))}
         </ListGroup>
       </View>
@@ -50,6 +53,12 @@ export function WeightDetailContent({ detail, trackers }: WeightDetailContentPro
           </View>
         ) : null}
       </Sheet>
+      <ImportedEntrySheet
+        imported={viewing === null ? null : { type: 'gewicht', entry: viewing }}
+        today={detail.today}
+        trackers={trackers}
+        onClose={() => setViewing(null)}
+      />
     </>
   );
 }
@@ -121,10 +130,17 @@ function WeightSummary({ detail }: { detail: WeightDetail }) {
   );
 }
 
-function MeasurementRow({ entry, today, onEdit }: { entry: WeightHistoryEntry; today: WeightDetail['today']; onEdit: (entry: EditedWeight) => void }) {
+type MeasurementRowProps = {
+  entry: WeightHistoryEntry;
+  today: WeightDetail['today'];
+  onEdit: (entry: EditedWeight) => void;
+  onView: (entry: WeightHistoryEntry) => void;
+};
+
+function MeasurementRow({ entry, today, onEdit, onView }: MeasurementRowProps) {
   const when = `${shortDayText(entry.localDate, today)} · ${timeText(entry.measuredAt, entry.timeZone)}`;
   const imported = entry.origin !== manualOrigin;
-  const parts = [when, entry.isDayWeight ? weightTexts.dayWeightMark : null, imported ? entry.sourceAppName : originNames.manuell].filter(Boolean);
+  const parts = [when, entry.isDayWeight ? weightTexts.dayWeightMark : null, imported ? sourceAppText(entry.sourceAppId, entry.sourceAppName) : originNames.manuell].filter(Boolean);
   const subtitle = parts.join(' · ');
   return (
     <ListRow
@@ -132,7 +148,7 @@ function MeasurementRow({ entry, today, onEdit }: { entry: WeightHistoryEntry; t
       subtitle={subtitle}
       tag={imported ? originNames[entry.origin] : undefined}
       accessibilityLabel={`${kgText(entry.weightG)}, ${subtitle}${imported ? `, ${originNames[entry.origin]}` : ''}`}
-      onPress={imported ? undefined : () => onEdit({ id: entry.id, weightG: entry.weightG, measuredAt: entry.measuredAt })}
+      onPress={imported ? () => onView(entry) : () => onEdit({ id: entry.id, weightG: entry.weightG, measuredAt: entry.measuredAt })}
     />
   );
 }

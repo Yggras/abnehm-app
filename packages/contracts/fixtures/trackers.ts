@@ -1,7 +1,12 @@
 import {
   ActivityType,
+  ActivityTypeOverriddenOutcome,
+  ActivityTypeOverriddenValues,
   ImportedSportEntryUpsert,
+  ImportedSportMessageValues,
   ImportedWeightEntryUpsert,
+  ImportedWeightMessageValues,
+  ImportHiddenOutcome,
   ManualSportMinutes,
   ManualWeightG,
   SportEntryRecord,
@@ -237,6 +242,47 @@ export const trackerFixtures = {
     invalid: {
       'ohne Rückgängig': { messageKey: 'gewicht.geloescht', values: { weightG: 82_400 } },
       'ohne Gewicht': { messageKey: 'gewicht.geloescht', values: {}, undoToken: 'undo-7f3d' },
+    },
+  }),
+  ImportedSportMessageValues: fixtures(ImportedSportMessageValues, {
+    valid: { '52 min Radfahren': { activityType: 'radfahren', durationMinutes: 52 }, 'ganzer Tag': { activityType: 'gehen', durationMinutes: 1440 } },
+    invalid: {
+      'über 1440 Minuten': { activityType: 'gehen', durationMinutes: 1441 },
+      'Plattformart': { activityType: 'HKWorkoutActivityTypeCycling', durationMinutes: 52 },
+      'mit Quell-App': { activityType: 'radfahren', durationMinutes: 52, sourceAppName: 'Fitbit' },
+    },
+  }),
+  ImportedWeightMessageValues: fixtures(ImportedWeightMessageValues, {
+    valid: { 'genaue Gramm': { weightG: 82_437 }, 'kleinstes Gewicht': { weightG: 20_000 } },
+    invalid: { 'unter 20 kg': { weightG: 19_999 }, 'in kg': { weightG: 82.437 }, 'ohne Gewicht': {} },
+  }),
+  ImportHiddenOutcome: fixtures(ImportHiddenOutcome, {
+    valid: {
+      'Training ausgeblendet': { messageKey: 'sport.ausgeblendet', values: { activityType: 'radfahren', durationMinutes: 52 }, undoToken: 'undo-7f3e' },
+      'Gewicht ausgeblendet': { messageKey: 'gewicht.ausgeblendet', values: { weightG: 82_437 }, undoToken: 'undo-7f3e' },
+    },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'sport.ausgeblendet', values: { activityType: 'radfahren', durationMinutes: 52 } },
+      'Gewicht mit Werten eines Trainings': { messageKey: 'gewicht.ausgeblendet', values: { activityType: 'radfahren', durationMinutes: 52 }, undoToken: 'undo-7f3e' },
+      'Meldung des Löschens': { messageKey: 'sport.geloescht', values: { activityType: 'radfahren', durationMinutes: 52 }, undoToken: 'undo-7f3e' },
+    },
+  }),
+  ActivityTypeOverriddenValues: fixtures(ActivityTypeOverriddenValues, {
+    valid: { 'Krafttraining statt Radfahren': { activityType: 'krafttraining', previousActivityType: 'radfahren' } },
+    invalid: {
+      'ohne vorherige Art': { activityType: 'krafttraining' },
+      'Plattformart': { activityType: 'krafttraining', previousActivityType: 13 },
+      'mit Dauer': { activityType: 'krafttraining', previousActivityType: 'radfahren', durationMinutes: 52 },
+    },
+  }),
+  ActivityTypeOverriddenOutcome: fixtures(ActivityTypeOverriddenOutcome, {
+    valid: {
+      'Art geändert': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', previousActivityType: 'radfahren' }, undoToken: 'undo-7f3f' },
+    },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', previousActivityType: 'radfahren' } },
+      'Werte eines ausgeblendeten Trainings': { messageKey: 'sport.art_geaendert', values: { activityType: 'krafttraining', durationMinutes: 52 }, undoToken: 'undo-7f3f' },
+      'unbekannte Art': { messageKey: 'sport.art_geaendert', values: { activityType: 'tanzen', previousActivityType: 'radfahren' }, undoToken: 'undo-7f3f' },
     },
   }),
 };

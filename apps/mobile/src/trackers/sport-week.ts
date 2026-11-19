@@ -20,12 +20,17 @@ export type SportListEntry = Readonly<{
   id: EntityId;
   /** Angezeigte Art: die überschriebene vor der Plattformart (Spezifikation 3, Abschnitt 5). */
   activityType: ActivityType;
+  /** Bei Importen die von der Plattform erkannte Art, auch wenn die Person sie überschrieben hat (#186); sonst `null`. */
+  recognizedActivityType: ActivityType | null;
   durationMinutes: number;
   startedAt: Instant;
+  /** Gespeicherter lokaler Tag; nach ihm gruppiert die Übersicht. */
+  localDate: LocalDate;
   /** Zone der Anlage; in ihr zeigt die Liste die Uhrzeit. */
   timeZone: TimeZone;
   origin: SportOrigin;
-  /** Anzeigename der Quell-App eines Imports, falls bekannt. */
+  /** Kennung und Anzeigename der Quell-App eines Imports, falls bekannt. */
+  sourceAppId: string | null;
   sourceAppName: string | null;
   /** Aktive Kalorien in `milli_kcal`; werden nur angezeigt. */
   activeMilliKcal: number | null;
@@ -105,10 +110,13 @@ function daysOf(rows: readonly SportRow[]): SportDay[] {
     entries.push({
       id: EntityId.parse(row.id),
       activityType: ActivityType.parse(row.overrideActivityType ?? row.activityType),
+      recognizedActivityType: row.origin === 'manuell' ? null : ActivityType.parse(row.activityType),
       durationMinutes: row.durationMinutes,
       startedAt: Instant.parse(row.startedAt),
+      localDate: LocalDate.parse(row.localDate),
       timeZone: TimeZone.parse(row.timeZone),
       origin: row.origin,
+      sourceAppId: row.sourceAppId,
       sourceAppName: row.sourceAppName,
       activeMilliKcal: row.activeMilliKcal,
     });

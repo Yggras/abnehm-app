@@ -33,6 +33,19 @@ export function timeText(instant: Instant, timeZone: TimeZone): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
+/**
+ * Anzeigenamen bekannter Quell-Apps nach ihrer Kennung (Spezifikation 3, Abschnitt 6): Google Health schreibt
+ * auf dem iPhone unter `com.fitbit.FitbitMobile` mit dem Namen „Google Health“
+ * (`spikes/health-hintergrund/RESULTS.md`, „Quellen erkennen“). Den Anzeigenamen „Google Health (Fitbit)“ legt
+ * Spezifikation 3, Abschnitt 6 fest (https://github.com/Yggras/abnehm-app/issues/86, „Prüfung der Quell-Apps“).
+ */
+const knownSourceApps: Readonly<Record<string, string>> = { 'com.fitbit.FitbitMobile': 'Google Health (Fitbit)' };
+
+/** Quell-App eines Imports: bekannter Anzeigename, sonst der gelieferte, sonst die Kennung; ohne beides `null`. */
+export function sourceAppText(id: string | null, name: string | null): string | null {
+  return (id === null ? undefined : knownSourceApps[id]) ?? name ?? id;
+}
+
 /** Herkunft eines Eintrags für die Liste (`CONTEXT.md`: manuell, Apple Health oder Health Connect). */
 export const originNames: Readonly<Record<'manuell' | ImportOrigin, string>> = {
   manuell: 'Manuell',

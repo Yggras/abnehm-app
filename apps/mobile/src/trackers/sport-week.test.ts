@@ -1,13 +1,10 @@
 /** @jest-environment node */
-import { eq } from 'drizzle-orm';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, LocalDate, TimeZone, type BausteinKey, type Weekday } from '@abnehm/contracts/base';
 import type { PlanReader } from '@abnehm/contracts/ports';
 
 import { fakePlanReader, type FakeGoalVersion, type FakeWeeklyPlanVersion } from '../area-ports/testing/fakes';
-import { sportEntry } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
 import type { SportInput } from './sport';
 import type { SportWeek, SportWeekState } from './sport-week';
 import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld } from './testing/tracker-world';
@@ -108,7 +105,10 @@ it('gruppiert die Einträge nach Tag, neuester Tag und neueste Einheit zuerst, u
     {
       localDate: '2026-10-14',
       entries: [
-        { id: mittag, activityType: 'radfahren', durationMinutes: 45, startedAt: '2026-10-14T09:00:00.000Z', timeZone: 'Europe/Berlin', origin: 'manuell', sourceAppName: null, activeMilliKcal: 210_000 },
+        {
+          id: mittag, activityType: 'radfahren', recognizedActivityType: null, durationMinutes: 45, startedAt: '2026-10-14T09:00:00.000Z', localDate: '2026-10-14',
+          timeZone: 'Europe/Berlin', origin: 'manuell', sourceAppId: null, sourceAppName: null, activeMilliKcal: 210_000,
+        },
         expect.objectContaining({ id: frueh, activityType: 'krafttraining' }),
       ],
     },
@@ -123,7 +123,7 @@ it('gruppiert die Einträge nach Tag, neuester Tag und neueste Einheit zuerst, u
 });
 
 it('zeigt die überschriebene Art vor der Plattformart und keine ausgeblendeten Importe', async () => {
-  const { watch, trackers, database, sports } = await setup();
+  const { watch, trackers, sports } = await setup();
   const week = await watch();
   const workout = (externalKey: string, startedAt: string) => ({
     type: 'workout' as const,
@@ -140,27 +140,29 @@ it('zeigt die überschriebene Art vor der Plattformart und keine ausgeblendeten 
     {
       origin: 'apple_health',
       type: 'workout',
-      upserts: [workout('umbenannt', '2026-10-13T05:00:00.000Z'), workout('ausgeblendet', '2026-10-13T16:00:00.000Z')],
+      upserts: [workout('art-geaendert', '2026-10-13T05:00:00.000Z'), workout('ausgeblendet', '2026-10-13T16:00:00.000Z')],
       deletedKeys: [],
       reconcileSince: null,
       notBefore: at('2026-10-01T00:00:00.000Z'),
     },
     () => {},
   );
-  // Umbenennen und Ausblenden liefert #186; hier setzt der Test die Felder direkt.
-  const idOf = (startedAt: string) => sports().find((row) => row.startedAt === startedAt)!.id;
+  const idOf = (startedAt: string) => EntityId.parse(sports().find((row) => row.startedAt === startedAt)!.id);
   const [renamed, hidden] = [idOf('2026-10-13T05:00:00.000Z'), idOf('2026-10-13T16:00:00.000Z')];
-  database.transaction((tx) => {
-    sqliteOf(tx).update(sportEntry).set({ overrideActivityType: 'yoga_dehnen' }).where(eq(sportEntry.id, renamed)).run();
-    sqliteOf(tx).update(sportEntry).set({ hiddenAt: '2026-10-13T18:00:00.000Z' }).where(eq(sportEntry.id, hidden)).run();
-  });
+  trackers.expire(trackers.overrideActivityType(renamed, 'yoga_dehnen').undoToken);
+  trackers.expire(trackers.hideImported(hidden).undoToken);
   await settled();
 
   expect(week().weekMinutes).toBe(45);
   expect(week().days).toEqual([
     {
       localDate: '2026-10-13',
-      entries: [expect.objectContaining({ activityType: 'yoga_dehnen', durationMinutes: 45, origin: 'apple_health', sourceAppName: 'Fitbit', activeMilliKcal: 180_000 })],
+      entries: [
+        expect.objectContaining({
+          activityType: 'yoga_dehnen', recognizedActivityType: 'sonstiges', durationMinutes: 45, origin: 'apple_health',
+          sourceAppId: 'com.fitbit.FitbitMobile', sourceAppName: 'Fitbit', activeMilliKcal: 180_000,
+        }),
+      ],
     },
   ]);
 });

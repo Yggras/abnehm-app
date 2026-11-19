@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { Instant, type EntityId, type TimeZone } from '@abnehm/contracts/base';
 import {
@@ -17,6 +17,7 @@ import { Button, Chip, DateTimePicker, ListGroup, ListRow, ProblemMessage, space
 import { activityNames } from '../shell/texts';
 import { useUndoableMessage, type UndoableOutcome } from '../shell/use-undoable-message';
 import { activityIcons } from './activity-icons';
+import { SheetLayout } from './SheetLayout';
 import type { Trackers } from './trackers';
 
 // Formular „+ Einheit“ (Spezifikation 3, Abschnitte 3–5; #38). Eine typische Einheit ist mit wenigen
@@ -233,26 +234,8 @@ export function SportEntryForm({ trackers, entry, title, onSaved }: SportEntryFo
   );
 }
 
-/** Titel und Felder scrollen; die Aktionen stehen als Fuß darunter. Tipps erreichen sie auch bei offener Tastatur. */
-function SheetLayout({ title, actions, children }: { title: string; actions: ReactNode; children: ReactNode }) {
-  return (
-    <View style={styles.sheet}>
-      <ScrollView testID="sheet-scroll" style={styles.sheetScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        <Text variant="title" accessibilityRole="header">
-          {title}
-        </Text>
-        {children}
-      </ScrollView>
-      <View style={styles.footer}>{actions}</View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   form: { gap: space[4] },
   group: { gap: space[2] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  sheet: { flex: 1 },
-  sheetScroll: { flex: 1 },
-  footer: { gap: space[2], paddingTop: space[3] },
 });

@@ -1,7 +1,18 @@
 import type { Clock } from '@abnehm/clock';
 import type { EntityId, LocalDate } from '@abnehm/contracts/base';
 import type { PlanReader, WeightRecorder, WeightTrendReader } from '@abnehm/contracts/ports';
-import type { SportDeletedOutcome, SportRecordedOutcome, SportUpdatedOutcome, WaterAddedOutcome, WeightDeletedOutcome, WeightRecordedOutcome, WeightUpdatedOutcome } from '@abnehm/contracts/trackers';
+import type {
+  ActivityType,
+  ActivityTypeOverriddenOutcome,
+  ImportHiddenOutcome,
+  SportDeletedOutcome,
+  SportRecordedOutcome,
+  SportUpdatedOutcome,
+  WaterAddedOutcome,
+  WeightDeletedOutcome,
+  WeightRecordedOutcome,
+  WeightUpdatedOutcome,
+} from '@abnehm/contracts/trackers';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { LocalDatabase, TransactionContext } from '../local-db';
@@ -10,6 +21,7 @@ import type { TodaySource } from '../shell/today-registry';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { applyHealthImport, type HealthImportBatch } from './health-import';
+import { hideImportedEntry, overrideImportedActivityType, undoImported, type ImportedUndo } from './imported';
 import { deleteSportEntry, lastSportOf, recordSportEntry, undoSport, updateSportEntry, type LastSport, type SportChanged, type SportInput } from './sport';
 import { sportWeekSource, type SportWeekState } from './sport-week';
 import { sportTodaySource } from './sport-today';
@@ -91,6 +103,22 @@ export type Trackers = Readonly<{
    * `InvalidTrackerInputError` für einen unbekannten, schon gelöschten oder importierten Eintrag.
    */
   deleteSport(entryId: EntityId): SportDeletedOutcome;
+  /**
+   * Blendet ein importiertes Training oder Gewicht ohne Bestätigungsdialog aus, in einer eigenen lokalen
+   * Transaktion, und meldet seinen Tag. Der Eintrag verschwindet aus allen Listen und Summen, und ein
+   * späterer Upsert aus der Quelle blendet ihn nicht wieder ein; ein von ihm ersetzter manueller Eintrag
+   * zählt wieder. „Rückgängig“ entfernt `hidden_at`. Wirft `InvalidTrackerInputError` für einen unbekannten,
+   * manuellen, gelöschten oder schon ausgeblendeten Eintrag, ohne etwas zu schreiben.
+   */
+  hideImported(entryId: EntityId): ImportHiddenOutcome;
+  /**
+   * Überschreibt die Aktivitätsart eines importierten Trainings, in einer eigenen lokalen Transaktion, und
+   * meldet seinen Tag. Angezeigt wird die überschriebene vor der Plattformart; ein späterer Upsert aus der
+   * Quelle lässt sie unverändert. „Rückgängig“ stellt die vorher überschriebene Art wieder her. Wirft
+   * `InvalidTrackerInputError` für eine unbekannte Art und für einen Eintrag, der kein sichtbares
+   * importiertes Training ist, ohne etwas zu schreiben.
+   */
+  overrideActivityType(entryId: EntityId, activityType: ActivityType): ActivityTypeOverriddenOutcome;
   /** Zuletzt genutzte Art und Dauer dieses Geräts (Vorbelegung des Formulars); `null` vor der ersten Einheit. */
   lastSport(): LastSport | null;
   /**
@@ -101,8 +129,8 @@ export type Trackers = Readonly<{
   lastWeights(except?: EntityId): LastWeights | null;
   /**
    * Macht die Buchung zum Token höchstens einmal rückgängig, in einer eigenen Transaktion. Es kennt nur
-   * Tokens aus `addWater`, `recordWeight`, `updateWeight`, `deleteWeight`, `recordSport`, `updateSport` und
-   * `deleteSport`; Buchungen über
+   * Tokens aus `addWater`, `recordWeight`, `updateWeight`, `deleteWeight`, `recordSport`, `updateSport`,
+   * `deleteSport`, `hideImported` und `overrideActivityType`; Buchungen über
    * `water.quick_add` nimmt die Quick-Command-Registry mit ihren eigenen Tokens zurück.
    */
   undo(undoToken: string): UndoOutcome;
@@ -175,6 +203,8 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     values,
     undoToken: tokens.issue(database, (tx) => undoSport(tx, dependencies, undo)),
   });
+  /** Undo-Token eines Befehls für importierte Einträge. */
+  const importedUndoToken = (undo: ImportedUndo) => tokens.issue(database, (tx) => undoImported(tx, dependencies, undo));
 
   return {
     addWater({ ml }) {
@@ -188,6 +218,14 @@ export function createTrackers(dependencies: TrackerDependencies): Trackers {
     recordSport: (input) => sportOutcome(database.transaction((tx) => recordSportEntry(tx, dependencies, dependencies.newId(), input))),
     updateSport: (entryId, input) => sportOutcome(database.transaction((tx) => updateSportEntry(tx, dependencies, entryId, input))),
     deleteSport: (entryId) => sportOutcome(database.transaction((tx) => deleteSportEntry(tx, dependencies, entryId))),
+    hideImported(entryId) {
+      const { undo, ...message } = database.transaction((tx) => hideImportedEntry(tx, dependencies, entryId));
+      return { ...message, undoToken: importedUndoToken(undo) };
+    },
+    overrideActivityType(entryId, activityType) {
+      const { undo, ...message } = database.transaction((tx) => overrideImportedActivityType(tx, dependencies, entryId, activityType));
+      return { ...message, undoToken: importedUndoToken(undo) };
+    },
     lastSport: () => database.read((tx) => lastSportOf(tx)),
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),

@@ -227,6 +227,8 @@ export const healthScenarios = [
   'zwei_weckungen',
   'fitbit_vorhanden',
   'fitbit_fehlt',
+  'korrekturen',
+  'korrekturen_quelle',
 ] as const;
 export type HealthScenario = (typeof healthScenarios)[number];
 
@@ -245,6 +247,10 @@ const scaleApp = { id: 'com.withings.wiScaleNG', name: 'Withings' } as const;
  * - `nicht_verfuegbar`, `installation_noetig`, `keine_daten`: Verfügbarkeit bzw. eine leere Quelle.
  * - `zwei_weckungen`: Google Health schreibt Training und Gewicht zugleich und weckt zweimal fast gleichzeitig.
  * - `fitbit_vorhanden`, `fitbit_fehlt`: Quell-Apps der letzten 30 Tage mit bzw. ohne Google Health (Fitbit).
+ * - `korrekturen` (#186): heute eine automatisch erkannte Fehlaufnahme (12 min Gehen), ein als Radfahren erkanntes
+ *   Training und ein Waagenwert. Die Person blendet danach die Fehlaufnahme aus und ändert die Art des zweiten.
+ * - `korrekturen_quelle`: auf `korrekturen` aufbauend ändert die Quelle alle drei Datensätze (Upsert): andere
+ *   Dauern bzw. Gramm, das zweite Training mit anderer Plattformart. Ausblendung und überschriebene Art bleiben.
  */
 export async function applyHealthScenario(fake: FakeHealthPlatform, scenario: HealthScenario, clock: Clock): Promise<void> {
   const now = clock.read().instant;
@@ -302,5 +308,23 @@ export async function applyHealthScenario(fake: FakeHealthPlatform, scenario: He
     case 'fitbit_fehlt':
       fake.reset();
       fake.put(fakeWorkout('training-uhr', ago(3), 30 * 60, { platformActivityType: 37, sourceApp: watchApp }), fakeWeight('gewicht-waage', ago(1), 82_500, { sourceApp: scaleApp }));
+      return;
+    case 'korrekturen':
+      fake.reset();
+      fake.put(
+        fakeWorkout('training-fehlaufnahme', minutesFrom(now, -150), 12 * 60, { platformActivityType: 52 }),
+        fakeWorkout('training-falsch-erkannt', minutesFrom(now, -90), 45 * 60, { platformActivityType: 13, activeMilliKcal: 380_000 }),
+        fakeWeight('gewicht-korrektur', minutesFrom(now, -300), 82_437, { sourceApp: scaleApp }),
+      );
+      return;
+    case 'korrekturen_quelle':
+      // Dieselben Datensätze mit ihren Zeitpunkten, aber neuen Werten aus der Quelle.
+      for (const record of [...fake.records('workout'), ...fake.records('weight')]) {
+        if (record.type === 'workout' && record.externalKey === 'training-fehlaufnahme') fake.put(fakeWorkout(record.externalKey, record.startedAt, 14 * 60, { ...record }));
+        if (record.type === 'workout' && record.externalKey === 'training-falsch-erkannt') {
+          fake.put(fakeWorkout(record.externalKey, record.startedAt, 48 * 60, { ...record, platformActivityType: 37 }));
+        }
+        if (record.type === 'weight' && record.externalKey === 'gewicht-korrektur') fake.put({ ...record, weightG: 82_512 });
+      }
   }
 }

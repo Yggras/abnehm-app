@@ -245,3 +245,41 @@ export const WeightDeletedOutcome = QuickCommandOutcome.extend({
   values: WeightMessageValues,
 });
 export type WeightDeletedOutcome = z.infer<typeof WeightDeletedOutcome>;
+
+/**
+ * Werte der Meldungen zu einem importierten Training, etwa „45 min Laufen ausgeblendet · Rückgängig“: die
+ * angezeigte Art und die Dauer in den Grenzen des Schemas (1–1440 Minuten; Spezifikation 3, Abschnitt 4; #186).
+ */
+export const ImportedSportMessageValues = z.strictObject({
+  activityType: ActivityType,
+  durationMinutes: z.int().min(sportEntryMinutes.min).max(sportEntryMinutes.max),
+});
+export type ImportedSportMessageValues = z.infer<typeof ImportedSportMessageValues>;
+
+/** Werte der Meldung zu einem importierten Gewicht, etwa „82,4 kg ausgeblendet · Rückgängig“: genaue Gramm. */
+export const ImportedWeightMessageValues = z.strictObject({ weightG: z.int().min(importedWeightG.min).max(importedWeightG.max) });
+export type ImportedWeightMessageValues = z.infer<typeof ImportedWeightMessageValues>;
+
+/**
+ * Ergebnis von `hideImported` ohne Bestätigungsdialog (Spezifikation 3, Abschnitt 4; #186): je nach Eintrag
+ * „45 min Laufen ausgeblendet“ oder „82,4 kg ausgeblendet“, mit flüchtigem Undo-Token für „Rückgängig“.
+ */
+export const ImportHiddenOutcome = z.discriminatedUnion('messageKey', [
+  QuickCommandOutcome.extend({ messageKey: z.literal('sport.ausgeblendet'), values: ImportedSportMessageValues }),
+  QuickCommandOutcome.extend({ messageKey: z.literal('gewicht.ausgeblendet'), values: ImportedWeightMessageValues }),
+]);
+export type ImportHiddenOutcome = z.infer<typeof ImportHiddenOutcome>;
+
+/**
+ * Werte der Meldung nach dem Ändern der Aktivitätsart, etwa „Jetzt Krafttraining statt Radfahren · Rückgängig“:
+ * die neue und die vorher angezeigte Art (#186, Ergebnis der Impeccable-Kritik).
+ */
+export const ActivityTypeOverriddenValues = z.strictObject({ activityType: ActivityType, previousActivityType: ActivityType });
+export type ActivityTypeOverriddenValues = z.infer<typeof ActivityTypeOverriddenValues>;
+
+/** Ergebnis von `overrideActivityType` (#186) samt flüchtigem Undo-Token für „Rückgängig“. */
+export const ActivityTypeOverriddenOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('sport.art_geaendert'),
+  values: ActivityTypeOverriddenValues,
+});
+export type ActivityTypeOverriddenOutcome = z.infer<typeof ActivityTypeOverriddenOutcome>;
