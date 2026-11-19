@@ -22,7 +22,7 @@ export {
   type DailyGoalRegistrations,
   type DailyGoalRegistry,
 } from './registry';
-export { isDayClosed } from './rules';
+export { bausteinEvaluation, isDayClosed } from './rules';
 /** Lesezugriff für Spezifikation 4, die Tageszielerfüllungen konsumiert (Spezifikation 0, Abschnitt 3). */
 export { completionsOfDay, latestCompletionDate } from './completion';
 export {

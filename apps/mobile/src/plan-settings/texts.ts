@@ -4,7 +4,7 @@ import type { Pace } from '@abnehm/contracts/ports';
 import type { BudgetSource } from '@abnehm/contracts/plan';
 
 import { kcalText } from '../nutrition/texts';
-import { onboardingTexts, safetyCheckTexts } from '../onboarding/texts';
+import { activityLevelParts, onboardingTexts, safetyCheckTexts } from '../onboarding/texts';
 import { monthNames, thousandthsWithOneDecimal } from '../shell/texts';
 import { kgText } from '../trackers/weight-texts';
 
@@ -12,17 +12,19 @@ export { kcalText, kgText };
 
 // Sichtbare Texte und zugängliche Namen der Einstellungsseite „Ziele“ (Spezifikation 1, Abschnitte 3 und
 // 10). Den Hinweis „keine medizinische Beratung“ und die Erklärung des erzwungenen Haltemodus teilt die
-// Seite wörtlich mit dem Onboarding (Schritte 1 und 4). Die Kurzbeschriftungen der Aktivitätsstufen sind
-// laut Abschnitt 3 eigene Vereinfachungen der DGE-Stufen (Designwert). Hinweise zu Gesundheitswerten sind
-// neutral formuliert und nie in `problem`-Farbe (Abschnitt 6).
+// Seite wörtlich mit dem Onboarding (Schritte 1 und 4), die Kurzbeschriftungen der Aktivitätsstufen mit
+// Schritt 5 (`activityLevelParts`). Hinweise zu Gesundheitswerten sind neutral formuliert und nie in
+// `problem`-Farbe (Abschnitt 6).
 
 /** Liter ohne überflüssige Nullen, etwa „1,5 l“ oder „1,75 l“; das Raster ist 250 ml. */
 export const litreText = (ml: number) => `${(ml / 1_000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} l`;
 
+const activityLevelName = (level: ActivityLevel) => `${activityLevelParts[level].level} – ${activityLevelParts[level].everyday}`;
+
 export const activityLevelNames: Readonly<Record<ActivityLevel, string>> = {
-  wenig_aktiv: 'wenig aktiv – überwiegend sitzend',
-  maessig_aktiv: 'mäßig aktiv – sitzend, zeitweise gehend oder stehend',
-  aktiv: 'aktiv – überwiegend gehend oder stehend',
+  wenig_aktiv: activityLevelName('wenig_aktiv'),
+  maessig_aktiv: activityLevelName('maessig_aktiv'),
+  aktiv: activityLevelName('aktiv'),
 };
 
 export const paceNames: Readonly<Record<Pace, string>> = { entspannt: 'entspannt', zuegiger: 'zügiger' };

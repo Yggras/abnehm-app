@@ -2,18 +2,19 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { countedWaterMl } from '@abnehm/contracts/tracker-rules';
 
-import { nutritionEntry, sportEntry, waterEntry, weightEntry } from '../../local-db/schema';
+import { sportEntry, waterEntry, weightEntry } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
+import { nutritionDailyGoals } from '../../nutrition/daily-goal-evaluators';
 import type { DayFactsReader } from '../evaluators';
 import { createDailyGoalRegistry, type DailyGoalRegistry } from '../registry';
-import { testBausteinEvaluators, testCheckInEvaluators, type TestDayFacts } from './test-evaluators';
+import { noTestFacts, testBausteinEvaluators, testCheckInEvaluators, type TestDayFacts } from './test-evaluators';
 
-// Stellvertretende Evaluatoren für die Schritte der Seed-Manifeste (#113). Die echten registrieren die
-// Spezifikationen 2 und 3; bis dahin wertet der Persistenzdienst der Tagesziele (#105) in den Seed-Tests
-// mit den Test-Evaluatoren des Fundaments aus, deren Fakten hier aus den lokalen Tabellen der Bereiche
-// kommen: gezählte Wassermenge nach den Tracker-Regeln, Dauer jeder sichtbaren, nicht ersetzten
-// Sporteinheit, sichtbare Gewichtseinträge, erfasste Mahlzeitenkategorien und Aufnahme in ganzen kcal.
-// Liefert ein Bereich seinen Evaluator, ersetzt er hier den stellvertretenden.
+// Evaluatoren für die Schritte der Seed-Manifeste (#113). Die Ernährung registriert ihre echten (#166).
+// Für Wasser, Sport und Gewicht wertet der Persistenzdienst der Tagesziele (#105) in den Seed-Tests bis
+// Spezifikation 3 (#178) mit den Test-Evaluatoren des Fundaments aus, deren Fakten hier aus den lokalen
+// Tabellen der Bereiche kommen: gezählte Wassermenge nach den Tracker-Regeln, Dauer jeder sichtbaren,
+// nicht ersetzten Sporteinheit und sichtbare Gewichtseinträge. Liefert ein Bereich seinen Evaluator,
+// ersetzt er hier den stellvertretenden.
 
 const readSeedFacts: DayFactsReader<TestDayFacts> = (tx, personId, localDate) => {
   const db = sqliteOf(tx);
@@ -32,24 +33,20 @@ const readSeedFacts: DayFactsReader<TestDayFacts> = (tx, personId, localDate) =>
     .from(weightEntry)
     .where(and(eq(weightEntry.personId, personId), eq(weightEntry.localDate, localDate), isNull(weightEntry.deletedAt), isNull(weightEntry.hiddenAt)))
     .all();
-  const meals = db
-    .select({ meal: nutritionEntry.meal, milliKcal: nutritionEntry.totalMilliKcal })
-    .from(nutritionEntry)
-    .where(and(eq(nutritionEntry.personId, personId), eq(nutritionEntry.localDate, localDate), isNull(nutritionEntry.deletedAt)))
-    .all();
   return {
-    recordedMealCategories: new Set(meals.map(({ meal }) => meal)).size,
-    intakeKcal: Math.round(meals.reduce((sum, { milliKcal }) => sum + milliKcal, 0) / 1_000),
+    ...noTestFacts,
     countedMl: countedWaterMl(waters, localDate),
     sessionMinutes: sessions.map(({ minutes }) => minutes),
     weightEntryCount: weights.length,
   };
 };
 
-/** Registry der Tagesziele mit den stellvertretenden Evaluatoren über den lokalen Tabellen. */
+/** Registry der Tagesziele: die echten der Ernährung, für die übrigen Bausteine die stellvertretenden. */
 export function seedDailyGoalRegistry(): DailyGoalRegistry {
+  const { wasserziel, sporteinheit, gewogen } = testBausteinEvaluators(readSeedFacts);
+  const { wasser, sport, gewicht } = testCheckInEvaluators(readSeedFacts);
   return createDailyGoalRegistry({
-    bausteine: Object.values(testBausteinEvaluators(readSeedFacts)),
-    checkIns: Object.values(testCheckInEvaluators(readSeedFacts)),
+    bausteine: [...nutritionDailyGoals.bausteine, wasserziel, sporteinheit, gewogen],
+    checkIns: [...nutritionDailyGoals.checkIns, wasser, sport, gewicht],
   });
 }

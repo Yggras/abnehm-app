@@ -25,6 +25,7 @@ import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 import { createMealPhotos } from './nutrition/meal-photos.ts';
 import { encouragementEntity, sendEncouragementCommand } from './notifications/encouragement.ts';
 import { notificationSettingEntity } from './notifications/notification-setting-entity.ts';
+import { createPushInstallations } from './notifications/push-installations.ts';
 import { ownFoodEntity } from './nutrition/own-food-entity.ts';
 import { createPhotoDrafts } from './nutrition/photo-drafts.ts';
 import { createPhotoStorage } from './nutrition/photo-storage.ts';
@@ -137,14 +138,17 @@ export function createBackend({
     securityLog,
     ipAddressOf: auth.ipAddressOf,
   });
-  // Serverseitige Abmelde-Haken melden die Bereiche hier an, etwa Spezifikation 5 die Push-Deaktivierung.
+  // Serverseitige Abmelde-Haken melden die Bereiche hier an.
   const logout = createLogout({ database, clock, auth, securityLog });
+  // Push-Installation (Spezifikation 5, Abschnitt 9; #139): eigener Endpunkt, das Abmelden deaktiviert sie.
+  const pushInstallations = createPushInstallations({ database, clock });
+  logout.registerHook(pushInstallations.logoutHook);
   const jobs = createJobRegistry({ clock });
   jobs.register(securityLog.cleanupJob);
   jobs.register(photoDrafts.cleanupJob);
   jobs.register(mealPhotos.storageCleanupJob);
   return {
-    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts }),
+    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts, pushInstallations }),
     clock,
     photoStorage,
     securityLog,

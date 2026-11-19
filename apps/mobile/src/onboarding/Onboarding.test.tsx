@@ -547,6 +547,330 @@ describe('Schritt 4 „Sicherheits-Check“', () => {
   });
 });
 
+// Schritte 5–7 (#143) mit dem Referenzfall aus research/calorie-needs.md: Frau, 35 Jahre, 168 cm,
+// 80 kg → Grundumsatz 1.514 kcal, Gesamtumsatz 2.120 kcal bei PAL 1,4, Budget 1.620 kcal.
+
+async function answerSafety(pregnant: 'Ja' | 'Nein' = 'Nein', eatingDisorder: 'Ja' | 'Nein' = 'Nein') {
+  await user.press(screen.getByRole('radio', { name: `Schwanger oder stillend: ${pregnant}` }));
+  await user.press(screen.getByRole('radio', { name: `Bekannte Essstörung: ${eatingDisorder}` }));
+}
+
+async function openStepFive({ pregnant = 'Nein' as 'Ja' | 'Nein', ...body }: Parameters<typeof fillBody>[0] & { pregnant?: 'Ja' | 'Nein' } = {}) {
+  await openStepThree();
+  await fillBody(body);
+  await next();
+  await screen.findByRole('header', { name: 'Sicherheits-Check' });
+  await answerSafety(pregnant);
+  await next();
+  await screen.findByRole('header', { name: 'Aktivitätsstufe' });
+}
+
+async function openStepSix(options: Parameters<typeof openStepFive>[0] = {}) {
+  await openStepFive(options);
+  await next();
+  await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+}
+
+async function openStepSeven(options: Parameters<typeof openStepFive>[0] = {}) {
+  await openStepSix(options);
+  await next();
+  await screen.findByRole('header', { name: 'Ergebnis' });
+}
+
+const levelCard = (name: string) => screen.getByRole('radio', { name });
+const lowLevel = 'wenig aktiv, überwiegend sitzend';
+const midLevel = 'mäßig aktiv, sitzend, zeitweise gehend oder stehend';
+const highLevel = 'aktiv, überwiegend gehend oder stehend';
+const relaxed = 'entspannt, etwa 0,5 kg pro Woche';
+const faster = 'zügiger, etwa 0,75 kg pro Woche';
+const forecastNote = 'Schätzung. Nach etwa drei Monaten verlangsamt sich die Abnahme meist.';
+
+async function typeGoalWeight(value: string) {
+  await user.clear(screen.getByLabelText('Zielgewicht'));
+  await user.type(screen.getByLabelText('Zielgewicht'), value);
+}
+
+describe('Schritt 5 „Aktivitätsstufe“', () => {
+  it('zeigt drei Karten, die niedrigste vorausgewählt, mit „im Zweifel die niedrigere“', async () => {
+    await openStepFive();
+
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 5 von 11' });
+    expect(levelCard(lowLevel)).toBeChecked();
+    expect(levelCard(midLevel)).not.toBeChecked();
+    expect(levelCard(highLevel)).not.toBeChecked();
+    expect(screen.getByText('Im Zweifel die niedrigere Stufe: So überschätzt die App deinen Bedarf nicht.')).toBeOnTheScreen();
+
+    await next();
+    expect(await screen.findByRole('header', { name: 'Zielgewicht und Tempo' })).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().activityLevel).toBe('wenig_aktiv');
+  });
+
+  it('legt die gewählte Stufe sofort im Entwurf ab', async () => {
+    await openStepFive();
+
+    await user.press(levelCard(midLevel));
+
+    expect(levelCard(midLevel)).toBeChecked();
+    expect(levelCard(lowLevel)).not.toBeChecked();
+    expect(mockDevice.onboarding.readDraft().activityLevel).toBe('maessig_aktiv');
+  });
+});
+
+describe('Schritt 6 „Zielgewicht und Tempo“', () => {
+  it('wählt 5 % unter dem aktuellen Gewicht und „entspannt“ vor und zeigt die Prognose als Schätzung', async () => {
+    await openStepSix();
+
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 6 von 11' });
+    expect(screen.getByLabelText('Zielgewicht')).toHaveProp('value', '76,0');
+    // BMI 18,5 bei 168 cm sind 52,21… kg, aufgerundet auf 0,1 kg.
+    expect(screen.getByLabelText('Zielgewicht')).toHaveProp('accessibilityHint', 'Vorschlag: 72,0 bis 76,0 kg. Mindestens 52,3 kg.');
+    expect(screen.getByRole('radio', { name: relaxed })).toBeChecked();
+    // 4 kg bei 0,5 kg pro Woche: 8 Wochen ab dem 14.10.2026.
+    expect(screen.getByText('etwa Dezember 2026')).toBeOnTheScreen();
+    expect(screen.getByText(forecastNote)).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('radio', { name: faster }));
+    // 4 kg bei 0,75 kg pro Woche: 38 Tage.
+    expect(screen.getByText('etwa November 2026')).toBeOnTheScreen();
+
+    await next();
+    expect(await screen.findByRole('header', { name: 'Ergebnis' })).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft()).toEqual(expect.objectContaining({ goalWeightG: 76_000, pace: 'zuegiger' }));
+  });
+
+  it('Untergrenze BMI 18,5 und 0,1-kg-Schritte: darunter und mit zwei Nachkommastellen geht es nicht weiter', async () => {
+    await openStepSix();
+
+    await typeGoalWeight('52,2');
+    expect(screen.getByLabelText('Zielgewicht')).toHaveProp('accessibilityHint', 'Fehler: Dein Zielgewicht muss mindestens 52,3 kg betragen, das entspricht einem BMI von 18,5.');
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+
+    await typeGoalWeight('70,25');
+    expect(screen.getByLabelText('Zielgewicht')).toHaveProp('accessibilityHint', 'Fehler: Bitte gib dein Zielgewicht in kg mit höchstens einer Nachkommastelle ein.');
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+
+    await typeGoalWeight('52,3');
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeEnabled();
+    expect(mockDevice.onboarding.readDraft().goalWeightG).toBe(52_300);
+  });
+
+  it('ein Zielgewicht nicht unter dem aktuellen führt mit Hinweis in den gewählten Haltemodus, ohne Tempo und Prognose', async () => {
+    await openStepSix();
+
+    await typeGoalWeight('80,0');
+
+    expect(screen.getByText(/^Dein Zielgewicht liegt nicht unter deinem aktuellen Gewicht von 80,0 kg\. .*\(Haltemodus\)/)).toBeOnTheScreen();
+    expect(screen.queryByRole('radio', { name: relaxed })).toBeNull();
+    expect(screen.queryByText(forecastNote)).toBeNull();
+
+    await typeGoalWeight('75,0');
+    expect(screen.getByRole('radio', { name: relaxed })).toBeChecked();
+    expect(screen.getByText(forecastNote)).toBeOnTheScreen();
+  });
+
+  it('erzwungener Haltemodus aus dem Sicherheits-Check: Hinweis, kein Tempo, keine Prognose', async () => {
+    await openStepSix({ pregnant: 'Ja' });
+
+    expect(screen.getByText(/^Wegen Schwangerschaft oder Stillzeit rechnet die App.*ärztlich begleiten/)).toBeOnTheScreen();
+    expect(screen.queryByRole('radio', { name: relaxed })).toBeNull();
+    expect(screen.queryByText(forecastNote)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeEnabled();
+  });
+});
+
+describe('Schritt 7 „Ergebnis“', () => {
+  const budgetValue = (text: string) => screen.getByLabelText(`Kalorienbudget pro Tag: ${text}`);
+
+  it('zeigt das Budget mit aufklappbarer Herleitung aus Grundumsatz, Aktivitätsstufe und Defizit', async () => {
+    await openStepSeven();
+
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 7 von 11' });
+    expect(budgetValue('1.620 kcal')).toBeOnTheScreen();
+    expect(screen.queryByLabelText('Grundumsatz: 1.514 kcal')).toBeNull();
+
+    await user.press(screen.getByRole('button', { name: 'So entsteht dein Budget' }));
+
+    expect(screen.getByLabelText('Grundumsatz: 1.514 kcal')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Aktivitätsstufe wenig aktiv – überwiegend sitzend: mal 1,4')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Gesamtumsatz: 2.120 kcal')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Defizit für das Tempo entspannt: minus 500 kcal')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Untergrenze: 1.514 kcal')).toBeOnTheScreen();
+    expect(screen.queryByText(/angehoben/)).toBeNull();
+
+    await user.press(screen.getByRole('button', { name: 'Herleitung ausblenden' }));
+    expect(screen.queryByLabelText('Grundumsatz: 1.514 kcal')).toBeNull();
+  });
+
+  it('ändert das Budget in 10-kcal-Schritten als eigenes und kehrt zur Rechnung zurück', async () => {
+    await openStepSeven();
+
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' }));
+    expect(budgetValue('1.630 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Selbst festgelegt. Möglich sind 1.520 bis 2.120 kcal.')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBe(1_630);
+
+    await user.press(screen.getByRole('button', { name: 'Zurück zu 1.620 kcal' }));
+    expect(budgetValue('1.620 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Berechnet. Möglich sind 1.520 bis 2.120 kcal.')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBeUndefined();
+  });
+
+  it('Anhebungshinweis mit Verweis auf ärztliche Begleitung; an der Untergrenze geht es nicht weiter nach unten', async () => {
+    await openStepSix();
+    await user.press(screen.getByRole('radio', { name: faster }));
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+
+    // 2.119,6 − 750 = 1.369,6 kcal liegt unter dem Grundumsatz; angehoben auf das nächste Vielfache von 10.
+    expect(budgetValue('1.520 kcal')).toBeOnTheScreen();
+    expect(screen.getByText(/^Die Rechnung lag unter deiner Untergrenze, deshalb ist dein Budget angehoben\..*ärztlich begleiten/)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag verringern' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' })).toBeEnabled();
+  });
+
+  it('am Gesamtumsatz geht es nicht weiter nach oben', async () => {
+    await openStepSix();
+    await typeGoalWeight('80,0');
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+
+    expect(budgetValue('2.120 kcal')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag verringern' })).toBeEnabled();
+  });
+
+  it('im gewählten Haltemodus reicht der Bereich bis zum auf 10 kcal gerundeten Gesamtumsatz', async () => {
+    await openStepFive();
+    await user.press(levelCard(highLevel));
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    await typeGoalWeight('80,0');
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+
+    // 1.514 × 1,8 = 2.725,2 kcal: Budget 2.730 kcal, ein eigenes höchstens 2.720 kcal.
+    expect(budgetValue('2.730 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Berechnet. Möglich sind 1.520 bis 2.730 kcal.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' })).toBeDisabled();
+
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag verringern' }));
+    expect(budgetValue('2.720 kcal')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBe(2_720);
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' }));
+    expect(budgetValue('2.730 kcal')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBeUndefined();
+  });
+
+  it('im erzwungenen Haltemodus lässt sich das Budget nicht ändern', async () => {
+    await openStepSeven({ pregnant: 'Ja' });
+
+    expect(screen.getByLabelText('Kalorienbudget pro Tag: 2.120 kcal')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Kalorienbudget pro Tag verringern' })).toBeNull();
+    expect(screen.getByText(/^Wegen Schwangerschaft oder Stillzeit rechnet die App/)).toBeOnTheScreen();
+  });
+
+  it('Wasser in 250-ml-Schritten mit Hinweis auf Mehrbedarf, Sport in 10-Minuten-Schritten', async () => {
+    await openStepSeven();
+
+    expect(screen.getByLabelText('Wasserziel: 1,5 l')).toBeOnTheScreen();
+    expect(screen.getByText('Bei Hitze und Sport brauchst du mehr.')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Sportziel: 150 min')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Wasserziel erhöhen' }));
+    await user.press(screen.getByRole('button', { name: 'Sportziel verringern' }));
+
+    expect(screen.getByLabelText('Wasserziel: 1,75 l')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Sportziel: 140 min')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft()).toEqual(expect.objectContaining({ waterTargetMl: 1_750, weeklySportTargetMinutes: 140 }));
+  });
+
+  it.each([
+    ['unteren', { waterTargetMl: 500, weeklySportTargetMinutes: 30 }, 'verringern'],
+    ['oberen', { waterTargetMl: 5_000, weeklySportTargetMinutes: 600 }, 'erhöhen'],
+  ] as const)('Stepper an der %s Grenze sperren die Richtung', async (_, targets, direction) => {
+    await openStepSix();
+    mockDevice.onboarding.updateDraft(targets);
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+
+    expect(screen.getByRole('button', { name: `Wasserziel ${direction}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: `Sportziel ${direction}` })).toBeDisabled();
+  });
+
+  it('„Weiter“ übernimmt die Vorschläge in den Entwurf und führt zu Schritt 8', async () => {
+    await openStepSeven();
+
+    await next();
+
+    expect(await screen.findByRole('header', { name: 'Wochenplan' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 8 von 11' });
+    expect(mockDevice.onboarding.readDraft()).toEqual(
+      expect.objectContaining({ activityLevel: 'wenig_aktiv', goalWeightG: 76_000, pace: 'entspannt', waterTargetMl: 1_500, weeklySportTargetMinutes: 150 }),
+    );
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBeUndefined();
+  });
+});
+
+describe('Schritte 5–7 ohne Netz und mit „Zurück“', () => {
+  it('rufen keinen Server auf, und „Zurück“ behält alle Eingaben', async () => {
+    await openStepFive();
+    mockDevice.faults.set({ transport: 'offline' });
+    const calls = mockDevice.server.calls().length;
+
+    await user.press(levelCard(highLevel));
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    await typeGoalWeight('75,0');
+    await user.press(screen.getByRole('radio', { name: faster }));
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag verringern' }));
+    await user.press(screen.getByRole('button', { name: 'Wasserziel erhöhen' }));
+    await user.press(screen.getByRole('button', { name: 'Sportziel erhöhen' }));
+    // aktiv: 1.514 × 1,8 − 750 = 1.975,2 kcal → 1.980 kcal, eins tiefer 1.970 kcal.
+    expect(screen.getByLabelText('Kalorienbudget pro Tag: 1.970 kcal')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('header', { name: 'Zielgewicht und Tempo' })).toBeOnTheScreen();
+    expect(screen.getByLabelText('Zielgewicht')).toHaveProp('value', '75,0');
+    expect(screen.getByRole('radio', { name: faster })).toBeChecked();
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('header', { name: 'Aktivitätsstufe' })).toBeOnTheScreen();
+    expect(levelCard(highLevel)).toBeChecked();
+
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+    expect(screen.getByLabelText('Kalorienbudget pro Tag: 1.970 kcal')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Wasserziel: 1,75 l')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Sportziel: 160 min')).toBeOnTheScreen();
+    expect(mockDevice.server.calls()).toHaveLength(calls);
+  });
+
+  it('ein eigenes Budget bleibt nach einer anderen Aktivitätsstufe, solange es im neuen Bereich liegt', async () => {
+    await openStepSeven();
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' }));
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    await screen.findByRole('header', { name: 'Aktivitätsstufe' });
+    await user.press(levelCard(midLevel));
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+
+    // mäßig aktiv: 1.514 × 1,6 − 500 = 1.922,4 kcal → 1.920 kcal; die eigenen 1.630 kcal liegen im Bereich.
+    expect(screen.getByLabelText('Kalorienbudget pro Tag: 1.630 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Selbst festgelegt. Möglich sind 1.520 bis 2.420 kcal.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Zurück zu 1.920 kcal' })).toBeOnTheScreen();
+  });
+});
+
 describe('Zugänglichkeit', () => {
   const interactiveRoles = ['button', 'checkbox', 'radio'];
 
@@ -610,6 +934,26 @@ describe('Zugänglichkeit', () => {
     expect(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' })).toBeChecked();
     expect(within(screen.getByRole('radio', { name: 'Schwanger oder stillend: Ja' })).getByTestId('icon-check', { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByText(/\(Haltemodus\)/)).toBeOnTheScreen();
+    await expectAccessible();
+  });
+
+  it('Schritte 5–7: deutsche Namen, 48-dp-Aktionen, Schrift bis Faktor 2,0, Auswahl nicht nur über Farbe', async () => {
+    await openStepFive();
+    // Ausgewählt heißt Zustand und Häkchen (#95).
+    expect(within(levelCard(lowLevel)).getByTestId('icon-check', { includeHiddenElements: true })).toBeOnTheScreen();
+    await expectAccessible();
+
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    expect(hitArea(screen.getByLabelText('Zielgewicht')).height).toBeGreaterThanOrEqual(48);
+    await expectAccessible();
+
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+    await user.press(screen.getByRole('button', { name: 'So entsteht dein Budget' }));
+    for (const name of ['Kalorienbudget pro Tag verringern', 'Kalorienbudget pro Tag erhöhen', 'Wasserziel verringern', 'Wasserziel erhöhen', 'Sportziel verringern', 'Sportziel erhöhen', 'Herleitung ausblenden']) {
+      expect(screen.getByRole('button', { name })).toBeOnTheScreen();
+    }
     await expectAccessible();
   });
 });

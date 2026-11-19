@@ -19,15 +19,18 @@ import { islandEventCommands } from '../island/island-events';
 import { islandObjectCommands } from '../island/object-commands';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
+import { composeAreaPorts } from '../area-ports';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
+import { appNutrition, createNutrition, intakeReaderOf, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
-import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
+import { createNotifications, NotificationsStep, type AppNotifications, type NotificationPort } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
 import { appNotificationSettings } from '../notifications/app-notification-settings';
 import { createNotificationSettings } from '../notifications/notification-setting';
 import { notificationSettingEntity } from '../notifications/notification-setting-entity';
+import { createPushInstallationTransport } from '../notifications/push-installation-transport';
+import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
 import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
@@ -140,33 +143,45 @@ function deviceState() {
     // Kontobezogene Beobachter an der geöffneten Datenbank; beim Sperren lösen sie sich wieder.
     onAccountOpened(database) {
       const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError });
-      // Baustein-Auswertung (Spezifikation 0, Abschnitt 3); die Evaluatoren registrieren die Spezifikationen 2 und 3.
-      const dailyGoalRegistry = createDailyGoalRegistry({ bausteine: [], checkIns: [] });
+      // Baustein-Auswertung und Tages-Check-in (Spezifikation 0, Abschnitt 3): Die Ernährung registriert
+      // „Ernährung erfasst“, „Im Kalorienbudget“ und den Check-in `ernaehrung` (#166); Wasser, Sport und
+      // Gewicht folgen mit Spezifikation 3 (#178).
+      const dailyGoalRegistry = createDailyGoalRegistry({
+        bausteine: [...nutritionDailyGoals.bausteine],
+        checkIns: [...nutritionDailyGoals.checkIns],
+      });
       const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
       // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
-      // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`). Die Ports
-      // `weightRecorder` und `weightTrendReader` gibt der Composition Root an `composeAreaPorts` weiter,
-      // sobald alle Pflichtports angemeldet sind.
+      // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`).
       const trackers = createTrackers({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Ports zwischen Bereichen (Spezifikation 0, Abschnitt 3): vollständig geprüft, jede Rückgabe gegen ihr
+      // Vertragsschema validiert. Die konsumierenden Module bekommen nur diese Ports.
+      const ports = composeAreaPorts(database, {
+        planReader: planReaderOf,
+        intakeReader: intakeReaderOf,
+        weightRecorder: () => trackers.weightRecorder,
+        weightTrendReader: () => trackers.weightTrendReader,
+      });
       // Health-Import (Spezifikation 3, Abschnitt 6): schreibt nur über den Importbefehl des Tracker-Moduls und
       // läuft beim App-Start, bei Rückkehr in den Vordergrund, nach dem Verbinden und auf „Jetzt abrufen“.
       const health = createHealthImport({ database, platform: healthPlatform, trackers, clock: appClock, onError });
       // Plan-Modul (Spezifikation 1): Seine Materialisierung legt fehlende Tage im Nachholfenster an, bevor
       // der Persistenzdienst auswertet (#131). Das Startgewicht des Erstplans läuft über den `WeightRecorder`
       // des Tracker-Moduls.
-      const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: trackers.weightRecorder, newId });
+      const plan = createPlan({ database, clock: appClock, writer: syncWriter, persistence, weightRecorder: ports.weightRecorder, newId });
       persistence.registerMissingDaysHook(plan.materializeMissingDays);
       // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
       const planToday = plan.today(dailyGoalRegistry);
       // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
       // Stimmungen folgen der Uhr im Takt von „Heute“; die Erfolgshaptik löst nur dieser Dienst aus (#188).
       const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh });
+      const installation = installationId(database, appClock, newId);
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
-        installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
+        installationId: installation, onCanonicalChanges: persistence.onCanonicalChanges,
         commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
       });
       activeEngine = engine;
@@ -186,19 +201,26 @@ function deviceState() {
         appTrackers.opened(trackers),
         appHealthImport.opened(health),
         health.startForegroundTriggers({ initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground }),
-        waterTodayOpened(trackers.waterToday(planReaderOf(database), appTodayRefresh)),
-        weightTodayOpened(trackers.weightToday(planReaderOf(database), appTodayRefresh)),
-        appWeightDetail.opened(trackers.weightDetail(planReaderOf(database), appTodayRefresh)),
-        appSportWeeks.opened((week) => trackers.sportWeek(planReaderOf(database), appTodayRefresh, week)),
-        sportTodayOpened(trackers.sportToday(planReaderOf(database), appTodayRefresh)),
+        waterTodayOpened(trackers.waterToday(ports.planReader, appTodayRefresh)),
+        weightTodayOpened(trackers.weightToday(ports.planReader, appTodayRefresh)),
+        appWeightDetail.opened(trackers.weightDetail(ports.planReader, appTodayRefresh)),
+        appSportWeeks.opened((week) => trackers.sportWeek(ports.planReader, appTodayRefresh, week)),
+        sportTodayOpened(trackers.sportToday(ports.planReader, appTodayRefresh)),
         appGameService.opened(game), momoTodayOpened(game.momoCharacter), appWirContributions.opened(game.wirContributions),
         appPartner.opened(partner), partnerTodayOpened(partner.todayCard),
         dailyGoalsTodayOpened(planToday.dailyGoals(appTodayRefresh)), budgetTodayOpened(planToday.budget(appTodayRefresh)),
         // Einstellungsseite „Ziele“ (#147): das Plan-Modul für „Ziele ändern“ und sein Lesemodell mit dem
         // Basisgewicht der Prognose aus dem `WeightTrendReader` des Tracker-Moduls.
-        appPlan.opened(plan), appGoalSettings.opened(plan.goalSettings(trackers.weightTrendReader, appTodayRefresh)),
+        appPlan.opened(plan), appGoalSettings.opened(plan.goalSettings(ports.weightTrendReader, appTodayRefresh)),
         // Benachrichtigungseinstellung (Spezifikation 5, #132): die Seite „Benachrichtigungen“ spricht nur mit diesem Modul.
         appNotificationSettings.opened(createNotificationSettings({ database, writer: syncWriter, clock: appClock })),
+        // Push-Installation (Spezifikation 5, Abschnitt 9; #139): nach erteilter Erlaubnis, bei jedem Start mit
+        // Erlaubnis und bei geänderter Erlaubnis im Vordergrund; die Kennung ist die des Syncs.
+        startPushRegistration({
+          database, clock: appClock, notifications: deviceNotifications(), port: deviceNotificationPort(),
+          transport: createPushInstallationTransport({ baseUrl, fetch: session.auth.fetch }),
+          installationKey: installation, platform: Platform.OS === 'ios' ? 'ios' : 'android', onError,
+        }),
         // Tagesziele sicherstellen: jetzt (App-Start), im Vordergrund und am lokalen Tageswechsel (#131).
         followDailyGoalTriggers({
           ensure: plan.ensureDailyGoals,
@@ -263,6 +285,13 @@ function deviceState() {
 }
 
 let notifications: AppNotifications | null = null;
+let notificationPort: NotificationPort | null = null;
+
+/** Der Mitteilungs-Port des Geräts; in Test-Artefakten mit dem Umschalter auf den Fake davor (#125). */
+function deviceNotificationPort(): NotificationPort {
+  notificationPort ??= testCapabilities?.adapters.notifications(expoNotificationPort) ?? expoNotificationPort;
+  return notificationPort;
+}
 
 /**
  * Mitteilungen des Geräts (Spezifikation 5, Abschnitt 8). Das Wurzel-Layout ruft das beim Start auf:
@@ -272,8 +301,7 @@ let notifications: AppNotifications | null = null;
  */
 export function deviceNotifications(): AppNotifications {
   if (notifications !== null) return notifications;
-  const port = testCapabilities?.adapters.notifications(expoNotificationPort) ?? expoNotificationPort;
-  const created = createNotifications({ port, onError });
+  const created = createNotifications({ port: deviceNotificationPort(), onError });
   AppState.addEventListener('change', (state) => {
     if (state === 'active') void created.refresh();
   });

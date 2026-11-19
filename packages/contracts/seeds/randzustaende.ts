@@ -26,7 +26,7 @@ const iphone = seedInstallations.philippIphone.key;
 const now = seedClock.instant;
 
 /** Wochenplan der Randzustände: dienstags und mittwochs Kalorienbudget, Wasserziel und Sporteinheit. */
-const plan = {
+export const randzustandPlan = {
   montag: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'],
   dienstag: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
   mittwoch: ['im_kalorienbudget', 'wasserziel', 'sporteinheit'],
@@ -44,7 +44,7 @@ const water = {
 } as const satisfies Record<string, WaterToday>;
 
 /** Philipp mit Zielen, Wochenplan der Randzustände, Tageszielen von heute und Wasser von heute. */
-const basis = (waterToday: WaterToday): SeedPart[] => [soloFundament, soloZieleOf(plan), soloTrackerOf(waterToday)];
+const basis = (waterToday: WaterToday): SeedPart[] => [soloFundament, soloZieleOf(randzustandPlan), soloTrackerOf(waterToday)];
 
 /** Heute eine kurze Einheit unter der Schwelle von 20 Minuten. */
 const kurzeEinheit: SeedPart = {
@@ -72,7 +72,7 @@ const gestern: readonly SeedPart[] = [
       localDate: seedDays.gestern,
       dayEndsAt: seedDayEnds.gestern,
       createdAt: '2026-10-13T05:00:00.000Z',
-      bausteine: plan.dienstag,
+      bausteine: randzustandPlan.dienstag,
       thresholds: philippThresholds,
     }),
   },
@@ -105,7 +105,7 @@ const gestern: readonly SeedPart[] = [
 /** Erfüllung eines Tagesziels von Philipp zu `at`. */
 const completion = (localDate: 'heute' | 'gestern', slot: DailyGoalSlot, at: string): SeedEntity[] => {
   const ids = localDate === 'heute' ? seedIds.dailyGoal.philippHeute : seedIds.dailyGoal.philippGestern;
-  const bausteine = localDate === 'heute' ? plan.mittwoch : plan.dienstag;
+  const bausteine = localDate === 'heute' ? randzustandPlan.mittwoch : randzustandPlan.dienstag;
   return seedCompletion({ personId: philipp, dailyGoalId: ids[slot - 1]!, localDate: seedDays[localDate], slot, baustein: bausteine[slot - 1]!, at });
 };
 
@@ -118,12 +118,13 @@ type CommandDraft = Omit<Extract<OutboxOperation, { businessKey: string }>, 'ope
 /**
  * Der Fachbefehl, den der Persistenzdienst zu einer angelegten Zeile schreibt: je Erfüllung
  * `completeDailyGoal` (die Gutschrift reist mit ihr), je Tagesbonus `grantDailyBonus`; sonst keiner.
+ * `createdAt` ist die Uhrzeit des Geräts bei der Auswertung.
  */
-function commandOf(entity: SeedEntity): CommandDraft | null {
+function commandOf(entity: SeedEntity, createdAt: string): CommandDraft | null {
   const { row } = entity;
   const personId = EntityId.parse(row.person_id);
   const localDate = LocalDate.parse(row.local_date);
-  const base = { knownServerVersion: null, schemaVersion: currentSyncSchemaVersion, createdAt: Instant.parse(now) };
+  const base = { knownServerVersion: null, schemaVersion: currentSyncSchemaVersion, createdAt: Instant.parse(createdAt) };
   if (entity.table === 'daily_goal_completion') {
     const slot = DailyGoalSlot.parse(row.slot);
     return {
@@ -140,32 +141,35 @@ function commandOf(entity: SeedEntity): CommandDraft | null {
 }
 
 /** Zustand mit dem iPhone auf dem Stand des Servers. */
-const stateOf = (parts: readonly SeedPart[]): SeedState =>
+export const stateOf = (parts: readonly SeedPart[]): SeedState =>
   buildSeedState({ parts, createdAt: now, devices: { [iphone]: { personId: philipp, cursor: 'latest' } } });
 
 /**
  * Sollzustand nach `tagesziele_auswerten`: Erfüllungen und Buchungen nur auf dem iPhone, ohne
- * Serverversion, ihre Fachbefehle in Reihenfolge in der Outbox. Der Server bleibt unverändert.
+ * Serverversion, ihre Fachbefehle in Reihenfolge in der Outbox. Der Server bleibt unverändert. `at` ist
+ * die Uhrzeit des Geräts bei der Auswertung, ohne Angabe die Uhr des Manifests.
  */
-function evaluatedOnDevice(state: SeedState, created: readonly SeedEntity[], operationIds: readonly string[]): SeedState {
+export function evaluatedOnDevice(state: SeedState, created: readonly SeedEntity[], operationIds: readonly string[], at: string = now): SeedState {
   const device = state.devices[iphone]!;
   const rows: Record<string, SeedRow[]> = { ...device.rows };
   for (const { table, row } of local(created)) rows[table] = [...(rows[table] ?? []), row];
-  const commands = created.map(commandOf).filter((draft) => draft !== null);
+  const commands = created.map((entity) => commandOf(entity, at)).filter((draft) => draft !== null);
   if (commands.length !== operationIds.length) throw new Error('Seed: je Fachbefehl genau eine Operations-ID');
   const outbox = commands.map((draft, index) => OutboxOperation.parse({ ...draft, operationId: operationIds[index] }));
   return { server: state.server, devices: { [iphone]: { ...device, rows, outbox } } };
 }
 
-const evaluate = (localDate: 'heute' | 'gestern', cause: 'app_oeffnung' | 'tagesabschluss', operationIds: readonly string[]): SeedStep => ({
+/** Schritt `tagesziele_auswerten` auf dem iPhone; mit `at` zu dieser Uhrzeit des Geräts. */
+export const evaluate = (localDate: 'heute' | 'gestern', cause: 'app_oeffnung' | 'tagesabschluss', operationIds: readonly string[], at?: string): SeedStep => ({
   type: 'tagesziele_auswerten',
   installation: iphone,
   localDates: [LocalDate.parse(seedDays[localDate])],
   cause,
   operationIds: operationIds.map((id) => EntityId.parse(id)),
+  ...(at === undefined ? {} : { at: Instant.parse(at) }),
 });
 
-type Randzustand = Readonly<{ initial: SeedState; steps: readonly SeedStep[]; target: SeedState }>;
+export type Randzustand = Readonly<{ initial: SeedState; steps: readonly SeedStep[]; target: SeedState }>;
 
 /** Heute ohne Wasser, Sport und Mahlzeiten: alle drei Tagesziele offen; die App-Öffnung legt nichts an. */
 function leer(): Randzustand {
@@ -253,8 +257,8 @@ const randzustaende = {
 
 type RandzustandKey = keyof typeof randzustaende;
 
-function manifest(scenario: RandzustandKey): SeedManifest {
-  const { initial, steps, target } = randzustaende[scenario]();
+/** Manifest eines Randzustands: Philipp allein mit dem iPhone, Uhr und Tage wie in allen Szenarien. */
+export function randzustandManifest(scenario: SeedScenarioKey, { initial, steps, target }: Randzustand): SeedManifest {
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
@@ -272,5 +276,5 @@ function manifest(scenario: RandzustandKey): SeedManifest {
 
 /** Die Randzustände der Tagesziele (#113). */
 export const randzustandManifests = Object.fromEntries(
-  (Object.keys(randzustaende) as RandzustandKey[]).map((scenario) => [scenario, manifest(scenario)]),
+  (Object.keys(randzustaende) as RandzustandKey[]).map((scenario) => [scenario, randzustandManifest(scenario, randzustaende[scenario]())]),
 ) as Readonly<Record<RandzustandKey, SeedManifest>>;

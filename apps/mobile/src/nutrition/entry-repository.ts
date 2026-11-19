@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, between, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { CaptureMethod, DisplayUnit, SnapshotSource, type FoodRef, type NutritionEntryRecord, type NutritionEntryUpsert } from '@abnehm/contracts/nutrition';
@@ -138,6 +138,27 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
       source: SnapshotSource.parse(row.source),
       displayUnit: DisplayUnit.parse(row.displayUnit),
     }));
+}
+
+/** Aufnahme eines lokalen Tags: Summe der `milli_kcal` und Zahl der Mahlzeiten mit Einträgen (0–4). */
+export type DayIntake = Readonly<{ intakeMilliKcal: number; recordedMealCategories: number }>;
+
+/**
+ * Aufnahme je lokalem Tag von `from` bis `to` aus den nicht gelöschten Einträgen der Person. Tage ohne
+ * Einträge fehlen in der Map. Eine Mahlzeit zählt, sobald sie mindestens einen Eintrag hat.
+ */
+export function intakeByDay(tx: ReadContext, personId: EntityId, from: LocalDate, to: LocalDate): ReadonlyMap<LocalDate, DayIntake> {
+  const rows = sqliteOf(tx)
+    .select({
+      localDate: nutritionEntry.localDate,
+      intakeMilliKcal: sql<number>`sum(${nutritionEntry.totalMilliKcal})`,
+      recordedMealCategories: sql<number>`count(distinct ${nutritionEntry.meal})`,
+    })
+    .from(nutritionEntry)
+    .where(and(eq(nutritionEntry.personId, personId), between(nutritionEntry.localDate, from, to), isNull(nutritionEntry.deletedAt)))
+    .groupBy(nutritionEntry.localDate)
+    .all();
+  return new Map(rows.map(({ localDate, ...intake }) => [LocalDate.parse(localDate), intake]));
 }
 
 /** Menge und Einheit des zuletzt erfassten, nicht gelöschten Eintrags mit dieser Lebensmittelreferenz. */

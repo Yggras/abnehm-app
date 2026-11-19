@@ -1,8 +1,8 @@
 import type { AreaKey, BausteinKey, EntityId, LocalDate } from '@abnehm/contracts/base';
-import type { BausteinEvaluation, DailyGoalProgress, DailyGoalState } from '@abnehm/contracts/daily-goals';
+import type { DailyGoalState } from '@abnehm/contracts/daily-goals';
 
 import type { BausteinEvaluator, CheckInEvaluator, DayFactsReader } from '../evaluators';
-import { isDayClosed } from '../rules';
+import { bausteinEvaluation, isDayClosed } from '../rules';
 
 // Test-Evaluatoren für Registry, Orchestrator und Konformitäts-Testkit. Sie folgen den Regeln aus
 // Spezifikation 0, Abschnitt 3, lesen ihre Fakten aber aus einem Speicher im Test statt aus den
@@ -42,18 +42,13 @@ function graded(value: number, threshold: number): DailyGoalState {
   return value === 0 ? 'offen' : value < threshold ? 'teilweise' : 'erfuellt';
 }
 
-function result(baustein: BausteinKey, state: DailyGoalState, dayClosed: boolean, progress: DailyGoalProgress): BausteinEvaluation {
-  const { type: _type, ...values } = progress;
-  return { currentState: state, dayClosed, progress, messageKey: `tagesziel.${baustein}.${state}`, values };
-}
-
 /** Je Baustein ein Test-Evaluator; `Object.values` ergibt die Liste für die Registry. */
 export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>): { [K in BausteinKey]: BausteinEvaluator<K, TestDayFacts> } {
   const ernaehrung: BausteinEvaluator<'ernaehrung_erfasst', TestDayFacts> = {
     baustein: 'ernaehrung_erfasst',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      result(snapshot.type, graded(facts.recordedMealCategories, snapshot.minimumMealCategories), isDayClosed(snapshot, at), {
+      bausteinEvaluation(graded(facts.recordedMealCategories, snapshot.minimumMealCategories), isDayClosed(snapshot, at), {
         type: snapshot.type,
         recordedMealCategories: facts.recordedMealCategories,
         minimumMealCategories: snapshot.minimumMealCategories,
@@ -65,7 +60,7 @@ export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>):
     evaluate: (snapshot, at, facts) => {
       const dayClosed = isDayClosed(snapshot, at);
       const within = facts.intakeKcal >= snapshot.lowerBoundKcal && facts.intakeKcal <= snapshot.budgetKcal;
-      return result(snapshot.type, !dayClosed ? 'tagesende' : within ? 'erfuellt' : 'offen', dayClosed, {
+      return bausteinEvaluation(!dayClosed ? 'tagesende' : within ? 'erfuellt' : 'offen', dayClosed, {
         type: snapshot.type,
         intakeKcal: facts.intakeKcal,
         budgetKcal: snapshot.budgetKcal,
@@ -77,7 +72,7 @@ export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>):
     baustein: 'wasserziel',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      result(snapshot.type, graded(facts.countedMl, snapshot.targetMl), isDayClosed(snapshot, at), {
+      bausteinEvaluation(graded(facts.countedMl, snapshot.targetMl), isDayClosed(snapshot, at), {
         type: snapshot.type,
         countedMl: facts.countedMl,
         targetMl: snapshot.targetMl,
@@ -87,7 +82,7 @@ export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>):
     baustein: 'sporteinheit',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      result(snapshot.type, graded(longest(facts), snapshot.minimumSingleSessionMinutes), isDayClosed(snapshot, at), {
+      bausteinEvaluation(graded(longest(facts), snapshot.minimumSingleSessionMinutes), isDayClosed(snapshot, at), {
         type: snapshot.type,
         longestSessionMinutes: longest(facts),
         minimumSingleSessionMinutes: snapshot.minimumSingleSessionMinutes,
@@ -97,7 +92,7 @@ export function testBausteinEvaluators(readFacts: DayFactsReader<TestDayFacts>):
     baustein: 'gewogen',
     readFacts,
     evaluate: (snapshot, at, facts) =>
-      result(snapshot.type, facts.weightEntryCount === 0 ? 'offen' : 'erfuellt', isDayClosed(snapshot, at), {
+      bausteinEvaluation(facts.weightEntryCount === 0 ? 'offen' : 'erfuellt', isDayClosed(snapshot, at), {
         type: snapshot.type,
         weightEntryCount: facts.weightEntryCount,
       }),
