@@ -4,7 +4,11 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
-import { RegisterPushInstallationRequest, type NotificationPermission } from '@abnehm/contracts/notifications';
+import {
+  DeactivatePushInstallationParams,
+  RegisterPushInstallationRequest,
+  type NotificationPermission,
+} from '@abnehm/contracts/notifications';
 
 import { forbiddenError, guard, policies, type Actor } from '../authorization/authorization.ts';
 import { jsonBody } from '../contract-validation.ts';
@@ -50,14 +54,19 @@ export function createPushInstallations({ database, clock }: { database: Databas
       .onConflictDoUpdate({ target: pushInstallation.installationKey, set: current });
   }
 
-  /** Findet die Installation zur Kennung; die Regel der Matrix prüft danach das Eigentum. */
-  async function locate(installationKey: string) {
+  /**
+   * Findet die Installation zur Kennung über ihre Zeilen-ID; ob sie der Person gehört, entscheidet danach
+   * die Regel der Matrix. Eine ungültige oder unbekannte Kennung findet nichts und endet wie eine fremde
+   * in `forbidden`.
+   */
+  async function locate(params: Record<string, string>) {
+    const parsed = DeactivatePushInstallationParams.safeParse(params);
+    if (!parsed.success) return {};
     const [found] = await database.db
       .select({ id: pushInstallation.id })
       .from(pushInstallation)
-      .where(eq(pushInstallation.installationKey, installationKey));
-    // Eine unbekannte Kennung ist eine neue eigene Ressource; deaktivieren bleibt dann ohne Wirkung.
-    return { id: found?.id ?? installationKey };
+      .where(eq(pushInstallation.installationKey, parsed.data.installationKey));
+    return found === undefined ? {} : { id: found.id };
   }
 
   const routes = new Hono()
@@ -69,16 +78,14 @@ export function createPushInstallations({ database, clock }: { database: Databas
     })
     .post(
       '/push-installations/:installationKey/deactivate',
-      guard(policies.resource('push_installation', 'upsert'), (c) => locate(c.req.param('installationKey') ?? '')),
+      guard(policies.resource('push_installation', 'upsert'), (c) => locate(c.req.param())),
       async (c) => {
-        const { actor, resource } = c.var;
-        if (resource.exists) {
-          // Mit der Person als Bedingung, falls die Kennung inzwischen umgehängt wurde.
-          await database.db
-            .update(pushInstallation)
-            .set({ active: false, updatedAt: now() })
-            .where(and(eq(pushInstallation.installationKey, c.req.param('installationKey')), eq(pushInstallation.personId, actor.personId)));
-        }
+        const { installationKey } = DeactivatePushInstallationParams.parse(c.req.param());
+        // Mit der Person als Bedingung, falls die Kennung seit dem Guard umgehängt wurde.
+        await database.db
+          .update(pushInstallation)
+          .set({ active: false, updatedAt: now() })
+          .where(and(eq(pushInstallation.installationKey, installationKey), eq(pushInstallation.personId, c.var.actor.personId)));
         return c.body(null, 204);
       },
     );

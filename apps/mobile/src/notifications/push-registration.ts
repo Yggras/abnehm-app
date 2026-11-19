@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { Clock } from '@abnehm/clock';
@@ -7,8 +6,7 @@ import { ExpoPushToken, NotificationPermission, type PushPlatform, type Register
 import type { InstallationId } from '@abnehm/contracts/sync';
 
 import type { LocalDatabase } from '../local-db';
-import { deviceState } from '../local-db/schema';
-import { sqliteOf } from '../local-db/sqlite';
+import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 import type { AppNotifications } from './notifications';
 import type { NotificationPort } from './port';
 
@@ -75,22 +73,11 @@ export function startPushRegistration({
   let cancelRetry: (() => void) | null = null;
 
   function readReported(): Reported | null {
-    return database.read((tx) => {
-      const row = sqliteOf(tx).select().from(deviceState).where(eq(deviceState.key, REPORTED_KEY)).get();
-      const parsed = reportedSchema.safeParse(row?.value);
-      return parsed.success ? parsed.data : null;
-    });
+    return database.read((tx) => reportedSchema.safeParse(readDeviceState(tx, REPORTED_KEY)).data ?? null);
   }
 
   function writeReported(reported: Reported) {
-    const updatedAt = Instant.parse(clock.read().instant);
-    database.transaction((tx) => {
-      sqliteOf(tx)
-        .insert(deviceState)
-        .values({ key: REPORTED_KEY, value: reported, updatedAt })
-        .onConflictDoUpdate({ target: deviceState.key, set: { value: reported, updatedAt } })
-        .run();
-    });
+    database.transaction((tx) => writeDeviceState(tx, REPORTED_KEY, reported, Instant.parse(clock.read().instant)));
   }
 
   /** Was jetzt zu melden ist, oder `null`. Ohne Erlaubnis meldet sie nur eine Änderung einer früheren Registrierung. */

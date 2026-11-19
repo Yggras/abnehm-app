@@ -237,3 +237,11 @@ export const RegisterPushInstallationRequest = z.strictObject({
   permission: NotificationPermission,
 });
 export type RegisterPushInstallationRequest = z.infer<typeof RegisterPushInstallationRequest>;
+
+/**
+ * „Eigene Installation deaktivieren“ (Spezifikation 5, Abschnitt 9): der Pfadparameter
+ * `POST /v1/push-installations/:installationKey/deactivate`. Eine fremde, unbekannte oder ungültige
+ * Kennung lehnt der Guard mit `forbidden` ab, ohne zu verraten, ob es sie gibt.
+ */
+export const DeactivatePushInstallationParams = z.strictObject({ installationKey: InstallationId });
+export type DeactivatePushInstallationParams = z.infer<typeof DeactivatePushInstallationParams>;

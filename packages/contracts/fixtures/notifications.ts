@@ -1,4 +1,5 @@
 import {
+  DeactivatePushInstallationParams,
   defaultNotificationSetting,
   EncouragementNotificationPayload,
   ExpoPushToken,
@@ -96,6 +97,14 @@ export const notificationFixtures = {
       'Installationskennung keine UUID': { ...pushRegistration, installationKey: 'geraet-1' },
       'ohne Token': without(pushRegistration, 'expoPushToken'),
       'ohne Erlaubnisstatus': without(pushRegistration, 'permission'),
+    },
+  }),
+  DeactivatePushInstallationParams: fixtures(DeactivatePushInstallationParams, {
+    valid: { 'Kennung des iPhones': { installationKey: pushRegistration.installationKey } },
+    invalid: {
+      'Kennung keine UUID': { installationKey: 'geraet-1' },
+      'mit Person': { installationKey: pushRegistration.installationKey, personId: philipp },
+      'ohne Kennung': {},
     },
   }),
   NotificationPermission: fixtures(NotificationPermission, {

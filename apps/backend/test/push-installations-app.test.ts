@@ -156,15 +156,21 @@ describe('eigene Installation deaktivieren', () => {
     expect(await installationOf(backend, request.installationKey)).toMatchObject({ personId: philipp.personId, active: false });
   });
 
-  it('ist wiederholbar und für eine unbekannte eigene Kennung ohne Wirkung', async () => {
+  it('ist wiederholbar', async () => {
     const { backend, philipp } = await twoPeople();
     const request = registration();
     await register(backend, philipp.device, request);
     await deactivate(backend, philipp.device, request.installationKey);
 
     expect((await deactivate(backend, philipp.device, request.installationKey)).status).toBe(204);
-    expect((await deactivate(backend, philipp.device, randomUUID())).status).toBe(204);
-    expect(await installations(backend)).toHaveLength(1);
+    expect(await installationOf(backend, request.installationKey)).toMatchObject({ personId: philipp.personId, active: false });
+  });
+
+  it('antwortet auf eine unbekannte oder ungültige Kennung wie auf eine fremde', async () => {
+    const { backend, philipp } = await twoPeople();
+
+    expect(httpOutcome(await deactivate(backend, philipp.device, randomUUID()))).toBe('verweigert');
+    expect(httpOutcome(await deactivate(backend, philipp.device, 'geraet-1'))).toBe('verweigert');
   });
 
   it('verbietet, eine fremde Installation zu deaktivieren', async () => {

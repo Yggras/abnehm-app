@@ -836,6 +836,31 @@ Anfeuern senden aus Abschnitt 4 der [Spezifikation 5](https://github.com/Yggras/
 - **Seed:** Im Szenario `gekoppelt` (Revision 10) hat Philipp Anna heute dreimal angefeuert, mit Push-Status `zugestellt`; Intents gehören als Servertechnik nicht in den Seed.
 - **Tests:** `packages/contracts/test/encouragement.test.ts`, `apps/backend/test/encouragement-app.test.ts` (HTTP/Sync: Empfänger aus der Kopplung, manipulierte Empfänger-ID, Idempotenz, vierte Anfeuerung, gleichzeitige Anfeuerungen, Eingang nach mehr als 24 Stunden, Entkopplung, unbekannter Schlüssel, Negativtests der Autorisierung mit Gegenprobe), `apps/backend/test/encouragement-sync-app.test.ts` (zwei Geräte gegen die echte Hono-App), `src/partner/encouragement.test.ts` (Modul auf SQLite) und `src/partner/EncourageScreen.test.tsx` (Sheet mit den echten Routendateien und dem Seed `gekoppelt`). Maestro: `anfeuern.yaml`.
 
+### Push-Installation
+
+Die Push-Installation aus Abschnitt 9 der [Spezifikation 5](https://github.com/Yggras/abnehm-app/issues/87) liefert [#139](https://github.com/Yggras/abnehm-app/issues/139). Den Versand übernimmt der Zusteller aus [#142](https://github.com/Yggras/abnehm-app/issues/142).
+
+- **Vertrag** (`@abnehm/contracts/notifications`):
+  - `RegisterPushInstallationRequest` enthält Installationskennung (dieselbe `InstallationId` wie im Sync), Plattform (`PushPlatform`), `ExpoPushToken` und Erlaubnis (`NotificationPermission`). Person und Sitzung stehen nie in der Nutzlast.
+  - `DeactivatePushInstallationParams` ist der Pfadparameter von „deaktivieren“.
+  - Die Form des Tokens folgt `Expo.isExpoPushToken` aus [`expo-server-sdk`](https://github.com/expo/expo-server-sdk-node/blob/main/src/ExpoClient.ts).
+- **Server** (`apps/backend/src/notifications/push-installations.ts`):
+  - `POST /v1/push-installations` registriert oder aktualisiert in einer Anweisung (`insert … on conflict (installation_key) do update`). Gespeichert werden die Person und die Sitzung der Anfrage, `active` wird wahr. Gehörte die Kennung einer anderen Person, wird sie umgehängt; für diese ist sie damit deaktiviert. Antwort `204`, ohne Person `403`.
+  - `POST /v1/push-installations/:installationKey/deactivate` setzt `active` auf falsch. Eine fremde, unbekannte oder ungültige Kennung beantwortet der Guard mit `forbidden`.
+  - Abmelde-Haken `push_installation` (an `logout.registerHook` in `createBackend`): Das Abmelden deaktiviert die Installationen, die mit dieser Sitzung registriert wurden. Die Installation eines anderen Geräts bleibt aktiv.
+  - Die Tabelle stammt aus #96. Sie ist keine Sync-Entität, Tokens erscheinen also nie im Fach-Sync.
+- **Autorisierung, bewusste Ausnahme:** „Registrieren“ trägt `authenticated()` und nicht `resource('push_installation', 'upsert')`. Die Regel `owned` verweigert eine fremde Zeile. Das Ticket verlangt aber, eine fremde Kennung umzuhängen. Die Route verlangt deshalb eine Person aus der Sitzung und nimmt nichts aus der Nutzlast als Eigentum. „Deaktivieren“ trägt die Ressourcen-Policy, dort bleibt eine fremde Installation verboten.
+- **App** (`src/notifications/push-registration.ts`):
+  - `startPushRegistration(…)` läuft je geöffneter Kontodatenbank und endet beim Sperren. Gemeldet wird in drei Fällen: nach erteilter Erlaubnis, bei jedem Start mit Erlaubnis (bindet die aktuelle Sitzung) und wenn sich die Erlaubnis geändert hat. Eine geänderte Erlaubnis liest das Mitteilungs-Modul bei jeder Rückkehr in den Vordergrund neu.
+  - Ohne Erlaubnis meldet die App nur die Änderung einer früheren Registrierung, mit dem zuletzt gemeldeten Token. Dieser Stand liegt unter `push_installation_reported` in `device_state`.
+  - Den Token holt die App über den Mitteilungs-Port. Scheitert der Token oder die Anfrage, wiederholt sie nach 30 s, danach mit doppeltem Abstand bis höchstens 30 min (Designwerte, nicht belegt).
+  - Nach einer `401` wiederholt sie nicht: Das Auth-Modul sperrt dann, und die nächste Anmeldung startet die Registrierung neu.
+  - Den HTTP-Transport enthält `push-installation-transport.ts`. Verdrahtet wird beides in `src/session/device-session.ts`.
+- **Tests:**
+  - `apps/backend/test/push-installations-app.test.ts` prüft registrieren, aktualisieren, umhängen, deaktivieren, fremde, unbekannte und ungültige Kennungen, den Abmelde-Haken, Pull ohne Token sowie die Negativtests der Autorisierung mit Gegenprobe.
+  - `apps/backend/test/push-registration-app.test.ts` prüft die App gegen die echte Hono-App.
+  - `src/notifications/push-registration.test.ts` prüft das Modul mit dem Fake-Mitteilungs-Port auf SQLite.
+
 ### Ernährung: Modul, Protokoll und Erfassen aus der Suche
 
 Das App-Modul „Ernährung“, das Tagesprotokoll und den ersten Erfassungsweg (Abschnitte 1, 2, 6 und 11 der [Spezifikation 2](https://github.com/Yggras/abnehm-app/issues/81)) liefert [#155](https://github.com/Yggras/abnehm-app/issues/155).
