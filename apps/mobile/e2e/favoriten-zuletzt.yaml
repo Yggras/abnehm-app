@@ -49,6 +49,10 @@ name: Gewohntes mit zwei Tipps erfassen
 - takeScreenshot: favoriten-zuletzt-5-protokoll
 
 # Zwei Tipps aus den Lebensmittelfavoriten ---------------------------------------------------------
+# Auf dem iPhone SE liegt die Mahlzeit Snacks unterhalb des sichtbaren Bereichs.
+- scrollUntilVisible:
+    element: "Snacks hinzufügen"
+    direction: DOWN
 - tapOn: "Snacks hinzufügen"
 - extendedWaitUntil:
     visible: "Lebensmittelfavoriten"
