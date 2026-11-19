@@ -28,7 +28,7 @@ name: Challenge-Vorschlag
 - extendedWaitUntil:
     visible: "Gemeinsam dranbleiben"
     timeout: 30000
-- assertVisible: "Dein Anteil: 17 erfüllte Tagesziele"
+- assertVisible: "Dein Anteil: 17 von 21 Tageszielen"
 - takeScreenshot: challenge-1-vorlagen-oben
 - scrollUntilVisible:
     element: "Aktive Woche vorschlagen"
@@ -55,7 +55,7 @@ name: Challenge-Vorschlag
     timeout: 10000
 - tapOn: "Gut getrunken vorschlagen"
 - extendedWaitUntil:
-    visible: "Vorschlag an Anna gesendet"
+    visible: "Dein Vorschlag ist auf dem Weg zu Anna"
     timeout: 10000
 - takeScreenshot: challenge-3-gesendet
 

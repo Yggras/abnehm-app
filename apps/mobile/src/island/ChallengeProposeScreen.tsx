@@ -106,7 +106,8 @@ function Templates({
         const rejected = unfitToday.includes(template.key);
         const fits = share.type === 'passt' && !rejected;
         return (
-          <Card key={template.key}>
+          // Eine unpassende Vorlage ist nicht wählbar und trägt deshalb die leere Variante ohne Sockel.
+          <Card key={template.key} variant={fits ? 'standard' : 'empty'}>
             <View testID={`challenge-vorlage-${template.key}`} style={styles.card}>
               <Text variant="headline" accessibilityRole="header" tone={fits ? 'ink' : 'inkMuted'}>
                 {template.name}

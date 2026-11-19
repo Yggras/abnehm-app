@@ -81,7 +81,7 @@ describe('challenge.propose', () => {
       expect.arrayContaining(['Gemeinsam dranbleiben', 'Ernährung im Blick', 'Gut getrunken', 'Aktive Woche']),
     );
     expect(card('gemeinsam_dranbleiben').getByText('Jedes erfüllte Tagesziel zählt, egal welches.')).toBeOnTheScreen();
-    expect(card('gemeinsam_dranbleiben').getByText('Dein Anteil: 17 erfüllte Tagesziele')).toBeOnTheScreen();
+    expect(card('gemeinsam_dranbleiben').getByText('Dein Anteil: 17 von 21 Tageszielen')).toBeOnTheScreen();
     expect(card('ernaehrung_im_blick').getByText('Dein Anteil: 6 von 7 Tagen mit „Ernährung erfasst“')).toBeOnTheScreen();
     expect(card('gut_getrunken').getByText('Dein Anteil: 6 von 7 Tagen mit „Wasserziel“')).toBeOnTheScreen();
     expect(card('aktive_woche').getByText('Dein Anteil: 6 von 7 geplanten Sporteinheiten')).toBeOnTheScreen();
@@ -90,7 +90,7 @@ describe('challenge.propose', () => {
     await user.press(screen.getByRole('button', { name: 'Gut getrunken vorschlagen' }));
 
     expect(screen).toHavePathname('/');
-    expect(await screen.findByText('Vorschlag an Anna gesendet')).toBeOnTheScreen();
+    expect(await screen.findByText('Dein Vorschlag ist auf dem Weg zu Anna')).toBeOnTheScreen();
     expect(payloads(opened)).toEqual([{ type: 'proposeChallenge', payload: expect.objectContaining({ templateKey: 'gut_getrunken' }) }]);
     expect(ProposeChallenge.safeParse(payloads(opened)[0]!.payload).success).toBe(true);
   });
