@@ -111,7 +111,7 @@ describe('Katalogprüfung', () => {
   it('verlangt Verweise auf vorhandene Deko', () => {
     const areas = replace(catalog.areas, 't_gebiet_1', (area) => ({ ...area, discoveryDeko: ['fehlt'] }));
     expect(checkCatalog({ ...catalog, areas })).toContainEqual({ rule: 'verweis_unbekannt', key: 'fehlt' });
-    const challengeTemplates = [{ key: 't_challenge', name: 'Test', deko: 'fehlt_auch' }];
+    const challengeTemplates = [{ key: 't_challenge', name: 'Test', description: 'Test', measure: { type: 'tagesziele', required: 17 }, deko: 'fehlt_auch' } as const];
     expect(checkCatalog({ ...catalog, challengeTemplates })).toContainEqual({ rule: 'verweis_unbekannt', key: 'fehlt_auch' });
     const visitorTemplates = [
       { key: 't_igel', name: 'Igel', animal: 'igel', wish: 'bauplan_bauen', rewards: { blueprints: ['fehlt_bauplan'], deko: [] } },

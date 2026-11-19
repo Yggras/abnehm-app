@@ -1,4 +1,5 @@
 import type { ContractError } from '@abnehm/contracts/errors';
+import type { BausteinKey } from '@abnehm/contracts/base';
 import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
 
 // Format des versionierten Spielkatalogs (Spezifikation 4, Abschnitt 4). Der Katalog wird mit App und
@@ -111,7 +112,16 @@ export type ProjectTemplate = Readonly<{
   site: string;
 }>;
 
-export type ChallengeTemplate = Readonly<{ key: string; name: string; deko: string }>;
+/**
+ * Was eine Challenge-Vorlage je Person verlangt (Spezifikation 4, Abschnitt 10): eine feste Zahl
+ * erfüllter Tagesziele oder, für einen Baustein, `ceil(Zähler / Nenner × geplante Tage)`.
+ */
+export type ChallengeMeasure =
+  | Readonly<{ type: 'tagesziele'; required: number }>
+  | Readonly<{ type: 'baustein'; baustein: BausteinKey; numerator: number; denominator: number }>;
+
+/** Challenge-Vorlage mit sichtbarem Namen, kurzer Erklärung, Maß und der Challenge-Deko für den Erfolg. */
+export type ChallengeTemplate = Readonly<{ key: string; name: string; description: string; measure: ChallengeMeasure; deko: string }>;
 
 export type GameCatalog = Readonly<{
   /** Steigt mit jeder Änderung; je Version gibt es einen Schnappschuss (`catalog-versions/`). */

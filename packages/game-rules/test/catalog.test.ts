@@ -32,7 +32,7 @@ describe('Nachschlagen im Katalog', () => {
       ['bauplan', 'gibt_es_nicht'],
       ['deko', 'holzweg'],
       ['accessoire', 'strohhut'],
-      ['challenge_vorlage', 'gut_getrunken'],
+      ['challenge_vorlage', 'wasser_marathon'],
       ['besuchervorlage', 'igel'],
     ] as const) {
       const result = shipped.find(kind, key);
