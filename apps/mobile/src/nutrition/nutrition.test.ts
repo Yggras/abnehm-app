@@ -24,6 +24,7 @@ import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { createNutrition, InvalidNutritionInputError, nutritionEntryEntity, type DayLog, type NewEntry, type NutritionDependencies } from '.';
+import { withoutPhotos } from './testing/without-photos';
 
 // Nachweis für #155: das App-Modul „Ernährung“ (Spezifikation 2, Abschnitte 1, 2 und 6) mit den
 // Befehlen „Eintrag hinzufügen“ und „Rückgängig“ sowie den Abfragen Tagesprotokoll und Vorbelegung,
@@ -90,6 +91,7 @@ async function setup({ failReevaluation = false }: { failReevaluation?: boolean 
   const persistence = createDailyGoalPersistence({ registry: createDailyGoalRegistry({ bausteine: [], checkIns: [] }), clock, writer, dispatcher });
   const reports: Report[] = [];
   const dependencies: NutritionDependencies = {
+    ...withoutPhotos,
     database,
     clock,
     writer,
@@ -255,10 +257,11 @@ describe('Tagesprotokoll', () => {
             { id: expect.any(String), name: 'Hafer Flocken', displayUnit: 'g', displayAmountMilli: 60_000, kcal: 209, fromPhoto: false, aiEstimate: false },
             { id: expect.any(String), name: 'Apfel roh', displayUnit: 'g', displayAmountMilli: 150_000, kcal: 87, fromPhoto: false, aiEstimate: false },
           ],
+          photoIds: [],
         },
-        { meal: 'mittagessen', kcal: 0, entries: [] },
-        { meal: 'abendessen', kcal: 0, entries: [] },
-        { meal: 'snacks', kcal: 139, entries: [{ id: expect.any(String), name: 'Hafer Flocken', displayUnit: 'g', displayAmountMilli: 40_000, kcal: 139, fromPhoto: false, aiEstimate: false }] },
+        { meal: 'mittagessen', kcal: 0, entries: [], photoIds: [] },
+        { meal: 'abendessen', kcal: 0, entries: [], photoIds: [] },
+        { meal: 'snacks', kcal: 139, entries: [{ id: expect.any(String), name: 'Hafer Flocken', displayUnit: 'g', displayAmountMilli: 40_000, kcal: 139, fromPhoto: false, aiEstimate: false }], photoIds: [] },
       ],
     });
   });
@@ -286,7 +289,7 @@ describe('Tagesprotokoll', () => {
     const database = await databases.open('konto_b');
     const clock = createTestClock({ instant: morning, timeZone: berlin });
     const newId = () => EntityId.parse(randomUUID());
-    const nutrition = createNutrition({
+    const nutrition = createNutrition({ ...withoutPhotos,
       database, clock, newId, persistence: { reevaluateDailyGoals() {} },
       writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity]), clock, newId }),
     });

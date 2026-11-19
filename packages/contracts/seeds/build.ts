@@ -83,6 +83,9 @@ export function buildSeedState({
       add(server, entity.table, versioned);
       if (entity.entityType !== undefined) add(server, 'change_log', changeLogEntry(entity, position, createdAt));
       for (const [table, rows] of Object.entries(entity.children ?? {})) for (const row of rows) add(server, table, row);
+      // Eine schon gelöschte Zeile steht nur als Löschmarkierung im Änderungsprotokoll. Wie bei einem
+      // vollständigen Pull legt sie auf keinem Gerät eine Zeile an (#164, verwaistes Foto).
+      if (entity.row.deleted_at != null) continue;
       for (const [key, plan] of Object.entries(devices)) {
         if (!visibleTo(entity, plan.personId, members)) continue;
         const local = deviceRows[key] as Record<string, SeedRow[]>;

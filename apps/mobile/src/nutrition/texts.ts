@@ -285,4 +285,27 @@ export const nutritionTexts = {
     unitName: (unit: ConversionUnit) => conversionTexts[unit].name,
     back: 'Zurück',
   },
+  /** Eigene Mahlzeitenfotos im Protokoll und in der Fotoansicht (Spezifikation 2, Abschnitt 9; #164). */
+  photo: {
+    title: 'Mahlzeitenfoto',
+    /**
+     * Zugänglicher Name eines Fotos, wie bei Partnerfotos „Mahlzeitenfoto, <Mahlzeit>“ (Spezifikation 2, Abschnitt 12).
+     * Hat eine Mahlzeit mehrere Fotos, unterscheidet sie die Nummer („Mahlzeitenfoto 2 von 2, Mittagessen“).
+     */
+    name: (meal: MealKey, of?: Readonly<{ position: number; count: number }>) =>
+      `Mahlzeitenfoto${of === undefined ? '' : ` ${of.position} von ${of.count}`}, ${mealNames[meal]}`,
+    loading: 'Foto lädt',
+    /** Die Fotoansicht ist geöffnet, das Bild kommt aber nicht an. */
+    unavailable: 'Das Foto lässt sich gerade nicht laden. Es braucht Internet.',
+    /** Verweigert oder ohne Datei, etwa schon auf einem anderen Gerät gelöscht und noch nicht synchronisiert. */
+    gone: 'Das Foto ist nicht mehr verfügbar.',
+    retry: 'Erneut laden',
+    share: 'Mit Partner teilen',
+    /** Partner sehen nur geteilte Fotos mit einem Eintrag von heute (Spezifikation 2, Abschnitt 9). */
+    shareHint: 'Geteilte Fotos von heute sieht dein Partner unter „Wir“, ohne Namen, Mengen oder kcal.',
+    delete: 'Foto löschen',
+    deleteQuestion: 'Foto endgültig löschen? Die Einträge bleiben.',
+    confirmDelete: 'Endgültig löschen',
+    cancel: 'Abbrechen',
+  },
 } as const;

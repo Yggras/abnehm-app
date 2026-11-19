@@ -637,13 +637,29 @@ describe('Szenario gekoppelt', () => {
           imageKey: seedImageKeys.mealPhoto.philippHeute },
         { id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'],
           imageKey: seedImageKeys.mealPhoto.annaHeute },
+        // Seit #164: Philipps einzeln vom Teilen ausgenommenes Foto und sein verwaistes Foto sieht nur er.
+        { id: seedIds.mealPhoto.philippNichtGeteilt, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippNichtGeteilt, visibleTo: [],
+          imageKey: seedImageKeys.mealPhoto.philippNichtGeteilt },
+        { id: seedIds.mealPhoto.philippVerwaist, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippVerwaist, visibleTo: [],
+          imageKey: seedImageKeys.mealPhoto.philippVerwaist },
       ],
       expiredDrafts: [{ id: seedIds.photoDraft.philippAbgelaufen, account: 'philipp', imageKey: seedImageKeys.photoDraft.philippAbgelaufen }],
     });
-    for (const photo of server.meal_photo ?? []) expect(photo).toMatchObject({ shared_with_partner: true, deleted_at: null });
+    const sharing = Object.fromEntries((server.meal_photo ?? []).map((photo) => [photo.id, photo.shared_with_partner]));
+    expect(sharing).toEqual({
+      [seedIds.mealPhoto.philippHeute]: true,
+      [seedIds.mealPhoto.annaHeute]: true,
+      [seedIds.mealPhoto.philippNichtGeteilt]: false,
+      [seedIds.mealPhoto.philippVerwaist]: true,
+    });
+    for (const photo of server.meal_photo ?? []) expect(photo).toMatchObject({ deleted_at: null });
+    // Das verwaiste Foto: Sein einziger Eintrag ist seit gestern gelöscht, länger als 24 Stunden vor der Uhr des Seeds.
+    const orphanEntries = (server.nutrition_entry ?? []).filter((entry) => entry.meal_photo_id === seedIds.mealPhoto.philippVerwaist);
+    expect(orphanEntries.map((entry) => entry.deleted_at)).toEqual(['2026-10-13T10:45:00.000Z']);
+    expect(Date.parse(seedClock.instant) - Date.parse(String(orphanEntries[0]!.deleted_at))).toBeGreaterThan(24 * 60 * 60_000);
     // Die Fotos stehen seit #162 im Änderungsprotokoll und auf dem Gerät ihres Eigentümers; der Entwurf nur auf dem Server.
     expect(server.change_log?.filter((entry) => entry.entity_type === 'meal_photo').map((entry) => entry.entity_id).sort()).toEqual(
-      [seedIds.mealPhoto.philippHeute, seedIds.mealPhoto.annaHeute].sort(),
+      [seedIds.mealPhoto.philippHeute, seedIds.mealPhoto.annaHeute, seedIds.mealPhoto.philippNichtGeteilt, seedIds.mealPhoto.philippVerwaist].sort(),
     );
     expect(server.photo_draft).toEqual([expect.objectContaining({ id: seedIds.photoDraft.philippAbgelaufen, person_id: seedIds.person.philipp })]);
     expect(server.photo_draft?.[0]).not.toHaveProperty('server_version');

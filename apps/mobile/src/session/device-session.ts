@@ -24,7 +24,7 @@ import { sharedActionCommands } from '../island/shared-action-commands';
 import { composeAreaPorts } from '../area-ports';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createNutrition, intakeReaderOf, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
+import { appNutrition, createHttpMealPhotoImages, createNutrition, intakeReaderOf, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications, type NotificationPort } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
@@ -158,8 +158,12 @@ function deviceState() {
         checkIns: [...nutritionDailyGoals.checkIns, ...trackerDailyGoals.checkIns],
       });
       const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
-      // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
-      const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId });
+      // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul; eigene Mahlzeitenfotos
+      // ruft es online mit der Sitzung des Auth-Moduls ab (#164).
+      const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId,
+        photoImages: createHttpMealPhotoImages({ baseUrl, fetch: session.auth.fetch }),
+        // In Test-Artefakten überlagert vom Transport-Fehlermodus wie beim Partnerbereich (#114).
+        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
       // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
       // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`).

@@ -1,0 +1,101 @@
+# Gerätelauf Mahlzeitenfotos (Spezifikation 2, Abschnitt 9; #164): Seed „gekoppelt“ öffnet das Protokoll.
+# Philipps Mittagessen hat zwei Fotos: das geteilte zur Linsensuppe und den einzeln vom Teilen ausgenommenen
+# Obstsalat (`packages/contracts/seeds/gekoppelt.ts`, Teil `ernaehrung`). Online zeigt die Mahlzeit beide
+# Vorschauen; die erste öffnet die Fotoansicht mit dem vergrößerten Foto und „Mit Partner teilen“ (an, weil
+# gekoppelt). Ausschalten, dann „Foto löschen“ mit Rückfrage; danach bleibt nur der Obstsalat. Geht das Gerät
+# offline, zeigt das Protokoll nur noch das Foto-/KI-Symbol der Einträge.
+#
+# Transport: Android schaltet den Flugmodus, iOS-Simulatoren haben keinen; dort ersetzt ihn der
+# Transport-Fehlermodus des E2E-Builds (`fehler?transport=offline`, wie in `sync-offline.yaml`). Die
+# Bildschirmfotos sind die Vorlage der Impeccable-Kritik. Einzeln mit `scripts/e2e-run --ablauf mahlzeitenfotos`.
+appId: ${APP_ID}
+name: Mahlzeitenfotos ansehen, freigeben und löschen
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&ziel=/log
+
+# Protokoll mit Vorschauen -------------------------------------------------------------------------
+- extendedWaitUntil:
+    visible: "Mahlzeitenfoto 1 von 2, Mittagessen"
+    timeout: 30000
+- assertVisible: "Mahlzeitenfoto 2 von 2, Mittagessen"
+- takeScreenshot: mahlzeitenfotos-1-protokoll
+
+# Fotoansicht ----------------------------------------------------------------------------------------
+- tapOn: "Mahlzeitenfoto 1 von 2, Mittagessen"
+- extendedWaitUntil:
+    visible: "Mit Partner teilen"
+    timeout: 10000
+- assertVisible: "Mahlzeitenfoto"
+- assertVisible: "Foto löschen"
+- takeScreenshot: mahlzeitenfotos-2-fotoansicht
+- tapOn:
+    text: "Mit Partner teilen"
+    index: 1
+- takeScreenshot: mahlzeitenfotos-3-nicht-geteilt
+
+# Löschen mit Rückfrage ---------------------------------------------------------------------------
+- tapOn: "Foto löschen"
+- extendedWaitUntil:
+    visible: "Foto endgültig löschen? Die Einträge bleiben."
+    timeout: 5000
+- takeScreenshot: mahlzeitenfotos-4-rueckfrage
+- tapOn: "Endgültig löschen"
+- extendedWaitUntil:
+    visible: "Foto gelöscht"
+    timeout: 10000
+- assertNotVisible: "Mahlzeitenfoto 1 von 2, Mittagessen"
+- assertVisible: "Mahlzeitenfoto, Mittagessen"
+- takeScreenshot: mahlzeitenfotos-5-geloescht
+
+# Ohne Netz nur das Symbol ---------------------------------------------------------------------------
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: enabled
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: fehler?transport=offline
+      - extendedWaitUntil:
+          visible: ".*Transport-Fehlermodus: kein Netz.*"
+          timeout: 10000
+# Der Link des Fehlermodus öffnet „Heute“; zurück ins Protokoll.
+- tapOn:
+    id: tab-log
+- scrollUntilVisible:
+    element:
+      text: "Mittagessen: Linsensuppe, 300 g, 270 kcal, KI-Schätzung"
+    direction: DOWN
+- assertNotVisible: "Mahlzeitenfoto, Mittagessen"
+- takeScreenshot: mahlzeitenfotos-6-offline
+
+# Netz zurück ---------------------------------------------------------------------------------------
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: fehler

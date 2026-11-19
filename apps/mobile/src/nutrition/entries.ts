@@ -18,6 +18,7 @@ import { requireOwnPerson } from '../local-db/person-header';
 import { nutritionEntryEntity } from './entry-entity';
 import { readEntry, readEntryContent, readOwnLivingEntry, tombstoneEntry, writeEntry, type StoredEntryContent } from './entry-repository';
 import type { NutritionDependencies } from './nutrition';
+import { isLivingPhoto } from './photo-repository';
 
 // Befehle des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 6). Sie laufen in der Transaktion des
 // Aufrufers: Fachzeile, Outbox-Operation und `reevaluateDailyGoals` entstehen gemeinsam.
@@ -144,7 +145,9 @@ export function deleteEntry(tx: TransactionContext, dependencies: EntryDependenc
  * - Hinzufügen: Der Eintrag wird gelöscht.
  * - Ändern: Menge, Einheit und Mahlzeit von vorher werden zurückgeschrieben (Last-Write-Wins).
  * - Löschen: Ein **neuer** Eintrag mit neuer ID und identischem Inhalt entsteht: Snapshot, Menge, Tag,
- *   Mahlzeit, Erfassungsart, Erfassungszeitpunkt samt Zone und Fotoverknüpfung.
+ *   Mahlzeit, Erfassungsart, Erfassungszeitpunkt samt Zone und Fotoverknüpfung. Verknüpft wird nur ein
+ *   nicht gelöschtes Mahlzeitenfoto (Spezifikation 2, Abschnitt 6); ist es inzwischen gelöscht, etwa per
+ *   „Foto löschen“ oder durch einen Pull, oder gibt es es nicht mehr, bleibt der neue Eintrag ohne Foto.
  *
  * Ist der Eintrag inzwischen gelöscht, etwa durch einen Pull, bleibt beim Hinzufügen und Ändern alles, wie es ist.
  */
@@ -161,13 +164,11 @@ export function undoEntry(tx: TransactionContext, dependencies: EntryDependencie
     }
     case 'entry_deleted': {
       const { clock, newId } = dependencies;
-      // Die Fotoverknüpfung kommt unverändert zurück, auch wenn das Foto inzwischen gelöscht ist (etwa durch
-      // einen Pull). Ob nur nicht gelöschte Fotos wieder verknüpft werden (Spezifikation 2, Abschnitt 6),
-      // entscheidet #164; bis dahin ist dieser Fall offen.
+      const { mealPhotoId } = undo.deleted;
       persistEntry(tx, dependencies, {
         entryId: newId(),
         personId: EntityId.parse(requireOwnPerson(tx).id),
-        payload: undo.deleted,
+        payload: { ...undo.deleted, mealPhotoId: mealPhotoId !== null && isLivingPhoto(tx, mealPhotoId) ? mealPhotoId : null },
         knownServerVersion: null,
         cause: 'rueckgaengig',
         now: Instant.parse(clock.read().instant),

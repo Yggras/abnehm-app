@@ -22,6 +22,9 @@ export async function seedPhotoFiles(storage: PhotoStorage, manifest: SeedManife
 
   const photos = manifest.extensions?.mealPhotos;
   if (photos?.version !== 2) return;
-  for (const photo of photos.photos) await storage.savePhoto(photo.imageKey, await mealPhotoImages(await jpegOf(photo.image)));
-  for (const draft of photos.expiredDrafts) await storage.saveDraft(draft.imageKey, await jpegOf(draft.image));
+  // Parallel: Jedes Seeden erzeugt alle Bilder neu, und sharp arbeitet ohnehin in seinem eigenen Threadpool.
+  await Promise.all([
+    ...photos.photos.map(async (photo) => storage.savePhoto(photo.imageKey, await mealPhotoImages(await jpegOf(photo.image)))),
+    ...photos.expiredDrafts.map(async (draft) => storage.saveDraft(draft.imageKey, await jpegOf(draft.image))),
+  ]);
 }

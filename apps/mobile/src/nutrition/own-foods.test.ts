@@ -23,6 +23,7 @@ import {
 } from '.';
 import { checkAmountInput } from './amount-input';
 import { openTestCatalog } from './testing/test-catalog';
+import { withoutPhotos } from './testing/without-photos';
 
 // Nachweis für #157: eigene Lebensmittel im App-Modul „Ernährung“ (Spezifikation 2, Abschnitte 2–4)
 // gegen eine echte SQLite-Datei mit denselben Migrationen wie die App, den BLS-Testkatalog und die
@@ -84,7 +85,7 @@ async function setup() {
   const newId = () => EntityId.parse(randomUUID());
   const writer = createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity]), clock, newId });
   const reports: LocalDate[][] = [];
-  const nutrition = createNutrition({
+  const nutrition = createNutrition({ ...withoutPhotos,
     database,
     clock,
     writer,

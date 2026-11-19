@@ -1,12 +1,15 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte, notExists, or } from 'drizzle-orm';
+import { Hono } from 'hono';
 
-import type { EntityId } from '@abnehm/contracts/base';
-import { ConfirmPhotoDraft, confirmPhotoDraftKey, MealPhotoRecord, MealPhotoUpsert } from '@abnehm/contracts/nutrition';
+import type { Clock } from '@abnehm/clock';
+import { EntityId } from '@abnehm/contracts/base';
+import type { ContractError } from '@abnehm/contracts/errors';
+import { ConfirmPhotoDraft, confirmPhotoDraftKey, MealPhotoRecord, MealPhotoUpsert, OwnMealPhotoRequest } from '@abnehm/contracts/nutrition';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 
-import { policies } from '../authorization/authorization.ts';
+import { guard, policies } from '../authorization/authorization.ts';
 import type { Database, DbExecutor } from '../database.ts';
-import { mealPhoto, photoDraft } from '../db/schema/index.ts';
+import { mealPhoto, nutritionEntry, photoDraft } from '../db/schema/index.ts';
 import type { Job } from '../jobs/job-registry.ts';
 import { nextServerVersion, recordChange } from '../sync/change-log.ts';
 import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
@@ -15,11 +18,16 @@ import { canonicalAfterWrite, upsertEntity } from '../sync/sync.ts';
 import { mealPhotoImages } from './photo-image.ts';
 import type { PhotoStorage } from './photo-storage.ts';
 
-// Mahlzeitenfotos auf dem Server (Spezifikation 2, Abschnitte 8, 9 und 11; #162). Ein Mahlzeitenfoto
+// Mahlzeitenfotos auf dem Server (Spezifikation 2, Abschnitte 8, 9 und 11; #162, #164). Ein Mahlzeitenfoto
 // entsteht nur mit dem Fachbefehl `confirmPhotoDraft`: Er legt immer alle Einträge an und, solange der
 // Entwurf gültig, eigen und nicht abgelaufen ist, das Foto samt Vorschau und vergrößerter Fassung in
 // der Fotoablage. Andernfalls bleiben die Einträge ohne Foto, damit keine bestätigte Mahlzeit verloren
 // geht. Der Sync kennt für das Foto nur den Freigabeschalter (Upsert) und die Löschmarkierung.
+//
+// Die Eigentümerin ruft ihre Fotos online über einen eigenen Endpunkt ab (#164). „Foto löschen“ ist ein
+// Tombstone: Beim Übernehmen löscht der Server beide Fassungen sofort aus der Fotoablage, die Einträge
+// bleiben. Ein Foto, das seit 24 Stunden mit keinem nicht gelöschten Eintrag mehr verknüpft ist, setzt
+// ein Aufräumjob auf Tombstone; bis dahin kann „Rückgängig“ es wieder verknüpfen.
 //
 // Atomar ist der Übergang über Postgres: Das Foto gilt erst mit dem Commit, der zugleich den Entwurf
 // löscht. Die Dateien entstehen davor unter dem Bildschlüssel des Entwurfs; rollt die Transaktion
@@ -32,17 +40,45 @@ type ValidDraft = typeof photoDraft.$inferSelect & Readonly<{ image: Uint8Array 
 /** Abstand der Aufräumläufe der Fotoablage (Designwert, nicht belegt), wie bei den Fotoentwürfen. */
 const STORAGE_CLEANUP_INTERVAL_MS = 5 * 60_000;
 
+/** Abstand der Läufe für verwaiste Fotos (Designwert, nicht belegt), wie bei den übrigen Fotojobs. */
+const ORPHAN_CLEANUP_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * So lange bleibt ein Foto ohne nicht gelöschten Eintrag bestehen, damit „Rückgängig“ es wieder verknüpfen
+ * kann (Spezifikation 2, Abschnitt 9).
+ */
+const ORPHAN_AFTER_MS = 24 * 60 * 60_000;
+
+/** Antwort auf eine unbekannte Fassung; die ID hat der Guard schon geprüft. */
+const invalidRequest = { code: 'invalid_payload', retryable: false } as const satisfies ContractError;
+
+/**
+ * Antwort-Header des Bildabrufs: JPEG, nie als etwas anderes interpretiert und nicht cachebar (`no-store`,
+ * RFC 9111, Abschnitt 5.2.2.5, https://www.rfc-editor.org/rfc/rfc9111#name-no-store). Die App hält das Bild
+ * nur im Speicher (Spezifikation 2, Abschnitt 9).
+ */
+const imageHeaders = { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } as const;
+
 export function createMealPhotos({
   database,
+  clock,
   storage,
   entries,
 }: {
   database: Database;
+  clock: Clock;
   storage: PhotoStorage;
   /** Die angemeldete Entität `nutrition_entry`: Der Befehl schreibt Einträge über ihren Schreibweg. */
   entries: ServerSyncEntity;
 }) {
-  const entity: ServerSyncEntity = ownedEntity({
+  /** Der Bildschlüssel eines Fotos, gleich ob gelöscht. */
+  async function imageKeyOf(executor: DbExecutor, photoId: string): Promise<string | null> {
+    const [row] = await executor.select({ imageKey: mealPhoto.imageKey }).from(mealPhoto).where(eq(mealPhoto.id, photoId));
+    return row?.imageKey ?? null;
+  }
+
+  /** Die Entität nur mit Metadaten: Ihr Löschen setzt den Tombstone und lässt die Dateien liegen. */
+  const tombstoneOnly: ServerSyncEntity = ownedEntity({
     entityType: 'meal_photo',
     resource: 'meal_photo',
     table: mealPhoto,
@@ -61,6 +97,21 @@ export function createMealPhotos({
     // Kein generisches Create: Ohne bestätigten Entwurf gibt es weder Bild noch Aufnahmezeit.
     validate: async (_tx, { exists }) => (exists ? null : 'invalid_payload'),
   });
+
+  const entity: ServerSyncEntity = {
+    ...tombstoneOnly,
+    /**
+     * „Foto löschen“: Tombstone und sofort beide Fassungen aus der Fotoablage (Spezifikation 2, Abschnitt 9).
+     * Die Dateien gehen schon im Savepoint der Operation. Rollt er danach zurück, bleibt ein Foto ohne
+     * Dateien, bis der Tombstone erneut ankommt: Für die App ist er endgültig (Spezifikation 0, Abschnitt 10),
+     * sie wiederholt ihn, bis der Server ihn übernimmt.
+     */
+    async remove(tx, removal) {
+      await tombstoneOnly.remove(tx, removal);
+      const imageKey = await imageKeyOf(tx, removal.entityId);
+      if (imageKey !== null) await storage.deletePhoto(imageKey);
+    },
+  };
 
   /** Der Entwurf, sofern er der Person gehört, analysiert und nicht abgelaufen ist, samt seinem Bild. */
   async function validDraft(tx: DbExecutor, draftId: string, personId: string, at: Date): Promise<ValidDraft | null> {
@@ -158,7 +209,72 @@ export function createMealPhotos({
 
   const storageCleanupJob: Job = { name: 'fotoablage_aufraeumen', intervalMs: STORAGE_CLEANUP_INTERVAL_MS, run: cleanUpStorage };
 
-  return { entity, confirmCommand, storageCleanupJob };
+  /**
+   * Ob ein nicht gelöschtes Foto seit `cutoff` verwaist ist: Es entstand davor, keiner seiner Einträge ist
+   * ungelöscht, und keiner hat sich seither geändert. Das Löschen eines Eintrags setzt dessen `updated_at`;
+   * der zuletzt gelöschte Eintrag bestimmt also, seit wann das Foto verwaist ist.
+   */
+  const orphanedSince = (cutoff: Date) =>
+    and(
+      isNull(mealPhoto.deletedAt),
+      lte(mealPhoto.createdAt, cutoff),
+      notExists(
+        database.db
+          .select({ id: nutritionEntry.id })
+          .from(nutritionEntry)
+          .where(and(eq(nutritionEntry.mealPhotoId, mealPhoto.id), or(isNull(nutritionEntry.deletedAt), gt(nutritionEntry.updatedAt, cutoff)))),
+      ),
+    );
+
+  /**
+   * Setzt jedes seit 24 Stunden verwaiste Foto auf Tombstone (Spezifikation 2, Abschnitt 9) und löscht nach
+   * dem Commit seine Dateien. Die Zeile bleibt bis zum Commit gesperrt: Ein gleichzeitiger Eintrag, der auf
+   * das Foto verweist, wartet über seinen Fremdschlüssel. Idempotent; scheitert das Löschen der Dateien,
+   * holt es der Aufräumjob der Fotoablage nach.
+   */
+  async function tombstoneOrphans() {
+    const at = new Date(clock.read().instant);
+    const cutoff = new Date(at.getTime() - ORPHAN_AFTER_MS);
+    const due = await database.db.select({ id: mealPhoto.id }).from(mealPhoto).where(orphanedSince(cutoff));
+    for (const { id } of due) {
+      const imageKey = await database.db.transaction(async (tx) => {
+        const [photo] = await tx
+          .select({ personId: mealPhoto.personId, imageKey: mealPhoto.imageKey })
+          .from(mealPhoto)
+          .where(and(eq(mealPhoto.id, id), orphanedSince(cutoff)))
+          .for('update');
+        if (photo === undefined) return null;
+        const serverVersion = await nextServerVersion(tx);
+        const ownerPersonId = EntityId.parse(photo.personId);
+        // Ohne Dateien: Die löscht der Job erst nach dem Commit.
+        await tombstoneOnly.remove(tx, { entityId: EntityId.parse(id), ownerPersonId, serverVersion, at });
+        await recordChange(tx, { position: serverVersion, entityType: entity.entityType, entityId: id, operation: 'delete', ownerPersonId, createdAt: at });
+        return photo.imageKey;
+      });
+      if (imageKey !== null) await storage.deletePhoto(imageKey);
+    }
+  }
+
+  const orphanCleanupJob: Job = { name: 'verwaiste_mahlzeitenfotos', intervalMs: ORPHAN_CLEANUP_INTERVAL_MS, run: tombstoneOrphans };
+
+  const routes = new Hono()
+    /**
+     * `GET /v1/nutrition/meal-photos/:id/:variant`: ein eigenes, nicht gelöschtes Mahlzeitenfoto als Vorschau
+     * oder vergrößert (`OwnMealPhotoRequest`), als JPEG und nicht cachebar. Fremde und gelöschte Fotos
+     * verweigert der Guard generisch, auch geteilte des Partners.
+     */
+    .get('/nutrition/meal-photos/:id/:variant', guard(policies.resource('meal_photo_own', 'lesen'), (c) => ({ id: c.req.param('id') })), async (c) => {
+      const request = OwnMealPhotoRequest.safeParse({ photoId: c.req.param('id'), variant: c.req.param('variant') });
+      if (!request.success) return c.json(invalidRequest, 400);
+      const { photoId, variant } = request.data;
+      const imageKey = await imageKeyOf(database.db, photoId);
+      const image = imageKey === null ? null : await storage.readPhoto(imageKey, variant);
+      // Ohne Datei, etwa zwischen Löschen und Retry: kein Bild und nichts Cachebares.
+      if (image === null) return c.body(null, 404, { 'cache-control': 'no-store' });
+      return c.body(new Uint8Array(image), 200, imageHeaders);
+    });
+
+  return { entity, confirmCommand, routes, storageCleanupJob, orphanCleanupJob };
 }
 
 export type MealPhotos = ReturnType<typeof createMealPhotos>;

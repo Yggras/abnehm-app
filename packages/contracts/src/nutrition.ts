@@ -621,3 +621,19 @@ export const MealPhotoRecord = z.strictObject({
   updatedAt: Instant,
 });
 export type MealPhotoRecord = z.infer<typeof MealPhotoRecord>;
+
+/**
+ * Fassung eines Mahlzeitenfotos beim Bildabruf: die Vorschau für Protokoll und „Wir“ oder die
+ * vergrößerte Fassung (Spezifikation 0, Abschnitt 5; Spezifikation 2, Abschnitt 9).
+ */
+export const MealPhotoVariant = z.enum(['vorschau', 'gross']);
+export type MealPhotoVariant = z.infer<typeof MealPhotoVariant>;
+
+/**
+ * Bildabruf eines **eigenen** Mahlzeitenfotos (Spezifikation 2, Abschnitt 9): online, nur mit Sitzung,
+ * nur für die Eigentümerin und nur, solange das Foto nicht gelöscht ist. Die Antwort ist das Bild
+ * (`image/jpeg`) und nicht cachebar; die App hält es nur im Speicher. Partnerfotos laufen nie hierüber,
+ * sondern über Fotoliste und Handle (`PartnerPhotoRequest`).
+ */
+export const OwnMealPhotoRequest = z.strictObject({ photoId: EntityId, variant: MealPhotoVariant });
+export type OwnMealPhotoRequest = z.infer<typeof OwnMealPhotoRequest>;

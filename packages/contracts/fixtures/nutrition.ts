@@ -14,6 +14,8 @@ import {
   PhotoImageKey,
   MealPhotoRecord,
   MealPhotoUpsert,
+  MealPhotoVariant,
+  OwnMealPhotoRequest,
   NutritionEntryAddedOutcome,
   NutritionEntryAddedValues,
   NutritionEntryDeletedOutcome,
@@ -481,6 +483,18 @@ export const nutritionFixtures = {
     invalid: {
       'ohne Eigentümer': { imageKey, capturedAt: now, sharedWithPartner: true, createdAt: now, updatedAt: now },
       'Bildschlüssel als Pfad': { imageKey: 'fotos/a.jpg', capturedAt: now, sharedWithPartner: true, personId: philipp, createdAt: now, updatedAt: now },
+    },
+  }),
+  MealPhotoVariant: fixtures(MealPhotoVariant, {
+    valid: { 'Vorschau': 'vorschau', 'vergrößert': 'gross' },
+    invalid: { 'Original gibt es nicht': 'original', 'Englisch': 'preview' },
+  }),
+  OwnMealPhotoRequest: fixtures(OwnMealPhotoRequest, {
+    valid: { 'Vorschau': { photoId: mealPhoto, variant: 'vorschau' }, 'vergrößert': { photoId: mealPhoto, variant: 'gross' } },
+    invalid: {
+      'Bildschlüssel statt ID': { photoId: imageKey, variant: 'gross' },
+      'unbekannte Fassung': { photoId: mealPhoto, variant: 'original' },
+      'mit Eigentümer': { photoId: mealPhoto, variant: 'gross', personId: philipp },
     },
   }),
   PhotoAnalysisError: fixtures(PhotoAnalysisError, {

@@ -19,6 +19,7 @@ export type { FlowState } from './use-online-flow';
 export type { InvitationFlows, InvitationResult, SyncTrigger } from './invitation-flows';
 export type { OnlineResult } from './online-result';
 export { OnlineFlowsProvider } from './OnlineFlowsProvider';
+export { useOnlineRead } from './use-online-read';
 
 /** Die Abläufe des Geräts: `fetch` des Auth-Moduls (Sitzung, Sperre bei `401`) und der Sync des Kontos. */
 export function createDeviceInvitationFlows({ fetch, sync }: { fetch: typeof globalThis.fetch; sync: SyncTrigger }): InvitationFlows {

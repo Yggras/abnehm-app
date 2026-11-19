@@ -2,11 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { PhotoImageKey } from '@abnehm/contracts/nutrition';
+import { MealPhotoVariant, PhotoImageKey } from '@abnehm/contracts/nutrition';
 
 /** Die beiden Fassungen eines Mahlzeitenfotos in der Fotoablage; ihre Größen stehen in `photo-image.ts`. */
-export const mealPhotoVariants = ['vorschau', 'gross'] as const;
-export type MealPhotoVariant = (typeof mealPhotoVariants)[number];
+export const mealPhotoVariants = MealPhotoVariant.options;
+export type { MealPhotoVariant };
 
 /**
  * Bilddateien auf dem Server (Spezifikation 2, Abschnitte 8 und 9; Spezifikation 0, Abschnitt 8): die
