@@ -62,14 +62,24 @@ describe('Textkatalog für Benachrichtigungen', () => {
     });
   });
 
+  it('der gemeinsame Katalog: Levelaufstieg (Spezifikation 4, Abschnitt 12; #200)', () => {
+    expect(notificationTexts.render('levelaufstieg', { level: 7 })).toEqual({
+      title: 'Momo ist jetzt auf Level 7 🎉',
+      body: 'Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.',
+    });
+    expect(notificationTexts.renderStored('levelaufstieg', { level: 1 })).toMatchObject({ type: 'contract_error', error: { code: 'invalid_payload' } });
+  });
+
   it('der Eintrag passt zu Schlüssel und Werten des Intents aus den Fixtures', () => {
-    const rollenwahl = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid['Rollenwahl']);
-    expect(notificationTexts.renderStored(rollenwahl.messageKey, rollenwahl.payload)).toMatchObject({ type: 'rendered' });
+    for (const name of ['Rollenwahl', 'Levelaufstieg an Anna'] as const) {
+      const intent = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid[name]);
+      expect(notificationTexts.renderStored(intent.messageKey, intent.payload)).toMatchObject({ type: 'rendered' });
+    }
   });
 
   it('Schlüssel ohne Eintrag sind ein Typfehler', () => {
     // @ts-expect-error – Einträge kommen mit den Tickets der Spezifikationen 4 und 5
-    expect(() => notificationTexts.render('levelaufstieg', { level: 7 })).toThrow();
-    expect(notificationTexts.renderStored('levelaufstieg', { level: 7 })).toMatchObject({ type: 'contract_error' });
+    expect(() => notificationTexts.render('gebiet', { gebietKey: 'gebiet_1' })).toThrow();
+    expect(notificationTexts.renderStored('gebiet', { gebietKey: 'gebiet_1' })).toMatchObject({ type: 'contract_error' });
   });
 });
