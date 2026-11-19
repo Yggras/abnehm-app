@@ -100,6 +100,7 @@ function operationsOf(entity: ResourceEntity): readonly Operation[] {
 
 function resourceDimensions(entity: ResourceEntity, operation: Operation): ProtectionDimension[] {
   const { resourceClass, locatedBy } = resourceEntities[entity];
+  // Nur einzelne Regeln tragen `ownerOnly`; die Vereinigung aller Regeln kennt das Feld deshalb nicht.
   const ownerOnly = (resourceEntities[entity] as { ownerOnly?: true }).ownerOnly === true;
   const matrix: MatrixRow = operationMatrix[resourceClass];
   const dimensions: ProtectionDimension[] = ['ohne_sitzung', 'fremde_person'];

@@ -301,7 +301,8 @@ export const nutritionTexts = {
     gone: 'Das Foto ist nicht mehr verfügbar.',
     retry: 'Erneut laden',
     share: 'Mit Partner teilen',
-    shareHint: 'Dein Partner sieht das Foto heute unter „Wir“, ohne Namen, Mengen oder kcal.',
+    /** Partner sehen nur geteilte Fotos mit einem Eintrag von heute (Spezifikation 2, Abschnitt 9). */
+    shareHint: 'Geteilte Fotos von heute sieht dein Partner unter „Wir“, ohne Namen, Mengen oder kcal.',
     delete: 'Foto löschen',
     deleteQuestion: 'Foto endgültig löschen? Die Einträge bleiben.',
     confirmDelete: 'Endgültig löschen',

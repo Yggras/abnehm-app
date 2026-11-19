@@ -171,7 +171,7 @@ describe('Fotoansicht', () => {
     const toggle = screen.getByRole('switch', { name: 'Mit Partner teilen' });
     expect(toggle).toBeChecked();
     expect(Math.min(hitArea(toggle).width, hitArea(toggle).height)).toBeGreaterThanOrEqual(48);
-    expect(screen.getByText('Dein Partner sieht das Foto heute unter „Wir“, ohne Namen, Mengen oder kcal.')).toBeOnTheScreen();
+    expect(screen.getByText('Geteilte Fotos von heute sieht dein Partner unter „Wir“, ohne Namen, Mengen oder kcal.')).toBeOnTheScreen();
 
     await user.press(toggle);
 

@@ -743,14 +743,15 @@ export const gekoppeltExtensions = SeedExtensions.parse({
         id: seedIds.mealPhoto.annaHeute, account: 'anna', nutritionEntryId: seedIds.nutritionEntry.annaMittag, visibleTo: ['philipp'],
         imageKey: seedImageKeys.mealPhoto.annaHeute, image: { width: 960, height: 1_280, rgb: [214, 168, 40] },
       },
-      // Seit #164: Philipps einzeln vom Teilen ausgenommenes Foto und sein verwaistes Foto sieht nur er.
+      // Seit #164: Philipps einzeln vom Teilen ausgenommenes Foto und sein verwaistes Foto sieht nur er. Kleiner als
+      // die übrigen, damit jedes Seeden schnell bleibt; die Vorschau hat ohnehin nur 400 px.
       {
         id: seedIds.mealPhoto.philippNichtGeteilt, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippNichtGeteilt, visibleTo: [],
-        imageKey: seedImageKeys.mealPhoto.philippNichtGeteilt, image: { width: 1_280, height: 1_280, rgb: [220, 90, 110] },
+        imageKey: seedImageKeys.mealPhoto.philippNichtGeteilt, image: { width: 640, height: 640, rgb: [220, 90, 110] },
       },
       {
         id: seedIds.mealPhoto.philippVerwaist, account: 'philipp', nutritionEntryId: seedIds.nutritionEntry.philippVerwaist, visibleTo: [],
-        imageKey: seedImageKeys.mealPhoto.philippVerwaist, image: { width: 1_280, height: 960, rgb: [150, 110, 60] },
+        imageKey: seedImageKeys.mealPhoto.philippVerwaist, image: { width: 640, height: 480, rgb: [150, 110, 60] },
       },
     ],
     expiredDrafts: [

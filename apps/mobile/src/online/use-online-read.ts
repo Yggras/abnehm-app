@@ -10,12 +10,11 @@ import type { FlowState } from './use-online-flow';
  * Das Ergebnis lebt nur, solange ein Bildschirm es zeigt: `gcTime: 0` aus dem `OnlineFlowsProvider` wirft
  * es nach dem Schließen weg, nichts wird persistiert. Solange es angezeigt wird, lädt es nicht von selbst
  * neu (`staleTime: Infinity`); `retry` lädt es erneut, etwa wieder online. Gleiche `key` teilen sich einen
- * Abruf. Ohne `enabled` bleibt der Zustand `idle`.
+ * Abruf.
  */
 export function useOnlineRead<T, C extends ContractErrorCode>(
   key: readonly string[],
   read: () => Promise<OnlineResult<T, C>>,
-  { enabled = true }: { enabled?: boolean } = {},
 ): { state: FlowState<T, C>; retry(): void } {
   const query = useQuery({
     queryKey: ['online-read', ...key],
@@ -26,9 +25,8 @@ export function useOnlineRead<T, C extends ContractErrorCode>(
         return { type: 'failed' };
       }
     },
-    enabled,
     staleTime: Infinity,
   });
-  const state: FlowState<T, C> = !enabled ? { type: 'idle' } : query.data ?? { type: 'pending' };
+  const state: FlowState<T, C> = query.data ?? { type: 'pending' };
   return { state, retry: () => void query.refetch() };
 }

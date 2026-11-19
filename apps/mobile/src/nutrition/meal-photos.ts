@@ -171,11 +171,10 @@ export function confirmPhotoDraft(
 
 /** Entfernt ein Mahlzeitenfoto, das der Server nie bestätigt hat, und löst seine Einträge davon. */
 function removeUnconfirmedPhoto(tx: TransactionContext, photoId: EntityId): void {
-  const db = sqliteOf(tx);
-  const photo = db.select({ serverVersion: mealPhoto.serverVersion }).from(mealPhoto).where(eq(mealPhoto.id, photoId)).get();
+  const photo = readPhoto(tx, photoId);
   if (photo === undefined || photo.serverVersion !== null) return;
   unlinkPhoto(tx, photoId);
-  db.delete(mealPhoto).where(eq(mealPhoto.id, photoId)).run();
+  sqliteOf(tx).delete(mealPhoto).where(eq(mealPhoto.id, photoId)).run();
 }
 
 /**

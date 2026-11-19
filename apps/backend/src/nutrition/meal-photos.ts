@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import type { Clock } from '@abnehm/clock';
 import { EntityId } from '@abnehm/contracts/base';
 import type { ContractError } from '@abnehm/contracts/errors';
-import { ConfirmPhotoDraft, confirmPhotoDraftKey, MealPhotoRecord, MealPhotoUpsert, MealPhotoVariant } from '@abnehm/contracts/nutrition';
+import { ConfirmPhotoDraft, confirmPhotoDraftKey, MealPhotoRecord, MealPhotoUpsert, OwnMealPhotoRequest } from '@abnehm/contracts/nutrition';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 
 import { guard, policies } from '../authorization/authorization.ts';
@@ -49,8 +49,8 @@ const ORPHAN_CLEANUP_INTERVAL_MS = 5 * 60_000;
  */
 const ORPHAN_AFTER_MS = 24 * 60 * 60_000;
 
-/** Antwort auf eine unbekannte Fassung. */
-const invalidVariant = { code: 'invalid_payload', retryable: false } as const satisfies ContractError;
+/** Antwort auf eine unbekannte Fassung; die ID hat der Guard schon geprüft. */
+const invalidRequest = { code: 'invalid_payload', retryable: false } as const satisfies ContractError;
 
 /**
  * Antwort-Header des Bildabrufs: JPEG, nie als etwas anderes interpretiert und nicht cachebar (`no-store`,
@@ -264,10 +264,11 @@ export function createMealPhotos({
      * verweigert der Guard generisch, auch geteilte des Partners.
      */
     .get('/nutrition/meal-photos/:id/:variant', guard(policies.resource('meal_photo_own', 'lesen'), (c) => ({ id: c.req.param('id') })), async (c) => {
-      const variant = MealPhotoVariant.safeParse(c.req.param('variant'));
-      if (!variant.success) return c.json(invalidVariant, 400);
-      const imageKey = await imageKeyOf(database.db, c.req.param('id'));
-      const image = imageKey === null ? null : await storage.readPhoto(imageKey, variant.data);
+      const request = OwnMealPhotoRequest.safeParse({ photoId: c.req.param('id'), variant: c.req.param('variant') });
+      if (!request.success) return c.json(invalidRequest, 400);
+      const { photoId, variant } = request.data;
+      const imageKey = await imageKeyOf(database.db, photoId);
+      const image = imageKey === null ? null : await storage.readPhoto(imageKey, variant);
       // Ohne Datei, etwa zwischen Löschen und Retry: kein Bild und nichts Cachebares.
       if (image === null) return c.body(null, 404, { 'cache-control': 'no-store' });
       return c.body(new Uint8Array(image), 200, imageHeaders);
