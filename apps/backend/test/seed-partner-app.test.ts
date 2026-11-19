@@ -4,8 +4,8 @@ import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
-import { EntityId, LocalDate, ServerVersion } from '@abnehm/contracts/base';
-import { revocationNoticeId } from '@abnehm/contracts/partner';
+import { AreaKey, EntityId, LocalDate, ServerVersion } from '@abnehm/contracts/base';
+import { partnerSummaryPeriodOf, revocationNoticeId } from '@abnehm/contracts/partner';
 import {
   buildSeedState,
   gekoppeltParts,
@@ -23,6 +23,9 @@ import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabilities/seed/local-seed.ts';
 import { policies } from '../src/authorization/authorization.ts';
 import { photoDraft, revocationNotice } from '../src/db/schema/index.ts';
+import type { PartnerSummaryProjector } from '../src/partner-projections/projector.ts';
+import { postgresPlanReader } from '../src/plan/plan-reader.ts';
+import { trackerPartnerSummaryProjectors } from '../src/trackers/partner-summaries.ts';
 import type { TestBackend } from './support/app.ts';
 import type { Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
@@ -83,8 +86,8 @@ describe('Szenario gekoppelt', () => {
       dailyGoalStatus: expect.objectContaining({ ownerPersonId: anna.personId, stage: 'fast_geschafft' }),
       summaries: [
         expect.objectContaining({ type: 'wasser', ownerPersonId: anna.personId, content: { progressPercent: 100 } }),
-        expect.objectContaining({ type: 'sport', content: { countedMinutes: 45, weeklyTargetMinutes: 120 } }),
-        expect.objectContaining({ type: 'gewicht', content: { changeKg: null, direction: 'noch_nicht_verfuegbar' } }),
+        expect.objectContaining({ type: 'sport', content: { countedMinutes: 125, weeklyTargetMinutes: 120 } }),
+        expect.objectContaining({ type: 'gewicht', content: { changeKg: -0.2, direction: 'sinkend' } }),
       ],
     });
     expect(anna.partner()).toEqual({
@@ -93,10 +96,29 @@ describe('Szenario gekoppelt', () => {
       summaries: [
         expect.objectContaining({ type: 'ernaehrung', ownerPersonId: philipp.personId, content: { recordedMealCategories: 2 } }),
         expect.objectContaining({ type: 'wasser', content: { progressPercent: 50 } }),
-        expect.objectContaining({ type: 'sport', content: { countedMinutes: 65, weeklyTargetMinutes: 150 } }),
-        expect.objectContaining({ type: 'gewicht', content: { changeKg: null, direction: 'noch_nicht_verfuegbar' } }),
+        expect.objectContaining({ type: 'sport', content: { countedMinutes: 105, weeklyTargetMinutes: 150 } }),
+        expect.objectContaining({ type: 'gewicht', content: { changeKg: -0.6, direction: 'sinkend' } }),
       ],
     });
+  });
+
+  it('die geseedeten Zusammenfassungen Wasser, Sport und Gewicht rechnen die Projectors aus #181 zur Uhr des Seeds genauso', async () => {
+    const { backend } = await seeded(gekoppelt);
+    const projectors = new Map(trackerPartnerSummaryProjectors({ planReader: postgresPlanReader }).map((projector) => [projector.area, projector]));
+    const rows = (gekoppelt.initial.server.partner_summary ?? []).filter((row) => projectors.has(row.area as 'wasser'));
+    expect(rows).toHaveLength(6);
+
+    for (const row of rows) {
+      const area = AreaKey.parse(row.area);
+      // Zeitraum und Inhalt passen je Bereich zusammen; über die Union verfolgt TypeScript das nicht.
+      const projector = projectors.get(area as 'wasser') as unknown as PartnerSummaryProjector;
+      const content = await backend.database.db.transaction((tx) => projector.project(tx, {
+        ownerPersonId: EntityId.parse(row.owner_person_id),
+        period: partnerSummaryPeriodOf(area, LocalDate.parse(row.period_from), LocalDate.parse(row.period_to)),
+        today: LocalDate.parse(gekoppelt.localDates.heute),
+      }));
+      expect(content, `${row.owner_person_id} ${area}`).toEqual(row.content);
+    }
   });
 
   it('Mahlzeitenfotos: Online-Sichtbarkeit wie im Erweiterungspunkt, ohne Bereichsfreigabe Ernährung', async () => {

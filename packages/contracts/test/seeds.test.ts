@@ -27,10 +27,17 @@ import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, week
 const solo = seedManifests.solo;
 const philipp = seedIds.person.philipp;
 
-/** Was die Sport-Zählregel von einer Seed-Zeile braucht; Seeds kennen nur manuelle, nie ersetzte Einheiten. */
+const orNull = (value: unknown) => (value === null || value === undefined ? null : String(value));
+
+/** Was die Sport-Zählregel von einer Seed-Zeile braucht, samt Ausblendung und Ersetzung (#181). */
 const sportFacts = (row: Record<string, unknown>) => ({
   id: String(row.id), origin: String(row.origin), durationMinutes: Number(row.duration_minutes), localDate: String(row.local_date),
-  deletedAt: null, hiddenAt: null, replacedByEntryId: null, reactivatedAt: null,
+  deletedAt: orNull(row.deleted_at), hiddenAt: orNull(row.hidden_at), replacedByEntryId: orNull(row.replaced_by_entry_id), reactivatedAt: orNull(row.reactivated_at),
+});
+
+/** Was die Gewichtsregeln von einer Seed-Zeile brauchen. */
+const weightFacts = (row: Record<string, unknown>) => ({
+  weightG: Number(row.weight_g), measuredAt: String(row.measured_at), localDate: String(row.local_date), deletedAt: orNull(row.deleted_at), hiddenAt: orNull(row.hidden_at),
 });
 
 describe('Seed-Manifest', () => {
@@ -99,13 +106,16 @@ describe('Seed-Manifest', () => {
       return [day?.baustein_1, day?.baustein_2, day?.baustein_3].map(String);
     };
 
-    it.each(['solo', 'gekoppelt'] as const)('%s: Philipp hat Gewichtseinträge ohne Importe, heute (Mittwoch) ist sein Wiegetag noch offen', (scenario) => {
+    it.each(['solo', 'gekoppelt'] as const)('%s: Philipp hat Gewichtseinträge bis gestern, heute (Mittwoch) ist sein Wiegetag noch offen', (scenario) => {
       const days = dayWeights(weighings(scenario));
 
       expect(days.length).toBeGreaterThan(0);
       expect(days.at(-1)!.localDate < seedDays.heute).toBe(true);
       expect(isWeighDay(planDay(scenario, 'mittwoch'))).toBe(true);
-      expect((seedManifests[scenario].initial.server.weight_entry ?? []).every((row) => row.origin === 'manuell')).toBe(true);
+    });
+
+    it('solo: Philipps Gewichtseinträge sind ohne Importe; den Waagenimport gibt es nur in den Partner-Szenarien (#181)', () => {
+      expect((solo.initial.server.weight_entry ?? []).every((row) => row.origin === 'manuell')).toBe(true);
     });
 
     it('solo-ohne-wiegetag: Der Wochenplan hat keinen Wiegetag, sonst gleicht das Szenario solo', () => {
@@ -510,6 +520,60 @@ describe('Szenario gekoppelt', () => {
     }
     expect(byId('partner_daily_goal_status', seedIds.partnerDailyGoalStatus.philipp)).toMatchObject({ recipient_person_id: anna, stage: 'unterwegs' });
     expect(byId('partner_daily_goal_status', seedIds.partnerDailyGoalStatus.anna)).toMatchObject({ recipient_person_id: philipp, stage: 'fast_geschafft' });
+  });
+
+  it('Tracker-Daten aus Spezifikation 3, Abschnitt 9 (#181): Importe, Ersetzung und Ausblendung entstehen als Daten', () => {
+    const own = (table: string, personId: string) => (server[table] ?? []).filter((row) => row.person_id === personId);
+    const sport = (personId: string) => own('sport_entry', personId);
+
+    // Philipp (Apple Health): Montag manuell 30 min, Dienstag ein Import (45 min) samt der davon ersetzten
+    // manuellen Einheit, heute ein ausgeblendeter Import und sein Krafttraining.
+    const philippSport = sport(philipp);
+    const ids = seedIds.sportEntry.philippPartner;
+    expect(byId('sport_entry', ids.montag)).toMatchObject({ origin: 'manuell', local_date: seedDays.vorgestern, duration_minutes: 30 });
+    expect(byId('sport_entry', ids.dienstagImport)).toMatchObject({ origin: 'apple_health', local_date: seedDays.gestern, duration_minutes: 45, hidden_at: null });
+    expect(byId('sport_entry', ids.dienstagErsetzt)).toMatchObject({ origin: 'manuell', local_date: seedDays.gestern, replaced_by_entry_id: ids.dienstagImport, reactivated_at: null });
+    expect(byId('sport_entry', ids.heuteAusgeblendet)).toMatchObject({ origin: 'apple_health', local_date: seedDays.heute, hidden_at: expect.any(String) });
+    expect(weekMinutes(philippSport.map(sportFacts), seedDays.heute)).toBe(105);
+
+    // Gewicht über 30 Tage mit Lücken, einem Tag mit zwei Messungen und einem importierten Waagenwert; heute ist Wiegetag und offen.
+    const philippWeights = own('weight_entry', philipp);
+    const days = [...new Set(philippWeights.map((row) => String(row.local_date)))].sort();
+    expect([days[0], days.at(-1)]).toEqual(['2026-09-15', seedDays.gestern]);
+    expect(days.length).toBeLessThan(30);
+    expect(philippWeights.filter((row) => row.local_date === '2026-09-24')).toHaveLength(2);
+    expect(philippWeights.filter((row) => row.origin === 'apple_health')).toHaveLength(1);
+    expect(days).not.toContain(seedDays.heute);
+    const wednesday = server.weekly_plan_day?.find((row) => row.weekly_plan_version_id === seedIds.weeklyPlanVersion.philipp && row.weekday === 'mittwoch');
+    expect(isWeighDay([wednesday?.baustein_1, wednesday?.baustein_2, wednesday?.baustein_3].map(String))).toBe(true);
+
+    // Anna (Health Connect): Wasser über dem Ziel, Sportwoche erreicht, sinkender Trend.
+    const annaGoal = byId('goal_version', seedIds.goalVersion.anna)!;
+    const annaWater = countedWaterMl(own('water_entry', anna).map((row) => ({ amountMl: Number(row.amount_ml), localDate: String(row.local_date), deletedAt: null })), seedDays.heute);
+    expect(trackerStatus(annaWater, Number(annaGoal.water_target_ml))).toBe('ueber_ziel');
+    const annaMinutes = weekMinutes(sport(anna).map(sportFacts), seedDays.heute);
+    expect(annaMinutes).toBeGreaterThanOrEqual(Number(annaGoal.weekly_sport_target_minutes));
+    expect(sport(anna).filter((row) => row.origin === 'health_connect')).toHaveLength(2);
+    expect(weightChange(weightTrend(dayWeights(own('weight_entry', anna).map(weightFacts))), seedDays.heute).direction).toBe('sinkend');
+  });
+
+  it('die Zusammenfassungen folgen aus den Tracker-Daten nach den Tracker-Regeln (#181)', () => {
+    const content = (ownerId: string, area: string) => server.partner_summary?.find((row) => row.owner_person_id === ownerId && row.area === area)?.content;
+    for (const personId of [philipp, anna]) {
+      const goal = (server.goal_version ?? []).find((row) => row.person_id === personId)!;
+      const water = countedWaterMl(
+        (server.water_entry ?? []).filter((row) => row.person_id === personId).map((row) => ({ amountMl: Number(row.amount_ml), localDate: String(row.local_date), deletedAt: null })),
+        seedDays.heute,
+      );
+      expect(content(personId, 'wasser')).toEqual({ progressPercent: Math.min(100, Math.round((100 * water) / Number(goal.water_target_ml))) });
+      expect(content(personId, 'sport')).toEqual({
+        countedMinutes: weekMinutes((server.sport_entry ?? []).filter((row) => row.person_id === personId).map(sportFacts), seedDays.heute),
+        weeklyTargetMinutes: Number(goal.weekly_sport_target_minutes),
+      });
+      expect(content(personId, 'gewicht')).toEqual(
+        weightChange(weightTrend(dayWeights((server.weight_entry ?? []).filter((row) => row.person_id === personId).map(weightFacts))), seedDays.heute),
+      );
+    }
   });
 
   it('kein Gerät erhält fremde Gesundheits-Rohdaten, Freigaben oder Fotos des Partners', () => {

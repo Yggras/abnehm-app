@@ -197,6 +197,9 @@ const waterToday = {
   ],
 } as const satisfies Partial<Record<SeedScenarioKey, WaterToday>>;
 
+/** Philipps Wasser von heute in `solo`; die Partner-Szenarien übernehmen es (#181). */
+export const soloWaterToday: WaterToday = waterToday.solo;
+
 /** Ein manueller Sporteintrag, ohne Importe. */
 type SportUnit = Readonly<{ id: string; activity: string; startedAt: string; minutes: number; localDate: string; createdAt: string }>;
 
@@ -243,10 +246,10 @@ const sportVorwoche: SeedPart = {
 };
 
 /** Eine manuelle Messung: ID, Gewicht in g, Zeitpunkt und lokaler Tag in Berlin. */
-type SeedWeighing = Readonly<{ id: string; weight: number; at: string; localDate: string }>;
+export type SeedWeighing = Readonly<{ id: string; weight: number; at: string; localDate: string }>;
 
-/** Zwei Wiegungen bis gestern: unter drei Tagesgewichten, also noch ohne Trend (#175, #176). */
-const weighingsSolo: readonly SeedWeighing[] = [
+/** Zwei Wiegungen bis gestern: unter drei Tagesgewichten, also noch ohne Trend (#175, #176). Die Partner-Szenarien ergänzen frühere (#181). */
+export const weighingsSolo: readonly SeedWeighing[] = [
   { id: seedIds.weightEntry.philippVorgestern, weight: 92_400, at: '2026-10-12T05:30:00.000Z', localDate: seedDays.vorgestern },
   { id: seedIds.weightEntry.philippGestern, weight: 91_800, at: '2026-10-13T05:45:00.000Z', localDate: seedDays.gestern },
 ];

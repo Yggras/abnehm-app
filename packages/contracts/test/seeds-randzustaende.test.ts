@@ -136,12 +136,28 @@ describe('Randzustand veralteter_partnerstand (#113)', () => {
     expect(rowsOf('veralteter_partnerstand', 'initial', 'daily_goal_completion', 'server').filter((row) => row.person_id === seedIds.person.anna && row.local_date === seedDays.heute)).toHaveLength(2);
   });
 
-  it('nur der Tageszielstand ist neu; Zusammenfassungen bleiben ohne Projectors der Bereiche alt, Anna synchronisiert nicht', () => {
-    const summaries = (state: 'initial' | 'target') => manifest[state].devices['philipp-iphone']!.rows.partner_summary;
-    expect(summaries('target')).toEqual(summaries('initial'));
+  it('sein Sync rechnet auch Annas Zusammenfassungen neu: Wasser jetzt 100 %, Sport und Gewicht nur bestätigt (#181); Anna synchronisiert nicht', () => {
+    const summaries = (state: 'initial' | 'target') => manifest[state].devices['philipp-iphone']!.rows.partner_summary!
+      .filter((row) => row.owner_person_id === seedIds.person.anna)
+      .map(({ area, content, data_as_of, generation, id }) => ({ area, content, data_as_of, generation, id }));
+    const ids = seedIds.partnerSummary.anna;
+    expect(summaries('initial')).toEqual([
+      { area: 'wasser', id: ids.wasser, generation: 1, content: { progressPercent: 0 }, data_as_of: '2026-10-14T06:30:00.000Z' },
+      { area: 'sport', id: ids.sport, generation: 1, content: { countedMinutes: 125, weeklyTargetMinutes: 120 }, data_as_of: '2026-10-14T06:30:00.000Z' },
+      { area: 'gewicht', id: ids.gewicht, generation: 1, content: { changeKg: -0.2, direction: 'sinkend' }, data_as_of: '2026-10-14T06:30:00.000Z' },
+    ]);
+    expect(summaries('target')).toEqual([
+      { area: 'wasser', id: ids.wasser, generation: 1, content: { progressPercent: 100 }, data_as_of: seedClock.instant },
+      { area: 'sport', id: ids.sport, generation: 1, content: { countedMinutes: 125, weeklyTargetMinutes: 120 }, data_as_of: seedClock.instant },
+      { area: 'gewicht', id: ids.gewicht, generation: 1, content: { changeKg: -0.2, direction: 'sinkend' }, data_as_of: seedClock.instant },
+    ]);
     expect(manifest.target.devices['anna-android']).toEqual(manifest.initial.devices['anna-android']);
     const changed = manifest.target.server.change_log!.slice(manifest.initial.server.change_log!.length);
-    expect(changed).toEqual([expect.objectContaining({ entity_type: 'partner_daily_goal_status', entity_id: seedIds.partnerDailyGoalStatus.anna, recipient_person_id: philipp })]);
+    // In der Reihenfolge des Vor-Pull-Schritts: Bereiche nach Katalog, dann der Tageszielstand.
+    expect(changed).toEqual([
+      ...[ids.wasser, ids.sport, ids.gewicht].map((id) => expect.objectContaining({ entity_type: 'partner_summary', entity_id: id, recipient_person_id: philipp })),
+      expect.objectContaining({ entity_type: 'partner_daily_goal_status', entity_id: seedIds.partnerDailyGoalStatus.anna, recipient_person_id: philipp }),
+    ]);
     expect(manifest.target.devices['philipp-iphone']!.cursor).toBe(manifest.target.server.sync_clock![0]!.position);
   });
 });
