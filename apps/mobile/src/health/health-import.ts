@@ -5,7 +5,7 @@ import { Instant, LocalDate } from '@abnehm/contracts/base';
 
 import type { LocalDatabase } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
-import { runOnForegroundEntry } from '../shell/foreground-entry';
+import { runOnForegroundEntry, type ObserveForeground } from '../shell/foreground-entry';
 import type { Trackers } from '../trackers';
 import { daysBefore, healthDataTypes, type HealthAccessState, type HealthDataType, type HealthPlatformAdapter } from './platform';
 
@@ -50,7 +50,7 @@ export type HealthImport = Readonly<{
    */
   importNow(): Promise<void>;
   /** Löst bei Rückkehr in den Vordergrund aus, mit `initialActive` auch sofort (App-Start). */
-  startForegroundTriggers(options: { initialActive: boolean; observeForeground(listener: (active: boolean) => void): () => void }): () => void;
+  startForegroundTriggers(options: { initialActive: boolean; observeForeground: ObserveForeground }): () => void;
   /** Die Verbindung dieses Geräts, oder `null`, solange nicht verbunden. */
   connection(): HealthConnection | null;
   /** Erfüllt sich, sobald weder ein Import noch ein Nachlauf aussteht. */

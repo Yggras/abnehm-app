@@ -1,5 +1,5 @@
 import { readingOf, type Clock } from '@abnehm/clock';
-import { EntityId, Instant, LocalDate, localDateAfter, localDaysBetween, type TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, localDateAfter, localDaysBetween, type ServerVersion, type TimeZone } from '@abnehm/contracts/base';
 import {
   budgetSuggestionId,
   BudgetSuggestionUpsert,
@@ -89,7 +89,7 @@ export type BudgetSuggestionCheck =
 type Window = Readonly<{ from: LocalDate; to: LocalDate }>;
 
 /** Was die Prüfung aus SQLite braucht, bevor sie die Ports liest. */
-type Context = Readonly<{
+type CheckInputs = Readonly<{
   personId: EntityId;
   today: LocalDate;
   window: Window;
@@ -99,7 +99,7 @@ type Context = Readonly<{
 }>;
 
 /** `countsAsChecked`: ob die Prüfung damit für heute als gelaufen gilt. */
-type Prepared = { type: 'fertig'; check: BudgetSuggestionCheck; countsAsChecked: boolean } | { type: 'pruefen'; context: Context };
+type Prepared = { type: 'fertig'; check: BudgetSuggestionCheck; countsAsChecked: boolean } | { type: 'pruefen'; inputs: CheckInputs };
 
 type Decision =
   | Readonly<{ type: 'vorschlag'; direction: BudgetSuggestionDirection; suggestedBudgetMilliKcal: number }>
@@ -126,8 +126,8 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
       if (prepared.countsAsChecked) database.transaction((tx) => markChecked(tx, today, at));
       return prepared.check;
     }
-    const { context } = prepared;
-    const decision = await decide(context, readers);
+    const { inputs } = prepared;
+    const decision = await decide(inputs, readers);
     return database.transaction((tx): BudgetSuggestionCheck => {
       // Zwischen Lesen und Schreiben kann sich der Plan geändert haben; dann prüft der nächste Auslöser.
       const again = prepare(tx, today, reading.timeZone);
@@ -135,20 +135,19 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
         if (again.countsAsChecked) markChecked(tx, today, at);
         return again.check;
       }
-      if (!sameGoal(again.context.goal, context.goal)) return { type: 'kein_vorschlag', reason: 'plan_geaendert' };
+      if (!sameGoal(again.inputs.goal, inputs.goal)) return { type: 'kein_vorschlag', reason: 'plan_geaendert' };
       markChecked(tx, today, at);
       if (decision.type === 'kein_vorschlag') return decision;
-      const id = budgetSuggestionId(context.personId, context.window.to);
+      const id = budgetSuggestionId(inputs.personId, inputs.window.to);
       const payload = BudgetSuggestionUpsert.parse({
-        periodFrom: context.window.from,
-        periodTo: context.window.to,
-        previousBudgetMilliKcal: context.goal.calorieBudgetMilliKcal,
+        periodFrom: inputs.window.from,
+        periodTo: inputs.window.to,
+        previousBudgetMilliKcal: inputs.goal.calorieBudgetMilliKcal,
         suggestedBudgetMilliKcal: decision.suggestedBudgetMilliKcal,
         direction: decision.direction,
         status: 'offen',
       });
-      writeBudgetSuggestion(tx, id, context.personId, payload, at);
-      writer.upsert(tx, { entityType: budgetSuggestionEntity.entityType, entityId: id, payload, knownServerVersion: null });
+      save(tx, { id, personId: inputs.personId, payload, at, knownServerVersion: null });
       return {
         type: 'vorgeschlagen',
         suggestionId: id,
@@ -172,8 +171,7 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
       if (open === undefined) return;
       const { personId: _owner, createdAt: _createdAt, updatedAt: _updatedAt, ...values } = open.record;
       const payload = BudgetSuggestionUpsert.parse({ ...values, status: 'ueberholt' });
-      writeBudgetSuggestion(tx, open.id, personId, payload, at);
-      writer.upsert(tx, { entityType: budgetSuggestionEntity.entityType, entityId: open.id, payload, knownServerVersion: open.serverVersion });
+      save(tx, { id: open.id, personId, payload, at, knownServerVersion: open.serverVersion });
     },
 
     notice(tx, personId) {
@@ -187,6 +185,15 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
       };
     },
   };
+
+  /** Schreibt den Vorschlag und in derselben Transaktion seinen Upsert in die Outbox. */
+  function save(
+    tx: TransactionContext,
+    { id, personId, payload, at, knownServerVersion }: Readonly<{ id: EntityId; personId: EntityId; payload: BudgetSuggestionUpsert; at: Instant; knownServerVersion: ServerVersion | null }>,
+  ): void {
+    writeBudgetSuggestion(tx, id, personId, payload, at);
+    writer.upsert(tx, { entityType: budgetSuggestionEntity.entityType, entityId: id, payload, knownServerVersion });
+  }
 
   function markChecked(tx: TransactionContext, today: LocalDate, at: Instant): void {
     writeDeviceState(tx, checkedOnKey, today, at);
@@ -220,7 +227,7 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
     for (let day = window.from; day <= window.to; day = localDateAfter(day, 1)) {
       budgetOn.set(day, versions.findLast((version) => version.validFrom <= day)!.calorieBudgetMilliKcal);
     }
-    return { type: 'pruefen', context: { personId, today, window, goal: { ...goal, pace: goal.pace }, budgetOn } };
+    return { type: 'pruefen', inputs: { personId, today, window, goal: { ...goal, pace: goal.pace }, budgetOn } };
   }
 }
 
@@ -229,7 +236,7 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
  * Soll des Tempos; zum Senken außerdem ≥ 10 erfasste Tage, an ≥ 70 % davon beim jeweils gültigen Budget oder
  * darunter.
  */
-async function decide({ personId, window, goal, budgetOn }: Context, { weightTrendReader, intakeReader }: BudgetSuggestionReaders): Promise<Decision> {
+async function decide({ personId, window, goal, budgetOn }: CheckInputs, { weightTrendReader, intakeReader }: BudgetSuggestionReaders): Promise<Decision> {
   const series = await weightTrendReader.series(personId, window.from, window.to);
   for (let section = 0; section < windowDays / sectionDays; section += 1) {
     const from = localDateAfter(window.from, section * sectionDays);

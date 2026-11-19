@@ -209,14 +209,14 @@ async function activeCouplingOf(db: DbExecutor, personId: string): Promise<{ cou
 /** Ob die Operation eine Ressource anlegen kann, wenn es die ID noch nicht gibt. */
 const creates = (operation: Operation) => operation === 'upsert' || operation === 'befehl';
 
-/**
- * Ressource mit einem Eigentümer. Lesen, Ändern und Fachbefehle nur durch ihn; eine unbekannte ID
- * legt die handelnde Person nur an, wo die Ressource vom Client stammt (`creatable`).
- */
 /** Regel einer eigenen Ressource; eine engere Auswahl der Operationen steht auch im Typ, damit `DimensionsOf` die verbotene Operation kennt. */
 type OwnedRule<C extends ResourceClass, O extends readonly Operation[] | undefined> = EntityRule<C, 'id'> &
   (O extends readonly Operation[] ? Readonly<{ onlyOperations: O }> : unknown);
 
+/**
+ * Ressource mit einem Eigentümer. Lesen, Ändern und Fachbefehle nur durch ihn; eine unbekannte ID
+ * legt die handelnde Person nur an, wo die Ressource vom Client stammt (`creatable`).
+ */
 function owned<C extends ResourceClass, const O extends readonly Operation[] | undefined = undefined>(
   resourceClass: C,
   table: PgTable,
@@ -590,7 +590,7 @@ export const resourceEntities = {
   notification_setting: owned('eigene_eintraege', notificationSetting, ownedBy(notificationSetting), { creatable: true }),
   // Der Budgetvorschlag (Spezifikation 1, Abschnitte 7 und 11; #150): Die App legt ihn per Upsert an und setzt
   // ihn auf `abgelehnt` oder `ueberholt`; `angenommen` setzt nur `acceptBudgetSuggestion` (#151). Gelöscht wird
-  // er nie (Nutzerentscheidung in #150: eigene Einträge ohne Löschen).
+  // er nie (Nutzerentscheidung, https://github.com/Yggras/abnehm-app/issues/71#issuecomment-7014230206).
   budget_suggestion: owned('eigene_eintraege', budgetSuggestion, ownedBy(budgetSuggestion), { creatable: true, onlyOperations: ['lesen', 'upsert', 'befehl'] }),
   // Ziel-/Wochenplanversion und Tagesziel.
   goal_version: owned('zielversionen', goalVersion, ownedBy(goalVersion), { creatable: true }),

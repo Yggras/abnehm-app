@@ -9,7 +9,7 @@ import { budgetSuggestion } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { TodayState } from '../shell/today-registry';
 import { pendingOperations } from '../sync/outbox';
-import type { BudgetSuggestionCheck, BudgetSuggestionReaders, GoalDraft } from '.';
+import type { BudgetSuggestionCheck, BudgetSuggestionReaders, GoalDraft, NoBudgetSuggestionReason } from '.';
 import { writeBudgetSuggestion } from './budget-suggestion-repository';
 import { readGoalVersionOn, writeGoalVersion } from './plan-repository';
 import { berlin, createPlanTodayWorld, philipp, type PlanTodayWorld } from './testing/today-world';
@@ -148,7 +148,7 @@ async function setup({ start = '2026-09-16', plan = {}, person = true }: Setup =
   };
 }
 
-const none = (reason: string): BudgetSuggestionCheck => ({ type: 'kein_vorschlag', reason } as BudgetSuggestionCheck);
+const none = (reason: NoBudgetSuggestionReason): BudgetSuggestionCheck => ({ type: 'kein_vorschlag', reason });
 const id = budgetSuggestionId(philipp, day(window.periodTo));
 
 describe('Budgetvorschlag: Senken', () => {
@@ -214,6 +214,7 @@ describe('Budgetvorschlag: Senken', () => {
   it.each([
     ['9 erfasste Tage', intake(sameDays(9, 1_700)), none('zu_wenige_erfasste_tage')],
     ['10 erfasste Tage', intake(sameDays(10, 1_700)), { type: 'vorgeschlagen' }],
+    ['11 erfasste Tage', intake(sameDays(11, 1_700)), { type: 'vorgeschlagen' }],
     ['10 Tage, einer davon mit nur einer Mahlzeitenkategorie', intake({ ...sameDays(10, 1_700), '2026-10-10': [1_700, 1] }), none('zu_wenige_erfasste_tage')],
     ['7 von 10 Tagen im Budget (70 %)', intake({ ...sameDays(7, 1_700), ...sameDays(3, 2_100, '2026-10-08') }), { type: 'vorgeschlagen' }],
     ['6 von 10 Tagen im Budget', intake({ ...sameDays(6, 1_700), ...sameDays(4, 2_100, '2026-10-07') }), none('zu_selten_im_budget')],
@@ -295,6 +296,7 @@ describe('Budgetvorschlag: Anheben', () => {
 describe('Budgetvorschlag: Voraussetzungen', () => {
   it.each([
     ['genau 2 Tagesgewichte je Abschnitt', weighDays, { type: 'vorgeschlagen' }],
+    ['3 Tagesgewichte im zweiten Abschnitt', [...weighDays.slice(0, 3), '2026-10-02', ...weighDays.slice(3)], { type: 'vorgeschlagen' }],
     ['nur 1 Tagesgewicht im zweiten Abschnitt', weighDays.filter((value) => value !== '2026-10-04'), none('zu_wenige_tagesgewichte')],
     ['nur 1 Tagesgewicht im ersten Abschnitt, eines davor', ['2026-09-22', ...weighDays.slice(1)], none('zu_wenige_tagesgewichte')],
   ] as const)('%s', async (_case, weights, expected) => {
