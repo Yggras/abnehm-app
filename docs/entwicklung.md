@@ -703,6 +703,11 @@ Die drei Online-Abläufe zum Koppeln ([#103](https://github.com/Yggras/abnehm-ap
   - `apps/backend/test/invitations.test.ts` prüft die Abläufe über HTTP, einschließlich Konkurrenz und Reaktivierung.
   - `online-app.test.ts` lässt Modul und App-Sync gegen die echte Hono-App laufen.
   - Komponententests nutzen den Online-Test-Adapter `online/testing/fake-invitation-flows.ts` (`respond`, `hold`, `calls`), etwa `src/partner/Coupling.test.tsx` für beide Bildschirme mit dem echten `src/app`. Maestro: `koppeln.yaml` mit dem Seed `einladung-nach-entkopplung`.
+- **Partner & Freigaben und Onboarding-Schritt `partner`** ([#129](https://github.com/Yggras/abnehm-app/issues/129), Abschnitte 5 und 6 der [Spezifikation 5](https://github.com/Yggras/abnehm-app/issues/87)):
+  - Der Partnerbereich liest Kopplung und eigene Freigaben aus SQLite (`sharing` in `src/partner/sharing.ts`). Ein Schalter (`share`) schreibt sofort lokal über `setPartnerSharing` bzw. `setPhotoSharing` mit Outbox; Widerruf, Notices und Sicherheitslog erledigt der Server (siehe „Partner-Projektionen und Partnercache“). Ohne Verbindung meldet der Meldungs-Host nach dem Abschalten `freigaben.gilt_wenn_online`.
+  - Die Seite `settings/partner_sharing` (`src/settings/PartnerSharingScreen.tsx`) und Schritt 11 (`src/partner/PartnerStep.tsx`, in `device-session.ts` registriert) teilen sich die Schalter (`SharingSwitches.tsx`).
+  - Ob schon ein Code entstand, merkt sich der Partnerbereich, solange die Kontodatenbank offen ist (`noteInvitationCreated`, aufgerufen von `partner.invite`). Schritt 11 meldet dann `partner_invite_created`. Nach einem Neustart der App ist das vergessen; das Online-Modul bleibt flüchtig.
+  - Tests: `src/settings/PartnerSharingScreen.test.tsx` (Seite, Übersicht, offline) und `src/partner/PartnerStep.test.tsx` (Schritt 11 mit den echten Abläufen aus `src/app`), `apps/backend/test/partner-sharing-app.test.ts` (Schalter über den Partnerbereich der App gegen die echte Hono-App mit Test-Projector). Maestro: `freigaben.yaml` (`scripts/e2e-run --ablauf freigaben`); er endet bis zur Behebung von [#324](https://github.com/Yggras/abnehm-app/issues/324) bei der Anmeldung als Partner.
 
 ### Gemeinsame Aktionen und Entkoppeln
 

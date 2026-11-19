@@ -21,7 +21,8 @@ import { couplingTexts, groupedCode } from './texts';
 
 export function InviteScreen({ target }: RouteScreenProps<'partner.invite'>) {
   const { state, create } = useCreateInvitationCode();
-  const coupling = useCouplingState(usePartner());
+  const partner = usePartner();
+  const coupling = useCouplingState(partner);
   // Einmal beim Öffnen; ein zweiter Lauf (React StrictMode) trägt dieselbe `requestId` und erhält denselben Code.
   const started = useRef(false);
   useEffect(() => {
@@ -29,6 +30,11 @@ export function InviteScreen({ target }: RouteScreenProps<'partner.invite'>) {
     started.current = true;
     create();
   }, [create]);
+  // Der Onboarding-Schritt `partner` meldet danach `partner_invite_created` (#129).
+  const created = state.type === 'ok';
+  useEffect(() => {
+    if (created) partner?.noteInvitationCreated();
+  }, [created, partner]);
   const coupled = state.type === 'ok' && coupling.type === 'coupled' ? coupling : null;
   usePullWhile(state.type === 'ok' && coupled === null);
 

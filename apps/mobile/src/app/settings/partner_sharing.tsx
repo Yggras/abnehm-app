@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { PartnerSharingScreen } from '../../settings';
 
-export default placeholderRoute('settings', { section: 'partner_sharing' });
+export default routeScreen('settings', PartnerSharingScreen, { section: 'partner_sharing' });

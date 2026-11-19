@@ -12,6 +12,7 @@ import type { ObserveNetwork } from '../sync/triggers';
 import { readCouplingState, type CouplingState } from './coupling-state';
 import { readEncourageSheet, sendEncouragement, type EncourageOutcome, type EncourageSheet } from './encouragement';
 import { partnerCardOf, wirPartnerOf, type PartnerReading, type WirPartner } from './partner-view';
+import { changeSharing, readSharing, type Sharing, type SharingChange, type SharingOutcome } from './sharing';
 
 // Partnerbereich der App (Spezifikation 5, Abschnitte 2 und 3; #121) über der Datenbank eines Kontos.
 // Er liest den Partner ausschließlich aus dem widerrufbaren Partnercache (#106): Jede Pull-Seite mit
@@ -37,6 +38,9 @@ export type PartnerDependencies = Readonly<{
 /** Sheet `partner.encourage` samt Netzstatus, der die Bestätigung bestimmt; `loading` bis zur ersten Lesung. */
 export type EncourageView = Readonly<{ type: 'loading' }> | (EncourageSheet & Readonly<{ online: boolean }>);
 
+/** Eigene Freigaben samt Netzstatus, der bestimmt, ob das Abschalten erst mit der nächsten Verbindung wirkt. */
+export type SharingView = Readonly<{ type: 'loading' }> | (Exclude<Sharing, { type: 'loading' }> & Readonly<{ online: boolean }>);
+
 export type Partner = Readonly<{
   /** Partnerzustand für „Wir“: lädt, solo oder gekoppelt mit Übersicht. */
   wir: Source<WirPartner>;
@@ -50,6 +54,17 @@ export type Partner = Readonly<{
   encourage(messageKey: EncouragementKey): EncourageOutcome;
   /** Stand der Kopplung für `partner.invite` und `partner.redeem` (#120): solo oder gekoppelt, und ob Momo geschlüpft ist. */
   couplingState: Source<CouplingState>;
+  /** „Partner & Freigaben“ und Onboarding-Schritt `partner` (#129): Kopplung und eigene Freigaben. */
+  sharing: Source<SharingView>;
+  /** Ein Schalterwechsel: sofort lokal, der Upsert geht mit dem nächsten Push raus. */
+  share(change: SharingChange): SharingOutcome;
+  /**
+   * Ob `partner.invite` für dieses Konto schon einen Code erzeugt hat, solange die Kontodatenbank offen ist. Der
+   * Onboarding-Schritt `partner` meldet dann `partner_invite_created`; die Kopplung kann später entstehen. Den Code
+   * selbst hält niemand fest (Online-Abläufe sind flüchtig, Spezifikation 0, Abschnitt 9).
+   */
+  invitationCreated: Source<boolean>;
+  noteInvitationCreated(): void;
 }>;
 
 function readPartner(tx: ReadContext): PartnerReading {
@@ -102,6 +117,8 @@ function followedReading<R, V>(
 
 export function createPartner(dependencies: PartnerDependencies): Partner {
   const { database, clock, sync, writer, newId } = dependencies;
+  let invitationCreated = false;
+  const invitationListeners = new Set<(created: boolean) => void>();
   // Alter des Stands und die 10-Minuten-Grenze ändern sich auch ohne Commit.
   const wir = followedReading(dependencies, readPartner, (reading, online) => wirPartnerOf(reading, online, clock.read()));
   // Der Zähler gilt für den lokalen Tag; um Mitternacht beginnt er neu.
@@ -117,5 +134,19 @@ export function createPartner(dependencies: PartnerDependencies): Partner {
     encourageSheet,
     encourage: (messageKey) => database.transaction((tx) => sendEncouragement(tx, { writer, newId, clock }, messageKey)),
     couplingState: followedReading(dependencies, readCouplingState, (state) => state),
+    sharing: followedReading(dependencies, readSharing, (sharing, online): SharingView => (sharing.type === 'loading' ? sharing : { ...sharing, online })),
+    share: (change) => database.transaction((tx) => changeSharing(tx, { writer, clock }, change)),
+    invitationCreated: {
+      subscribe(listener) {
+        listener(invitationCreated);
+        invitationListeners.add(listener);
+        return () => invitationListeners.delete(listener);
+      },
+    },
+    noteInvitationCreated() {
+      if (invitationCreated) return;
+      invitationCreated = true;
+      for (const listener of invitationListeners) listener(true);
+    },
   };
 }

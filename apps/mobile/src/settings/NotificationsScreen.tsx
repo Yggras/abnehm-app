@@ -26,6 +26,7 @@ import {
   useSavedNotificationSetting,
   type NotificationSettings,
 } from '../notifications';
+import { areaIcons } from '../shell/area-icons';
 import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
@@ -76,8 +77,6 @@ function Loading() {
   );
 }
 
-const trackerIcons: Readonly<Record<AreaKey, IconName>> = { ernaehrung: 'plate', wasser: 'drop', sport: 'sport', gewicht: 'scale' };
-
 function SettingForm({ settings }: { settings: NotificationSettings }) {
   const { showMessage } = useMessageHost();
   const saved = useSavedNotificationSetting(settings);
@@ -126,7 +125,7 @@ function SettingForm({ settings }: { settings: NotificationSettings }) {
           {AreaKey.options.map((area) => {
             const field = checkInTrackerField(area);
             return (
-              <ListRow key={area} icon={trackerIcons[area]} title={texts.trackers[area]}
+              <ListRow key={area} icon={areaIcons[area]} title={texts.trackers[area]}
                 accessory={<Switch label={texts.trackers[area]} value={shown[field]} onValueChange={(value) => change({ [field]: value })} />} />
             );
           })}

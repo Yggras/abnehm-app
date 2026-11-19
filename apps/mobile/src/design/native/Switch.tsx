@@ -10,6 +10,8 @@ export type SwitchProps = {
   /** Name für Screenreader; sichtbar steht er als Titel der Listenzeile daneben. */
   label: string;
   disabled?: boolean;
+  /** Kennung für Maestro, etwa `freigabe-wasser`; Screenreader nutzen `label`. */
+  testID?: string;
 };
 
 /**
@@ -19,9 +21,10 @@ export type SwitchProps = {
  * Beschriftung in Rubik. Deshalb tragen Rolle, Zustand und Name das `Pressable`, und der native
  * Schalter ist für Screenreader und Berührung ausgeblendet.
  */
-export function Switch({ value, onValueChange, label, disabled = false }: SwitchProps) {
+export function Switch({ value, onValueChange, label, disabled = false, testID }: SwitchProps) {
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="switch"
       accessibilityLabel={label}
       accessibilityState={{ checked: value, disabled }}
