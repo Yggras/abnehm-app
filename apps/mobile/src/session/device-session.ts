@@ -34,12 +34,13 @@ import { createPushInstallationTransport } from '../notifications/push-installat
 import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
-import { appGoalSettings, appPlan, budgetSuggestionEntity, createPlan, followBudgetSuggestionChecks, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { appGoalSettings, appPlan, budgetSuggestionEntity, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { appWirContributions } from '../shell/app-wir';
+import { runOnForegroundEntry } from '../shell/foreground-entry';
 import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
@@ -239,12 +240,10 @@ function deviceState() {
         }),
         // Budgetvorschlag prüfen: beim App-Start und bei jeder Rückkehr in den Vordergrund, höchstens einmal je
         // lokalem Tag; Gewichtstrend und Tagesaufnahme über die Ports der Spezifikationen 2 und 3 (#150).
-        followBudgetSuggestionChecks({
-          check: () => plan.checkBudgetSuggestion({ weightTrendReader: ports.weightTrendReader, intakeReader: ports.intakeReader }),
-          initialActive: !backgroundOpening && AppState.currentState === 'active',
-          observeForeground: observeAppForeground,
-          onError,
-        }),
+        runOnForegroundEntry(
+          { initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground },
+          () => void plan.checkBudgetSuggestion({ weightTrendReader: ports.weightTrendReader, intakeReader: ports.intakeReader }).catch(onError),
+        ),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

@@ -5,6 +5,7 @@ import { Instant, LocalDate } from '@abnehm/contracts/base';
 
 import type { LocalDatabase } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
+import { runOnForegroundEntry } from '../shell/foreground-entry';
 import type { Trackers } from '../trackers';
 import { daysBefore, healthDataTypes, type HealthAccessState, type HealthDataType, type HealthPlatformAdapter } from './platform';
 
@@ -169,14 +170,7 @@ export function createHealthImport({ database, platform, trackers, clock, onErro
       return { type: 'verbunden', access };
     },
     importNow,
-    startForegroundTriggers({ initialActive, observeForeground }) {
-      let active = initialActive;
-      if (active) void importNow();
-      return observeForeground((next) => {
-        if (next && !active) void importNow();
-        active = next;
-      });
-    },
+    startForegroundTriggers: (options) => runOnForegroundEntry(options, () => void importNow()),
     connection,
     async idle() {
       while (current !== null || followUp !== null) await (followUp ?? current);

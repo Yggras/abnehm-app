@@ -129,7 +129,7 @@ export function budgetvorschlagReadings(scenario: Scenario) {
 }
 
 /** Schlüssel des Gerätezustands, unter dem das Plan-Modul den Tag der letzten Prüfung merkt (`plan/budget-suggestion.ts`). */
-const checkedOnKey = 'plan.budgetvorschlag_geprueft_am';
+const checkedOnKey = 'budgetvorschlag_geprueft_am';
 
 function target(initial: SeedState, scenario: Scenario): SeedState {
   const id = budgetSuggestionId(EntityId.parse(philipp), LocalDate.parse(period.to));

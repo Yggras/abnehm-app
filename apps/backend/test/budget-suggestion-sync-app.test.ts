@@ -19,6 +19,7 @@ import { budgetSuggestion } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
 import { defaultPassword, newDevice, signIn, type Device } from './support/auth-client.ts';
 import { authorizationCases, httpOutcome, personWithSession, type AuthorizationWorld, type Outcome } from './support/authorization.ts';
+import { goalVersionOp } from './support/plan.ts';
 import { deleteOp, pullRaw, push, pushRaw, upsertOp } from './support/sync.ts';
 
 // Nachweis für #150: der Budgetvorschlag im Sync (Spezifikation 1, Abschnitte 7 und 11) gegen die echte
@@ -93,18 +94,45 @@ describe('Budgetvorschlag im Sync', () => {
     expect(ipad.rows()).toEqual([expect.objectContaining({ id, personId, ...offen, serverVersion: expect.any(String) })]);
   });
 
-  it('übernimmt Statuswechsel als Last-Write-Wins: zwei Geräte desselben Tags treffen dieselbe Zeile', async () => {
+  it('zwei Geräte desselben Tags treffen dieselbe Zeile; der Status ändert sich nur aus offen heraus', async () => {
     const { backend, anna, id } = await annaWithSuggestion();
     const second = (await signIn(backend, 'anna@example.test', defaultPassword, newDevice())).device;
 
     await push(backend, anna.device, [suggestionOp(id, offen)]);
-    // Das zweite Gerät hat am selben Tag denselben Vorschlag angelegt und dann eine neue Zielversion gespeichert.
-    const [again, overtaken] = await push(backend, second, [suggestionOp(id, offen), suggestionOp(id, { ...offen, status: 'ueberholt' })]);
+    // Das zweite Gerät hat am selben Tag denselben Vorschlag angelegt und ihn dann abgelehnt.
+    const [again, declined] = await push(backend, second, [suggestionOp(id, offen), suggestionOp(id, { ...offen, status: 'abgelehnt' })]);
     expect(again).toMatchObject({ type: 'applied' });
-    expect(overtaken).toMatchObject({ type: 'applied' });
-    const [declined] = await push(backend, anna.device, [suggestionOp(id, { ...offen, status: 'abgelehnt' })]);
     expect(declined).toMatchObject({ type: 'applied' });
 
+    // Verspätet: Das erste Gerät überholt ihn, oder sein Anlegen kommt noch einmal an. Die Entscheidung bleibt.
+    const [overtaken, reopened, repeated] = await push(backend, anna.device, [
+      suggestionOp(id, { ...offen, status: 'ueberholt' }),
+      suggestionOp(id, offen),
+      suggestionOp(id, { ...offen, status: 'abgelehnt' }),
+    ]);
+    expect(overtaken).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' }, canonical: { type: 'record', data: { status: 'abgelehnt' } } });
+    expect(reopened).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' } });
+    expect(repeated).toMatchObject({ type: 'applied' });
+    expect(await serverRows(backend)).toEqual([expect.objectContaining({ id, status: 'abgelehnt' })]);
+  });
+
+  it('createGoalVersion überholt einen offenen Vorschlag, auch wenn das schreibende Gerät ihn nicht kannte', async () => {
+    const { backend, anna, id } = await annaWithSuggestion();
+    const second = (await signIn(backend, 'anna@example.test', defaultPassword, newDevice())).device;
+    await push(backend, anna.device, [suggestionOp(id, offen)]);
+
+    // Das zweite Gerät hat nie gezogen und speichert neue Ziele.
+    const [saved] = await push(backend, second, [goalVersionOp(anna.personId)]);
+
+    expect(saved).toMatchObject({ type: 'applied' });
+    expect(saved!.type === 'applied' && saved!.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'record', entityType: 'budget_suggestion', entityId: id, data: expect.objectContaining({ status: 'ueberholt' }) }),
+    ]));
+    expect(await serverRows(backend)).toEqual([expect.objectContaining({ id, status: 'ueberholt' })]);
+
+    // Ein entschiedener Vorschlag bleibt bei der nächsten Zielversion, wie er ist.
+    await backend.database.db.update(budgetSuggestion).set({ status: 'abgelehnt' }).where(eq(budgetSuggestion.id, id));
+    await push(backend, second, [goalVersionOp(anna.personId, { payload: { validFrom: '2026-10-15' } })]);
     expect(await serverRows(backend)).toEqual([expect.objectContaining({ id, status: 'abgelehnt' })]);
   });
 
@@ -147,7 +175,7 @@ describe('Budgetvorschlag im Sync', () => {
 
     const [overtaken] = await push(backend, anna.device, [suggestionOp(id, { ...offen, status: 'ueberholt' })]);
 
-    expect(overtaken).toMatchObject({ type: 'permanently_rejected', error: { code: 'invalid_payload' } });
+    expect(overtaken).toMatchObject({ type: 'permanently_rejected', error: { code: 'conflict' }, canonical: { type: 'record', data: { status: 'angenommen' } } });
     expect(await serverRows(backend)).toEqual([expect.objectContaining({ status: 'angenommen' })]);
   });
 });

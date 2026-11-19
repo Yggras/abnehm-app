@@ -213,12 +213,16 @@ const creates = (operation: Operation) => operation === 'upsert' || operation ==
  * Ressource mit einem Eigentümer. Lesen, Ändern und Fachbefehle nur durch ihn; eine unbekannte ID
  * legt die handelnde Person nur an, wo die Ressource vom Client stammt (`creatable`).
  */
+/** Regel einer eigenen Ressource; eine engere Auswahl der Operationen steht auch im Typ, damit `DimensionsOf` die verbotene Operation kennt. */
+type OwnedRule<C extends ResourceClass, O extends readonly Operation[] | undefined> = EntityRule<C, 'id'> &
+  (O extends readonly Operation[] ? Readonly<{ onlyOperations: O }> : unknown);
+
 function owned<C extends ResourceClass, const O extends readonly Operation[] | undefined = undefined>(
   resourceClass: C,
   table: PgTable,
   columns: { id: IdColumn; owner: IdColumn },
   { creatable, onlyOperations }: { creatable: boolean; onlyOperations?: O },
-): EntityRule<C, 'id'> & (O extends readonly Operation[] ? Readonly<{ onlyOperations: O }> : unknown) {
+): OwnedRule<C, O> {
   return byId(
     resourceClass,
     table,
@@ -228,9 +232,8 @@ function owned<C extends ResourceClass, const O extends readonly Operation[] | u
       if (found !== null) return found.owner === personId ? allowed({ ownerPersonId: personId }) : denied;
       return creatable && creates(context.operation) ? allowed({ exists: false, ownerPersonId: personId }) : denied;
     },
-    // Die engere Auswahl steht auch im Typ, damit `DimensionsOf` die verbotene Operation kennt.
     onlyOperations === undefined ? {} : { onlyOperations },
-  ) as EntityRule<C, 'id'> & (O extends readonly Operation[] ? Readonly<{ onlyOperations: O }> : unknown);
+  ) as OwnedRule<C, O>;
 }
 
 /** Inhalt einer Kopplung: nur aktive Mitglieder, und nur über Fachbefehle bzw. den Server. */

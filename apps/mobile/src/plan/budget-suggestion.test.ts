@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { Instant, LocalDate, localDateAfter } from '@abnehm/contracts/base';
+import { Instant, LocalDate, localDateAfter, localDaysBetween } from '@abnehm/contracts/base';
 import { budgetSuggestionId, goalVersionId, type BudgetSuggestionUpsert } from '@abnehm/contracts/plan';
 import type { DailyIntakeSeries, WeightTrendSeries } from '@abnehm/contracts/ports';
 
@@ -38,11 +38,7 @@ const weighDays = ['2026-09-26', '2026-09-28', '2026-10-01', '2026-10-04', '2026
  * um `lossG` (negativ: steigt). Über genau 14 Tage ist der Trendverlust je Woche `lossG ÷ 2`.
  */
 function trend(lossG: number, days: readonly string[] = weighDays): WeightTrendSeries {
-  const offset = (value: string) => {
-    let count = 0;
-    for (let current = day(days[0]!); current < value; current = localDateAfter(current, 1)) count += 1;
-    return count;
-  };
+  const offset = (value: string) => localDaysBetween(day(days[0]!), day(value));
   return days.map((localDate) => {
     const trendG = 80_000 - Math.round((lossG * offset(localDate)) / offset(days.at(-1)!));
     return { localDate: day(localDate), dayWeightG: trendG, trendG };

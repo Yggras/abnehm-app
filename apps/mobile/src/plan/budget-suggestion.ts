@@ -1,5 +1,5 @@
 import { readingOf, type Clock } from '@abnehm/clock';
-import { EntityId, Instant, LocalDate, localDateAfter, type TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, localDateAfter, localDaysBetween, type TimeZone } from '@abnehm/contracts/base';
 import {
   budgetSuggestionId,
   BudgetSuggestionUpsert,
@@ -44,7 +44,7 @@ const stepMilliKcal = 150_000;
 const targetLossG = { entspannt: 500, zuegiger: 750 } as const;
 
 /** Schlüssel im Gerätezustand: der lokale Tag der letzten Prüfung. Er wird nicht synchronisiert. */
-const checkedOnKey = 'plan.budgetvorschlag_geprueft_am';
+const checkedOnKey = 'budgetvorschlag_geprueft_am';
 
 /** Die Ports, über die die Prüfung Gewichtstrend und Tagesaufnahme liest. */
 export type BudgetSuggestionReaders = Readonly<{
@@ -98,7 +98,8 @@ type Context = Readonly<{
   budgetOn: ReadonlyMap<LocalDate, number>;
 }>;
 
-type Prepared = { type: 'fertig'; check: BudgetSuggestionCheck; mark: boolean } | { type: 'pruefen'; context: Context };
+/** `countsAsChecked`: ob die Prüfung damit für heute als gelaufen gilt. */
+type Prepared = { type: 'fertig'; check: BudgetSuggestionCheck; countsAsChecked: boolean } | { type: 'pruefen'; context: Context };
 
 type Decision =
   | Readonly<{ type: 'vorschlag'; direction: BudgetSuggestionDirection; suggestedBudgetMilliKcal: number }>
@@ -122,7 +123,7 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
     const at = Instant.parse(reading.instant);
     const prepared = database.read((tx) => prepare(tx, today, reading.timeZone));
     if (prepared.type === 'fertig') {
-      if (prepared.mark) database.transaction((tx) => markChecked(tx, today, at));
+      if (prepared.countsAsChecked) database.transaction((tx) => markChecked(tx, today, at));
       return prepared.check;
     }
     const { context } = prepared;
@@ -131,7 +132,7 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
       // Zwischen Lesen und Schreiben kann sich der Plan geändert haben; dann prüft der nächste Auslöser.
       const again = prepare(tx, today, reading.timeZone);
       if (again.type === 'fertig') {
-        if (again.mark) markChecked(tx, today, at);
+        if (again.countsAsChecked) markChecked(tx, today, at);
         return again.check;
       }
       if (!sameGoal(again.context.goal, context.goal)) return { type: 'kein_vorschlag', reason: 'plan_geaendert' };
@@ -198,10 +199,10 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
    */
   function prepare(tx: ReadContext, today: LocalDate, timeZone: TimeZone): Prepared {
     const own = readOwnPerson(tx);
-    if (own === undefined) return { type: 'fertig', check: { type: 'kein_vorschlag', reason: 'ohne_person' }, mark: false };
-    if (readDeviceState(tx, checkedOnKey) === today) return { type: 'fertig', check: { type: 'bereits_geprueft' }, mark: false };
+    if (own === undefined) return { type: 'fertig', check: { type: 'kein_vorschlag', reason: 'ohne_person' }, countsAsChecked: false };
+    if (readDeviceState(tx, checkedOnKey) === today) return { type: 'fertig', check: { type: 'bereits_geprueft' }, countsAsChecked: false };
     const personId = EntityId.parse(own.id);
-    const none = (reason: NoBudgetSuggestionReason): Prepared => ({ type: 'fertig', check: { type: 'kein_vorschlag', reason }, mark: true });
+    const none = (reason: NoBudgetSuggestionReason): Prepared => ({ type: 'fertig', check: { type: 'kein_vorschlag', reason }, countsAsChecked: true });
 
     const versions = readGoalVersionsUntil(tx, personId, today);
     const goal = versions.at(-1);
@@ -242,7 +243,7 @@ async function decide({ personId, window, goal, budgetOn }: Context, { weightTre
   // Trendverlust je Woche = (Trend am ersten − Trend am letzten Tagesgewicht) ÷ Tage dazwischen × 7; positiv
   // ist Abnahme. Verglichen wird ganzzahlig über Kreuz, ohne Rundung an den Grenzen 0,5 × und 1,5 × Soll.
   const weeklyLossTimesDays = (first.trendG - last.trendG) * 7;
-  const targetTimesDays = targetLossG[goal.pace] * daysFrom(first.localDate, last.localDate);
+  const targetTimesDays = targetLossG[goal.pace] * localDaysBetween(first.localDate, last.localDate);
   const budget = goal.calorieBudgetMilliKcal;
 
   if (weeklyLossTimesDays * 2 < targetTimesDays) {
@@ -267,13 +268,6 @@ function budgetSince(versions: readonly GoalVersionValues[]): LocalDate {
   let since = versions.at(-1)!.validFrom;
   for (let index = versions.length - 2; index >= 0 && versions[index]!.calorieBudgetMilliKcal === budget; index -= 1) since = versions[index]!.validFrom;
   return since;
-}
-
-/** Tage von `from` bis `to`; im Fenster höchstens 20. */
-function daysFrom(from: LocalDate, to: LocalDate): number {
-  let days = 0;
-  for (let day = from; day < to; day = localDateAfter(day, 1)) days += 1;
-  return days;
 }
 
 /** Dieselbe heute gültige Zielversion mit denselben Werten, die die Regel nutzt. */

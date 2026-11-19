@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { budgetvorschlagBudget, budgetvorschlagReadings, seedDays, seedIds, seedManifests } from '../seeds/index.ts';
 import type { SeedRow } from '../seeds/manifest.ts';
-import { EntityId, LocalDate } from '../src/base.ts';
+import { EntityId, LocalDate, localDaysBetween } from '../src/base.ts';
 import { budgetSuggestionId, BudgetSuggestionUpsert, CreateGoalVersion } from '../src/plan.ts';
 import { weightTrend } from '../src/tracker-rules.ts';
 
@@ -18,10 +18,7 @@ const iphone = 'philipp-iphone';
 const rows = (key: (typeof scenarios)[number], table: string, state: 'initial' | 'target' = 'initial'): SeedRow[] =>
   seedManifests[key][state].devices[iphone]!.rows[table] ?? [];
 
-/** Die Tage vom ersten bis zum letzten Tag einschließlich. */
-function daysFrom(from: string, to: string): number {
-  return (Date.UTC(+to.slice(0, 4), +to.slice(5, 7) - 1, +to.slice(8)) - Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1, +from.slice(8))) / 86_400_000;
-}
+const daysFrom = (from: string, to: string) => localDaysBetween(LocalDate.parse(from), LocalDate.parse(to));
 
 const sections = [['2026-09-23', '2026-09-29'], ['2026-09-30', '2026-10-06'], ['2026-10-07', '2026-10-13']] as const;
 
@@ -85,7 +82,7 @@ describe('Seed-Szenarien „Budgetvorschlag fällig“ (#150)', () => {
     expect(rows(key, 'budget_suggestion', 'target')).toEqual([expect.objectContaining({ id, status: 'offen', direction, suggested_budget_milli_kcal: suggested, server_version: null })]);
     expect(BudgetSuggestionUpsert.safeParse(payload).success).toBe(true);
     expect(manifest.target.devices[iphone]!.outbox).toEqual([expect.objectContaining({ type: 'upsert_entity', operationId, entityType: 'budget_suggestion', entityId: id, payload })]);
-    expect(rows(key, 'device_state', 'target')).toEqual([{ key: 'plan.budgetvorschlag_geprueft_am', value: seedDays.heute, updated_at: manifest.clock.instant }]);
+    expect(rows(key, 'device_state', 'target')).toEqual([{ key: 'budgetvorschlag_geprueft_am', value: seedDays.heute, updated_at: manifest.clock.instant }]);
     expect(manifest.target.server).toEqual(manifest.initial.server);
     expect(manifest.steps).toEqual([{ type: 'budgetvorschlag_pruefen', installation: iphone, operationIds: [operationId] }]);
   });

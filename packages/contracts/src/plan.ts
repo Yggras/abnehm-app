@@ -180,13 +180,7 @@ const budgetSuggestionFields = {
   status: BudgetSuggestionStatus,
 };
 
-type BudgetSuggestionValues = Readonly<{
-  periodFrom: LocalDate;
-  periodTo: LocalDate;
-  previousBudgetMilliKcal: number;
-  suggestedBudgetMilliKcal: number;
-  direction: BudgetSuggestionDirection;
-}>;
+type BudgetSuggestionValues = Omit<z.infer<z.ZodObject<typeof budgetSuggestionFields>>, 'status'>;
 
 /** Dieselben Regeln wie die `CHECK`s beider Datenbanken: Richtung passt zum Betrag, Zeitraum aufsteigend. */
 function checkBudgetSuggestion(suggestion: BudgetSuggestionValues, context: z.RefinementCtx): void {
