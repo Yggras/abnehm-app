@@ -274,24 +274,34 @@ describe('Schritte 5–7: eigenes Budget im Entwurf', () => {
     await device.onboarding.setUpAccount();
   }
 
-  it('bleibt bei Wasser, Sport und einer unveränderten Aktivitätsstufe erhalten', async () => {
+  it('bleibt erhalten, solange es im erlaubten Bereich liegt, auch nach einer anderen Aktivitätsstufe', async () => {
     await registered();
     device.onboarding.updateDraft({ ...answered, activityLevel: 'wenig_aktiv', manualBudgetKcal: 1_700 });
 
     device.onboarding.updateDraft({ waterTargetMl: 2_000, weeklySportTargetMinutes: 160 });
-    device.onboarding.updateDraft({ activityLevel: 'wenig_aktiv' });
+    device.onboarding.updateDraft({ goalWeightG: 75_000, pace: 'zuegiger' });
+    // mäßig aktiv: erlaubt sind 1.520 bis 2.420 kcal.
+    device.onboarding.updateDraft({ activityLevel: 'maessig_aktiv' });
 
     expect(device.onboarding.readDraft()).toEqual(expect.objectContaining({ manualBudgetKcal: 1_700, waterTargetMl: 2_000 }));
   });
 
-  it('entfällt, wenn eine Eingabe die Rechnung ändert; Wasser und Sport bleiben', async () => {
+  it('entfällt außerhalb des neuen Bereichs; Wasser und Sport bleiben', async () => {
     await registered();
-    device.onboarding.updateDraft({ ...answered, manualBudgetKcal: 1_700, waterTargetMl: 2_000 });
+    // aktiv: erlaubt sind 1.520 bis 2.720 kcal, wenig aktiv nur bis 2.120 kcal.
+    device.onboarding.updateDraft({ ...answered, activityLevel: 'aktiv', manualBudgetKcal: 2_500, waterTargetMl: 2_000 });
 
-    const draft = device.onboarding.updateDraft({ activityLevel: 'aktiv' });
+    const draft = device.onboarding.updateDraft({ activityLevel: 'wenig_aktiv' });
 
     expect(draft.manualBudgetKcal).toBeUndefined();
-    expect(draft).toEqual(expect.objectContaining({ activityLevel: 'aktiv', waterTargetMl: 2_000 }));
+    expect(draft).toEqual(expect.objectContaining({ activityLevel: 'wenig_aktiv', waterTargetMl: 2_000 }));
     expect(device.onboarding.readDraft()).toEqual(draft);
+  });
+
+  it('entfällt im erzwungenen Haltemodus', async () => {
+    await registered();
+    device.onboarding.updateDraft({ ...answered, manualBudgetKcal: 1_700 });
+
+    expect(device.onboarding.updateDraft({ knownEatingDisorder: true }).manualBudgetKcal).toBeUndefined();
   });
 });

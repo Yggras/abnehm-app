@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { ActivityLevel } from '@abnehm/contracts/person';
+import { ActivityLevel } from '@abnehm/contracts/person';
 
 import { ListGroup, ListRow, Notice, Text } from '../design';
 import { activityTexts as texts } from './goal-texts';
@@ -16,8 +16,6 @@ export type ActivityLevelStepProps = {
   /** Weiter zu Schritt 6, die gezeigte Stufe liegt dann im Entwurf. */
   onNext: () => void;
 };
-
-const levels = ['wenig_aktiv', 'maessig_aktiv', 'aktiv'] as const satisfies readonly ActivityLevel[];
 
 /**
  * Schritt 5 „Aktivitätsstufe“ (Spezifikation 1, Abschnitte 3 und 9): drei Karten als Einzelauswahl, die
@@ -38,7 +36,7 @@ export function ActivityLevelStep({ onBack, onNext }: ActivityLevelStepProps) {
     <OnboardingFrame step="aktivitaetsstufe" title={stepTitles.aktivitaetsstufe} onBack={onBack} primary={{ label: onboardingTexts.next, onPress: next }}>
       <Text>{texts.intro}</Text>
       {/* Je Stufe eine Karte: eine Zeile des Design-Systems mit Einzelauswahl, ausgewählt mit Häkchen (#95). */}
-      {levels.map((level) => (
+      {ActivityLevel.options.map((level) => (
         <ListGroup key={level}>
           <ListRow
             title={activityLevelParts[level].level}

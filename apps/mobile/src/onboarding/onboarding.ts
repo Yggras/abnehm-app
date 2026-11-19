@@ -59,8 +59,9 @@ export type Onboarding = {
   acceptDisclaimer(): void;
   readDraft(): OnboardingDraft;
   /**
-   * Übernimmt eine Eingabe in den Entwurf. Ändert sie die Rechnung hinter einem eigenen Budget aus Schritt 7,
-   * etwa über die Aktivitätsstufe, entfällt dieses, und es gilt wieder das berechnete (`keepsManualBudget`).
+   * Übernimmt eine Eingabe in den Entwurf. Liegt ein eigenes Budget aus Schritt 7 danach außerhalb des
+   * erlaubten Bereichs, etwa nach einer anderen Aktivitätsstufe, entfällt es, und es gilt wieder das
+   * berechnete (`keepsManualBudget`).
    */
   updateDraft(change: OnboardingDraftChange): OnboardingDraft;
   /**
@@ -180,9 +181,8 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
     updateDraft(change) {
       const { instant, localDate } = clock.read();
       return requireDatabase().transaction((tx) => {
-        const before = readOnboardingDraft(tx);
         const after = updateOnboardingDraft(tx, change, instant);
-        if (after.manualBudgetKcal === undefined || 'manualBudgetKcal' in change || keepsManualBudget(before, after, localDate)) return after;
+        if ('manualBudgetKcal' in change || keepsManualBudget(after, localDate)) return after;
         return updateOnboardingDraft(tx, { manualBudgetKcal: undefined }, instant);
       });
     },

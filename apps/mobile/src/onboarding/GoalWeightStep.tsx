@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { Pace } from '@abnehm/contracts/ports';
+import type { GoalInputError } from '@abnehm/contracts/goal-calculator';
+import { Pace } from '@abnehm/contracts/ports';
 
 import { useClock } from '../clock/clock-context';
 import { Card, Chip, Notice, space, Text, TextField } from '../design';
@@ -21,7 +22,8 @@ export type GoalWeightStepProps = {
   onNext: () => void;
 };
 
-const paces = ['entspannt', 'zuegiger'] as const satisfies readonly Pace[];
+/** Fehler des Zielrechners, die das Zielgewicht betreffen. */
+const goalWeightErrors: ReadonlySet<GoalInputError> = new Set(['goal_weight_out_of_range', 'goal_weight_not_on_step', 'goal_weight_below_lower_limit']);
 
 /**
  * Schritt 6 „Zielgewicht und Tempo“ (Spezifikation 1, Abschnitte 3 und 9). Das Zielgewicht ist mit 5 %
@@ -51,7 +53,7 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
     ? texts.invalid
     : errors.includes('goal_weight_below_lower_limit') && goalWeight !== null
       ? texts.belowLimit(goalWeight.range.min)
-      : errors.some((error) => error.startsWith('goal_weight_'))
+      : errors.some((error) => goalWeightErrors.has(error))
         ? texts.invalid
         : undefined;
   const valid = readable && calculation !== null;
@@ -97,7 +99,7 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
         <View style={styles.section}>
           <Text variant="label">{texts.pace}</Text>
           <View style={styles.chips}>
-            {paces.map((pace) => (
+            {Pace.options.map((pace) => (
               <Chip
                 key={pace}
                 label={texts.paceChoice(pace)}

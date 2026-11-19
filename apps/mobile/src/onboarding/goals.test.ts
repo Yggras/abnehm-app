@@ -2,9 +2,11 @@
 import { LocalDate } from '@abnehm/contracts/base';
 
 import type { OnboardingDraft } from './draft';
-import { calculatedBudgetOf, goalPreviewOf, keepsManualBudget } from './goals';
+import { goalPreviewOf } from './goals';
 
-// Ziele im Onboarding (Spezifikation 1, Abschnitte 3 und 9) über der Vorschau des Zielrechners. Der
+// Vorschau der Schritte 5–7 (Spezifikation 1, Abschnitte 3 und 9) an der Funktion, mit der die Schritte
+// rechnen, als Referenzfall des Zielrechners mit den Vorauswahlen des Onboardings. Wann ein eigenes Budget
+// gilt, prüft `onboarding.test.ts` an `onboarding.updateDraft`. Der
 // Referenzfall stammt aus research/calorie-needs.md: Frau, 35 Jahre, 168 cm, 80 kg → Grundumsatz
 // 1.514 kcal, Gesamtumsatz ≈ 2.120 kcal bei PAL 1,4, Budget ≈ 1.620 kcal.
 
@@ -85,29 +87,5 @@ describe('Vorschau der Schritte 5–7', () => {
       hints: ['budget_raised_to_lower_bound'],
       manualBudgetRange: { min: 1_520, max: 2_120, step: 10 },
     });
-  });
-});
-
-describe('Eigenes Budget aus Schritt 7', () => {
-  const own: OnboardingDraft = { ...answered, manualBudgetKcal: 1_700 };
-
-  it('das berechnete Budget samt Bereich lässt ein eigenes außer Acht', () => {
-    expect(calculatedBudgetOf(own, today)).toEqual({ kcal: 1_620, range: { min: 1_520, max: 2_120 } });
-    expect(calculatedBudgetOf({ ...own, knownEatingDisorder: true }, today)).toEqual({ kcal: 2_120, range: null });
-    expect(calculatedBudgetOf({}, today)).toBeNull();
-  });
-
-  it('gilt weiter, solange Rechnung und Bereich gleich bleiben', () => {
-    expect(keepsManualBudget(own, { ...own, waterTargetMl: 2_000, weeklySportTargetMinutes: 200 }, today)).toBe(true);
-    expect(keepsManualBudget(own, { ...own, goalWeightG: 75_000 }, today)).toBe(true);
-  });
-
-  it('entfällt, wenn sich die Rechnung ändert', () => {
-    expect(keepsManualBudget(own, { ...own, activityLevel: 'maessig_aktiv' }, today)).toBe(false);
-    expect(keepsManualBudget(own, { ...own, pace: 'zuegiger' }, today)).toBe(false);
-    expect(keepsManualBudget(own, { ...own, goalWeightG: 80_000 }, today)).toBe(false);
-    expect(keepsManualBudget(own, { ...own, weightG: 79_000 }, today)).toBe(false);
-    expect(keepsManualBudget(own, { ...own, pregnantOrBreastfeeding: true }, today)).toBe(false);
-    expect(keepsManualBudget(own, { ...own, heightCm: 10 }, today)).toBe(false);
   });
 });

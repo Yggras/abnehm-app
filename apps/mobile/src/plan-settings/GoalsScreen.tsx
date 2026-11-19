@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { targetInputLimits } from '@abnehm/contracts/goal-calculator';
 import { kcalOfMilliKcal } from '@abnehm/contracts/plan';
-import type { Pace } from '@abnehm/contracts/ports';
+import { Pace } from '@abnehm/contracts/ports';
 
 import { Button, Chip, ListGroup, ListRow, Notice, Sheet, Skeleton, size, space, Stepper, Switch, Text, TextField } from '../design';
 import type { RouteScreenProps } from '../navigation';
@@ -274,7 +274,7 @@ function GoalForm({ settings, base, onDone }: { settings: GoalSettings; base: Go
         <View style={styles.section}>
           <SectionTitle>{texts.pace}</SectionTitle>
           <View style={styles.chips}>
-            {(['entspannt', 'zuegiger'] as const satisfies readonly Pace[]).map((pace) => (
+            {Pace.options.map((pace) => (
               <Chip
                 key={pace}
                 label={texts.paceChoice(pace)}

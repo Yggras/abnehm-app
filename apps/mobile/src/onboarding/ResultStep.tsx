@@ -3,11 +3,13 @@ import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
 import { Button, ListGroup, Notice, space, Stepper, Text } from '../design';
+import { previewGoals } from '../plan';
 import { budgetDerivationRows, ValueRow } from '../plan-settings/BudgetDerivation';
 import { kcalText, litreText } from '../plan-settings/texts';
 import { SectionTitle } from '../settings/SectionTitle';
 import { resultTexts as texts } from './goal-texts';
-import { calculatedBudgetOf, goalPreviewOf, preselectedActivityLevel } from './goals';
+import type { OnboardingDraftChange } from './draft';
+import { budgetChoiceOf, onboardingGoalDraft } from './goals';
 import { useOnboarding } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
 import { stepTitles } from './steps';
@@ -32,10 +34,12 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
   const today = useClock().read().localDate;
   const [draft, setDraft] = useState(() => onboarding.readDraft());
   const [derivationShown, setDerivationShown] = useState(false);
-  const result = goalPreviewOf(draft, today);
-  const calculation = result?.type === 'berechnet' ? result : null;
-  const calculated = calculatedBudgetOf(draft, today);
-  const change = (next: Parameters<typeof onboarding.updateDraft>[0]) => setDraft(onboarding.updateDraft(next));
+  // Vorauswahl und Eingaben des Entwurfs; die Herleitung nennt die Aktivitätsstufe daraus.
+  const goals = onboardingGoalDraft(draft, today);
+  const result = goals === null ? null : previewGoals(goals, today);
+  const calculation = goals !== null && result?.type === 'berechnet' ? { ...result, activityLevel: goals.activityLevel } : null;
+  const choice = budgetChoiceOf(draft, today);
+  const change = (next: OnboardingDraftChange) => setDraft(onboarding.updateDraft(next));
 
   function next() {
     if (calculation === null) return;
@@ -59,7 +63,7 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
 
           <View style={styles.section}>
             <ListGroup>
-              {calculation.manualBudgetRange === null ? (
+              {choice === null || choice.range === null ? (
                 // Warum es sich nicht ändern lässt, sagt der Hinweis zum Haltemodus direkt darunter.
                 <ValueRow title={texts.budget} value={kcalText(calculation.calorieBudget.kcal)} />
               ) : (
@@ -67,11 +71,11 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
                   label={texts.budget}
                   value={calculation.calorieBudget.kcal}
                   valueText={kcalText(calculation.calorieBudget.kcal)}
-                  {...calculation.manualBudgetRange}
+                  {...choice.range}
                   stacked
-                  hint={texts.budgetHint(calculation.budgetSource, calculation.manualBudgetRange.min, calculation.manualBudgetRange.max)}
+                  hint={texts.budgetHint(calculation.budgetSource, choice.range.min, choice.range.max)}
                   // Zurück auf genau den berechneten Wert heißt wieder „berechnet“.
-                  onChange={(kcal) => change({ manualBudgetKcal: kcal === calculated?.kcal ? undefined : kcal })}
+                  onChange={(kcal) => change({ manualBudgetKcal: kcal === choice.calculatedKcal ? undefined : kcal })}
                 />
               )}
             </ListGroup>
@@ -81,8 +85,8 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
               <Notice tone="hint" icon="info" text={texts.maintenanceForced(calculation.safetyTriggers)} />
             ) : null}
             <View style={styles.actions}>
-              {calculation.budgetSource === 'manuell' && calculated !== null ? (
-                <Button label={texts.useCalculated(calculated.kcal)} variant="text" onPress={() => change({ manualBudgetKcal: undefined })} />
+              {calculation.budgetSource === 'manuell' && choice !== null ? (
+                <Button label={texts.useCalculated(choice.calculatedKcal)} variant="text" onPress={() => change({ manualBudgetKcal: undefined })} />
               ) : null}
               <Button
                 label={derivationShown ? texts.hideDerivation : texts.showDerivation}
@@ -94,7 +98,7 @@ export function ResultStep({ onBack, onNext }: ResultStepProps) {
               <ListGroup>
                 {budgetDerivationRows({
                   basalKcal: calculation.basalMetabolicRate.kcal,
-                  activityLevel: draft.activityLevel ?? preselectedActivityLevel,
+                  activityLevel: calculation.activityLevel,
                   activityFactor: calculation.activityFactor,
                   totalKcal: calculation.totalEnergyExpenditure.kcal,
                   deficit: calculation.deficit === null || calculation.pace === null ? null : { pace: calculation.pace, kcal: calculation.deficit.kcal },

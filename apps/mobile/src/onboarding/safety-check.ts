@@ -3,7 +3,7 @@ import type { SafetyTrigger } from '@abnehm/contracts/goal-calculator';
 
 import { previewGoals } from '../plan';
 import type { OnboardingDraft } from './draft';
-import { goalDraftOf } from './goals';
+import { onboardingGoalDraft } from './goals';
 
 // Vorschau von Onboarding-Schritt 4 „Sicherheits-Check“ (Spezifikation 1, Abschnitte 3 und 9) über den
 // Zielrechner: BMI aus Größe und aktuellem Gewicht und die Anlässe des erzwungenen Haltemodus. Die
@@ -20,7 +20,7 @@ export type SafetyCheck = Readonly<{
 
 /** `null`, solange der Entwurf keine vollständigen, gültigen Körperdaten aus Schritt 3 hat (`checkBodyData`). */
 export function safetyCheckOf(draft: OnboardingDraft, today: LocalDate): SafetyCheck | null {
-  const goals = goalDraftOf(draft, today);
+  const goals = onboardingGoalDraft(draft, today);
   if (goals === null) return null;
   // Nur Körperdaten und Sicherheitsangaben: Ziele, die später ungültig wurden, verdecken den BMI nicht.
   const result = previewGoals({ ...goals, goalWeightG: null, manualBudgetKcal: null, waterTargetMl: null, weeklySportTargetMinutes: null }, today);

@@ -739,6 +739,28 @@ describe('Schritt 7 „Ergebnis“', () => {
     expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag verringern' })).toBeEnabled();
   });
 
+  it('im gewählten Haltemodus reicht der Bereich bis zum auf 10 kcal gerundeten Gesamtumsatz', async () => {
+    await openStepFive();
+    await user.press(levelCard(highLevel));
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+    await typeGoalWeight('80,0');
+    await next();
+    await screen.findByRole('header', { name: 'Ergebnis' });
+
+    // 1.514 × 1,8 = 2.725,2 kcal: Budget 2.730 kcal, ein eigenes höchstens 2.720 kcal.
+    expect(budgetValue('2.730 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Berechnet. Möglich sind 1.520 bis 2.730 kcal.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' })).toBeDisabled();
+
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag verringern' }));
+    expect(budgetValue('2.720 kcal')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBe(2_720);
+    await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' }));
+    expect(budgetValue('2.730 kcal')).toBeOnTheScreen();
+    expect(mockDevice.onboarding.readDraft().manualBudgetKcal).toBeUndefined();
+  });
+
   it('im erzwungenen Haltemodus lässt sich das Budget nicht ändern', async () => {
     await openStepSeven({ pregnant: 'Ja' });
 
@@ -828,7 +850,7 @@ describe('Schritte 5–7 ohne Netz und mit „Zurück“', () => {
     expect(mockDevice.server.calls()).toHaveLength(calls);
   });
 
-  it('eine andere Aktivitätsstufe ersetzt ein eigenes Budget durch das berechnete', async () => {
+  it('ein eigenes Budget bleibt nach einer anderen Aktivitätsstufe, solange es im neuen Bereich liegt', async () => {
     await openStepSeven();
     await user.press(screen.getByRole('button', { name: 'Kalorienbudget pro Tag erhöhen' }));
 
@@ -842,9 +864,10 @@ describe('Schritte 5–7 ohne Netz und mit „Zurück“', () => {
     await next();
     await screen.findByRole('header', { name: 'Ergebnis' });
 
-    // mäßig aktiv: 1.514 × 1,6 − 500 = 1.922,4 kcal → 1.920 kcal.
-    expect(screen.getByLabelText('Kalorienbudget pro Tag: 1.920 kcal')).toBeOnTheScreen();
-    expect(screen.getByText('Berechnet. Möglich sind 1.520 bis 2.420 kcal.')).toBeOnTheScreen();
+    // mäßig aktiv: 1.514 × 1,6 − 500 = 1.922,4 kcal → 1.920 kcal; die eigenen 1.630 kcal liegen im Bereich.
+    expect(screen.getByLabelText('Kalorienbudget pro Tag: 1.630 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Selbst festgelegt. Möglich sind 1.520 bis 2.420 kcal.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Zurück zu 1.920 kcal' })).toBeOnTheScreen();
   });
 });
 
