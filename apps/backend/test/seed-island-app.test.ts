@@ -38,6 +38,7 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.
 import { signIn } from './support/auth-client.ts';
 import { notificationSettingEntity } from '../../mobile/src/notifications/notification-setting-entity.ts';
 import { encouragementEntity } from '../../mobile/src/partner/encouragement.ts';
+import { planReaderOf } from '../../mobile/src/plan/plan-reader.ts';
 
 // Nachweis für #180: die Szenarien `solo-energie` und `rollenwahl-offen` (Spezifikation 4, Abschnitt 13)
 // auf Postgres und den Geräten, deren Engine, Adapter und Spieldienst auf echtem SQLite (better-sqlite3)
@@ -89,7 +90,8 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     installationId: InstallationId.parse(installation.installationId),
     commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands] }),
   });
-  const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
+  // Die Vorschau der Challenge-Anteile liest den Wochenplan des Seeds aus der Gerätedatenbank (#210).
+  const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies, planReader: planReaderOf(database) });
   let stage: IslandStage | null = null;
   cleanups.push(game.observeStage((next) => (stage = next)));
   return {

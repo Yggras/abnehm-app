@@ -30,6 +30,7 @@ import { createGameService, type GameService } from '../game-service';
 import { islandProgressOf, islandSyncEntities } from '../island-entities';
 import { anna, philipp } from './persons';
 import { quietGameDependencies } from './quiet-game';
+import { everyDayPlan, weeklyPlanReader } from './challenge-plans';
 
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
@@ -91,7 +92,7 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
   database.transaction((tx) => insertPersonForTest(tx, philipp));
   const newId = () => EntityId.parse(randomUUID());
   const writer = createSyncWriter({ registry: createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]), clock, newId });
-  const gameOf = (opened: LocalDatabase) => createGameService({ database: opened, writer, clock, newId, haptics, refresh });
+  const gameOf = (opened: LocalDatabase) => createGameService({ database: opened, writer, clock, newId, haptics, refresh, planReader: weeklyPlanReader(everyDayPlan) });
   let game = gameOf(database);
   const fieldIdOf = (fieldKey: string) => {
     const field = database.read((tx) => sqliteOf(tx).select({ id: islandField.id }).from(islandField).where(eq(islandField.fieldKey, fieldKey)).get());

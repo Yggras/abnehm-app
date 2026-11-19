@@ -61,17 +61,18 @@ const goal = {
 } as const;
 
 /**
- * `PlanReader` im Speicher, wie ihn Spezifikation 1 auf Postgres liefert, für die Challenge-Anteile: je
- * Person ein Wochenplan ab `validFrom`; davor und ohne Plan ausdrücklich `leer`. Er zählt seine Lesungen,
- * damit Tests sehen, dass der Server die sieben Tage beider Personen liest.
+ * `PlanReader` im Speicher, wie ihn Spezifikation 1 auf Postgres und SQLite liefert, für die
+ * Challenge-Anteile: je Person ein Wochenplan ab `validFrom`, für alle übrigen der `fallback`; davor und
+ * ohne Plan ausdrücklich `leer`. Er zählt seine Lesungen, damit Tests sehen, dass der Server die sieben
+ * Tage beider Personen liest. Server (`planReader`) und Geräte (`reader`) können denselben nutzen.
  */
-export function testWeeklyPlans() {
+export function testWeeklyPlans(fallback: TestWeeklyPlan | null = null) {
   const plans = new Map<string, { validFrom: string; days: TestWeeklyPlan }>();
   const reads: { personId: string; localDate: string }[] = [];
   const reader: PlanReader = {
     async effectivePlan(personId, localDate) {
       reads.push({ personId, localDate });
-      const plan = plans.get(personId);
+      const plan = plans.get(personId) ?? (fallback === null ? undefined : { validFrom: '2026-10-01', days: fallback });
       if (plan === undefined || plan.validFrom > localDate) return EffectivePlan.parse({ type: 'leer', localDate });
       return EffectivePlan.parse({
         type: 'gueltig',
@@ -86,6 +87,7 @@ export function testWeeklyPlans() {
       plans.set(personId, { validFrom, days });
     },
     reads,
+    reader,
     planReader: (() => reader) satisfies ReaderPort<PlanReader>,
   };
 }

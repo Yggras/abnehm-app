@@ -14,6 +14,8 @@ import {
   ServerPushData,
 } from '@abnehm/contracts/notifications';
 import { notificationTexts } from '@abnehm/contracts/notification-texts';
+import { withCatalogNames } from '@abnehm/game-rules/catalog';
+import { gameCatalog } from '@abnehm/game-rules/content';
 
 import { deliveryAttempt, pushInstallation, session } from '../src/db/schema/index.ts';
 import { insertNotificationIntent } from '../src/sync/notification-intents.ts';
@@ -538,7 +540,8 @@ describe('Nachricht je Intent-Typ', { timeout: 30_000 }, () => {
 
     const sent = new Map(world.fake.reached().map((message) => [message.data.intentId, message]));
     for (const intent of intents) {
-      const rendered = notificationTexts.renderStored(intent.messageKey, intent.payload);
+      // Wie der Zusteller: Namen aus dem Spielkatalog, etwa der Challenge-Vorlage, kommen zu den Werten hinzu.
+      const rendered = notificationTexts.renderStored(intent.messageKey, withCatalogNames(gameCatalog, intent.payload));
       if (rendered.type === 'contract_error') {
         expect(sent.has(intent.intentId), intent.messageKey).toBe(false);
         expect(await intentStatus(world.backend, intent.intentId), intent.messageKey).toBe('fehlgeschlagen');
@@ -553,10 +556,11 @@ describe('Nachricht je Intent-Typ', { timeout: 30_000 }, () => {
         interruptionLevel: 'active',
       });
     }
-    // Spezifikation 5 liefert Anfeuern und Entkopplung, Spezifikation 4 bisher Rollenwahl und Levelaufstieg.
+    // Spezifikation 5 liefert Anfeuern und Entkopplung, Spezifikation 4 bisher Rollenwahl, Levelaufstieg und Challenge-Vorschlag.
     expect([...sent.values()].map((message) => message.title).sort()).toEqual([
       'Anna feuert dich an',
       'Anna hat eure Kopplung beendet',
+      'Anna schlägt eine Challenge vor',
       'Anna schlägt eure Rollen vor',
       'Momo ist jetzt auf Level 7 🎉',
     ]);
