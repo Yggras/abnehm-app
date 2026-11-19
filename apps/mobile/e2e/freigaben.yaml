@@ -1,0 +1,109 @@
+# Gerätelauf Partner & Freigaben (Spezifikation 5, Abschnitt 6 und Testing Decisions; #129): Freigabe abschalten
+# und nach Neuanmeldung als Partner keine Zusammenfassung mehr.
+#
+# Seed „gekoppelt“ öffnet als Philipp direkt „Partner & Freigaben“. Philipp teilt dort alle vier Zusammenfassungen
+# und die Fotos (`packages/contracts/seeds/gekoppelt.ts`). Er schaltet „Wasser“ ab, meldet sich über „Konto“ ab;
+# das Abmelden pusht die Outbox vorher (Abmeldemodul aus #111). Danach meldet sich Anna auf demselben Gerät an. Auf
+# „Wir“ sieht sie Philipps Sport und Gewicht aus den echten Projectors von Spezifikation 3 (#181), aber kein Wasser
+# mehr. Vorher prüft der Ablauf als Anna, dass Philipps Wasser dort steht.
+#
+# Offline-Meldung, Onboarding-Schritt und alle Schalter belegen die Komponententests
+# (`src/settings/PartnerSharingScreen.test.tsx`, `src/partner/PartnerStep.test.tsx`), den Widerruf samt neuer
+# Generation der Integrationstest (`apps/backend/test/partner-sharing-app.test.ts`). Die Bildschirmfotos sind die
+# Vorlage der Impeccable-Kritik. Einzeln mit `scripts/e2e-run --ablauf freigaben`.
+appId: ${APP_ID}
+name: Freigabe abschalten
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# Vorher: Anna sieht Philipps Wasser ---------------------------------------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&installation=anna-android&ziel=/partner
+- extendedWaitUntil:
+    visible:
+      id: wir-partneruebersicht
+    timeout: 30000
+- assertVisible:
+    id: wir-bereich-wasser
+- assertVisible:
+    id: wir-bereich-sport
+- takeScreenshot: freigaben-0-wir-vorher
+
+# Philipp schaltet „Wasser“ ab ----------------------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&ziel=/settings/partner_sharing
+- extendedWaitUntil:
+    visible: "Mit Anna gekoppelt"
+    timeout: 30000
+- assertVisible: "Momo und Insel seit .*"
+- assertVisible: "Gesundheitsbereiche"
+- assertVisible: "Nur Trend und Veränderung, nie dein absolutes Gewicht"
+- takeScreenshot: freigaben-1-gekoppelt
+- tapOn:
+    id: freigabe-wasser
+- scrollUntilVisible:
+    element:
+      text: "Abschalten beendet den Zugriff sofort.*"
+    direction: DOWN
+- takeScreenshot: freigaben-2-wasser-aus
+
+# Abmelden über „Konto“ ------------------------------------------------------------------------------
+- back
+- extendedWaitUntil:
+    visible: "Einstellungen"
+    timeout: 10000
+- tapOn: "Einstellungen"
+- assertVisible: "Mit Anna gekoppelt"
+- takeScreenshot: freigaben-3-uebersicht
+- tapOn: "Konto"
+- scrollUntilVisible:
+    element:
+      text: "Abmelden"
+    direction: DOWN
+- tapOn: "Abmelden"
+
+# Anna meldet sich an ---------------------------------------------------------------------------------
+- extendedWaitUntil:
+    visible: "Willkommen bei Gemeinsam leichter"
+    timeout: 30000
+- tapOn: "Verstanden"
+- tapOn: "Weiter"
+- tapOn: "Ich habe schon ein Konto"
+- tapOn: "E-Mail-Adresse"
+- inputText: "anna@example.test"
+- tapOn: "Passwort"
+- inputText: "momo-insel-testpasswort"
+- hideKeyboard
+- tapOn:
+    text: "Anmelden"
+    index: 1
+- extendedWaitUntil:
+    visible: "Hallo, Anna"
+    timeout: 30000
+- tapOn:
+    id: tab-partner
+- extendedWaitUntil:
+    visible:
+      id: wir-partneruebersicht
+    timeout: 30000
+- assertVisible:
+    id: wir-bereich-sport
+- assertVisible:
+    id: wir-bereich-gewicht
+- assertNotVisible:
+    id: wir-bereich-wasser
+- takeScreenshot: freigaben-4-wir-ohne-wasser

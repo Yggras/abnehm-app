@@ -31,7 +31,7 @@ export function SharingSwitches({ partner, sharing }: { partner: Partner; sharin
         <ListGroup>
           {AreaKey.options.map((area) => (
             <ListRow key={area} icon={areaIcons[area]} title={areaNames[area]} subtitle={sharingTexts.areaSubtitles[area]}
-              accessory={<Switch label={areaNames[area]} value={sharing.areas[area]} onValueChange={(shared) => change({ type: 'area', area, shared })} />} />
+              accessory={<Switch testID={`freigabe-${area}`} label={areaNames[area]} value={sharing.areas[area]} onValueChange={(shared) => change({ type: 'area', area, shared })} />} />
           ))}
         </ListGroup>
       </View>
@@ -39,7 +39,7 @@ export function SharingSwitches({ partner, sharing }: { partner: Partner; sharin
         <SectionTitle>{sharingTexts.photosTitle}</SectionTitle>
         <ListGroup>
           <ListRow icon="camera" title={sharingTexts.photos} subtitle={sharingTexts.photosSubtitle}
-            accessory={<Switch label={sharingTexts.photos} value={sharing.photos} onValueChange={(shared) => change({ type: 'photos', shared })} />} />
+            accessory={<Switch testID="freigabe-fotos" label={sharingTexts.photos} value={sharing.photos} onValueChange={(shared) => change({ type: 'photos', shared })} />} />
         </ListGroup>
       </View>
       <Notice tone="neutral" icon="info" text={sharingTexts.info} />
