@@ -21,7 +21,7 @@ import { sharedActionCommands } from '../island/shared-action-commands';
 import { composeAreaPorts } from '../area-ports';
 import { createDeviceLocalDatabases } from '../local-db/device-databases';
 import { createLogout, syncBeforeLogout, type Logout } from '../logout';
-import { appNutrition, createNutrition, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
+import { appNutrition, createNutrition, intakeReaderOf, mealPhotoEntity, nutritionDailyGoals, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../nutrition';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
@@ -158,7 +158,7 @@ function deviceState() {
       // Vertragsschema validiert. Die konsumierenden Module bekommen nur diese Ports.
       const ports = composeAreaPorts(database, {
         planReader: planReaderOf,
-        intakeReader: () => nutrition.intakeReader,
+        intakeReader: intakeReaderOf,
         weightRecorder: () => trackers.weightRecorder,
         weightTrendReader: () => trackers.weightTrendReader,
       });

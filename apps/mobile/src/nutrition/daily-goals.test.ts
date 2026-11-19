@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { EntityId, Instant, LocalDate, TimeZone, type MealKey } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, TimeZone, type BausteinKey, type MealKey } from '@abnehm/contracts/base';
 import { DailyGoalSnapshot, type DailyGoalEvaluation } from '@abnehm/contracts/daily-goals';
 import type { NutritionSnapshot } from '@abnehm/contracts/nutrition';
 import { DailyIntakeSeries, EffectivePlan } from '@abnehm/contracts/ports';
@@ -29,7 +29,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
-import { createNutrition, nutritionDailyGoals, nutritionEntryEntity, type NutritionDayFacts } from '.';
+import { createNutrition, intakeReaderOf, nutritionDailyGoals, nutritionEntryEntity, type NutritionDayFacts } from '.';
 
 // Nachweis für #166: die Beiträge der Ernährung zu den Verträgen aus Spezifikation 0, Abschnitt 3
 // (Spezifikation 2, Abschnitt 10). Die Evaluatoren für „Ernährung erfasst“ und „Im Kalorienbudget“ und
@@ -66,6 +66,15 @@ const goalVersion = {
   waterTargetMl: 2_500,
   weeklySportTargetMinutes: 150,
 } as const;
+
+/** Gültiger Plan eines Tags mit Philipps Zielversion und den Bausteinen des Wochenplantags. */
+const validPlan = (localDate: LocalDate, bausteine: [BausteinKey, BausteinKey, BausteinKey]): ValidPlan =>
+  EffectivePlan.parse({
+    type: 'gueltig',
+    localDate,
+    goal: { ...goalVersion, validFrom: '2026-10-01' },
+    weeklyPlanDay: { weeklyPlanVersionId: '0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2c01', validFrom: '2026-10-01', bausteine },
+  }) as ValidPlan;
 
 const facts = (recordedMealCategories: number, intakeKcal = 0): NutritionDayFacts => ({ recordedMealCategories, intakeKcal });
 
@@ -107,12 +116,7 @@ describe('Konformitäts-Testkit: Im Kalorienbudget', () => {
 });
 
 describe('Konformitäts-Testkit: Tages-Check-in Ernährung', () => {
-  const plan = EffectivePlan.parse({
-    type: 'gueltig',
-    localDate: today,
-    goal: { ...goalVersion, validFrom: '2026-10-01' },
-    weeklyPlanDay: { weeklyPlanVersionId: '0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2c01', validFrom: '2026-10-01', bausteine: ['ernaehrung_erfasst', 'wasserziel', 'gewogen'] },
-  }) as ValidPlan;
+  const plan = validPlan(today, ['ernaehrung_erfasst', 'wasserziel', 'gewogen']);
   const row = (moment: 'mittag' | 'abend', meals: number, behind: boolean): CheckInTruthRow<'ernaehrung', NutritionDayFacts> => ({
     name: `${moment} mit ${meals} Mahlzeiten: ${behind ? 'hinterher' : 'nicht hinterher'}`,
     moment,
@@ -203,6 +207,7 @@ async function world({ at = noon }: { at?: Instant } = {}) {
     database,
     clock,
     nutrition,
+    intakeReader: intakeReaderOf(database),
     persistence,
     registry,
     /** Legt ein Tagesziel an, wie es die Materialisierung aus Spezifikation 1 täte. */
@@ -330,17 +335,12 @@ describe('Tagesziele über Registry und Persistenzdienst', () => {
 });
 
 describe('Tages-Check-in über die Registry', () => {
-  const plan = (localDate: LocalDate): ValidPlan => ({
-    type: 'gueltig',
-    localDate,
-    goal: { ...goalVersion, validFrom: LocalDate.parse('2026-10-01') },
-    weeklyPlanDay: { weeklyPlanVersionId: EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2c01'), validFrom: LocalDate.parse('2026-10-01'), bausteine: ['gewogen', 'wasserziel', 'sporteinheit'] },
-  }) as ValidPlan;
+  const plan = validPlan(today, ['gewogen', 'wasserziel', 'sporteinheit']);
 
   it('liest die Mahlzeitenzahl aus den Einträgen, auch ohne Momo-Platz für die Ernährung', async () => {
     const { nutrition, registry, database } = await world();
     const checkInAt = (moment: 'mittag' | 'abend') =>
-      database.read((tx) => registry.evaluateCheckIn(tx, { tracker: 'ernaehrung', personId: philipp, localDate: today, moment, plan: plan(today) }));
+      database.read((tx) => registry.evaluateCheckIn(tx, { tracker: 'ernaehrung', personId: philipp, localDate: today, moment, plan }));
 
     expect(checkInAt('mittag')).toEqual({ type: 'evaluated', tracker: 'ernaehrung', moment: 'mittag', behind: true, reason: { type: 'ernaehrung', recordedMealCategories: 0 } });
 
@@ -355,14 +355,14 @@ describe('Tages-Check-in über die Registry', () => {
 
 describe('IntakeReader', () => {
   it('liefert jeden lokalen Tag des Bereichs, Tage ohne Einträge mit 0', async () => {
-    const { nutrition } = await world();
+    const { nutrition, intakeReader } = await world();
     nutrition.addEntry(oatsEntry(LocalDate.parse('2026-10-11'), 'fruehstueck', 60));
     nutrition.addEntry(oatsEntry(LocalDate.parse('2026-10-11'), 'snacks', 100));
     const removed = nutrition.addEntry(oatsEntry(yesterday, 'abendessen', 100));
     nutrition.undo(removed.undoToken);
     nutrition.addEntry(oatsEntry(today, 'mittagessen', 100));
 
-    const series = await nutrition.intakeReader.dailyIntake(philipp, LocalDate.parse('2026-10-10'), today);
+    const series = await intakeReader.dailyIntake(philipp, LocalDate.parse('2026-10-10'), today);
 
     expect(DailyIntakeSeries.parse(series)).toEqual([
       { localDate: '2026-10-10', intakeMilliKcal: 0, recordedMealCategories: 0 },
@@ -371,31 +371,31 @@ describe('IntakeReader', () => {
       { localDate: '2026-10-13', intakeMilliKcal: 0, recordedMealCategories: 0 },
       { localDate: '2026-10-14', intakeMilliKcal: 348_000, recordedMealCategories: 1 },
     ]);
-    await expect(nutrition.intakeReader.dailyIntake(anna, yesterday, today)).resolves.toEqual([
+    await expect(intakeReader.dailyIntake(anna, yesterday, today)).resolves.toEqual([
       { localDate: '2026-10-13', intakeMilliKcal: 0, recordedMealCategories: 0 },
       { localDate: '2026-10-14', intakeMilliKcal: 0, recordedMealCategories: 0 },
     ]);
   });
 
   it('liefert über einen Monatswechsel und die Zeitumstellung jeden Kalendertag genau einmal', async () => {
-    const { nutrition } = await world();
-    const series = await nutrition.intakeReader.dailyIntake(philipp, LocalDate.parse('2026-10-24'), LocalDate.parse('2026-11-02'));
+    const { intakeReader } = await world();
+    const series = await intakeReader.dailyIntake(philipp, LocalDate.parse('2026-10-24'), LocalDate.parse('2026-11-02'));
     expect(series.map((day) => day.localDate)).toEqual([
       '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02',
     ]);
   });
 
   it('liefert für einen leeren Bereich (von nach bis) keine Tage', async () => {
-    const { nutrition } = await world();
-    await expect(nutrition.intakeReader.dailyIntake(philipp, today, yesterday)).resolves.toEqual([]);
+    const { intakeReader } = await world();
+    await expect(intakeReader.dailyIntake(philipp, today, yesterday)).resolves.toEqual([]);
   });
 
   it('liest nur: Ein Aufruf schreibt weder Einträge noch Operationen', async () => {
-    const { nutrition, operations } = await world();
+    const { nutrition, intakeReader, operations } = await world();
     nutrition.addEntry(oatsEntry(today, 'fruehstueck', 60));
     const before = operations();
 
-    await nutrition.intakeReader.dailyIntake(philipp, yesterday, today);
+    await intakeReader.dailyIntake(philipp, yesterday, today);
 
     expect(operations()).toEqual(before);
   });
@@ -407,7 +407,7 @@ describe('IntakeReader', () => {
       planReader: () => fakePlanReader(),
       weightTrendReader: () => fakeWeightTrendReader(),
       weightRecorder: () => fakeWeightRecorder(() => today),
-      intakeReader: () => nutrition.intakeReader,
+      intakeReader: intakeReaderOf,
     });
 
     await expect(ports.intakeReader.dailyIntake(philipp, today, today)).resolves.toEqual([

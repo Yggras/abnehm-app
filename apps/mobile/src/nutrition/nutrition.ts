@@ -10,8 +10,6 @@ import {
   type NutritionSnapshot,
 } from '@abnehm/contracts/nutrition';
 
-import type { IntakeReader } from '@abnehm/contracts/ports';
-
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { CatalogDatabase, LocalDatabase } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
@@ -22,7 +20,6 @@ import { readDayLog, type DayLog } from './day-log';
 import { addEntry, removeEntry, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
 import { createFoodSearch, type FoodSearch } from './food-search';
-import { intakeReaderOf } from './intake-reader';
 import { confirmPhotoDraft, type PhotoDraftConfirmation } from './meal-photos';
 import { overlaidOrigins, searchOwnFoods, type OwnFoodChoice } from './own-food-repository';
 import { deleteOwnFood, saveOwnFood, type OwnFoodBase } from './own-foods';
@@ -86,13 +83,6 @@ export type Nutrition = Readonly<{
    * die eigenen Lebensmittel dieses Kontos. Jede Suche liest den aktuellen Stand.
    */
   foodSearch(catalog: CatalogDatabase): FoodSearch;
-  /**
-   * Lese-Port für *Ziele & Onboarding* über dieser Kontodatenbank (Spezifikation 2, Abschnitt 10): je
-   * lokalem Tag die Aufnahme in `milli_kcal` und die Zahl der Mahlzeiten mit Einträgen, Tage ohne
-   * Einträge mit 0. Der Composition Root gibt ihn an `composeAreaPorts` weiter
-   * (`intakeReader: () => nutrition.intakeReader`).
-   */
-  intakeReader: IntakeReader;
 }>;
 
 /**
@@ -130,6 +120,5 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
           overlaidOrigins: () => database.read(overlaidOrigins),
         },
       }),
-    intakeReader: intakeReaderOf(database),
   };
 }

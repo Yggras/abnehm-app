@@ -5,6 +5,7 @@ import {
   type CheckInMoment,
   type DailyGoalProgress,
   type DailyGoalSnapshot,
+  type DailyGoalState,
 } from '@abnehm/contracts/daily-goals';
 
 import type { ValidPlan } from './evaluators';
@@ -19,6 +20,16 @@ import type { ValidPlan } from './evaluators';
  */
 export function isDayClosed(snapshot: Pick<DailyGoalSnapshot, 'dayEndsAt'>, at: Instant): boolean {
   return Date.parse(at) >= Date.parse(snapshot.dayEndsAt);
+}
+
+/**
+ * Ergebnis eines Bausteinevaluators mit der Anzeigeaussage aller Bausteine: `messageKey`
+ * `tagesziel.<baustein>.<zustand>`, die Werte sind die Fortschrittsfelder ohne `type`
+ * (`src/shell/daily-goal-texts.ts`).
+ */
+export function bausteinEvaluation(state: DailyGoalState, dayClosed: boolean, progress: DailyGoalProgress): BausteinEvaluation {
+  const { type, ...values } = progress;
+  return { currentState: state, dayClosed, progress, messageKey: `tagesziel.${type}.${state}`, values };
 }
 
 /** Welche Regel ein Ergebnis verletzt; ein Token für den Kontext eines `ContractError`. */

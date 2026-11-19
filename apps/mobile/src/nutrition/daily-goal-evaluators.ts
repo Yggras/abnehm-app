@@ -1,7 +1,6 @@
-import type { BausteinEvaluation, DailyGoalProgress, DailyGoalState } from '@abnehm/contracts/daily-goals';
-import { roundKcal } from '@abnehm/contracts/nutrition';
+import { dailyIntakeKcal } from '@abnehm/contracts/nutrition';
 
-import { isDayClosed, type BausteinEvaluator, type CheckInEvaluator, type DayFactsReader } from '../daily-goals';
+import { bausteinEvaluation, isDayClosed, type BausteinEvaluator, type CheckInEvaluator, type DayFactsReader } from '../daily-goals';
 import { intakeByDay } from './entry-repository';
 
 // Beiträge der Ernährung zur Baustein-Auswertung und zum Tages-Check-in (Spezifikation 2, Abschnitt 10;
@@ -21,14 +20,9 @@ export type NutritionDayFacts = Readonly<{
 /** Liest die Tagesfakten in der laufenden Transaktion, nur aus der Tabelle der Ernährungseinträge. */
 export const readNutritionDayFacts: DayFactsReader<NutritionDayFacts> = (tx, personId, localDate) => {
   const intake = intakeByDay(tx, personId, localDate, localDate).get(localDate);
-  return { recordedMealCategories: intake?.recordedMealCategories ?? 0, intakeKcal: roundKcal(intake?.intakeMilliKcal ?? 0) };
+  // Die Summe der `milli_kcal` bildet die Abfrage; gerundet wird nach der Regel der Tagesaufnahme.
+  return { recordedMealCategories: intake?.recordedMealCategories ?? 0, intakeKcal: dailyIntakeKcal([intake?.intakeMilliKcal ?? 0]) };
 };
-
-/** Anzeigeaussage wie bei allen Bausteinen: `tagesziel.<baustein>.<zustand>`, die Werte sind der Fortschritt ohne `type`. */
-function evaluation(state: DailyGoalState, dayClosed: boolean, progress: DailyGoalProgress): BausteinEvaluation {
-  const { type, ...values } = progress;
-  return { currentState: state, dayClosed, progress, messageKey: `tagesziel.${type}.${state}`, values };
-}
 
 /** „Ernährung erfasst“: 0 Mahlzeiten `offen`, unter der Schwelle `teilweise`, ab der Schwelle `erfuellt`. */
 const mealsRecorded: BausteinEvaluator<'ernaehrung_erfasst', NutritionDayFacts> = {
@@ -37,7 +31,7 @@ const mealsRecorded: BausteinEvaluator<'ernaehrung_erfasst', NutritionDayFacts> 
   evaluate(snapshot, at, { recordedMealCategories }) {
     const { minimumMealCategories } = snapshot;
     const state = recordedMealCategories === 0 ? 'offen' : recordedMealCategories < minimumMealCategories ? 'teilweise' : 'erfuellt';
-    return evaluation(state, isDayClosed(snapshot, at), { type: snapshot.type, recordedMealCategories, minimumMealCategories });
+    return bausteinEvaluation(state, isDayClosed(snapshot, at), { type: snapshot.type, recordedMealCategories, minimumMealCategories });
   },
 };
 
@@ -54,7 +48,7 @@ const calorieBudget: BausteinEvaluator<'im_kalorienbudget', NutritionDayFacts> =
     const dayClosed = isDayClosed(snapshot, at);
     const within = intakeKcal >= lowerBoundKcal && intakeKcal <= budgetKcal;
     const state = !dayClosed ? 'tagesende' : within ? 'erfuellt' : 'offen';
-    return evaluation(state, dayClosed, { type: snapshot.type, intakeKcal, budgetKcal, lowerBoundKcal });
+    return bausteinEvaluation(state, dayClosed, { type: snapshot.type, intakeKcal, budgetKcal, lowerBoundKcal });
   },
 };
 

@@ -9,7 +9,8 @@ import { intakeByDay } from './entry-repository';
  * lokalen Tag von `from` bis `to` die Summe der `milli_kcal` und die Zahl der Mahlzeiten mit Einträgen
  * (0–4), gezählt wie in der Partner-Zusammenfassung `ernaehrung`. Tage ohne Einträge liefern 0; ist
  * `from` nach `to`, ist die Reihe leer. Er liest in einer Lesetransaktion; die Rückgabe prüft
- * `composeAreaPorts` am Composition Root gegen `DailyIntakeSeries`.
+ * `composeAreaPorts` am Composition Root gegen `DailyIntakeSeries`; dort ist er die Fabrik des Ports
+ * (`intakeReader: intakeReaderOf`).
  */
 export function intakeReaderOf(db: ReadAccess): IntakeReader {
   return {

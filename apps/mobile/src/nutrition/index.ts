@@ -11,6 +11,7 @@
 export { appNutrition, useNutrition } from './app-nutrition';
 export { nutritionDailyGoals, readNutritionDayFacts, type NutritionDayFacts } from './daily-goal-evaluators';
 export type { DayLog, DayLogEntry, DayLogMeal } from './day-log';
+export { intakeReaderOf } from './intake-reader';
 export { InvalidNutritionInputError, type NewEntry } from './entries';
 export { nutritionEntryEntity } from './entry-entity';
 export type { FoodSearch, FoodSearchHit, FoodSearchResult, SearchMark } from './food-search';
