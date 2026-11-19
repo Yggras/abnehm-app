@@ -113,6 +113,8 @@ export type IslandScene = Readonly<{
   foliage: ColorToken;
   /** Mitte der Lichtung: Momos Platz, auf den die Ansicht startet. */
   focus: Point;
+  /** Mitte der eben freigeschalteten Gebiete während der Verwandlung; dorthin schwenkt die Ansicht (#204). */
+  reveal: Point | null;
   /** Ausdehnung aller Felder samt Erdschicht. */
   bounds: Rect;
   /** Umkehrabbildung derselben Projektion: was ein Punkt der Szene trifft, `null` im Wasser. */
@@ -213,7 +215,8 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     opacity: opacity.fog,
     lifting,
   });
-  const fog = [...island.fog.map(fogOf(false)), ...(transformation?.lifting ?? []).map(fogOf(true))];
+  const lifting = transformation?.lifting ?? [];
+  const fog = [...island.fog.map(fogOf(false)), ...lifting.map(fogOf(true))];
 
   const foliage: ColorToken = season === 'herbst' ? 'islandFoliageAutumn' : 'islandFoliage';
   const fields = island.fields;
@@ -258,6 +261,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     daytime,
     foliage,
     focus: place === null ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } : project.point(place.middle),
+    reveal: lifting.length === 0 ? null : centerOf(boundsOf(lifting.flatMap(({ cells }) => cells.map((cell) => project.diamond(cell))))),
     bounds,
     items: [...water, ...sides, ...fieldItems, ...standing.map(({ item }) => item), ...fog, ...particles, ...evening, ...buildable, ...selection],
     hitAt(point) {
@@ -345,6 +349,10 @@ function wavePoints(bounds: Rect, margin: number): Point[] {
     const angle = ((index + 0.5) / waveCount) * 2 * Math.PI;
     return { x: center.x + radius.x * Math.cos(angle), y: center.y + radius.y * Math.sin(angle) };
   });
+}
+
+function centerOf(rect: Rect): Point {
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 }
 
 function boundsOf(polygons: readonly Polygon[]): Rect {

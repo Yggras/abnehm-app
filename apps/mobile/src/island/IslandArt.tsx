@@ -184,12 +184,12 @@ export function MomoTransforming({ at, from, appearance, reduceMotion }: { at: P
   );
 }
 
-/** Nebel über einem eben freigeschalteten Gebiet: Er zieht nach der Verwandlung ab (#204). */
+/** Nebel über einem eben freigeschalteten Gebiet: Er zieht nach Verwandlung und Schwenk ab (#204). */
 export function LiftingFog({ cells, tone, opacity, reduceMotion }: { cells: readonly Polygon[]; tone: ColorToken; opacity: number; reduceMotion: boolean }) {
-  const { morph, lift } = transformationMotion(reduceMotion);
+  const { morph, pan, lift } = transformationMotion(reduceMotion);
   const fade = useSharedValue(opacity);
   useEffect(() => {
-    fade.value = withDelay(morph, withTiming(0, { duration: lift, easing: Easing.out(Easing.quad) }));
+    fade.value = withDelay(morph + pan, withTiming(0, { duration: lift, easing: Easing.out(Easing.quad) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const path = useMemo(() => fogPath(cells), [cells]);

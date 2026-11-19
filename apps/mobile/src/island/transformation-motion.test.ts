@@ -4,13 +4,13 @@ import { transformationDuration, transformationMotion } from './transformation-m
 
 // Nachweis für #204: Takt der Verwandlungsszene (Spezifikation 4, Abschnitt 6; Design-System › Insel und Bewegung).
 
-test('Überblendung mit kurzer Skalierung über `duration-celebrate`, danach zieht der Nebel über `duration-celebrate` ab', () => {
-  expect(transformationMotion(false)).toEqual({ morph: motion.duration.celebrate, lift: motion.duration.celebrate, grow: 0.15 });
-  expect(transformationDuration(false, true)).toBe(2 * motion.duration.celebrate);
+test('Überblendung mit kurzer Skalierung über `duration-celebrate`, Schwenk über `duration-slow`, danach zieht der Nebel über `duration-celebrate` ab', () => {
+  expect(transformationMotion(false)).toEqual({ morph: motion.duration.celebrate, pan: motion.duration.slow, lift: motion.duration.celebrate, grow: 0.15 });
+  expect(transformationDuration(false, true)).toBe(2 * motion.duration.celebrate + motion.duration.slow);
 });
 
-test('mit „Bewegung reduzieren“ eine reine Überblendung in `duration-fast`, ohne Skalierung', () => {
-  expect(transformationMotion(true)).toEqual({ morph: motion.duration.fast, lift: motion.duration.fast, grow: 0 });
+test('mit „Bewegung reduzieren“ eine reine Überblendung in `duration-fast`, ohne Skalierung und ohne Schwenk', () => {
+  expect(transformationMotion(true)).toEqual({ morph: motion.duration.fast, pan: 0, lift: motion.duration.fast, grow: 0 });
   expect(transformationDuration(true, true)).toBe(2 * motion.duration.fast);
 });
 

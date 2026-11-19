@@ -14,6 +14,7 @@ import { routeScreen } from '../navigation';
 import { MessageHostProvider } from '../shell/MessageHost';
 import { appGameService } from './app-game-service';
 import { MomoTab } from './MomoTab';
+import { transformationDuration } from './transformation-motion';
 import { IslandHost, testScreen } from './testing/island-host';
 import { createLaichkugelWorld, type LaichkugelWorld } from './testing/laichkugel-world';
 import type * as mockSkia from './testing/skia-mock';
@@ -79,8 +80,8 @@ test('Tracer: Kommt Level 4 per Pull, während der Tab offen ist, folgt die Verw
 
   // Über der Schilfwiese liegt der Nebel, der nach der Überblendung abzieht.
   expect(fog()).toHaveLength(1);
-  // Überblendung und Abziehen dauern je `duration-celebrate`; danach ist der Nebel weg.
-  await act(() => jest.advanceTimersByTime(2 * 1200));
+  // Überblendung, Schwenk und Abziehen (`transformationDuration`); danach ist der Nebel weg.
+  await act(() => jest.advanceTimersByTime(transformationDuration(false, true)));
   expect(fog()).toHaveLength(0);
 });
 
@@ -95,7 +96,7 @@ test('beim nächsten Öffnen nach einem Pull im Hintergrund kommt die Verwandlun
   await act(() => router.replace('/momo'));
   await fireEvent(screen.getByTestId('insel'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, ...testScreen } } });
   expect(fog()).toHaveLength(1);
-  await act(() => jest.advanceTimersByTime(2 * 1200));
+  await act(() => jest.advanceTimersByTime(transformationDuration(false, true)));
   expect(fog()).toHaveLength(0);
 
   await act(() => router.replace('/'));

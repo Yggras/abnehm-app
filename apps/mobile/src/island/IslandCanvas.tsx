@@ -2,12 +2,13 @@ import { Canvas, Fill, Group, Path, type Transforms3d } from '@shopify/react-nat
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
-import { useDerivedValue, useSharedValue, type SharedValue } from 'react-native-reanimated';
+import { Easing, useAnimatedReaction, useDerivedValue, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { color, useReducedMotion, type ColorToken } from '../design';
 import { fogPath, LampGlow, LiftingFog, MomoOnIsland, MomoTransforming, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
 import type { IslandScene, Polygon, Rect, SceneHit, SceneItem } from './scene-model';
 import { useLoop, usePulse } from './use-loop';
+import { transformationMotion } from './transformation-motion';
 import { panBy, resizeView, startView, toScene, zoomAt, type Size, type Viewport } from './viewport';
 
 export type IslandCanvasProps = {
@@ -41,6 +42,36 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
     bounds.value = scene.bounds;
   }, [bounds, scene.bounds]);
   const laidOut = useRef<Size | null>(null);
+  const reduceMotion = useReducedMotion();
+
+  // Verwandlungsszene (#204): Nach der Überblendung schwenkt die Ansicht zum neuen Gebiet, das auf kleinen
+  // Bildschirmen außerhalb des Startausschnitts liegt. `reveal` läuft von 0 nach 1 und schiebt den Ausschnitt von
+  // `revealFrom` nach `revealTo`; ohne Szene steht es auf 1 und lässt Ziehen und Zoomen in Ruhe.
+  const reveal = useSharedValue(1);
+  const revealFrom = useSharedValue<Viewport>({ x: 0, y: 0, scale: 1 });
+  const revealTo = useSharedValue<Viewport>({ x: 0, y: 0, scale: 1 });
+  useAnimatedReaction(
+    () => reveal.value,
+    (t, previous) => {
+      if (previous === null || t === previous) return;
+      const [from, to] = [revealFrom.get(), revealTo.get()];
+      view.set({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, scale: to.scale });
+    },
+  );
+  const startReveal = (size: Size, from: Viewport) => {
+    if (scene.reveal === null) return;
+    const { morph, pan } = transformationMotion(reduceMotion);
+    revealFrom.set(from);
+    revealTo.set({ x: size.width / 2 - scene.reveal.x * from.scale, y: size.height / 2 - scene.reveal.y * from.scale, scale: from.scale });
+    reveal.set(0);
+    reveal.set(withDelay(morph, withTiming(1, { duration: pan, easing: Easing.inOut(Easing.quad) })));
+  };
+  // Kommt die Szene nach dem ersten Layout, beginnt der Schwenk am aktuellen Ausschnitt; sonst nach dem Layout.
+  useEffect(() => {
+    if (laidOut.current !== null) startReveal(laidOut.current, view.get());
+    // Der Schwenk gilt der einen Szene; ein späterer Wechsel der Einstellung schwenkt nicht neu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene.reveal]);
 
   // Größen kommen aus dem Layout, nicht aus `screen.value`: Ein eben geschriebener Shared Value
   // liefert auf dem JS-Thread noch den alten Wert (im Simulator beobachtet, #182). Die erste Größe
@@ -50,8 +81,12 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
     const size = { width: layout.width, height: layout.height };
     const previous = laidOut.current;
     laidOut.current = size;
-    screen.value = size;
-    if (previous === null) view.value = startView(size, scene.focus);
+    screen.set(size);
+    if (previous === null) {
+      const start = startView(size, scene.focus);
+      view.set(start);
+      startReveal(size, start);
+    }
     // `modify` ruft die Funktion auf dem UI-Thread auf; ohne `'worklet'` brach die App auf Android beim
     // Verlassen des Tabs ab („Tried to synchronously call a Remote Function“, beobachtet im Emulator am
     // 18.11.2026, #184; https://docs.swmansion.com/react-native-worklets/docs/guides/troubleshooting).
@@ -66,14 +101,14 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
     testID: testID && `${testID}-ziehen`,
     onUpdate: (event) => {
       'worklet';
-      view.value = panBy(view.value, { x: event.changeX, y: event.changeY }, screen.value, bounds.value);
+      view.set(panBy(view.get(), { x: event.changeX, y: event.changeY }, screen.get(), bounds.get()));
     },
   });
   const pinch = usePinchGesture({
     testID: testID && `${testID}-zoomen`,
     onUpdate: (event) => {
       'worklet';
-      view.value = zoomAt(view.value, { x: event.focalX, y: event.focalY }, event.scaleChange, screen.value, bounds.value);
+      view.set(zoomAt(view.get(), { x: event.focalX, y: event.focalY }, event.scaleChange, screen.get(), bounds.get()));
     },
   });
   const tap = useTapGesture({
@@ -85,7 +120,6 @@ export function IslandCanvas({ scene, onHit, accessibilityLabel, testID }: Islan
   const gesture = useCompetingGestures(tap, move);
 
   const transform = useDerivedValue<Transforms3d>(() => [{ translateX: view.value.x }, { translateY: view.value.y }, { scale: view.value.scale }]);
-  const reduceMotion = useReducedMotion();
   const progress = useLoop(reduceMotion);
   const pulse = usePulse(reduceMotion);
   const drawing = useMemo(() => drawScene(scene, transform, { progress, pulse, reduceMotion }), [scene, transform, progress, pulse, reduceMotion]);

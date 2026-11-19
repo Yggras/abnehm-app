@@ -253,10 +253,14 @@ describe('Gebietsfreischaltung (#204)', () => {
     expect(ofType(scene.items, 'nebel')[0]!.cells).toHaveLength(80);
     // Der abziehende Nebel sperrt nichts: Ein Tipp trifft schon das Feld.
     expect(scene.hitAt(centerOf(scene, 'schilfwiese:0:-1'))).toMatchObject({ type: 'feld' });
+    // Die Ansicht schwenkt zur Mitte des Gebiets. Felder (0..15, −5..−1) mit oberer Ecke ((x − y) · 32, (x + y) · 16):
+    // waagrecht von (1 · 32 − 32) = 0 bis (20 · 32 + 32) = 672, senkrecht von −5 · 16 = −80 bis 14 · 16 + 32 = 256.
+    expect(scene.reveal).toEqual({ x: 336, y: 88 });
   });
 
-  test('ohne Verwandlung steht Momo nur in der aktuellen Form', () => {
+  test('ohne Verwandlung steht Momo nur in der aktuellen Form, und die Ansicht bleibt', () => {
     expect(ofType(sceneOf(hatched, []).items, 'momo')).toMatchObject([{ from: null }]);
+    expect(sceneOf(hatched, []).reveal).toBeNull();
   });
 });
 
