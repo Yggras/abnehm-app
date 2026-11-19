@@ -2,10 +2,16 @@ import { instantAtWallClock, type Clock } from '@abnehm/clock';
 import { AreaKey, EntityId, localDateAfter, type Instant, type LocalDate } from '@abnehm/contracts/base';
 import type { CheckInMoment, CheckInReason, DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import { notificationTexts } from '@abnehm/contracts/notification-texts';
-import { checkInTrackerField, wallClockMinutes, type CheckInTopic, type NotificationSettingUpsert } from '@abnehm/contracts/notifications';
+import {
+  checkInTrackerField,
+  wallClockMinutes,
+  type CheckInTextValues,
+  type CheckInTopic,
+  type NotificationSettingUpsert,
+} from '@abnehm/contracts/notifications';
 import type { IslandCheckInHintReader, PlanReader } from '@abnehm/contracts/ports';
 import type { RouteTarget } from '@abnehm/contracts/routes';
-import { isSportDay, isWeighDay } from '@abnehm/contracts/tracker-rules';
+import { isInFuture, isSportDay, isWeighDay } from '@abnehm/contracts/tracker-rules';
 
 import type { DailyGoalRegistry, ValidPlan } from '../daily-goals';
 import type { LocalDatabase } from '../local-db';
@@ -131,7 +137,7 @@ async function desiredCheckIns(options: CheckInPlannerOptions): Promise<LocalNot
     if (plan.type !== 'gueltig') continue;
     for (const { moment, minutes } of moments) {
       const at = instantAtWallClock(plan.localDate, minutes, reading.timeZone);
-      if (Date.parse(at) <= Date.parse(reading.instant)) continue;
+      if (!isInFuture(at, reading.instant)) continue;
       const isToday = plan.localDate === reading.localDate;
       const topics = isToday ? todayTopics(options, personId, plan, moment, trackers) : futureTopics(plan, moment, trackers);
       if (topics.length === 0) continue;
@@ -194,7 +200,7 @@ function topicOf(reason: CheckInReason): CheckInTopic {
   }
 }
 
-function checkIn(localDate: LocalDate, moment: CheckInMoment, at: Instant, values: Parameters<typeof notificationTexts.render<'tages_checkin'>>[1]): LocalNotification {
+function checkIn(localDate: LocalDate, moment: CheckInMoment, at: Instant, values: CheckInTextValues): LocalNotification {
   const { title, body } = notificationTexts.render('tages_checkin', values);
   return {
     id: checkInId(localDate, moment),

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { notificationFixtures } from '../fixtures/notifications.ts';
 import { challenge, sharedAction } from '../fixtures/ids.ts';
 import { defineNotificationTexts, notificationText, notificationTexts } from '../src/notification-texts.ts';
-import { NotificationIntent } from '../src/notifications.ts';
+import { NotificationIntent, type CheckInTextValues } from '../src/notifications.ts';
 
 // Ein Testkatalog belegt das Gerüst; die echten Einträge liefern die Spezifikationen 4 und 5.
 const catalog = defineNotificationTexts({
@@ -103,7 +103,7 @@ describe('Textkatalog für Benachrichtigungen', () => {
   });
 
   describe('Tages-Check-in (Spezifikation 5, Abschnitt 7; #135)', () => {
-    const render = (values: Parameters<typeof notificationTexts.render<'tages_checkin'>>[1]) => notificationTexts.render('tages_checkin', values);
+    const render = (values: CheckInTextValues) => notificationTexts.render('tages_checkin', values);
 
     it('Titel „Momo fragt nach“, ein Anlass je Zeile in fester Reihenfolge', () => {
       expect(

@@ -107,7 +107,11 @@ function checkInLine(topic: CheckInTopic, moment: CheckInTextValues['moment']): 
   }
 }
 
-/** Insel-Zusatz je Ereignisart; „… und auf der Insel wartet Besuch 🦊“ steht wörtlich in Spezifikation 5, Abschnitt 7. */
+/**
+ * Insel-Zusatz je Ereignisart. „… und auf der Insel wartet Besuch 🦊“ steht wörtlich in Spezifikation 5,
+ * Abschnitt 7; die Zusätze für Momos Wunsch, Inselwetter und Entdeckung sind eigene Formulierungen im
+ * selben Ton (nicht belegt).
+ */
 const islandHints: Readonly<Record<NonNullable<CheckInTextValues['islandEventKind']>, string>> = {
   besuch: '… und auf der Insel wartet Besuch 🦊',
   momos_wunsch: '… und Momo hat einen Wunsch ✨',
