@@ -9,14 +9,13 @@ import type {
   HealthBackgroundHandler,
   HealthChanges,
   HealthDataType,
-  HealthOrigin,
   HealthPlatformAdapter,
   HealthRecord,
   HealthRecordOf,
   HealthWeightRecord,
   HealthWorkoutRecord,
 } from '../platform';
-import { daysBefore } from '../platform';
+import { daysBefore, tallyOrigins } from '../platform';
 
 // Health-Attrappe (Spezifikation 3, Abschnitte 2 und 9; #183): deterministisch steuerbare Implementierung
 // des Health-Plattform-Adapters. Es gibt sie nur in Tests, im Development- und im E2E-Build; registriert ist
@@ -117,15 +116,7 @@ export function createFakeHealthPlatform({ origin, clock }: FakeHealthPlatformOp
     },
     recentOrigins(days) {
       const since = Date.parse(daysBefore(clock.read().instant, days));
-      const origins = new Map<string, { sourceApp: HealthRecord['sourceApp']; workouts: number; weights: number }>();
-      for (const record of records.values()) {
-        if (Date.parse(atOf(record)) < since) continue;
-        const entry = origins.get(record.sourceApp.id) ?? { sourceApp: record.sourceApp, workouts: 0, weights: 0 };
-        if (record.type === 'workout') entry.workouts += 1;
-        else entry.weights += 1;
-        origins.set(record.sourceApp.id, entry);
-      }
-      return Promise.resolve([...origins.values()] satisfies HealthOrigin[]);
+      return Promise.resolve(tallyOrigins([...records.values()].filter((record) => Date.parse(atOf(record)) >= since)));
     },
     backgroundCapability: () => Promise.resolve(background),
     registerBackground(next) {

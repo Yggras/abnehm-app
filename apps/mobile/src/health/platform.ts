@@ -108,6 +108,21 @@ export function daysBefore(at: Instant, days: number): Instant {
   return Instant.parse(new Date(Date.parse(at) - days * dayMs).toISOString());
 }
 
+/** Ergebnis von `readChanges` bei verfallenem oder unlesbarem Cursor: leer und ohne Cursor. */
+export const expiredHealthChanges = { upserts: [], deletedKeys: [], cursor: null, cursorExpired: true } as const;
+
+/** Zählt normalisierte Trainings und Gewichte je Quell-App, in der Reihenfolge ihres ersten Auftretens. */
+export function tallyOrigins(records: Iterable<HealthRecord>): HealthOrigin[] {
+  const origins = new Map<string, { sourceApp: HealthSourceApp; workouts: number; weights: number }>();
+  for (const record of records) {
+    const entry = origins.get(record.sourceApp.id) ?? { sourceApp: record.sourceApp, workouts: 0, weights: 0 };
+    if (record.type === 'workout') entry.workouts += 1;
+    else entry.weights += 1;
+    origins.set(record.sourceApp.id, entry);
+  }
+  return [...origins.values()];
+}
+
 /**
  * Adapter ohne Plattform: Health ist nicht verfügbar, gelesen wird nichts; ohne Verbindung bleibt alles
  * manuell nutzbar. Er steht in Jest für die Plattform des Geräts (`jest/setup.js`) und dient Tests als

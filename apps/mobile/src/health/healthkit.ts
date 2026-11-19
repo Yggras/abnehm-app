@@ -10,12 +10,12 @@ import type {
 
 import {
   daysBefore,
+  expiredHealthChanges,
+  tallyOrigins,
   type HealthChanges,
   type HealthDataType,
-  type HealthOrigin,
   type HealthPlatformAdapter,
   type HealthRecordOf,
-  type HealthSourceApp,
   type HealthWeightRecord,
   type HealthWorkoutRecord,
 } from './platform';
@@ -29,8 +29,10 @@ import {
 type BodyMass = 'HKQuantityTypeIdentifierBodyMass';
 type WeightSample = QuantitySampleTyped<BodyMass>;
 
+/** Zeitraum einer Abfrage; `strictStartDate` nimmt nur Samples, die im Zeitraum beginnen. */
+type DateRange = Readonly<{ startDate: Date; endDate?: Date; strictStartDate?: boolean }>;
 /** Optionen einer Abfrage: ohne Grenze (`limit: 0`), optional mit Zeitraum bzw. Anker. */
-type QueryOptions = Readonly<{ limit: number; anchor?: string; filter?: { date: { startDate: Date; endDate?: Date } } }>;
+type QueryOptions = Readonly<{ limit: number; anchor?: string; filter?: { date: DateRange } }>;
 /** Gewicht immer in g: HealthKit rechnet die Einheit um (`serializeQuantitySample` mit angefragter Einheit). */
 type WeightQueryOptions = QueryOptions & Readonly<{ unit: 'g' }>;
 type AccessRequest = Readonly<{ toRead: readonly ('HKWorkoutTypeIdentifier' | BodyMass)[] }>;
@@ -70,19 +72,32 @@ const alreadyRequested = 2;
  */
 const unreadableAnchor = /Invalid base64 string|Error recreating/;
 
-const expiredChanges = { upserts: [], deletedKeys: [], cursor: null, cursorExpired: true } as const;
+/** Ergebnis einer Abfrage eines Typs, normalisiert. */
+type Normalized<T extends HealthDataType> = Readonly<{ records: HealthRecordOf<T>[]; deleted: string[]; anchor: string }>;
+
+/** Je Datentyp die Abfragen von HealthKit und ihre Normalisierung. */
+type Kind<T extends HealthDataType> = Readonly<{
+  anchored(client: HealthKitClient, options: QueryOptions): Promise<Normalized<T>>;
+  samples(client: HealthKitClient, options: QueryOptions): Promise<HealthRecordOf<T>[]>;
+}>;
+const kinds: { readonly [T in HealthDataType]: Kind<T> } = {
+  workout: {
+    async anchored(client, options) {
+      const result = await client.queryWorkoutSamplesWithAnchor(options);
+      return { records: present(result.workouts.map(normalizeWorkout)), deleted: uuidsOf(result.deletedSamples), anchor: result.newAnchor };
+    },
+    samples: async (client, options) => present((await client.queryWorkoutSamples(options)).map(normalizeWorkout)),
+  },
+  weight: {
+    async anchored(client, options) {
+      const result = await client.queryQuantitySamplesWithAnchor(bodyMass, { ...options, unit: 'g' });
+      return { records: present(result.samples.map(normalizeWeight)), deleted: uuidsOf(result.deletedSamples), anchor: result.newAnchor };
+    },
+    samples: async (client, options) => present((await client.queryQuantitySamples(bodyMass, { ...options, unit: 'g' })).map(normalizeWeight)),
+  },
+};
 
 export function createHealthKitPlatform({ client, clock }: HealthKitPlatformOptions): HealthPlatformAdapter {
-  /** Eine Anker-Abfrage eines Typs, normalisiert. */
-  async function anchored<T extends HealthDataType>(type: T, options: QueryOptions): Promise<{ upserts: HealthRecordOf<T>[]; deleted: string[]; anchor: string }> {
-    if (type === 'workout') {
-      const result = await client.queryWorkoutSamplesWithAnchor(options);
-      return { upserts: present(result.workouts.map(normalizeWorkout)) as HealthRecordOf<T>[], deleted: uuidsOf(result.deletedSamples), anchor: result.newAnchor };
-    }
-    const result = await client.queryQuantitySamplesWithAnchor(bodyMass, { ...options, unit: 'g' });
-    return { upserts: present(result.samples.map(normalizeWeight)) as HealthRecordOf<T>[], deleted: uuidsOf(result.deletedSamples), anchor: result.newAnchor };
-  }
-
   return {
     origin: 'apple_health',
     // Vor allen anderen Aufrufen (https://developer.apple.com/documentation/healthkit/setting-up-healthkit).
@@ -98,36 +113,31 @@ export function createHealthKitPlatform({ client, clock }: HealthKitPlatformOpti
       return (await client.getRequestStatusForAuthorization(readAccess)) === alreadyRequested ? 'angefragt' : 'nicht_angefragt';
     },
     async readChanges<T extends HealthDataType>(type: T, cursor: string | null, since: Instant): Promise<HealthChanges<T>> {
+      const kind: Kind<T> = kinds[type];
       if (cursor === null) {
         // Ohne Anker liefert die Abfrage sonst die gesamte Historie (Spike); der Zeitraum ist immer begrenzt.
-        const first = await anchored(type, { limit: 0, filter: { date: { startDate: dateOf(since) } } });
-        return { upserts: first.upserts, deletedKeys: [], cursor: first.anchor, cursorExpired: false };
+        // `strictStartDate`: nur Samples, die ab `since` beginnen, nicht solche, die den Zeitraum nur
+        // überschneiden (https://developer.apple.com/documentation/healthkit/hkqueryoptions/strictstartdate).
+        const first = await kind.anchored(client, { limit: 0, filter: { date: { startDate: dateOf(since), strictStartDate: true } } });
+        return { upserts: first.records, deletedKeys: [], cursor: first.anchor, cursorExpired: false };
       }
       // Mit Anker: neue und gelöschte Objekte seit dem Anker
       // (https://developer.apple.com/documentation/healthkit/hkanchoredobjectquery,
       // https://developer.apple.com/documentation/healthkit/hkdeletedobject), ohne Zeitraum, damit auch
       // nachgetragene ältere Datensätze ankommen.
-      let changes: Awaited<ReturnType<typeof anchored<T>>>;
+      let changes: Normalized<T>;
       try {
-        changes = await anchored(type, { limit: 0, anchor: cursor });
+        changes = await kind.anchored(client, { limit: 0, anchor: cursor });
       } catch (error) {
-        if (error instanceof Error && unreadableAnchor.test(error.message)) return expiredChanges;
+        if (error instanceof Error && unreadableAnchor.test(error.message)) return expiredHealthChanges;
         throw error;
       }
-      return { upserts: changes.upserts, deletedKeys: changes.deleted, cursor: changes.anchor, cursorExpired: false };
+      return { upserts: changes.records, deletedKeys: changes.deleted, cursor: changes.anchor, cursorExpired: false };
     },
     async recentOrigins(days) {
       const end = clock.read().instant;
       const options = { limit: 0, filter: { date: { startDate: dateOf(daysBefore(end, days)), endDate: dateOf(end) } } };
-      const origins = new Map<string, { sourceApp: HealthSourceApp; workouts: number; weights: number }>();
-      const count = (sourceApp: HealthSourceApp, field: 'workouts' | 'weights') => {
-        const entry = origins.get(sourceApp.id) ?? { sourceApp, workouts: 0, weights: 0 };
-        entry[field] += 1;
-        origins.set(sourceApp.id, entry);
-      };
-      for (const record of present((await client.queryWorkoutSamples(options)).map(normalizeWorkout))) count(record.sourceApp, 'workouts');
-      for (const record of present((await client.queryQuantitySamples(bodyMass, { ...options, unit: 'g' })).map(normalizeWeight))) count(record.sourceApp, 'weights');
-      return [...origins.values()] satisfies HealthOrigin[];
+      return tallyOrigins([...(await kinds.workout.samples(client, options)), ...(await kinds.weight.samples(client, options))]);
     },
     // Hintergrund-Import (Bonus) mit `configureBackgroundTypes` und `subscribeToChanges` liefert #197; bis
     // dahin importiert iOS im Vordergrund.

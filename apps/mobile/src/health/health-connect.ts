@@ -11,11 +11,12 @@ import type {
 
 import {
   daysBefore,
+  expiredHealthChanges,
+  tallyOrigins,
   type HealthAccessState,
   type HealthAvailability,
   type HealthChanges,
   type HealthDataType,
-  type HealthOrigin,
   type HealthPlatformAdapter,
   type HealthRecordOf,
   type HealthWeightRecord,
@@ -73,8 +74,6 @@ const sdkStatus = { available: 3, providerUpdateRequired: 2 } as const;
  * or expired Changes tokens“ gleich (https://developer.android.com/health-and-fitness/guides/health-connect/develop/sync-data).
  */
 const invalidArgument = 'ARGUMENT_VALIDATION_ERROR';
-
-const expiredChanges = { upserts: [], deletedKeys: [], cursor: null, cursorExpired: true } as const;
 
 export function createHealthConnectPlatform({ client, clock }: HealthConnectPlatformOptions): HealthPlatformAdapter {
   let ready: Promise<void> | null = null;
@@ -162,7 +161,7 @@ export function createHealthConnectPlatform({ client, clock }: HealthConnectPlat
       await initialized();
       if (cursor !== null) {
         const changes = await drain(type, cursor);
-        if (changes === null) return expiredChanges;
+        if (changes === null) return expiredHealthChanges;
         const upserts = [...changes.touched.values()].filter((record): record is HealthRecordOf<T> => record !== null);
         const deletedKeys = [...changes.touched].filter(([, record]) => record === null).map(([key]) => key);
         return { upserts, deletedKeys, cursor: changes.next, cursorExpired: false };
@@ -178,21 +177,9 @@ export function createHealthConnectPlatform({ client, clock }: HealthConnectPlat
       await initialized();
       const end = clock.read().instant;
       const timeRangeFilter = { operator: 'between', startTime: daysBefore(end, days), endTime: end } as const;
-      const origins = new Map<string, { sourceApp: HealthOrigin['sourceApp']; workouts: number; weights: number }>();
-      const count = (sourceApp: HealthOrigin['sourceApp'], field: 'workouts' | 'weights') => {
-        const entry = origins.get(sourceApp.id) ?? { sourceApp, workouts: 0, weights: 0 };
-        entry[field] += 1;
-        origins.set(sourceApp.id, entry);
-      };
-      for (const record of await readAll('workout', timeRangeFilter)) {
-        const normalized = normalizeWorkout(record);
-        if (normalized !== null) count(normalized.sourceApp, 'workouts');
-      }
-      for (const record of await readAll('weight', timeRangeFilter)) {
-        const normalized = normalizeWeight(record);
-        if (normalized !== null) count(normalized.sourceApp, 'weights');
-      }
-      return [...origins.values()];
+      const workouts = (await readAll('workout', timeRangeFilter)).map(normalizeWorkout);
+      const weights = (await readAll('weight', timeRangeFilter)).map(normalizeWeight);
+      return tallyOrigins([...workouts, ...weights].filter((record) => record !== null));
     },
     // Hintergrund-Import (Bonus) mit Feature-Check und Task liefert #199; bis dahin importiert Android im Vordergrund.
     backgroundCapability: () => Promise.resolve('nicht_verfuegbar'),

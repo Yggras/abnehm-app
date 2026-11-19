@@ -7,7 +7,7 @@ type AppVariant = 'development' | 'e2e' | 'production';
 export const exactAlarmPermissions = ['android.permission.SCHEDULE_EXACT_ALARM', 'android.permission.USE_EXACT_ALARM'];
 
 /** HealthKit nur lesend (Spezifikation 3, Abschnitt 6; #193): deutsche Lese-, keine Schreib-Nutzungsbeschreibung. */
-export const healthKitPlugin = {
+export const healthKitPluginProps = {
   NSHealthShareUsageDescription:
     'Die App liest deine Trainings und dein Gewicht aus Apple Health, damit sie als Sport und Gewicht zählen. Sie schreibt nichts in Apple Health.',
   NSHealthUpdateUsageDescription: false,
@@ -149,7 +149,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // keine Schreib-Nutzungsbeschreibung (`false`). Background Delivery und ihr Entitlement kommen mit dem
       // Hintergrund-Import (#197); bis dahin bleibt es aus (`background: false`, README von
       // @kingstinct/react-native-healthkit 16.2.0).
-      ['@kingstinct/react-native-healthkit', healthKitPlugin],
+      ['@kingstinct/react-native-healthkit', healthKitPluginProps],
     ],
     experiments: {
       reactCompiler: true,

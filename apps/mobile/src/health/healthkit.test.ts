@@ -127,8 +127,15 @@ type FakeClient = HealthKitClient & {
   calls: Call[];
 };
 
-function inRange(at: Date, date: { startDate?: Date; endDate?: Date } | undefined): boolean {
-  return (date?.startDate === undefined || at >= date.startDate) && (date?.endDate === undefined || at <= date.endDate);
+/**
+ * Wie `HKQuery.predicateForSamples`: Ohne `strictStartDate` trifft ein Sample den Zeitraum schon, wenn es
+ * ihn überschneidet; mit muss es darin beginnen
+ * (https://developer.apple.com/documentation/healthkit/hkqueryoptions/strictstartdate).
+ */
+function inRange(item: { startDate: Date; endDate: Date }, date: { startDate?: Date; endDate?: Date; strictStartDate?: boolean } | undefined): boolean {
+  const from = date?.startDate;
+  const startsInTime = from === undefined || (date?.strictStartDate === true ? item.startDate >= from : item.endDate >= from);
+  return startsInTime && (date?.endDate === undefined || item.startDate <= date.endDate);
 }
 
 function fakeClient(): FakeClient {
@@ -156,7 +163,7 @@ function fakeClient(): FakeClient {
     queryWorkoutSamplesWithAnchor(options) {
       client.calls.push({ name: 'queryWorkoutSamplesWithAnchor', args: [options] });
       if (options.anchor === undefined) {
-        const workouts = client.stored.workouts.filter((item) => inRange(item.startDate, options.filter?.date));
+        const workouts = client.stored.workouts.filter((item) => inRange(item, options.filter?.date));
         return Promise.resolve({ workouts, deletedSamples: [], newAnchor: client.firstAnchors.workouts });
       }
       const page = client.workoutPages.get(options.anchor);
@@ -166,7 +173,7 @@ function fakeClient(): FakeClient {
     queryQuantitySamplesWithAnchor(identifier, options) {
       client.calls.push({ name: 'queryQuantitySamplesWithAnchor', args: [identifier, options] });
       if (options.anchor === undefined) {
-        const samples = client.stored.weights.filter((item) => inRange(item.startDate, options.filter?.date));
+        const samples = client.stored.weights.filter((item) => inRange(item, options.filter?.date));
         return Promise.resolve({ samples, deletedSamples: [], newAnchor: client.firstAnchors.weights });
       }
       const page = client.weightPages.get(options.anchor);
@@ -175,11 +182,11 @@ function fakeClient(): FakeClient {
     },
     queryWorkoutSamples(options) {
       client.calls.push({ name: 'queryWorkoutSamples', args: [options] });
-      return Promise.resolve(client.stored.workouts.filter((item) => inRange(item.startDate, options.filter?.date)));
+      return Promise.resolve(client.stored.workouts.filter((item) => inRange(item, options.filter?.date)));
     },
     queryQuantitySamples(identifier, options) {
       client.calls.push({ name: 'queryQuantitySamples', args: [identifier, options] });
-      return Promise.resolve(client.stored.weights.filter((item) => inRange(item.startDate, options.filter?.date)));
+      return Promise.resolve(client.stored.weights.filter((item) => inRange(item, options.filter?.date)));
     },
   };
   return client;
@@ -246,7 +253,18 @@ describe('Erste Abfrage ohne Anker', () => {
     expect(changes.upserts.map((record) => record.externalKey)).toEqual([strength.uuid]);
     expect(changes).toMatchObject({ deletedKeys: [], cursor: 'anker-workout-0', cursorExpired: false });
     const [query] = callsNamed(client, 'queryWorkoutSamplesWithAnchor');
-    expect(query?.args).toEqual([{ limit: 0, filter: { date: { startDate: new Date(since) } } }]);
+    expect(query?.args).toEqual([{ limit: 0, filter: { date: { startDate: new Date(since), strictStartDate: true } } }]);
+  });
+
+  test('ein Training, das vor since beginnt und danach endet, gehört nicht zum Erstimport', async () => {
+    const client = fakeClient();
+    const overMidnight = workout({ uuid: 'M', start: '2026-11-18T22:30:00.000Z', end: '2026-11-19T00:30:00.000Z', durationSeconds: 7200, activityType: 52 });
+    client.stored.workouts = [overMidnight, strength];
+    const platform = createHealthKitPlatform({ client, clock });
+
+    const changes = await platform.readChanges('workout', null, Instant.parse('2026-11-19T00:00:00.000Z'));
+
+    expect(changes.upserts.map((record) => record.externalKey)).toEqual([strength.uuid]);
   });
 
   test('Gewicht in g, ebenfalls begrenzt', async () => {
@@ -261,7 +279,7 @@ describe('Erste Abfrage ohne Anker', () => {
     expect(changes.cursor).toBe('anker-weight-0');
     expect(callsNamed(client, 'queryQuantitySamplesWithAnchor')[0]?.args).toEqual([
       'HKQuantityTypeIdentifierBodyMass',
-      { limit: 0, unit: 'g', filter: { date: { startDate: new Date(since) } } },
+      { limit: 0, unit: 'g', filter: { date: { startDate: new Date(since), strictStartDate: true } } },
     ]);
   });
 });

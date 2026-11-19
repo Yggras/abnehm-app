@@ -1,7 +1,7 @@
 import type { ConfigContext } from 'expo/config';
 import { AndroidConfig, type ExportedConfig } from 'expo/config-plugins';
 
-import createConfig, { exactAlarmPermissions, healthKitPlugin } from '../app.config';
+import createConfig, { exactAlarmPermissions, healthKitPluginProps } from '../app.config';
 
 const original = {
   variant: process.env.APP_VARIANT,
@@ -124,16 +124,16 @@ test('Health Connect: nur Lesezugriff auf Trainings und Gewicht, ohne ältere Hi
 
 test('HealthKit: deutsche Lese-Nutzungsbeschreibung, keine Schreib-Nutzungsbeschreibung, noch kein Background Delivery (#193)', async () => {
   for (const config of [configFor(undefined), configFor('development'), configFor('e2e', 'true')]) {
-    expect(config.plugins).toContainEqual(['@kingstinct/react-native-healthkit', healthKitPlugin]);
+    expect(config.plugins).toContainEqual(['@kingstinct/react-native-healthkit', healthKitPluginProps]);
   }
   // Das Plugin der Bibliothek auf eine leere Konfiguration angewandt: so landet es in Info.plist und Entitlements.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const plugin = (require('@kingstinct/react-native-healthkit/app.plugin.js') as { default: (config: ExportedConfig, props: typeof healthKitPlugin) => ExportedConfig }).default;
-  const applied = plugin({ name: 'Abnehm-App', slug: 'abnehm-app', _internal: { projectRoot: `${__dirname}/..` } } as ExportedConfig, healthKitPlugin);
+  const plugin = (require('@kingstinct/react-native-healthkit/app.plugin.js') as { default: (config: ExportedConfig, props: typeof healthKitPluginProps) => ExportedConfig }).default;
+  const applied = plugin({ name: 'Abnehm-App', slug: 'abnehm-app', _internal: { projectRoot: `${__dirname}/..` } } as ExportedConfig, healthKitPluginProps);
   const infoPlist = await runIosMod(applied, 'infoPlist');
   const entitlements = await runIosMod(applied, 'entitlements');
 
-  expect(infoPlist.NSHealthShareUsageDescription).toBe(healthKitPlugin.NSHealthShareUsageDescription);
+  expect(infoPlist.NSHealthShareUsageDescription).toBe(healthKitPluginProps.NSHealthShareUsageDescription);
   expect(infoPlist).not.toHaveProperty('NSHealthUpdateUsageDescription');
   expect(entitlements).toEqual({ 'com.apple.developer.healthkit': true });
 });
