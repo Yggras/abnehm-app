@@ -14,7 +14,10 @@ import type { OnboardingDraft } from './draft';
 /** Die niedrigste Stufe, weil die DGE bei Übergewicht und geringer Aktivität individuelle Anpassung verlangt (Abschnitt 3). */
 export const preselectedActivityLevel: ActivityLevel = 'wenig_aktiv';
 
-/** „entspannt“ ist das Standard-Defizit von 500 kcal/Tag ([#14](https://github.com/Yggras/abnehm-app/issues/14)). */
+/**
+ * „entspannt“ ist das Standard-Defizit von 500 kcal/Tag ([#14](https://github.com/Yggras/abnehm-app/issues/14));
+ * dass das Onboarding es vorauswählt, legt Spezifikation 1 nicht fest (Designwert).
+ */
 export const preselectedPace: Pace = 'entspannt';
 
 /**

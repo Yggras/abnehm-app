@@ -18,8 +18,9 @@ export type StepperProps = {
   /** Kurzer Hinweis unter der Beschriftung, etwa zum Mehrbedarf. */
   hint?: string;
   /**
-   * Beschriftung über der Bedienung, „−“ und „+“ an den Rändern: für Beschriftungen, die neben der
-   * Bedienung im Wort umbrächen, etwa „Kalorienbudget pro Tag“ auf dem iPhone SE (Impeccable-critique, #143).
+   * Beschriftung über der Bedienung, „−“ und „+“ an den Rändern und der Wert größer (`title`): für
+   * Beschriftungen, die neben der Bedienung im Wort umbrächen, etwa „Kalorienbudget pro Tag“ auf dem
+   * iPhone SE (Impeccable-critique, #143).
    */
   stacked?: boolean;
 };

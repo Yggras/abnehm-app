@@ -9,7 +9,7 @@ import { Card, Chip, Notice, space, Text, TextField } from '../design';
 import { thousandthsWithOneDecimal as kg } from '../shell/texts';
 import { gramsOfKgText } from '../trackers/kg-text';
 import { goalWeightTexts as texts } from './goal-texts';
-import { goalPreviewOf } from './goals';
+import { goalPreviewOf, onboardingGoalDraft } from './goals';
 import { useOnboarding } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
 import { stepTitles } from './steps';
@@ -36,6 +36,7 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
   const onboarding = useOnboarding();
   const today = useClock().read().localDate;
   const [draft, setDraft] = useState(() => onboarding.readDraft());
+  const goals = onboardingGoalDraft(draft, today);
   // Zielgewicht ohne Eingabe: Vorauswahl, Vorschlag und Untergrenze für Feld und Hinweis.
   const reference = goalPreviewOf({ ...draft, goalWeightG: undefined }, today);
   const goalWeight = reference?.type === 'berechnet' ? reference.goalWeight : null;
@@ -58,6 +59,10 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
         : undefined;
   const valid = readable && calculation !== null;
 
+  /**
+   * Eine lesbare Eingabe liegt sofort im Entwurf. Eine unlesbare (leer, „70,05“) löscht das Zielgewicht dort,
+   * weil das Schema nur gültige Gramm kennt; nach „Zurück“ steht dann wieder die Vorauswahl (Designwert).
+   */
   function changeText(next: string) {
     setText(next);
     const grams = gramsOfKgText(next);
@@ -91,8 +96,8 @@ export function GoalWeightStep({ onBack, onNext }: GoalWeightStepProps) {
       />
 
       {calculation?.hints.includes('maintenance_forced') ? <Notice tone="hint" icon="info" text={texts.maintenanceForced(calculation.safetyTriggers)} /> : null}
-      {calculation?.hints.includes('goal_weight_not_below_current') ? (
-        <Notice tone="hint" icon="info" text={texts.notBelowCurrent(draft.weightG ?? 0)} />
+      {calculation?.hints.includes('goal_weight_not_below_current') && goals !== null ? (
+        <Notice tone="hint" icon="info" text={texts.notBelowCurrent(goals.weightG)} />
       ) : null}
 
       {calculation === null || calculation.maintenanceReason !== null ? null : (
