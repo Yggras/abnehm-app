@@ -7,7 +7,7 @@ import { BuildObject, buildObjectKey, PlaceObject, placeObjectKey } from '../src
 import { islandEventId } from '../src/island-records.ts';
 import { notificationIntentId } from '../src/notifications.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
-import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
+import { buildSeedState, changedOnServer, pulledBy, withDeviceState, type SeedEntity, type SeedPart } from './build.ts';
 import { visitEntities, visitWish, type SeedVisit } from './ereignisse.ts';
 import { gekoppeltExtensions, gekoppeltParts, gekoppeltPartsBuilt, gekoppeltPartsVisited, vorDemSchluepfenParts } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
@@ -537,8 +537,7 @@ function levelIntent(level: number, recipientPersonId: string): SeedRow {
  */
 function celebratedLevel(state: SeedState, level: number): SeedState {
   const row = { key: 'momo_levelfeier', value: { islandId: seedIds.island.philippAnna, level }, updated_at: haelfteVollBauten.at(-1)!.at };
-  const devices = Object.fromEntries(Object.entries(state.devices).map(([key, device]) => [key, { ...device, rows: { ...device.rows, device_state: [...(device.rows.device_state ?? []), row] } }]));
-  return { server: state.server, devices };
+  return Object.keys(state.devices).reduce((next, installation) => withDeviceState(next, installation, [row]), state);
 }
 
 function levelaufstiegAusstehend() {

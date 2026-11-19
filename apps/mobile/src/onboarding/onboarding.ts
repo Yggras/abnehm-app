@@ -158,7 +158,7 @@ type OwnPerson = { accountId: string; disclaimerAccepted: boolean };
 const loading: OnboardingProgress = { type: 'laedt' };
 
 /** Körperdaten gültig und mit „Weiter“ in Schritt 3 bestätigt, erkennbar an der `entryId` des Startgewichts. */
-function confirmed(draft: OnboardingDraft, body: BodyDataCheck): boolean {
+function bodyDataConfirmed(draft: OnboardingDraft, body: BodyDataCheck): boolean {
   return body.type === 'vollstaendig' && draft.startWeightEntryId !== undefined;
 }
 
@@ -275,18 +275,18 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
     hasPlanToday: () => requireOpened().plan.hasPlanToday(),
 
     resume() {
+      // Die Weiche „`disclaimer_accepted_at` fehlt → Schritt 1“ steht davor in der Route (`progress`). Eine
+      // Zielversion gibt es erst nach Schritt 8, also nie ohne Bestätigung; die Reihenfolge aus Abschnitt 9
+      // ergibt dasselbe.
       const { database, plan } = requireOpened();
-      const step = database.read(readOnboardingStep);
-      if (plan.hasGoalVersion()) return step !== undefined && isSlotStep(step) ? step : 'health';
       const { localDate } = clock.read();
-      return database.read((tx): OnboardingPosition => {
-        const draft = readOnboardingDraft(tx);
-        const body = checkBodyData(draft, localDate);
-        if (body.type === 'minderjaehrig') return 'minderjaehrig';
-        if (step === undefined || !confirmed(draft, body)) return 'koerperdaten';
-        // Ohne Zielversion ist der Plan noch nicht gespeichert; Schritt 8 ist dann der letzte offene.
-        return isSlotStep(step) ? 'wochenplan' : step;
-      });
+      const { step, draft } = database.read((tx) => ({ step: readOnboardingStep(tx), draft: readOnboardingDraft(tx) }));
+      if (plan.hasGoalVersion()) return step !== undefined && isSlotStep(step) ? step : 'health';
+      const body = checkBodyData(draft, localDate);
+      if (body.type === 'minderjaehrig') return 'minderjaehrig';
+      if (step === undefined || !bodyDataConfirmed(draft, body)) return 'koerperdaten';
+      // Ohne Zielversion ist der Plan noch nicht gespeichert; Schritt 8 ist dann der letzte offene.
+      return isSlotStep(step) ? 'wochenplan' : step;
     },
 
     enterStep(step) {
@@ -298,7 +298,7 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
       const { localDate } = clock.read();
       return requireDatabase().read((tx) => {
         const draft = readOnboardingDraft(tx);
-        return confirmed(draft, checkBodyData(draft, localDate));
+        return bodyDataConfirmed(draft, checkBodyData(draft, localDate));
       });
     },
 

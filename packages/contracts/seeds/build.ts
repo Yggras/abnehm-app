@@ -112,6 +112,18 @@ export function buildSeedState({
 }
 
 /**
+ * Hängt Zeilen des Gerätezustands (`device_state`) an eine Installation an, etwa einen Onboarding-Entwurf
+ * oder ein gefeiertes Level. Der Wert gehört dem Modul der App, dem der Schlüssel gehört; die Seeds können es
+ * nicht importieren, deshalb belegt ein Test der App, dass er den Wert liest.
+ */
+export function withDeviceState(state: SeedState, installation: SeedKey, rows: readonly SeedRow[]): SeedState {
+  const device = state.devices[installation];
+  if (device === undefined) throw new Error(`Gerätezustand: keine Installation ${installation}`);
+  const deviceState = [...(device.rows.device_state ?? []), ...rows];
+  return { server: state.server, devices: { ...state.devices, [installation]: { ...device, rows: { ...device.rows, device_state: deviceState } } } };
+}
+
+/**
  * Ändert Entitäten eines fertigen Zustands auf dem Server, nachdem die Geräte zuletzt gezogen haben
  * (#113), etwa eine Korrektur von einem anderen Gerät oder einen neu berechneten Partnerstand. Jede
  * Entität ersetzt die Zeile mit ihrer ID oder kommt neu dazu und erhält in Reihenfolge die nächste

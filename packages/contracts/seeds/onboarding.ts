@@ -1,6 +1,6 @@
 import { EntityId, LocalDate } from '../src/base.ts';
 import { weeklyPlanVersionId } from '../src/plan.ts';
-import { buildSeedState, type SeedPart } from './build.ts';
+import { buildSeedState, withDeviceState, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedRow, type SeedScenarioKey, type SeedState } from './manifest.ts';
 import { seedWeeklyPlan, type SeedWeeklyPlan } from './rows.ts';
@@ -13,10 +13,12 @@ import { calculatedGoalVersion } from './ziele-einstellungen.ts';
 // - `onboarding-unterbrochen`: Auf dem iPhone hat er die Schritte 3–5 ausgefüllt und dann abgebrochen. Der
 //   Server kennt nur die Person; Eingaben und Schritt stehen im Gerätezustand (`device_state`), wie ihn das
 //   Onboarding-Modul ablegt (`onboarding_draft`, `onboarding_step` in `apps/mobile/src/onboarding/`). Die App
-//   setzt bei Schritt 6 „Zielgewicht und Tempo“ fort.
+//   setzt bei Schritt 6 „Zielgewicht und Tempo“ fort. Die Seeds können das Schema der App nicht importieren;
+//   dass sie Entwurf und Schritt liest, belegt `apps/mobile/src/onboarding/Onboarding.test.tsx`.
 // - `zweites-geraet`: Auf dem iPhone hat er heute den Plan gespeichert (Schritt 8) und dann aufgehört. Der
-//   Server kennt die Person mit allen Angaben, die Zielversion und die Wochenplanversion ab heute. Er meldet
-//   sich auf dem iPad an, das noch nichts hat; nach dem ersten Pull setzt die App dort bei Schritt 9 fort.
+//   Server kennt die Person mit allen Angaben, die Zielversion und die Wochenplanversion ab heute. Er hat sich
+//   auf dem iPad angemeldet, das außer dem ersten Pull nichts hat: kein Entwurf, kein gemerkter Schritt. Die
+//   App setzt dort bei Schritt 9 fort.
 //   Tagesziele von heute legt das iPad selbst an (deterministische IDs, Spezifikation 1, Abschnitt 5).
 
 const philipp = seedIds.person.philipp;
@@ -71,11 +73,6 @@ const interruptedDeviceState: readonly SeedRow[] = [
   { key: 'onboarding_draft', value: draftAfterStepFive, updated_at: '2026-10-14T11:56:00.000Z' },
   { key: 'onboarding_step', value: 'zielgewicht', updated_at: '2026-10-14T11:56:00.000Z' },
 ];
-
-function withDeviceState(state: SeedState, installation: string, rows: readonly SeedRow[]): SeedState {
-  const device = state.devices[installation]!;
-  return { server: state.server, devices: { ...state.devices, [installation]: { ...device, rows: { ...device.rows, device_state: [...rows] } } } };
-}
 
 const iphone = seedInstallations.philippIphone.key;
 const interrupted = withDeviceState(

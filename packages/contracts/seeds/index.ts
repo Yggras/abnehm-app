@@ -38,7 +38,7 @@ export {
   type SeedValue,
 } from './manifest.ts';
 export { canonicalJson, canonicalRows, dependencyOrder, withoutDerivedColumns } from './canonical.ts';
-export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
+export { buildSeedState, changedOnServer, pulledBy, withDeviceState, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts, vorDemSchluepfenParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedImageKeys, seedInstallations, seedInviteCodes, seedPassword } from './ids.ts';
 export { budgetvorschlagBudget, budgetvorschlagReadings } from './budgetvorschlag.ts';
