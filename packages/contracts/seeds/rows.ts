@@ -410,3 +410,62 @@ export function seedDailyBonus(options: { personId: string; localDate: string; a
     },
   };
 }
+
+/** Herkunft eines importierten Eintrags (Spezifikation 3, Abschnitt 6); in den Seeds schreibt immer Fitbit nach Apple Health bzw. Health Connect (#181). */
+export type SeedImport = Readonly<{ origin: 'apple_health' | 'health_connect'; externalKey: string; hiddenAt?: string }>;
+
+const seedImportOrigin = ({ origin, externalKey, hiddenAt }: SeedImport) =>
+  ({ origin, external_key: externalKey, source_app_id: 'com.fitbit.FitbitMobile', source_app_name: 'Fitbit', hidden_at: hiddenAt ?? null });
+
+/** Ein importiertes Training (#181); `at` ist der Import, `updatedAt` etwa das Ausblenden. */
+export function seedImportedSportEntry(options: {
+  id: string;
+  person: string;
+  activity: string;
+  startedAt: string;
+  minutes: number;
+  milliKcal: number;
+  localDate: string;
+  at: string;
+  updatedAt?: string;
+  from: SeedImport;
+}): SeedEntity {
+  return {
+    table: 'sport_entry',
+    entityType: 'sport_entry',
+    ownerPersonId: options.person,
+    row: {
+      id: options.id,
+      person_id: options.person,
+      activity_type: options.activity,
+      override_activity_type: null,
+      started_at: options.startedAt,
+      duration_minutes: options.minutes,
+      active_milli_kcal: options.milliKcal,
+      ...seedImportOrigin(options.from),
+      replaced_by_entry_id: null,
+      reactivated_at: null,
+      ...seedDay(options.localDate),
+      ...seedCreated(options.at),
+      updated_at: options.updatedAt ?? options.at,
+    },
+  };
+}
+
+/** Ein Gewichtseintrag, manuell oder als Waagenwert importiert (#181). */
+export function seedWeightEntry(options: { id: string; person: string; weightG: number; at: string; localDate: string; from?: SeedImport }): SeedEntity {
+  return {
+    table: 'weight_entry',
+    entityType: 'weight_entry',
+    ownerPersonId: options.person,
+    row: {
+      id: options.id,
+      person_id: options.person,
+      weight_g: options.weightG,
+      measured_at: options.at,
+      ...(options.from === undefined ? seedManualOrigin : seedImportOrigin(options.from)),
+      ...seedDay(options.localDate),
+      ...seedCreated(options.at),
+    },
+  };
+}

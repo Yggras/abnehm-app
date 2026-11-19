@@ -82,8 +82,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
 async function setup() {
   const clock = createTestClock(worldStart);
   const plans = testPlans();
-  const water = trackerPartnerSummaryProjectors({ planReader: plans.planReader }).filter((projector) => projector.area === 'wasser');
-  const backend = await createTestBackend({ clock, partnerSummaryProjectors: water });
+  const backend = await createTestBackend({ clock, partnerSummaryProjectors: [trackerPartnerSummaryProjectors({ planReader: plans.planReader }).wasser] });
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   plans.set(anna.personId, { validFrom: '2026-10-01', waterTargetMl: 1500, weeklySportTargetMinutes: 150 });

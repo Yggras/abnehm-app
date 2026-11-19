@@ -63,7 +63,7 @@ export function createBackend({
   syncPullPageSize,
   photoStorageDirectory,
   mealVisionAnalyzer,
-  partnerSummaryProjectors = trackerPartnerSummaryProjectors({ planReader: postgresPlanReader }),
+  partnerSummaryProjectors = Object.values(trackerPartnerSummaryProjectors({ planReader: postgresPlanReader })),
 }: {
   database: Database;
   authSettings: AuthSettings;

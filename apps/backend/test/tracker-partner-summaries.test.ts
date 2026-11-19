@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
@@ -21,14 +20,12 @@ import { testPlans, testRecorders, type TestPlan } from './support/partner-proje
 // die Tracker-Regeln kennen: ersetzte, reaktivierte und wieder zählende Einheiten, den Trend samt
 // Vorgeschichte vor dem 14-Tage-Zeitraum und das Ziel aus der Zielversion von heute.
 
-const projectorOf = <A extends 'wasser' | 'sport' | 'gewicht'>(area: A, ports: Parameters<typeof trackerPartnerSummaryProjectors>[0]) =>
-  trackerPartnerSummaryProjectors(ports).find((projector) => projector.area === area)! as Extract<ReturnType<typeof trackerPartnerSummaryProjectors>[number], { area: A }>;
 
 describe('Konformitäts-Testkit mit den Tracker-Projectors', () => {
   const harnesses = [
-    partnerProjectorConformanceCases('wasser', { projector: (ports) => projectorOf('wasser', ports), record: testRecorders.wasser }),
-    partnerProjectorConformanceCases('sport', { projector: (ports) => projectorOf('sport', ports), record: testRecorders.sport }),
-    partnerProjectorConformanceCases('gewicht', { projector: (ports) => projectorOf('gewicht', ports), record: testRecorders.gewicht }),
+    partnerProjectorConformanceCases('wasser', { projector: (ports) => trackerPartnerSummaryProjectors(ports).wasser, record: testRecorders.wasser }),
+    partnerProjectorConformanceCases('sport', { projector: (ports) => trackerPartnerSummaryProjectors(ports).sport, record: testRecorders.sport }),
+    partnerProjectorConformanceCases('gewicht', { projector: (ports) => trackerPartnerSummaryProjectors(ports).gewicht, record: testRecorders.gewicht }),
   ];
   for (const { name, run } of harnesses.flat()) it(name, run);
 });
@@ -57,7 +54,7 @@ async function project<A extends 'wasser' | 'sport' | 'gewicht'>(
   return backend.database.db.transaction(async (tx) => {
     await arrange(rowsOf(tx, owner.personId));
     // Zeitraum und Inhalt passen je Bereich zusammen; über die Union verfolgt TypeScript das nicht.
-    const projector = projectorOf(area, { planReader: plans.planReader }) as unknown as PartnerSummaryProjector<A>;
+    const projector: PartnerSummaryProjector<A> = trackerPartnerSummaryProjectors({ planReader: plans.planReader })[area];
     return projector.project(tx, { ownerPersonId: EntityId.parse(owner.personId), period: partnerSummaryPeriod(area, conformanceToday), today: conformanceToday });
   });
 }
@@ -188,21 +185,12 @@ describe('Gewicht', () => {
   });
 });
 
-describe('Datenzugriff', () => {
-  it('liest nur die Tabellen von Wasser, Sport und Gewicht; alles andere kommt über injizierte Reader-Ports', async () => {
-    const source = await readFile(new URL('../src/trackers/partner-summaries.ts', import.meta.url), 'utf8');
-    const schemaImports = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']*db\/schema[^']*)'/g)];
-    const relativeImports = [...source.matchAll(/from\s*'(\.\.?\/[^']*)'/g)].map((match) => match[1]);
-
-    expect(schemaImports.flatMap((match) => match[1]!.split(',').map((name) => name.trim()).filter(Boolean)).sort())
-      .toEqual(['sportEntry', 'waterEntry', 'weightEntry']);
-    // Kein direkter Zugriff auf fremde Module wie den Postgres-`PlanReader`; nur Schema und Projector-Vertrag.
-    expect(relativeImports.sort()).toEqual(['../db/schema/index.ts', '../partner-projections/projector.ts']);
-  });
-
+// Dass die Projectors nur die Tabellen ihres Bereichs lesen und den `PlanReader` als Port bekommen, erzwingt
+// `npm run lint` (Importgrenze in `eslint.config.js`, belegt in `test/lint-grenzen.test.ts`).
+describe('Anmeldung', () => {
   it('meldet je Bereich genau einen Projector an', () => {
-    const areas: AreaKey[] = trackerPartnerSummaryProjectors({ planReader: testPlans().planReader }).map((projector) => projector.area);
+    const projectors = Object.entries(trackerPartnerSummaryProjectors({ planReader: testPlans().planReader }));
 
-    expect(areas).toEqual(['wasser', 'sport', 'gewicht']);
+    expect(projectors.map(([key, projector]) => [key, projector.area])).toEqual([['wasser', 'wasser'], ['sport', 'sport'], ['gewicht', 'gewicht']]);
   });
 });

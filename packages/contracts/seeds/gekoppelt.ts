@@ -12,10 +12,11 @@ import {
   seedDailyGoals,
   seedDay as day,
   seedGoalVersion,
-  seedManualOrigin,
+  seedImportedSportEntry,
   seedSportEntry,
   seedWaterEntry,
   seedWeeklyPlan,
+  seedWeightEntry,
   type SeedWeeklyPlan,
 } from './rows.ts';
 import { geschluepftePart } from './geschluepft.ts';
@@ -160,84 +161,25 @@ const annaZiele: SeedPart = {
   ],
 };
 
-/** Herkunft eines importierten Eintrags (Spezifikation 3, Abschnitt 6): Fitbit schreibt nach Apple Health bzw. Health Connect. */
-type SeedImport = Readonly<{ origin: 'apple_health' | 'health_connect'; externalKey: string; hiddenAt?: string }>;
-
-const importOrigin = ({ origin, externalKey, hiddenAt }: SeedImport) =>
-  ({ origin, external_key: externalKey, source_app_id: 'com.fitbit.FitbitMobile', source_app_name: 'Fitbit', hidden_at: hiddenAt ?? null });
-
-/** Ein importiertes Training; `at` ist der Import, `updatedAt` etwa das Ausblenden. */
-function importedSport(options: {
-  id: string;
-  person: string;
-  activity: string;
-  startedAt: string;
-  minutes: number;
-  milliKcal: number;
-  localDate: string;
-  at: string;
-  updatedAt?: string;
-  from: SeedImport;
-}): SeedEntity {
-  return {
-    table: 'sport_entry',
-    entityType: 'sport_entry',
-    ownerPersonId: options.person,
-    row: {
-      id: options.id,
-      person_id: options.person,
-      activity_type: options.activity,
-      override_activity_type: null,
-      started_at: options.startedAt,
-      duration_minutes: options.minutes,
-      active_milli_kcal: options.milliKcal,
-      ...importOrigin(options.from),
-      replaced_by_entry_id: null,
-      reactivated_at: null,
-      ...day(options.localDate),
-      ...created(options.at),
-      updated_at: options.updatedAt ?? options.at,
-    },
-  };
-}
-
-/** Ein Gewichtseintrag, manuell oder als Waagenwert importiert. */
-function weighIn(options: { id: string; person: string; weightG: number; at: string; localDate: string; from?: SeedImport }): SeedEntity {
-  return {
-    table: 'weight_entry',
-    entityType: 'weight_entry',
-    ownerPersonId: options.person,
-    row: {
-      id: options.id,
-      person_id: options.person,
-      weight_g: options.weightG,
-      measured_at: options.at,
-      ...(options.from === undefined ? seedManualOrigin : importOrigin(options.from)),
-      ...day(options.localDate),
-      ...created(options.at),
-    },
-  };
-}
-
-const [monat0, monat1, monat2, monat3, monat4, monat5, monat6, monat7, monat8] = seedIds.weightEntry.philippMonat as [
-  string, string, string, string, string, string, string, string, string,
-];
-
 /**
  * Philipps manuelle Messungen der letzten 30 Tage, mit Lücken und zwei Messungen am 24.09.; die späte zählt
  * nicht als Tagesgewicht. Die letzten beiden sind die aus `solo`, heute (Wiegetag) wiegt er noch nicht.
  */
 const philippWeighings: readonly SeedWeighing[] = [
-  { id: monat0, weight: 93_400, at: '2026-09-15T05:30:00.000Z', localDate: '2026-09-15' },
-  { id: monat1, weight: 93_200, at: '2026-09-17T05:30:00.000Z', localDate: '2026-09-17' },
-  { id: monat2, weight: 93_500, at: '2026-09-18T05:30:00.000Z', localDate: '2026-09-18' },
-  { id: monat3, weight: 93_000, at: '2026-09-22T05:30:00.000Z', localDate: '2026-09-22' },
-  { id: monat4, weight: 92_800, at: '2026-09-24T05:30:00.000Z', localDate: '2026-09-24' },
-  { id: monat5, weight: 93_400, at: '2026-09-24T18:00:00.000Z', localDate: '2026-09-24' },
-  { id: monat6, weight: 92_600, at: '2026-09-29T05:30:00.000Z', localDate: '2026-09-29' },
-  // Beim Onboarding gewogen, wie in Philipps Zielversion.
-  { id: monat7, weight: 92_000, at: '2026-10-01T07:03:00.000Z', localDate: seedDays.zielstart },
-  { id: monat8, weight: 92_100, at: '2026-10-08T05:30:00.000Z', localDate: '2026-10-08' },
+  ...(
+    [
+      [93_400, '2026-09-15T05:30:00.000Z', '2026-09-15'],
+      [93_200, '2026-09-17T05:30:00.000Z', '2026-09-17'],
+      [93_500, '2026-09-18T05:30:00.000Z', '2026-09-18'],
+      [93_000, '2026-09-22T05:30:00.000Z', '2026-09-22'],
+      [92_800, '2026-09-24T05:30:00.000Z', '2026-09-24'],
+      [93_400, '2026-09-24T18:00:00.000Z', '2026-09-24'],
+      [92_600, '2026-09-29T05:30:00.000Z', '2026-09-29'],
+      // Beim Onboarding gewogen, wie in Philipps Zielversion.
+      [92_000, '2026-10-01T07:03:00.000Z', seedDays.zielstart],
+      [92_100, '2026-10-08T05:30:00.000Z', '2026-10-08'],
+    ] as const
+  ).map(([weight, at, localDate], index) => ({ id: seedIds.weightEntry.philippMonat[index]!, weight, at, localDate })),
   ...weighingsSolo,
 ];
 
@@ -274,25 +216,25 @@ const tracker: SeedPart = {
       id: philippSport.montag, personId: philipp, activity: 'laufen', startedAt: '2026-10-12T16:00:00.000Z', minutes: 30,
       createdAt: '2026-10-12T16:35:00.000Z', localDate: seedDays.vorgestern,
     }),
-    importedSport({
+    seedImportedSportEntry({
       id: philippSport.dienstagImport, person: philipp, activity: 'radfahren', startedAt: '2026-10-13T15:55:00.000Z', minutes: 45, milliKcal: 380_000,
       localDate: seedDays.gestern, at: '2026-10-13T17:00:00.000Z', from: { origin: 'apple_health', externalKey: 'SEED-HK-WORKOUT-PHILIPP-1' },
     }),
     { ...replacedRide, row: { ...replacedRide.row, replaced_by_entry_id: philippSport.dienstagImport, updated_at: '2026-10-13T17:00:00.000Z' } },
-    importedSport({
+    seedImportedSportEntry({
       id: philippSport.heuteAusgeblendet, person: philipp, activity: 'gehen', startedAt: '2026-10-14T06:10:00.000Z', minutes: 18, milliKcal: 70_000,
       localDate: seedDays.heute, at: '2026-10-14T06:40:00.000Z', updatedAt: '2026-10-14T07:15:00.000Z',
       from: { origin: 'apple_health', externalKey: 'SEED-HK-WORKOUT-PHILIPP-2', hiddenAt: '2026-10-14T07:15:00.000Z' },
     }),
-    weighIn({
+    seedWeightEntry({
       id: seedIds.weightEntry.philippWaage, person: philipp, weightG: 92_315, at: '2026-10-05T05:20:00.000Z', localDate: '2026-10-05',
       from: { origin: 'apple_health', externalKey: 'SEED-HK-WEIGHT-PHILIPP-1' },
     }),
-    importedSport({
+    seedImportedSportEntry({
       id: annaMontag, person: anna, activity: 'laufen', startedAt: '2026-10-12T05:00:00.000Z', minutes: 50, milliKcal: 420_000,
       localDate: seedDays.vorgestern, at: '2026-10-12T06:10:00.000Z', from: { origin: 'health_connect', externalKey: 'seed-hc-exercise-anna-1' },
     }),
-    importedSport({
+    seedImportedSportEntry({
       id: annaDienstag, person: anna, activity: 'yoga_dehnen', startedAt: '2026-10-13T17:00:00.000Z', minutes: 30, milliKcal: 90_000,
       localDate: seedDays.gestern, at: '2026-10-13T17:45:00.000Z', from: { origin: 'health_connect', externalKey: 'seed-hc-exercise-anna-2' },
     }),
@@ -302,17 +244,17 @@ const tracker: SeedPart = {
       { id: seedIds.waterEntry.annaHeute[2], amount: 250, at: '2026-10-14T11:45:00.000Z' },
     ].map(({ id, amount, at }) => seedWaterEntry({ id: id!, personId: anna, amountMl: amount, loggedAt: at, localDate: seedDays.heute })),
     // Beim Onboarding gewogen, wie in Annas Zielversion; dazwischen zwei Waagenwerte aus Health Connect.
-    weighIn({ id: anna01, person: anna, weightG: 74_000, at: '2026-10-01T18:05:00.000Z', localDate: seedDays.zielstart }),
-    weighIn({
+    seedWeightEntry({ id: anna01, person: anna, weightG: 74_000, at: '2026-10-01T18:05:00.000Z', localDate: seedDays.zielstart }),
+    seedWeightEntry({
       id: anna04, person: anna, weightG: 73_850, at: '2026-10-04T05:10:00.000Z', localDate: '2026-10-04',
       from: { origin: 'health_connect', externalKey: 'seed-hc-weight-anna-1' },
     }),
-    weighIn({ id: anna07, person: anna, weightG: 73_900, at: '2026-10-07T05:30:00.000Z', localDate: '2026-10-07' }),
-    weighIn({
+    seedWeightEntry({ id: anna07, person: anna, weightG: 73_900, at: '2026-10-07T05:30:00.000Z', localDate: '2026-10-07' }),
+    seedWeightEntry({
       id: anna10, person: anna, weightG: 73_640, at: '2026-10-10T05:10:00.000Z', localDate: '2026-10-10',
       from: { origin: 'health_connect', externalKey: 'seed-hc-weight-anna-2' },
     }),
-    weighIn({ id: seedIds.weightEntry.annaGestern, person: anna, weightG: 73_600, at: '2026-10-13T05:15:00.000Z', localDate: seedDays.gestern }),
+    seedWeightEntry({ id: seedIds.weightEntry.annaGestern, person: anna, weightG: 73_600, at: '2026-10-13T05:15:00.000Z', localDate: seedDays.gestern }),
   ],
 };
 

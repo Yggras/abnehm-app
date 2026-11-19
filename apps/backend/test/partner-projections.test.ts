@@ -38,8 +38,8 @@ type World = CoupledWorld & {
 type Plans = ReturnType<typeof testPlans>;
 
 /** Der echte Projector eines Tracker-Bereichs über dem `PlanReader`-Fake. */
-const trackerProjector = <A extends 'wasser' | 'sport'>(area: A, plans: Plans) =>
-  trackerPartnerSummaryProjectors({ planReader: plans.planReader }).find((projector) => projector.area === area) as unknown as PartnerSummaryProjector<A>;
+const trackerProjector = <A extends 'wasser' | 'sport'>(area: A, plans: Plans): PartnerSummaryProjector<A> =>
+  trackerPartnerSummaryProjectors({ planReader: plans.planReader })[area];
 
 async function world(projectors: (plans: Plans) => readonly AnyPartnerSummaryProjector[] = (plans) => [
   trackerProjector('wasser', plans),

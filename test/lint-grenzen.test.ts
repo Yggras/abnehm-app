@@ -210,6 +210,29 @@ describe('Testfähigkeiten nur in Tests und Development-Artefakten (#112)', () =
   });
 });
 
+describe('Partner-Projectors der Tracker (#181)', () => {
+  const inProjectors = (code: string) => violations(code, 'apps/backend/src/trackers/partner-summaries.ts');
+
+  it.each([
+    ["import { nutritionEntry } from '../db/schema/index.ts';\nexport const t = nutritionEntry;", 'fremde Bereichstabelle'],
+    ["import { goalVersion, waterEntry } from '../db/schema/index.ts';\nexport const t = [goalVersion, waterEntry];", 'Zieltabelle neben der eigenen'],
+    ["import { postgresPlanReader } from '../plan/plan-reader.ts';\nexport const r = postgresPlanReader;", 'PlanReader direkt statt als Port'],
+    ["import { x } from './sport-entity.ts';\nexport const y = x;", 'anderes Modul des Bereichs'],
+  ])('verbietet %s (%s)', async (code) => {
+    expect(await inProjectors(code)).toContain('no-restricted-imports');
+  });
+
+  it('erlaubt die Tabellen von Wasser, Sport und Gewicht und den Projector-Vertrag', async () => {
+    const code = [
+      "import { sportEntry, waterEntry, weightEntry } from '../db/schema/index.ts';",
+      "import type { PartnerSummaryProjector } from '../partner-projections/projector.ts';",
+      'export type P = PartnerSummaryProjector;',
+      'export const t = [sportEntry, waterEntry, weightEntry];',
+    ].join('\n');
+    expect(await inProjectors(code)).toEqual([]);
+  });
+});
+
 describe('Backend in der App', () => {
   it('erlaubt nur Typen aus dem Backend', async () => {
     const typeOnly = "import type { AppType } from '@abnehm/backend/rpc';\nexport type A = AppType;";

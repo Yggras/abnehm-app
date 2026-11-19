@@ -8,7 +8,7 @@ import type { PartnerSummaryProjector, ReaderPort } from '../partner-projections
 
 // Partner-Zusammenfassungen der Tracker (Spezifikation 3, Abschnitt 7; Spezifikation 0, Abschnitt 5;
 // #181). Die drei Projectors lesen nur die Tabellen von Wasser, Sport und Gewicht und bekommen den
-// `PlanReader` injiziert. Gezählt und gerechnet wird mit den Tracker-Regeln aus dem Vertragsmodul, also
+// `PlanReader` injiziert; die Importgrenze dafür prüft `npm run lint`. Gezählt und gerechnet wird mit den Tracker-Regeln aus dem Vertragsmodul, also
 // genau wie in der App. Der Inhalt enthält nur die Werte des Vertrags: nie Einträge, Mengen, Tages- oder
 // Trendgewichte oder das Zielgewicht.
 
@@ -47,6 +47,7 @@ function sportProjector({ planReader }: Ports): PartnerSummaryProjector<'sport'>
     async project(tx, { ownerPersonId, period, today }) {
       const own = eq(sportEntry.personId, ownerPersonId);
       const inWeek = between(sportEntry.localDate, period.from, period.to);
+      // Dieselbe Auswahl wie die Sportwoche der App (`apps/mobile/src/trackers/sport-repository.ts`) über SQLite.
       const replacingImports = tx.select({ id: sportEntry.replacedByEntryId }).from(sportEntry).where(and(own, inWeek));
       const rows = await tx.select().from(sportEntry).where(and(own, or(inWeek, inArray(sportEntry.id, replacingImports))));
       const minutes = weekMinutes(
@@ -80,7 +81,10 @@ function weightProjector(): PartnerSummaryProjector<'gewicht'> {
   };
 }
 
+/** Je Tracker-Bereich sein Projector, nach Bereich getypt. */
+export type TrackerPartnerSummaryProjectors = { readonly [A in 'wasser' | 'sport' | 'gewicht']: PartnerSummaryProjector<A> };
+
 /** Die Projectors der Bereiche `wasser`, `sport` und `gewicht`, je Bereich genau einer. */
-export function trackerPartnerSummaryProjectors(ports: Ports) {
-  return [waterProjector(ports), sportProjector(ports), weightProjector()] as const;
+export function trackerPartnerSummaryProjectors(ports: Ports): TrackerPartnerSummaryProjectors {
+  return { wasser: waterProjector(ports), sport: sportProjector(ports), gewicht: weightProjector() };
 }

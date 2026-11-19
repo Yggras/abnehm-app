@@ -104,14 +104,13 @@ describe('Szenario gekoppelt', () => {
 
   it('die geseedeten Zusammenfassungen Wasser, Sport und Gewicht rechnen die Projectors aus #181 zur Uhr des Seeds genauso', async () => {
     const { backend } = await seeded(gekoppelt);
-    const projectors = new Map(trackerPartnerSummaryProjectors({ planReader: postgresPlanReader }).map((projector) => [projector.area, projector]));
-    const rows = (gekoppelt.initial.server.partner_summary ?? []).filter((row) => projectors.has(row.area as 'wasser'));
+    const projectors: Partial<Record<AreaKey, PartnerSummaryProjector>> = trackerPartnerSummaryProjectors({ planReader: postgresPlanReader });
+    const rows = (gekoppelt.initial.server.partner_summary ?? []).filter((row) => projectors[AreaKey.parse(row.area)] !== undefined);
     expect(rows).toHaveLength(6);
 
     for (const row of rows) {
       const area = AreaKey.parse(row.area);
-      // Zeitraum und Inhalt passen je Bereich zusammen; über die Union verfolgt TypeScript das nicht.
-      const projector = projectors.get(area as 'wasser') as unknown as PartnerSummaryProjector;
+      const projector = projectors[area]!;
       const content = await backend.database.db.transaction((tx) => projector.project(tx, {
         ownerPersonId: EntityId.parse(row.owner_person_id),
         period: partnerSummaryPeriodOf(area, LocalDate.parse(row.period_from), LocalDate.parse(row.period_to)),
