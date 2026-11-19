@@ -19,7 +19,7 @@ export function usePartner(): Partner | null {
 type Loading = Readonly<{ type: 'loading' }>;
 
 /** Die Quellen des Partnerbereichs, die ein Bildschirm abonniert. */
-type SourceKey = 'wir' | 'encourageSheet' | 'couplingState' | 'sharing';
+type SourceKey = 'wir' | 'encourageSheet' | 'couplingState' | 'sharing' | 'invitationCreated';
 type ValueOf<K extends SourceKey> = Partner[K] extends Source<infer V> ? V : never;
 
 /**
@@ -52,6 +52,12 @@ export function useCouplingState(partner: Partner | null): CouplingState {
 }
 
 /** Kopplung und eigene Freigaben für „Partner & Freigaben“ und den Onboarding-Schritt `partner`. */
-export function useSharing(partner: Partner | null): SharingView | Readonly<{ type: 'loading' }> {
+export function useSharing(partner: Partner | null): SharingView {
   return usePartnerSource(partner, 'sharing');
+}
+
+/** Ob für dieses Konto schon ein Einladungscode entstand; ohne geöffnetes Konto nicht. */
+export function useInvitationCreated(partner: Partner | null): boolean {
+  const created = usePartnerSource(partner, 'invitationCreated');
+  return created === true;
 }

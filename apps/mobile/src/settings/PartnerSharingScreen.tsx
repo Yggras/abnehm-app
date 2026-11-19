@@ -3,13 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { readingOf } from '@abnehm/clock';
 
 import { useClock } from '../clock/clock-context';
-import { Button, size, Skeleton, space, Text } from '../design';
-import { openTarget, type RouteScreenProps } from '../navigation';
+import { space, Text } from '../design';
+import type { RouteScreenProps } from '../navigation';
 import { useSharing, usePartner } from '../partner/app-partner';
 import type { SharingView } from '../partner/partner';
 import { PartnerAvatar } from '../partner/PartnerAvatar';
-import { SharingSwitches } from '../partner/SharingSwitches';
-import { partnerTexts, sharingTexts } from '../partner/texts';
+import { CouplingButtons, SharingLoading, SharingSwitches } from '../partner/SharingSwitches';
+import { sharingTexts } from '../partner/texts';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 
@@ -24,11 +24,9 @@ export function PartnerSharingScreen({ target }: RouteScreenProps<'settings'>) {
   return (
     <ScreenFrame title={titleOf(target)} presentation="page">
       {partner === null || sharing.type === 'loading' ? (
-        <View accessible accessibilityLabel={sharingTexts.loading}>
-          <Skeleton width="100%" height={size.avatar} />
-        </View>
+        <SharingLoading />
       ) : sharing.type === 'solo' ? (
-        <Solo />
+        <NotCoupled />
       ) : (
         <>
           <CoupledHeader sharing={sharing} />
@@ -40,13 +38,12 @@ export function PartnerSharingScreen({ target }: RouteScreenProps<'settings'>) {
 }
 
 /** Ohne Kopplung: dieselben Wege wie „Wir“ solo, als modale Abläufe, die hierher zurückkehren. */
-export function Solo() {
+function NotCoupled() {
   return (
     <View style={styles.group}>
       <Text variant="title">{sharingTexts.notCoupled}</Text>
       <Text tone="inkMuted">{sharingTexts.soloBody}</Text>
-      <Button block icon="invite" label={partnerTexts.invite} onPress={() => openTarget({ type: 'partner.invite' })} />
-      <Button block variant="secondary" label={partnerTexts.redeem} onPress={() => openTarget({ type: 'partner.redeem' })} />
+      <CouplingButtons />
     </View>
   );
 }

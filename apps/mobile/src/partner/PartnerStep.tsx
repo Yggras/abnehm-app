@@ -1,12 +1,10 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Icon, Notice, size, Skeleton, space, Text } from '../design';
-import { openTarget } from '../navigation';
-import { useInvitationCreated } from '../online';
+import { Button, Icon, Notice, space, Text } from '../design';
 import type { OnboardingStepProps } from '../shell/onboarding-registry';
-import { usePartner, useSharing } from './app-partner';
-import { SharingSwitches } from './SharingSwitches';
-import { partnerTexts, sharingTexts } from './texts';
+import { useInvitationCreated, usePartner, useSharing } from './app-partner';
+import { CouplingButtons, SharingLoading, SharingSwitches } from './SharingSwitches';
+import { sharingTexts } from './texts';
 
 /**
  * Onboarding-Schritt 11 `partner` (Spezifikation 5, Abschnitt 5; #129) am Steckplatz der Onboarding-Registry. Solo
@@ -18,15 +16,9 @@ import { partnerTexts, sharingTexts } from './texts';
 export function PartnerStep({ complete }: OnboardingStepProps<'partner'>) {
   const partner = usePartner();
   const sharing = useSharing(partner);
-  const invitationCreated = useInvitationCreated();
+  const invitationCreated = useInvitationCreated(partner);
 
-  if (partner === null || sharing.type === 'loading') {
-    return (
-      <View accessible accessibilityLabel={sharingTexts.loading}>
-        <Skeleton width="100%" height={size.avatar} />
-      </View>
-    );
-  }
+  if (partner === null || sharing.type === 'loading') return <SharingLoading />;
   if (sharing.type === 'coupled') {
     return (
       <View style={styles.step}>
@@ -45,9 +37,7 @@ export function PartnerStep({ complete }: OnboardingStepProps<'partner'>) {
         <Text variant="headline">{sharingTexts.stepSolo}</Text>
       </View>
       {invitationCreated ? <Notice tone="neutral" icon="invite" text={sharingTexts.stepInviteCreated} /> : null}
-      <Button block variant={invitationCreated ? 'secondary' : 'primary'} icon="invite" label={partnerTexts.invite}
-        onPress={() => openTarget({ type: 'partner.invite' })} />
-      <Button block variant="secondary" label={partnerTexts.redeem} onPress={() => openTarget({ type: 'partner.redeem' })} />
+      <CouplingButtons invitePrimary={!invitationCreated} />
       {invitationCreated ? <Button block label={sharingTexts.next} onPress={() => complete({ type: 'partner_invite_created' })} /> : null}
     </View>
   );

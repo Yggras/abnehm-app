@@ -4,8 +4,8 @@ import { and, eq } from 'drizzle-orm';
 import { AreaKey, Instant, type DisplayName } from '@abnehm/contracts/base';
 
 import type { ReadContext, TransactionContext } from '../local-db';
-import { readOwnPerson } from '../local-db/person-header';
-import { coupling, partnerSharing, photoSharing } from '../local-db/schema';
+import { requireOwnPerson } from '../local-db/person-header';
+import { partnerSharing, photoSharing } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { setPartnerSharing, setPhotoSharing, type SyncWriter } from '../sync';
 import { readCouplingState } from './coupling-state';
@@ -40,20 +40,18 @@ export type SharingOutcome = Readonly<{ type: 'saved' }> | Readonly<{ type: 'not
 export function readSharing(tx: ReadContext): Sharing {
   const state = readCouplingState(tx);
   if (state.type !== 'coupled') return state;
-  const own = readOwnPerson(tx)!;
+  const own = requireOwnPerson(tx);
   const db = sqliteOf(tx);
-  const active = db.select({ id: coupling.id, startedAt: coupling.startedAt, reactivatedAt: coupling.reactivatedAt })
-    .from(coupling).where(eq(coupling.status, 'aktiv')).get()!;
   const areaRows = db.select({ area: partnerSharing.area, level: partnerSharing.level }).from(partnerSharing)
-    .where(and(eq(partnerSharing.ownerPersonId, own.id), eq(partnerSharing.couplingId, active.id))).all();
+    .where(and(eq(partnerSharing.ownerPersonId, own.id), eq(partnerSharing.couplingId, state.couplingId))).all();
   const photoRow = db.select({ level: photoSharing.level }).from(photoSharing)
-    .where(and(eq(photoSharing.ownerPersonId, own.id), eq(photoSharing.couplingId, active.id))).get();
+    .where(and(eq(photoSharing.ownerPersonId, own.id), eq(photoSharing.couplingId, state.couplingId))).get();
   const levels = new Map(areaRows.map((row) => [row.area, row.level]));
   if (photoRow === undefined || AreaKey.options.some((area) => !levels.has(area))) return { type: 'loading' };
   return {
     type: 'coupled',
     partnerDisplayName: state.partnerDisplayName,
-    since: Instant.parse(active.reactivatedAt ?? active.startedAt),
+    since: state.since,
     areas: Object.fromEntries(AreaKey.options.map((area) => [area, levels.get(area) === 'zusammengefasst'])) as Record<AreaKey, boolean>,
     photos: photoRow.level === 'geteilt',
   };

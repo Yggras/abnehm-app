@@ -39,7 +39,7 @@ export type PartnerDependencies = Readonly<{
 export type EncourageView = Readonly<{ type: 'loading' }> | (EncourageSheet & Readonly<{ online: boolean }>);
 
 /** Eigene Freigaben samt Netzstatus, der bestimmt, ob das Abschalten erst mit der nächsten Verbindung wirkt. */
-export type SharingView = Sharing & Readonly<{ online: boolean }>;
+export type SharingView = Readonly<{ type: 'loading' }> | (Exclude<Sharing, { type: 'loading' }> & Readonly<{ online: boolean }>);
 
 export type Partner = Readonly<{
   /** Partnerzustand für „Wir“: lädt, solo oder gekoppelt mit Übersicht. */
@@ -58,6 +58,13 @@ export type Partner = Readonly<{
   sharing: Source<SharingView>;
   /** Ein Schalterwechsel: sofort lokal, der Upsert geht mit dem nächsten Push raus. */
   share(change: SharingChange): SharingOutcome;
+  /**
+   * Ob `partner.invite` für dieses Konto schon einen Code erzeugt hat, solange die Kontodatenbank offen ist. Der
+   * Onboarding-Schritt `partner` meldet dann `partner_invite_created`; die Kopplung kann später entstehen. Den Code
+   * selbst hält niemand fest (Online-Abläufe sind flüchtig, Spezifikation 0, Abschnitt 9).
+   */
+  invitationCreated: Source<boolean>;
+  noteInvitationCreated(): void;
 }>;
 
 function readPartner(tx: ReadContext): PartnerReading {
@@ -110,6 +117,8 @@ function followedReading<R, V>(
 
 export function createPartner(dependencies: PartnerDependencies): Partner {
   const { database, clock, sync, writer, newId } = dependencies;
+  let invitationCreated = false;
+  const invitationListeners = new Set<(created: boolean) => void>();
   // Alter des Stands und die 10-Minuten-Grenze ändern sich auch ohne Commit.
   const wir = followedReading(dependencies, readPartner, (reading, online) => wirPartnerOf(reading, online, clock.read()));
   // Der Zähler gilt für den lokalen Tag; um Mitternacht beginnt er neu.
@@ -125,7 +134,19 @@ export function createPartner(dependencies: PartnerDependencies): Partner {
     encourageSheet,
     encourage: (messageKey) => database.transaction((tx) => sendEncouragement(tx, { writer, newId, clock }, messageKey)),
     couplingState: followedReading(dependencies, readCouplingState, (state) => state),
-    sharing: followedReading(dependencies, readSharing, (sharing, online): SharingView => ({ ...sharing, online })),
+    sharing: followedReading(dependencies, readSharing, (sharing, online): SharingView => (sharing.type === 'loading' ? sharing : { ...sharing, online })),
     share: (change) => database.transaction((tx) => changeSharing(tx, { writer, clock }, change)),
+    invitationCreated: {
+      subscribe(listener) {
+        listener(invitationCreated);
+        invitationListeners.add(listener);
+        return () => invitationListeners.delete(listener);
+      },
+    },
+    noteInvitationCreated() {
+      if (invitationCreated) return;
+      invitationCreated = true;
+      for (const listener of invitationListeners) listener(true);
+    },
   };
 }

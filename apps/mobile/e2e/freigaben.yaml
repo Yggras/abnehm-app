@@ -2,10 +2,14 @@
 # und nach Neuanmeldung als Partner keine Zusammenfassung mehr.
 #
 # Seed „gekoppelt“ öffnet als Philipp direkt „Partner & Freigaben“. Philipp teilt dort alle vier Zusammenfassungen
-# und die Fotos (`packages/contracts/seeds/gekoppelt.ts`). Er schaltet „Wasser“ ab, meldet sich über „Konto“ ab;
-# das Abmelden pusht die Outbox vorher (Abmeldemodul aus #111). Danach meldet sich Anna auf demselben Gerät an. Auf
-# „Wir“ sieht sie Philipps Sport und Gewicht aus den echten Projectors von Spezifikation 3 (#181), aber kein Wasser
-# mehr. Vorher prüft der Ablauf als Anna, dass Philipps Wasser dort steht.
+# und die Fotos (`packages/contracts/seeds/gekoppelt.ts`). Er schaltet „Wasser“ ab und wartet auf „Heute“, bis der
+# Hinweis „Noch nicht gesichert“ weg ist, die Änderung also beim Server liegt. Danach meldet sich Anna auf einem
+# frischen Gerät („Ich habe schon ein Konto“) an. Auf „Wir“ sieht sie Philipps Sport und Gewicht aus den echten
+# Projectors von Spezifikation 3 (#181), aber kein Wasser mehr. Vorher prüft der Ablauf als Anna, dass Philipps
+# Wasser dort steht.
+#
+# Stand 19.11.2026: Annas Anmeldung bleibt auf beiden Plattformen bei „Konto wird eingerichtet“ stehen (#324);
+# bis zur Behebung endet der Ablauf dort.
 #
 # Offline-Meldung, Onboarding-Schritt und alle Schalter belegen die Komponententests
 # (`src/settings/PartnerSharingScreen.test.tsx`, `src/partner/PartnerStep.test.tsx`), den Widerruf samt neuer

@@ -11,18 +11,11 @@ import type { InvitationFlows } from './invitation-flows';
 // Wiederholt wird nie still im Hintergrund, sondern nur, wenn die Person es auslöst; dabei bleibt die
 // `requestId` derselben Absicht erhalten (`use-online-flow.ts`).
 
-type OnlineFlowsProps = Readonly<{ invitations: InvitationFlows; newId: () => EntityId }>;
-
-type OnlineFlowsContext = OnlineFlowsProps &
-  Readonly<{
-    /** Ob mit diesen Abläufen schon ein Code entstand; der Onboarding-Schritt `partner` meldet dann `partner_invite_created`. */
-    invitationCreated: boolean;
-    markInvitationCreated(): void;
-  }>;
+type OnlineFlowsContext = Readonly<{ invitations: InvitationFlows; newId: () => EntityId }>;
 
 const Context = createContext<OnlineFlowsContext | null>(null);
 
-export function OnlineFlowsProvider({ invitations, newId, children }: OnlineFlowsProps & { children: ReactNode }) {
+export function OnlineFlowsProvider({ invitations, newId, children }: OnlineFlowsContext & { children: ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
@@ -34,13 +27,8 @@ export function OnlineFlowsProvider({ invitations, newId, children }: OnlineFlow
         },
       }),
   );
-  // Nur das Wissen, dass ein Code entstand, nicht der Code selbst; es gilt für diese Abläufe, also dieses Konto.
-  const [createdWith, setCreatedWith] = useState<InvitationFlows | null>(null);
   // Neue Abläufe, etwa nach einem Kontowechsel, ersetzen die bisherigen; der flüchtige Cache bleibt leer.
-  const value = useMemo<OnlineFlowsContext>(
-    () => ({ invitations, newId, invitationCreated: createdWith === invitations, markInvitationCreated: () => setCreatedWith(invitations) }),
-    [invitations, newId, createdWith],
-  );
+  const value = useMemo<OnlineFlowsContext>(() => ({ invitations, newId }), [invitations, newId]);
   return (
     <QueryClientProvider client={client}>
       <Context.Provider value={value}>{children}</Context.Provider>

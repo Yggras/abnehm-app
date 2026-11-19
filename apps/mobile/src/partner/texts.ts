@@ -2,7 +2,7 @@ import type { AreaKey, LocalDate } from '@abnehm/contracts/base';
 import type { InviteCode } from '@abnehm/contracts/coupling';
 import type { PartnerDailyGoalStage, PartnerSummaryEnvelope } from '@abnehm/contracts/partner';
 
-import { monthNames, titleOf } from '../shell/texts';
+import { longDateText, titleOf } from '../shell/texts';
 import type { DataAge } from './partner-view';
 
 // Texte des Partnerbereichs nach Spezifikation 5, Abschnitt 2 (#121). Angezeigt wird die kurze Form,
@@ -188,10 +188,7 @@ export const sharingTexts = {
   soloBody: 'Lade deinen Partner ein oder gib seinen Code ein. Danach legst du hier fest, was er von dir sieht.',
   coupledWith: (name: string) => `Mit ${name} gekoppelt`,
   /** Lokales Datum im Kalender des Geräts, etwa „1. Oktober 2026“. */
-  since: (localDate: LocalDate) => {
-    const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
-    return `Momo und Insel seit ${day}. ${monthNames[month - 1]} ${year}`;
-  },
+  since: (localDate: LocalDate) => `Momo und Insel seit ${longDateText(localDate)}`,
   areasTitle: 'Gesundheitsbereiche',
   areaSubtitles: {
     ernaehrung: 'Anzahl erfasster Mahlzeiten',
