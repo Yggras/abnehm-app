@@ -305,17 +305,21 @@ describe('Quick-Commands und Meldungen', () => {
 
   const today = (goals: readonly BausteinKey[], bonus = false) => ({ goals, bonus, energy: goals.length + (bonus ? 1 : 0) });
   test.each([
-    [{ yesterday: null, today: today(['wasserziel']) }, ['Wasserziel erfüllt · +1 Energie']],
-    [{ yesterday: null, today: today([], true) }, ['Alle drei geschafft · +1 Energie']],
+    [{ yesterday: null, today: today(['wasserziel']), level: null }, ['Wasserziel erfüllt · +1 Energie']],
+    [{ yesterday: null, today: today([], true), level: null }, ['Alle drei geschafft · +1 Energie']],
     // Mehreres aus einem Commit: eine Meldung mit der Summe der Energie.
-    [{ yesterday: null, today: today(['sporteinheit'], true) }, ['Alle drei geschafft · +2 Energie']],
-    [{ yesterday: null, today: today(['wasserziel', 'gewogen']) }, ['Wasserziel und Gewogen erfüllt · +2 Energie']],
-    [{ yesterday: null, today: today(['ernaehrung_erfasst', 'wasserziel', 'gewogen']) }, ['Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie']],
-    [{ yesterday: { bonus: false, energy: 1 }, today: null }, ['Gestern im Kalorienbudget · +1 Energie']],
-    [{ yesterday: { bonus: true, energy: 2 }, today: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie']],
+    [{ yesterday: null, today: today(['sporteinheit'], true), level: null }, ['Alle drei geschafft · +2 Energie']],
+    [{ yesterday: null, today: today(['wasserziel', 'gewogen']), level: null }, ['Wasserziel und Gewogen erfüllt · +2 Energie']],
+    [{ yesterday: null, today: today(['ernaehrung_erfasst', 'wasserziel', 'gewogen']), level: null }, ['Ernährung erfasst, Wasserziel und Gewogen erfüllt · +3 Energie']],
+    [{ yesterday: { bonus: false, energy: 1 }, today: null, level: null }, ['Gestern im Kalorienbudget · +1 Energie']],
+    [{ yesterday: { bonus: true, energy: 2 }, today: null, level: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie']],
     // Gestern und heute zusammen: zwei Zeilen derselben Meldung, je mit eigenem Betrag.
-    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']) }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie', 'Sporteinheit erfüllt · +1 Energie']],
-  ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188)', async (reaction, lines) => {
+    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']), level: null }, ['Gestern im Kalorienbudget, alle drei geschafft · +2 Energie', 'Sporteinheit erfüllt · +1 Energie']],
+    // Levelaufstieg (#200): eine Zeile; mit Gutschriften aus demselben Commit steht er als zweite Zeile unter der von heute.
+    [{ yesterday: null, today: null, level: 7 }, ['Momo ist jetzt auf Level 7']],
+    [{ yesterday: { bonus: true, energy: 2 }, today: today(['sporteinheit']), level: 4 }, ['Sporteinheit erfüllt · +1 Energie', 'Momo ist jetzt auf Level 4']],
+    [{ yesterday: { bonus: false, energy: 1 }, today: null, level: 3 }, ['Gestern im Kalorienbudget · +1 Energie', 'Momo ist jetzt auf Level 3']],
+  ] as const)('Momos Reaktion %o erscheint als eine Meldung über den Meldungs-Host (#188, #200)', async (reaction, lines) => {
     closeIsland();
     closeIsland = appGameService.opened(fakeGameService(hatchedStage(), [reaction]));
     await renderRouter(appDir, { initialUrl: '/' });

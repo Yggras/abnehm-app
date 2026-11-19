@@ -36,6 +36,30 @@ const toMeal: Readonly<Record<MealKey, string>> = {
   snacks: 'zu den Snacks',
 };
 
+/** Werte von Momos Reaktion auf Gutschriften: Tagesziele, Bonus und Energie je Tag (#188). */
+const MomoEnergyValues = z.strictObject({
+  ziel1: BausteinKey.optional(),
+  ziel2: BausteinKey.optional(),
+  ziel3: BausteinKey.optional(),
+  bonus: z.boolean(),
+  energie: z.int().nonnegative(),
+  gesternBonus: z.boolean(),
+  gesternEnergie: z.int().nonnegative(),
+});
+
+/** Die Zeilen von `momo.energie` (siehe dort): eine je Tag mit Gutschriften. */
+function energyLines({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }: z.output<typeof MomoEnergyValues>): MessageLines {
+  const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
+  const todayText = bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`;
+  const today: ToastLine = { text: `${todayText} · +${energie} Energie`, energy: true };
+  const yesterday: ToastLine = {
+    text: `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''} · +${gesternEnergie} Energie`,
+    energy: true,
+  };
+  if (gesternEnergie === 0) return today;
+  return energie === 0 ? yesterday : [yesterday, today];
+}
+
 export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Development Build: Für einen Quick-Command fehlt noch der Handler seines Bereichs. */
   'shell.quick_command.in_arbeit': messageText(z.strictObject({ commandKey: QuickCommandKey }), ({ commandKey }) => ({
@@ -93,29 +117,21 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
    * mit „Rückgängig“, hängt der Host die Zeile von heute an.
    */
   'momo.energie': messageText(
-    z
-      .strictObject({
-        ziel1: BausteinKey.optional(),
-        ziel2: BausteinKey.optional(),
-        ziel3: BausteinKey.optional(),
-        bonus: z.boolean(),
-        energie: z.int().nonnegative(),
-        gesternBonus: z.boolean(),
-        gesternEnergie: z.int().nonnegative(),
-      })
-      .refine((values) => values.energie + values.gesternEnergie > 0, { message: 'Meldung ohne Gutschrift' }),
-    ({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }) => {
-      const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
-      const todayText = bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`;
-      const today: ToastLine = { text: `${todayText} · +${energie} Energie`, energy: true };
-      const yesterday: ToastLine = {
-        text: `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''} · +${gesternEnergie} Energie`,
-        energy: true,
-      };
-      if (gesternEnergie === 0) return today;
-      return energie === 0 ? yesterday : [yesterday, today];
-    },
+    MomoEnergyValues.refine((values) => values.energie + values.gesternEnergie > 0, { message: 'Meldung ohne Gutschrift' }),
+    energyLines,
   ),
+  /**
+   * Spezifikation 4, Abschnitt 6: Momos Feier eines Levelaufstiegs, „Momo ist jetzt auf Level N“ (#200); bei
+   * mehreren übersprungenen Leveln das höchste. Kommen im selben Commit Gutschriften dazu, steht ihre Zeile
+   * davor, bei gestern und heute nur die von heute, weil eine Meldung höchstens zwei Zeilen hat. Die Levelzeile
+   * steht zuletzt: Steht eine Meldung mit „Rückgängig“, hängt der Host nur sie an.
+   */
+  'momo.levelaufstieg': messageText(MomoEnergyValues.extend({ level: z.int().min(2) }), ({ level, ...energy }) => {
+    const levelLine: ToastLine = { text: `Momo ist jetzt auf Level ${level}` };
+    if (energy.energie + energy.gesternEnergie === 0) return levelLine;
+    const lines = energyLines(energy);
+    return ['text' in lines ? lines : lines[1], levelLine];
+  }),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5, Abschnitt 4: Anfeuerung gesendet (#123); ohne „Rückgängig“ und ohne Haptik. */

@@ -22,7 +22,7 @@ import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceO
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
 // der Laichkugel über die Rollenwahl (#180) bis zur geschlüpften Insel (#184), die Befehle der Rollenwahl,
-// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
+// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) samt Levelfeier (#200) und die Beiträge an „Heute“
 // (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je
 // geöffneter Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
@@ -44,7 +44,8 @@ export type GameService = Readonly<{
    */
   observeStage(listener: (stage: IslandStage) => void): () => void;
   /**
-   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften, je Commit zu einer zusammengefasst.
+   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften und auf Levelaufstiege der Insel (#200),
+   * je Commit zu einer zusammengefasst.
    * Solange ein Beobachter angemeldet ist, beansprucht der Dienst jedes neue Ereignis genau einmal je
    * Installation, löst dazu höchstens eine Haptik aus und lässt Momo kurz reagieren. Ohne Beobachter wartet
    * das Ereignis.
@@ -188,7 +189,7 @@ export function momoCharacterOf(stage: IslandStage): TodayState<'momo.character'
  * bestätigten Vorschlag des Partners in der aktiven Kopplung, solange sie ihn nicht schon angenommen hat.
  * Aktionen einer archivierten Kopplung sind beendet, auch wenn sie lokal noch offen sind (#107);
  * `readIslandStage` liest nur die aktive. Nach dem Schlüpfen die gemeinsamen Ereignisse der Insel für
- * „Neu bei euch“ als `shared_event`, bisher „Momo ist geschlüpft“ (#184).
+ * „Neu bei euch“ als `shared_event`, bisher „Momo ist geschlüpft“ (#184) und „Levelaufstieg“ (#200).
  */
 export function wirContributionsOf(stage: IslandStage): ContributionState<WirContribution[]> {
   if (stage.type === 'ohne_person') return { type: 'loading' };
