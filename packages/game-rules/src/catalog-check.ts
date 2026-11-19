@@ -15,6 +15,7 @@ import {
   type OwnedFieldKind,
 } from './catalog.ts';
 import { challengeDayCount, dailyGoalsPerDay } from './challenges.ts';
+import { landscapeBand } from './areas.ts';
 import { fieldQuota } from './fields.ts';
 import { areaLevels } from './unlocks.ts';
 import { isWholeNumber } from './whole-number.ts';
@@ -98,7 +99,7 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
   for (const plan of fieldPlans(catalog)) {
     const occupied = plan.onIslandGrid ? onIsland : new Set<string>();
     for (const field of plan.fields) {
-      if (!Number.isInteger(field.x) || !Number.isInteger(field.y)) issue('feld_koordinate', fieldKey(plan.area, field));
+      if (!Number.isInteger(field.x) || !Number.isInteger(field.y) || !inBand(plan, field)) issue('feld_koordinate', fieldKey(plan.area, field));
       const position = `${field.x}:${field.y}`;
       if (occupied.has(position)) issue('feld_doppelt', plan.onIslandGrid ? position : fieldKey(plan.area, field));
       occupied.add(position);
@@ -153,6 +154,12 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
   }
 
   return issues;
+}
+
+/** Felder einer Landschaftsvorlage liegen im Band der endlosen Gebiete (`placeField`, #204); andere Pläne sind frei. */
+function inBand(plan: FieldPlan, field: Readonly<{ x: number; y: number }>): boolean {
+  if (plan.source !== 'landschaftsvorlage') return true;
+  return field.x >= 0 && field.x < landscapeBand.width && field.y >= 0 && field.y < landscapeBand.height;
 }
 
 /**

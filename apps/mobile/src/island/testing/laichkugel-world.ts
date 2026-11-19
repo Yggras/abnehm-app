@@ -8,7 +8,8 @@ import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
 import type { PlanReader } from '@abnehm/contracts/ports';
-import { IslandEventRecord, islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
+import { IslandEventRecord, islandContentId, islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
+import { areaOccasionKey, areaUnlockAt, discoveryStatus, sidesOf } from '@abnehm/game-rules/areas';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { visitorOccasionKey } from '@abnehm/game-rules/events';
 import { hatching } from '@abnehm/game-rules/hatching';
@@ -21,7 +22,21 @@ import { appendBooking, energyBookingEntity } from '../../energy';
 import type { Haptics } from '../../haptics/haptics';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { blueprintUnlock, challenge, communityProject, coupling, couplingMember, island, islandEvent, islandEventState, islandField, islandObject, islandProgress, sharedAction } from '../../local-db/schema';
+import {
+  areaUnlock,
+  blueprintUnlock,
+  challenge,
+  communityProject,
+  coupling,
+  couplingMember,
+  island,
+  islandEvent,
+  islandEventState,
+  islandField,
+  islandObject,
+  islandProgress,
+  sharedAction,
+} from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import type { Refresh } from '../../shell/followed-source';
@@ -36,7 +51,8 @@ import { everyDayPlan, weeklyPlanReader } from './challenge-plans';
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
 // Insel, Vorschläge, die geschlüpfte Insel, Energie, Objekte (#194) und Besucher (#202) legt der Test an, wie sie der Pull
-// ablegen würde; einen Levelaufstieg (#200) übernimmt er über die Sync-Adapter wie ein echter Pull.
+// ablegen würde; einen Levelaufstieg (#200) übernimmt er über die Sync-Adapter wie ein echter Pull. Ein Gebiet mit
+// Entdeckung (#204) entsteht wie auf dem Server aus den Spielregeln.
 // Die Uhr gibt der Test hinein, auf Wunsch auch Haptik und Takt des Spieldienstes (#188).
 
 const at = '2026-10-14T12:00:00.000Z';
@@ -85,6 +101,11 @@ export type LaichkugelWorld = Readonly<{
    * der Server sie nach einem Bau des Partners schreibt (#200). Übernommen über die Sync-Adapter der Insel.
    */
   pullProgress(level: number, events?: readonly number[]): void;
+  /**
+   * Gebiet und Entdeckung des Levels `level`, wie der Pull sie nach der Freischaltung ablegt (#204): Freischaltung,
+   * Felder beider Personen, Entdeckungs-Baupläne, das Ereignis und Philipps Ereignisstand. Liefert dessen ID.
+   */
+  areaOnServer(level: number, options?: Readonly<{ seen?: boolean }>): EntityId;
   operations(): ReturnType<typeof pendingOperations>;
   close(): void;
 }>;
@@ -259,6 +280,34 @@ export async function createLaichkugelWorld(
           });
           adapterOf('island_event').applyCanonical(tx, { entityId: id, serverVersion: ServerVersion.parse(progress.serverVersion), data });
         }
+      });
+    },
+    areaOnServer(level, { seen = false } = {}) {
+      return database.transaction((tx) => {
+        const db = sqliteOf(tx);
+        const fields = db.select({ key: islandField.fieldKey, ownerPersonId: islandField.ownerPersonId }).from(islandField).all();
+        const sides = sidesOf(gameCatalog, fields);
+        const unlock = sides === null ? null : areaUnlockAt(gameCatalog, { level, sides });
+        if (unlock === null) throw new Error(`Kein Gebiet bei Level ${level}; zuerst hatch()`);
+        const owned = { islandId, couplingId };
+        // IDs wie auf dem Server (`islandContentId`).
+        const idOf = (entityType: Parameters<typeof islandContentId>[0], key: string) => islandContentId(entityType, islandId, key);
+        db.insert(areaUnlock).values({ id: idOf('area_unlock', unlock.area.key), ...owned, areaKey: unlock.area.key, level, unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+        for (const field of unlock.fields) {
+          db.insert(islandField).values({ id: idOf('island_field', field.key), ...owned, fieldKey: field.key, ownerPersonId: field.ownerPersonId, createdAt: at, serverVersion: '1' }).run();
+        }
+        for (const catalogKey of unlock.discovery.blueprints) {
+          db.insert(blueprintUnlock).values({ id: idOf('blueprint_unlock', catalogKey), ...owned, catalogKey, reason: 'entdeckung', unlockedAt: at, createdAt: at, serverVersion: '1' }).run();
+        }
+        const occasionKey = areaOccasionKey(islandId, unlock.area.key);
+        const eventId = islandEventId(islandId, occasionKey);
+        const status = discoveryStatus(unlock.discovery);
+        db.insert(islandEvent)
+          .values({ id: eventId, ...owned, type: 'entdeckung', templateKey: null, responsiblePersonId: null, occasionKey, status, reward: unlock.discovery, occurredAt: at, ...synced })
+          .run();
+        const stateId = islandEventStateId(eventId, philipp);
+        db.insert(islandEventState).values({ id: stateId, islandEventId: eventId, personId: philipp, seenAt: seen ? at : null, claimedAt: null, ...synced }).run();
+        return stateId;
       });
     },
     operations: () => database.read((tx) => pendingOperations(tx, 100)),

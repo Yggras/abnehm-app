@@ -556,13 +556,14 @@ describe('Nachricht je Intent-Typ', { timeout: 30_000 }, () => {
         interruptionLevel: 'active',
       });
     }
-    // Spezifikation 5 liefert Anfeuern und Entkopplung, Spezifikation 4 bisher Rollenwahl, Levelaufstieg und Challenge-Vorschlag.
+    // Spezifikation 5 liefert Anfeuern und Entkopplung, Spezifikation 4 bisher Rollenwahl, Levelaufstieg, neues Gebiet und Challenge-Vorschlag.
     expect([...sent.values()].map((message) => message.title).sort()).toEqual([
       'Anna feuert dich an',
       'Anna hat eure Kopplung beendet',
       'Anna schlägt eine Challenge vor',
       'Anna schlägt eure Rollen vor',
       'Momo ist jetzt auf Level 7 🎉',
+      'Neues Gebiet auf eurer Insel 🏝️',
     ]);
   });
 

@@ -1,8 +1,10 @@
-import type { AreaKey, LocalDate } from '@abnehm/contracts/base';
+import type { AreaKey, LocalDate, Weekday } from '@abnehm/contracts/base';
 import type { InviteCode } from '@abnehm/contracts/coupling';
+import type { CommonStage, IslandRole } from '@abnehm/contracts/island';
 import type { PartnerDailyGoalStage, PartnerSummaryEnvelope } from '@abnehm/contracts/partner';
+import type { SharedEventType, WirContribution } from '@abnehm/contracts/wir';
 
-import { longDateText, titleOf } from '../shell/texts';
+import { longDateText, titleOf, weekdayNames } from '../shell/texts';
 import type { DataAge } from './partner-view';
 
 // Texte des Partnerbereichs nach Spezifikation 5, Abschnitt 2 (#121). Angezeigt wird die kurze Form,
@@ -208,3 +210,69 @@ export const sharingTexts = {
   stepCoupled: (name: string) => `Mit ${name} gekoppelt. Lege fest, was ${name} von dir sieht.`,
   next: 'Weiter',
 } as const;
+
+/** Verlauf hinter „Alle anzeigen“ (Spezifikation 5, Abschnitt 2; #124): Überschriften wörtlich aus der Spezifikation. */
+export const historyTexts = {
+  thisWeek: 'Diese Woche',
+  lastWeek: 'Letzte Woche',
+  week: (isoWeek: number) => `KW ${isoWeek}`,
+} as const;
+
+/**
+ * Texte der gemeinsamen Bereiche von „Wir“ (#124). Wörtlich aus den Spezifikationen: „Neu bei euch“, „Alle
+ * anzeigen“, „Vorschlag gesendet“ und „Du: 4 von 6“ (Spezifikation 4, Abschnitt 10) sowie die Titel der
+ * Vorgänge aus den Push-Titeln von Spezifikation 4, Abschnitt 12, ohne Emoji. „Ansehen“ und „Dein Bau-Anteil“
+ * stammen aus dem Prototyp `prototypes/partner-bereich`. Die übrigen Sätze sind Designwerte (nicht belegt).
+ */
+export const sharedTexts = {
+  challengeProposal: (name: string) => `${name} schlägt eine Challenge vor`,
+  pendingAction: {
+    rollenwahl: (name: string) => `${name} schlägt eure Rollen vor`,
+    rollentausch: (name: string) => `${name} möchte die Rollen tauschen`,
+    deko_schenken: (name: string) => `${name} schenkt dir Deko`,
+  } satisfies Readonly<Record<PendingActionKind, (name: string) => string>>,
+  open: 'Ansehen',
+  validUntil: (weekday: Weekday, time: string) => `Gilt bis ${weekdayNames[weekday]}, ${time} Uhr`,
+  quotedTemplate: (template: string, detail: string | null) => (detail === null ? `„${template}“` : `„${template}“ · ${detail}`),
+  challenge: 'Challenge',
+  sent: 'Vorschlag gesendet',
+  ownShare: (count: number, required: number) => `Du: ${count} von ${required}`,
+  stage: (stage: CommonStage) => `Gemeinsam: ${commonStageTexts[stage]}`,
+  remaining: (days: number) => `noch ${days} ${days === 1 ? 'Tag' : 'Tage'}`,
+  project: 'Gemeinschaftsprojekt',
+  projectShare: (role: IslandRole, count: number, required: number) => `Dein ${roleNames[role]}-Anteil: ${count} von ${required} Energie`,
+  news: 'Neu bei euch',
+  showAll: 'Alle anzeigen',
+  close: 'Schließen',
+  unavailable: 'Gemeinsames ist gerade nicht verfügbar.',
+  retry: 'Erneut versuchen',
+} as const;
+
+type PendingActionKind = Extract<WirContribution, { type: 'pending_shared_action' }>['kind'];
+
+const roleNames: Readonly<Record<IslandRole, string>> = { bauen: 'Bau', natur: 'Natur' };
+
+/** Gemeinsame Stufe von Challenge und Gemeinschaftsprojekt, ohne Partneranteil. */
+const commonStageTexts: Readonly<Record<CommonStage, string>> = {
+  gestartet: 'gestartet',
+  gut_unterwegs: 'gut unterwegs',
+  fast_geschafft: 'fast geschafft',
+  geschafft: 'geschafft',
+};
+
+/**
+ * Gemeinsame Ereignisse von Spezifikation 4 je `messageKey` (Spezifikation 0, Abschnitt 2: Text aus dem Schlüssel).
+ * Die Ereignisse tragen keine Werte wie das Level, die Sätze bleiben deshalb allgemein (Designwerte, nicht belegt).
+ */
+export const sharedEventTexts: Readonly<Record<`neu_bei_euch.${SharedEventType}`, string>> = {
+  'neu_bei_euch.momo_geschluepft': 'Momo ist geschlüpft',
+  'neu_bei_euch.levelaufstieg': 'Momo ist ein Level aufgestiegen',
+  'neu_bei_euch.gebiet': 'Neues Gebiet auf eurer Insel',
+  'neu_bei_euch.projektabschluss': 'Euer Gemeinschaftsprojekt ist fertig',
+  'neu_bei_euch.accessoire': 'Neues Accessoire im Schrank',
+  'neu_bei_euch.deko_geschenkt': 'Geschenkte Deko ist angekommen',
+  'neu_bei_euch.challenge_gestartet': 'Eure Challenge hat begonnen',
+  'neu_bei_euch.challenge_geschafft': 'Challenge gemeinsam geschafft',
+  'neu_bei_euch.challenge_abgelaufen': 'Eure Challenge-Woche ist vorbei',
+  'neu_bei_euch.challenge_beendet': 'Challenge beendet',
+};

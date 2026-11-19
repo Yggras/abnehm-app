@@ -19,6 +19,7 @@ import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { OnlineFlowsProvider } from '../online/OnlineFlowsProvider';
 import { fakeInvitationFlows, type FakeInvitationFlows } from '../online/testing/fake-invitation-flows';
 import { setTestGate } from '../session/testing/test-gate';
+import { appWirContributions } from '../shell/app-wir';
 import { MessageHostProvider } from '../shell/MessageHost';
 import { OnboardingStep } from '../shell/OnboardingStep';
 import { createOnboardingRegistry } from '../shell/onboarding-registry';
@@ -83,6 +84,7 @@ async function openStep(scenario: 'solo' | 'gekoppelt' = 'solo') {
   const registry = createSyncRegistry([...foundationSyncEntities, encouragementEntity]);
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId() });
   const partner = createPartner({
+    wirContributions: appWirContributions.source,
     database, clock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock, newId }), newId,
     observeOnline: () => () => {},
     refresh: () => () => {},

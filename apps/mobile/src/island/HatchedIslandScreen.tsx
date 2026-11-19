@@ -15,17 +15,18 @@ import type { BuildOutcome } from './build-object';
 import { buildOptions, type BlueprintOption } from './build-options';
 import { BuildSheet } from './BuildSheet';
 import { EventsSheet } from './EventsSheet';
-import type { ClaimOutcome, ShownReward, VisitorWish } from './island-events';
+import type { ClaimOutcome, IslandEvent, ShownReward } from './island-events';
 import type { HatchedIsland } from './hatched-island';
 import type { IslandEntry } from './IslandBar';
 import { IslandView } from './IslandView';
-import { islandLayout } from './layout';
+import { areaCells, islandLayout } from './layout';
 import type { PlaceOutcome, UpgradeOutcome } from './object-commands';
 import { objectOptions, type StorageItem } from './object-options';
 import { ObjectSheet } from './ObjectSheet';
 import type { IslandSceneInput, SceneHit } from './scene-model';
 import { StorageSheet } from './StorageSheet';
 import { buildTexts, momoSheetTexts, objectTexts } from './texts';
+import type { Transformation } from './transformation';
 
 // Die geschlüpfte Insel im Tab „Momo“ (Spezifikation 4, Abschnitt 7; #184, #191, #192): die Inselansicht
 // aus den lokalen Daten, das Momo-Sheet nach einem Tipp auf Momo, beim ersten Öffnen einmalig „So wächst
@@ -56,6 +57,8 @@ export type HatchedIslandScreenProps = Readonly<{
   island: HatchedIsland;
   /** Ob „So wächst Momo“ jetzt erscheinen soll; merkt das Erscheinen (Einmal-Flag je Installation). */
   takeGrowthIntro(): boolean;
+  /** Die Verwandlungsszene, wenn Momo seit dem letzten Öffnen eine neue Form hat; merkt das gezeigte Level (#204). */
+  takeTransformation(): Transformation | null;
   /** Baut über den Spieldienst (`GameService.build`). */
   build(request: Readonly<{ fieldId: EntityId; blueprintKey: string }>): BuildOutcome;
   /** Wertet über den Spieldienst auf (`GameService.upgrade`). */
@@ -113,7 +116,7 @@ function placingTitleOf(placing: Placing): string {
   return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placing(placing.name);
 }
 
-export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, place, markEventsSeen, claimEventReward, onOpen, challengeEntry = null, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
+export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformation, build, upgrade, place, markEventsSeen, claimEventReward, onOpen, challengeEntry = null, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
   const [sheet, setSheet] = useState<SheetContent | null>(null);
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [appearing, setAppearing] = useState<string | null>(null);
@@ -126,6 +129,15 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
     useCallback(() => {
       if (takeGrowthIntro()) setSheet({ type: 'wachstum' });
     }, [takeGrowthIntro]),
+  );
+  // Verwandlungsszene (#204): beim nächsten Öffnen des Tabs (Spezifikation 4, Abschnitt 6). Hebt ein Pull das Level,
+  // während der Tab offen ist, feiert Momo dort zuerst; die Verwandlung folgt beim nächsten Öffnen.
+  const [transformation, setTransformation] = useState<Transformation | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const next = takeTransformation();
+      if (next !== null) setTransformation(next);
+    }, [takeTransformation]),
   );
   // Wer den Tab verlässt, bricht den Bau-Modus ab; zurück auf der Insel wird nicht unbemerkt weitergebaut.
   useFocusEffect(useCallback(() => () => setPlacing(null), []));
@@ -183,6 +195,10 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
     }),
     [island.fields, island.unlockedAreas, island.objects, island.appearance],
   );
+  const transformationScene = useMemo(
+    () => (transformation === null ? null : { from: { ...island.appearance, formKey: transformation.from }, lifting: areaCells(gameCatalog, transformation.areas) }),
+    [transformation, island.appearance],
+  );
   const placingFields = useMemo(() => {
     if (placing === null) return null;
     return placing.type === 'bauen' ? options.fields(placing.option.key) : objects.placeFields(placing.objectId);
@@ -238,10 +254,10 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
   };
 
   // Die Bestätigung steht im Sheet: Eine Meldung läge auf dem Gerät hinter dem nativen Sheet (Gerätelauf #202).
-  const claim = (event: VisitorWish) => {
+  const claim = (event: IslandEvent) => {
     const outcome = claimEventReward(event.stateId);
     if (outcome.type !== 'abgeholt') return notDone();
-    setSheet((current) => (current?.type === 'ereignisse' ? { ...current, claimed: [...current.claimed, outcome.reward] } : current));
+    setSheet((current) => (current?.type === 'ereignisse' ? { ...current, claimed: [...current.claimed, ...outcome.rewards] } : current));
   };
 
   const placingTitle = placing === null ? null : placingTitleOf(placing);
@@ -266,6 +282,8 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
         bottomInset={bottomInset}
         building={placingTitle === null || placingFields === null ? null : { title: placingTitle, fields: placingFields, onCancel: () => setPlacing(null) }}
         appearing={appearing}
+        transformation={transformationScene}
+        onTransformationEnd={() => setTransformation(null)}
       />
       <Sheet visible={sheet !== null} onClose={() => setSheet(null)} height={sheet?.type === 'bauen' || sheet?.type === 'lager' || sheet?.type === 'ereignisse' ? 'full' : 'content'}>
         {sheet?.type === 'momo' ? (

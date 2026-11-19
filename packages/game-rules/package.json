@@ -11,6 +11,7 @@
     "./prices": "./src/prices.ts",
     "./fields": "./src/fields.ts",
     "./unlocks": "./src/unlocks.ts",
+    "./areas": "./src/areas.ts",
     "./projects": "./src/projects.ts",
     "./hatching": "./src/hatching.ts",
     "./building": "./src/building.ts",

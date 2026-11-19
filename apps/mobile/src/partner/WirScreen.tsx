@@ -5,30 +5,32 @@ import { openTarget } from '../navigation';
 import { MomoFigure } from '../momo';
 import { areaIcons } from '../shell/area-icons';
 import { ScreenFrame } from '../shell/ScreenFrame';
-import { usePartner, useWirPartner } from './app-partner';
+import { usePartner, useWirPartner, useWirShared } from './app-partner';
 import { PartnerAvatar } from './PartnerAvatar';
 import { PartnerStage } from './PartnerStage';
 import { partnerActions, type CoupledPartner, type WirPartner } from './partner-view';
 import { areaNames, partnerHeadline, partnerTexts, standText, summaryText, type Spoken } from './texts';
+import type { WirShared } from './wir-shared';
+import { Responses, SharedSections } from './WirShared';
 
-// Tab „Wir“ (Spezifikation 5, Abschnitt 2; #121): ohne Kopplung der Leerzustand „Momo wartet im Ei“,
-// gekoppelt die Partnerübersicht und die Anfeuern-Karte. Antwortbedürftige Vorgänge, Challenge,
-// Gemeinschaftsprojekt und „Neu bei euch“ (#124), Fotos von heute (#122) und erhaltene Anfeuerungen
-// samt „Danke“ (#126) ergänzen ihre Tickets. Partnerinhalte tragen die Partnerfarbe und stehen nie neben
-// eigenen Werten.
+// Tab „Wir“ (Spezifikation 5, Abschnitt 2; #121, #124): ohne Kopplung der Leerzustand „Momo wartet im Ei“,
+// gekoppelt antwortbedürftige Vorgänge, Partnerübersicht, Anfeuern-Karte, Challenge, Gemeinschaftsprojekt und
+// „Neu bei euch“. Fotos von heute (#122) und erhaltene Anfeuerungen samt „Danke“ (#126) ergänzen ihre Tickets.
+// Partnerinhalte tragen die Partnerfarbe und stehen nie neben eigenen Werten.
 
 
 export function WirScreen() {
   const partner = usePartner();
   const state = useWirPartner(partner);
+  const shared = useWirShared(partner);
   return (
     <ScreenFrame title={partnerTexts.title} presentation="tab" onRefresh={partner?.refresh}>
-      <WirContent state={state} />
+      <WirContent state={state} shared={shared} />
     </ScreenFrame>
   );
 }
 
-function WirContent({ state }: { state: WirPartner }) {
+function WirContent({ state, shared }: { state: WirPartner; shared: WirShared }) {
   switch (state.type) {
     case 'loading':
       return (
@@ -40,7 +42,7 @@ function WirContent({ state }: { state: WirPartner }) {
     case 'solo':
       return <Solo />;
     case 'coupled':
-      return <Coupled partner={state} />;
+      return <Coupled partner={state} shared={shared} />;
   }
 }
 
@@ -63,10 +65,15 @@ function Solo() {
   );
 }
 
-function Coupled({ partner }: { partner: Readonly<{ type: 'coupled' } & CoupledPartner> }) {
+/**
+ * Feste Reihenfolge nach Spezifikation 5, Abschnitt 2: antwortbedürftige Vorgänge, Partnerübersicht (mit dem
+ * neutralen Offline-Hinweis darüber), Anfeuern, Challenge, Gemeinschaftsprojekt, „Neu bei euch“.
+ */
+function Coupled({ partner, shared }: { partner: Readonly<{ type: 'coupled' } & CoupledPartner>; shared: WirShared }) {
   const stand = partner.age === null ? null : standText(partner.age, partner.stale);
   return (
     <>
+      <Responses shared={shared} partnerName={partner.displayName} />
       {partner.stale ? <Notice tone="neutral" icon="offline" text={stand?.shown ?? partnerTexts.offline} /> : null}
       <Overview partner={partner} stand={stand} />
       <Card>
@@ -78,6 +85,7 @@ function Coupled({ partner }: { partner: Readonly<{ type: 'coupled' } & CoupledP
           <Button label={partnerTexts.encourage} onPress={() => openTarget(partnerActions.encourage.target)} />
         </View>
       </Card>
+      <SharedSections shared={shared} />
     </>
   );
 }

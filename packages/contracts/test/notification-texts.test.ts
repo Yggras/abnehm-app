@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { notificationFixtures } from '../fixtures/notifications.ts';
 import { challenge, sharedAction } from '../fixtures/ids.ts';
 import { defineNotificationTexts, notificationText, notificationTexts } from '../src/notification-texts.ts';
-import { NotificationIntent } from '../src/notifications.ts';
+import { NotificationIntent, type CheckInTextValues } from '../src/notifications.ts';
 
 // Ein Testkatalog belegt das Gerüst; die echten Einträge liefern die Spezifikationen 4 und 5.
 const catalog = defineNotificationTexts({
@@ -102,9 +102,96 @@ describe('Textkatalog für Benachrichtigungen', () => {
     });
   });
 
+  it('der gemeinsame Katalog: neues Gebiet, mit und ohne Namen aus dem Spielkatalog (Spezifikation 4, Abschnitt 12; #204)', () => {
+    const text = { title: 'Neues Gebiet auf eurer Insel 🏝️', body: 'Der Nebel zieht ab – es gibt etwas zu entdecken.' };
+    expect(notificationTexts.render('gebiet', { gebietKey: 'schilfwiese', gebietName: 'Schilfwiese' })).toEqual(text);
+    // Endlose Gebiete stehen nicht im Katalog; der Zusteller ergänzt dann keinen Namen.
+    expect(notificationTexts.renderStored('gebiet', { gebietKey: 'endlos_1_duenen' })).toEqual({ type: 'rendered', text });
+  });
+
+  describe('Tages-Check-in (Spezifikation 5, Abschnitt 7; #135)', () => {
+    const render = (values: CheckInTextValues) => notificationTexts.render('tages_checkin', values);
+
+    it('Titel „Momo fragt nach“, ein Anlass je Zeile in fester Reihenfolge', () => {
+      expect(
+        render({
+          moment: 'abend',
+          topics: [{ type: 'ernaehrung' }, { type: 'wasser', progress: { countedMl: 400, targetMl: 1_500 } }, { type: 'sport' }, { type: 'gewicht' }],
+          islandEventKind: null,
+        }),
+      ).toEqual({
+        title: 'Momo fragt nach',
+        body: [
+          'Was gab’s heute zu essen? 🍎 Kurz eintragen',
+          '0,4 von 1,5 l getrunken 💧',
+          'Schon trainiert? Öffne die App, damit Momo es mitbekommt',
+          'Heute ist Wiegetag ⚖️ – kurz auf die Waage?',
+        ].join('\n'),
+      });
+    });
+
+    it('mittags fragt die Ernährung nach Frühstück oder Mittag', () => {
+      expect(render({ moment: 'mittag', topics: [{ type: 'ernaehrung' }], islandEventKind: null }).body).toBe('Schon was gegessen? 🍎 Frühstück oder Mittag eintragen');
+    });
+
+    it('Wasser zeigt Werte nur mit Fortschritt, gerundet auf eine Nachkommastelle', () => {
+      const water = (progress: { countedMl: number; targetMl: number } | null) =>
+        render({ moment: 'mittag', topics: [{ type: 'wasser', progress }], islandEventKind: null }).body;
+      expect(water({ countedMl: 0, targetMl: 2_500 })).toBe('0,0 von 2,5 l getrunken 💧');
+      expect(water({ countedMl: 1_250, targetMl: 3_000 })).toBe('1,3 von 3,0 l getrunken 💧');
+      expect(water({ countedMl: 12_340, targetMl: 2_000 })).toBe('12,3 von 2,0 l getrunken 💧');
+      expect(water(null)).toBe('Schon was getrunken? 💧 Kurz eintragen');
+    });
+
+    it.each([
+      ['besuch', '… und auf der Insel wartet Besuch 🦊'],
+      ['momos_wunsch', '… und Momo hat einen Wunsch ✨'],
+      ['inselwetter', '… und auf der Insel gibt es neues Wetter 🌦️'],
+      ['entdeckung', '… und auf der Insel gibt es etwas zu entdecken 🧭'],
+    ] as const)('Insel-Zusatz %s als letzte Zeile', (islandEventKind, line) => {
+      expect(render({ moment: 'abend', topics: [{ type: 'gewicht' }], islandEventKind }).body).toBe(`Heute ist Wiegetag ⚖️ – kurz auf die Waage?\n${line}`);
+    });
+
+    it('Eigenschaft: kein Text nennt Kalorien, Budget, Gewichtswerte oder Schuld (alle gültigen Kombinationen)', () => {
+      const forbidden = [/kcal/i, /kalorie/i, /budget/i, /\d\s*(kg|g)\b/i, /verpasst/i, /verfehlt/i, /Momo ist traurig/i, /zu viel/i];
+      const waters = [null, ...[0, 1, 49, 50, 333, 999, 1_000, 1_499, 2_550, 9_999].map((countedMl) => ({ countedMl, targetMl: 1_500 }))];
+      const kinds = [null, 'besuch', 'momos_wunsch', 'inselwetter', 'entdeckung'] as const;
+      let rendered = 0;
+      for (const moment of ['mittag', 'abend'] as const) {
+        for (let mask = 1; mask < 16; mask += 1) {
+          if (moment === 'mittag' && mask & 4) continue;
+          for (const progress of mask & 2 ? waters : [null]) {
+            const topics = [
+              ...(mask & 1 ? [{ type: 'ernaehrung' } as const] : []),
+              ...(mask & 2 ? [{ type: 'wasser', progress } as const] : []),
+              ...(mask & 4 ? [{ type: 'sport' } as const] : []),
+              ...(mask & 8 ? [{ type: 'gewicht' } as const] : []),
+            ];
+            for (const islandEventKind of kinds) {
+              const { title, body } = render({ moment, topics, islandEventKind });
+              rendered += 1;
+              for (const pattern of forbidden) expect({ text: `${title}\n${body}`, match: pattern.test(`${title}\n${body}`) }).toMatchObject({ match: false });
+            }
+          }
+        }
+      }
+      // Abends 8 Anlass-Kombinationen mit Wasser × 11 Wasserstände + 7 ohne, mittags ohne Sport 4 × 11 + 3; je 5 Insel-Varianten.
+      expect(rendered).toBe((8 * 11 + 7 + 4 * 11 + 3) * 5);
+    });
+
+    it('lehnt leere, doppelte und ungeordnete Anlässe und Sport am Mittag ab', () => {
+      const stored = (values: unknown) => notificationTexts.renderStored('tages_checkin', values);
+      const invalid = { type: 'contract_error', error: { code: 'invalid_payload', retryable: false } };
+      expect(stored({ moment: 'mittag', topics: [], islandEventKind: null })).toEqual(invalid);
+      expect(stored({ moment: 'abend', topics: [{ type: 'gewicht' }, { type: 'gewicht' }], islandEventKind: null })).toEqual(invalid);
+      expect(stored({ moment: 'abend', topics: [{ type: 'gewicht' }, { type: 'ernaehrung' }], islandEventKind: null })).toEqual(invalid);
+      expect(stored({ moment: 'mittag', topics: [{ type: 'sport' }], islandEventKind: null })).toEqual(invalid);
+    });
+  });
+
   it('Schlüssel ohne Eintrag sind ein Typfehler', () => {
     // @ts-expect-error – Einträge kommen mit den Tickets der Spezifikationen 4 und 5
-    expect(() => notificationTexts.render('gebiet', { gebietKey: 'gebiet_1' })).toThrow();
-    expect(notificationTexts.renderStored('gebiet', { gebietKey: 'gebiet_1' })).toMatchObject({ type: 'contract_error' });
+    expect(() => notificationTexts.render('projektabschluss', { templateKey: 'gartenhaeuschen' })).toThrow();
+    expect(notificationTexts.renderStored('projektabschluss', { templateKey: 'gartenhaeuschen' })).toMatchObject({ type: 'contract_error' });
   });
 });

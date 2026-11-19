@@ -4,6 +4,7 @@ import { EntityId } from '@abnehm/contracts/base';
 import { islandEventId } from '@abnehm/contracts/island-records';
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import { notificationTexts } from '@abnehm/contracts/notification-texts';
+import { areaOccasionKey } from '@abnehm/game-rules/areas';
 import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { energyBooking } from '../src/db/schema/index.ts';
@@ -87,9 +88,11 @@ describe('Levelaufstieg im Baubefehl', { timeout: 60_000 }, () => {
     expect(result).toMatchObject({ type: 'applied' });
     if (result?.type !== 'applied') return;
     expect(result.changes?.find((change) => change.entityType === 'island_progress')).toMatchObject({ data: { level: 4 } });
-    expect(result.changes?.filter((change) => change.entityType === 'island_event').map((change) => change.entityId)).toEqual(
-      [2, 3, 4].map((level) => islandEventId(world.islandId, levelOccasionKey(world.islandId, level))),
-    );
+    // Dazu die Entdeckung der Schilfwiese an Formlevel 4 (#204).
+    expect(result.changes?.filter((change) => change.entityType === 'island_event').map((change) => change.entityId)).toEqual([
+      ...[2, 3, 4].map((level) => islandEventId(world.islandId, levelOccasionKey(world.islandId, level))),
+      islandEventId(world.islandId, areaOccasionKey(world.islandId, 'schilfwiese')),
+    ]);
     const intents = await levelIntents(world);
     expect(intents.map((intent) => [intent.recipientPersonId, intent.payload]).sort()).toEqual(
       [[world.anna.personId, { level: 4 }], [world.philipp.personId, { level: 4 }]].sort(),

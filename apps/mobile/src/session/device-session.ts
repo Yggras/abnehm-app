@@ -213,6 +213,8 @@ function deviceState() {
       // Anfeuern schreibt die Anfeuerung samt Outbox-Operation (#123).
       const partner = createPartner({
         database, clock: appClock, refresh: appTodayRefresh, sync: () => engine.sync(), writer: syncWriter, newId,
+        // „Wir“ komponiert die Spiel-Beiträge, die `game.wirContributions` unten am Steckplatz anmeldet (#124).
+        wirContributions: appWirContributions.source,
         // In Test-Artefakten überlagert vom Transport-Fehlermodus wie die Sync-Auslöser (#114).
         observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline,
       });

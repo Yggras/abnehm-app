@@ -119,6 +119,37 @@ test('Ein Bau vor dem Besuch zählt nicht; der Besuch der Partnerin erscheint ni
   expect(screen.queryByRole('button', { name: /Belohnung/ })).toBeNull();
 });
 
+test('Entdeckung (#204): Die Schilfwiese steht unter „Neu auf der Insel“ und „Neue Gebiete“; Philipp holt den Steinfrosch ab, die Baupläne sind schon da', async () => {
+  const world = await openIslandScreen(clock, cleanups, {
+    energy: 5,
+    arrange: (w) => {
+      w.pullProgress(4, [2, 3, 4]);
+      w.areaOnServer(4);
+    },
+  });
+
+  await openEvents();
+
+  expect(section('Neu auf der Insel')).toBeOnTheScreen();
+  expect(screen.getByText('Neues Gebiet: Schilfwiese')).toBeOnTheScreen();
+  expect(section('Neue Gebiete')).toBeOnTheScreen();
+  expect(section('Offene Wünsche')).toBeNull();
+  expect(screen.getByText('Schilfwiese entdeckt')).toBeOnTheScreen();
+  expect(screen.getByText('Neue Baupläne für eure Insel: Steinmauer, Briefkasten, Seerosenteich und Schilfgras')).toBeOnTheScreen();
+  expect(screen.getByText('Für dein Lager: Steinfrosch')).toBeOnTheScreen();
+
+  await user.press(screen.getByRole('button', { name: 'Steinfrosch abholen' }));
+
+  expect(within(screen.getByTestId('sheet')).getByText('Steinfrosch liegt jetzt in deinem Lager')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Steinfrosch abholen' })).toBeNull();
+  expect(commandTypes(world)).toEqual(['markEventsSeen', 'claimEventReward']);
+  await openView('lager');
+  expect(within(screen.getByTestId('lager')).getByText('Steinfrosch')).toBeOnTheScreen();
+  // Die Entdeckungs-Baupläne kamen mit dem Ereignis; Philipp baut mit Bauen die Steinmauer.
+  await openView('bauen');
+  expect(screen.getByText('Steinmauer')).toBeOnTheScreen();
+});
+
 test('Die Route `momo` mit `view: \'ereignisse\'` öffnet das Sheet; ohne Ereignisse steht dort ein ruhiger Leerzustand', async () => {
   await openIslandScreen(clock, cleanups, { energy: 0 });
 
