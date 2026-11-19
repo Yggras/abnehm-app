@@ -73,12 +73,13 @@ async function hatch(backend: TestBackend, anna: WorldPerson, philipp: WorldPers
 
 /** Anna und Philipp mit geschlüpfter Insel; Philipp hat 4 Energie aus drei Tageszielen samt Bonus. */
 export async function builtWorld() {
-  const backend = await createTestBackend({ clock: createTestClock(worldStart) });
+  const clock = createTestClock(worldStart);
+  const backend = await createTestBackend({ clock });
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   const island = await hatch(backend, anna, philipp);
   await earnEnergy(backend, philipp, [worldToday]);
-  return { backend, anna, philipp, actor: philipp.device, ...island };
+  return { backend, clock, anna, philipp, actor: philipp.device, ...island };
 }
 
 /** Energie aus Tageszielen: je Tag drei Erfüllungen samt Bonus, also 4 Energie je Tag. Liefert die Tagesziele. */

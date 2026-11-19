@@ -73,9 +73,12 @@ describe('Schlüpfen', { timeout: 20_000 }, () => {
       );
       const [project] = values(recordsOf(changes, 'community_project'));
       expect(project).toMatchObject({ islandId, sequenceNumber: 1, templateKey: gameCatalog.projects[0]!.key, buildNeed: 20, natureNeed: 20, status: 'aktiv' });
-      expect(values(recordsOf(changes, 'island_event'))).toEqual([
+      // Derselbe Pull bringt schon die ersten Besucher des Inseltags (#202).
+      const events = values(recordsOf(changes, 'island_event'));
+      expect(events.filter((event) => event.type !== 'besuch')).toEqual([
         expect.objectContaining({ islandId, type: 'momo_geschluepft', status: 'abgeschlossen', occurredAt: hatchedAt.toISOString() }),
       ]);
+      expect(events.filter((event) => event.type === 'besuch')).toHaveLength(2);
       const [progress] = values(recordsOf(changes, 'island_progress'));
       expect(IslandProgress.parse(progress)).toMatchObject({
         islandId,

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CatalogKey, EntityId, Instant } from './base.ts';
+import { uuidV5 } from './ids.ts';
 import { IslandEventKind } from './island.ts';
 import { SharedEventType } from './wir.ts';
 
@@ -100,6 +101,48 @@ export const IslandEventRecord = z.strictObject({
   updatedAt: Instant,
 });
 export type IslandEventRecord = z.infer<typeof IslandEventRecord>;
+
+/**
+ * Stand eines Insel-Ereignisses für eine Person: gesehen und abgeholt. Er gehört der Person und ändert
+ * sich nur über `markEventsSeen` und `claimEventReward` (Spezifikation 0, Abschnitt 8). Der Server legt ihn
+ * mit dem Ereignis an, für die zuständige Person bzw. bei gemeinsamen Ereignissen für beide.
+ */
+export const IslandEventStateRecord = z
+  .strictObject({
+    islandEventId: EntityId,
+    personId: EntityId,
+    seenAt: Instant.nullable(),
+    claimedAt: Instant.nullable(),
+    createdAt: Instant,
+    updatedAt: Instant,
+  })
+  .refine((state) => state.claimedAt === null || state.seenAt !== null, {
+    message: 'Abgeholt ist auch gesehen',
+    path: ['seenAt'],
+  });
+export type IslandEventStateRecord = z.infer<typeof IslandEventStateRecord>;
+
+const islandEventNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b67';
+const islandEventStateNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b68';
+const eventRewardNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b69';
+
+/** ID eines Insel-Ereignisses aus Insel und Anlassschlüssel; eine wiederholte Erzeugung trifft dieselbe Zeile. */
+export function islandEventId(islandId: EntityId, occasionKey: string): EntityId {
+  return EntityId.parse(uuidV5(islandEventNamespace, `${islandId}:${occasionKey}`));
+}
+
+/** ID des Ereignisstands einer Person; Gerät und Server kennen sie ohne Rückfrage. */
+export function islandEventStateId(islandEventId: EntityId, personId: EntityId): EntityId {
+  return EntityId.parse(uuidV5(islandEventStateNamespace, `${islandEventId}:${personId}`));
+}
+
+/**
+ * ID der Belohnung eines Ereignisstands: Freischaltung oder Inselobjekt. Gerät und Server vergeben dieselbe,
+ * damit eine offline vorläufig abgeholte Belohnung auf zwei Geräten genau einmal entsteht.
+ */
+export function eventRewardId(islandEventStateId: EntityId): EntityId {
+  return EntityId.parse(uuidV5(eventRewardNamespace, islandEventStateId));
+}
 
 /** Belohnung eines Besuchers: ein Besucher-Bauplan für die Insel oder Deko ins Lager der Person. */
 export const VisitorReward = z.discriminatedUnion('type', [

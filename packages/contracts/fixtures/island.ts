@@ -1,6 +1,7 @@
 import {
   BuildObject,
   ChallengeStatus,
+  ClaimEventReward,
   CommonStage,
   DecideSharedAction,
   IslandEventKind,
@@ -8,6 +9,7 @@ import {
   IslandRecord,
   IslandRole,
   IslandState,
+  MarkEventsSeen,
   MomoAppearance,
   MomoForm,
   MomoMood,
@@ -20,7 +22,7 @@ import {
   UpgradeObject,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
-import { anna, command, coupling, island, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
+import { anna, command, coupling, island, islandEventState, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
 
 const progress = {
   islandId: island,
@@ -185,6 +187,21 @@ export const islandFixtures = {
       'über Stufe 3 hinaus': { commandId: command, islandObjectId: islandObject, toLevel: 4, localDate: today },
       'auf Stufe 1': { commandId: command, islandObjectId: islandObject, toLevel: 1, localDate: today },
       'ohne Zielstufe': { commandId: command, islandObjectId: islandObject, localDate: today },
+    },
+  }),
+  MarkEventsSeen: fixtures(MarkEventsSeen, {
+    valid: { 'ein eigenes Ereignis angesehen': { islandEventStateId: islandEventState } },
+    invalid: {
+      'Person aus dem Client': { islandEventStateId: islandEventState, personId: philipp },
+      'Zeitpunkt aus dem Client': { islandEventStateId: islandEventState, seenAt: now },
+      'ohne Ereignisstand': {},
+    },
+  }),
+  ClaimEventReward: fixtures(ClaimEventReward, {
+    valid: { 'Belohnung abholen': { islandEventStateId: islandEventState } },
+    invalid: {
+      'Belohnung aus dem Client': { islandEventStateId: islandEventState, reward: { type: 'bauplan', key: 'brunnen' } },
+      'ohne Ereignisstand': {},
     },
   }),
   PlacementTarget: fixtures(PlacementTarget, {
