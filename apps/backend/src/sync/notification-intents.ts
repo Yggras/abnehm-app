@@ -20,7 +20,7 @@ export async function insertNotificationIntent(tx: DbExecutor, raw: unknown): Pr
     type: intent.type,
     messageKey: intent.messageKey,
     payload: intent.payload,
-    status: 'offen',
+    status: 'offen' as const,
     createdAt: new Date(intent.createdAt),
     statusChangedAt: new Date(intent.createdAt),
   };

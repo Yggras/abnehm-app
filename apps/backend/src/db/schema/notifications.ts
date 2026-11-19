@@ -21,6 +21,14 @@ export const intentTypes = [
   'entkopplung',
 ] as const;
 
+/** Zustellstatus eines Intents (Spezifikation 5, Abschnitt 9). */
+export const intentStatuses = ['offen', 'unterdrueckt', 'keine_installation', 'zugestellt', 'fehlgeschlagen'] as const;
+export type IntentStatus = (typeof intentStatuses)[number];
+
+/** Status eines Zustellversuchs (Spezifikation 5, Abschnitt 9). */
+export const deliveryAttemptStatuses = ['geplant', 'gesendet', 'ticket_fehler', 'quittiert', 'quittung_fehler', 'aufgegeben'] as const;
+export type DeliveryAttemptStatus = (typeof deliveryAttemptStatuses)[number];
+
 /** Lokale Wanduhrzeit `HH:MM`. */
 const wallClock = (column: unknown) => sql`${column} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`;
 
@@ -117,10 +125,10 @@ export const notificationIntent = pgTable(
     recipientPersonId: ref('recipient_person_id')
       .notNull()
       .references(() => person.id),
-    type: text('type').notNull(),
+    type: text('type').$type<(typeof intentTypes)[number]>().notNull(),
     messageKey: text('message_key').notNull(),
     payload: json<Record<string, unknown>>('payload').notNull(),
-    status: text('status').notNull(),
+    status: text('status').$type<IntentStatus>().notNull(),
     createdAt: instant('created_at').notNull(),
     statusChangedAt: instant('status_changed_at').notNull(),
   },
@@ -128,7 +136,7 @@ export const notificationIntent = pgTable(
     check('notification_intent_type_check', oneOf(t.type, intentTypes)),
     check(
       'notification_intent_status_check',
-      oneOf(t.status, ['offen', 'unterdrueckt', 'keine_installation', 'zugestellt', 'fehlgeschlagen']),
+      oneOf(t.status, intentStatuses),
     ),
     check(
       'notification_intent_id_check',
@@ -151,7 +159,7 @@ export const deliveryAttempt = pgTable(
     recipientPersonId: ref('recipient_person_id')
       .notNull()
       .references(() => person.id),
-    status: text('status').notNull(),
+    status: text('status').$type<DeliveryAttemptStatus>().notNull(),
     expoTicketId: text('expo_ticket_id'),
     errorCode: text('error_code'),
     attemptCount: whole('attempt_count').notNull(),
@@ -165,7 +173,7 @@ export const deliveryAttempt = pgTable(
     unique('delivery_attempt_installation_uq').on(t.intentId, t.installationId),
     check(
       'delivery_attempt_status_check',
-      oneOf(t.status, ['geplant', 'gesendet', 'ticket_fehler', 'quittiert', 'quittung_fehler', 'aufgegeben']),
+      oneOf(t.status, deliveryAttemptStatuses),
     ),
     check('delivery_attempt_count_check', sql`${t.attemptCount} >= 0`),
   ],

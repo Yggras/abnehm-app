@@ -63,6 +63,12 @@ export function openDatabase(settings: DatabaseSettings): Database {
         connected.release(error instanceof Error ? error : true);
         throw error;
       }
+      // Beendet, während die Verbindung entstand (etwa ein Reconnect beim Herunterfahren): gleich zurückgeben,
+      // sonst hielte sie `pool.end()` auf.
+      if (stopped) {
+        connected.release();
+        return;
+      }
       client = connected;
     }
     function reconnectLater(error: unknown) {

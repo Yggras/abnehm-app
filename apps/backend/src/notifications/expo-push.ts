@@ -46,9 +46,12 @@ export type ReceiptsOutcome =
   | Readonly<{ type: 'failed'; code: string }>;
 
 export type ExpoPushPort = {
-  /** Höchstens `MAX_MESSAGES_PER_REQUEST` Nachrichten. Wirft nie; jeder Fehler ist ein Ausgang. */
+  /**
+   * Höchstens `MAX_MESSAGES_PER_REQUEST` Nachrichten. Jeder Netz- oder Expo-Fehler ist ein Ausgang;
+   * geworfen wird nur bei verletzter Vorbedingung (zu viele Nachrichten).
+   */
   send(messages: readonly ExpoPushMessage[]): Promise<SendOutcome>;
-  /** Höchstens `MAX_RECEIPT_IDS_PER_REQUEST` Ticket-IDs. Wirft nie. */
+  /** Höchstens `MAX_RECEIPT_IDS_PER_REQUEST` Ticket-IDs; wirft wie `send` nur bei verletzter Vorbedingung. */
   getReceipts(ticketIds: readonly string[]): Promise<ReceiptsOutcome>;
 };
 

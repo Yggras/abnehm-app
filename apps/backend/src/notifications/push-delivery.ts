@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, notExists, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, notInArray, or, sql } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
 import type { Instant } from '@abnehm/contracts/base';
@@ -10,7 +10,7 @@ import { notificationTexts } from '@abnehm/contracts/notification-texts';
 import type { SessionAuthenticator } from '../auth/auth-module.ts';
 import type { Database, DbExecutor } from '../database.ts';
 import { deliveryAttempt, notificationIntent, notificationSetting, pushInstallation } from '../db/schema/index.ts';
-import type { intentTypes } from '../db/schema/notifications.ts';
+import type { DeliveryAttemptStatus, intentTypes, IntentStatus } from '../db/schema/notifications.ts';
 import type { Job } from '../jobs/job-registry.ts';
 import { errorCodeForLog } from '../log.ts';
 import { NOTIFICATION_INTENT_CHANNEL } from '../sync/notification-intents.ts';
@@ -30,7 +30,7 @@ import { MAX_MESSAGES_PER_REQUEST, MAX_RECEIPT_IDS_PER_REQUEST, type ExpoPushMes
 // „Höchstens einmal“: Ein Versuch wird vor dem HTTP-Aufruf in eigener Transaktion `gesendet`. Nur ein
 // Ausgang, der nachweislich nichts gesendet hat, führt zurück nach `geplant`.
 
-export type IntentFinalStatus = 'unterdrueckt' | 'keine_installation' | 'zugestellt' | 'fehlgeschlagen';
+export type IntentFinalStatus = Exclude<IntentStatus, 'offen'>;
 type IntentType = (typeof intentTypes)[number];
 
 /** Der abgeschlossene Intent, wie Beobachter ihn sehen. */
@@ -68,11 +68,19 @@ const LOOP_INTERVAL_MS = 5_000;
 /** Intents je Planungstransaktion; Designwert. */
 const PLAN_BATCH = 50;
 
-/** Expo-Fehler, bei denen eine erneute Sendung sinnvoll ist: „Implement exponential backoff and slowly retry“. */
+/**
+ * Vorübergehende Fehler eines einzelnen Tickets, nach denen erneut gesendet wird (Spezifikation 5,
+ * Abschnitt 9): „Implement exponential backoff and slowly retry“ (Expo zu `MessageRateExceeded`). Expo
+ * nennt diesen Code unter den Quittungsfehlern; ob er auch im Ticket vorkommt, ist nicht belegt. Nach
+ * einer Quittung wird laut Spezifikation nie erneut gesendet.
+ */
 const TRANSIENT_TICKET_ERRORS = new Set(['MessageRateExceeded']);
 /** „The device cannot receive push notifications anymore“ (Expo, „Push ticket errors“). */
 const DEVICE_NOT_REGISTERED = 'DeviceNotRegistered';
-const TERMINAL_ATTEMPT_STATUSES = ['quittiert', 'quittung_fehler', 'aufgegeben'];
+const TERMINAL_ATTEMPT_STATUSES: DeliveryAttemptStatus[] = ['quittiert', 'quittung_fehler', 'aufgegeben'];
+
+/** Ob die Frist von 24 Stunden seit Erzeugung des Intents vorbei ist. */
+const deliveryWindowEnded = (intentCreatedAt: Date, at: Date) => at.getTime() > intentCreatedAt.getTime() + DELIVERY_WINDOW_MS;
 
 type IntentRow = typeof notificationIntent.$inferSelect;
 
@@ -103,14 +111,13 @@ export function createPushDelivery({
     return parsed.success ? parsed.data : null;
   }
 
-  /** Die Nachricht an ein Token; `null`, wenn der Textkatalog den Intent nicht darstellen kann. */
-  function messageFor(row: IntentRow, to: string): ExpoPushMessage | null {
+  /** Inhalt der Nachricht ohne Empfänger; `null`, wenn der Textkatalog den Intent nicht darstellen kann. */
+  function contentOf(row: IntentRow): Omit<ExpoPushMessage, 'to'> | null {
     const intent = parsedIntent(row);
     if (intent === null) return null;
     const rendered = notificationTexts.renderStored(intent.messageKey, intent.payload);
     if (rendered.type === 'contract_error') return null;
     return {
-      to,
       ...rendered.text,
       data: { intentId: intent.intentId, target: notificationTarget(intent) },
       ttl: DELIVERY_WINDOW_MS / 1000,
@@ -127,8 +134,8 @@ export function createPushDelivery({
       .where(and(eq(notificationIntent.intentId, row.intentId), eq(notificationIntent.status, 'offen')))
       .returning({ intentId: notificationIntent.intentId });
     if (updated.length === 0) return;
-    const type = row.type as IntentType;
-    const finished: FinishedIntent = { intentId: row.intentId, sourceEventId: row.sourceEventId, recipientPersonId: row.recipientPersonId, type, status, at };
+    const { intentId, sourceEventId, recipientPersonId, type } = row;
+    const finished: FinishedIntent = { intentId, sourceEventId, recipientPersonId, type, status, at };
     for (const observer of observers.get(type) ?? []) await observer(tx, finished);
   }
 
@@ -151,13 +158,13 @@ export function createPushDelivery({
         .for('update', { skipLocked: true });
 
       for (const row of rows) {
-        // Zu alt, oder der Katalog kann ihn nicht darstellen: Es gibt nichts mehr zuzustellen.
-        if (messageFor(row, '') === null) {
+        // Der Katalog kann ihn nicht darstellen, oder er ist zu alt: Es gibt nichts mehr zuzustellen.
+        if (contentOf(row) === null) {
           console.error('[push] Intent ohne darstellbaren Text:', row.type);
           await finish(tx, row, 'fehlgeschlagen', at);
           continue;
         }
-        if (at.getTime() - row.createdAt.getTime() > DELIVERY_WINDOW_MS) {
+        if (deliveryWindowEnded(row.createdAt, at)) {
           await finish(tx, row, 'fehlgeschlagen', at);
           continue;
         }
@@ -188,7 +195,7 @@ export function createPushDelivery({
               intentId: row.intentId,
               installationId: installation.id,
               recipientPersonId: row.recipientPersonId,
-              status: 'geplant',
+              status: 'geplant' as const,
               attemptCount: 0,
               createdAt: at,
               updatedAt: at,
@@ -209,14 +216,11 @@ export function createPushDelivery({
     tx.update(deliveryAttempt).set({ status: 'aufgegeben', errorCode, nextAttemptAt: null, updatedAt: at }).where(eq(deliveryAttempt.id, attemptId));
 
   /**
-   * Deaktiviert die Installation nach `DeviceNotRegistered`, sofern sie seit der Sendung nicht neu
-   * registriert wurde: Ein neues Token derselben Installation bleibt aktiv.
+   * Deaktiviert die Installation nach `DeviceNotRegistered` sofort (Spezifikation 5, Abschnitt 9). Hat das
+   * Gerät noch Erlaubnis und Token, aktiviert es die nächste Registrierung der App wieder (`register`).
    */
-  const deactivateInstallation = (tx: DbExecutor, installationId: string, sentAt: Date, at: Date) =>
-    tx
-      .update(pushInstallation)
-      .set({ active: false, updatedAt: at })
-      .where(and(eq(pushInstallation.id, installationId), lte(pushInstallation.updatedAt, sentAt)));
+  const deactivateInstallation = (tx: DbExecutor, installationId: string, at: Date) =>
+    tx.update(pushInstallation).set({ active: false, updatedAt: at }).where(eq(pushInstallation.id, installationId));
 
   /**
    * Schreibt fällige Versuche vor dem HTTP-Aufruf als `gesendet` fest (eigene Transaktion). `full`, wenn
@@ -242,14 +246,15 @@ export function createPushDelivery({
 
       const claimed: Claimed[] = [];
       for (const { attempt, intent, installation } of due) {
-        const message = messageFor(intent, installation.expoPushToken);
+        const content = contentOf(intent);
         // Die Installation kann seit der Planung deaktiviert, umgehängt oder abgemeldet worden sein.
         if (!installation.active || installation.personId !== attempt.recipientPersonId) await giveUp(tx, attempt.id, 'installation_inaktiv', at);
         else if (!valid.has(installation.sessionId)) await giveUp(tx, attempt.id, 'sitzung_ungueltig', at);
-        else if (at.getTime() - intent.createdAt.getTime() > DELIVERY_WINDOW_MS) await giveUp(tx, attempt.id, 'frist_abgelaufen', at);
+        else if (deliveryWindowEnded(intent.createdAt, at)) await giveUp(tx, attempt.id, 'frist_abgelaufen', at);
         else if (attempt.attemptCount >= MAX_SENDS) await giveUp(tx, attempt.id, 'versuche_erschoepft', at);
-        else if (message === null) await giveUp(tx, attempt.id, 'text_fehlt', at);
+        else if (content === null) await giveUp(tx, attempt.id, 'text_fehlt', at);
         else {
+          const message: ExpoPushMessage = { to: installation.expoPushToken, ...content };
           const sends = attempt.attemptCount + 1;
           await tx
             .update(deliveryAttempt)
@@ -265,7 +270,7 @@ export function createPushDelivery({
   /** Plant die nächste Sendung mit wachsendem Abstand, solange Versuche und Frist reichen. */
   async function retryLater(tx: DbExecutor, claimed: Claimed, status: 'geplant' | 'ticket_fehler', errorCode: string, at: Date) {
     const next = new Date(at.getTime() + RETRY_BASE_MS * 2 ** (claimed.sends - 1));
-    if (claimed.sends >= MAX_SENDS || next.getTime() > claimed.intentCreatedAt.getTime() + DELIVERY_WINDOW_MS) {
+    if (claimed.sends >= MAX_SENDS || deliveryWindowEnded(claimed.intentCreatedAt, next)) {
       await giveUp(tx, claimed.attemptId, errorCode, at);
       return;
     }
@@ -293,7 +298,7 @@ export function createPushDelivery({
             continue;
           }
           const code = ticket.details?.error ?? 'ticket_fehler';
-          if (code === DEVICE_NOT_REGISTERED) await deactivateInstallation(tx, entry.installationId, at, at);
+          if (code === DEVICE_NOT_REGISTERED) await deactivateInstallation(tx, entry.installationId, at);
           if (TRANSIENT_TICKET_ERRORS.has(code)) await retryLater(tx, entry, 'ticket_fehler', code, at);
           else await giveUp(tx, entry.attemptId, code, at);
         }
@@ -336,7 +341,7 @@ export function createPushDelivery({
     // Abholen vormerken, damit eine parallele Arbeitsschleife dieselben Tickets nicht abfragt.
     const claimed = await database.db.transaction(async (tx) => {
       const rows = await tx
-        .select({ id: deliveryAttempt.id, ticketId: deliveryAttempt.expoTicketId, installationId: deliveryAttempt.installationId, sentAt: deliveryAttempt.sentAt })
+        .select({ id: deliveryAttempt.id, ticketId: deliveryAttempt.expoTicketId, installationId: deliveryAttempt.installationId })
         .from(deliveryAttempt)
         .where(
           and(
@@ -369,7 +374,7 @@ export function createPushDelivery({
           continue;
         }
         const code = receipt.details?.error ?? 'quittung_fehler';
-        if (code === DEVICE_NOT_REGISTERED) await deactivateInstallation(tx, row.installationId, row.sentAt!, at);
+        if (code === DEVICE_NOT_REGISTERED) await deactivateInstallation(tx, row.installationId, at);
         await tx.update(deliveryAttempt).set({ status: 'quittung_fehler', errorCode: code, updatedAt: at }).where(terminal);
       }
     });
@@ -388,7 +393,7 @@ export function createPushDelivery({
         .where(
           and(
             eq(notificationIntent.status, 'offen'),
-            sql`exists ${tx.select({ one: sql`1` }).from(deliveryAttempt).where(attemptsOfIntent)}`,
+            exists(tx.select({ one: sql`1` }).from(deliveryAttempt).where(attemptsOfIntent)),
             notExists(
               tx.select({ one: sql`1` }).from(deliveryAttempt).where(and(attemptsOfIntent, notInArray(deliveryAttempt.status, TERMINAL_ATTEMPT_STATUSES))),
             ),

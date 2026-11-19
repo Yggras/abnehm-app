@@ -368,18 +368,35 @@ describe('ungültige Tokens', { timeout: 30_000 }, () => {
     expect(await pushStatusOf(world, encouragementId)).toBe('fehlgeschlagen');
   });
 
-  it('eine seit dem Senden neu registrierte Installation bleibt aktiv', async () => {
+  it('deaktiviert sofort, auch wenn die App seit dem Senden mit demselben Token neu registriert hat', async () => {
     const world = await pushWorld();
     await encourage(world);
     world.fake.receiptFor(annasToken, 'DeviceNotRegistered');
     await deliver(world);
 
+    // App-Start mit Erlaubnis: dieselbe Registrierung erneut (Spezifikation 5, Abschnitt 9).
     world.clock.advanceBy(minutes(1));
-    await registerInstallation(world.backend, world.anna.device, { ...world.annasIphone, expoPushToken: 'ExponentPushToken[anna-iphone-neu]' });
+    await registerInstallation(world.backend, world.anna.device, world.annasIphone);
     world.clock.advanceBy(minutes(14));
     await receipts(world);
 
-    expect(await installationActive(world.backend, world.annasIphone.installationKey)).toBe(true);
+    expect(await installationActive(world.backend, world.annasIphone.installationKey)).toBe(false);
+  });
+
+  it('die nächste Registrierung der App aktiviert die Installation wieder', async () => {
+    const world = await pushWorld();
+    await encourage(world);
+    world.fake.ticketErrorFor(annasToken, 'DeviceNotRegistered');
+    await deliver(world);
+    expect(await installationActive(world.backend, world.annasIphone.installationKey)).toBe(false);
+
+    await registerInstallation(world.backend, world.anna.device, { ...world.annasIphone, expoPushToken: 'ExponentPushToken[anna-iphone-neu]' });
+    const next = await encourage(world);
+    await deliver(world);
+
+    expect(world.fake.reached().filter((message) => message.data.intentId === next.intentId).map((message) => message.to)).toEqual([
+      'ExponentPushToken[anna-iphone-neu]',
+    ]);
   });
 });
 
