@@ -18,6 +18,7 @@ import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { fakeInvitationFlows, type FakeInvitationFlows } from '../online/testing/fake-invitation-flows';
 import type * as DeviceSession from '../session/device-session';
 import { setTestGate } from '../session/testing/test-gate';
+import { appWirContributions } from '../shell/app-wir';
 import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport } from '../sync';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner, encouragementEntity } from '.';
@@ -89,6 +90,7 @@ async function openPhilipp() {
   const registry = createSyncRegistry([...foundationSyncEntities, encouragementEntity]);
   const engine = createSyncEngine({ database, registry, transport, clock: mockClock, installationId: mockNewId() });
   const partner = createPartner({
+    wirContributions: appWirContributions.source,
     database, clock: mockClock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock: mockClock, newId: mockNewId }), newId: mockNewId,
     observeOnline: () => () => {},
     refresh: () => () => {},

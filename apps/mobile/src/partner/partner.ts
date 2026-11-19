@@ -5,6 +5,7 @@ import type { EncouragementKey } from '@abnehm/contracts/partner';
 import { LocalDatabaseClosedError, type LocalDatabase, type ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { readPartnerCache } from '../partner-cache';
+import type { WirContributionsSlot } from '../shell/app-wir';
 import type { Refresh, Source } from '../shell/followed-source';
 import type { TodaySource } from '../shell/today-registry';
 import { readLastPullAt, type SyncWriter } from '../sync';
@@ -13,6 +14,7 @@ import { readCouplingState, type CouplingState } from './coupling-state';
 import { readEncourageSheet, sendEncouragement, type EncourageOutcome, type EncourageSheet } from './encouragement';
 import { partnerCardOf, wirPartnerOf, type PartnerReading, type WirPartner } from './partner-view';
 import { changeSharing, readSharing, type Sharing, type SharingChange, type SharingOutcome } from './sharing';
+import { wirSharedOf, type WirShared } from './wir-shared';
 
 // Partnerbereich der App (Spezifikation 5, Abschnitte 2 und 3; #121) über der Datenbank eines Kontos.
 // Er liest den Partner ausschließlich aus dem widerrufbaren Partnercache (#106): Jede Pull-Seite mit
@@ -33,6 +35,11 @@ export type PartnerDependencies = Readonly<{
   /** Outbox des Fundaments: Anfeuern merkt `sendEncouragement` in der Transaktion der Anfeuerung vor (#123). */
   writer: SyncWriter;
   newId: () => EntityId;
+  /**
+   * Beiträge von Spezifikation 4 an „Wir“ über den Steckplatz der App (`appWirContributions.source`); `null`,
+   * solange keine `WirContributionSource` angemeldet ist (#124).
+   */
+  wirContributions: Source<WirContributionsSlot>;
 }>;
 
 /** Sheet `partner.encourage` samt Netzstatus, der die Bestätigung bestimmt; `loading` bis zur ersten Lesung. */
@@ -44,6 +51,8 @@ export type SharingView = Readonly<{ type: 'loading' }> | (Exclude<Sharing, { ty
 export type Partner = Readonly<{
   /** Partnerzustand für „Wir“: lädt, solo oder gekoppelt mit Übersicht. */
   wir: Source<WirPartner>;
+  /** Gemeinsame Bereiche von „Wir“: Vorgänge, Challenge, Gemeinschaftsprojekt und „Neu bei euch“ (#124). */
+  shared: Source<WirShared>;
   /** Beitrag `partner` für „Heute“. */
   todayCard: TodaySource<'partner'>;
   /** Pull-to-Refresh auf „Wir“: startet den Sync. */
@@ -115,6 +124,31 @@ function followedReading<R, V>(
   };
 }
 
+/**
+ * Gemeinsame Bereiche von „Wir“ aus den Spiel-Beiträgen: neu bei jedem Zustand der Quelle und im Minutentakt,
+ * weil „vor X Min.“, Restlaufzeit und die Kalenderwoche auch ohne neuen Beitrag weiterlaufen. Weitere
+ * gemeinsame Ereignisse, etwa Anfeuerungen (#126), kommen als zweites Argument von `wirSharedOf` hinzu.
+ */
+function followedShared({ wirContributions, clock, refresh }: Pick<PartnerDependencies, 'wirContributions' | 'clock' | 'refresh'>): Source<WirShared> {
+  return {
+    subscribe(listener) {
+      let state: { value: WirContributionsSlot } | undefined;
+      const emit = () => {
+        if (state !== undefined) listener(wirSharedOf(state.value, [], clock.read()));
+      };
+      const stopContributions = wirContributions.subscribe((next) => {
+        state = { value: next };
+        emit();
+      });
+      const stopRefresh = refresh(emit);
+      return () => {
+        stopContributions();
+        stopRefresh();
+      };
+    },
+  };
+}
+
 export function createPartner(dependencies: PartnerDependencies): Partner {
   const { database, clock, sync, writer, newId } = dependencies;
   let invitationCreated = false;
@@ -129,6 +163,7 @@ export function createPartner(dependencies: PartnerDependencies): Partner {
   );
   return {
     wir,
+    shared: followedShared(dependencies),
     todayCard: { subscribe: (listener) => wir.subscribe((partner) => listener(partnerCardOf(partner))) },
     refresh: sync,
     encourageSheet,
