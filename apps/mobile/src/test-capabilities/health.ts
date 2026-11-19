@@ -2,7 +2,8 @@ import type { Clock } from '@abnehm/clock';
 
 import type { HealthConnectOutcome, HealthPlatformAdapter } from '../health';
 import { appHealthImport } from '../health/app-health';
-import { applyHealthScenario, createFakeHealthPlatform, healthScenarios, type FakeHealthPlatform, type HealthScenario } from '../health/testing/fake-platform';
+import { applyHealthScenario, createFakeHealthPlatform, type FakeHealthPlatform } from '../health/testing/fake-platform';
+import type { TestHealthScenario } from './health-scenarios';
 
 // Health-Attrappe in Test-Artefakten (Spezifikation 3, Abschnitt 9; #183): Development- und E2E-Build
 // stellen sie per Link `health?szenario=<name>`. Bis zum ersten Link reicht der Adapter jeden Aufruf an
@@ -13,10 +14,6 @@ import { applyHealthScenario, createFakeHealthPlatform, healthScenarios, type Fa
 // `health?szenario=geraet` stellt zurück auf die Plattform des Builds (Health Connect bzw. HealthKit) und
 // verbindet sie: der Gerätetest der echten Adapter (#195), solange Onboarding-Schritt (#189) und
 // Einstellungsseite (#190) fehlen.
-
-/** Szenarien des Links `health`: die der Attrappe und `geraet`, die echte Plattform des Builds. */
-export const testHealthScenarios = [...healthScenarios, 'geraet'] as const;
-export type TestHealthScenario = HealthScenario | 'geraet';
 
 export type TestHealth = Readonly<{
   /** Umhüllt den Adapter der Plattform; einmal je Prozess. */

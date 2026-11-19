@@ -9,16 +9,17 @@ import type {
   RecordResult,
 } from 'react-native-health-connect';
 
-import type {
-  HealthAccessState,
-  HealthAvailability,
-  HealthChanges,
-  HealthDataType,
-  HealthOrigin,
-  HealthPlatformAdapter,
-  HealthRecordOf,
-  HealthWeightRecord,
-  HealthWorkoutRecord,
+import {
+  daysBefore,
+  type HealthAccessState,
+  type HealthAvailability,
+  type HealthChanges,
+  type HealthDataType,
+  type HealthOrigin,
+  type HealthPlatformAdapter,
+  type HealthRecordOf,
+  type HealthWeightRecord,
+  type HealthWorkoutRecord,
 } from './platform';
 
 // Health-Connect-Adapter (Spezifikation 3, Abschnitt 6; #195): die Android-Implementierung des
@@ -33,39 +34,47 @@ import type {
 export type HealthConnectClient = Readonly<{
   getSdkStatus(): Promise<number>;
   initialize(): Promise<boolean>;
-  requestPermission(permissions: Permission[]): Promise<readonly { accessType: string; recordType: string }[]>;
-  getGrantedPermissions(): Promise<readonly { accessType: string; recordType: string }[]>;
+  requestPermission(permissions: Permission[]): Promise<readonly GrantedPermission[]>;
+  getGrantedPermissions(): Promise<readonly GrantedPermission[]>;
   readRecords<T extends RecordTypeOf<HealthDataType>>(recordType: T, options: ReadRecordsOptions): Promise<ReadRecordsResult<T>>;
   getChanges(request: GetChangesRequest): Promise<GetChangesResults>;
 }>;
 
+/** Eine erteilte Berechtigung, wie die Bibliothek sie meldet. */
+type GrantedPermission = Readonly<{ accessType: string; recordType: string }>;
+
 export type HealthConnectPlatformOptions = Readonly<{ client: HealthConnectClient; clock: Clock }>;
 
-const recordTypes = { workout: 'ExerciseSession', weight: 'Weight' } as const;
-type RecordTypeOf<T extends HealthDataType> = (typeof recordTypes)[T];
+type RecordTypeOf<T extends HealthDataType> = T extends 'workout' ? 'ExerciseSession' : 'Weight';
+
+/** Je Datentyp der Record-Typ von Health Connect und seine Normalisierung. */
+type Kind<T extends HealthDataType> = Readonly<{ recordType: RecordTypeOf<T>; normalize(record: RecordResult<RecordTypeOf<T>>): HealthRecordOf<T> | null }>;
+const kinds: { readonly [T in HealthDataType]: Kind<T> } = {
+  workout: { recordType: 'ExerciseSession', normalize: (record) => normalizeWorkout(record) },
+  weight: { recordType: 'Weight', normalize: (record) => normalizeWeight(record) },
+};
 
 /** Nur Lesen von Trainings und Gewicht; kein Schreiben, keine ältere Historie, kein Hintergrund (#199). */
 const readPermissions: Permission[] = [
-  { accessType: 'read', recordType: recordTypes.workout },
-  { accessType: 'read', recordType: recordTypes.weight },
+  { accessType: 'read', recordType: kinds.workout.recordType },
+  { accessType: 'read', recordType: kinds.weight.recordType },
 ];
 
 /**
- * `SdkAvailabilityStatus` der Bibliothek. Unter Android 14 fehlt Health Connect, bis die App aus dem Play
+ * `SdkAvailabilityStatus` der Bibliothek. Bis Android 13 fehlt Health Connect, bis die App aus dem Play
  * Store installiert bzw. aktualisiert ist (`SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED`); ab Android 14 ist
  * es Teil des Systems (https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started).
  */
 const sdkStatus = { available: 3, providerUpdateRequired: 2 } as const;
 
 /**
- * Fehlercode der Bibliothek für eine `IllegalArgumentException` (`ExceptionsUtils.kt`). So meldet Health
- * Connect einen ungültigen Token; Android behandelt „invalid or expired Changes tokens“ gleich
- * (https://developer.android.com/health-and-fitness/guides/health-connect/develop/sync-data).
+ * Fehlercode der Bibliothek für eine `IllegalArgumentException` (`ExceptionsUtils.kt`). Dass Health Connect
+ * einen ungültigen Token so meldet, ist nicht belegt; der Gerätetest prüft es. Android behandelt „invalid
+ * or expired Changes tokens“ gleich (https://developer.android.com/health-and-fitness/guides/health-connect/develop/sync-data).
  */
 const invalidArgument = 'ARGUMENT_VALIDATION_ERROR';
 
-const dayMs = 86_400_000;
-const expired = { upserts: [], deletedKeys: [], cursor: null, cursorExpired: true } as const;
+const expiredChanges = { upserts: [], deletedKeys: [], cursor: null, cursorExpired: true } as const;
 
 export function createHealthConnectPlatform({ client, clock }: HealthConnectPlatformOptions): HealthPlatformAdapter {
   let ready: Promise<void> | null = null;
@@ -95,7 +104,7 @@ export function createHealthConnectPlatform({ client, clock }: HealthConnectPlat
     const records: RecordResult<RecordTypeOf<T>>[] = [];
     let pageToken: string | undefined;
     do {
-      const result = await client.readRecords(recordTypes[type], { timeRangeFilter, ...(pageToken === undefined ? {} : { pageToken }) });
+      const result = await client.readRecords(kinds[type].recordType, { timeRangeFilter, ...(pageToken === undefined ? {} : { pageToken }) });
       records.push(...result.records);
       pageToken = result.pageToken === '' || result.pageToken == null ? undefined : result.pageToken;
     } while (pageToken !== undefined);
@@ -120,7 +129,8 @@ export function createHealthConnectPlatform({ client, clock }: HealthConnectPlat
       }
       if (page.changesTokenExpired) return null;
       for (const change of page.upsertionChanges) {
-        const record = normalize(type, change.record);
+        // Ein Token gilt für genau einen Record-Typ (`getChangesToken` je Typ).
+        const record = kinds[type].normalize(change.record as unknown as RecordResult<RecordTypeOf<T>>);
         if (record !== null) {
           touched.delete(record.externalKey);
           touched.set(record.externalKey, record);
@@ -152,22 +162,22 @@ export function createHealthConnectPlatform({ client, clock }: HealthConnectPlat
       await initialized();
       if (cursor !== null) {
         const changes = await drain(type, cursor);
-        if (changes === null) return expired;
+        if (changes === null) return expiredChanges;
         const upserts = [...changes.touched.values()].filter((record): record is HealthRecordOf<T> => record !== null);
         const deletedKeys = [...changes.touched].filter(([, record]) => record === null).map(([key]) => key);
         return { upserts, deletedKeys, cursor: changes.next, cursorExpired: false };
       }
       // Erste Abfrage: Token je Typ vor dem Lesen holen, damit nichts dazwischen verloren geht; der Zeitraum
       // ist immer begrenzt. Ohne Token gibt die Bibliothek einen neuen aus (`getChangesToken`).
-      const fresh = await client.getChanges({ recordTypes: [recordTypes[type]] });
+      const tokenResponse = await client.getChanges({ recordTypes: [kinds[type].recordType] });
       const records = await readAll(type, { operator: 'after', startTime: since });
-      const upserts = records.map((record) => normalize(type, record)).filter((record) => record !== null);
-      return { upserts, deletedKeys: [], cursor: fresh.nextChangesToken, cursorExpired: false };
+      const upserts = records.map((record) => kinds[type].normalize(record)).filter((record) => record !== null);
+      return { upserts, deletedKeys: [], cursor: tokenResponse.nextChangesToken, cursorExpired: false };
     },
     async recentOrigins(days) {
       await initialized();
       const end = clock.read().instant;
-      const timeRangeFilter = { operator: 'between', startTime: new Date(Date.parse(end) - days * dayMs).toISOString(), endTime: end } as const;
+      const timeRangeFilter = { operator: 'between', startTime: daysBefore(end, days), endTime: end } as const;
       const origins = new Map<string, { sourceApp: HealthOrigin['sourceApp']; workouts: number; weights: number }>();
       const count = (sourceApp: HealthOrigin['sourceApp'], field: 'workouts' | 'weights') => {
         const entry = origins.get(sourceApp.id) ?? { sourceApp, workouts: 0, weights: 0 };
@@ -190,7 +200,7 @@ export function createHealthConnectPlatform({ client, clock }: HealthConnectPlat
   };
 }
 
-function accessOf(permissions: readonly { accessType: string; recordType: string }[], none: HealthAccessState): HealthAccessState {
+function accessOf(permissions: readonly GrantedPermission[], none: HealthAccessState): HealthAccessState {
   const ours = permissions.some((permission) => readPermissions.some((read) => read.accessType === permission.accessType && read.recordType === permission.recordType));
   return ours ? 'erteilt' : none;
 }
@@ -203,10 +213,6 @@ function codeOf(error: unknown): unknown {
 
 type Metadata = Readonly<{ id?: string | null; dataOrigin?: string | null }>;
 type ZoneOffsetResult = Readonly<{ totalSeconds: number }> | null | undefined;
-
-function normalize<T extends HealthDataType>(type: T, record: unknown): HealthRecordOf<T> | null {
-  return (type === 'workout' ? normalizeWorkout(record as RecordResult<'ExerciseSession'>) : normalizeWeight(record as RecordResult<'Weight'>)) as HealthRecordOf<T> | null;
-}
 
 /** Ein Training; die Dauer ist Ende minus Beginn der Sitzung. Aktive Kalorien schreibt Google Health nicht nach Health Connect. */
 function normalizeWorkout(record: RecordResult<'ExerciseSession'>): HealthWorkoutRecord | null {

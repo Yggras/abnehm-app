@@ -7,7 +7,7 @@ import type { RouteTarget } from '@abnehm/contracts/routes';
 
 import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
-import { testHealthScenarios, type TestHealthScenario } from './health';
+import { testHealthScenarios, type TestHealthScenario } from './health-scenarios';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
 import { momoGalleryViews, type MomoGalleryView } from './momo-gallery/views';

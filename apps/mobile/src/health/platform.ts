@@ -1,4 +1,4 @@
-import type { Instant } from '@abnehm/contracts/base';
+import { Instant } from '@abnehm/contracts/base';
 import type { ImportOrigin } from '@abnehm/contracts/trackers';
 
 // Health-Plattform-Adapter (Spezifikation 3, Abschnitt 2; #183): die einzige neue Naht des Bereichs,
@@ -99,6 +99,13 @@ export interface HealthPlatformAdapter {
   backgroundCapability(): Promise<HealthBackgroundCapability>;
   /** Meldet den Handler für Weckungen im Hintergrund an. */
   registerBackground(handler: HealthBackgroundHandler): void;
+}
+
+const dayMs = 86_400_000;
+
+/** Zeitpunkt `days` mal 24 Stunden vor `at`: Zeiträume von Import, Abgleich und Quell-Apps. */
+export function daysBefore(at: Instant, days: number): Instant {
+  return Instant.parse(new Date(Date.parse(at) - days * dayMs).toISOString());
 }
 
 /**
