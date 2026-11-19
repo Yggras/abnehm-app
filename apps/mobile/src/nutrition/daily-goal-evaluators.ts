@@ -1,6 +1,6 @@
 import { dailyIntakeKcal } from '@abnehm/contracts/nutrition';
 
-import { bausteinEvaluation, isDayClosed, type BausteinEvaluator, type CheckInEvaluator, type DayFactsReader } from '../daily-goals';
+import { bausteinEvaluation, gradedState, isDayClosed, type BausteinEvaluator, type CheckInEvaluator, type DayFactsReader } from '../daily-goals';
 import { intakeByDay } from './entry-repository';
 
 // Beiträge der Ernährung zur Baustein-Auswertung und zum Tages-Check-in (Spezifikation 2, Abschnitt 10;
@@ -30,8 +30,7 @@ const mealsRecorded: BausteinEvaluator<'ernaehrung_erfasst', NutritionDayFacts> 
   readFacts: readNutritionDayFacts,
   evaluate(snapshot, at, { recordedMealCategories }) {
     const { minimumMealCategories } = snapshot;
-    const state = recordedMealCategories === 0 ? 'offen' : recordedMealCategories < minimumMealCategories ? 'teilweise' : 'erfuellt';
-    return bausteinEvaluation(state, isDayClosed(snapshot, at), { type: snapshot.type, recordedMealCategories, minimumMealCategories });
+    return bausteinEvaluation(gradedState(recordedMealCategories, minimumMealCategories), isDayClosed(snapshot, at), { type: snapshot.type, recordedMealCategories, minimumMealCategories });
   },
 };
 
