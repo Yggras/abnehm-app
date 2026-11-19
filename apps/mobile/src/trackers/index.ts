@@ -8,6 +8,13 @@
 export { appSportWeeks, appTrackers, appWeightDetail, useAppTrackers } from './app-trackers';
 export { createTrackers, type TrackerDependencies, type Trackers } from './trackers';
 export { InvalidTrackerInputError } from './invalid-input';
+export {
+  sportCheckInMessageKey,
+  trackerDailyGoals,
+  type SportDayFacts,
+  type WaterDayFacts,
+  type WeightDayFacts,
+} from './daily-goal-evaluators';
 export type { HealthImportBatch } from './health-import';
 export { sportEntryEntity } from './sport-entity';
 export { waterEntryEntity } from './water-entity';

@@ -19,12 +19,13 @@ import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db
 import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import type { Refresh, Source } from '../shell/followed-source';
 import { updateOwnPerson, type SyncWriter } from '../sync';
+import { createBudgetSuggestions, type BudgetSuggestionCheck, type BudgetSuggestionReaders } from './budget-suggestion';
 import { createDailyGoalMaterialization } from './daily-goals';
 import { calculatorInput, keptSuggestedBudget, previewGoals, type GoalDraft } from './goal-draft';
 import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
-import { createPlanToday, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
+import { createPlanToday, noBudgetNotices, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
 import { freeWeeklyPlan, standardWeeklyPlan, type WeekChoice, type WeekChoiceError, type WeeklyPlanDayError, type WeeklyPlanInput } from './weekly-plan';
 
 export type PlanDependencies = Readonly<{
@@ -139,6 +140,15 @@ export type Plan = Readonly<{
    */
   materializeMissingDays: MissingDaysHook;
   /**
+   * Budgetvorschlag prüfen (Spezifikation 1, Abschnitt 7), beim App-Start und bei jeder Rückkehr in den
+   * Vordergrund, höchstens einmal je lokalem Tag. Nach drei Wochen mit genügend Gewichtsdaten legt es einen
+   * offenen Vorschlag an, das Budget um 150 kcal zu senken oder anzuheben, wenn der Gewichtstrend der letzten
+   * 21 Tage bis gestern deutlich vom gewählten Tempo abweicht. Gewichtstrend
+   * und Tagesaufnahme liest es nur über die Ports aus den Spezifikationen 2 und 3. Der Vorschlag entsteht
+   * samt Upsert in einer lokalen Transaktion; ohne eigene Person tut es nichts.
+   */
+  checkBudgetSuggestion(readers: BudgetSuggestionReaders): Promise<BudgetSuggestionCheck>;
+  /**
    * „Heute“-Beiträge `momo.daily_goals` und `nutrition.budget` (Spezifikation 1, Abschnitt 6). Sie werten
    * mit derselben Registry aus wie der Persistenzdienst der Tagesziele.
    */
@@ -153,6 +163,7 @@ export type Plan = Readonly<{
 export function createPlan(dependencies: PlanDependencies): Plan {
   const { database, clock, writer, persistence, weightRecorder, newId } = dependencies;
   const dailyGoals = createDailyGoalMaterialization({ clock, writer, persistence });
+  const budgetSuggestions = createBudgetSuggestions({ database, clock, writer });
 
   return {
     preview: (draft) => previewGoals(draft, readClock().today),
@@ -265,7 +276,9 @@ export function createPlan(dependencies: PlanDependencies): Plan {
 
     materializeMissingDays: dailyGoals.missingDaysHook,
 
-    today: (evaluator) => createPlanToday({ database, clock, dailyGoals: evaluator }),
+    checkBudgetSuggestion: (readers) => budgetSuggestions.check(readers),
+
+    today: (evaluator) => createPlanToday({ database, clock, dailyGoals: evaluator }, { ...noBudgetNotices, budgetSuggestion: budgetSuggestions.notice }),
   };
 
   /** Heute, morgen und der Zeitpunkt aus einer Ablesung der Uhr. */
@@ -299,13 +312,15 @@ export function createPlan(dependencies: PlanDependencies): Plan {
 
   /**
    * Legt die Zielversion an oder ersetzt die desselben Tags. Gleicht sie der an ihrem `validFrom` ohnehin
-   * gültigen Fassung, entsteht nichts, und das Ergebnis ist `false`.
+   * gültigen Fassung, entsteht nichts, und das Ergebnis ist `false`. Eine neue Fassung setzt einen offenen
+   * Budgetvorschlag in derselben Transaktion auf `ueberholt` (Spezifikation 1, Abschnitt 7).
    */
   function saveGoalVersion(tx: TransactionContext, personId: EntityId, goal: CreateGoalVersion, at: Instant): boolean {
     const inForce = readGoalVersionOn(tx, personId, goal.validFrom);
     if (inForce !== undefined && sameValues({ ...inForce.values, validFrom: goal.validFrom }, goal)) return false;
     const id = goalVersionId(personId, goal.validFrom);
     writeGoalVersion(tx, id, personId, goal, at);
+    budgetSuggestions.supersede(tx, personId, at);
     writer.command(tx, {
       type: 'createGoalVersion',
       businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),

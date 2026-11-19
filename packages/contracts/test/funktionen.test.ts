@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { AreaKey, EntityId, LocalDate, localDateAfter, ServerVersion, weekdayOf } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, localDateAfter, localDaysBetween, ServerVersion, weekdayOf } from '../src/base.ts';
 import { contributionState, type ContributionState } from '../src/contribution.ts';
 import { sharedActionDecisionKey, sharedActionRequestKey } from '../src/island.ts';
 import { NotificationIntent, notificationTarget } from '../src/notifications.ts';
@@ -86,6 +86,19 @@ describe('localDateAfter', () => {
 
   it('kennt keine Zeitumstellung: Ein lokaler Tag ist ein Datum, kein Zeitpunkt', () => {
     expect(localDateAfter(LocalDate.parse('2026-10-24'), 2)).toBe('2026-10-26');
+  });
+});
+
+describe('localDaysBetween', () => {
+  it.each([
+    ['2026-10-14', '2026-10-14', 0],
+    ['2026-09-23', '2026-10-13', 20],
+    ['2028-02-28', '2028-03-01', 2],
+    ['2026-12-31', '2027-01-01', 1],
+    ['2026-10-14', '2026-09-30', -14],
+    ['2026-10-24', '2026-10-26', 2],
+  ] as const)('von %s bis %s sind %s Tage, auch über Monats-, Jahres-, Schaltjahresgrenzen und Zeitumstellung', (from, to, expected) => {
+    expect(localDaysBetween(LocalDate.parse(from), LocalDate.parse(to))).toBe(expected);
   });
 });
 

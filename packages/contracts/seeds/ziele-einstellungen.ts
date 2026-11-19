@@ -43,8 +43,11 @@ const soloInputs = {
   weeklySportTargetMinutes: 150,
 } as const satisfies Omit<GoalCalculatorInput, 'calculationDate' | 'ageYears'>;
 
-/** Eine Zielversion aus dem Zielrechner, gültig ab `validFrom`, mit der ID aus Person und Tag. */
-function calculatedGoalVersion(validFrom: LocalDate, createdAt: string, inputs: GoalInputs): SeedEntity {
+/**
+ * Eine Zielversion aus dem Zielrechner, gültig ab `validFrom`, mit der ID aus Person und Tag. Die Szenarien
+ * des Budgetvorschlags (#150) nutzen sie ebenfalls.
+ */
+export function calculatedGoalVersion(validFrom: LocalDate, createdAt: string, inputs: GoalInputs): SeedEntity {
   const input: GoalCalculatorInput = { ...soloInputs, ...inputs, calculationDate: validFrom, ageYears: ageOn(birthDate, validFrom) };
   const calculation = calculateGoals(input);
   if (calculation.type === 'ungueltig') throw new Error(`Zielversion ab ${validFrom}: ${calculation.errors.join(', ')}`);

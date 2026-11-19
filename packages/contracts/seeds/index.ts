@@ -1,3 +1,4 @@
+import { budgetvorschlagManifests } from './budgetvorschlag.ts';
 import { einladungNachEntkopplungManifest } from './einladung-nach-entkopplung.ts';
 import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
@@ -38,6 +39,7 @@ export { canonicalJson, canonicalRows, dependencyOrder, withoutDerivedColumns } 
 export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts, vorDemSchluepfenParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedImageKeys, seedInstallations, seedInviteCodes, seedPassword } from './ids.ts';
+export { budgetvorschlagBudget, budgetvorschlagReadings } from './budgetvorschlag.ts';
 export { ServerClockRequest, serverClockRoutePath } from './server-clock.ts';
 export { uncoupledState, uncouplingRequestOf, type SeedUncouplingRequest } from './nach-entkopplung.ts';
 
@@ -60,4 +62,5 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   veralteter_partnerstand: veralteterPartnerstandManifest,
   ...syncSzenarioManifests,
   ...tageszielManifests,
+  ...budgetvorschlagManifests,
 };

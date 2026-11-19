@@ -37,6 +37,7 @@ import { createPartnerProjections } from './partner-projections/projections.ts';
 import type { AnyPartnerSummaryProjector } from './partner-projections/projector.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
+import { budgetSuggestionEntity } from './plan/budget-suggestion-entity.ts';
 import { createGoalVersionCommand, goalVersionEntity } from './plan/goal-versions.ts';
 import { postgresPlanReader } from './plan/plan-reader.ts';
 import { createWeeklyPlanVersionCommand, weeklyPlanVersionEntity } from './plan/weekly-plan-versions.ts';
@@ -119,9 +120,11 @@ export function createBackend({
   sync.registerPrePullStep('island_events', generateIslandEvents);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
-  // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.
+  // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle; der Budgetvorschlag als
+  // Upsert innerhalb der eigenen Eigentumsgrenze (#150).
   sync.registerEntity(goalVersionEntity);
   sync.registerEntity(weeklyPlanVersionEntity);
+  sync.registerEntity(budgetSuggestionEntity);
   sync.registerCommand(createGoalVersionCommand);
   sync.registerCommand(createWeeklyPlanVersionCommand);
   sync.registerEntity(dailyGoalCompletionEntity);

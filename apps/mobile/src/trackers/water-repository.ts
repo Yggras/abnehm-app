@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 
 import { EntityId, LocalDate, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import type { WaterEntryFacts } from '@abnehm/contracts/tracker-rules';
+import { countedWaterMl, type WaterEntryFacts } from '@abnehm/contracts/tracker-rules';
 import type { WaterEntryUpsert } from '@abnehm/contracts/trackers';
 
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -46,6 +46,11 @@ export function readWaterEntry(tx: ReadContext, entityId: EntityId): StoredWater
     deletedAt: row.deletedAt as Instant | null,
     serverVersion: row.serverVersion as ServerVersion | null,
   };
+}
+
+/** Gezählte Wassermenge einer Person an einem lokalen Tag in ml, nach der Zählregel der Tracker-Regeln. */
+export function countedWaterMlOfDay(tx: ReadContext, personId: EntityId, localDate: LocalDate): number {
+  return countedWaterMl(waterEntriesOfDay(tx, personId, localDate), localDate);
 }
 
 /** Alle Einträge einer Person an einem lokalen Tag, auch gelöschte; die Zählregel filtert selbst. */

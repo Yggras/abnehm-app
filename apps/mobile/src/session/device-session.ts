@@ -35,7 +35,7 @@ import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
 import { PartnerStep } from '../partner/PartnerStep';
-import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { appGoalSettings, appPlan, budgetSuggestionEntity, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 // Direkt aus den Fachdateien, nicht über `../settings`: Das Sammelmodul exportiert Bildschirme, die über
 // `useSessionGate` wieder diese Datei laden (Importzyklus).
 import type { AccountPorts } from '../settings/AccountProvider';
@@ -44,11 +44,12 @@ import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
 import { appTodayRegistry, followTodayContribution, followTodayPerson } from '../shell/app-today';
 import { appWirContributions } from '../shell/app-wir';
+import { runOnForegroundEntry } from '../shell/foreground-entry';
 import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { appSportWeeks, appTrackers, appWeightDetail, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
+import { appSportWeeks, appTrackers, appWeightDetail, createTrackers, sportEntryEntity, trackerDailyGoals, waterEntryEntity, weightEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -66,7 +67,7 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
   weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity, encouragementEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
@@ -149,11 +150,11 @@ function deviceState() {
     onAccountOpened(database) {
       const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError });
       // Baustein-Auswertung und Tages-Check-in (Spezifikation 0, Abschnitt 3): Die Ernährung registriert
-      // „Ernährung erfasst“, „Im Kalorienbudget“ und den Check-in `ernaehrung` (#166); Wasser, Sport und
-      // Gewicht folgen mit Spezifikation 3 (#178).
+      // „Ernährung erfasst“, „Im Kalorienbudget“ und den Check-in `ernaehrung` (#166), das Tracker-Modul
+      // Wasserziel, Sporteinheit, Gewogen und die Check-ins `wasser`, `sport` und `gewicht` (#178).
       const dailyGoalRegistry = createDailyGoalRegistry({
-        bausteine: [...nutritionDailyGoals.bausteine],
-        checkIns: [...nutritionDailyGoals.checkIns],
+        bausteine: [...nutritionDailyGoals.bausteine, ...trackerDailyGoals.bausteine],
+        checkIns: [...nutritionDailyGoals.checkIns, ...trackerDailyGoals.checkIns],
       });
       const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
@@ -241,6 +242,12 @@ function deviceState() {
           observeTicks: appTodayRefresh,
           onError,
         }),
+        // Budgetvorschlag prüfen: beim App-Start und bei jeder Rückkehr in den Vordergrund, höchstens einmal je
+        // lokalem Tag; Gewichtstrend und Tagesaufnahme über die Ports der Spezifikationen 2 und 3 (#150).
+        runOnForegroundEntry(
+          { initialActive: !backgroundOpening && AppState.currentState === 'active', observeForeground: observeAppForeground },
+          () => void plan.checkBudgetSuggestion({ weightTrendReader: ports.weightTrendReader, intakeReader: ports.intakeReader }).catch(onError),
+        ),
       ];
       const publishStatus = () => syncStatusSource.publish(engine.status());
       const stopStatus = observeOutbox(database, publishStatus);

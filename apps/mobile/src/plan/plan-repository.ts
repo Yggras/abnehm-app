@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { EntityId, LocalDate, weekdayOf, Weekday, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import {
@@ -46,6 +46,17 @@ export function readGoalVersion(tx: ReadContext, id: EntityId): StoredGoalVersio
 /** Die an einem Tag gültige Zielversion der Person: die mit dem größten `valid_from` ≤ Tag. */
 export function readGoalVersionOn(tx: ReadContext, personId: EntityId, localDate: LocalDate): StoredGoalVersion | undefined {
   return storedGoalVersion(goalVersionRowOn(tx, personId, localDate));
+}
+
+/** Alle Zielversionen der Person mit `valid_from` ≤ Tag, die älteste zuerst. */
+export function readGoalVersionsUntil(tx: ReadContext, personId: EntityId, localDate: LocalDate): GoalVersionValues[] {
+  return sqliteOf(tx)
+    .select()
+    .from(goalVersion)
+    .where(and(eq(goalVersion.personId, personId), lte(goalVersion.validFrom, localDate), isNull(goalVersion.deletedAt)))
+    .orderBy(asc(goalVersion.validFrom))
+    .all()
+    .map((row) => storedGoalVersion(row)!.values);
 }
 
 /** Die Zeile der Zielversion mit dem größten `valid_from` ≤ Tag; die eine Stelle dieser Regel in SQLite. */

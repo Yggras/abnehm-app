@@ -159,6 +159,62 @@ export const GoalVersionRecord = z
   });
 export type GoalVersionRecord = z.infer<typeof GoalVersionRecord>;
 
+/** Richtung eines Budgetvorschlags: um 150 kcal senken oder anheben (Spezifikation 1, Abschnitt 7). */
+export const BudgetSuggestionDirection = z.enum(['senken', 'anheben']);
+export type BudgetSuggestionDirection = z.infer<typeof BudgetSuggestionDirection>;
+
+/**
+ * Status eines Budgetvorschlags: `offen` bis zur Entscheidung; `angenommen` nur über den Fachbefehl
+ * `acceptBudgetSuggestion`, `abgelehnt` als Upsert; `ueberholt`, sobald eine andere neue Zielversion entsteht.
+ */
+export const BudgetSuggestionStatus = z.enum(['offen', 'angenommen', 'abgelehnt', 'ueberholt']);
+export type BudgetSuggestionStatus = z.infer<typeof BudgetSuggestionStatus>;
+
+const budgetSuggestionFields = {
+  /** Erster und letzter lokaler Tag des geprüften Zeitraums; das Zeitraumende ist Teil des natürlichen Schlüssels. */
+  periodFrom: LocalDate,
+  periodTo: LocalDate,
+  previousBudgetMilliKcal: storedKcal,
+  suggestedBudgetMilliKcal: storedKcal,
+  direction: BudgetSuggestionDirection,
+  status: BudgetSuggestionStatus,
+};
+
+type BudgetSuggestionValues = Omit<z.infer<z.ZodObject<typeof budgetSuggestionFields>>, 'status'>;
+
+/** Dieselben Regeln wie die `CHECK`s beider Datenbanken: Richtung passt zum Betrag, Zeitraum aufsteigend. */
+function checkBudgetSuggestion(suggestion: BudgetSuggestionValues, context: z.RefinementCtx): void {
+  const { previousBudgetMilliKcal: previous, suggestedBudgetMilliKcal: suggested } = suggestion;
+  if (suggested === previous || (suggestion.direction === 'senken') !== (suggested < previous)) {
+    context.addIssue({ code: 'custom', message: 'Vorschlag passt nicht zur Richtung', path: ['suggestedBudgetMilliKcal'] });
+  }
+  if (suggestion.periodFrom > suggestion.periodTo) context.addIssue({ code: 'custom', message: 'Zeitraum endet vor seinem Beginn', path: ['periodTo'] });
+}
+
+/**
+ * Nutzlast des generischen Upserts `budget_suggestion` (Spezifikation 1, Abschnitte 7 und 11): der
+ * vollständige Vorschlag ohne Eigentümer und Serverfelder. Er synchronisiert innerhalb der eigenen
+ * Eigentumsgrenze, Last-Write-Wins; die ID ist `budgetSuggestionId` aus Person und Zeitraumende.
+ */
+export const BudgetSuggestionUpsert = z.strictObject(budgetSuggestionFields).superRefine(checkBudgetSuggestion);
+export type BudgetSuggestionUpsert = z.infer<typeof BudgetSuggestionUpsert>;
+
+/** Kanonischer Budgetvorschlag im Sync; nur der Eigentümer erhält ihn. */
+export const BudgetSuggestionRecord = z
+  .strictObject({ ...budgetSuggestionFields, personId: EntityId, createdAt: Instant, updatedAt: Instant })
+  .superRefine(checkBudgetSuggestion);
+export type BudgetSuggestionRecord = z.infer<typeof BudgetSuggestionRecord>;
+
+const budgetSuggestionNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b6a';
+
+/**
+ * Deterministische ID eines Budgetvorschlags (UUIDv5) aus Person und Zeitraumende, dem natürlichen
+ * Schlüssel: Prüfen zwei Geräte am selben Tag, meinen sie denselben Vorschlag.
+ */
+export function budgetSuggestionId(personId: EntityId, periodTo: LocalDate): EntityId {
+  return EntityId.parse(uuidV5(budgetSuggestionNamespace, `budget_suggestion:${personId}:${periodTo}`));
+}
+
 /** Drei verschiedene Bausteine auf den Plätzen 1–3 eines Wochentags. */
 const DayBausteine = z
   .tuple([BausteinKey, BausteinKey, BausteinKey])
