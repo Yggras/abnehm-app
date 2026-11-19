@@ -21,8 +21,9 @@ import { createNutrition, InvalidNutritionInputError, mealPhotoEntity, nutrition
 // Grundlage sind die Seeds `gekoppelt` (Philipps geteiltes Foto vom Mittagessen) und `solo`.
 
 const today = LocalDate.parse(seedDays.heute);
-const photoId = seedIds.mealPhoto.philippHeute;
-const lunchEntry = seedIds.nutritionEntry.philippMittag;
+const photoId = EntityId.parse(seedIds.mealPhoto.philippHeute);
+const annasPhoto = EntityId.parse(seedIds.mealPhoto.annaHeute);
+const lunchEntry = EntityId.parse(seedIds.nutritionEntry.philippMittag);
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -112,7 +113,7 @@ describe('Fotoansicht', () => {
   it('kennt fremde und unbekannte Fotos nicht', async () => {
     const { detail } = await setup();
 
-    expect(detail(seedIds.mealPhoto.annaHeute)).toBeNull();
+    expect(detail(annasPhoto)).toBeNull();
     expect(detail(EntityId.parse(randomUUID()))).toBeNull();
   });
 });
@@ -144,7 +145,7 @@ describe('„Mit Partner teilen“', () => {
     nutrition.deletePhoto(photoId);
     const before = read();
 
-    for (const id of [seedIds.mealPhoto.annaHeute, EntityId.parse(randomUUID()), photoId]) {
+    for (const id of [annasPhoto, EntityId.parse(randomUUID()), photoId]) {
       expect(() => nutrition.setPhotoSharing(id, false)).toThrow(InvalidNutritionInputError);
     }
     expect(read()).toEqual(before);
@@ -173,7 +174,7 @@ describe('„Foto löschen“', () => {
     nutrition.deletePhoto(photoId);
 
     expect(() => nutrition.deletePhoto(photoId)).toThrow(InvalidNutritionInputError);
-    expect(() => nutrition.deletePhoto(seedIds.mealPhoto.annaHeute)).toThrow(InvalidNutritionInputError);
+    expect(() => nutrition.deletePhoto(annasPhoto)).toThrow(InvalidNutritionInputError);
   });
 });
 

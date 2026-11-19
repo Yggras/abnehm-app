@@ -1,18 +1,20 @@
 import { localDateAfter, MealKey, type EntityId, type LocalDate } from '@abnehm/contracts/base';
 import type { NutritionEntryDeletedOutcome, NutritionEntryUpdatedOutcome } from '@abnehm/contracts/nutrition';
 import { usePathname } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
 import { Button, Card, IconButton, ListGroup, ListRow, Sheet, size, Skeleton, space, Text } from '../design';
 import { openTarget, pathOf, routeCatalog } from '../navigation';
+import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useUndoableMessage } from '../shell/use-undoable-message';
 import { useNutrition } from './app-nutrition';
 import type { DayLog, DayLogMeal, EntryDetail } from './day-log';
 import type { EntryChange } from './entries';
 import { EntryEditor } from './EntryEditor';
+import { MealPhotoStrip, MealPhotoView } from './MealPhotos';
 import type { Nutrition } from './nutrition';
 import { useDayLog, useLocalToday } from './use-day-log';
 import { amountText, kcalText, logDayParts, logDayText, macrosText, mealNames, nutritionTexts } from './texts';
@@ -21,7 +23,8 @@ import { amountText, kcalText, logDayParts, logDayText, macrosText, mealNames, n
 // aufklappbaren Tagesmakros, ohne Budgetvergleich (der bleibt auf „Heute“), darunter die vier Mahlzeiten mit
 // Summe, Einträgen und „+“. Das Protokoll öffnet „Heute“, blättert tageweise zurück und springt mit „Heute“
 // zurück; künftige Tage sind nicht erreichbar. Ein neuer Eintrag gehört zum gewählten Tag. Antippen eines
-// Eintrags öffnet seine Mengenansicht. Der Bildschirm spricht nur mit dem Ernährungsmodul.
+// Eintrags öffnet seine Mengenansicht. Online zeigt jede Mahlzeit die Vorschauen ihrer Fotos; Antippen öffnet
+// die Fotoansicht (#164). Der Bildschirm spricht nur mit dem Ernährungsmodul.
 
 /** Pfade der übrigen Tabs; dorthin zu wechseln setzt den gewählten Tag zurück. */
 const otherTabPaths = new Set(
@@ -62,7 +65,10 @@ export function LogScreen() {
 
 function DayLogView({ nutrition, log, today, onDay }: { nutrition: Nutrition; log: DayLog; today: LocalDate; onDay: (day: LocalDate) => void }) {
   const [editing, setEditing] = useState<EntryDetail | null>(null);
+  const [viewing, setViewing] = useState<{ photoId: EntityId; meal: MealKey } | null>(null);
   const message = useUndoableMessage();
+  const { showMessage } = useMessageHost();
+  const closePhoto = useCallback(() => setViewing(null), []);
 
   /** Führt einen Befehl aus, zeigt seine Meldung mit „Rückgängig“ und schließt das Sheet. */
   const run = (command: () => NutritionEntryUpdatedOutcome | NutritionEntryDeletedOutcome) => {
@@ -79,8 +85,31 @@ function DayLogView({ nutrition, log, today, onDay }: { nutrition: Nutrition; lo
     <>
       <DayHead log={log} today={today} onDay={onDay} />
       {log.meals.map((meal) => (
-        <MealSection key={meal.meal} meal={meal} localDate={log.localDate} onEntry={(id) => setEditing(nutrition.entryDetail(id))} />
+        <MealSection
+          key={meal.meal}
+          nutrition={nutrition}
+          meal={meal}
+          localDate={log.localDate}
+          onEntry={(id) => setEditing(nutrition.entryDetail(id))}
+          onPhoto={(photoId) => setViewing({ photoId, meal: meal.meal })}
+        />
       ))}
+      <Sheet visible={viewing !== null} onClose={closePhoto} height="full">
+        {viewing === null ? null : (
+          <MealPhotoView
+            key={viewing.photoId}
+            nutrition={nutrition}
+            photoId={viewing.photoId}
+            meal={viewing.meal}
+            onClose={closePhoto}
+            onDeleted={() => {
+              setViewing(null);
+              showMessage({ messageKey: 'ernaehrung.foto_geloescht', values: {} });
+            }}
+            onFailed={message.failed}
+          />
+        )}
+      </Sheet>
       <Sheet visible={editing !== null} onClose={() => setEditing(null)} height="full">
         {editing === null ? null : (
           <EntryEditor
@@ -141,7 +170,19 @@ function DayHead({ log, today, onDay }: { log: DayLog; today: LocalDate; onDay: 
   );
 }
 
-function MealSection({ meal, localDate, onEntry }: { meal: DayLogMeal; localDate: LocalDate; onEntry: (id: EntityId) => void }) {
+function MealSection({
+  nutrition,
+  meal,
+  localDate,
+  onEntry,
+  onPhoto,
+}: {
+  nutrition: Nutrition;
+  meal: DayLogMeal;
+  localDate: LocalDate;
+  onEntry: (id: EntityId) => void;
+  onPhoto: (photoId: EntityId) => void;
+}) {
   const name = mealNames[meal.meal];
   const hasEntries = meal.entries.length > 0;
   return (
@@ -161,6 +202,7 @@ function MealSection({ meal, localDate, onEntry }: { meal: DayLogMeal; localDate
           onPress={() => openTarget({ type: 'capture.food', meal: meal.meal, localDate })}
         />
       </View>
+      <MealPhotoStrip nutrition={nutrition} meal={meal.meal} photoIds={meal.photoIds} onOpen={onPhoto} />
       {hasEntries ? (
         <ListGroup>
           {meal.entries.map((entry) => {
