@@ -3,8 +3,9 @@ import { AreaKey, EntityId, localDateAfter, type Instant, type LocalDate } from 
 import type { CheckInMoment, CheckInReason, DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import { notificationTexts } from '@abnehm/contracts/notification-texts';
 import { checkInTrackerField, wallClockMinutes, type CheckInTopic, type NotificationSettingUpsert } from '@abnehm/contracts/notifications';
-import type { EffectivePlan, IslandCheckInHintReader, PlanReader } from '@abnehm/contracts/ports';
+import type { IslandCheckInHintReader, PlanReader } from '@abnehm/contracts/ports';
 import type { RouteTarget } from '@abnehm/contracts/routes';
+import { isSportDay, isWeighDay } from '@abnehm/contracts/tracker-rules';
 
 import type { DailyGoalRegistry, ValidPlan } from '../daily-goals';
 import type { LocalDatabase } from '../local-db';
@@ -144,19 +145,17 @@ async function desiredCheckIns(options: CheckInPlannerOptions): Promise<LocalNot
   return notifications;
 }
 
-type ValidEffectivePlan = Extract<EffectivePlan, { type: 'gueltig' }>;
-
 /** Heute: die Tracker, die laut `evaluateCheckIn` mit dem jetzigen Datenstand hinterherhinken. */
 function todayTopics(
   { database, registry, onError }: CheckInPlannerOptions,
   personId: EntityId,
-  plan: ValidEffectivePlan,
+  plan: ValidPlan,
   moment: CheckInMoment,
   trackers: readonly AreaKey[],
 ): CheckInTopic[] {
   return database.read((tx) =>
     trackers.flatMap((tracker) => {
-      const result = registry.evaluateCheckIn(tx, { tracker, personId, localDate: plan.localDate, moment, plan: plan as ValidPlan });
+      const result = registry.evaluateCheckIn(tx, { tracker, personId, localDate: plan.localDate, moment, plan });
       if (result.type === 'contract_error') {
         onError(new Error(`Tages-Check-in ${tracker}: ${result.error.code}`));
         return [];
@@ -167,8 +166,8 @@ function todayTopics(
 }
 
 /** Künftige Tage ohne aktuelle Werte: Ernährung und Wasser immer, Sport nur abends am Sporttag, Gewicht am Wiegetag. */
-function futureTopics(plan: ValidEffectivePlan, moment: CheckInMoment, trackers: readonly AreaKey[]): CheckInTopic[] {
-  const bausteine = plan.weeklyPlanDay.bausteine;
+function futureTopics(plan: ValidPlan, moment: CheckInMoment, trackers: readonly AreaKey[]): CheckInTopic[] {
+  const { bausteine } = plan.weeklyPlanDay;
   return trackers.flatMap((tracker): CheckInTopic[] => {
     switch (tracker) {
       case 'ernaehrung':
@@ -176,9 +175,9 @@ function futureTopics(plan: ValidEffectivePlan, moment: CheckInMoment, trackers:
       case 'wasser':
         return [{ type: 'wasser', progress: null }];
       case 'sport':
-        return moment === 'abend' && bausteine.includes('sporteinheit') ? [{ type: 'sport' }] : [];
+        return moment === 'abend' && isSportDay(bausteine) ? [{ type: 'sport' }] : [];
       case 'gewicht':
-        return bausteine.includes('gewogen') ? [{ type: 'gewicht' }] : [];
+        return isWeighDay(bausteine) ? [{ type: 'gewicht' }] : [];
     }
   });
 }
