@@ -116,3 +116,5 @@ manifestSuite('challenge-verfallen');
 manifestSuite('challenge-passt-nicht');
 manifestSuite('budgetvorschlag-senken');
 manifestSuite('budgetvorschlag-anheben');
+manifestSuite('onboarding-unterbrochen');
+manifestSuite('zweites-geraet');

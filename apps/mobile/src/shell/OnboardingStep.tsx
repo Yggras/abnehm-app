@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { onboardingStepOutcomes, type OnboardingStepKey, type OnboardingStepOutcome } from '@abnehm/contracts/onboarding';
 
-import { Button, Notice, space, Text } from '../design';
+import { Notice, space, Text } from '../design';
 import { isTestArtifact } from '../test-artifact';
 import {
   appOnboardingRegistry,
@@ -12,7 +12,7 @@ import {
   type OnboardingRegistry,
   type OnboardingStepOutcomeOf,
 } from './onboarding-registry';
-import { onboardingStepTitles, ownerName, shellTexts } from './texts';
+import { ownerName, shellTexts } from './texts';
 
 export type OnboardingStepSlotProps<K extends OnboardingStepKey> = Readonly<{
   stepKey: K;
@@ -30,26 +30,24 @@ export function OnboardingStep<K extends OnboardingStepKey>({ stepKey, onComplet
     (outcome: OnboardingStepOutcome) => onComplete(onboardingStepOutcomes[stepKey].parse(outcome) as OnboardingStepOutcomeOf<K>),
     [onComplete, stepKey],
   );
-  return registry.element(stepKey, { complete }) ?? <MissingStep stepKey={stepKey} complete={complete} />;
+  return registry.element(stepKey, { complete }) ?? <MissingStep stepKey={stepKey} />;
 }
 
 /**
- * Development- und E2E-Build: überspringbarer deutscher Platzhalter mit dem liefernden Bereich. Im Release ist
- * ein fehlender Beitrag ein Integrationsfehler (Spezifikation 0, Abschnitt 6).
+ * Development- und E2E-Build: deutscher Platzhalter mit dem liefernden Bereich. Wie ein Beitrag zeichnet er
+ * nur den Inhalt; Titel und „Überspringen“ zeichnet der Rahmen von Spezifikation 1, also bleibt der Schritt
+ * überspringbar. Eine Hauptaktion hat er nicht. Im Release ist ein fehlender Beitrag ein Integrationsfehler
+ * (Spezifikation 0, Abschnitt 6).
  */
-function MissingStep({ stepKey, complete }: { stepKey: OnboardingStepKey; complete(outcome: OnboardingStepOutcome): void }) {
+function MissingStep({ stepKey }: { stepKey: OnboardingStepKey }) {
   if (!isTestArtifact()) throw new MissingOnboardingStepError(stepKey);
   const step = onboardingSteps.find((entry) => entry.key === stepKey)!;
   return (
     <View style={{ gap: space[4] }}>
-      <Text variant="title" accessibilityRole="header">
-        {onboardingStepTitles[stepKey]}
-      </Text>
       <Notice tone="neutral" icon="hammer" text={shellTexts.onboardingStepPlaceholder} />
       <Text variant="caption" tone="inkMuted">
         {shellTexts.placeholderOwner(ownerName(step.owner))}
       </Text>
-      <Button label={shellTexts.skip} variant="secondary" onPress={() => complete({ type: 'skipped' })} />
     </View>
   );
 }

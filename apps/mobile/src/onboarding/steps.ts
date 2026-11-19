@@ -29,6 +29,11 @@ const ownTitles: Record<(typeof ownSteps)[number], string> = {
 /** Titel eines Schritts; die der Steckplätze kommen aus der Shell. */
 export const stepTitles: Record<OnboardingFlowStep, string> = { ...ownTitles, ...onboardingStepTitles };
 
+/** Ob der Schritt einer der Steckplätze 9–11 ist. */
+export function isSlotStep(step: OnboardingFlowStep): step is OnboardingStepKey {
+  return onboardingSteps.some(({ key }) => key === step);
+}
+
 /** Nummer des Schritts, 1 bis 11. */
 export function stepNumber(step: OnboardingFlowStep): number {
   return onboardingFlowSteps.indexOf(step) + 1;

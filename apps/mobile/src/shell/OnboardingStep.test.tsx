@@ -3,7 +3,6 @@ import { Text as NativeText, Pressable } from 'react-native';
 
 import type { OnboardingStepOutcome } from '@abnehm/contracts/onboarding';
 
-import { hitArea } from '../design/testing/hit-area';
 import { OnboardingStep } from './OnboardingStep';
 import { createOnboardingRegistry, MissingOnboardingStepError, onboardingSteps, type OnboardingStepProps } from './onboarding-registry';
 
@@ -69,24 +68,24 @@ test('ein Ergebnis eines anderen Schritts ist ein Vertragsfehler und erreicht de
   expect(onComplete).not.toHaveBeenCalled();
 });
 
+// Überspringbar ist der Platzhalter über „Überspringen“ im Rahmen von Spezifikation 1; das prüft
+// `src/onboarding/Onboarding.test.tsx` für alle drei Steckplätze.
 test.each(onboardingSteps.map((step) => [step.key, step.owner] as const))(
-  'ohne Beitrag zeigt „%s“ im Development Build einen überspringbaren deutschen Platzhalter',
+  'ohne Beitrag zeigt „%s“ im Development Build einen deutschen Platzhalter ohne eigene Aktion; Titel und „Überspringen“ zeichnet der Rahmen',
   async (key) => {
     const onComplete = jest.fn();
     await render(<OnboardingStep stepKey={key} registry={createOnboardingRegistry()} onComplete={onComplete} />);
 
     expect(screen.getByText('Dieser Schritt ist noch in Arbeit.')).toBeOnTheScreen();
-    const skip = screen.getByRole('button', { name: 'Überspringen' });
-    expect(hitArea(skip).height).toBeGreaterThanOrEqual(48);
-    await userEvent.setup().press(skip);
-    expect(onComplete).toHaveBeenCalledWith({ type: 'skipped' });
+    expect(screen.queryAllByRole('button')).toEqual([]);
+    expect(screen.queryAllByRole('header')).toEqual([]);
+    expect(onComplete).not.toHaveBeenCalled();
   },
 );
 
 test('der Platzhalter nennt den liefernden Bereich', async () => {
   await render(<OnboardingStep stepKey="health" registry={createOnboardingRegistry()} onComplete={() => {}} />);
 
-  expect(screen.getByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
   expect(screen.getByText('Kommt mit: Wasser, Sport, Gewicht & Health')).toBeOnTheScreen();
 });
 

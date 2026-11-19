@@ -1,8 +1,9 @@
 import { asc, eq } from 'drizzle-orm';
 
 import { readingOf, type Clock } from '@abnehm/clock';
-import { EntityId, LocalDate } from '@abnehm/contracts/base';
+import { EntityId, LocalDate, SyncCursor } from '@abnehm/contracts/base';
 import type { WeightRecorder } from '@abnehm/contracts/ports';
+import type { SeedKey, SeedManifest } from '@abnehm/contracts/seeds';
 
 import { fakeWeightRecorder } from '../../area-ports/testing/fakes';
 import type { StoredSession } from '../../auth/app-auth';
@@ -17,12 +18,21 @@ import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createAppSession } from '../../session/app-session';
 import { followSessionGate } from '../../session/session-gate';
 import { createPlan, goalVersionEntity, weeklyPlanVersionEntity } from '../../plan';
-import { createSyncRegistry, createSyncWriter, foundationSyncEntities, unsecuredOperationCount, type SyncCycleResult } from '../../sync';
+import {
+  createSyncRegistry,
+  createSyncWriter,
+  foundationSyncEntities,
+  readLastPullAt,
+  restoreSyncState,
+  unsecuredOperationCount,
+  type SyncCycleResult,
+} from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
 import { createLogout, syncBeforeLogout, type LogoutRecord } from '../../logout';
 import { followOwnDisplayName, type AccountPorts } from '../../settings';
 // Der Fehler-Adapter aus #112 schaltet den Transport ab, wie in den Test-Artefakten der App.
 import { createFaultController, faultyFetch } from '../../test-capabilities/faults';
+import { seedLocalDatabase } from '../../test-capabilities/seed/local-seed';
 import { createOnboarding } from '../onboarding';
 import { createFakeAuthServer } from './fake-auth-server';
 
@@ -62,13 +72,26 @@ export function createOnboardingDevice(clock: Clock) {
     },
   };
 
-  /** Ersatz für den Sync-Zyklus der geöffneten Kontodatenbank: übernimmt die Person vom Server. */
+  // Konten, deren Stand auf dem Server ein Seed-Manifest beschreibt: Ihr erster Pull liefert die Zeilen
+  // der Installation, wie es der echte Pull nach dem Seeden des Servers täte.
+  const seeded = new Map<string, { manifest: SeedManifest; installation: SeedKey }>();
+  let pullInterrupted = false;
+
+  /**
+   * Ersatz für den Sync-Zyklus der geöffneten Kontodatenbank: übernimmt die Person vom Server bzw. den Stand
+   * eines geseedeten Kontos und schließt den Pull ab, wie die letzte Seite den Cursor samt Zeitpunkt schreibt.
+   */
   function sync(): Promise<SyncCycleResult> | undefined {
     const database = databases.current();
     if (database === null) return undefined;
     const offline = faults.plan().transport === 'offline';
+    if (offline) return Promise.resolve({ push: 'unavailable', pull: 'skipped' });
+    const seed = seeded.get(database.accountId);
     const person = server.person(database.accountId);
-    if (!offline && person !== null && database.read((tx) => readOwnPerson(tx)) === undefined) {
+    const arrived = database.read((tx) => readOwnPerson(tx)) !== undefined;
+    if (seed !== undefined && !arrived) {
+      seedLocalDatabase(database, seed.manifest, seed.installation);
+    } else if (person !== null && !arrived) {
       const at = clock.read().instant;
       database.transaction((tx) =>
         sqliteOf(tx)
@@ -86,7 +109,12 @@ export function createOnboardingDevice(clock: Clock) {
           .run(),
       );
     }
-    return Promise.resolve(offline ? { push: 'unavailable', pull: 'skipped' } : { push: 'nothing_to_do', pull: 'done' });
+    // Ein unterbrochener Pull hat die Person mit der ersten Seite gebracht; die nächste Seite kam nicht mehr an.
+    if (pullInterrupted) return Promise.resolve({ push: 'nothing_to_do', pull: 'unavailable' });
+    if (database.read(readLastPullAt) === null) {
+      database.transaction((tx) => restoreSyncState(tx, { cursor: SyncCursor.parse('1'), outbox: [] }, clock.read().instant));
+    }
+    return Promise.resolve({ push: 'nothing_to_do', pull: 'done' });
   }
 
   // Wie im Composition Root: Weiche und Onboarding folgen der jeweils geöffneten Kontodatenbank.
@@ -188,6 +216,29 @@ export function createOnboardingDevice(clock: Clock) {
       await session.revocations.forgetSession();
       return accountId;
     },
+    /**
+     * Das Testkonto der Installation aus dem Seed-Manifest, mit Konto-ID, E-Mail und Passwort von dort.
+     * Nach der Anmeldung bringt der erste Pull die Zeilen der Installation samt lokalem Gerätezustand, etwa
+     * einen Entwurf, wie ein Seed-Link auf dem Gerät. Gibt die Zugangsdaten zurück.
+     */
+    addSeededAccount(manifest: SeedManifest, installation: SeedKey) {
+      const owner = manifest.installations.find(({ key }) => key === installation)?.account;
+      const account = manifest.accounts.find(({ key }) => key === owner);
+      if (account === undefined) throw new Error(`Seed: ${manifest.scenario} kennt keine Installation ${installation}`);
+      server.addAccount({ email: account.email, password: account.password, id: account.accountId });
+      seeded.set(account.accountId, { manifest, installation });
+      return { email: account.email, password: account.password };
+    },
+    /** `true`: Der Pull bricht nach der ersten Seite ab; die Person kommt an, der Pull ist nicht vollständig. */
+    interruptPull(interrupted: boolean) {
+      pullInterrupted = interrupted;
+    },
+    /** Löscht einen Gerätezustand der geöffneten Kontodatenbank, etwa den gemerkten Schritt (`onboarding_step`). */
+    forgetDeviceState(key: string) {
+      databases.current()!.transaction((tx) => sqliteOf(tx).delete(schema.deviceState).where(eq(schema.deviceState.key, key)).run());
+    },
+    /** Ein Sync-Zyklus der geöffneten Kontodatenbank, wie ihn ein Auslöser anstößt. */
+    pull: () => sync(),
     /** Die seit dem letzten Aufruf an `onError` gemeldeten Fehler des Onboardings. */
     takeErrors() {
       const taken = reported;

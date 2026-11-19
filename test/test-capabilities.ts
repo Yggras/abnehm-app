@@ -62,7 +62,7 @@ export const testCapabilities: readonly TestCapability[] = [
     // (#131), `haelfte-voll` und `doppelausgabe` (#191), die Szenarien der Einstellungsseite „Ziele“ (#147) sowie
     // `feldkonflikt` (#194), `ereignisse-voll` (#202), `einladung-nach-entkopplung` (#120), `levelaufstieg-ausstehend` (#200) sowie
     // `challenge-vorgeschlagen`, `challenge-verfallen` und `challenge-passt-nicht` (#210) sowie
-    // `budgetvorschlag-senken` und `budgetvorschlag-anheben` (#150) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
+    // `budgetvorschlag-senken` und `budgetvorschlag-anheben` (#150) sowie `onboarding-unterbrochen` und `zweites-geraet` (#146) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
     // von `momo.character` zu Recht im Produktions-Bundle steht.
     markers: [
       '/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen', 'tage_ohne_app_oeffnung', 'zeitzonen_reisen',
@@ -70,6 +70,7 @@ export const testCapabilities: readonly TestCapability[] = [
       'feldkonflikt', 'ereignisse-voll', 'einladung-nach-entkopplung', 'levelaufstieg-ausstehend',
       'challenge-vorgeschlagen', 'challenge-verfallen', 'challenge-passt-nicht',
       'budgetvorschlag-senken', 'budgetvorschlag-anheben',
+      'onboarding-unterbrochen', 'zweites-geraet',
     ],
   },
   {

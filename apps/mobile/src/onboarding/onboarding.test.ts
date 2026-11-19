@@ -414,3 +414,163 @@ describe('Schritt 8 „Wochenplan“: Plan speichern', () => {
     expect(device.dailyGoalsOn(today)).toEqual([]);
   });
 });
+
+describe('Ladezustand bis zum ersten vollständigen Pull', () => {
+  it('bleibt beim Laden, solange der erste Pull die Person, aber noch nicht alle Seiten gebracht hat', async () => {
+    device.interruptPull(true);
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    expect(await device.onboarding.setUpAccount()).toEqual({ type: 'offline' });
+
+    // Die Weiche steht mit der Person schon im Onboarding, das Onboarding wartet noch auf den Rest des Pulls.
+    expect(device.gate.get()).toBe('onboarding');
+    expect(device.onboarding.progress()).toEqual({ type: 'laedt' });
+
+    device.interruptPull(false);
+    await device.pull();
+
+    expect(device.onboarding.progress()).toEqual({ type: 'bereit', disclaimerAccepted: true });
+    expect(device.ownPerson()?.disclaimerAcceptedAt).toBe(acceptedAt);
+  });
+});
+
+describe('Fortsetzen', () => {
+  const today = LocalDate.parse('2026-10-14');
+  const answered = {
+    calculationSex: 'weiblich', birthDate: LocalDate.parse('1991-04-02'), heightCm: 168, weightG: 80_000,
+    pregnantOrBreastfeeding: false, knownEatingDisorder: false, activityLevel: 'wenig_aktiv',
+  } as const;
+
+  async function registered() {
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+  }
+
+  /** Meldet ab, ohne die Kontodatenbank zu löschen, und wieder an: wie ein Neustart der App. */
+  async function reopen() {
+    await device.session.revocations.forgetSession();
+    await device.session.auth.signIn(anna);
+  }
+
+  const forgetStep = () => device.forgetDeviceState('onboarding_step');
+
+  it('ohne Entwurf beginnt es bei Schritt 3', async () => {
+    await registered();
+
+    expect(device.onboarding.resume()).toBe('koerperdaten');
+  });
+
+  it('setzt nach einem Abbruch aus dem lokalen Entwurf am letzten offenen Schritt fort, ohne etwas zu synchronisieren', async () => {
+    await registered();
+    const before = device.outbox();
+    device.onboarding.updateDraft(answered);
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'bestaetigt' });
+    device.onboarding.enterStep('zielgewicht');
+
+    await reopen();
+
+    expect(device.onboarding.resume()).toBe('zielgewicht');
+    expect(device.onboarding.readDraft()).toEqual(expect.objectContaining(answered));
+    expect(device.outbox()).toEqual(before);
+  });
+
+  it('ohne bestätigte Körperdaten beginnt es bei Schritt 3, auch wenn ein späterer Schritt gemerkt ist', async () => {
+    await registered();
+    device.onboarding.updateDraft(answered);
+    device.onboarding.enterStep('ergebnis');
+
+    expect(device.onboarding.resume()).toBe('koerperdaten');
+  });
+
+  it('ergibt das Geburtsdatum im Entwurf unter 18 Jahre, steht dort der Sperrbildschirm', async () => {
+    await registered();
+    device.onboarding.updateDraft({ birthDate: LocalDate.parse('2008-10-15') });
+    device.onboarding.enterStep('koerperdaten');
+
+    expect(device.onboarding.resume()).toBe('minderjaehrig');
+  });
+
+  it('mit Zielversion: Schritt 9 oder der gemerkte der Schritte 9–11; geht er verloren, wieder Schritt 9', async () => {
+    await registered();
+    device.onboarding.updateDraft({ ...answered, goalWeightG: 76_000, pace: 'entspannt', waterTargetMl: 1_500, weeklySportTargetMinutes: 150 });
+    device.onboarding.confirmBodyData();
+    device.onboarding.enterStep('wochenplan');
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+    expect(device.dailyGoalsOn(today)).toHaveLength(3);
+
+    // Abbruch direkt nach dem Speichern, noch vor Schritt 9.
+    expect(device.onboarding.resume()).toBe('health');
+
+    device.onboarding.enterStep('notifications');
+    await reopen();
+    expect(device.onboarding.resume()).toBe('notifications');
+
+    forgetStep();
+    expect(device.onboarding.resume()).toBe('health');
+
+    // Wer aus Schritt 9 in die Schritte davor zurückgeht und abbricht, landet wieder bei Schritt 9.
+    device.onboarding.enterStep('ergebnis');
+    expect(device.onboarding.resume()).toBe('health');
+  });
+
+  it('„Zurück“ aus Schritt 9 nur mit bestätigten Körperdaten im Entwurf dieses Geräts', async () => {
+    await registered();
+    expect(device.onboarding.hasConfirmedDraft()).toBe(false);
+
+    device.onboarding.updateDraft(answered);
+    expect(device.onboarding.hasConfirmedDraft()).toBe(false);
+    device.onboarding.confirmBodyData();
+    expect(device.onboarding.hasConfirmedDraft()).toBe(true);
+  });
+
+  it('der gemerkte Schritt ist Gerätezustand und wird nicht synchronisiert', async () => {
+    await registered();
+    const before = device.outbox();
+
+    device.onboarding.enterStep('aktivitaetsstufe');
+
+    expect(device.outbox()).toEqual(before);
+  });
+});
+
+describe('Abschluss', () => {
+  async function planSaved() {
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+    device.onboarding.updateDraft({
+      calculationSex: 'weiblich', birthDate: LocalDate.parse('1991-04-02'), heightCm: 168, weightG: 80_000,
+      pregnantOrBreastfeeding: false, knownEatingDisorder: false, activityLevel: 'wenig_aktiv', goalWeightG: 76_000, pace: 'entspannt',
+    });
+    device.onboarding.confirmBodyData();
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+  }
+
+  it('setzt `abgeschlossen` samt Zeitpunkt über den Person-Upsert, und die Weiche wechselt zu „Heute“', async () => {
+    await planSaved();
+    expect(device.gate.get()).toBe('onboarding');
+
+    expect(device.onboarding.complete()).toEqual({ type: 'abgeschlossen' });
+
+    const now = clock.read().instant;
+    expect(device.ownPerson()).toEqual(expect.objectContaining({ onboardingStatus: 'abgeschlossen', onboardingCompletedAt: now }));
+    expect(device.gate.get()).toBe('today');
+    expect(device.outbox().at(-1)).toEqual(
+      expect.objectContaining({
+        type: 'upsert_entity',
+        entityType: 'person',
+        payload: expect.objectContaining({ onboardingStatus: 'abgeschlossen', onboardingCompletedAt: now }),
+      }),
+    );
+  });
+
+  it('scheitert die lokale Transaktion, meldet es den Fehler und bleibt im Onboarding', async () => {
+    // Ohne gespeicherten Plan fehlen die Personenfelder, die `abgeschlossen` verlangt.
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+
+    expect(device.onboarding.complete()).toEqual({ type: 'fehlgeschlagen' });
+
+    expect(device.takeErrors()).toHaveLength(1);
+    expect(device.ownPerson()?.onboardingStatus).toBe('begonnen');
+    expect(device.gate.get()).toBe('onboarding');
+  });
+});

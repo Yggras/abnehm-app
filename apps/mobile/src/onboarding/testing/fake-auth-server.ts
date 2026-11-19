@@ -14,8 +14,8 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 
 export type FakeAuthServer = {
   fetch: typeof fetch;
-  /** Legt ein bestehendes Konto an; die Person entsteht erst mit `bootstrap`. */
-  addAccount(input: { email: string; password: string }): string;
+  /** Legt ein bestehendes Konto an, auf Wunsch mit fester ID (etwa aus einem Seed); die Person entsteht erst mit `bootstrap`. */
+  addAccount(input: { email: string; password: string; id?: string }): string;
   /** Die Person eines Kontos, sobald der Bootstrap sie angelegt hat. */
   person(accountId: string): BootstrapPersonResult | null;
   /** `false`: Der Bootstrap antwortet mit `503`, etwa bei einem Serverausfall direkt nach der Kontoanlage. */
@@ -40,8 +40,8 @@ export function createFakeAuthServer(): FakeAuthServer {
     return json(200, { token, user: { id: account.id } });
   }
 
-  function addAccount({ email, password }: { email: string; password: string }) {
-    const account = { id: id(1), email: email.toLowerCase(), password };
+  function addAccount({ email, password, id: fixed }: { email: string; password: string; id?: string }) {
+    const account = { id: fixed ?? id(1), email: email.toLowerCase(), password };
     accounts.set(account.email, account);
     return account.id;
   }

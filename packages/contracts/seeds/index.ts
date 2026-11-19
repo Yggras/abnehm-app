@@ -5,6 +5,7 @@ import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
+import { onboardingManifests } from './onboarding.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { ernaehrungRandzustandManifests } from './randzustaende-ernaehrung.ts';
 import { soloManifests } from './solo.ts';
@@ -67,4 +68,5 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   ...syncSzenarioManifests,
   ...tageszielManifests,
   ...budgetvorschlagManifests,
+  ...onboardingManifests,
 };
