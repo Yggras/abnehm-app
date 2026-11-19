@@ -140,7 +140,11 @@ export const testCapabilities: readonly TestCapability[] = [
     // gilt der Adapter der Plattform.
     key: 'health-attrappe',
     description: 'Deterministisch steuerbare Health-Attrappe (Plattform-Adapter) mit Szenarien, gestellt per Link `health?szenario=<name>`',
-    modules: ['apps/mobile/src/health/testing/', 'apps/mobile/src/test-capabilities/health.ts'],
+    modules: [
+      'apps/mobile/src/health/testing/',
+      'apps/mobile/src/test-capabilities/health.ts',
+      'apps/mobile/src/test-capabilities/health-scenarios.ts',
+    ],
     entries: { deepLinks: ['health'] },
     markers: ['health_attrappe'],
   },

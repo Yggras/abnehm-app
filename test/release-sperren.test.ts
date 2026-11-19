@@ -412,7 +412,11 @@ describe('Health-Attrappe (#183)', () => {
   it('ist zentral registriert, mit Modulen, Link und Marker', () => {
     expect(read('apps/mobile/src/health/testing/fake-platform.ts')).toContain(`healthFakeMarker = '${healthFakeMarker}'`);
     expect(capability).toMatchObject({
-      modules: ['apps/mobile/src/health/testing/', 'apps/mobile/src/test-capabilities/health.ts'],
+      modules: [
+        'apps/mobile/src/health/testing/',
+        'apps/mobile/src/test-capabilities/health.ts',
+        'apps/mobile/src/test-capabilities/health-scenarios.ts',
+      ],
       entries: { deepLinks: ['health'] },
       markers: [healthFakeMarker],
     });
