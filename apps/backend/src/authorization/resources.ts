@@ -351,6 +351,26 @@ const mealPhotoRule = byId(
   { photoAccess: 'bildabruf' },
 );
 
+/**
+ * Bildabruf eines eigenen Mahlzeitenfotos (Spezifikation 2, Abschnitt 9; #164): nur die Eigentümerin, nur
+ * Lesen und nur, solange das Foto nicht gelöscht ist. Für sie ist das Foto ein eigener Eintrag; Kopplung
+ * und Freigaben spielen keine Rolle. Partnerfotos laufen nie hierüber, sondern über Fotoliste und Handle.
+ * Die Tabelle gehört zur Klasse `partnerfoto` (`meal_photo`); dies ist die engere Sicht der Eigentümerin.
+ */
+const ownMealPhotoRule = {
+  ...byId(
+    'eigene_eintraege',
+    mealPhoto,
+    async (context, id) => {
+      const photo = await first(context.db.select({ owner: mealPhoto.personId, deletedAt: mealPhoto.deletedAt }).from(mealPhoto).where(eq(mealPhoto.id, id)));
+      return photo?.owner === context.actor.personId && photo.deletedAt === null ? allowed({ ownerPersonId: photo.owner }) : denied;
+    },
+    { photoAccess: 'bildabruf' },
+  ),
+  // Als Literal, damit auch die Typprüfung der Negativtests nur Lesen kennt (`DimensionsOf`).
+  onlyOperations: ['lesen'],
+} as const satisfies EntityRule<'eigene_eintraege', 'id'>;
+
 /** Fotoliste des Partners: ohne Parameter, der Eigentümer ist der Partner aus der aktiven Kopplung. */
 const partnerPhotoListRule = {
   resourceClass: 'partnerfoto',
@@ -633,6 +653,7 @@ export const resourceEntities = {
   revocation_notice: revocationNoticeRule,
   coupling_archive_status: couplingArchiveStatusRule,
   meal_photo: mealPhotoRule,
+  meal_photo_own: ownMealPhotoRule,
   partner_photo_list: partnerPhotoListRule,
   push_installation: owned('push_installation', pushInstallation, ownedBy(pushInstallation), { creatable: true }),
   // Kataloge, Sync-Log, verarbeitete Operationen, Sicherheitslog und alle übrigen Servertabellen.

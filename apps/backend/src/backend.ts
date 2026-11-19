@@ -133,7 +133,7 @@ export function createBackend({
   sync.registerEntity(ownFoodEntity);
   const photoStorage = createPhotoStorage({ directory: photoStorageDirectory });
   const photoDrafts = createPhotoDrafts({ database, clock, analyzer: mealVisionAnalyzer, storage: photoStorage });
-  const mealPhotos = createMealPhotos({ database, storage: photoStorage, entries: nutritionEntries });
+  const mealPhotos = createMealPhotos({ database, clock, storage: photoStorage, entries: nutritionEntries });
   sync.registerEntity(mealPhotos.entity);
   sync.registerCommand(mealPhotos.confirmCommand);
   // Wasser, Sport und Gewicht (Spezifikation 3); jede Push-Annahme invalidiert die Zusammenfassung ihres Bereichs (#181).
@@ -172,9 +172,10 @@ export function createBackend({
   jobs.register(securityLog.cleanupJob);
   jobs.register(photoDrafts.cleanupJob);
   jobs.register(mealPhotos.storageCleanupJob);
+  jobs.register(mealPhotos.orphanCleanupJob);
   for (const job of pushDelivery.jobs) jobs.register(job);
   return {
-    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts, pushInstallations }),
+    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts, mealPhotos, pushInstallations }),
     clock,
     photoStorage,
     securityLog,
