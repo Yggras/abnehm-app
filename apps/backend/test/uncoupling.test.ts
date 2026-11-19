@@ -51,8 +51,8 @@ describe('Entkopplungs-Kern', () => {
     expect(Object.values(recordsOf(changes, 'revocation_notice'))).toEqual([
       expect.objectContaining({ recipientPersonId: philipp.personId, couplingId, target: { type: 'kopplung' }, reason: 'entkopplung' }),
     ]);
-    // Der Partner-Tageszielstatus endet als inhaltsfreie Löschmarkierung.
-    expect(changes.filter((change) => change.type === 'tombstone').map((change) => change.entityType)).toEqual(['partner_daily_goal_status']);
+    // Partner-Tageszielstatus und Zusammenfassungen (seit #181 die zum Gewicht) enden als inhaltsfreie Löschmarkierung.
+    expect(changes.filter((change) => change.type === 'tombstone').map((change) => change.entityType).sort()).toEqual(['partner_daily_goal_status', 'partner_summary']);
   });
 
   it('liefert der Antragstellerin ihre Entkopplung, sofort angenommen, samt Archivstatus; nur sie darf sie lesen', async () => {

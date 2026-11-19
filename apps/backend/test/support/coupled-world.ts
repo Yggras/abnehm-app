@@ -33,7 +33,7 @@ import {
   waterEntry,
   weeklyPlanVersion,
 } from '../../src/db/schema/index.ts';
-import { createTestBackend, type TestBackend } from './app.ts';
+import { createTestBackend, type TestAppOptions, type TestBackend } from './app.ts';
 import { call, type Device } from './auth-client.ts';
 import { httpOutcome, personWithSession, resourceProbe } from './authorization.ts';
 
@@ -60,9 +60,9 @@ export type CoupledWorld = {
   islandId: string;
 };
 
-export async function coupledWorld(): Promise<CoupledWorld> {
+export async function coupledWorld(options: Omit<TestAppOptions, 'clock'> = {}): Promise<CoupledWorld> {
   const clock = createTestClock(worldStart);
-  const backend = await createTestBackend({ clock });
+  const backend = await createTestBackend({ ...options, clock });
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   return { backend, clock, anna, philipp, ...(await couple(backend, anna, philipp)) };

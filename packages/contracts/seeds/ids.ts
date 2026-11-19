@@ -68,10 +68,10 @@ export const seedIds = {
     verlauf: (n: number) => id('0013', n),
   },
   // 0020/5–7 sind Philipps Einträge 3–5, nur in den Varianten `solo-wasser-*` (#171) und den Randzuständen (#113);
-  // 0020/3–4 gehören Anna (#117).
+  // 0020/3–4 gehören Anna (#117), 0020/15 ist ihr dritter Eintrag über dem Ziel (#181).
   waterEntry: {
     philippHeute: [id('0020', 1), id('0020', 2), id('0020', 5), id('0020', 6), id('0020', 7)],
-    annaHeute: [id('0020', 3), id('0020', 4)],
+    annaHeute: [id('0020', 3), id('0020', 4), id('0020', 15)],
     /** Nur in den Randzuständen zum Tagesende (#113). */
     philippGestern: [id('0020', 8), id('0020', 9)],
     /** Offline gebucht, nur in `zwei_installationen` (#116): je Gerät ein Eintrag. */
@@ -83,14 +83,25 @@ export const seedIds = {
     philippOhneAppOeffnung: [id('0020', 13), id('0020', 14)],
   },
   // 0021/4–6: Philipps weitere Messungen in den Gewichts-Varianten von `solo` (#176).
-  weightEntry: { philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3), philippVerlauf: [id('0021', 4), id('0021', 5), id('0021', 6)] },
+  // 0021/7–15: Philipps frühere Messungen der letzten 30 Tage in den Partner-Szenarien (#181), 0021/16: sein Waagenimport.
+  // 0021/17–20: Annas frühere Messungen in den Partner-Szenarien (#181).
+  weightEntry: {
+    philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3), philippVerlauf: [id('0021', 4), id('0021', 5), id('0021', 6)],
+    philippMonat: Array.from({ length: 9 }, (_, index) => id('0021', 7 + index)),
+    philippWaage: id('0021', 16),
+    annaVerlauf: [id('0021', 17), id('0021', 18), id('0021', 19), id('0021', 20)],
+  },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
   // 0022/5–8: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).
   // 0022/9–11: Philipps Einheiten der Vorwoche in `solo` und seinen Varianten (#174).
+  // 0022/12–15: Philipps Sportwoche in den Partner-Szenarien mit Import, Ersetzung und Ausblendung (#181).
+  // 0022/16–17: Annas importierte Einheiten dieser Woche in den Partner-Szenarien (#181).
   sportEntry: {
     philippGestern: id('0022', 1), philippHeute: id('0022', 2), annaHeute: id('0022', 3), philippHeuteKurz: id('0022', 4),
     philippVorgestern: id('0022', 5), philippWoche: [id('0022', 6), id('0022', 7), id('0022', 8)],
     philippVorwoche: [id('0022', 9), id('0022', 10), id('0022', 11)],
+    philippPartner: { montag: id('0022', 12), dienstagImport: id('0022', 13), dienstagErsetzt: id('0022', 14), heuteAusgeblendet: id('0022', 15) },
+    annaWoche: [id('0022', 16), id('0022', 17)],
   },
   // 0031/3–4: Philipps Frühstück aus der Suche (#155), in `solo` und damit auch in den Partner-Szenarien.
   // 0031/5–7: Philipps Mahlzeiten von gestern, nur in den Randzuständen zum Tagesende (#113).

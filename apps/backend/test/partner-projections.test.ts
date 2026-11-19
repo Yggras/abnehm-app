@@ -7,26 +7,21 @@ import type { CanonicalChange } from '@abnehm/contracts/sync';
 
 import { coupling, partnerDailyGoalStatus, partnerSummary, person, projectionInvalidation, waterEntry } from '../src/db/schema/index.ts';
 import { invalidatePartnerSummaries } from '../src/partner-projections/invalidations.ts';
-import type { PartnerSummaryProjector } from '../src/partner-projections/projector.ts';
+import type { AnyPartnerSummaryProjector, PartnerSummaryProjector } from '../src/partner-projections/projector.ts';
 import { dataAsOfRefreshMs } from '../src/partner-projections/projections.ts';
 import { revokeCoupling } from '../src/partner-projections/revocation.ts';
+import { trackerPartnerSummaryProjectors } from '../src/trackers/partner-summaries.ts';
 import { securityLogEntries } from './support/auth-client.ts';
 import { coupledWorld, otherCouple, sharingId, worldStart, worldToday, type CoupledWorld, type WorldPerson } from './support/coupled-world.ts';
 import { completeOp, insertDailyGoals } from './support/daily-goals.ts';
 import { partnerProjectorConformanceCases } from './support/partner-projector-conformance.ts';
-import {
-  testNutritionProjector,
-  testPlans,
-  testRecorders,
-  testSportProjector,
-  testWaterProjector,
-  testWeightProjector,
-} from './support/partner-projectors.ts';
+import { testNutritionProjector, testPlans, testRecorders } from './support/partner-projectors.ts';
 import { pullAll, push, upsertOp } from './support/sync.ts';
 
 // Projektionsmechanismus (Spezifikation 0, Abschnitt 5; #106) über die echte Hono-App: Vor dem Pull
-// materialisiert das Fundament, was die abrufende Person über ihren Partner sehen darf. Die echten
-// Projectors liefern Spezifikation 2 und 3; hier belegen Test-Projectors den Mechanismus.
+// materialisiert das Fundament, was die abrufende Person über ihren Partner sehen darf. Den Mechanismus
+// belegen die Projectors für Wasser und Sport aus Spezifikation 3 (#181) mit dem `PlanReader`-Fake aus
+// #104; ihre eigenen Regeln prüft `tracker-partner-summaries.test.ts`.
 
 const today = LocalDate.parse(worldToday);
 
@@ -40,14 +35,19 @@ type World = CoupledWorld & {
   summaries(changes: readonly CanonicalChange[]): PartnerSummaryEnvelope[];
 };
 
-async function world(projectors: (plans: ReturnType<typeof testPlans>) => readonly PartnerSummaryProjector<AreaKey>[] = (plans) => [
-  testWaterProjector(plans),
-  testSportProjector(plans),
+type Plans = ReturnType<typeof testPlans>;
+
+/** Der echte Projector eines Tracker-Bereichs über dem `PlanReader`-Fake. */
+const trackerProjector = <A extends 'wasser' | 'sport'>(area: A, plans: Plans): PartnerSummaryProjector<A> =>
+  trackerPartnerSummaryProjectors({ planReader: plans.planReader })[area];
+
+async function world(projectors: (plans: Plans) => readonly AnyPartnerSummaryProjector[] = (plans) => [
+  trackerProjector('wasser', plans),
+  trackerProjector('sport', plans),
 ]): Promise<World> {
-  const base = await coupledWorld();
   const plans = testPlans();
+  const base = await coupledWorld({ partnerSummaryProjectors: projectors(plans) });
   for (const member of [base.anna, base.philipp]) plans.set(member.personId, { validFrom: '2026-10-01', waterTargetMl: 1500, weeklySportTargetMinutes: 150 });
-  for (const projector of projectors(plans)) base.backend.partnerProjections.registerProjector(projector as never);
   const cursors = new Map<string, SyncCursor | null>();
   const db = base.backend.database.db;
   return {
@@ -285,7 +285,31 @@ describe('Partner-Zusammenfassungen', () => {
   it('lässt nur einen Projector je Bereich zu', async () => {
     const w = await world();
 
-    expect(() => w.backend.partnerProjections.registerProjector(testWaterProjector(w.plans))).toThrow('wasser');
+    expect(() => w.backend.partnerProjections.registerProjector(trackerProjector('wasser', w.plans))).toThrow('wasser');
+  });
+
+  it('hält keine Zusammenfassung, solange der Projector noch nichts zu zeigen hat, und liefert den Rest trotzdem (#181)', async () => {
+    let showing = true;
+    const w = await world((plans) => {
+      const water = trackerProjector('wasser', plans);
+      return [{ area: 'wasser', project: async (tx, input) => (showing ? water.project(tx, input) : null) } satisfies PartnerSummaryProjector<'wasser'>];
+    });
+    await w.drink(w.anna, 750);
+    const [shown] = w.summaries(await w.pull(w.philipp));
+
+    showing = false;
+    await w.drink(w.anna, 375);
+    const hidden = await w.pull(w.philipp);
+
+    expect(ofType(hidden, 'partner_summary')).toEqual([expect.objectContaining({ type: 'tombstone', entityId: shown?.id })]);
+    expect(await w.backend.database.db.select().from(partnerSummary).where(isNull(partnerSummary.deletedAt))).toEqual([]);
+    expect(w.summaries(await w.pull(w.philipp))).toEqual([]);
+
+    showing = true;
+    await w.drink(w.anna, 375);
+    const [again] = w.summaries(await w.pull(w.philipp));
+    expect(again).toMatchObject({ type: 'wasser', content: { progressPercent: 100 }, generation: 2 });
+    expect(again?.id).not.toBe(shown?.id);
   });
 });
 
@@ -404,7 +428,7 @@ describe('Nebenläufigkeit', () => {
     const gate = new Promise<void>((resolve) => (release = resolve));
     let blocking = true;
     const w = await world((plans) => {
-      const water = testWaterProjector(plans);
+      const water = trackerProjector('wasser', plans);
       return [{
         area: 'wasser',
         // Rechnet zuerst und hängt dann, bevor das Fundament speichert.
@@ -448,12 +472,7 @@ describe('Nebenläufigkeit', () => {
   });
 });
 
-describe('Konformitäts-Testkit mit den Test-Projectors', () => {
-  const harnesses = [
-    partnerProjectorConformanceCases('ernaehrung', { projector: () => testNutritionProjector(), record: testRecorders.ernaehrung }),
-    partnerProjectorConformanceCases('wasser', { projector: testWaterProjector, record: testRecorders.wasser }),
-    partnerProjectorConformanceCases('sport', { projector: testSportProjector, record: testRecorders.sport }),
-    partnerProjectorConformanceCases('gewicht', { projector: () => testWeightProjector(), record: testRecorders.gewicht }),
-  ];
-  for (const { name, run } of harnesses.flat()) it(name, run);
+// Wasser, Sport und Gewicht laufen mit ihren echten Projectors in `tracker-partner-summaries.test.ts` durchs Kit.
+describe('Konformitäts-Testkit mit dem Test-Projector für Ernährung', () => {
+  for (const { name, run } of partnerProjectorConformanceCases('ernaehrung', { projector: () => testNutritionProjector(), record: testRecorders.ernaehrung })) it(name, run);
 });

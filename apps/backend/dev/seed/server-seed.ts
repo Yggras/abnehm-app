@@ -30,13 +30,14 @@ import { seedPhotoFiles } from './photo-seed.ts';
 // und gesalzenem Passwort-Hash, keine Sitzung. Sitzung und Sicherheitslog-Eintrag entstehen erst bei
 // der Anmeldung danach. Der kanonische Vergleich umfasst deshalb Fach- und Sync-Daten, also alle
 // Tabellen außer den Better-Auth-Tabellen (Konten prüft der Test semantisch: ID, E-Mail, Hash passt
-// zum Testpasswort) und dem Sicherheitslog (betriebliches Protokoll, das jede Anmeldung schreibt).
-// Seeden leert beide.
+// zum Testpasswort), dem Sicherheitslog (betriebliches Protokoll, das jede Anmeldung schreibt) und den
+// Projektions-Invalidierungen (Arbeitswarteschlange des Projektionsmechanismus mit zufälligen IDs, die
+// jede Push-Annahme eines Tracker-Eintrags schreibt, #181). Seeden leert alle drei.
 
 const tables = (Object.values(schema) as unknown[]).filter((value): value is PgTable => is(value, PgTable));
 const byName = new Map(tables.map((table) => [getTableConfig(table).name, table]));
 /** Nicht Teil des kanonischen Vergleichs; siehe Seed-Strategie oben. */
-const notCanonical: readonly string[] = [...authTables, 'security_log'];
+const notCanonical: readonly string[] = [...authTables, 'security_log', 'projection_invalidation'];
 const authTableNames: readonly string[] = authTables;
 
 const insertOrder = dependencyOrder(
@@ -58,6 +59,7 @@ export async function seedServer(database: Database, manifest: SeedManifest, cod
   }
   if (rows.sync_clock?.length !== 1) throw new Error('Seed: das Manifest muss die Sync-Clock setzen');
   if (rows.security_log !== undefined) throw new Error('Seed: das Sicherheitslog entsteht nur im Betrieb');
+  if (rows.projection_invalidation !== undefined) throw new Error('Seed: Projektions-Invalidierungen entstehen nur im Betrieb');
   // Hashen dauert; es läuft vor der Transaktion.
   const accounts = await Promise.all(manifest.accounts.map(async (account) => ({ ...account, hash: await hashPassword(account.password) })));
   const at = new Date(manifest.clock.instant);

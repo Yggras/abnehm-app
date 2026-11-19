@@ -27,8 +27,8 @@ import { appPartner, createPartner } from '.';
 // Partner-Karte auf „Heute“ über die Heute-Registry. Darunter liegen der echte Partnerbereich, die echte
 // Sync-Engine und eine mit `solo` bzw. `gekoppelt` (#117) geseedete SQLite-Datei. Der Test gibt Pull-Seiten,
 // Netzstatus und Minutentakt vor. In `gekoppelt` hält Anna Ernährung privat und teilt Wasser (100 %),
-// Sport (45 von 120 min) und Gewicht (noch ohne Trend); ihr grober Stand ist „fast geschafft“, berechnet zur
-// Uhr des Seeds.
+// Sport (125 von 120 min) und Gewicht (Trend −0,2 kg, seit #181); ihr grober Stand ist „fast geschafft“,
+// berechnet zur Uhr des Seeds.
 
 jest.setTimeout(30_000);
 jest.mock('../session/use-session-gate', () => jest.requireActual('../session/testing/test-gate'));
@@ -163,8 +163,8 @@ describe('„Wir“ gekoppelt', () => {
     expect(screen.queryByText(/Ernährung|privat/)).not.toBeOnTheScreen();
     expect(within(card).getByLabelText('Anna, Wasser: 100 Prozent des Wasserziels, Stand gerade eben')).toBeOnTheScreen();
     expect(within(card).getByText('100 % des Wasserziels')).toBeOnTheScreen();
-    expect(within(card).getByLabelText('Anna, Sport: 45 von 120 Minuten diese Woche, Stand gerade eben')).toBeOnTheScreen();
-    expect(within(card).getByText('Trend ab drei Tagesgewichten')).toBeOnTheScreen();
+    expect(within(card).getByLabelText('Anna, Sport: 125 von 120 Minuten diese Woche, Stand gerade eben')).toBeOnTheScreen();
+    expect(within(card).getByText('Trend −0,2 kg in 2 Wochen')).toBeOnTheScreen();
     expect(within(card).getByText('Stand gerade eben')).toBeOnTheScreen();
     // Partnerinhalte tragen die Partnerfarbe.
     expect(within(card).getAllByTestId('icon-drop', { includeHiddenElements: true })).toHaveLength(1);
@@ -218,6 +218,8 @@ describe('„Wir“ gekoppelt', () => {
     await renderRouter(appDir, { initialUrl: '/partner' });
     const weightRow = async () => within(await screen.findByTestId('wir-bereich-gewicht'));
 
+    expect((await weightRow()).getByText('Trend −0,2 kg in 2 Wochen')).toBeOnTheScreen();
+    await philipp.pull([summary('gewicht', { changeKg: null, direction: 'noch_nicht_verfuegbar' })]);
     expect((await weightRow()).getByText('Trend ab drei Tagesgewichten')).toBeOnTheScreen();
     await philipp.pull([summary('gewicht', { changeKg: -0.4, direction: 'sinkend' })]);
     expect((await weightRow()).getByText('Trend −0,4 kg in 2 Wochen')).toBeOnTheScreen();

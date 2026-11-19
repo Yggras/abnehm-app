@@ -1,5 +1,5 @@
 import { buildSeedState, changedOnServer, pulledBy } from './build.ts';
-import { gekoppeltExtensions, gekoppeltPartsWith, partnerDailyGoalStatusEntity, type AnnasProjections } from './gekoppelt.ts';
+import { annasProjectionsNow, annasSummaries, gekoppeltExtensions, gekoppeltPartsWith, partnerDailyGoalStatusEntity, type AnnasProjections } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest } from './manifest.ts';
 
@@ -8,12 +8,12 @@ import { SeedManifest } from './manifest.ts';
 // damals. Anna hatte da noch kein Wasser und ein erfülltes Tagesziel (Sporteinheit um 06:16 UTC), also
 // den groben Tageszielstand „unterwegs“. Seitdem hat sie ihr Wasserziel erfüllt.
 //
-// Der Schritt ist Philipps Sync. Der Vor-Pull-Schritt der Partner-Projektionen (#106) rechnet Annas
-// Tageszielstand zur Uhr des Manifests neu: „fast_geschafft“, dieselbe ID und Generation, neuer
-// Datenstand und die nächste Serverversion, und Philipps Pull übernimmt ihn. Annas Zusammenfassungen
-// bleiben auf dem alten Stand, bis die Bereiche ihre Projectors anmelden (Spezifikationen 2 und 3); dann
-// ergänzen sie den Sollzustand und zählen die Revision hoch. Anna synchronisiert nicht; ihr Gerät
-// bleibt, wie es war.
+// Der Schritt ist Philipps Sync. Der Vor-Pull-Schritt der Partner-Projektionen (#106) rechnet zur Uhr des
+// Manifests neu, was älter als 10 Minuten ist, mit derselben ID und Generation, neuem Datenstand und je der
+// nächsten Serverversion: Annas Zusammenfassungen Wasser (jetzt 100 %), Sport und Gewicht (unverändert,
+// nur bestätigt; Projectors aus #181), danach ihren Tageszielstand „fast_geschafft“. Philipps Pull
+// übernimmt alles. Ernährung hält Anna privat; der Projector dazu kommt mit Spezifikation 2. Anna
+// synchronisiert nicht; ihr Gerät bleibt, wie es war.
 //
 // Das Development-Backend nutzt bis #271 die Systemuhr; per Seed-Link rechnet der erste Pull deshalb
 // für den echten Tag. Den Sollzustand zeigen die Tests mit Testuhr.
@@ -34,18 +34,19 @@ const initial = buildSeedState({
   },
 });
 
-/** Annas Tageszielstand zur Uhr des Manifests; die Zeile behält ID, Generation und Anlagezeitpunkt. */
-const fresh = partnerDailyGoalStatusEntity('anna', 'fast_geschafft', seedClock.instant);
+/** Annas Projektionen zur Uhr des Manifests; die Zeilen behalten ID, Generation und Anlagezeitpunkt. */
+const fresh = [...annasSummaries(annasProjectionsNow), partnerDailyGoalStatusEntity('anna', annasProjectionsNow.stage, annasProjectionsNow.dataAsOf)];
 const refreshed = changedOnServer(initial, {
   createdAt: seedClock.instant,
-  changes: [{ ...fresh, row: { ...fresh.row, created_at: stale.dataAsOf } }],
+  changes: fresh.map((entity) => ({ ...entity, row: { ...entity.row, created_at: stale.dataAsOf } })),
 });
 
 export const veralteterPartnerstandManifest = SeedManifest.parse({
   formatVersion: 1,
   scenario: 'veralteter_partnerstand',
+  // Revision 3: Annas Zusammenfassungen rechnet der Sync seit #181 mit neu; Tracker-Daten aus `gekoppelt` (#181).
   // Revision 2: Mahlzeitenfotos seit #162 im Änderungsprotokoll, mit Bilddaten und abgelaufenem Fotoentwurf.
-  revision: 2,
+  revision: 3,
   clock: seedClock,
   localDates: seedDays,
   catalogVersion: null,

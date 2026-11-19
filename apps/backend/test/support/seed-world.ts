@@ -217,7 +217,7 @@ export async function reseed({ backend, manifest, phones }: SeedWorld): Promise<
 }
 
 /**
- * Kanonischer Gesamtzustand: Postgres ohne Better-Auth-Tabellen und Sicherheitslog, je Installation SQLite.
+ * Kanonischer Gesamtzustand: Postgres ohne Better-Auth-Tabellen, Sicherheitslog und Projektions-Invalidierungen, je Installation SQLite.
  * Wie im Manifest fehlen die abgeleiteten Spalten verarbeiteter Operationen; sie prüft `expectProcessedOperations`.
  */
 export async function stateOf({ backend, phones }: SeedWorld): Promise<SeedState> {

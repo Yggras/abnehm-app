@@ -145,6 +145,33 @@ export default defineConfig([
     rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock, testOnlyFixtures, testOnlySeeds, noDevelopmentBackend] }] },
   },
   {
+    // Partner-Projectors der Tracker (#181; Spezifikation 0, Abschnitt 5): nur die Tabellen von Wasser, Sport und
+    // Gewicht und der Projector-Vertrag; alles andere, etwa der `PlanReader`, kommt als injizierter Reader-Port.
+    files: ['apps/backend/src/trackers/partner-summaries.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            testOnlyClock,
+            testOnlyFixtures,
+            testOnlySeeds,
+            noDevelopmentBackend,
+            {
+              group: ['../db/schema/index.ts'],
+              allowImportNames: ['sportEntry', 'waterEntry', 'weightEntry'],
+              message: 'Ein Projector liest nur die Tabellen seines Bereichs, keine fremden Bereichstabellen.',
+            },
+            {
+              regex: '^\\.\\.?/(?!db/schema/index\\.ts$|partner-projections/projector\\.ts$)',
+              message: 'Ein Projector bekommt fremde Module als Reader-Port injiziert, statt sie zu importieren.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Development-Backend (#112): darf die Seed-Manifeste nutzen, aber weder Testuhr noch Vertrags-Fixtures.
     files: ['apps/backend/dev/**'],
     rules: { 'no-restricted-imports': ['error', { patterns: [testOnlyClock, testOnlyFixtures] }] },
