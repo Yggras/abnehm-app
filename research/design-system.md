@@ -372,7 +372,7 @@ Federnd bei Erfolgen, ruhig bei allem anderen. Werte gelten für Reanimated (`wi
 | `spring-firm` | `damping 20, stiffness 260, mass 1` | Rückfedern nach dem Drücken, Chips |
 
 - **Tagesziel erfüllt:** Häkchen mit `spring-bouncy`, Zeile färbt sich in `duration-fast`, Momo wechselt kurz auf „freut sich“.
-- **Alle drei erfüllt / Levelaufstieg:** Momo „begeistert“ mit Hüpfer und drei Funken über `duration-celebrate`; nie Konfetti über den ganzen Bildschirm.
+- **Alle drei erfüllt / Levelaufstieg:** Momo „begeistert“ mit Hüpfer und drei Funken über `duration-celebrate`; nie Konfetti über den ganzen Bildschirm. Beim Levelaufstieg bleibt Momo „begeistert“, solange die Meldung „Momo ist jetzt auf Level N“ steht (5 s); der seltenste gemeinsame Erfolg soll neben seiner Meldung sichtbar bleiben (Nutzerentscheidung in [#200](https://github.com/Yggras/abnehm-app/issues/200) nach der Impeccable-Kritik).
 - **Seitenwechsel** folgen der Plattform (Expo Router).
 - **Bewegung reduzieren:** Federn werden zu Überblendungen in `duration-fast`, Momo hüpft nicht, Wellen und Partikel der Insel stehen still. Abfrage über Reanimated `useReducedMotion` ([Doku](https://docs.swmansion.com/react-native-reanimated/docs/device/useReducedMotion/)) bzw. `AccessibilityInfo.isReduceMotionEnabled` ([RN-Doku](https://reactnative.dev/docs/accessibilityinfo)).
 

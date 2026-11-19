@@ -3,13 +3,14 @@ import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole, PlacementTarget } from '@abnehm/contracts/island';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
-import { reactionMood } from '@abnehm/game-rules/mood';
+import { reactionMood, type MomoEvent } from '@abnehm/game-rules/mood';
 
 import { motion } from '../design/tokens';
 import type { Haptics } from '../haptics/haptics';
 import type { LocalDatabase, ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { Refresh } from '../shell/followed-source';
+import { messageStandingTime } from '../shell/message-timing';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
@@ -88,8 +89,12 @@ const roleChoiceAction = { actionId: 'momo.open_role_choice', target: { type: 'm
 const answerRoleChoiceAction = { actionId: 'wir.answer_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 const openIslandAction = { actionId: 'wir.open_island', target: { type: 'momo' } } as const;
 
-/** Wie lange Momo nach einem eigenen Ereignis reagiert (`duration-celebrate`, Design-System › Bewegung). */
-const reactionMs = motion.duration.celebrate;
+/**
+ * Wie lange Momo nach einem eigenen Ereignis reagiert: `duration-celebrate` (Design-System › Bewegung), beim
+ * Levelaufstieg so lange, wie die Meldung „Momo ist jetzt auf Level N“ steht. Der seltenste gemeinsame Erfolg
+ * soll neben seiner Meldung sichtbar bleiben (Nutzerentscheidung in #200 nach der Impeccable-Kritik).
+ */
+const reactionMsOf = (events: readonly MomoEvent[]) => (events.includes('levelaufstieg') ? messageStandingTime.default : motion.duration.celebrate);
 
 export function createGameService({ database, writer, clock, newId, haptics, refresh }: GameServiceDependencies): GameService {
   const commands = roleChoiceCommands({ writer, newId, timeZone: () => TimeZone.parse(clock.read().timeZone) });
@@ -116,7 +121,7 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
             const events = eventsOf(claimed);
             tx.afterCommit(() => {
               haptics.feedback(hapticOf(events));
-              mood.react(reactionMood(events), reactionMs);
+              mood.react(reactionMood(events), reactionMsOf(events));
             });
           }
           return claimed;

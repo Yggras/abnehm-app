@@ -69,9 +69,12 @@ describe('Levelfeier', () => {
       values: { level: 2, bonus: false, energie: 0, gesternBonus: false, gesternEnergie: 0 },
     });
     expect(app.haptics).toEqual(['levelaufstieg']);
-    // „begeistert“ ist die Pose mit den drei Energie-Funken (Momo-Rig, #187).
+    // „begeistert“ ist die Pose mit den drei Energie-Funken (Momo-Rig, #187). Beim Levelaufstieg hält sie so lange,
+    // wie die Meldung steht (5 s), nicht nur `duration-celebrate` (Nutzerentscheidung in #200).
     expect(app.todayMood()).toBe('begeistert');
-    jest.advanceTimersByTime(1_200);
+    jest.advanceTimersByTime(4_999);
+    expect(app.todayMood()).toBe('begeistert');
+    jest.advanceTimersByTime(1);
     expect(app.todayMood()).not.toBe('begeistert');
   });
 
