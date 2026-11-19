@@ -99,7 +99,7 @@ describe('Seed-Manifest', () => {
       expect.objectContaining({ id: bircherFavorite, food_ref_type: 'eigen', food_ref_key: seedIds.ownFood.philippBircher, removed_at: null, deleted_at: null }),
     ]);
     expect(solo.initial.server.food_favorite).toEqual(rows.food_favorite);
-    const window = rows.nutrition_entry!.filter((row) => row.local_date < seedDays.zielstart).map(({ local_date, meal, food_ref_key }) => ({ local_date, meal, food_ref_key }));
+    const window = rows.nutrition_entry!.filter((row) => String(row.local_date) < seedDays.zielstart).map(({ local_date, meal, food_ref_key }) => ({ local_date, meal, food_ref_key }));
     // Heute ist der 14.10.: Das Fenster beginnt am 15.09.
     expect(window).toEqual([
       { local_date: '2026-09-15', meal: 'fruehstueck', food_ref_key: 'C514300' },
