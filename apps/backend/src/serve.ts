@@ -7,6 +7,7 @@ import { readConfig, type BackendConfig } from './config.ts';
 import { openDatabase, type Database } from './database.ts';
 import { migrateDatabase } from './db/migrate.ts';
 import { errorCodeForLog } from './log.ts';
+import { createExpoPushClient } from './notifications/expo-push.ts';
 import { productionMealVisionAnalyzer } from './nutrition/claude-meal-vision.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 
@@ -50,10 +51,13 @@ export async function runBackend({
     invitationSettings: config.invitations,
     photoStorageDirectory: config.photoStorageDirectory,
     mealVisionAnalyzer: analyzer,
+    expoPush: createExpoPushClient({ accessToken: config.expoPush.accessToken }),
     clock,
   });
-  // Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts).
+  // Zeitgesteuerte Serverjobs laufen im Backend-Prozess (src/jobs/job-registry.ts), darunter die
+  // Arbeitsschleife des Push-Zustellers; der Commit eines neuen Intents stößt sie zusätzlich sofort an.
   const stopJobs = backend.jobs.start();
+  const stopListening = await backend.pushDelivery.listen();
 
   // Im Container auf allen Interfaces; welche Adresse nach außen sichtbar ist, legt compose.yaml fest.
   const server = serve({ fetch: served(backend, database).fetch, port: config.port, hostname: '0.0.0.0' }, (info) => {
@@ -66,7 +70,8 @@ export async function runBackend({
     stopping = true;
     console.log(`[backend] ${signal} empfangen, fahre herunter`);
     server.close(() => {
-      void stopJobs()
+      void stopListening()
+        .then(() => stopJobs())
         .then(() => database.close())
         .finally(() => process.exit(0));
     });

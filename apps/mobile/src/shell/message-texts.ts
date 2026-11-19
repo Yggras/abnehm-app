@@ -36,6 +36,50 @@ const toMeal: Readonly<Record<MealKey, string>> = {
   snacks: 'zu den Snacks',
 };
 
+/** Werte von Momos Reaktion auf Gutschriften: Tagesziele, Bonus und Energie je Tag (#188). */
+const MomoEnergyValues = z.strictObject({
+  ziel1: BausteinKey.optional(),
+  ziel2: BausteinKey.optional(),
+  ziel3: BausteinKey.optional(),
+  bonus: z.boolean(),
+  energie: z.int().nonnegative(),
+  gesternBonus: z.boolean(),
+  gesternEnergie: z.int().nonnegative(),
+});
+
+/** Was Momos Reaktion auf Gutschriften je Tag sagt, ohne Betrag; `null` ohne Gutschrift an diesem Tag. */
+function energyParts({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }: z.output<typeof MomoEnergyValues>) {
+  const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
+  return {
+    yesterday: gesternEnergie === 0 ? null : `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''}`,
+    today: energie === 0 ? null : bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`,
+  };
+}
+
+const energyLine = (text: string, amount: number): ToastLine => ({ text: `${text} · +${amount} Energie`, energy: true });
+
+/** Die Zeilen von `momo.energie` (siehe dort): eine je Tag mit Gutschriften, gestern über heute. */
+function energyLines(values: z.output<typeof MomoEnergyValues>): MessageLines {
+  const { yesterday, today } = energyParts(values);
+  if (yesterday !== null && today !== null) return [energyLine(yesterday, values.gesternEnergie), energyLine(today, values.energie)];
+  return yesterday !== null ? energyLine(yesterday, values.gesternEnergie) : energyLine(today!, values.energie);
+}
+
+/**
+ * Gutschriften als eine Zeile, wenn neben ihnen nur eine Zeile Platz hat: gestern und heute zusammen mit der
+ * Summe, etwa „Gestern im Kalorienbudget, heute Wasserziel erfüllt · +2 Energie“ (Wortlaut ist ein Designwert
+ * aus #200, nicht belegt).
+ */
+function energyLineCombined(values: z.output<typeof MomoEnergyValues>): ToastLine {
+  const { yesterday, today } = energyParts(values);
+  if (yesterday === null || today === null) {
+    const lines = energyLines(values);
+    return 'text' in lines ? lines : lines[0];
+  }
+  // Bausteinnamen sind Substantive und bleiben groß; nur „Alle drei geschafft“ steht mitten im Satz klein.
+  return energyLine(`${yesterday}, heute ${values.bonus ? 'alle drei geschafft' : today}`, values.gesternEnergie + values.energie);
+}
+
 export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   /** Development Build: Für einen Quick-Command fehlt noch der Handler seines Bereichs. */
   'shell.quick_command.in_arbeit': messageText(z.strictObject({ commandKey: QuickCommandKey }), ({ commandKey }) => ({
@@ -49,6 +93,10 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'ernaehrung.eintrag_hinzugefuegt': messageText(NutritionEntryAddedValues, ({ meal, kcal }) => ({
     text: `${kcal.toLocaleString('de-DE')} kcal ${toMeal[meal]} hinzugefügt`,
   })),
+  /** Spezifikation 2: Menge, Einheit oder Mahlzeit eines Eintrags geändert („Eintrag gespeichert · Rückgängig“; #156). */
+  'ernaehrung.eintrag_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Eintrag gespeichert' })),
+  /** Spezifikation 2, Abschnitt 6: Eintrag ohne Bestätigungsdialog gelöscht („Eintrag gelöscht · Rückgängig“; #156). */
+  'ernaehrung.eintrag_geloescht': messageText(z.strictObject({}), () => ({ text: 'Eintrag gelöscht' })),
   /** Spezifikation 3: Gewicht eingetragen („91,8 kg eingetragen · Rückgängig“); nur die Person selbst sieht es. */
   'gewicht.eingetragen': messageText(WeightMessageValues, ({ weightG }) => ({ text: `${thousandthsWithOneDecimal(weightG)} kg eingetragen` })),
   /** Spezifikation 3: manuelle Messung bearbeitet („82,1 kg gespeichert · Rückgängig“; #176). */
@@ -93,29 +141,20 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
    * mit „Rückgängig“, hängt der Host die Zeile von heute an.
    */
   'momo.energie': messageText(
-    z
-      .strictObject({
-        ziel1: BausteinKey.optional(),
-        ziel2: BausteinKey.optional(),
-        ziel3: BausteinKey.optional(),
-        bonus: z.boolean(),
-        energie: z.int().nonnegative(),
-        gesternBonus: z.boolean(),
-        gesternEnergie: z.int().nonnegative(),
-      })
-      .refine((values) => values.energie + values.gesternEnergie > 0, { message: 'Meldung ohne Gutschrift' }),
-    ({ ziel1, ziel2, ziel3, bonus, energie, gesternBonus, gesternEnergie }) => {
-      const goals = [ziel1, ziel2, ziel3].flatMap((goal) => (goal === undefined ? [] : [bausteinNames[goal]]));
-      const todayText = bonus ? 'Alle drei geschafft' : `${germanList(goals)} erfüllt`;
-      const today: ToastLine = { text: `${todayText} · +${energie} Energie`, energy: true };
-      const yesterday: ToastLine = {
-        text: `Gestern im Kalorienbudget${gesternBonus ? ', alle drei geschafft' : ''} · +${gesternEnergie} Energie`,
-        energy: true,
-      };
-      if (gesternEnergie === 0) return today;
-      return energie === 0 ? yesterday : [yesterday, today];
-    },
+    MomoEnergyValues.refine((values) => values.energie + values.gesternEnergie > 0, { message: 'Meldung ohne Gutschrift' }),
+    energyLines,
   ),
+  /**
+   * Spezifikation 4, Abschnitt 6: Momos Feier eines Levelaufstiegs, „Momo ist jetzt auf Level N“ (#200); bei
+   * mehreren übersprungenen Leveln das höchste. Kommen im selben Commit Gutschriften dazu, steht ihre Zeile
+   * davor, gestern und heute zusammengefasst, weil eine Meldung höchstens zwei Zeilen hat. Die Levelzeile
+   * steht zuletzt: Steht eine Meldung mit „Rückgängig“, hängt der Host nur sie an.
+   */
+  'momo.levelaufstieg': messageText(MomoEnergyValues.extend({ level: z.int().min(2) }), ({ level, ...energy }) => {
+    const levelLine: ToastLine = { text: `Momo ist jetzt auf Level ${level}` };
+    if (energy.energie + energy.gesternEnergie === 0) return levelLine;
+    return [energyLineCombined(energy), levelLine];
+  }),
   /** Spezifikation 5: Anzeigename unter „Konto“ geändert. */
   'konto.name_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Name gespeichert' })),
   /** Spezifikation 5, Abschnitt 4: Anfeuerung gesendet (#123); ohne „Rückgängig“ und ohne Haptik. */

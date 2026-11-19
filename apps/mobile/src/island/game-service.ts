@@ -3,13 +3,14 @@ import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole, PlacementTarget } from '@abnehm/contracts/island';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
-import { reactionMood } from '@abnehm/game-rules/mood';
+import { reactionMood, type MomoEvent } from '@abnehm/game-rules/mood';
 
 import { motion } from '../design/tokens';
 import type { Haptics } from '../haptics/haptics';
 import type { LocalDatabase, ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { Refresh } from '../shell/followed-source';
+import { messageStandingTime } from '../shell/message-timing';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
@@ -22,7 +23,7 @@ import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceO
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
 // der Laichkugel über die Rollenwahl (#180) bis zur geschlüpften Insel (#184), die Befehle der Rollenwahl,
-// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
+// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) samt Levelfeier (#200) und die Beiträge an „Heute“
 // (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je
 // geöffneter Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
@@ -44,7 +45,8 @@ export type GameService = Readonly<{
    */
   observeStage(listener: (stage: IslandStage) => void): () => void;
   /**
-   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften, je Commit zu einer zusammengefasst.
+   * Momos Reaktionen auf eigene Tageszielerfüllungen und Gutschriften und auf Levelaufstiege der Insel (#200),
+   * je Commit zu einer zusammengefasst.
    * Solange ein Beobachter angemeldet ist, beansprucht der Dienst jedes neue Ereignis genau einmal je
    * Installation, löst dazu höchstens eine Haptik aus und lässt Momo kurz reagieren. Ohne Beobachter wartet
    * das Ereignis.
@@ -87,8 +89,12 @@ const roleChoiceAction = { actionId: 'momo.open_role_choice', target: { type: 'm
 const answerRoleChoiceAction = { actionId: 'wir.answer_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 const openIslandAction = { actionId: 'wir.open_island', target: { type: 'momo' } } as const;
 
-/** Wie lange Momo nach einem eigenen Ereignis reagiert (`duration-celebrate`, Design-System › Bewegung). */
-const reactionMs = motion.duration.celebrate;
+/**
+ * Wie lange Momo nach einem eigenen Ereignis reagiert: `duration-celebrate` (Design-System › Bewegung), beim
+ * Levelaufstieg so lange, wie die Meldung „Momo ist jetzt auf Level N“ steht. Der seltenste gemeinsame Erfolg
+ * soll neben seiner Meldung sichtbar bleiben (Nutzerentscheidung in #200 nach der Impeccable-Kritik).
+ */
+const reactionMsOf = (events: readonly MomoEvent[]) => (events.includes('levelaufstieg') ? messageStandingTime.default : motion.duration.celebrate);
 
 export function createGameService({ database, writer, clock, newId, haptics, refresh }: GameServiceDependencies): GameService {
   const commands = roleChoiceCommands({ writer, newId, timeZone: () => TimeZone.parse(clock.read().timeZone) });
@@ -115,7 +121,7 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
             const events = eventsOf(claimed);
             tx.afterCommit(() => {
               haptics.feedback(hapticOf(events));
-              mood.react(reactionMood(events), reactionMs);
+              mood.react(reactionMood(events), reactionMsOf(events));
             });
           }
           return claimed;
@@ -188,7 +194,7 @@ export function momoCharacterOf(stage: IslandStage): TodayState<'momo.character'
  * bestätigten Vorschlag des Partners in der aktiven Kopplung, solange sie ihn nicht schon angenommen hat.
  * Aktionen einer archivierten Kopplung sind beendet, auch wenn sie lokal noch offen sind (#107);
  * `readIslandStage` liest nur die aktive. Nach dem Schlüpfen die gemeinsamen Ereignisse der Insel für
- * „Neu bei euch“ als `shared_event`, bisher „Momo ist geschlüpft“ (#184).
+ * „Neu bei euch“ als `shared_event`, bisher „Momo ist geschlüpft“ (#184) und „Levelaufstieg“ (#200).
  */
 export function wirContributionsOf(stage: IslandStage): ContributionState<WirContribution[]> {
   if (stage.type === 'ohne_person') return { type: 'loading' };

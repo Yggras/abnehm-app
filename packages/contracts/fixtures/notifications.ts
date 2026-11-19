@@ -3,6 +3,7 @@ import {
   defaultNotificationSetting,
   EncouragementNotificationPayload,
   ExpoPushToken,
+  LevelUpPayload,
   NotificationIntent,
   NotificationPermission,
   NotificationSettingRecord,
@@ -10,6 +11,8 @@ import {
   PushPlatform,
   RegisterPushInstallationRequest,
   RoleRequestPayload,
+  ServerPushData,
+  UncouplingNotificationPayload,
   WallClockTime,
 } from '../src/notifications.ts';
 import { fixtures, without } from './define.ts';
@@ -40,7 +43,29 @@ const pushRegistration = {
   permission: 'granted',
 } as const;
 
+/** `data` des Anfeuern-Pushes an Philipp: Intent und Ziel „partner“ mit Fokus auf die erhaltene Anfeuerung (#142). */
+const pushData = {
+  intentId: encouragement.intentId,
+  target: { type: 'partner', focus: 'received_encouragement' },
+} as const;
+
 export const notificationFixtures = {
+  ServerPushData: fixtures(ServerPushData, {
+    valid: {
+      'Anfeuern öffnet „Wir“ bei der Anfeuerung': pushData,
+      'Projektabschluss öffnet das Projekt auf der Insel': {
+        intentId: `${sharedEvent}:${anna}:projektabschluss`,
+        target: { type: 'momo', view: 'projekt' },
+      },
+    },
+    invalid: {
+      'ohne Ziel': without(pushData, 'target'),
+      'ohne Intent': without(pushData, 'intentId'),
+      'unbekanntes Ziel': { ...pushData, target: { type: 'chat' } },
+      'Gesundheitswert gehört nicht in die Daten': { ...pushData, partnerWaterPercent: 64 },
+      'Text gehört nicht in die Daten': { ...pushData, body: 'Gemeinsam für Momo 🐣' },
+    },
+  }),
   WallClockTime: fixtures(WallClockTime, {
     valid: { 'Mitternacht': '00:00', 'Mittag': '13:00', 'letzte Minute': '23:59' },
     invalid: {
@@ -111,11 +136,22 @@ export const notificationFixtures = {
     valid: { 'unentschieden': 'undetermined', 'erlaubt': 'granted', 'verweigert': 'denied' },
     invalid: { 'vorläufig gibt es nicht (keine provisional-Erlaubnis)': 'provisional', 'leer': '' },
   }),
+  LevelUpPayload: fixtures(LevelUpPayload, {
+    valid: { 'Level 2': { level: 2 }, 'Level 61': { level: 61 } },
+    invalid: { 'Level 1 ist kein Aufstieg': { level: 1 }, 'kein ganzes Level': { level: 2.5 }, 'mit Energiemenge': { level: 4, energy: 12 } },
+  }),
   EncouragementNotificationPayload: fixtures(EncouragementNotificationPayload, {
     valid: { 'Anna, Gemeinsam für Momo': { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' } },
     invalid: {
       'Freitext': { senderDisplayName: 'Anna', encouragementKey: 'Kleiner Stups: Trink was 💧' },
       'mit Empfänger': { senderDisplayName: 'Anna', encouragementKey: 'stark_heute', recipientPersonId: philipp },
+    },
+  }),
+  UncouplingNotificationPayload: fixtures(UncouplingNotificationPayload, {
+    valid: { 'Anna hat entkoppelt': { actionId: sharedAction, senderDisplayName: 'Anna' } },
+    invalid: {
+      'ohne Absender': { actionId: sharedAction },
+      'Grund als Freitext gibt es nicht': { actionId: sharedAction, senderDisplayName: 'Anna', reason: 'Es passt gerade nicht' },
     },
   }),
   RoleRequestPayload: fixtures(RoleRequestPayload, {

@@ -305,3 +305,112 @@ describe('Schritte 5–7: eigenes Budget im Entwurf', () => {
     expect(device.onboarding.updateDraft({ knownEatingDisorder: true }).manualBudgetKcal).toBeUndefined();
   });
 });
+
+describe('Schritt 8 „Wochenplan“: Plan speichern', () => {
+  // Heute ist laut Testuhr Mittwoch, 14.10.2026, in Europe/Berlin.
+  const today = LocalDate.parse('2026-10-14');
+  const answered = {
+    calculationSex: 'weiblich', birthDate: LocalDate.parse('1991-04-02'), heightCm: 168, weightG: 80_000,
+    pregnantOrBreastfeeding: false, knownEatingDisorder: false, activityLevel: 'wenig_aktiv', goalWeightG: 76_000, pace: 'entspannt',
+    waterTargetMl: 1_500, weeklySportTargetMinutes: 150,
+  } as const;
+
+  /** Registriert, füllt die Schritte 3–7 und bestätigt die Körperdaten wie „Weiter“ in Schritt 3. */
+  async function throughStepSeven() {
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+    device.onboarding.updateDraft(answered);
+    expect(device.onboarding.confirmBodyData()).toEqual({ type: 'bestaetigt' });
+    return device.onboarding.readDraft().startWeightEntryId!;
+  }
+
+  it('speichert mit der Vorauswahl Di/Do/Sa und Montag: Startgewicht, Personenfelder und heute drei Tagesziele', async () => {
+    const entryId = await throughStepSeven();
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+
+    expect(device.startWeights()).toEqual([{ entryId, personId: device.ownPerson()!.id, weightG: 80_000, measuredAt: clock.read().instant }]);
+    expect(device.ownPerson()).toEqual(
+      expect.objectContaining({ calculationSex: 'weiblich', heightCm: 168, activityLevel: 'wenig_aktiv', onboardingStatus: 'begonnen' }),
+    );
+    // Mittwoch ist weder Sport- noch Wiegetag.
+    expect(device.dailyGoalsOn(today).map(({ baustein }) => baustein)).toEqual(['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget']);
+  });
+
+  it('übernimmt Sporttage und Wiegetag aus dem Entwurf; die Sporteinheit trägt die Mindestdauer', async () => {
+    await throughStepSeven();
+    device.onboarding.updateDraft({ sportDays: ['mittwoch', 'freitag'], weighDay: 'sonntag' });
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+
+    // 150 Minuten ÷ 2 Sporttage.
+    expect(device.dailyGoalsOn(today)[2]).toEqual(
+      expect.objectContaining({ baustein: 'sporteinheit', snapshot: expect.objectContaining({ minimumSingleSessionMinutes: 75 }) }),
+    );
+  });
+
+  it('zweimal speichern, etwa nach „Zurück“: genau ein Startgewicht und heute genau drei Tagesziele', async () => {
+    await throughStepSeven();
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+
+    expect(device.onboarding.hasPlanToday()).toBe(true);
+    device.onboarding.updateDraft({ sportDays: ['mittwoch'] });
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+
+    expect(device.startWeights()).toHaveLength(1);
+    // Die heutigen Tagesziele behalten die Werte des ersten Speicherns; der geänderte Wochenplan gilt ab
+    // morgen (Entscheidung in #134).
+    expect(device.dailyGoalsOn(today).map(({ baustein }) => baustein)).toEqual(['ernaehrung_erfasst', 'wasserziel', 'im_kalorienbudget']);
+    expect(device.weeklyPlanVersions()).toEqual([today, LocalDate.parse('2026-10-15')]);
+  });
+
+  it('vor dem ersten Speichern gilt heute kein Plan', async () => {
+    await throughStepSeven();
+
+    expect(device.onboarding.hasPlanToday()).toBe(false);
+  });
+
+  it('scheitert der `WeightRecorder`, meldet es „fehlgeschlagen“ ohne Plan; Wiederholen speichert genau einmal', async () => {
+    await throughStepSeven();
+    device.failWeightRecorder('wirft');
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'fehlgeschlagen' });
+    expect(device.takeErrors()).toEqual([new Error('WeightRecorder: Transaktion gescheitert')]);
+    expect(device.dailyGoalsOn(today)).toEqual([]);
+
+    device.failWeightRecorder(false);
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'gespeichert' });
+    expect(device.startWeights()).toHaveLength(1);
+    expect(device.dailyGoalsOn(today)).toHaveLength(3);
+  });
+
+  it('lehnt der `WeightRecorder` das Startgewicht mit einem Vertragsfehler ab, meldet es „fehlgeschlagen“ ohne Plan', async () => {
+    await throughStepSeven();
+    device.failWeightRecorder('lehnt_ab');
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'fehlgeschlagen' });
+    expect(device.takeErrors()).toEqual([{ code: 'invalid_payload', retryable: false }]);
+    expect(device.dailyGoalsOn(today)).toEqual([]);
+    expect(device.weeklyPlanVersions()).toEqual([]);
+  });
+
+  it('lehnt das Plan-Modul den Entwurf ab, etwa ein Zielgewicht unter BMI 18,5, ist er unvollständig, und es entsteht nichts', async () => {
+    await throughStepSeven();
+    // 168 cm: BMI 18,5 liegt bei 52,2 kg.
+    device.onboarding.updateDraft({ goalWeightG: 50_000 });
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'unvollstaendig' });
+    expect(device.startWeights()).toEqual([]);
+    expect(device.weeklyPlanVersions()).toEqual([]);
+  });
+
+  it('ohne bestätigte Körperdaten ist der Entwurf unvollständig, und es entsteht nichts', async () => {
+    await device.onboarding.register({ ...anna, disclaimerAcceptedAt: acceptedAt });
+    await device.onboarding.setUpAccount();
+    device.onboarding.updateDraft(answered);
+
+    expect(await device.onboarding.savePlan()).toEqual({ type: 'unvollstaendig' });
+    expect(device.startWeights()).toEqual([]);
+    expect(device.dailyGoalsOn(today)).toEqual([]);
+  });
+});

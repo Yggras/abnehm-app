@@ -48,6 +48,8 @@ services:
       BETTER_AUTH_SECRET_FILE: /run/secrets/better_auth_secret
       INVITE_CODE_SECRET_FILE: /run/secrets/invite_code_secret
       ANTHROPIC_API_KEY_FILE: /run/secrets/anthropic_api_key
+      # Zugriffstoken der erweiterten Push-Sicherheit von Expo (#142); leer, solange sie aus ist.
+      EXPO_ACCESS_TOKEN_FILE: /run/secrets/expo_access_token
       # Öffentliche HTTPS-Adresse aus `tailscale serve`, z. B. https://<maschine>.<tailnet>.ts.net
       AUTH_BASE_URL: "${ABNEHM_PROD_URL:?ABNEHM_PROD_URL (https://…ts.net) fehlt; scripts/prod setzt sie}"
       # Anfragen über die Portweiterleitung kommen im Container vom Gateway des Netzes `intern`.
@@ -60,6 +62,7 @@ services:
       - better_auth_secret
       - invite_code_secret
       - anthropic_api_key
+      - expo_access_token
     volumes:
       - photo-data:/var/lib/abnehm/fotos
     networks:
@@ -94,6 +97,8 @@ secrets:
     file: ${ABNEHM_PROD_SECRETS_DIR:?}/invite_code_secret
   anthropic_api_key:
     file: ${ABNEHM_PROD_SECRETS_DIR:?}/anthropic_api_key
+  expo_access_token:
+    file: ${ABNEHM_PROD_SECRETS_DIR:?}/expo_access_token
 
 volumes:
   postgres-data:

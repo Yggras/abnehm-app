@@ -4,17 +4,20 @@ import type { DisplayName, EntityId, Instant } from '@abnehm/contracts/base';
 import type { AppAuth, RegisterResult, SignInResult } from '../auth';
 import type { LocalDatabase } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
+import type { Plan } from '../plan';
 import { updateOwnPerson, type SyncCycleResult, type SyncWriter } from '../sync';
 import { checkBodyData, type BodyDataCheck, type BodyDataProblem } from './body-data';
 import { readOnboardingDraft, updateOnboardingDraft, type OnboardingDraft, type OnboardingDraftChange } from './draft';
 import { keepsManualBudget } from './goals';
+import { initialPlanDraftOf } from './week';
 
 // Onboarding-Modul (Spezifikation 1, Abschnitte 1 und 9): der Weg vom Willkommen bis „Heute“. Vor dem
 // Konto führt es durch Schritt 1 und 2 der Route `sitzung`: Es registriert bzw. meldet an und richtet
 // das Konto ein, bis die Person mit dem Pull auf dem Gerät ist. Die Bestätigung aus Schritt 1 schreibt
 // es dann über den Person-Upsert (#110) als `disclaimer_accepted_at`. Ab der Route `onboarding` liefert
 // es den Stand der Person und den lokalen Entwurf. Fachdaten schreibt es nur über den Person-Upsert
-// bzw. später das Plan-Modul; Registrieren, Anmelden und Bootstrap gehören dem Auth-Modul (#97).
+// bzw. in Schritt 8 über „Erstplan speichern“ des Plan-Moduls; Registrieren, Anmelden und Bootstrap
+// gehören dem Auth-Modul (#97).
 
 export type OnboardingAuth = Pick<AppAuth, 'register' | 'signIn' | 'bootstrapPerson'>;
 
@@ -42,6 +45,18 @@ export type BodyDataResult =
   /** Unter 18 Jahren: freundlicher Sperrbildschirm. */
   | Readonly<{ type: 'minderjaehrig' }>
   | Readonly<{ type: 'ungueltig'; errors: BodyDataProblem[] }>;
+
+/** Ausgang von „Plan speichern“ in Schritt 8. */
+export type PlanSaveResult =
+  /** Startgewicht, Personenfelder, Fassungen und die heutigen Tagesziele liegen vor; weiter zu Schritt 9. */
+  | Readonly<{ type: 'gespeichert' }>
+  /** Der Entwurf trägt keine bestätigten Körperdaten oder passt nicht mehr zum Zielrechner; zurück in die Schritte davor. */
+  | Readonly<{ type: 'unvollstaendig' }>
+  /** Startgewicht oder lokale Transaktion sind gescheitert; Wiederholen erzeugt keine Dublette. */
+  | Readonly<{ type: 'fehlgeschlagen' }>;
+
+/** Was das Onboarding vom Plan-Modul der geöffneten Kontodatenbank braucht. */
+export type OnboardingPlan = Pick<Plan, 'saveInitialPlan' | 'hasPlanToday'>;
 
 export type Onboarding = {
   /** Schritt 2: legt das Konto samt Person an; die Bestätigung aus Schritt 1 folgt mit der Person. */
@@ -72,8 +87,21 @@ export type Onboarding = {
   confirmBodyData(): BodyDataResult;
   /** Stand der Körperdaten im Entwurf am heutigen Tag, etwa für den Sperrbildschirm nach einem Neustart. */
   bodyData(): BodyDataCheck;
-  /** Für `onAccountOpened` der App-Sitzung; die Rückgabe löst die Beobachtung beim Sperren. */
-  opened(database: LocalDatabase): () => void;
+  /**
+   * „Plan speichern“ in Schritt 8: ruft „Erstplan speichern“ des Plan-Moduls mit dem Entwurf am heutigen
+   * Tag samt der `entryId` aus Schritt 3 auf; Sporttage und Wiegetag ohne Wahl übernehmen die Vorauswahl.
+   * Erneutes Speichern nach „Zurück“ oder einem Fehler trifft dasselbe Startgewicht. Ein Fehler des
+   * Plan-Moduls geht an `onError` und endet als `fehlgeschlagen`.
+   */
+  savePlan(): Promise<PlanSaveResult>;
+  /**
+   * Ob heute schon ein Plan gilt (`Plan.hasPlanToday`), etwa nach „Zurück“ aus Schritt 9. Dann legt
+   * erneutes Speichern nur geänderte Fassungen ab morgen an, und Schritt 8 sagt das (Spezifikation 1,
+   * Abschnitt 4; Entscheidung in #134).
+   */
+  hasPlanToday(): boolean;
+  /** Für `onAccountOpened` der App-Sitzung mit dem Plan-Modul dieser Datenbank; die Rückgabe löst die Beobachtung beim Sperren. */
+  opened(database: LocalDatabase, plan: OnboardingPlan): () => void;
 };
 
 export type OnboardingOptions = {
@@ -96,7 +124,7 @@ const loading: OnboardingProgress = { type: 'laedt' };
 
 export function createOnboarding({ auth, clock, writer, sync, onError, newId }: OnboardingOptions): Onboarding {
   let handover: Handover | null = null;
-  let current: { database: LocalDatabase; own: OwnPerson | null } | null = null;
+  let current: { database: LocalDatabase; plan: OnboardingPlan; own: OwnPerson | null } | null = null;
   let snapshot: OnboardingProgress = loading;
   const listeners = new Set<() => void>();
 
@@ -108,9 +136,13 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
     for (const listener of [...listeners]) listener();
   }
 
-  function requireDatabase(): LocalDatabase {
+  function requireOpened() {
     if (current === null) throw new Error('Onboarding ohne geöffnete Kontodatenbank');
-    return current.database;
+    return current;
+  }
+
+  function requireDatabase(): LocalDatabase {
+    return requireOpened().database;
   }
 
   function writeDisclaimer(database: LocalDatabase, acceptedAt: Instant) {
@@ -200,8 +232,26 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
       });
     },
 
-    opened(database) {
-      const entry: { database: LocalDatabase; own: OwnPerson | null } = { database, own: null };
+    hasPlanToday: () => requireOpened().plan.hasPlanToday(),
+
+    async savePlan() {
+      const { database, plan } = requireOpened();
+      const draft = initialPlanDraftOf(database.read(readOnboardingDraft), clock.read().localDate);
+      if (draft === null) return { type: 'unvollstaendig' };
+      try {
+        const saved = await plan.saveInitialPlan(draft);
+        if (saved.type === 'gespeichert') return { type: 'gespeichert' };
+        if (saved.type === 'ungueltig') return { type: 'unvollstaendig' };
+        onError(saved.error);
+        return { type: 'fehlgeschlagen' };
+      } catch (error) {
+        onError(error);
+        return { type: 'fehlgeschlagen' };
+      }
+    },
+
+    opened(database, plan) {
+      const entry: { database: LocalDatabase; plan: OnboardingPlan; own: OwnPerson | null } = { database, plan, own: null };
       current = entry;
       publish();
       const stop = database.observe(

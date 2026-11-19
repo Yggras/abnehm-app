@@ -6,7 +6,7 @@ import { nachEntkopplungManifest } from './nach-entkopplung.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { ernaehrungRandzustandManifests } from './randzustaende-ernaehrung.ts';
 import { soloManifests } from './solo.ts';
-import { doppelausgabeManifest, ereignisseVollManifest, feldkonfliktManifest, haelfteVollManifest, rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
+import { doppelausgabeManifest, ereignisseVollManifest, feldkonfliktManifest, haelfteVollManifest, levelaufstiegAusstehendManifest, rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
 import { syncSzenarioManifests } from './sync-szenarien.ts';
 import { tageszielManifests } from './tagesziele.ts';
 import { veralteterPartnerstandManifest } from './veralteter-partnerstand.ts';
@@ -54,6 +54,7 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   doppelausgabe: doppelausgabeManifest,
   feldkonflikt: feldkonfliktManifest,
   'ereignisse-voll': ereignisseVollManifest,
+  'levelaufstieg-ausstehend': levelaufstiegAusstehendManifest,
   ...randzustandManifests,
   ...ernaehrungRandzustandManifests,
   veralteter_partnerstand: veralteterPartnerstandManifest,

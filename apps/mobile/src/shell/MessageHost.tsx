@@ -6,6 +6,7 @@ import { space, Toast, useMotion, type Motion, type ToastLine } from '../design'
 import { isTestArtifact } from '../test-artifact';
 import { messageTexts } from './message-texts';
 import { shellTexts } from './texts';
+import { messageStandingTime } from './message-timing';
 
 // Der eine Meldungs-Host der App-Shell über der Tab-Leiste (Spezifikation 0, Abschnitt 6).
 // Quick-Commands und alle Bereichsbildschirme zeigen Meldungen und „Rückgängig“ nur über ihn.
@@ -34,10 +35,9 @@ export class MissingMessageTextError extends Error {
   }
 }
 
-// Standzeit nach dem Design-System (Annahme 7: 5 s, mit Screenreader länger). Die 10 s mit
-// Screenreader sind ein Designwert ohne Beleg. Android übernimmt zusätzlich die längere
+// Standzeit nach dem Design-System (`message-timing.ts`). Android übernimmt zusätzlich die längere
 // Systemeinstellung „Zeit zum Reagieren“ (https://reactnative.dev/docs/accessibilityinfo).
-const standingTime = { default: 5_000, screenReader: 10_000 } as const;
+const standingTime = messageStandingTime;
 
 type Shown = { line: ToastLine; secondLine?: ToastLine; undo?: MessageUndo };
 

@@ -59,8 +59,11 @@ Docker-Stack `abnehm-prod` (compose.prod.yaml)
 ```sh
 scripts/prod-secrets                           # legt Datenbankpasswort, Better-Auth- und Einladungs-Secret an
 scripts/prod-secrets setzen anthropic_api_key  # API-Schlüssel der Fotoanalyse, Eingabe unsichtbar
+scripts/prod-secrets setzen expo_access_token  # nur bei erweiterter Push-Sicherheit von Expo
 scripts/prod-secrets pruefen
 ```
+
+- `expo_access_token` ist optional (#142). `scripts/prod-secrets` legt die Datei leer an, weil Docker Compose jedes genannte Secret einbindet. Leer sendet das Backend ohne Token. Wer in Expo die erweiterte Push-Sicherheit einschaltet, muss das Token setzen. Danach lehnt Expo Anfragen ohne gültiges Token mit `UNAUTHORIZED` ab ([Expo: Additional security](https://docs.expo.dev/push-notifications/sending-notifications/#additional-security)).
 
 - Die Dateien liegen in `~/Library/Application Support/abnehm-app/produktion/secrets/`: Verzeichnis `0700`, Dateien `0600`. Damit stehen sie außerhalb jedes Checkouts, also nicht in Git, im Build-Kontext oder im Image. Docker Compose bindet sie zur Laufzeit unter `/run/secrets/` ein ([Docker Compose Secrets](https://docs.docker.com/compose/how-tos/use-secrets/)). Jeder Dienst erhält nur seine Secrets, Postgres nur das Datenbankpasswort (`test/produktivbetrieb.test.ts`).
 - Das Backend liest Geheimnisse nur aus `*_FILE`-Dateien und nennt in Fehlern nur Variablennamen (`apps/backend/src/config.ts`). Die App enthält keine Secrets.

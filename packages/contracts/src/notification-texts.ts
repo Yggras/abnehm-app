@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import type { ContractError } from './errors.ts';
-import { EncouragementNotificationPayload, RoleRequestPayload } from './notifications.ts';
+import {
+  EncouragementNotificationPayload,
+  LevelUpPayload,
+  RoleRequestPayload,
+  UncouplingNotificationPayload,
+} from './notifications.ts';
 import type { EncouragementKey } from './partner.ts';
 
 // Deutscher Textkatalog für Benachrichtigungen (Spezifikation 0, Abschnitt 2). App (Tages-Check-ins,
@@ -81,8 +86,18 @@ export const notificationTexts = defineNotificationTexts({
     title: `${senderDisplayName} feuert dich an`,
     body: encouragementMessages[encouragementKey],
   })),
+  /** Spezifikation 4, Abschnitt 12: an beide, mit dem höchsten neuen Level (#200). */
+  levelaufstieg: notificationText(LevelUpPayload, ({ level }) => ({
+    title: `Momo ist jetzt auf Level ${level} 🎉`,
+    body: 'Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.',
+  })),
   'rollen_anfrage.rollenwahl': notificationText(
     RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),
     ({ senderDisplayName }) => ({ title: `${senderDisplayName} schlägt eure Rollen vor`, body: 'Wenn du zustimmst, schlüpft Momo 🐣' }),
   ),
+  /** Spezifikation 5, Abschnitt 9: Information an den Partner, keine Anfrage. */
+  entkopplung: notificationText(UncouplingNotificationPayload, ({ senderDisplayName }) => ({
+    title: `${senderDisplayName} hat eure Kopplung beendet`,
+    body: 'Momo und eure Insel sind archiviert.',
+  })),
 });

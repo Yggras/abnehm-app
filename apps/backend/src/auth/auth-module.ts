@@ -4,7 +4,7 @@ import { betterAuth, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getIP, isAPIError } from 'better-auth/api';
 import { bearer } from 'better-auth/plugins';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
@@ -39,6 +39,13 @@ export type SessionAuthenticator = {
    * Sitzung verlängert sich dabei.
    */
   authenticate(headers: Headers): Promise<AuthenticatedSession | null>;
+  /**
+   * Widerruf prüfen ohne Request: die IDs unter `sessionIds`, deren Sitzung weder widerrufen noch
+   * abgelaufen ist. Better Auth löscht widerrufene Sitzungen; abgelaufen ist eine Sitzung, deren
+   * `expires_at` nicht nach der Serveruhr liegt. Nutzer ist der Push-Zusteller, der nur an Installationen
+   * mit gültiger Sitzung sendet (Spezifikation 0, Abschnitt 9). Verlängert keine Sitzung.
+   */
+  validSessionIds(sessionIds: readonly string[]): Promise<ReadonlySet<string>>;
 };
 
 /** Rolle des Betriebs: serverseitiges Kommando, kein öffentlicher Ablauf. */
@@ -219,6 +226,15 @@ export function createAuthModule({ database, clock, securityLog, passwordBlockli
       const found = await auth.api.getSession({ headers });
       if (found === null) return null;
       return { accountId: EntityId.parse(found.user.id), sessionId: EntityId.parse(found.session.id) };
+    },
+    async validSessionIds(sessionIds) {
+      const ids = [...new Set(sessionIds)].filter((id) => EntityId.safeParse(id).success);
+      if (ids.length === 0) return new Set();
+      const rows = await database.db
+        .select({ id: session.id })
+        .from(session)
+        .where(and(inArray(session.id, ids), gt(session.expiresAt, new Date(clock.read().instant))));
+      return new Set(rows.map((row) => row.id));
     },
   };
 

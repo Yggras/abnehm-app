@@ -196,7 +196,7 @@ function deviceState() {
       });
       void dispatcher.deliver();
       const stops = [
-        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database), onboarding?.opened(database), ownDisplayName.opened(database),
+        todayPersonOpened(database), timeZone.opened(database), gate?.opened(database), onboarding?.opened(database, plan), ownDisplayName.opened(database),
         appNutrition.opened(nutrition),
         appQuickCommands.opened(database, trackers.quickCommands),
         appTrackers.opened(trackers),

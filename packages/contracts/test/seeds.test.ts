@@ -77,13 +77,25 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.weightEntry.philippVorgestern, seedIds.weightEntry.philippGestern].map((id) =>
         expect.objectContaining({ entity_type: 'weight_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
-      ...seedIds.nutritionEntry.philippFruehstueck.map((id) =>
+      ...[...seedIds.nutritionEntry.philippFruehstueck, ...seedIds.nutritionEntry.philippVortag].map((id) =>
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.ownFood.philippBircher, seedIds.ownFood.philippApfel].map((id) =>
         expect.objectContaining({ entity_type: 'own_food', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.sportEntry.philippVorwoche.map((id) =>
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
     ]);
+  });
+
+  it('enthält Ernährungseinträge am Vortag ohne Abendessen und ohne Mahlzeitenfoto (#156)', () => {
+    const yesterday = solo.initial.devices['philipp-iphone']!.rows.nutrition_entry!.filter((row) => row.local_date === seedDays.gestern);
+
+    expect(yesterday.map(({ id, meal, meal_photo_id }) => ({ id, meal, meal_photo_id }))).toEqual([
+      { id: seedIds.nutritionEntry.philippVortag[0], meal: 'fruehstueck', meal_photo_id: null },
+      { id: seedIds.nutritionEntry.philippVortag[1], meal: 'mittagessen', meal_photo_id: null },
+      { id: seedIds.nutritionEntry.philippVortag[2], meal: 'snacks', meal_photo_id: null },
+    ]);
+    // 219,6 + 124 + 79 kcal: unter der Untergrenze von 1.882 kcal, „Im Kalorienbudget“ von gestern bliebe offen.
+    expect(yesterday.reduce((sum, row) => sum + Number(row.total_milli_kcal), 0)).toBe(422_600);
   });
 
   it('enthält ein eigenes Lebensmittel mit Portionsumrechnung und eine Korrektur eines BLS-Lebensmittels (#157)', () => {
@@ -836,5 +848,30 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
     expect(visits(iphone.rows.island_event).map((row) => row.id)).toContain(today[0]!.id);
     expect((iphone.rows.island_event_state ?? []).every((row) => row.person_id === philipp)).toBe(true);
     expect(iphone.rows.island_event_state).toHaveLength(4);
+  });
+
+  it('levelaufstieg-ausstehend: Annas drei Offline-Bauten heben die Insel auf Level 4; danach haben beide Geräte Level 4 und das Ereignis (#200)', () => {
+    const manifest = seedManifests['levelaufstieg-ausstehend'];
+    const levelEvents = (rows: readonly Record<string, unknown>[] | undefined) => (rows ?? []).filter((row) => row.type === 'levelaufstieg');
+    const android = manifest.initial.devices['anna-android']!;
+    expect(android.outbox.map(({ type }) => type)).toEqual(Array(3).fill('buildObject'));
+    expect(progressOf(manifest.initial.server.island_progress)).toMatchObject({ level: 3 });
+    expect(levelEvents(manifest.initial.server.island_event)).toEqual([]);
+    expect(manifest.initial.server.notification_intent ?? []).toEqual([]);
+
+    const { server, devices } = manifest.target;
+    expect(progressOf(server.island_progress)).toMatchObject({ level: 4 });
+    const islandId = seedIds.island.philippAnna;
+    expect(levelEvents(server.island_event)).toEqual([expect.objectContaining({ occasion_key: `level:${islandId}:4`, status: 'abgeschlossen' })]);
+    expect((server.notification_intent ?? []).map((row) => [row.recipient_person_id, row.payload])).toEqual(
+      expect.arrayContaining([[philipp, { level: 4 }], [anna, { level: 4 }]]),
+    );
+    expect(server.notification_intent).toHaveLength(2);
+    expect(server.processed_operation?.map(({ outcome, person_id }) => [outcome, person_id])).toEqual(Array(3).fill(['applied', anna]));
+    for (const device of Object.values(devices)) {
+      expect(device.outbox).toEqual([]);
+      expect(progressOf(device.rows.island_progress)).toMatchObject({ level: 4 });
+      expect(levelEvents(device.rows.island_event)).toHaveLength(1);
+    }
   });
 });

@@ -9,6 +9,7 @@ import type { Clock } from '@abnehm/clock';
 
 import { createDevelopmentApp } from '../../dev/app.ts';
 import { createFakeMealVision, type FakeMealVision } from '../../dev/meal-vision/fake-analyzer.ts';
+import { createFakeExpoPush, type FakeExpoPush } from '../../dev/push/fake-expo-push.ts';
 import { createServerClock, type ServerClock } from '../../dev/server-clock.ts';
 import { createBackend, serverSystemClock, type Backend } from '../../src/backend.ts';
 import type { Database } from '../../src/database.ts';
@@ -26,14 +27,19 @@ export type TestBackend = Backend & {
   photoStorageDirectory: string;
   /** Der Fake der Fotoanalyse, sofern der Test keinen eigenen Analyzer übergibt. */
   fakeMealVision: FakeMealVision;
+  /** Der Fake-Expo-Push-Port hinter dem Zusteller (#142). */
+  fakeExpoPush: FakeExpoPush;
 };
 
 /**
  * Die echte Hono-App über einer gegebenen Datenbank, mit denselben Modulen wie `src/main.ts`.
  * Ohne `clock` gilt die Systemuhr; Better Auth rechnet Sitzungsablauf ohnehin mit `Date`, deshalb
- * steuern Tests die Zeit dort mit `vi.setSystemTime`. Die Fotoanalyse läuft über den Fake.
+ * steuern Tests die Zeit dort mit `vi.setSystemTime`. Fotoanalyse und Expo Push laufen über Fakes.
  */
-export function createTestApp(database: Database, { clock, syncPullPageSize, mealVisionAnalyzer, partnerSummaryProjectors }: TestAppOptions = {}): TestBackend {
+export function createTestApp(
+  database: Database,
+  { clock, syncPullPageSize, mealVisionAnalyzer, partnerSummaryProjectors, fakeExpoPush = createFakeExpoPush() }: TestAppOptions = {},
+): TestBackend {
   const authSettings = { secret: 'test-secret-mit-mindestens-zweiunddreissig-zeichen', baseUrl: testBaseUrl, trustedProxies: [] };
   const invitationSettings = { codeSecret: 'test-einladungs-secret-mit-mindestens-32-zeichen' };
   const photoStorageDirectory = join(tmpdir(), `abnehm-fotos-${randomUUID()}`);
@@ -46,15 +52,18 @@ export function createTestApp(database: Database, { clock, syncPullPageSize, mea
     syncPullPageSize,
     photoStorageDirectory,
     mealVisionAnalyzer: mealVisionAnalyzer ?? fakeMealVision.analyzer,
+    expoPush: fakeExpoPush.port,
     ...(partnerSummaryProjectors !== undefined && { partnerSummaryProjectors }),
   });
-  return { ...backend, database, photoStorageDirectory, fakeMealVision };
+  return { ...backend, database, photoStorageDirectory, fakeMealVision, fakeExpoPush };
 }
 
 export type TestAppOptions = {
   clock?: Clock;
   syncPullPageSize?: number;
   mealVisionAnalyzer?: MealVisionAnalyzer;
+  /** Gemeinsamer Fake mehrerer Backends über derselben Datenbank, etwa zweier Arbeitsschleifen. */
+  fakeExpoPush?: FakeExpoPush;
   /** Statt der echten Partner-Projectors; nur für Tests des Projektionsmechanismus (#106). */
   partnerSummaryProjectors?: readonly AnyPartnerSummaryProjector[];
 };

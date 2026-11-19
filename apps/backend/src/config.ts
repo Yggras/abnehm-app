@@ -25,6 +25,13 @@ export type BackendConfig = {
    * dann nicht (`productionMealVisionAnalyzer`); das Development-Backend nutzt ohnehin seinen Fake.
    */
   mealVision: MealVisionSettings | null;
+  /**
+   * Expo Push: `accessToken` nur, wenn die erweiterte Push-Sicherheit aktiviert ist
+   * (https://docs.expo.dev/push-notifications/sending-notifications/#additional-security). Es kommt als
+   * Docker-Compose-Secret über `EXPO_ACCESS_TOKEN_FILE`; ohne Variable oder mit leerer Datei sendet das
+   * Backend ohne Token.
+   */
+  expoPush: { accessToken: string | null };
 };
 
 /** Better Auth signiert damit Sitzungstokens; `openssl rand -hex 32` ergibt 64 Zeichen. */
@@ -54,6 +61,14 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
     const value = readFileSync(file, 'utf8').trim();
     if (value === '') problems.push(`Secret-Datei aus ${name} ist leer`);
     return value;
+  };
+
+  /** Secret, das fehlen darf: ohne Variable oder mit leerer Datei `null`. */
+  const optionalSecret = (name: string) => {
+    const file = environment[name];
+    if (file === undefined || file === '') return null;
+    const value = readFileSync(file, 'utf8').trim();
+    return value === '' ? null : value;
   };
 
   const url = (name: string) => {
@@ -120,6 +135,7 @@ export function readConfig(environment: NodeJS.ProcessEnv): BackendConfig {
     invitations: { codeSecret: inviteCodeSecret },
     photoStorageDirectory: absolutePath('PHOTO_STORAGE_DIR'),
     mealVision: mealVisionSettings(),
+    expoPush: { accessToken: optionalSecret('EXPO_ACCESS_TOKEN_FILE') },
   };
   if (problems.length > 0) throw new Error(`Ungültige Backend-Konfiguration: ${problems.join(', ')}`);
   return config;

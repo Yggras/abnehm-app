@@ -112,6 +112,8 @@ export const seedIds = {
     philippFruehstueck: [id('0031', 3), id('0031', 4)],
     philippGestern: [id('0031', 5), id('0031', 6), id('0031', 7)],
     philippRandzustand: { fruehstueck: id('0031', 8), mittag: id('0031', 9) },
+    /** `solo`: Einträge am Vortag ohne Abendessen (#156). */
+    philippVortag: [id('0031', 10), id('0031', 11), id('0031', 12)],
   },
   /**
    * Operations-IDs, die der Sync-Writer einer Installation in einem Schritt `tagesziele_auswerten` (#113)
@@ -140,6 +142,8 @@ export const seedIds = {
     },
     /** Offline-Platzierungen in `feldkonflikt` (#194): je Gerät eine. */
     feldkonflikt: { iphone: id('0090', 50), ipad: id('0090', 51) },
+    /** Annas Offline-Bauten in `levelaufstieg-ausstehend` (#200), in Entstehungsreihenfolge. */
+    levelaufstiegAusstehend: Array.from({ length: 3 }, (_, index) => id('0090', 54 + index)),
     /** Erfüllungen in den Randzuständen der Ernährung (#166). */
     ernaehrungErfuellt: [id('0090', 52)],
     kalorienbudgetInnerhalb: [id('0090', 53)],

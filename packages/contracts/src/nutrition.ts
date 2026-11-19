@@ -355,6 +355,24 @@ export const NutritionEntryAddedOutcome = QuickCommandOutcome.extend({
 });
 export type NutritionEntryAddedOutcome = z.infer<typeof NutritionEntryAddedOutcome>;
 
+/**
+ * Ergebnis von „Eintrag ändern“ (Menge, Einheit oder Mahlzeit; Spezifikation 2, Abschnitt 6): „Eintrag
+ * gespeichert · Rückgängig“. Der Wortlaut folgt den Bearbeiten-Meldungen von Sport und Gewicht
+ * (Spezifikation 3, Abschnitt 4) und ist ein Designwert, nicht belegt.
+ */
+export const NutritionEntryUpdatedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('ernaehrung.eintrag_gespeichert'),
+  values: z.strictObject({}),
+});
+export type NutritionEntryUpdatedOutcome = z.infer<typeof NutritionEntryUpdatedOutcome>;
+
+/** Ergebnis von „Eintrag löschen“ ohne Bestätigungsdialog: „Eintrag gelöscht · Rückgängig“ (Spezifikation 2, Abschnitt 6). */
+export const NutritionEntryDeletedOutcome = QuickCommandOutcome.extend({
+  messageKey: z.literal('ernaehrung.eintrag_geloescht'),
+  values: z.strictObject({}),
+});
+export type NutritionEntryDeletedOutcome = z.infer<typeof NutritionEntryDeletedOutcome>;
+
 /** Angezeigte kcal: kaufmännisch auf ganze kcal gerundet (Spezifikation 2, Abschnitt 2). */
 export function roundKcal(milliKcal: number): number {
   return scaled(milliKcal, 1, 1_000);

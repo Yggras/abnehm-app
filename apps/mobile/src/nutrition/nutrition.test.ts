@@ -1,10 +1,17 @@
 /** @jest-environment node */
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
-import { NutritionEntryAddedOutcome, NutritionEntryUpsert, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import {
+  NutritionEntryAddedOutcome,
+  NutritionEntryDeletedOutcome,
+  NutritionEntryUpdatedOutcome,
+  NutritionEntryUpsert,
+  type NutritionSnapshot,
+} from '@abnehm/contracts/nutrition';
 
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCompletionEntity } from '../daily-goals';
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
@@ -16,7 +23,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
-import { createNutrition, InvalidNutritionInputError, nutritionEntryEntity, type DayLog, type NutritionDependencies } from '.';
+import { createNutrition, InvalidNutritionInputError, nutritionEntryEntity, type DayLog, type NewEntry, type NutritionDependencies } from '.';
 
 // Nachweis für #155: das App-Modul „Ernährung“ (Spezifikation 2, Abschnitte 1, 2 und 6) mit den
 // Befehlen „Eintrag hinzufügen“ und „Rückgängig“ sowie den Abfragen Tagesprotokoll und Vorbelegung,
@@ -238,6 +245,8 @@ describe('Tagesprotokoll', () => {
       localDate: '2026-10-14',
       // 208,8 + 87 + 139,2 = 435 kcal; gerundet wird erst die Summe.
       intakeKcal: 435,
+      // Summen der Eintragsmakros in mg; gerundet wird erst für die Anzeige (Spezifikation 2, Abschnitt 2).
+      macros: { proteinMg: 7_932 + 636 + 5_288, carbsMg: 31_980 + 17_550 + 21_320, fatMg: 3_990 + 750 + 2_660 },
       meals: [
         {
           meal: 'fruehstueck',
@@ -374,5 +383,256 @@ describe('Rückgängig', () => {
     expect(nutrition.undo(undoToken)).toEqual({ type: 'noop' });
     expect(rows()).toEqual([expect.objectContaining({ deletedAt: null })]);
     expect(operations().map(({ type }) => type)).toEqual(['upsert_entity']);
+  });
+});
+
+// Nachweis für #156: Ändern, Löschen und „Rückgängig“ an der Naht des Moduls. Jede Mutation ist genau eine
+// Transaktion mit genau einer Outbox-Operation und meldet den gespeicherten Tag des Eintrags.
+
+type Context = Awaited<ReturnType<typeof setup>>;
+
+/** Legt einen Eintrag an und liefert seine ID; die Meldungen beginnen danach leer. */
+function added(context: Context, input: NewEntry = breakfast): EntityId {
+  const { undoToken } = context.nutrition.addEntry(input);
+  context.nutrition.expire(undoToken);
+  context.reports.length = 0;
+  return EntityId.parse(context.rows().at(-1)!.id);
+}
+
+describe('Eintrag ansehen', () => {
+  it('liefert den gespeicherten Eintrag mit Snapshot, Menge, Mahlzeit und Tag', async () => {
+    const context = await setup();
+    const id = added(context, { ...breakfast, localDate: yesterday });
+
+    expect(context.nutrition.entryDetail(id)).toEqual({
+      id,
+      localDate: '2026-10-13',
+      meal: 'fruehstueck',
+      captureMethod: 'suche',
+      snapshot: oats,
+      displayUnit: 'g',
+      displayAmountMilli: 60_000,
+      consumedAt: morning,
+      timeZone: 'Europe/Berlin',
+    });
+  });
+
+  it('ist `null` für einen gelöschten oder unbekannten Eintrag', async () => {
+    const context = await setup();
+    const id = added(context);
+    context.nutrition.deleteEntry(id);
+
+    expect(context.nutrition.entryDetail(id)).toBeNull();
+    expect(context.nutrition.entryDetail(EntityId.parse(randomUUID()))).toBeNull();
+  });
+});
+
+describe('Eintrag ändern', () => {
+  it('rechnet Menge, Einheit und Summen aus demselben Snapshot neu, mit genau einer Operation, und meldet den Tag', async () => {
+    const context = await setup();
+    const { nutrition, rows, operations, reports, clock } = context;
+    const id = added(context, { ...breakfast, localDate: yesterday });
+    const before = operations().length;
+    clock.advanceBy(3_600_000);
+
+    const outcome = nutrition.updateEntry(id, { meal: 'snacks', displayUnit: 'g', displayAmountMilli: 45_000 });
+
+    expect(NutritionEntryUpdatedOutcome.parse(outcome)).toEqual({ messageKey: 'ernaehrung.eintrag_gespeichert', values: {}, undoToken: expect.any(String) });
+    // 348 kcal je 100 g × 0,45 = 156,6 kcal; Tag, Erfassungszeitpunkt, Zone und Snapshot bleiben.
+    expect(rows()).toEqual([
+      expect.objectContaining({
+        id,
+        localDate: '2026-10-13',
+        consumedAt: morning,
+        timeZone: 'Europe/Berlin',
+        utcOffsetMinutes: 120,
+        meal: 'snacks',
+        captureMethod: 'suche',
+        snapshotName: 'Hafer Flocken',
+        baseAmount: 45_000,
+        displayAmountMilli: 45_000,
+        totalMilliKcal: 156_600,
+        totalProteinMg: 5_949,
+        totalCarbsMg: 23_985,
+        totalFatMg: 2_993,
+        deletedAt: null,
+      }),
+    ]);
+    expect(operations().slice(before)).toEqual([
+      expect.objectContaining({
+        type: 'upsert_entity',
+        entityId: id,
+        payload: expect.objectContaining({
+          localDate: '2026-10-13',
+          meal: 'snacks',
+          snapshot: oats,
+          totals: { milliKcal: 156_600, proteinMg: 5_949, carbsMg: 23_985, fatMg: 2_993 },
+        }),
+      }),
+    ]);
+    expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-13'], cause: 'eingabe' }]);
+  });
+
+  it('wechselt in eine Einheit, die der Snapshot kennt', async () => {
+    const context = await setup();
+    const ownApple: NutritionSnapshot = { ...apple, portions: [{ unit: 'stueck', label: null, baseAmount: 180_000 }], source: 'eigen', attribution: null };
+    const ownAppleRef = { type: 'eigen', key: EntityId.parse(randomUUID()) } as const;
+    const id = added(context, { ...breakfast, captureMethod: 'eigenes_lebensmittel', foodRef: ownAppleRef, snapshot: ownApple, displayAmountMilli: 150_000 });
+
+    context.nutrition.updateEntry(id, { meal: 'fruehstueck', displayUnit: 'stueck', displayAmountMilli: 500 });
+
+    // 0,5 Stück zu 180 g = 90 g; 58 kcal je 100 g × 0,9 = 52,2 kcal.
+    expect(context.rows()).toEqual([expect.objectContaining({ displayUnit: 'stueck', displayAmountMilli: 500, baseAmount: 90_000, totalMilliKcal: 52_200 })]);
+  });
+
+  it.each([
+    ['0 g', { displayAmountMilli: 0 }],
+    ['über 5 kg', { displayAmountMilli: 5_000_001 }],
+    ['Stück ohne Umrechnung', { displayUnit: 'stueck' as const, displayAmountMilli: 1_000 }],
+  ])('lehnt %s ab, ohne etwas zu schreiben oder zu melden', async (_, change) => {
+    const context = await setup();
+    const id = added(context);
+    const before = { rows: context.rows(), operations: context.operations() };
+
+    expect(() => context.nutrition.updateEntry(id, { meal: 'fruehstueck', displayUnit: 'g', ...change })).toThrow(
+      InvalidNutritionInputError,
+    );
+
+    expect(context.rows()).toEqual(before.rows);
+    expect(context.operations()).toEqual(before.operations);
+    expect(context.reports).toEqual([]);
+  });
+
+  it('lehnt einen gelöschten oder unbekannten Eintrag ab', async () => {
+    const context = await setup();
+    const id = added(context);
+    context.nutrition.deleteEntry(id);
+    const change = { meal: 'fruehstueck', displayUnit: 'g', displayAmountMilli: 50_000 } as const;
+
+    expect(() => context.nutrition.updateEntry(id, change)).toThrow(InvalidNutritionInputError);
+    expect(() => context.nutrition.updateEntry(EntityId.parse(randomUUID()), change)).toThrow(InvalidNutritionInputError);
+  });
+
+  it('ändert, löscht und zeigt nur Einträge der eigenen Person', async () => {
+    const context = await setup();
+    const id = added(context);
+    const partner = randomUUID();
+    context.database.transaction((tx) => {
+      insertPersonForTest(tx, partner);
+      sqliteOf(tx).update(nutritionEntry).set({ personId: partner }).where(eq(nutritionEntry.id, id)).run();
+    });
+    const before = { rows: context.rows(), operations: context.operations() };
+
+    expect(() => context.nutrition.updateEntry(id, { meal: 'snacks', displayUnit: 'g', displayAmountMilli: 50_000 })).toThrow(InvalidNutritionInputError);
+    expect(() => context.nutrition.deleteEntry(id)).toThrow(InvalidNutritionInputError);
+    expect(context.nutrition.entryDetail(id)).toBeNull();
+    expect(context.rows()).toEqual(before.rows);
+    expect(context.operations()).toEqual(before.operations);
+  });
+
+  it('„Rückgängig“ stellt die vorherigen Werte mit genau einer Operation wieder her und meldet den Tag', async () => {
+    const context = await setup();
+    const { nutrition, rows, operations, reports } = context;
+    const id = added(context);
+    const original = rows()[0]!;
+    const { undoToken } = nutrition.updateEntry(id, { meal: 'abendessen', displayUnit: 'g', displayAmountMilli: 120_000 });
+    const before = operations().length;
+    reports.length = 0;
+
+    expect(nutrition.undo(undoToken)).toEqual({ type: 'undone' });
+    expect(nutrition.undo(undoToken)).toEqual({ type: 'noop' });
+
+    expect({ ...rows()[0], updatedAt: null }).toEqual({ ...original, updatedAt: null });
+    expect(operations().slice(before)).toEqual([
+      expect.objectContaining({
+        type: 'upsert_entity',
+        entityId: id,
+        payload: expect.objectContaining({ meal: 'fruehstueck', amount: expect.objectContaining({ displayAmountMilli: 60_000 }) }),
+      }),
+    ]);
+    expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-14'], cause: 'rueckgaengig' }]);
+  });
+
+  it('„Rückgängig“ lässt einen inzwischen gelöschten Eintrag gelöscht', async () => {
+    const context = await setup();
+    const id = added(context);
+    const { undoToken } = context.nutrition.updateEntry(id, { meal: 'abendessen', displayUnit: 'g', displayAmountMilli: 120_000 });
+    context.nutrition.deleteEntry(id);
+    const before = context.operations().length;
+
+    context.nutrition.undo(undoToken);
+
+    expect(context.rows()).toEqual([expect.objectContaining({ id, deletedAt: expect.any(String) })]);
+    expect(context.operations()).toHaveLength(before);
+  });
+});
+
+describe('Eintrag löschen', () => {
+  it('setzt den Tombstone ohne Rückfrage, mit genau einer Löschoperation, und meldet den Tag', async () => {
+    const context = await setup();
+    const { nutrition, rows, operations, reports } = context;
+    const id = added(context, { ...breakfast, localDate: yesterday });
+    const before = operations().length;
+
+    const outcome = nutrition.deleteEntry(id);
+
+    expect(NutritionEntryDeletedOutcome.parse(outcome)).toEqual({ messageKey: 'ernaehrung.eintrag_geloescht', values: {}, undoToken: expect.any(String) });
+    expect(rows()).toEqual([expect.objectContaining({ id, deletedAt: expect.any(String) })]);
+    expect(operations().slice(before)).toEqual([expect.objectContaining({ type: 'delete_entity', entityType: 'nutrition_entry', entityId: id })]);
+    expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-13'], cause: 'eingabe' }]);
+  });
+
+  it('lehnt einen schon gelöschten Eintrag ab, ohne etwas zu schreiben', async () => {
+    const context = await setup();
+    const id = added(context);
+    context.nutrition.deleteEntry(id);
+    const before = context.operations().length;
+    context.reports.length = 0;
+
+    expect(() => context.nutrition.deleteEntry(id)).toThrow(InvalidNutritionInputError);
+
+    expect(context.operations()).toHaveLength(before);
+    expect(context.reports).toEqual([]);
+  });
+
+  it('„Rückgängig“ legt einen neuen Eintrag mit neuer ID und identischem Inhalt an, mit genau einer Operation, und meldet den Tag', async () => {
+    const context = await setup();
+    const { nutrition, rows, operations, reports, clock } = context;
+    const id = added(context, { ...breakfast, localDate: yesterday, meal: 'abendessen' });
+    const { undoToken } = nutrition.deleteEntry(id);
+    const before = operations().length;
+    reports.length = 0;
+    clock.advanceBy(60_000);
+
+    expect(nutrition.undo(undoToken)).toEqual({ type: 'undone' });
+    expect(nutrition.undo(undoToken)).toEqual({ type: 'noop' });
+
+    const [deleted, restored] = rows();
+    expect(restored!.id).not.toBe(id);
+    const content = (row: NonNullable<typeof deleted>) => ({ ...row, id: null, createdAt: null, updatedAt: null, deletedAt: null });
+    expect(content(restored!)).toEqual(content(deleted!));
+    expect(restored).toMatchObject({ deletedAt: null, localDate: '2026-10-13', meal: 'abendessen', consumedAt: morning, captureMethod: 'suche' });
+    expect(operations().slice(before)).toEqual([
+      expect.objectContaining({
+        type: 'upsert_entity',
+        entityId: restored!.id,
+        knownServerVersion: null,
+        payload: expect.objectContaining({ localDate: '2026-10-13', consumedAt: morning, mealPhotoId: null }),
+      }),
+    ]);
+    expect(reports).toEqual([{ personId: philipp, localDates: ['2026-10-13'], cause: 'rueckgaengig' }]);
+  });
+
+  it('„Rückgängig“ ist eine Transaktion: Scheitert die Auswertung, entsteht kein Eintrag', async () => {
+    const context = await setup();
+    const id = added(context);
+    const { undoToken } = context.nutrition.deleteEntry(id);
+    const before = context.operations().length;
+    context.failReevaluationFromNowOn();
+
+    expect(() => context.nutrition.undo(undoToken)).toThrow('Auswertung gescheitert');
+
+    expect(context.rows()).toHaveLength(1);
+    expect(context.operations()).toHaveLength(before);
   });
 });

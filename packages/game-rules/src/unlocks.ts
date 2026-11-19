@@ -39,6 +39,15 @@ export type LevelUnlocks = Readonly<{
   area: UnlockedArea | null;
 }>;
 
+/**
+ * Anlassschlüssel des Levelaufstiegs auf Level `level`: `level:‹insel›:‹L›`, eindeutig je Insel
+ * (Spezifikation 4, Abschnitt 2.2; Spezifikation 0, Abschnitt 8).
+ */
+export function levelOccasionKey(islandId: string, level: number): string {
+  assertLevel(level);
+  return `level:${islandId}:${level}`;
+}
+
 /** Die Form mit der höchsten Formschwelle ≤ Level. */
 export function formAt(level: number): MomoForm {
   assertLevel(level);

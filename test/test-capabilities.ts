@@ -60,12 +60,12 @@ export const testCapabilities: readonly TestCapability[] = [
     // Szenarien der Bereiche liegen als Module in `packages/contracts/seeds/`; `frisches_konto` (#138),
     // `solo-energie` und `rollenwahl-offen` (#180), `tage_ohne_app_oeffnung` und `zeitzonen_reisen`
     // (#131), `haelfte-voll` und `doppelausgabe` (#191), die Szenarien der Einstellungsseite „Ziele“ (#147) sowie
-    // `feldkonflikt` (#194), `ereignisse-voll` (#202) und `einladung-nach-entkopplung` (#120) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
+    // `feldkonflikt` (#194), `ereignisse-voll` (#202), `einladung-nach-entkopplung` (#120) und `levelaufstieg-ausstehend` (#200) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
     // von `momo.character` zu Recht im Produktions-Bundle steht.
     markers: [
       '/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen', 'tage_ohne_app_oeffnung', 'zeitzonen_reisen',
       'haelfte-voll', 'doppelausgabe', 'solo-haltemodus-schwanger', 'solo-haltemodus-essstoerung', 'solo-haltemodus-untergewicht', 'solo-budget-angehoben', 'solo-ziele-ab-morgen',
-      'feldkonflikt', 'ereignisse-voll', 'einladung-nach-entkopplung',
+      'feldkonflikt', 'ereignisse-voll', 'einladung-nach-entkopplung', 'levelaufstieg-ausstehend',
     ],
   },
   {
@@ -123,6 +123,16 @@ export const testCapabilities: readonly TestCapability[] = [
     modules: ['apps/backend/dev/meal-vision/'],
     entries: { backendRoutes: ['POST /dev/fotoanalyse'] },
     markers: ['fake_fotoanalyse'],
+  },
+  {
+    // #142: Fake des Expo-Push-Ports mit steuerbaren Tickets, Quittungen, Verbindungs- und Teilfehlern. Die
+    // Integrationstests des Zustellers nutzen ihn direkt; das Development-Backend sendet wie das produktive
+    // über den HTTP-Adapter, damit Gerätetests echte Pushes erhalten.
+    key: 'fake-expo-push',
+    description: 'Fake des Expo-Push-Ports für die Tests des Push-Zustellers; nur in Test-Artefakten, ohne Route und ohne Schalter',
+    modules: ['apps/backend/dev/push/'],
+    entries: {},
+    markers: ['fake_expo_push'],
   },
   {
     // #183: Attrappe des Health-Plattform-Adapters mit den Szenarien aus Spezifikation 3, Abschnitt 9. Die

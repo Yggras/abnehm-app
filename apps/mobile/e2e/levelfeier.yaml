@@ -1,0 +1,119 @@
+# Gerätelauf Levelfeier (Spezifikation 4, Abschnitt 6 „Levelaufstieg erleben“; #200). Die Bildschirmfotos sind
+# die Vorlage der Impeccable-Kritik mit der Hauptaufgabe „den gemeinsamen Levelaufstieg erleben“.
+#
+# Teil 1, „Heute“: Seed `levelaufstieg-ausstehend` als Anna. Auf ihrem Gerät warten drei Offline-Bauten, die
+# ihre Hälfte auf Level 3 füllen; Philipps ist schon voll. Ihr erster Sync hebt die Insel auf Level 4, und
+# Momo feiert auf „Heute“ mit „Momo ist jetzt auf Level 4“.
+#
+# Teil 2, Tab „Momo“: Seed `haelfte-voll` als Anna (Natur, Seite b, Level 3, 29 von 36 verbaut, 25 Energie).
+# Sie baut zwei Apfelbäume und einen Beerenstrauch in ihren freien Rollenbereich b (Felder (10, 6), (10, 7)
+# und (10, 8)); der dritte Bau hebt die Insel auf Level 4. Feldmitte ((x − y) · 32, (x + y) · 16 + 16), Mitte
+# der Lichtung (16, 248) in der Bildschirmmitte (siehe `bau-modus`): Die Punkte liegen 112/24, 80/40 und
+# 48/56 dp rechts unter der Lichtung, in Prozent gemittelt für iPhone SE (375 × 667 pt) und `medium_phone`
+# (412 × 915 dp). Nicht im Standardumfang von `scripts/e2e-run`; Aufruf mit `--ablauf levelfeier`.
+appId: ${APP_ID}
+name: Levelfeier
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+
+# Teil 1: Feier auf „Heute“ nach dem Sync ------------------------------------------------------------------
+# Der Seed-Link steht hier selbst statt im Teilablauf `link`: Die Feier kommt mit dem ersten Sync direkt nach
+# dem Seed, und das Warten des Teilablaufs auf die iOS-Rückfrage „Öffnen“ (bis zu 5 s) ließ die Meldung schon
+# verschwinden (iPhone-SE-Simulator, beobachtet am 19.11.2026). Auf iOS wird deshalb auf beides gewartet.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: screen-scroll
+    timeout: 30000
+- openLink: ${SCHEME}://seed?szenario=levelaufstieg-ausstehend&installation=anna-android
+# Die Rückfrage gibt es nur auf iOS; auf Android dauerte schon die Prüfung auf sie länger als die Meldung steht
+# (Emulator `medium_phone`, beobachtet am 19.11.2026).
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Momo ist jetzt auf Level 4|Öffnen|Open"
+          timeout: 30000
+      - runFlow:
+          when:
+            visible: "Öffnen|Open"
+          commands:
+            - tapOn: "Öffnen|Open"
+- extendedWaitUntil:
+    visible: "Momo ist jetzt auf Level 4"
+    timeout: 30000
+- takeScreenshot: levelfeier-1-heute
+- extendedWaitUntil:
+    notVisible: "Momo ist jetzt auf Level 4"
+    timeout: 15000
+- takeScreenshot: levelfeier-2-heute-danach
+
+# Teil 2: Feier im Tab „Momo“ nach dem eigenen Bau ---------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=haelfte-voll&installation=anna-android&ziel=/momo
+- extendedWaitUntil:
+    visible: "Verstanden|Momos Insel, Level 3.*"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Verstanden"
+    commands:
+      - tapOn: "Verstanden"
+- assertVisible: "Momos Insel, Level 3, 10 eigene Objekte"
+
+- tapOn: "Bauen"
+- extendedWaitUntil:
+    visible: "Apfelbaum, 3 Energie"
+    timeout: 10000
+- tapOn: "Apfelbaum, 3 Energie"
+- extendedWaitUntil:
+    visible: "Apfelbaum bauen.*"
+    timeout: 10000
+- tapOn:
+    point: "78%,53%"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 11 eigene Objekte"
+    timeout: 10000
+
+- tapOn: "Bauen"
+- extendedWaitUntil:
+    visible: "Apfelbaum, 3 Energie"
+    timeout: 10000
+- tapOn: "Apfelbaum, 3 Energie"
+- extendedWaitUntil:
+    visible: "Apfelbaum bauen.*"
+    timeout: 10000
+- tapOn:
+    point: "70%,55%"
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 3, 12 eigene Objekte"
+    timeout: 10000
+- takeScreenshot: levelfeier-3-momo-vorher
+
+- tapOn: "Bauen"
+- extendedWaitUntil:
+    visible: "Beerenstrauch, 2 Energie"
+    timeout: 10000
+- tapOn: "Beerenstrauch, 2 Energie"
+- extendedWaitUntil:
+    visible: "Beerenstrauch bauen.*"
+    timeout: 10000
+- tapOn:
+    point: "62%,57%"
+- extendedWaitUntil:
+    visible: "Momo ist jetzt auf Level 4"
+    timeout: 30000
+- takeScreenshot: levelfeier-4-momo
+- assertVisible: "Momos Insel, Level 4, 13 eigene Objekte"

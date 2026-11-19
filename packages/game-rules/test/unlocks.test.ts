@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { testCatalog } from '../fixtures/index.ts';
-import { formAt, unlocksAt } from '../src/unlocks.ts';
+import { formAt, levelOccasionKey, unlocksAt } from '../src/unlocks.ts';
 
 // Nachweis für #179: Freischaltungen und Entwicklungsformen nach Abschnitt 5 von #83, gegen den
 // Test-Katalog mit zwei Gebieten (Level 4 und 8) und zwei Landschaftsvorlagen.
@@ -104,5 +104,13 @@ describe('Freischaltungen je Level', () => {
 
   it('schaltet ohne Landschaftsvorlage kein endloses Gebiet frei', () => {
     expect(unlocksAt({ ...catalog, landscapeTemplates: [] }, 49)).toEqual({ level: 49, blueprints: [], form: null, area: null });
+  });
+});
+
+describe('Anlassschlüssel des Levelaufstiegs (#200)', () => {
+  it('ist `level:‹insel›:‹L›` und nur für ganze Level ab 1 definiert', () => {
+    expect(levelOccasionKey('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c02', 4)).toBe('level:5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c02:4');
+    expect(() => levelOccasionKey('insel', 0)).toThrow();
+    expect(() => levelOccasionKey('insel', 2.5)).toThrow();
   });
 });

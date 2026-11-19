@@ -3,14 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import type { Clock } from '@abnehm/clock';
-import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, ServerVersion, TimeZone } from '@abnehm/contracts/base';
 import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
-import type { IslandRole } from '@abnehm/contracts/island';
-import { islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
+import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
+import { IslandEventRecord, islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { visitorOccasionKey } from '@abnehm/game-rules/events';
 import { hatching } from '@abnehm/game-rules/hatching';
+import { levelNeed } from '@abnehm/game-rules/progress';
+import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { dailyGoalCompletionEntity } from '../../daily-goals';
 import { insertCompletionForTest, insertDailyGoalForTest, insertPersonForTest } from '../../daily-goals/testing/persisted';
@@ -25,13 +27,14 @@ import type { Refresh } from '../../shell/followed-source';
 import { createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncWriter } from '../../sync';
 import { pendingOperations } from '../../sync/outbox';
 import { createGameService, type GameService } from '../game-service';
+import { islandProgressOf, islandSyncEntities } from '../island-entities';
 import { anna, philipp } from './persons';
 import { quietGameDependencies } from './quiet-game';
 
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
 // Insel, Vorschläge, die geschlüpfte Insel, Energie, Objekte (#194) und Besucher (#202) legt der Test an, wie sie der Pull
-// ablegen würde.
+// ablegen würde; einen Levelaufstieg (#200) übernimmt er über die Sync-Adapter wie ein echter Pull.
 // Die Uhr gibt der Test hinein, auf Wunsch auch Haptik und Takt des Spieldienstes (#188).
 
 const at = '2026-10-14T12:00:00.000Z';
@@ -70,6 +73,11 @@ export type LaichkugelWorld = Readonly<{
   /** Vom Server bestätigte Freischaltungen, etwa Besucher-Baupläne früherer Besuche (#202). */
   unlockOnServer(catalogKeys: readonly string[]): void;
   visitOnServer(visit: Readonly<{ to: 'philipp' | 'anna'; n: number; templateKey: string; details: VisitorEventDetails; status?: 'offen' | 'erfuellbar'; seen?: boolean }>): EntityId;
+  /**
+   * Ein Pull mit dem Inselfortschritt auf `level` und den Levelaufstiegs-Ereignissen der Level `events`, wie
+   * der Server sie nach einem Bau des Partners schreibt (#200). Übernommen über die Sync-Adapter der Insel.
+   */
+  pullProgress(level: number, events?: readonly number[]): void;
   operations(): ReturnType<typeof pendingOperations>;
   close(): void;
 }>;
@@ -202,6 +210,28 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
         if (to === 'philipp') db.insert(islandEventState).values({ id: stateId, islandEventId: eventId, personId: philipp, seenAt: seen ? at : null, claimedAt: null, ...synced }).run();
       });
       return stateId;
+    },
+    pullProgress(level, events = []) {
+      const adapterOf = (entityType: string) => islandSyncEntities.find((entity) => entity.entityType === entityType)!;
+      database.transaction((tx) => {
+        const row = sqliteOf(tx).select().from(islandProgress).where(eq(islandProgress.islandId, islandId)).get();
+        if (row === undefined) throw new Error('Inselfortschritt fehlt; zuerst hatch()');
+        const current = islandProgressOf(row);
+        const members = current.members.map(({ personId }) => ({ personId, halfPercent: 0, halfFull: false }));
+        const progress = IslandProgress.parse({
+          ...current, level, levelNeed: levelNeed(level), members, dataAsOf: at, serverVersion: String(Number(current.serverVersion) + 1),
+        });
+        adapterOf('island_progress').applyCanonical(tx, { entityId: EntityId.parse(row.id), serverVersion: progress.serverVersion, data: progress });
+        for (const eventLevel of events) {
+          const occasionKey = levelOccasionKey(islandId, eventLevel);
+          const id = islandEventId(islandId, occasionKey);
+          const data = IslandEventRecord.parse({
+            islandId, couplingId, type: 'levelaufstieg', templateKey: null, responsiblePersonId: null, occasionKey, status: 'abgeschlossen', reward: null,
+            occurredAt: at, createdAt: at, updatedAt: at,
+          });
+          adapterOf('island_event').applyCanonical(tx, { entityId: id, serverVersion: ServerVersion.parse(progress.serverVersion), data });
+        }
+      });
     },
     operations: () => database.read((tx) => pendingOperations(tx, 100)),
     close() {

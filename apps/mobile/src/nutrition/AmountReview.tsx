@@ -1,31 +1,14 @@
-import {
-  roundKcal,
-  type CaptureMethod,
-  type DisplayUnit,
-  type FoodRef,
-  type NutritionSnapshot,
-  type PortionConversion,
-} from '@abnehm/contracts/nutrition';
+import type { CaptureMethod, DisplayUnit, FoodRef, NutritionSnapshot, PortionConversion } from '@abnehm/contracts/nutrition';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Chip, IconButton, space, Text, TextField } from '../design';
-import { checkAmountInput, defaultAmountMilli } from './amount-input';
+import { defaultAmountMilli } from './amount-input';
+import { AmountFields, useAmountDraft } from './AmountFields';
 import type { Nutrition } from './nutrition';
 import { conversionFields, type ConversionUnit } from './own-food-fields';
 import { checkPortionDraft, editableBaseOf } from './own-food-input';
-import {
-  amountProblemText,
-  conversionProblemText,
-  kcalText,
-  macrosText,
-  milliText,
-  nutritionTexts,
-  ownFoodProblemText,
-  sourceNames,
-  unitChipText,
-  unitText,
-} from './texts';
+import { conversionProblemText, nutritionTexts, ownFoodProblemText, sourceNames } from './texts';
 
 // Mengenprüfung des Hinzufügen-Bildschirms (Spezifikation 2, Abschnitte 2 und 6) samt dem Schritt
 // „Umrechnung eintragen“ (#157). Beide stehen im selben Sheet; Sheets liegen nie in Sheets.
@@ -46,6 +29,7 @@ export type Selection = Readonly<{
  */
 export function AmountReview({
   selection,
+  target,
   nutrition,
   onClose,
   onAdd,
@@ -53,6 +37,8 @@ export function AmountReview({
   onConversion,
 }: {
   selection: Selection;
+  /** Mahlzeit und Tag, etwa „Abendessen · Gestern, Dienstag, 13.10.2026“: Beim Nachtragen steht der Tag bis zum letzten Schritt. */
+  target: string;
   nutrition: Nutrition;
   onClose: () => void;
   onAdd: (displayUnit: DisplayUnit, displayAmountMilli: number) => void;
@@ -65,17 +51,10 @@ export function AmountReview({
       ? nutrition.prefillAmount(selection.ref, snapshot)
       : { displayUnit: selection.unit, displayAmountMilli: defaultAmountMilli(snapshot, selection.unit) },
   );
-  const [unit, setUnit] = useState<DisplayUnit>(prefill.displayUnit);
-  const [input, setInput] = useState(() => milliText(prefill.displayAmountMilli));
-  const [submitted, setSubmitted] = useState(false);
+  const draft = useAmountDraft(snapshot, prefill);
   const [addingConversion, setAddingConversion] = useState(false);
-  const check = checkAmountInput(snapshot, unit, input);
-  // Ein leeres Feld beim Tippen ist noch kein Fehler; erst „Hinzufügen“ fragt nach der Menge.
-  const problem = check.type === 'problem' && (submitted || check.problem !== 'leer') ? amountProblemText(check.problem, snapshot.baseUnit) : undefined;
-  const units: DisplayUnit[] = [snapshot.baseUnit, ...snapshot.portions.map((portion) => portion.unit)];
   // Die Quellenangabe nennt die Quelle schon (BLS, Open Food Facts); sonst die Art der Werte.
   const source = snapshot.attribution ?? sourceNames[snapshot.source];
-  const kcal = check.type === 'menge' ? kcalText(roundKcal(check.totals.milliKcal)) : nutritionTexts.noKcal;
   // Ändern lässt sich ein eigenes oder ein BLS-Lebensmittel; ein Barcode-Produkt erst mit #160.
   const base = editableBaseOf(selection.ref);
   const missing = (['stueck', 'portion'] as const).filter((candidate) => !snapshot.portions.some((portion) => portion.unit === candidate));
@@ -92,48 +71,21 @@ export function AmountReview({
             {snapshot.name}
           </Text>
           <Text variant="caption" tone="inkMuted">
+            {target}
+          </Text>
+          <Text variant="caption" tone="inkMuted">
             {source}
           </Text>
         </View>
         <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
       </View>
-      <TextField
-        kind="number"
-        label={nutritionTexts.amount}
-        unit={unitText(unit)}
-        value={input}
-        onChangeText={setInput}
-        problem={problem}
-      />
-      <View style={styles.units}>
-        {units.map((option) => (
-          <Chip
-            key={option}
-            label={unitChipText(snapshot, option)}
-            selection="single"
-            selected={option === unit}
-            onPress={() => {
-              if (option === unit) return;
-              setUnit(option);
-              setInput(milliText(defaultAmountMilli(snapshot, option)));
-            }}
-          />
-        ))}
-      </View>
-      <View style={styles.values}>
-        <Text variant="numberXl">{kcal}</Text>
-        {check.type === 'menge' ? (
-          <Text variant="label" tone="inkMuted">
-            {macrosText(check.totals)}
-          </Text>
-        ) : null}
-      </View>
+      <AmountFields snapshot={snapshot} draft={draft} />
       <Button
         label={nutritionTexts.add}
         block
         onPress={() => {
-          setSubmitted(true);
-          if (check.type === 'menge') onAdd(unit, check.amount.displayAmountMilli);
+          const checked = draft.submit();
+          if (checked !== undefined) onAdd(draft.unit, checked.amount.displayAmountMilli);
         }}
       />
       {base === undefined ? null : (
@@ -236,6 +188,5 @@ const styles = StyleSheet.create({
   sheetHead: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] },
   grow: { flex: 1, gap: space[1] },
   units: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  values: { gap: space[1] },
   foodActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], justifyContent: 'center' },
 });

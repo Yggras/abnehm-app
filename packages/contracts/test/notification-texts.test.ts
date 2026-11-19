@@ -62,14 +62,39 @@ describe('Textkatalog für Benachrichtigungen', () => {
     });
   });
 
+  it('der gemeinsame Katalog: Levelaufstieg (Spezifikation 4, Abschnitt 12; #200)', () => {
+    expect(notificationTexts.render('levelaufstieg', { level: 7 })).toEqual({
+      title: 'Momo ist jetzt auf Level 7 🎉',
+      body: 'Das habt ihr gemeinsam geschafft. Schaut auf eurer Insel vorbei.',
+    });
+    expect(notificationTexts.renderStored('levelaufstieg', { level: 1 })).toMatchObject({ type: 'contract_error', error: { code: 'invalid_payload' } });
+  });
+
   it('der Eintrag passt zu Schlüssel und Werten des Intents aus den Fixtures', () => {
-    const rollenwahl = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid['Rollenwahl']);
-    expect(notificationTexts.renderStored(rollenwahl.messageKey, rollenwahl.payload)).toMatchObject({ type: 'rendered' });
+    for (const name of ['Rollenwahl', 'Levelaufstieg an Anna'] as const) {
+      const intent = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid[name]);
+      expect(notificationTexts.renderStored(intent.messageKey, intent.payload)).toMatchObject({ type: 'rendered' });
+    }
+  });
+
+  it('Anfeuern: „Anna feuert dich an“ mit der Kurzbotschaft (Spezifikation 5, Abschnitt 9)', () => {
+    expect(notificationTexts.render('anfeuern', { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' })).toEqual({
+      title: 'Anna feuert dich an',
+      body: 'Gemeinsam für Momo 🐣',
+    });
+  });
+
+  it('Entkopplung: „Anna hat eure Kopplung beendet“ als Information (Spezifikation 5, Abschnitt 9)', () => {
+    const entkopplung = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid['Entkopplung']);
+    expect(notificationTexts.renderStored(entkopplung.messageKey, entkopplung.payload)).toEqual({
+      type: 'rendered',
+      text: { title: 'Anna hat eure Kopplung beendet', body: 'Momo und eure Insel sind archiviert.' },
+    });
   });
 
   it('Schlüssel ohne Eintrag sind ein Typfehler', () => {
     // @ts-expect-error – Einträge kommen mit den Tickets der Spezifikationen 4 und 5
-    expect(() => notificationTexts.render('levelaufstieg', { level: 7 })).toThrow();
-    expect(notificationTexts.renderStored('levelaufstieg', { level: 7 })).toMatchObject({ type: 'contract_error' });
+    expect(() => notificationTexts.render('gebiet', { gebietKey: 'gebiet_1' })).toThrow();
+    expect(notificationTexts.renderStored('gebiet', { gebietKey: 'gebiet_1' })).toMatchObject({ type: 'contract_error' });
   });
 });

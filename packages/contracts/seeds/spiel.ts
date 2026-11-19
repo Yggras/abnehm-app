@@ -1,8 +1,11 @@
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { openVisitFacts, planVisitors, visitorSlotOf } from '@abnehm/game-rules/events';
+import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { EntityId, LocalDate } from '../src/base.ts';
 import { BuildObject, buildObjectKey, PlaceObject, placeObjectKey } from '../src/island.ts';
+import { islandEventId } from '../src/island-records.ts';
+import { notificationIntentId } from '../src/notifications.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
 import { buildSeedState, changedOnServer, pulledBy, type SeedEntity, type SeedPart } from './build.ts';
 import { visitEntities, visitWish, type SeedVisit } from './ereignisse.ts';
@@ -32,6 +35,11 @@ import { afterSync, changedOffline, processed, type OfflineChange } from './sync
 //   Philipp. Offline stellt das iPhone seine erste Laterne auf das freie Feld `grundinsel:2:2`, das iPad
 //   die zweite auf dasselbe Feld. Der Server nimmt beide an, in Eingangsreihenfolge: Die zuerst platzierte
 //   Laterne wechselt ins Lager, die zweite steht auf dem Feld. Keine Energie geht verloren.
+// - `levelaufstieg-ausstehend` („Levelaufstieg ausstehend vor und nach dem Pull“, #200): `haelfte-voll` mit
+//   Philipps iPhone und Annas Android. Offline hat Anna zwei Apfelbäume und einen Beerenstrauch gebaut; mit
+//   37 verbaut ist auch ihre Hälfte voll. Vor dem Sync zeigt Philipps iPhone Level 3 und „Momo wartet auf
+//   Anna“. Annas Sync hebt die Insel mit dem dritten Bau auf Level 4: Ereignis `level:<insel>:4` und je ein
+//   Push-Intent an beide. Philipps Pull bringt Level 4 und das Ereignis auf sein iPhone.
 // - `ereignisse-voll` („volles Ereignis-Kontingent (4 offen)“, #202): `gekoppelt` ohne die Besucher von
 //   heute. Philipp hat vier Besuche der letzten vier Tage nicht abgeholt, Anna einen von gestern. Philipps
 //   Pull am Mittag erzeugt die Besucher des Tages: Philipp bekommt wegen der Grenze von 4 offenen keinen,
@@ -466,5 +474,126 @@ export const ereignisseVollManifest = SeedManifest.parse({
   // Philipps Pull erzeugt die Besucher des Tages: nur Annas; ihren Ereignisstand sieht Philipps Gerät nicht.
   steps: [{ type: 'sync', installation: iphone }],
   target: ereignisseVollStates.target,
+  extensions: gekoppeltExtensions,
+});
+
+/**
+ * Annas Offline-Bauten in `levelaufstieg-ausstehend`, in ihrer Ecke: 29 + 3 + 3 + 2 = 37 verbaut, über
+ * Schwelle(4) = 36. Kein Bau erfüllt ihren Besucherwunsch von heute (Blumenwiese).
+ */
+const annasLueckenBauten: readonly SeedBuild[] = [
+  { personId: anna, fieldKey: 'grundinsel:14:2', blueprintKey: 'apfelbaum', at: '2026-10-14T11:00:00.000Z' },
+  { personId: anna, fieldKey: 'grundinsel:15:2', blueprintKey: 'apfelbaum', at: '2026-10-14T11:01:00.000Z' },
+  { personId: anna, fieldKey: 'grundinsel:12:3', blueprintKey: 'beerenstrauch', at: '2026-10-14T11:02:00.000Z' },
+];
+
+/** Das gemeinsame Ereignis „Levelaufstieg“, wie `level-up.ts` im Backend es schreibt (#200). */
+function levelEvent(level: number): SeedEntity {
+  const islandId = seedIds.island.philippAnna;
+  const occasionKey = levelOccasionKey(islandId, level);
+  return {
+    table: 'island_event',
+    entityType: 'island_event',
+    couplingId,
+    row: {
+      id: islandEventId(EntityId.parse(islandId), occasionKey),
+      island_id: islandId,
+      coupling_id: couplingId,
+      type: 'levelaufstieg',
+      template_key: null,
+      responsible_person_id: null,
+      occasion_key: occasionKey,
+      status: 'abgeschlossen',
+      reward: null,
+      occurred_at: now,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    },
+  };
+}
+
+/** Der offene `levelaufstieg`-Intent an eine Person; nur Server, ohne Sync. */
+function levelIntent(level: number, recipientPersonId: string): SeedRow {
+  const sourceEventId = levelEvent(level).row.id as string;
+  return {
+    intent_id: notificationIntentId({ sourceEventId: EntityId.parse(sourceEventId), recipientPersonId: EntityId.parse(recipientPersonId), type: 'levelaufstieg' }),
+    source_event_id: sourceEventId,
+    recipient_person_id: recipientPersonId,
+    type: 'levelaufstieg',
+    message_key: 'levelaufstieg',
+    payload: { level },
+    status: 'offen',
+    created_at: now,
+    status_changed_at: now,
+  };
+}
+
+/**
+ * Das zuletzt gefeierte Level je Installation, im Gerätezustand der App (`momo_levelfeier` in
+ * `apps/mobile/src/island/level-celebration.ts`): Beide Geräte haben Level 3 schon gesehen. Ohne gemerktes
+ * Level übernähme die App das erste, das sie sieht, still; dann hinge die Feier daran, ob die Oberfläche vor
+ * dem ersten Pull steht.
+ */
+function celebratedLevel(state: SeedState, level: number): SeedState {
+  const row = { key: 'momo_levelfeier', value: { islandId: seedIds.island.philippAnna, level }, updated_at: haelfteVollBauten.at(-1)!.at };
+  const devices = Object.fromEntries(Object.entries(state.devices).map(([key, device]) => [key, { ...device, rows: { ...device.rows, device_state: [...(device.rows.device_state ?? []), row] } }]));
+  return { server: state.server, devices };
+}
+
+function levelaufstiegAusstehend() {
+  const ops = seedIds.operation.levelaufstiegAusstehend;
+  const synced = celebratedLevel(
+    buildSeedState({
+      parts: gekoppeltPartsBuilt(haelfteVollBauten),
+      createdAt: now,
+      devices: { [iphone]: { personId: philipp, cursor: 'latest' }, [android]: { personId: anna, cursor: 'latest' } },
+    }),
+    3,
+  );
+  const arrivals = annasLueckenBauten.map((build, index) => ({ build, n: firstBuild + index, operationId: ops[index]! }));
+  const initial = changedOffline(synced, android, arrivals.map(({ build, n, operationId }) => offlineBuild(build, n, operationId)));
+  // Jeder Bau berechnet den Fortschritt aus allen bisherigen; erst der dritte erreicht Level 4.
+  const changes = arrivals.flatMap(({ build, n }, index) => {
+    const accepted = [...haelfteVollBauten, ...arrivals.slice(0, index + 1).map((arrival) => arrival.build)];
+    const built = serverBuild(initial, build, n, accepted);
+    return progressOf(accepted).level > progressOf(haelfteVollBauten).level ? [...built, levelEvent(progressOf(accepted).level)] : built;
+  });
+  const server = changedOnServer(initial, { createdAt: now, changes });
+  const withIntents = { ...server, server: { ...server.server, notification_intent: [levelIntent(4, philipp), levelIntent(4, anna)] } };
+  // Anna sendet und zieht, danach zieht Philipp.
+  const target = afterSync(
+    withIntents,
+    arrivals.map(({ n, operationId }) => ({
+      ...processed(operationId, 'applied', { command: 'buildObject', businessKey: buildObjectKey(EntityId.parse(seedIds.buildCommand(n))) }),
+      person_id: anna,
+    })),
+    [],
+  );
+  const pulled = pulledBy(pulledBy(target, android, anna), iphone, philipp);
+  return {
+    initial,
+    target: { server: pulled.server, devices: Object.fromEntries(Object.entries(pulled.devices).map(([key, device]) => [key, { ...device, outbox: [] }])) },
+  };
+}
+
+const levelaufstiegAusstehendStates = levelaufstiegAusstehend();
+
+export const levelaufstiegAusstehendManifest = SeedManifest.parse({
+  formatVersion: 1,
+  scenario: 'levelaufstieg-ausstehend',
+  revision: 1,
+  clock: seedClock,
+  localDates: seedDays,
+  catalogVersion: null,
+  accounts: [seedAccounts.philipp, seedAccounts.anna],
+  installations: [seedInstallations.philippIphone, seedInstallations.annaAndroid],
+  initial: levelaufstiegAusstehendStates.initial,
+  // Erst Annas Android: Ihre drei Bauten heben die Insel auf Level 4. Dann Philipps iPhone: Pull mit dem Aufstieg.
+  steps: [
+    { type: 'sync', installation: android },
+    { type: 'sync', installation: iphone },
+  ],
+  target: levelaufstiegAusstehendStates.target,
   extensions: gekoppeltExtensions,
 });
