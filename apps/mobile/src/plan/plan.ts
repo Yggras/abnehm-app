@@ -142,8 +142,8 @@ export type Plan = Readonly<{
   /**
    * Budgetvorschlag prüfen (Spezifikation 1, Abschnitt 7), beim App-Start und bei jeder Rückkehr in den
    * Vordergrund, höchstens einmal je lokalem Tag. Nach drei Wochen mit genügend Gewichtsdaten legt es einen
-   * offenen Vorschlag an, das Budget ab dem nächsten Annehmen um 150 kcal zu senken oder anzuheben, wenn
-   * der Gewichtstrend der letzten 21 Tage bis gestern deutlich vom gewählten Tempo abweicht. Gewichtstrend
+   * offenen Vorschlag an, das Budget um 150 kcal zu senken oder anzuheben, wenn der Gewichtstrend der letzten
+   * 21 Tage bis gestern deutlich vom gewählten Tempo abweicht. Gewichtstrend
    * und Tagesaufnahme liest es nur über die Ports aus den Spezifikationen 2 und 3. Der Vorschlag entsteht
    * samt Upsert in einer lokalen Transaktion; ohne eigene Person tut es nichts.
    */

@@ -1,5 +1,5 @@
 import { readingOf, type Clock } from '@abnehm/clock';
-import { EntityId, Instant, LocalDate, localDateAfter } from '@abnehm/contracts/base';
+import { EntityId, Instant, LocalDate, localDateAfter, type TimeZone } from '@abnehm/contracts/base';
 import {
   budgetSuggestionId,
   BudgetSuggestionUpsert,
@@ -196,7 +196,7 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
    * erste Zielversion seit ≥ 21 Tagen, das aktuelle Kalorienbudget seit ≥ 14 Tagen und die letzte
    * Entscheidung ≥ 14 Tage zurück. Jede verfehlte Voraussetzung zählt als Prüfung des Tags.
    */
-  function prepare(tx: ReadContext, today: LocalDate, timeZone: Parameters<typeof readingOf>[1]): Prepared {
+  function prepare(tx: ReadContext, today: LocalDate, timeZone: TimeZone): Prepared {
     const own = readOwnPerson(tx);
     if (own === undefined) return { type: 'fertig', check: { type: 'kein_vorschlag', reason: 'ohne_person' }, mark: false };
     if (readDeviceState(tx, checkedOnKey) === today) return { type: 'fertig', check: { type: 'bereits_geprueft' }, mark: false };
