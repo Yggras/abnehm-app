@@ -2,19 +2,24 @@ import type { Clock } from '@abnehm/clock';
 
 import type { HealthConnectOutcome, HealthPlatformAdapter } from '../health';
 import { appHealthImport } from '../health/app-health';
-import { applyHealthScenario, createFakeHealthPlatform, type FakeHealthPlatform, type HealthScenario } from '../health/testing/fake-platform';
+import { applyHealthScenario, createFakeHealthPlatform, type FakeHealthPlatform } from '../health/testing/fake-platform';
+import type { TestHealthScenario } from './health-scenarios';
 
 // Health-Attrappe in Test-Artefakten (Spezifikation 3, Abschnitt 9; #183): Development- und E2E-Build
 // stellen sie per Link `health?szenario=<name>`. Bis zum ersten Link reicht der Adapter jeden Aufruf an
 // die Plattform des Builds durch; danach antwortet die Attrappe. Nach dem Szenario verbindet der Link den
 // Health-Import des geöffneten Kontos, damit die Daten ohne Onboarding-Schritt ankommen. Registriert als
 // Testfähigkeit `health-attrappe` (`test/test-capabilities.ts`).
+//
+// `health?szenario=geraet` stellt zurück auf die Plattform des Builds (Health Connect bzw. HealthKit) und
+// verbindet sie: der Gerätetest der echten Adapter (#195), solange Onboarding-Schritt (#189) und
+// Einstellungsseite (#190) fehlen.
 
 export type TestHealth = Readonly<{
   /** Umhüllt den Adapter der Plattform; einmal je Prozess. */
   platform(inner: HealthPlatformAdapter): HealthPlatformAdapter;
   /** Stellt die Attrappe auf ein Szenario und verbindet; ohne geöffnetes Konto `null`. */
-  apply(scenario: HealthScenario): Promise<HealthConnectOutcome | null>;
+  apply(scenario: TestHealthScenario): Promise<HealthConnectOutcome | null>;
 }>;
 
 export function createTestHealth(clock: Clock): TestHealth {
@@ -45,8 +50,12 @@ export function createTestHealth(clock: Clock): TestHealth {
     },
     async apply(scenario) {
       if (fake === null) throw new Error('Die Health-Attrappe ist nicht angeschlossen');
-      active = true;
-      await applyHealthScenario(fake, scenario, clock);
+      if (scenario === 'geraet') {
+        active = false;
+      } else {
+        active = true;
+        await applyHealthScenario(fake, scenario, clock);
+      }
       return (await appHealthImport.current()?.connect()) ?? null;
     },
   };

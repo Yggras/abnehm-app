@@ -309,6 +309,12 @@ export default defineConfig([
             allowedIn: ['apps/mobile/src/notifications/expo-port.ts'],
             message: 'Mitteilungen laufen über den Mitteilungs-Port aus apps/mobile/src/notifications/.',
           },
+          {
+            // Spezifikation 3, Abschnitt 2 (#195): Bibliothekstypen bleiben im Adapter, hinaus gehen nur normalisierte Datensätze.
+            modules: ['react-native-health-connect'],
+            allowedIn: ['apps/mobile/src/health/health-connect.ts', 'apps/mobile/src/health/device-platform.android.ts'],
+            message: 'Health Connect läuft über den Health-Plattform-Adapter aus apps/mobile/src/health/.',
+          },
         ],
       ],
     },

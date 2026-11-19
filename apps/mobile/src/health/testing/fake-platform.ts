@@ -16,6 +16,7 @@ import type {
   HealthWeightRecord,
   HealthWorkoutRecord,
 } from '../platform';
+import { daysBefore } from '../platform';
 
 // Health-Attrappe (Spezifikation 3, Abschnitte 2 und 9; #183): deterministisch steuerbare Implementierung
 // des Health-Plattform-Adapters. Es gibt sie nur in Tests, im Development- und im E2E-Build; registriert ist
@@ -115,7 +116,7 @@ export function createFakeHealthPlatform({ origin, clock }: FakeHealthPlatformOp
       return { upserts, deletedKeys, cursor: next, cursorExpired: false };
     },
     recentOrigins(days) {
-      const since = Date.parse(clock.read().instant) - days * 86_400_000;
+      const since = Date.parse(daysBefore(clock.read().instant, days));
       const origins = new Map<string, { sourceApp: HealthRecord['sourceApp']; workouts: number; weights: number }>();
       for (const record of records.values()) {
         if (Date.parse(atOf(record)) < since) continue;

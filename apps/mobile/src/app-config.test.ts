@@ -105,6 +105,15 @@ test('lokale Benachrichtigungen ohne APNs-Entitlement, bis Server-Push kommt (#1
   expect(configFor(undefined).plugins).toContainEqual(['expo-notifications', { enableRemoteNotifications: false }]);
 });
 
+test('Health Connect: nur Lesezugriff auf Trainings und Gewicht, ohne ältere Historie (#195)', () => {
+  for (const config of [configFor(undefined), configFor('development'), configFor('e2e', 'true')]) {
+    expect(config.android?.permissions).toEqual(['android.permission.health.READ_EXERCISE', 'android.permission.health.READ_WEIGHT']);
+    expect(config.plugins).toContain('react-native-health-connect');
+    // Health Connect verlangt mindestens API 26; React Native 0.88 setzt 24.
+    expect(config.plugins).toContainEqual(['expo-build-properties', { android: { minSdkVersion: 26 } }]);
+  }
+});
+
 test('Development- und E2E-Build dürfen das lokale Backend per HTTP ansprechen', () => {
   setEnv('EXPO_PUBLIC_API_URL', 'http://192.168.178.20:8788');
   expect(() => configFor('development')).not.toThrow();

@@ -106,6 +106,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // (https://developer.android.com/about/versions/14/changes/schedule-exact-alarms).
       // `scripts/app-artefakt-pruefen` prüft das Manifest jeder Produktions-APK.
       blockedPermissions: exactAlarmPermissions,
+      // Health Connect (Spezifikation 3, Abschnitt 6; #195): nur Lesezugriff auf Trainings und Gewicht.
+      // Keine Schreib-Berechtigung und kein `READ_HEALTH_DATA_HISTORY`: Ohne sie liefert Health Connect
+      // Daten bis 30 Tage vor der ersten Berechtigung
+      // (https://developer.android.com/health-and-fitness/guides/health-connect/develop/read-data).
+      // Expo fügt die Liste beim Prebuild dem Manifest hinzu
+      // (https://docs.expo.dev/versions/v58.0.0/config/app/#permissions).
+      permissions: ['android.permission.health.READ_EXERCISE', 'android.permission.health.READ_WEIGHT'],
     },
     plugins: [
       'expo-router',
@@ -121,6 +128,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Push-Ticket; bis dahin bleibt es aus (`enableRemoteNotifications`,
       // https://docs.expo.dev/versions/v58.0.0/sdk/notifications/).
       ['expo-notifications', { enableRemoteNotifications: false }],
+      // Health Connect (#195): Das Plugin trägt die Aktivität für die Begründung der Berechtigungen ein
+      // (bis Android 13 `ACTION_SHOW_PERMISSIONS_RATIONALE`, ab 14 `VIEW_PERMISSION_USAGE`) und meldet den
+      // Berechtigungsdialog an (README von react-native-health-connect 4.1.3, „Expo installation“). Die
+      // Bibliothek verlangt mindestens API 26; React Native 0.88 setzt 24 (`minSdk` in
+      // react-native/gradle/libs.versions.toml).
+      'react-native-health-connect',
+      ['expo-build-properties', { android: { minSdkVersion: 26 } }],
     ],
     experiments: {
       reactCompiler: true,

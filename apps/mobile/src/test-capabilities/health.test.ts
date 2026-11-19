@@ -48,6 +48,22 @@ describe('Health-Attrappe in Test-Artefakten', () => {
     release();
   });
 
+  it('`geraet` stellt nach einem Szenario zurück auf die Plattform des Builds und verbindet sie (Gerätetest, #195)', async () => {
+    const health = createTestHealth(clock);
+    const device = { ...unavailableHealthPlatform('health_connect'), availability: () => Promise.resolve('installation_noetig' as const) };
+    const platform = health.platform(device);
+    const connect = jest.fn(() => Promise.resolve({ type: 'verbunden', access: 'erteilt' } as const));
+    const release = appHealthImport.opened({ connect } as unknown as HealthImport);
+
+    await health.apply('erstimport');
+    expect(await platform.availability()).toBe('verfuegbar');
+
+    expect(await health.apply('geraet')).toEqual({ type: 'verbunden', access: 'erteilt' });
+    expect(await platform.availability()).toBe('installation_noetig');
+    expect(connect).toHaveBeenCalledTimes(2);
+    release();
+  });
+
   it('ohne angeschlossene Plattform ist das Szenario ein Fehler', async () => {
     await expect(createTestHealth(clock).apply('erstimport')).rejects.toThrow('nicht angeschlossen');
   });

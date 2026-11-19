@@ -6,7 +6,7 @@ import { Instant, LocalDate } from '@abnehm/contracts/base';
 import type { LocalDatabase } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 import type { Trackers } from '../trackers';
-import { healthDataTypes, type HealthAccessState, type HealthDataType, type HealthPlatformAdapter } from './platform';
+import { daysBefore, healthDataTypes, type HealthAccessState, type HealthDataType, type HealthPlatformAdapter } from './platform';
 
 // Health-Import-Dienst der App (Spezifikation 3, Abschnitte 2 und 6; #183). Er steuert Verbindung,
 // Erstimport, Import der Änderungen und Abgleich nach verfallenem Token und schreibt ausschließlich über
@@ -65,7 +65,6 @@ export type HealthImportDependencies = Readonly<{
   onError(error: unknown): void;
 }>;
 
-const dayMs = 86_400_000;
 /** Zeitraum des Gewichts beim Erstimport und des Abgleichs nach verfallenem Token. */
 const windowDays = 30;
 
@@ -187,7 +186,7 @@ export function createHealthImport({ database, platform, trackers, clock, onErro
 
 /** Beginn der letzten 30 Tage vor einem Zeitpunkt: Gewicht beim Erstimport und Abgleich nach verfallenem Token. */
 function windowStart(at: Instant): Instant {
-  return Instant.parse(new Date(Date.parse(at) - windowDays * dayMs).toISOString());
+  return daysBefore(at, windowDays);
 }
 
 function later(a: Instant, b: Instant): Instant {

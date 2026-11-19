@@ -3,9 +3,9 @@ import type { ClockReading } from '@abnehm/clock';
 import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase, DeviceSuiteReport } from './device-suite/suite';
 import type { HealthConnectOutcome } from '../health';
-import type { HealthScenario } from '../health/testing/fake-platform';
 import type { FaultController, FaultPlan } from './faults';
 import type { TestHealth } from './health';
+import type { TestHealthScenario } from './health-scenarios';
 import type { TestLink, TestLinkPath } from './links';
 import type { MomoGalleryView } from './momo-gallery/views';
 import type { NotificationTestControl, NotificationTestMode } from './notifications';
@@ -28,7 +28,7 @@ export type TestStatus =
   | Readonly<{ type: 'geraetetest_laeuft'; phase: DeviceSuitePhase }>
   | Readonly<{ type: 'geraetetest_fertig'; report: DeviceSuiteReport }>
   /** `outcome` ist das Ergebnis des Verbindens, `ohne_konto` ohne geöffnetes Konto. */
-  | Readonly<{ type: 'health_gestellt'; scenario: HealthScenario; outcome: HealthConnectOutcome['type'] | 'ohne_konto' | 'fehlgeschlagen' }>
+  | Readonly<{ type: 'health_gestellt'; scenario: TestHealthScenario; outcome: HealthConnectOutcome['type'] | 'ohne_konto' | 'fehlgeschlagen' }>
   | Readonly<{ type: 'mitteilungen_gestellt'; mode: NotificationTestMode }>
   | Readonly<{ type: 'momo_galerie'; view: MomoGalleryView }>
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;

@@ -5,9 +5,9 @@ import type { NotificationPermission } from '@abnehm/contracts/notifications';
 import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
-import { healthScenarios, type HealthScenario } from '../health/testing/fake-platform';
 import { targetFromLink } from '../navigation/href';
 import type { ClockAdjustment } from './clock';
+import { testHealthScenarios, type TestHealthScenario } from './health-scenarios';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
 import { momoGalleryViews, type MomoGalleryView } from './momo-gallery/views';
@@ -30,7 +30,8 @@ import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 //   abnehmapp-dev://geraetetest?phase=vor_neustart|nach_neustart
 //     führt eine Phase der On-Device-Suite aus;
 //   abnehmapp-dev://health?szenario=erstimport
-//     stellt die Health-Attrappe auf ein Szenario (#183) und verbindet den Health-Import.
+//     stellt die Health-Attrappe auf ein Szenario (#183) und verbindet den Health-Import; `szenario=geraet`
+//     verbindet stattdessen die echte Plattform des Builds (Gerätetest, #195).
 //   abnehmapp-dev://mitteilungen?erlaubnis=unentschieden|erlaubt|verweigert[&antwort=erlaubt|verweigert]
 //     stellt den Mitteilungs-Port auf den Fake mit dieser Erlaubnis und dieser Antwort im Systemdialog
 //     (#125); `erlaubnis=system` stellt ihn zurück auf den echten Port.
@@ -46,7 +47,7 @@ export type TestLink =
   | Readonly<{ type: 'uhr'; adjustment: ClockAdjustment }>
   | Readonly<{ type: 'profil'; profile: RuntimeProfileKey }>
   | Readonly<{ type: 'geraetetest'; phase: DeviceSuitePhase }>
-  | Readonly<{ type: 'health'; scenario: HealthScenario }>
+  | Readonly<{ type: 'health'; scenario: TestHealthScenario }>
   /** `permission: null` ist der echte Port des Systems. */
   | Readonly<{ type: 'mitteilungen'; permission: NotificationPermission | null; answer: NotificationAnswer }>
   | Readonly<{ type: 'momo-galerie'; view: MomoGalleryView }>
@@ -65,7 +66,7 @@ const deviceSuiteParams = z.strictObject({ phase: z.enum(deviceSuitePhases) });
 
 const profileParams = z.strictObject({ name: runtimeProfileKeySchema });
 
-const healthParams = z.strictObject({ szenario: z.enum(healthScenarios) });
+const healthParams = z.strictObject({ szenario: z.enum(testHealthScenarios) });
 const galleryParams = z.strictObject({ ansicht: z.enum(momoGalleryViews).default('heute') });
 const notificationParams = z.strictObject({
   erlaubnis: z.enum(['system', 'unentschieden', 'erlaubt', 'verweigert']),
