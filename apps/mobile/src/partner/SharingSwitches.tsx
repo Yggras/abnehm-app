@@ -2,15 +2,13 @@ import { StyleSheet, View } from 'react-native';
 
 import { AreaKey } from '@abnehm/contracts/base';
 
-import { Button, ListGroup, ListRow, Notice, size, Skeleton, space, Switch } from '../design';
-import { openTarget } from '../navigation';
+import { ListGroup, ListRow, Notice, size, Skeleton, space, Switch } from '../design';
 import { SectionTitle } from '../settings/SectionTitle';
 import { areaIcons } from '../shell/area-icons';
 import { useMessageHost } from '../shell/MessageHost';
 import type { Partner, SharingView } from './partner';
-import { partnerActions } from './partner-view';
 import type { SharingChange } from './sharing';
-import { areaNames, partnerTexts, sharingTexts } from './texts';
+import { areaNames, sharingTexts } from './texts';
 
 /**
  * Die Schalter der eigenen Freigaben (Spezifikation 5, Abschnitt 6; #129): „Gesundheitsbereiche“ mit einem Schalter je
@@ -54,20 +52,6 @@ export function SharingLoading() {
     <View accessible accessibilityLabel={sharingTexts.loading}>
       <Skeleton width="100%" height={size.avatar} />
     </View>
-  );
-}
-
-/**
- * „Partner einladen“ und „Code eingeben“ ohne Kopplung: dieselben modalen Abläufe wie auf „Wir“ und „Heute“, die zum
- * Aufrufer zurückkehren. `invitePrimary` macht „Partner einladen“ zur Hauptaktion.
- */
-export function CouplingButtons({ invitePrimary = true }: { invitePrimary?: boolean }) {
-  return (
-    <>
-      <Button block icon="invite" variant={invitePrimary ? 'primary' : 'secondary'} label={partnerTexts.invite}
-        onPress={() => openTarget(partnerActions.invite.target)} />
-      <Button block variant="secondary" label={partnerTexts.redeem} onPress={() => openTarget(partnerActions.redeem.target)} />
-    </>
   );
 }
 

@@ -1,14 +1,14 @@
 import type { Clock } from '@abnehm/clock';
 import { and, eq } from 'drizzle-orm';
 
-import { AreaKey, Instant, type DisplayName } from '@abnehm/contracts/base';
+import { AreaKey, Instant } from '@abnehm/contracts/base';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { partnerSharing, photoSharing } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { setPartnerSharing, setPhotoSharing, type SyncWriter } from '../sync';
-import { readCouplingState } from './coupling-state';
+import { readCouplingState, type Coupled } from './coupling-state';
 
 // Die eigenen Freigaben der aktiven Kopplung für „Partner & Freigaben“ und den Onboarding-Schritt `partner`
 // (Spezifikation 5, Abschnitte 5 und 6; #129). Eine Partnerfreigabe je Gesundheitsbereich (`privat |
@@ -19,16 +19,13 @@ import { readCouplingState } from './coupling-state';
 export type Sharing =
   | Readonly<{ type: 'loading' }>
   | Readonly<{ type: 'solo' }>
-  | Readonly<{
+  | (Pick<Coupled, 'partnerDisplayName' | 'since'> & Readonly<{
       type: 'coupled';
-      partnerDisplayName: DisplayName;
-      /** Beginn bzw. letzte Reaktivierung der Kopplung: seitdem gibt es Momo und die Insel wieder. */
-      since: Instant;
       /** Je Gesundheitsbereich, ob der Partner die Zusammenfassung sieht. */
       areas: Readonly<Record<AreaKey, boolean>>;
       /** Ob der Partner die Mahlzeitenfotos sieht. */
       photos: boolean;
-    }>;
+    }>);
 
 /** Ein Schalterwechsel: ein Gesundheitsbereich oder die Mahlzeitenfotos. */
 export type SharingChange = Readonly<{ type: 'area'; area: AreaKey; shared: boolean }> | Readonly<{ type: 'photos'; shared: boolean }>;

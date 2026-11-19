@@ -3,7 +3,8 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Icon, Notice, space, Text } from '../design';
 import type { OnboardingStepProps } from '../shell/onboarding-registry';
 import { useInvitationCreated, usePartner, useSharing } from './app-partner';
-import { CouplingButtons, SharingLoading, SharingSwitches } from './SharingSwitches';
+import { CouplingButtons } from './CouplingParts';
+import { SharingLoading, SharingSwitches } from './SharingSwitches';
 import { sharingTexts } from './texts';
 
 /**
