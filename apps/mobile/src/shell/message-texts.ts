@@ -161,6 +161,14 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'anfeuern.gesendet': messageText(z.strictObject({ partnerDisplayName: DisplayName }), ({ partnerDisplayName }) => ({
     text: `Anfeuerung an ${partnerDisplayName} gesendet`,
   })),
+  /**
+   * Spezifikation 4, Abschnitt 10: Challenge vorgeschlagen (#210). „Vorschlag gesendet“ steht in der
+   * Spezifikation, der Name des Partners ist ein Designwert (nicht belegt). Offline sendet die Outbox ihn beim
+   * nächsten Push; bis dahin zeigt `challenge.detail` „Wird gesendet, sobald du online bist“.
+   */
+  'challenge.vorgeschlagen': messageText(z.strictObject({ partnerDisplayName: DisplayName }), ({ partnerDisplayName }) => ({
+    text: `Vorschlag an ${partnerDisplayName} gesendet`,
+  })),
   /** Spezifikation 5, Abschnitt 4: offline vorgemerkt; die Outbox sendet sie beim nächsten Push (#123). */
   'anfeuern.vorgemerkt': messageText(z.strictObject({}), () => ({ text: 'Wird gesendet, sobald du online bist' })),
   /** Spezifikation 1: „Ziele ändern“ hat eine Zielversion ab morgen angelegt (#147). */

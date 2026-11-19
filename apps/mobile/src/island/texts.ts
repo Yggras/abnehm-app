@@ -1,7 +1,9 @@
 import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
-import type { Season } from '@abnehm/game-rules/catalog';
+import type { ChallengeMeasure, Season } from '@abnehm/game-rules/catalog';
 
 import { formNames } from '../momo';
+import { bausteinNames } from '../shell/texts';
+import type { OwnChallengeShare } from './challenges';
 import type { IslandEntry } from './IslandBar';
 import type { Daytime } from './scene-model';
 
@@ -138,4 +140,42 @@ export const eventTexts = {
     reward.type === 'bauplan' ? `Neuer Bauplan: ${reward.name}` : `${reward.name} liegt jetzt in deinem Lager`,
   /** Zugänglicher Name von „Belohnung abholen“ in einer Karte. */
   claimFor: (visitor: string) => `Belohnung von ${visitor} abholen`,
+};
+
+/**
+ * Texte der Challenge-Bildschirme `challenge.propose` und `challenge.detail` (#210). „Passt gerade nicht zu
+ * euren Wochenplänen“ und „Vorschlag gesendet“ stehen in Spezifikation 4, Abschnitt 10; die übrigen Sätze
+ * sind Designwerte dieses Tickets (nicht belegt). Namen und Erklärungen der Vorlagen kommen aus dem
+ * Spielkatalog.
+ */
+export const challengeTexts = {
+  intro: (partner: string) => `Sieben Tage, gemeinsam mit ${partner}. Jede Person erfüllt ihren eigenen Anteil.`,
+  share: (share: OwnChallengeShare, measure: ChallengeMeasure): string => {
+    if (share.type === 'passt_nicht') return challengeTexts.unfit;
+    if (measure.type === 'tagesziele') return `Dein Anteil: ${share.required} erfüllte Tagesziele`;
+    if (measure.baustein === 'sporteinheit') return `Dein Anteil: ${share.required} von ${share.planned} geplanten Sporteinheiten`;
+    return `Dein Anteil: ${share.required} von ${share.planned} Tagen mit „${bausteinNames[measure.baustein]}“`;
+  },
+  unfit: 'Passt gerade nicht zu euren Wochenplänen',
+  propose: 'Vorschlagen',
+  /** Zugänglicher Name von „Vorschlagen“ in einer Vorlagenkarte. */
+  proposeTemplate: (template: string) => `${template} vorschlagen`,
+  solo: 'Challenges startet ihr zu zweit. Sobald ihr gekoppelt seid, kannst du eine vorschlagen.',
+  alreadyProposed: 'Gerade ist schon ein Vorschlag offen.',
+  alreadyActive: 'Gerade läuft schon eine Challenge.',
+  show: 'Ansehen',
+  /** Einstieg im Momo-Sheet. */
+  sheetPropose: 'Challenge vorschlagen',
+  sheetOpen: 'Zur Challenge',
+  proposedBy: (partner: string) => `${partner} schlägt vor`,
+  sent: 'Vorschlag gesendet',
+  waitingFor: (partner: string) => `${partner} entscheidet.`,
+  pending: 'Wird gesendet, sobald du online bist.',
+  validUntil: (weekday: string, time: string) => `Gilt bis ${weekday}, ${time} Uhr`,
+  accept: 'Annehmen',
+  decline: 'Ablehnen',
+  withdraw: 'Zurückziehen',
+  accepted: 'Angenommen. Die Challenge startet, sobald du online bist.',
+  running: 'Die Challenge läuft.',
+  gone: 'Dieser Vorschlag ist nicht mehr offen.',
 };

@@ -2,11 +2,12 @@ import { Skeleton, Text } from '../design';
 import { openTarget, setTargetParams, type RouteScreenProps } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useTabBarOverlap } from '../shell/tab-bar-overlap';
-import { useGameService, useIslandStage } from './app-game-service';
+import { useChallengeStage, useGameService, useIslandStage } from './app-game-service';
+import type { ChallengeStage } from './challenges';
 import { HatchedIslandScreen } from './HatchedIslandScreen';
 import { LaichkugelScreen } from './LaichkugelScreen';
 import { RoleChoiceScreen } from './RoleChoiceScreen';
-import { islandTexts } from './texts';
+import { challengeTexts, islandTexts } from './texts';
 
 /**
  * Tab „Momo“ (Spezifikation 4, Abschnitt 7). Ohne Kopplung wartet Momo als Laichkugel, vor dem Schlüpfen
@@ -19,6 +20,7 @@ import { islandTexts } from './texts';
 export function MomoTab({ target }: RouteScreenProps<'momo'>) {
   const game = useGameService();
   const stage = useIslandStage(game);
+  const challenge = useChallengeStage(game);
   const bottomInset = useTabBarOverlap();
   if (game === null || stage === null || stage.type === 'ohne_person') return <Loading />;
   if (stage.type === 'laichkugel') return <LaichkugelScreen energy={stage.energy} />;
@@ -46,11 +48,29 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
       markEventsSeen={game.markEventsSeen}
       claimEventReward={game.claimEventReward}
       onOpen={(view) => openTarget({ type: 'momo', view })}
+      challengeEntry={challengeEntryOf(challenge)}
       requestedView={target.view}
       onViewHandled={clearView}
       bottomInset={bottomInset}
     />
   );
+}
+
+/**
+ * Einstieg zu den gemeinsamen Challenges im Momo-Sheet (#210): ohne offenen Vorschlag und ohne laufende
+ * Challenge „Challenge vorschlagen“, sonst „Zur Challenge“.
+ */
+function challengeEntryOf(stage: ChallengeStage | null) {
+  switch (stage?.type) {
+    case 'frei':
+      return { label: challengeTexts.sheetPropose, target: { type: 'challenge.propose' } } as const;
+    case 'vorschlag':
+      return { label: challengeTexts.sheetOpen, target: { type: 'challenge.detail', challengeId: stage.proposal.challengeId } } as const;
+    case 'aktiv':
+      return { label: challengeTexts.sheetOpen, target: { type: 'challenge.detail', challengeId: stage.challengeId } } as const;
+    default:
+      return null;
+  }
 }
 
 /** Eine erledigte Ansicht verlässt die Route, damit derselbe Link sie erneut öffnen kann. */

@@ -185,6 +185,8 @@ export const seedIds = {
   encouragement: { philippHeute: [id('0055', 1), id('0055', 2), id('0055', 3)] },
   /** Annas offene Einladung in `einladung-nach-entkopplung` (#120). */
   invitation: { annasEinladung: id('0056', 1) },
+  /** Philipps Challenge-Vorschläge in `challenge-vorgeschlagen` und `challenge-verfallen` (#210). */
+  challenge: { philippsVorschlag: id('0057', 1), philippsVerfallenerVorschlag: id('0057', 2) },
 } as const;
 
 /**

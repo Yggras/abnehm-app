@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { createOpenedModule, useOpenedModule } from '../shell/opened-module';
+import type { ChallengeStage, OwnChallengeShare } from './challenges';
 import type { GameService } from './game-service';
 import type { IslandStage } from './role-choice';
 
@@ -19,4 +20,27 @@ export function useIslandStage(game: GameService | null): IslandStage | null {
   const [stage, setStage] = useState<{ game: GameService; value: IslandStage } | null>(null);
   useEffect(() => game?.observeStage((value) => setStage({ game, value })), [game]);
   return stage !== null && stage.game === game ? stage.value : null;
+}
+
+/** Wo das Paar mit Challenges steht (#210); `null`, bis die erste Lesung da ist. */
+export function useChallengeStage(game: GameService | null): ChallengeStage | null {
+  const [stage, setStage] = useState<{ game: GameService; value: ChallengeStage } | null>(null);
+  useEffect(() => game?.observeChallenges((value) => setStage({ game, value })), [game]);
+  return stage !== null && stage.game === game ? stage.value : null;
+}
+
+/** Vorschau des eigenen Anteils je Challenge-Vorlage (#210); `null`, bis sie berechnet ist. */
+export function useChallengeShares(game: GameService | null): Readonly<Record<string, OwnChallengeShare>> | null {
+  const [shares, setShares] = useState<{ game: GameService; value: Readonly<Record<string, OwnChallengeShare>> } | null>(null);
+  useEffect(() => {
+    if (game === null) return;
+    let active = true;
+    void game.challengeShares().then((value) => {
+      if (active) setShares({ game, value });
+    });
+    return () => {
+      active = false;
+    };
+  }, [game]);
+  return shares !== null && shares.game === game ? shares.value : null;
 }

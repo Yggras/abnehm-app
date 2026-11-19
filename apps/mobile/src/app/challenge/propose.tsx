@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { ChallengeProposeScreen } from '../../island/ChallengeProposeScreen';
+import { routeScreen } from '../../navigation';
 
-export default placeholderRoute('challenge.propose');
+export default routeScreen('challenge.propose', ChallengeProposeScreen);
