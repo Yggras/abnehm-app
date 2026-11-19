@@ -10,7 +10,8 @@ import { testCapabilities } from '../build-capabilities';
 import { deviceClock } from '../clock/device-clock';
 import { createDailyGoalPersistence, createDailyGoalRegistry, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../daily-goals';
 import { energyBookingEntity } from '../energy';
-import { createHealthImport, unavailableHealthPlatform } from '../health';
+import { createHealthImport } from '../health';
+import { deviceHealthPlatform } from '../health/device-platform';
 import { appHealthImport } from '../health/app-health';
 import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
@@ -80,11 +81,11 @@ const budgetTodayOpened = followTodayContribution(appTodayRegistry, 'ziele', 'nu
 const partnerTodayOpened = followTodayContribution(appTodayRegistry, 'partner', 'partner');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 /**
- * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183). Bis HealthKit (#193) und Health Connect
- * (#195) ihre Adapter liefern, ist Health nicht verfügbar; in Test-Artefakten übernimmt ab dem Link `health`
- * die Attrappe.
+ * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183): Android Health Connect (#195); auf iOS
+ * ist Health nicht verfügbar, bis HealthKit (#193) seinen Adapter liefert. In Test-Artefakten übernimmt ab
+ * dem Link `health` die Attrappe.
  */
-const devicePlatform = unavailableHealthPlatform(Platform.OS === 'ios' ? 'apple_health' : 'health_connect');
+const devicePlatform = deviceHealthPlatform(appClock);
 const healthPlatform = testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform;
 /** Ob die App im Vordergrund ist, laut React Native; meldet jede Änderung. */
 function observeAppForeground(listener: (active: boolean) => void) {
