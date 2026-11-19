@@ -33,6 +33,8 @@ export type LoggedEntry = Readonly<{
   totalProteinMg: number;
   totalCarbsMg: number;
   totalFatMg: number;
+  /** Das Mahlzeitenfoto des Eintrags, gleich ob gelöscht; `null` ohne Foto. */
+  mealPhotoId: EntityId | null;
 }>;
 
 /** Die fachlichen Spalten einer Nutzlast bzw. eines kanonischen Datensatzes. */
@@ -180,6 +182,7 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
       totalProteinMg: nutritionEntry.totalProteinMg,
       totalCarbsMg: nutritionEntry.totalCarbsMg,
       totalFatMg: nutritionEntry.totalFatMg,
+      mealPhotoId: nutritionEntry.mealPhotoId,
     })
     .from(nutritionEntry)
     .where(and(eq(nutritionEntry.personId, personId), eq(nutritionEntry.localDate, localDate), isNull(nutritionEntry.deletedAt)))
@@ -188,6 +191,7 @@ export function entriesOfDay(tx: ReadContext, personId: EntityId, localDate: Loc
     .map((row) => ({
       ...row,
       id: EntityId.parse(row.id),
+      mealPhotoId: row.mealPhotoId === null ? null : EntityId.parse(row.mealPhotoId),
       meal: MealKey.parse(row.meal),
       captureMethod: CaptureMethod.parse(row.captureMethod),
       source: SnapshotSource.parse(row.source),

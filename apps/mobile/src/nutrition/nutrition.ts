@@ -10,11 +10,13 @@ import {
   type NutritionEntryDeletedOutcome,
   type NutritionEntryUpdatedOutcome,
   type NutritionSnapshot,
+  type MealPhotoVariant,
 } from '@abnehm/contracts/nutrition';
 
 import type { DailyGoalPersistence } from '../daily-goals';
 import type { CatalogDatabase, LocalDatabase } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
+import type { OnlineResult } from '../online/online-result';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { defaultAmountMilli } from './amount-input';
@@ -22,7 +24,8 @@ import { readDayLog, readEntryDetail, type DayLog, type EntryDetail } from './da
 import { addEntry, deleteEntry, undoEntry, updateEntry, type EntryChange, type EntryUndo, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
 import { createFoodSearch, type FoodSearch } from './food-search';
-import { confirmPhotoDraft, type PhotoDraftConfirmation } from './meal-photos';
+import { confirmPhotoDraft, deletePhoto, readMealPhotoDetail, setPhotoSharing, type MealPhotoDetail, type PhotoDraftConfirmation } from './meal-photos';
+import type { MealPhotoImage, MealPhotoImages } from './photo-images';
 import { overlaidOrigins, searchOwnFoods, type OwnFoodChoice } from './own-food-repository';
 import { deleteOwnFood, saveOwnFood, type OwnFoodBase } from './own-foods';
 
@@ -36,6 +39,11 @@ export type NutritionDependencies = Readonly<{
   /** Persistenzdienst der Tagesziele; jeder Befehl meldet seine Tage in derselben Transaktion. */
   persistence: Pick<DailyGoalPersistence, 'reevaluateDailyGoals'>;
   newId: () => EntityId;
+  /**
+   * Bildabruf eigener Mahlzeitenfotos über den Server (`createHttpMealPhotoImages`). Ohne ihn, etwa in
+   * Tests ohne Server, ist jedes Foto `offline`: Das Protokoll zeigt dann nur das Foto-/KI-Symbol.
+   */
+  photoImages?: MealPhotoImages;
 }>;
 
 /** Vorbelegung der Mengenprüfung: Anzeigeeinheit und Menge in Tausendsteln. */
@@ -84,6 +92,26 @@ export type Nutrition = Readonly<{
   /** Ein nicht gelöschter eigener Eintrag für die Mengenansicht; sonst `null`. */
   entryDetail(entryId: EntityId): EntryDetail | null;
   /**
+   * Beobachtet die Fotoansicht eines eigenen Mahlzeitenfotos (Spezifikation 2, Abschnitt 9): Freigabeschalter
+   * und ob eine Kopplung besteht; `null`, sobald das Foto gelöscht, fremd oder unbekannt ist.
+   */
+  observeMealPhoto(photoId: EntityId, listener: (photo: MealPhotoDetail | null) => void): () => void;
+  /**
+   * Ruft ein eigenes Mahlzeitenfoto online als Vorschau oder vergrößert ab. Das Bild bleibt nur im
+   * Speicher; ohne Netz ist das Ergebnis `offline`.
+   */
+  mealPhotoImage(photoId: EntityId, variant: MealPhotoVariant): Promise<OnlineResult<MealPhotoImage>>;
+  /**
+   * „Mit Partner teilen“ eines eigenen Mahlzeitenfotos in einer eigenen lokalen Transaktion samt Outbox-
+   * Operation. Wirft `InvalidNutritionInputError` für ein fremdes, unbekanntes oder gelöschtes Foto.
+   */
+  setPhotoSharing(photoId: EntityId, sharedWithPartner: boolean): void;
+  /**
+   * „Foto löschen“ (Tombstone) in einer eigenen lokalen Transaktion; die Einträge bleiben. Endgültig, ohne
+   * „Rückgängig“. Wirft `InvalidNutritionInputError` für ein fremdes, unbekanntes oder gelöschtes Foto.
+   */
+  deletePhoto(photoId: EntityId): void;
+  /**
    * Vorbelegung der Mengenprüfung (Spezifikation 2, Abschnitt 6): die letzte Menge und Einheit dieses
    * Lebensmittels aus den eigenen Einträgen, sonst eine bekannte Portion, sonst 100 g bzw. 100 ml.
    */
@@ -128,6 +156,10 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
     expire: (undoToken) => tokens.expire(undoToken),
     observeDayLog: (localDate, listener) => database.observe((tx) => readDayLog(tx, localDate), listener),
     entryDetail: (entryId) => database.read((tx) => readEntryDetail(tx, entryId)),
+    observeMealPhoto: (photoId, listener) => database.observe((tx) => readMealPhotoDetail(tx, photoId), listener),
+    mealPhotoImage: (photoId, variant) => dependencies.photoImages?.(photoId, variant) ?? Promise.resolve({ type: 'offline' }),
+    setPhotoSharing: (photoId, sharedWithPartner) => database.transaction((tx) => setPhotoSharing(tx, dependencies, photoId, sharedWithPartner)),
+    deletePhoto: (photoId) => database.transaction((tx) => deletePhoto(tx, dependencies, photoId)),
     prefillAmount(foodRef, snapshot) {
       const latest = database.read((tx) => latestAmountOf(tx, EntityId.parse(requireOwnPerson(tx).id), foodRef));
       // Die letzte Menge gilt nur, wenn ihre Einheit im aktuellen Snapshot noch bekannt ist.

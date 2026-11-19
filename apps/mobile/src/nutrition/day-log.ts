@@ -11,6 +11,7 @@ import {
 import type { ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import { entriesOfDay, readOwnLivingEntry } from './entry-repository';
+import { viewablePhotoIds } from './photo-repository';
 
 // Abfragen Tagesprotokoll und Tagesaufnahme (Spezifikation 2, Abschnitte 2 und 6): die nicht
 // gelöschten Einträge eines lokalen Tags, gegliedert nach den vier Mahlzeiten in fester Reihenfolge,
@@ -35,6 +36,12 @@ export type DayLogMeal = Readonly<{
   /** Gerundete Summe der `milli_kcal` der Mahlzeit. */
   kcal: number;
   entries: readonly DayLogEntry[];
+  /**
+   * Die Mahlzeitenfotos der Einträge in Erfassungsreihenfolge, je Foto einmal: nur vom Server bestätigte,
+   * nicht gelöschte. Online zeigt das Protokoll sie als Vorschau; offline bleibt es beim Foto-/KI-Symbol
+   * der Einträge (Spezifikation 2, Abschnitt 9).
+   */
+  photoIds: readonly EntityId[];
 }>;
 
 export type DayLog = Readonly<{
@@ -52,6 +59,8 @@ export function readDayLog(tx: ReadContext, localDate: LocalDate): DayLog | null
   const person = readOwnPerson(tx);
   if (person === undefined) return null;
   const entries = entriesOfDay(tx, EntityId.parse(person.id), localDate);
+  const linked = [...new Set(entries.flatMap((entry) => (entry.mealPhotoId === null ? [] : [entry.mealPhotoId])))];
+  const viewable = viewablePhotoIds(tx, linked);
   return {
     localDate,
     intakeKcal: dailyIntakeKcal(entries.map((entry) => entry.totalMilliKcal)),
@@ -65,6 +74,7 @@ export function readDayLog(tx: ReadContext, localDate: LocalDate): DayLog | null
       return {
         meal,
         kcal: dailyIntakeKcal(ofMeal.map((entry) => entry.totalMilliKcal)),
+        photoIds: [...new Set(ofMeal.flatMap(({ mealPhotoId }) => (mealPhotoId !== null && viewable.has(mealPhotoId) ? [mealPhotoId] : [])))],
         entries: ofMeal.map(({ id, name, captureMethod, source, displayUnit, displayAmountMilli, totalMilliKcal }): DayLogEntry => ({
           id,
           name,
