@@ -2,6 +2,7 @@ import { createBackend } from '../backend.ts';
 import { readConfig } from '../config.ts';
 import { openDatabase } from '../database.ts';
 import { errorCodeForLog } from '../log.ts';
+import { createExpoPushClient } from '../notifications/expo-push.ts';
 import type { MealVisionAnalyzer } from '../nutrition/meal-vision.ts';
 
 // Administrativer Passwort-Reset (Spezifikation 0, Abschnitt 9): einziger Weg zu einem neuen Passwort
@@ -32,6 +33,8 @@ try {
     invitationSettings: config.invitations,
     photoStorageDirectory: config.photoStorageDirectory,
     mealVisionAnalyzer: withoutPhotoAnalysis,
+    // Der Reset startet keine Jobs; der Zusteller sendet hier nichts.
+    expoPush: createExpoPushClient({ accessToken: config.expoPush.accessToken }),
   });
   const result = await backend.auth.admin.resetPassword(email);
   if (result.type === 'unknown_account') {
