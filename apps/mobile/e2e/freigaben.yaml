@@ -46,41 +46,54 @@ name: Freigabe abschalten
     file: teilablaeufe/link.yaml
     env:
       LINK: seed?szenario=gekoppelt&ziel=/settings/partner_sharing
+# Der Kopf ist ein zugängliches Element; iOS nennt ihn nur mit dem zusammengesetzten Namen.
 - extendedWaitUntil:
-    visible: "Mit Anna gekoppelt"
+    visible: "Mit Anna gekoppelt.*"
     timeout: 30000
-- assertVisible: "Momo und Insel seit .*"
+- assertVisible: ".*Momo und Insel seit 1. Oktober 2026"
 - assertVisible: "Gesundheitsbereiche"
 - assertVisible: "Nur Trend und Veränderung, nie dein absolutes Gewicht"
+- assertVisible:
+    id: freigabe-wasser
+    checked: true
 - takeScreenshot: freigaben-1-gekoppelt
 - tapOn:
     id: freigabe-wasser
+- assertVisible:
+    id: freigabe-wasser
+    checked: false
 - scrollUntilVisible:
     element:
       text: "Abschalten beendet den Zugriff sofort.*"
     direction: DOWN
 - takeScreenshot: freigaben-2-wasser-aus
 
-# Abmelden über „Konto“ ------------------------------------------------------------------------------
-- back
+# Zurück zu „Heute“: Der Deep Link legte die Tabs unter die Seite. Die Übersicht zeigt die Kopplung; ist der
+# Hinweis „Noch nicht gesichert“ weg, liegt die Änderung beim Server ------------------------------------------
+- scrollUntilVisible:
+    element:
+      text: "Zurück"
+    direction: UP
+- tapOn: "Zurück"
 - extendedWaitUntil:
     visible: "Einstellungen"
     timeout: 10000
 - tapOn: "Einstellungen"
-- assertVisible: "Mit Anna gekoppelt"
+- assertVisible: ".*Mit Anna gekoppelt.*"
 - takeScreenshot: freigaben-3-uebersicht
-- tapOn: "Konto"
-- scrollUntilVisible:
-    element:
-      text: "Abmelden"
-    direction: DOWN
-- tapOn: "Abmelden"
+- tapOn: "Zurück"
+- extendedWaitUntil:
+    notVisible: "Noch nicht gesichert.*"
+    timeout: 30000
 
-# Anna meldet sich an ---------------------------------------------------------------------------------
+# Anna meldet sich auf einem frischen Gerät an ------------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
 - extendedWaitUntil:
     visible: "Willkommen bei Gemeinsam leichter"
     timeout: 30000
-- tapOn: "Verstanden"
+- tapOn: "Verstanden.*"
 - tapOn: "Weiter"
 - tapOn: "Ich habe schon ein Konto"
 - tapOn: "E-Mail-Adresse"
@@ -91,9 +104,23 @@ name: Freigabe abschalten
 - tapOn:
     text: "Anmelden"
     index: 1
+# iOS bietet nach der Anmeldung an, das Passwort im Schlüsselbund zu sichern (Systemdialog).
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Später|Not Now"
+          timeout: 10000
+          optional: true
+      - tapOn:
+          text: "Später|Not Now"
+          optional: true
+# Die Anmeldung legt Annas Kontodatenbank neu an und zieht alles; unter Last dauerte der erste Pull im Simulator
+# knapp eine Minute (beobachtet am 19.11.2026).
 - extendedWaitUntil:
     visible: "Hallo, Anna"
-    timeout: 30000
+    timeout: 180000
 - tapOn:
     id: tab-partner
 - extendedWaitUntil:
