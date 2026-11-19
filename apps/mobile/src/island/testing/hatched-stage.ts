@@ -44,6 +44,7 @@ export function hatchedStage(): Extract<IslandStage, { type: 'geschluepft' }> {
       unlockedBlueprints: plan.blueprints.map((blueprint) => blueprint.key),
       appearance: appearanceAt(plan.progress.level),
       sharedEvents: [{ eventId: EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c04'), type: plan.event.type, occurredAt: at }],
+      events: { open: [] },
     },
   };
 }

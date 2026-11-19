@@ -15,6 +15,7 @@ import { energyBookingEntity } from './energy/bookings.ts';
 import { buildObjectCommand } from './island/build-object.ts';
 import { placeObjectCommand, upgradeObjectCommand } from './island/object-commands.ts';
 import { islandSyncEntities } from './island/island-entities.ts';
+import { generateIslandEvents, islandEventCommands } from './island/island-events.ts';
 import { roleChoiceKind } from './island/role-choice.ts';
 import type { Database } from './database.ts';
 import { createJobRegistry } from './jobs/job-registry.ts';
@@ -89,12 +90,15 @@ export function createBackend({
   const sharedActions = createSharedActions();
   for (const command of sharedActions.commands) sync.registerCommand(command);
   // Momo, Insel & Challenges (Spezifikation 4): Rollenwahl (#180), deren Annahme das Schlüpfen ist,
-  // die Inselinhalte im Sync (#184), Bauen (#191) sowie Aufwerten und Platzieren (#194).
+  // die Inselinhalte im Sync (#184), Bauen (#191), Aufwerten und Platzieren (#194) sowie Insel-Ereignisse (#202).
   sharedActions.registerKind(roleChoiceKind);
   for (const entity of islandSyncEntities) sync.registerEntity(entity);
   sync.registerCommand(buildObjectCommand);
   sync.registerCommand(upgradeObjectCommand);
   sync.registerCommand(placeObjectCommand);
+  // Insel-Ereignisse (#202): der Ereignisgenerator vor jedem Pull, Ansehen und Abholen.
+  for (const command of islandEventCommands) sync.registerCommand(command);
+  sync.registerPrePullStep('island_events', generateIslandEvents);
   // Entkopplungs-Kern: Spezifikation 4 meldet ihre Beobachter an, Spezifikation 5 ruft ihn aus `requestUncoupling` auf.
   const uncoupling = createUncoupling();
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle.

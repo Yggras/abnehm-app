@@ -115,3 +115,27 @@ export const objectTexts = {
     deko: 'Deko',
   },
 };
+
+/**
+ * Texte des Sheets „Ereignisse“ (#202). „Neu auf der Insel“, „Offene Wünsche“ und „Kein Zeitdruck“ stehen in
+ * Spezifikation 4, Abschnitt 9; „‹Besucher› ist zu Besuch“ folgt dem Prototyp aus #28
+ * (prototypes/momos-insel/app.js). Die übrigen Sätze sind Designwerte dieses Tickets (nicht belegt).
+ */
+export const eventTexts = {
+  title: 'Ereignisse',
+  fresh: 'Neu auf der Insel',
+  wishes: 'Offene Wünsche',
+  noPressure: 'Kein Zeitdruck. Wünsche warten, bis du so weit bist.',
+  empty: 'Gerade wartet niemand auf dich. Besucher kommen ab und zu vorbei.',
+  visiting: (visitor: string) => `${visitor} ist zu Besuch`,
+  wish: (blueprint: string) => `Wünscht sich: ${blueprint}`,
+  reward: (reward: Readonly<{ type: 'bauplan' | 'deko'; name: string }>) =>
+    reward.type === 'bauplan' ? `Bringt den Bauplan ${reward.name} mit` : `Bringt ${reward.name} für dein Lager mit`,
+  howTo: (blueprint: string) => `Wenn du den Bauplan ${blueprint} baust, kannst du die Belohnung abholen.`,
+  claim: 'Belohnung abholen',
+  /** Bestätigung im Sheet nach dem Abholen. */
+  claimed: (reward: Readonly<{ type: 'bauplan' | 'deko'; name: string }>) =>
+    reward.type === 'bauplan' ? `Neuer Bauplan: ${reward.name}` : `${reward.name} liegt jetzt in deinem Lager`,
+  /** Zugänglicher Name von „Belohnung abholen“ in einer Karte. */
+  claimFor: (visitor: string) => `Belohnung von ${visitor} abholen`,
+};

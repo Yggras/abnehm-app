@@ -216,6 +216,7 @@ Trainings und Gewichte aus Apple Health bzw. Health Connect (Abschnitte 2, 3 und
 | `hatching` | `hatching(katalog, { proposerPersonId, proposerRole, partnerPersonId })`: Rollen, Felder der Grundinsel mit Besitzer, Start-Baupläne und Projekt 1 beim Schlüpfen; `otherRole(rolle)` (#184) |
 | `building` | `decideBuild(katalogIndex, anfrage)`: `erlaubt` mit Preis oder `verboten` mit Grund (`unbekannter_schluessel`, `nicht_freigeschaltet`, Platzierungsgründe, `zu_wenig_energie` samt `price` und `missing` (seit #194), `schutzgrenze`). `checkedBy: 'geraet'` verlangt ausreichenden angezeigten Bestand, `checkedBy: 'server'` nur die Schutzgrenze `serverDebtLimit` (−30) (#191). `nextStage(stufe)`, `decideUpgrade` (genau eine Stufe weiter, nur Gebautes: `nicht_aufwertbar`, `falsche_stufe`, Bestand wie beim Bauen) und `decidePlacement` (Platzierungsregeln für Gebautes mit der Rolle seines Bauplans und für Deko) (#194) |
 | `mood` | `momoMood(fakten)`, Momos Stimmung je Ansicht; `reactionMood(ereignisse)` und `strongestEvent(ereignisse)` für eigene Ereignisse (`MomoEvent`) eines Commits (#188, Abschnitt „Momo-Reaktionen und Stimmungen“) |
+| `events` | Ereignistakt und Besucher mit Wunsch (#202): `freeEventSlots`, `personalEventAllowed`, `planVisitors`, `chooseWish`, `wishPriceCap`, `visitorReward`, `resolveClaimedReward`, `isWishFulfilled`, `visitorOccasionKey`/`visitorSlotOf`, `openVisitFacts` (Abschnitt „Insel-Ereignisse“) |
 | `catalog` | Katalogformat; `indexCatalog(katalog).find(art, schlüssel)` mit `unknown_catalog_key`; `entriesOf`, `fieldPlans`, `fieldKey`, `endlessAreaKey` |
 | `catalog-check` | `checkCatalog`, die Prüfung von Format und Regeln |
 | `catalog-versions` | `catalogDedications` (Widmung je Schlüssel, bei Bauplänen Rolle und Herkunft), `catalogChanges` |
@@ -317,7 +318,7 @@ Ein Bauplan auf ein eigenes freies Feld (Abschnitte 2.5, 3, 7 und 11 der [Spezif
   - HUD und `IslandView` bekommen `halves` statt der Projektion. `readHatchedIsland` liefert dazu die Objekte auf Feldern (`PlacedObject`, mit der Grafik ihrer Stufe), die Inselansicht zeichnet sie.
 - **„Deine Hälfte ist voll – Momo wartet auf ‹Name›“** (`waitingForPartnerText` in `src/shell/texts.ts`): Den Text zeigen HUD und „Heute“ neutral, ohne Push und ohne Angabe, was dem Partner fehlt. Für „Heute“ trägt `momo.character` seit #191 das Pflichtfeld `partnerDisplayName` (`DisplayName`). Jeder Erzeuger von `momo.character` muss es liefern. Der Vertrag aus Spezifikation 0 ist damit erweitert (Nutzerentscheidung in #191, [Nachtrag](https://github.com/Yggras/abnehm-app/issues/71#issuecomment-6977382440)).
 - **Seeds** (`packages/contracts/seeds/spielverlauf.ts`):
-  - **`gekoppelt` (Revision 8):** An den 13 Tagen vom Zielstart bis gestern erfüllen beide ihre drei Tagesziele samt Bonus. Philipp hat zehn Laternen gebaut (30), Anna neun Apfelbäume und einen Beerenstrauch (29). Das ergibt Level 3; Philipp hat 23 Energie, Anna 25. Level 6 aus dem Design-System ginge erst mit einer früheren Zeitleiste, denn es bräuchte 88 Gutschriften für Philipp (Nutzerentscheidung in #191).
+  - **`gekoppelt` (Revision 11):** An den 13 Tagen vom Zielstart bis gestern erfüllen beide ihre drei Tagesziele samt Bonus. Philipp hat zehn Laternen gebaut (30), Anna neun Apfelbäume und einen Beerenstrauch (29). Das ergibt Level 3; Philipp hat 23 Energie, Anna 25. Level 6 aus dem Design-System ginge erst mit einer früheren Zeitleiste, denn es bräuchte 88 Gutschriften für Philipp (Nutzerentscheidung in #191). Seit #202 hat jeder heute einen offenen Besucher mit Wunsch.
   - **`haelfte-voll`:** Zwei Laternen mehr füllen Philipps Hälfte.
   - **`doppelausgabe`:** iPhone und iPad bauen offline je vier Laternen von denselben 23 Energie. Der Server nimmt alle acht an, Philipp steht bei −1, und beide Geräte zeigen 0.
   - **`feldkonflikt` (#194):** iPhone und iPad stellen offline je eine andere Laterne auf das freie Feld `grundinsel:2:2`. Der Server nimmt beide an, in Eingangsreihenfolge: Die Laterne des iPhones wechselt ins Lager, die des iPads steht auf dem Feld. Beide Geräte zeigen das nach dem Sync, mit unveränderten 23 Energie.
@@ -371,6 +372,43 @@ Die Fachbefehle `upgradeObject` und `placeObject` sowie das persönliche Lager (
   - **App gegen Hono-App:** `object-commands-app.test.ts` prüft Tracer, Gerätegrenzen, den Feldkonflikt auf zwei Geräten (das verdrängte Objekt liegt nach dem Pull auf beiden im Lager), einen Pull über eine offene Operation, dieselbe Aufwertung auf zwei Geräten und die Bereinigung einer Platzierung, die der Server ohne Datensatz ablehnt. Die Helfer `hatchedPhones`, `energize`, `islandOf` und `fieldOn` liegen in `test/support/game-phones.ts`.
   - **Oberfläche:** `object-options.test.ts` prüft die Optionen als reine Funktion, `ObjectsAndStorage.test.tsx` den Ablauf im Tab mit dem echten Spieldienst: Tracer, Partnerobjekt, Lager, Route und Abbrechen.
   - **Seed:** `feldkonflikt` prüfen `packages/contracts/test/seeds.test.ts`, die Manifest-Suite und `seed-island-app.test.ts`.
+
+### Insel-Ereignisse: Erzeugung und Besucher mit Wunsch
+
+Spezifikation 4, Abschnitt 9; #202. Bisher gibt es nur den Ereignistyp **Besucher mit Wunsch**. Momos Wunsch (#206), Inselwetter (#207) und Entdeckung (#204) melden sich mit ihren Tickets an denselben Stellen an. Hinweise wie Tab-Punkt und `islandNotice` liefert #203.
+
+- **Spielregeln** (`@abnehm/game-rules/events`, Zufall in `@abnehm/game-rules/random`):
+  - **Ereignistakt:** `freeEventSlots` (Tagesdeckel 2) und `personalEventAllowed` (je Person höchstens 1 neues personenbezogenes Ereignis je Tag und nur unter 4 offenen).
+  - **Besucher:** `planVisitors` füllt den Deckel auf. Reihenfolge und Auswahl kommen aus einem Zufall, den Insel-ID und Tag bzw. Anlassschlüssel `tag:‹datum›:‹n›` bestimmen (FNV-1a als Saat, Mulberry32 als Folge). Dieselben Fakten ergeben dieselben Besucher.
+  - **Wunsch:** `chooseWish` wählt aus den freigeschalteten Bauplänen der eigenen Rolle bis zur Preisgrenze `wishPriceCap` und bevorzugt noch nicht gebaute. Die Grenze ist der Preis des neuesten Level-Bauplans der Rolle, ohne einen der teuerste Start-Bauplan (Nutzerentscheidung in #202).
+  - **Belohnung und Bedingung:** `visitorReward` nimmt einen noch nicht freigeschalteten Besucher-Bauplan der Rolle, bevorzugt aus dem Pool des Besuchers, sonst Deko aus dem Pool. `resolveClaimedReward` bestimmt sie beim Abholen neu, falls der geplante Bauplan inzwischen freigeschaltet ist oder nicht mehr zur Rolle passt. `isWishFulfilled` zählt nur eigene Bauten nach dem Erzeugen.
+  - **Katalog** (`content/visitors.ts`, Version 3): acht Besuchervorlagen, je Rolle drei Besucher-Baupläne und acht Stücke Besucher-Deko. Die Katalogprüfung verlangt Belohnungen der Herkunft `besucher` und mindestens eine Deko je Besucher.
+- **Verträge:**
+  - `MarkEventsSeen` und `ClaimEventReward` tragen nur die ID des eigenen Ereignisstands; je Ereignisstand gibt es einen fachlichen Schlüssel.
+  - `IslandEventStateRecord` beschreibt den Ereignisstand.
+  - `VisitorEventDetails` (Wunsch und Belohnung) steht im Feld `reward` des Ereignisses.
+  - IDs von Ereignis, Ereignisstand und Belohnung leiten `islandEventId`, `islandEventStateId` und `eventRewardId` per UUIDv5 ab.
+- **Server** (`apps/backend/src/island/island-events.ts`):
+  - **Vor-Pull-Schritt `island_events`:** Er erzeugt unter einer Sperre je Insel die fehlenden Besucher des aktuellen Inseltags in der Zeitzone der Insel, samt Ereignisstand für die zuständige Person.
+  - **Bauen:** `buildObject` setzt im selben Befehl offene Wünsche auf `erfuellbar`, wenn der Bau sie erfüllt (`fulfillWishes`).
+  - **`claimEventReward`:** prüft die Bedingung selbst und schreibt dann Freischaltung bzw. Deko im Lager, Ereignis `abgeschlossen` und Ereignisstand abgeholt. Eine Ablehnung ist `conflict` und nennt den Ereignisstand kanonisch.
+  - **Autorisierung `island_event_state`:** nur der eigene Stand, und nur solange die Kopplung des Ereignisses aktiv ist.
+- **App** (`apps/mobile/src/island/island-events.ts`):
+  - `readIslandEvents` liefert die offenen, nicht abgeholten Besuche der Person mit `seen` und `claimable`.
+  - `game.markEventsSeen(ids)` und `game.claimEventReward(id)` gehen offline. Die vorläufige Belohnung trägt dieselbe ID wie auf dem Server.
+  - Lehnt der Server ab oder gewährt er eine andere Art, entfernt die Reconciliation die unbestätigte Zeile.
+  - Der Sync-Adapter `blueprint_unlock` räumt eine unbestätigte Freischaltung mit gleichem Schlüssel weg, bevor eine kanonische kommt.
+- **Oberfläche** (`EventsSheet.tsx`):
+  - „Ereignisse“ in der Leiste und die Route `momo` mit `view: 'ereignisse'` öffnen das Sheet in voller Höhe.
+  - Was beim Öffnen neu war, gilt als gesehen und steht bis zum Schließen unter „Neu auf der Insel“. „Offene Wünsche“ mit „Kein Zeitdruck“ zeigt jeden noch nicht abgeholten Wunsch als Karte, neue eingeschlossen.
+  - „Belohnung abholen“ erscheint nur bei erfülltem Wunsch. Danach bestätigt das Sheet oben „Neuer Bauplan: ‹Name›“ bzw. „‹Name› liegt jetzt in deinem Lager“. Eine Meldung des Meldungs-Hosts läge auf dem Gerät hinter dem nativen Sheet (Gerätelauf iPhone SE, #202).
+  - Tiere, Besucher-Baupläne und Deko zeichnet `art.ts`. Motive und Sätze außer den Begriffen aus Abschnitt 9 sind Designwerte aus #202, nicht belegt.
+- **Tests:**
+  - **Regeln:** `packages/game-rules/test/events.test.ts` mit Wahrheitstabellen für Deckel und Grenze von 4 offenen.
+  - **Server:** `apps/backend/test/island-events.test.ts` prüft Erzeugung über mehrere simulierte Tage, Idempotenz, deterministische Wiederholung, Inseltag in der Zeitzone, Abholen mit gültiger und ungültiger Bedingung, Deko statt Bauplan und die Autorisierungsmatrix (Szenarien in `test/support/island-events.ts`).
+  - **App gegen Hono-App:** `island-events-app.test.ts` prüft Tracer, eine andere kanonische Belohnung und die Ablehnung nach dem Entkoppeln.
+  - **Oberfläche:** `EventsSheet.test.tsx`.
+  - **Seeds:** Seit #202 bringt `gekoppelt` die zwei Besucher von heute mit. Sonst erzeugte der erste Pull im Seed-Lauf neue. Das Szenario `ereignisse-voll` („volles Ereignis-Kontingent (4 offen)“) prüfen `seeds.test.ts`, die Manifest-Suite und `seed-island-app.test.ts`.
 
 ### Momo-Reaktionen und Stimmungen
 

@@ -521,6 +521,25 @@ const ownObjectRule = byId(
   { onlyOperations: ['befehl'] },
 );
 
+/**
+ * Ereignisstand je Person (#202): nur die eigene Zeile, und nur solange die Kopplung des Ereignisses aktiv
+ * ist. Ein Ereignis der anderen Person hat keinen Stand der handelnden Person; nach dem Entkoppeln ist die
+ * Insel archiviert, Ansehen und Abholen gehen dann nicht mehr. Den Stand legt nur der Server an.
+ */
+const ownEventStateRule = byId('kopplungsinhalte', islandEventState, async (context, id) => {
+  const { personId } = context.actor;
+  const found = await first(
+    context.db
+      .select({ owner: islandEventState.personId, couplingId: islandEvent.couplingId })
+      .from(islandEventState)
+      .innerJoin(islandEvent, eq(islandEvent.id, islandEventState.islandEventId))
+      .where(eq(islandEventState.id, id)),
+  );
+  if (found === null || found.owner !== personId) return denied;
+  const membership = await activeMembership(context.db, found.couplingId, personId);
+  return membership === null ? denied : allowed({ ownerPersonId: personId, couplingId: found.couplingId, ...membership });
+});
+
 /** Revocation-Notice: nur der ehemals bezeichnete Empfänger, auch nach Rechteentzug. */
 const revocationNoticeRule = byId('widerrufshinweis', revocationNotice, async (context, id) => {
   const found = await first(
@@ -589,7 +608,7 @@ export const resourceEntities = {
   momo_outfit: coupled('kopplungsinhalte', momoOutfit, inCoupling(momoOutfit)),
   island_progress: coupled('inselfortschritt', islandProgress, inCoupling(islandProgress)),
   // Ereignisstand und Challenge-Anforderung je Person; beide legt der Server an.
-  island_event_state: owned('personenstand', islandEventState, ownedBy(islandEventState), { creatable: false }),
+  island_event_state: ownEventStateRule,
   challenge_requirement: owned('personenstand', challengeRequirement, ownedBy(challengeRequirement), { creatable: false }),
   encouragement: encouragementRule,
   encouragement_send: encouragementSendRule,

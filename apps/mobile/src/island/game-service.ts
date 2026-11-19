@@ -14,6 +14,7 @@ import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
 import { takeGrowthIntro } from './growth-intro';
+import { claimEventReward, markEventsSeen, type ClaimOutcome } from './island-events';
 import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
 import { createMoodState, distinct } from './mood-state';
 import { placeObject, upgradeObject, type PlaceOutcome, type UpgradeOutcome } from './object-commands';
@@ -21,7 +22,7 @@ import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceO
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
 // der Laichkugel über die Rollenwahl (#180) bis zur geschlüpften Insel (#184), die Befehle der Rollenwahl,
-// Bauen (#191), Aufwerten und Platzieren (#194), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
+// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) und die Beiträge an „Heute“
 // (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je
 // geöffneter Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
@@ -66,6 +67,10 @@ export type GameService = Readonly<{
   upgrade(islandObjectId: EntityId): UpgradeOutcome;
   /** Stellt ein eigenes Objekt kostenlos auf ein freies eigenes Feld oder legt es ins Lager (#194). */
   place(islandObjectId: EntityId, target: PlacementTarget): PlaceOutcome;
+  /** Merkt eigene Insel-Ereignisse als gesehen vor, auch offline (#202); Ansehen kostet nichts. */
+  markEventsSeen(stateIds: readonly EntityId[]): void;
+  /** Holt die Belohnung eines erfüllten Wunschs vorläufig ab, auch offline; der Server bestätigt sie (#202). */
+  claimEventReward(stateId: EntityId): ClaimOutcome;
   /**
    * Ob „So wächst Momo“ jetzt erscheinen soll; genau beim ersten Aufruf je Installation `true` und dann
    * gemerkt (Einmal-Flag ohne Sync).
@@ -131,6 +136,8 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     build: (request) => database.transaction((tx) => buildObject(tx, { writer, newId, clock }, request)),
     upgrade: (islandObjectId) => database.transaction((tx) => upgradeObject(tx, { writer, newId, clock }, { islandObjectId })),
     place: (islandObjectId, target) => database.transaction((tx) => placeObject(tx, { writer, newId, clock }, { islandObjectId, target })),
+    markEventsSeen: (stateIds) => void database.transaction((tx) => markEventsSeen(tx, { writer, clock }, stateIds)),
+    claimEventReward: (stateId) => database.transaction((tx) => claimEventReward(tx, { writer, clock }, stateId)),
     momoCharacter: { subscribe: (listener) => mood.observe(database, 'heute', (stage) => listener(momoCharacterOf(stage))) },
     // „Wir“ zeigt Momo nicht; seine Beiträge folgen nur der Datenbank.
     wirContributions: { subscribe: (listener) => database.observe(readIslandStage, distinct((stage) => listener(wirContributionsOf(stage)))) },

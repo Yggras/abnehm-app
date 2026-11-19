@@ -58,3 +58,22 @@ describe('Momo-Accessoires', () => {
     for (const accessory of gameCatalog.accessories) expect(Object.keys(accessory.fit)).toHaveLength(8);
   });
 });
+
+describe('Besucher mit Wunsch (#202)', () => {
+  it('gibt es mindestens acht, je mit Tier, Wunsch und Belohnungspool', () => {
+    expect(gameCatalog.visitorTemplates.length).toBeGreaterThanOrEqual(8);
+    for (const visitor of gameCatalog.visitorTemplates) {
+      expect(visitor.animal).not.toBe('');
+      expect(visitor.wish).toBe('bauplan_bauen');
+      expect(visitor.rewards.deko.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('bringen jeder Rolle eigene Besucher-Baupläne', () => {
+    for (const role of ['bauen', 'natur'] as const) {
+      const keys = gameCatalog.blueprints.filter((b) => b.origin === 'besucher' && b.role === role).map((b) => b.key);
+      expect(keys.length).toBeGreaterThan(0);
+      for (const visitor of gameCatalog.visitorTemplates) expect(visitor.rewards.blueprints.some((key) => keys.includes(key))).toBe(true);
+    }
+  });
+});
