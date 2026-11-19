@@ -484,6 +484,8 @@ describe('„Wir“: Vorgänge, Challenge, Gemeinschaftsprojekt und „Neu bei e
       'Momo ist ein Level aufgestiegen, heute 12:00 Uhr',
       'Momo ist geschlüpft, 11.10. 14:00 Uhr',
     ]);
+    // Der Verlauf zeigte nichts darüber hinaus (Impeccable-Kritik, P2).
+    expect(news.queryByRole('button', { name: 'Alle anzeigen' })).not.toBeOnTheScreen();
   });
 
   it('zeigt bei vielen Ereignissen die drei neuesten und unter „Alle anzeigen“ den Verlauf nach Kalenderwochen', async () => {

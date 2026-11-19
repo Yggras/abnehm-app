@@ -56,6 +56,8 @@ export type WirShared =
       projects: readonly SharedCard[];
       /** Die drei neuesten gemeinsamen Ereignisse. */
       news: readonly ShownEvent[];
+      /** Ob es mehr Ereignisse gibt als `news`; nur dann führt „Alle anzeigen“ zum Verlauf. */
+      hasMore: boolean;
       /** Alle lokal vorhandenen Ereignisse nach Kalenderwochen. */
       history: readonly (Omit<WeekGroup, 'events'> & Readonly<{ events: readonly ShownEvent[] }>)[];
     }>;
@@ -200,6 +202,7 @@ export function wirSharedOf(state: ContributionState<WirContribution[]> | null, 
         challenges,
         projects,
         news: sorted.slice(0, newsCount).map(shown),
+        hasMore: sorted.length > newsCount,
         history: historyOf(sorted, now).map((group) => ({ ...group, events: group.events.map(shown) })),
       };
     }

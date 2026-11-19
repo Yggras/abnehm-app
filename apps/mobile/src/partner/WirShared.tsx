@@ -124,7 +124,8 @@ function News({ shared }: { shared: Extract<WirShared, { type: 'ready' }> }) {
         {shared.news.map((event) => (
           <EventRow key={event.id} event={event} />
         ))}
-        <Button variant="text" label={sharedTexts.showAll} onPress={() => setHistoryOpen(true)} />
+        {/* Nur wenn der Verlauf mehr zeigt als diese drei (Impeccable-Kritik zu #124, P2). */}
+        {shared.hasMore ? <Button variant="text" label={sharedTexts.showAll} onPress={() => setHistoryOpen(true)} /> : null}
       </View>
       <Sheet visible={historyOpen} onClose={() => setHistoryOpen(false)} height="full">
         <View style={styles.group}>
