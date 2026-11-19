@@ -1,5 +1,17 @@
-import { weekdayOf, type LocalDate, type MealKey } from '@abnehm/contracts/base';
-import { foodNameMaxLength, maxBaseAmount, portionLabelMaxLength, roundMacroGrams, type BaseUnit, type DisplayUnit, type EntryTotals, type NutritionSnapshot, type SnapshotSource } from '@abnehm/contracts/nutrition';
+import { minutesOfDay, readingOf } from '@abnehm/clock';
+import { localDateAfter, weekdayOf, type Instant, type LocalDate, type MealKey, type TimeZone } from '@abnehm/contracts/base';
+import {
+  foodNameMaxLength,
+  maxBaseAmount,
+  portionLabelMaxLength,
+  roundMacroGrams,
+  type BaseUnit,
+  type CaptureMethod,
+  type DisplayUnit,
+  type EntryTotals,
+  type NutritionSnapshot,
+  type SnapshotSource,
+} from '@abnehm/contracts/nutrition';
 
 import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
@@ -63,6 +75,35 @@ function gramsText(mg: number): string {
 
 export function macrosText(totals: Pick<EntryTotals, 'proteinMg' | 'carbsMg' | 'fatMg'>): string {
   return `Eiweiß ${gramsText(totals.proteinMg)} · Kohlenhydrate ${gramsText(totals.carbsMg)} · Fett ${gramsText(totals.fatMg)}`;
+}
+
+/** Erfassungsart eines Eintrags in den Details (Spezifikation 2, Abschnitt 6). */
+export const captureMethodNames: Readonly<Record<CaptureMethod, string>> = {
+  suche: 'Suche',
+  barcode: 'Barcode',
+  foto: 'Foto',
+  lebensmittelfavorit: 'Lebensmittelfavorit',
+  mahlzeitenfavorit: 'Mahlzeitenfavorit',
+  zuletzt: 'Zuletzt verwendet',
+  eigenes_lebensmittel: 'Eigenes Lebensmittel',
+};
+
+/** Uhrzeit eines Zeitpunkts in der Zone seiner Erfassung, etwa „08:40 Uhr“. */
+export function timeText(instant: Instant, timeZone: TimeZone): string {
+  const minutes = minutesOfDay(readingOf(instant, timeZone));
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')} Uhr`;
+}
+
+/** Bezugsmenge eines Snapshots, etwa „100 g“ oder „250 ml“. */
+export function referenceText(snapshot: Pick<NutritionSnapshot, 'baseUnit' | 'referenceAmount'>): string {
+  return `${(snapshot.referenceAmount / baseAmountPerUnit[snapshot.baseUnit]).toLocaleString('de-DE', { maximumFractionDigits: 3 })} ${snapshot.baseUnit}`;
+}
+
+/** Tag im Protokoll: „Heute“, „Gestern“ oder Wochentag und Datum. */
+export function logDayText(localDate: LocalDate, today: LocalDate): string {
+  if (localDate === today) return `Heute, ${dateText(localDate)}`;
+  if (localDateAfter(localDate, 1) === today) return `Gestern, ${dateText(localDate)}`;
+  return dateText(localDate);
 }
 
 export const markNames: Readonly<Record<SearchMark, string>> = { favorit: 'Favorit', zuletzt: 'Zuletzt', eigen: 'Eigen', produkt: 'Produkt', bls: 'BLS' };
@@ -145,6 +186,12 @@ export const nutritionTexts = {
   today: 'Heute',
   intakeLabel: 'erfasst',
   intake: (today: boolean, kcal: number) => `${today ? 'Erfasst heute' : 'Erfasst'}: ${kcalText(kcal)}`,
+  previousDay: 'Vorheriger Tag',
+  nextDay: 'Nächster Tag',
+  /** Springt aus einem früheren Tag zurück auf heute. */
+  backToToday: 'Heute',
+  showMacros: 'Makros anzeigen',
+  hideMacros: 'Makros ausblenden',
   emptyMeal: 'Noch nichts eingetragen.',
   addTo: (meal: MealKey) => `${mealNames[meal]} hinzufügen`,
   /** Zugänglicher Name eines Eintrags; KI-Einträge tragen zusätzlich „KI-Schätzung“ (Spezifikation 2, Abschnitt 12). */
@@ -195,6 +242,19 @@ export const nutritionTexts = {
     delete: 'Löschen',
     deleteQuestion: (name: string) => `„${name}“ löschen? Einträge damit behalten ihre Werte.`,
     confirmDelete: 'Endgültig löschen',
+  },
+  /** Mengenansicht eines bestehenden Eintrags (#156). */
+  edit: {
+    meal: 'Mahlzeit',
+    save: 'Speichern',
+    delete: 'Löschen',
+    showDetails: 'Details anzeigen',
+    hideDetails: 'Details ausblenden',
+    day: 'Tag',
+    capturedAt: 'Erfasst um',
+    captureMethod: 'Erfasst über',
+    source: 'Quelle',
+    per: (reference: string) => `Je ${reference}`,
   },
   /** Aktionen der Mengenprüfung zum Lebensmittel selbst. */
   editFood: 'Bearbeiten',
