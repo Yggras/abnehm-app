@@ -1,0 +1,7 @@
+# Teilablauf: Das System-Teilen-Menü ist offen (React-Native-Share-API, https://reactnative.dev/docs/share).
+# Vorläufig: nur warten und fotografieren; die Prüfung folgt nach dem ersten Gerätelauf.
+appId: ${APP_ID}
+---
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: teilen-menue-roh
