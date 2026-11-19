@@ -21,13 +21,31 @@ name: Levelfeier
       - setAirplaneMode: disabled
 
 # Teil 1: Feier auf „Heute“ nach dem Sync ------------------------------------------------------------------
+# Der Seed-Link steht hier selbst statt im Teilablauf `link`: Die Feier kommt mit dem ersten Sync direkt nach
+# dem Seed, und das Warten des Teilablaufs auf die iOS-Rückfrage „Öffnen“ (bis zu 5 s) ließ die Meldung schon
+# verschwinden (iPhone-SE-Simulator, beobachtet am 19.11.2026). Auf iOS wird deshalb auf beides gewartet.
 - launchApp:
     clearState: true
     clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: screen-scroll
+    timeout: 30000
+- openLink: ${SCHEME}://seed?szenario=levelaufstieg-ausstehend&installation=anna-android
+# Die Rückfrage gibt es nur auf iOS; auf Android dauerte schon die Prüfung auf sie länger als die Meldung steht
+# (Emulator `medium_phone`, beobachtet am 19.11.2026).
 - runFlow:
-    file: teilablaeufe/link.yaml
-    env:
-      LINK: seed?szenario=levelaufstieg-ausstehend&installation=anna-android
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Momo ist jetzt auf Level 4|Öffnen|Open"
+          timeout: 30000
+      - runFlow:
+          when:
+            visible: "Öffnen|Open"
+          commands:
+            - tapOn: "Öffnen|Open"
 - extendedWaitUntil:
     visible: "Momo ist jetzt auf Level 4"
     timeout: 30000
