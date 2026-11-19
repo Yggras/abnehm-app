@@ -34,7 +34,7 @@ import { createPushInstallationTransport } from '../notifications/push-installat
 import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
 import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
-import { appGoalSettings, appPlan, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
+import { appGoalSettings, appPlan, budgetSuggestionEntity, createPlan, followBudgetSuggestionChecks, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 import { followOwnDisplayName, type AccountPorts } from '../settings';
 import { appQuickCommands } from '../shell/app-quick-commands';
 import { appOnboardingRegistry } from '../shell/onboarding-registry';
@@ -62,7 +62,7 @@ const newId = () => EntityId.parse(uuid.v4());
 /** Der Kopf von „Heute“ ist ab dem Start registriert und folgt der geöffneten Kontodatenbank. */
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
-  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
+  ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
   weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity, encouragementEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
@@ -235,6 +235,14 @@ function deviceState() {
           // Derselbe Takt wie für „Heute“: im Minutentakt, im Vordergrund und in Test-Artefakten bei jedem
           // Sprung der Testuhr (#114); er löst nur aus, wenn sich der lokale Tag geändert hat.
           observeTicks: appTodayRefresh,
+          onError,
+        }),
+        // Budgetvorschlag prüfen: beim App-Start und bei jeder Rückkehr in den Vordergrund, höchstens einmal je
+        // lokalem Tag; Gewichtstrend und Tagesaufnahme über die Ports der Spezifikationen 2 und 3 (#150).
+        followBudgetSuggestionChecks({
+          check: () => plan.checkBudgetSuggestion({ weightTrendReader: ports.weightTrendReader, intakeReader: ports.intakeReader }),
+          initialActive: !backgroundOpening && AppState.currentState === 'active',
+          observeForeground: observeAppForeground,
           onError,
         }),
       ];

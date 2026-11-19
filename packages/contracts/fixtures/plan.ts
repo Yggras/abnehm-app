@@ -2,6 +2,10 @@ import { EntityId, LocalDate } from '../src/base.ts';
 import { dailyGoalId } from '../src/daily-goals.ts';
 import {
   BudgetSource,
+  BudgetSuggestionDirection,
+  BudgetSuggestionRecord,
+  BudgetSuggestionStatus,
+  BudgetSuggestionUpsert,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   GoalVersionRecord,
@@ -49,6 +53,16 @@ export const standardWeekDays = {
 
 const stored = { personId: philipp, createdAt: now, updatedAt: now } as const;
 
+/** Budgetvorschlag zum Referenzfall: 21 Tage bis gestern, 150 kcal weniger. */
+const budgetSuggestion = {
+  periodFrom: '2026-09-23',
+  periodTo: '2026-10-13',
+  previousBudgetMilliKcal: 1_620_000,
+  suggestedBudgetMilliKcal: 1_520_000,
+  direction: 'senken',
+  status: 'offen',
+} as const;
+
 const goalIdOf = (slot: 1 | 2 | 3) => dailyGoalId(EntityId.parse(philipp), LocalDate.parse(today), slot);
 const snapshotBase = { personId: philipp, localDate: today, timeZone, dayEndsAt: todayEndsAt } as const;
 
@@ -63,6 +77,14 @@ export const planFixtures = {
   BudgetSource: fixtures(BudgetSource, {
     valid: { 'berechnet': 'berechnet', 'manuell': 'manuell', 'aus Budgetvorschlag': 'budgetvorschlag' },
     invalid: { 'geschätzt': 'geschaetzt' },
+  }),
+  BudgetSuggestionDirection: fixtures(BudgetSuggestionDirection, {
+    valid: { 'senken': 'senken', 'anheben': 'anheben' },
+    invalid: { 'halten': 'halten' },
+  }),
+  BudgetSuggestionStatus: fixtures(BudgetSuggestionStatus, {
+    valid: { 'offen': 'offen', 'angenommen': 'angenommen', 'abgelehnt': 'abgelehnt', 'überholt': 'ueberholt' },
+    invalid: { 'Umlaut': 'überholt' },
   }),
   CreateGoalVersion: fixtures(CreateGoalVersion, {
     valid: {
@@ -86,6 +108,27 @@ export const planFixtures = {
       'ohne Eigentümer': { ...referenceGoalVersion, createdAt: now, updatedAt: now },
       'Tempo im Haltemodus': { ...forced, ...stored, pace: 'entspannt' },
       'Budget unter der Untergrenze': { ...referenceGoalVersion, ...stored, calorieBudgetMilliKcal: 1_400_000 },
+    },
+  }),
+  BudgetSuggestionUpsert: fixtures(BudgetSuggestionUpsert, {
+    valid: {
+      'offen, senken': budgetSuggestion,
+      'abgelehnt, anheben': { ...budgetSuggestion, suggestedBudgetMilliKcal: 1_770_000, direction: 'anheben', status: 'abgelehnt' },
+      'bis zur Untergrenze gesenkt': { ...budgetSuggestion, suggestedBudgetMilliKcal: 1_514_000 },
+    },
+    invalid: {
+      'Richtung passt nicht zum Betrag': { ...budgetSuggestion, direction: 'anheben' },
+      'unverändertes Budget': { ...budgetSuggestion, suggestedBudgetMilliKcal: 1_620_000 },
+      'Zeitraum rückwärts': { ...budgetSuggestion, periodFrom: today, periodTo: '2026-09-23' },
+      'unbekannter Status': { ...budgetSuggestion, status: 'erledigt' },
+      'mit Eigentümer': { ...budgetSuggestion, personId: philipp },
+    },
+  }),
+  BudgetSuggestionRecord: fixtures(BudgetSuggestionRecord, {
+    valid: { 'kanonisch': { ...budgetSuggestion, ...stored }, 'angenommen': { ...budgetSuggestion, ...stored, status: 'angenommen' } },
+    invalid: {
+      'ohne Eigentümer': { ...budgetSuggestion, createdAt: now, updatedAt: now },
+      'Richtung passt nicht zum Betrag': { ...budgetSuggestion, ...stored, direction: 'anheben' },
     },
   }),
   WeeklyPlanDays: fixtures(WeeklyPlanDays, {
