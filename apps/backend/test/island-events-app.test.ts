@@ -72,7 +72,7 @@ describe('Insel-Ereignisse App ↔ Backend', { timeout: 60_000 }, () => {
     expect(onlyVisit(philippsPhone).claimable).toBe(true);
     const claimed = philippsPhone.game.claimEventReward(visit.stateId);
 
-    expect(claimed).toEqual({ type: 'abgeholt', reward: expect.objectContaining({ type: 'bauplan', key: visit.reward.key, name: visit.reward.name }) });
+    expect(claimed).toEqual({ type: 'abgeholt', rewards: [expect.objectContaining({ type: 'bauplan', key: visit.reward.key, name: visit.reward.name })] });
     // Vorläufig: Der Wunsch ist weg, der Bauplan sofort freigeschaltet, alles offline.
     expect(openOf(philippsPhone)).toEqual([]);
     expect(islandOf(philippsPhone).unlockedBlueprints).toContain(visit.reward.key);
@@ -103,7 +103,7 @@ describe('Insel-Ereignisse App ↔ Backend', { timeout: 60_000 }, () => {
     }
     philippsPhone.offline();
     buildWish(philippsPhone, 'grundinsel:0:0');
-    expect(philippsPhone.game.claimEventReward(visit.stateId)).toMatchObject({ type: 'abgeholt', reward: { type: 'bauplan' } });
+    expect(philippsPhone.game.claimEventReward(visit.stateId)).toMatchObject({ type: 'abgeholt', rewards: [{ type: 'bauplan' }] });
 
     philippsPhone.online();
     await philippsPhone.sync();

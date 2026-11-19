@@ -913,6 +913,8 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
         expect.arrayContaining([
           expect.objectContaining({ key: 'momo_levelfeier', value: { islandId: seedIds.island.philippAnna, level: 4 } }),
           expect.objectContaining({ key: 'momo_verwandlung', value: { islandId: seedIds.island.philippAnna, level: 3 } }),
+          // „So wächst Momo“ ist gesehen; sonst läge die Erklärung über der Verwandlung.
+          expect.objectContaining({ key: 'momo_so_waechst_momo' }),
         ]),
       );
     }

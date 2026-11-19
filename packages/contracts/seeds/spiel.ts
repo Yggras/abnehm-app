@@ -681,15 +681,17 @@ export const levelaufstiegAusstehendManifest = SeedManifest.parse({
 });
 
 /**
- * Gerätezustand je Installation für die Momo-Szenen (#200, #204): `momo_levelfeier` ist das zuletzt gefeierte
+ * Gerätezustand je Installation für die Momo-Szenen (#184, #200, #204): `momo_levelfeier` ist das zuletzt gefeierte
  * Level (`level-celebration.ts`), `momo_verwandlung` das Level, bei dem der Tab „Momo“ Momo zuletzt gezeigt hat
- * (`transformation.ts`). Ersetzt beide Einträge.
+ * (`transformation.ts`), `momo_so_waechst_momo` das Einmal-Flag von „So wächst Momo“ (`growth-intro.ts`); ohne
+ * es läge die Erklärung über der Verwandlung. Ersetzt diese Einträge.
  */
 function shownLevels(state: SeedState, levels: Readonly<{ celebrated: number; transformed: number }>, at: string): SeedState {
   const islandId = seedIds.island.philippAnna;
   const rows = [
     { key: 'momo_levelfeier', value: { islandId, level: levels.celebrated }, updated_at: at },
     { key: 'momo_verwandlung', value: { islandId, level: levels.transformed }, updated_at: at },
+    { key: 'momo_so_waechst_momo', value: { shownAt: at }, updated_at: at },
   ];
   const devices = Object.fromEntries(
     Object.entries(state.devices).map(([key, device]) => [
@@ -703,9 +705,9 @@ function shownLevels(state: SeedState, levels: Readonly<{ celebrated: number; tr
 /**
  * `formwechsel` („Formwechsel bei Level 4“, #204): der Stand von `levelaufstieg-ausstehend` nach beiden Syncs.
  * Die Insel ist auf Level 4, Momo ein Hüpfer, die Schilfwiese freigeschaltet, und die Entdeckung wartet auf beide.
- * Beide Geräte haben Level 4 auf „Heute“ schon gefeiert, Momo im Tab „Momo“ aber zuletzt auf Level 3 gesehen: Beim
- * nächsten Öffnen des Tabs verwandelt sich Momo von der Kaulquappe in den Hüpfer, danach zieht der Nebel von der
- * Schilfwiese ab. Ein Sync ändert nichts.
+ * Beide Geräte haben Level 4 auf „Heute“ schon gefeiert und „So wächst Momo“ gesehen, Momo im Tab „Momo“ aber
+ * zuletzt auf Level 3: Beim nächsten Öffnen des Tabs verwandelt sich Momo von der Kaulquappe in den Hüpfer, danach
+ * zieht der Nebel von der Schilfwiese ab. Ein Sync ändert nichts.
  */
 const formwechselState = (() => {
   const { server, devices } = shownLevels(levelaufstiegAusstehendStates.target, { celebrated: 4, transformed: 3 }, now);
