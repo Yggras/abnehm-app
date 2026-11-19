@@ -1,7 +1,7 @@
 import { MealKey, type LocalDate } from '@abnehm/contracts/base';
 import { roundKcal } from '@abnehm/contracts/nutrition';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button, Chip, IconButton, ListGroup, ListRow, space, Text } from '../design';
 import { AmountFields, useAmountDraft } from './AmountFields';
@@ -53,42 +53,49 @@ export function EntryEditor({
     else onSave(change);
   };
 
+  // Der Inhalt scrollt, „Speichern“ und „Löschen“ stehen als Fuß darunter: Mit aufgeklappten Details,
+  // offener Tastatur oder Schriftfaktor 2,0 bleiben sie so auf dem iPhone SE erreichbar (wie `SheetLayout`
+  // im Tracker-Bereich).
   return (
     <View style={styles.sheet}>
-      <View style={styles.head}>
-        <View style={styles.grow}>
-          <Text variant="title" accessibilityRole="header">
-            {snapshot.name}
+      <ScrollView testID="sheet-scroll" style={styles.fill} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.head}>
+          <View style={styles.grow}>
+            <Text variant="title" accessibilityRole="header">
+              {snapshot.name}
+            </Text>
+            <Text variant="caption" tone="inkMuted">
+              {`${mealNames[entry.meal]} · ${logDayText(entry.localDate, today)}`}
+            </Text>
+          </View>
+          <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
+        </View>
+        <AmountFields snapshot={snapshot} draft={draft} />
+        <View style={styles.group}>
+          <Text variant="label" tone="inkMuted" importantForAccessibility="no">
+            {texts.meal}
           </Text>
-          <Text variant="caption" tone="inkMuted">
-            {`${mealNames[entry.meal]} · ${logDayText(entry.localDate, today)}`}
-          </Text>
+          <View testID="mahlzeiten" accessibilityRole="radiogroup" accessibilityLabel={texts.meal} style={styles.chips}>
+            {MealKey.options.map((option) => (
+              <Chip key={option} label={mealNames[option]} selection="single" selected={option === meal} onPress={() => setMeal(option)} />
+            ))}
+          </View>
         </View>
-        <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
-      </View>
-      <AmountFields snapshot={snapshot} draft={draft} />
-      <View style={styles.group}>
-        <Text variant="label" tone="inkMuted" importantForAccessibility="no">
-          {texts.meal}
-        </Text>
-        <View testID="mahlzeiten" accessibilityRole="radiogroup" accessibilityLabel={texts.meal} style={styles.chips}>
-          {MealKey.options.map((option) => (
-            <Chip key={option} label={mealNames[option]} selection="single" selected={option === meal} onPress={() => setMeal(option)} />
-          ))}
+        <View style={styles.group}>
+          <View style={styles.start}>
+            <Button
+              variant="text"
+              label={detailsShown ? texts.hideDetails : texts.showDetails}
+              onPress={() => setDetailsShown((shown) => !shown)}
+            />
+          </View>
+          {detailsShown ? <Details entry={entry} today={today} /> : null}
         </View>
+      </ScrollView>
+      <View style={styles.footer}>
+        <Button label={texts.save} block onPress={save} />
+        <Button variant="text" label={texts.delete} block onPress={onDelete} />
       </View>
-      <View style={styles.group}>
-        <View style={styles.start}>
-          <Button
-            variant="text"
-            label={detailsShown ? texts.hideDetails : texts.showDetails}
-            onPress={() => setDetailsShown((shown) => !shown)}
-          />
-        </View>
-        {detailsShown ? <Details entry={entry} today={today} /> : null}
-      </View>
-      <Button label={texts.save} block onPress={save} />
-      <Button variant="text" label={texts.delete} block onPress={onDelete} />
     </View>
   );
 }
@@ -114,7 +121,10 @@ function Details({ entry, today }: { entry: EntryDetail; today: LocalDate }) {
 }
 
 const styles = StyleSheet.create({
-  sheet: { gap: space[4] },
+  sheet: { flex: 1 },
+  fill: { flex: 1 },
+  content: { gap: space[4] },
+  footer: { gap: space[2], paddingTop: space[3] },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3] },
   grow: { flex: 1, gap: space[1] },
   group: { gap: space[2] },

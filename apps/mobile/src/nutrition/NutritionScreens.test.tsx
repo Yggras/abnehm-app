@@ -588,6 +588,16 @@ describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
     ]) {
       expect(within(sheet()).getByLabelText(detail)).toBeOnTheScreen();
     }
+    // Mit aufgeklappten Details scrollt der Inhalt, „Speichern“ und „Löschen“ stehen fest darunter
+    // (auf dem iPhone SE waren sie sonst unerreichbar; Gerätelauf und Impeccable-Kritik).
+    const scroll = within(sheet()).getByTestId('sheet-scroll');
+    // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
+    expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
+    expect(within(scroll).getByLabelText('Erfasst über: Suche')).toBeOnTheScreen();
+    for (const name of ['Speichern', 'Löschen']) {
+      expect(within(sheet()).getByRole('button', { name })).toBeOnTheScreen();
+      expect(within(scroll).queryByRole('button', { name })).not.toBeOnTheScreen();
+    }
     await user.press(within(sheet()).getByRole('button', { name: 'Details ausblenden' }));
     expect(within(sheet()).queryByLabelText('Erfasst über: Suche')).not.toBeOnTheScreen();
 
