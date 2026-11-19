@@ -3,7 +3,7 @@
 # 1. „Code teilen“ öffnet das Teilen-Menü: Seed `solo` öffnet `partner.invite`. Die App erzeugt am E2E-Backend
 #    einen Code und zeigt ihn mit „gültig bis …“; „Code teilen“ öffnet das System-Teilen-Menü.
 # 2. Code eines geseedeten zweiten Kontos eingeben → Reaktivierungsvorschau → gekoppelt: Seed
-#    `einladung-nach-entkopplung` (`packages/contracts/seeds/einladung.ts`). Anna hat entkoppelt und danach
+#    `einladung-nach-entkopplung` (`packages/contracts/seeds/einladung-nach-entkopplung.ts`). Anna hat entkoppelt und danach
 #    den Code 271828 erzeugt. Philipp gibt ihn unter „Code eingeben“ ein, sieht „Mit Anna koppeln?“ samt
 #    Reaktivierungstext und koppelt. „Ihr seid wieder gekoppelt“ führt mit „Zu eurer Insel“ in den Tab „Momo“;
 #    dort ist die Insel wieder da, weil die Reaktivierung Rollen und Insel zurückbringt.

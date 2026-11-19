@@ -26,20 +26,20 @@ async function authState(backend: TestBackend) {
 describe('Seed für Postgres', () => {
   it('stellt den Ausgangszustand des Manifests exakt her, auch beim wiederholten Seeden', async () => {
     const backend = await createTestBackend();
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     const first = await dumpServer(backend.database.db);
     expect(first).toEqual(canonicalRows(solo.initial.server));
 
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     // Kanonisch gleich, nicht nur dieselbe Zeilenzahl.
     expect(await dumpServer(backend.database.db)).toEqual(first);
   });
 
   it('prüft Konten semantisch: feste ID und E-Mail, Hash passt zum Testpasswort, keine Sitzung', async () => {
     const backend = await createTestBackend();
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     const firstHash = (await authState(backend)).accounts[0]!.password!;
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     const { users, accounts, sessions } = await authState(backend);
 
     expect(users.map(({ id, email, name }) => ({ id, email, name }))).toEqual([{ id: solo.accounts[0]!.accountId, email: 'philipp@example.test', name: '' }]);
@@ -53,12 +53,12 @@ describe('Seed für Postgres', () => {
 
   it('setzt einen veränderten Stand zurück und verwirft Sitzungen; das Testkonto meldet sich danach an', async () => {
     const backend = await createTestBackend();
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     const { reply, device } = await signIn(backend, 'philipp@example.test', seedPassword);
     expect(reply.status).toBe(200);
     await backend.database.db.update(person).set({ displayName: 'Geändert' }).where(eq(person.id, solo.accounts[0]!.personId));
 
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(solo.initial.server));
     expect((await call(backend, 'GET', '/v1/auth/get-session', device)).body).toBeNull();
 
@@ -71,7 +71,7 @@ describe('Seed für Postgres', () => {
 
   it('Schema-Prüfung: nach dem Seeden steht außerhalb der Better-Auth-Tabellen keine E-Mail', async () => {
     const backend = await createTestBackend();
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     expect(await tablesWithEmail(backend.database.db)).toEqual([]);
 
     // Gegenprobe: Die Prüfung findet eine E-Mail in jeder Spalte, auch in JSON.
@@ -84,11 +84,11 @@ describe('Seed für Postgres', () => {
 
   it('bricht ab und hinterlässt nichts, wenn eine Zeile eine E-Mail enthält', async () => {
     const backend = await createTestBackend();
-    await seedServer(backend.database, solo);
+    await seedServer(backend.database, solo, backend.inviteCodes);
     // Am Manifest-Schema vorbei, um die Prüfung in der Datenbank zu belegen.
     const withEmail = structuredClone(solo) as SeedManifest;
     withEmail.initial.server.person![0]!.display_name = 'philipp@example.test';
-    await expect(seedServer(backend.database, withEmail)).rejects.toThrow('E-Mail außerhalb der Better-Auth-Tabellen in person');
+    await expect(seedServer(backend.database, withEmail, backend.inviteCodes)).rejects.toThrow('E-Mail außerhalb der Better-Auth-Tabellen in person');
     expect(await dumpServer(backend.database.db)).toEqual(canonicalRows(solo.initial.server));
   });
 });

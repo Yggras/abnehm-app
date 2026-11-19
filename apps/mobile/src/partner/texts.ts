@@ -44,6 +44,8 @@ export const partnerTexts = {
  */
 export const couplingTexts = {
   creating: 'Code wird erzeugt …',
+  /** Angenommen, die Kopplung ist aber noch nicht per Pull auf dem Gerät. */
+  loadingCoupling: 'Kopplung wird geladen …',
   /** Ohne Pronomen: Im Paar lädt mal die eine, mal die andere Person ein (Impeccable-Kritik zu #120). */
   inviteIntro: 'Gib deinem Partner diesen Code. Er wird in der App unter „Code eingeben“ eingetragen.',
   /** Zugänglicher Name des Codes: Ziffer für Ziffer statt „vierhundertzweiundachtzig …“. */

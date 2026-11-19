@@ -1,5 +1,5 @@
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
-import { seedClock, seedIds, seedInviteCodes } from './ids.ts';
+import { seedIds, seedInviteCodes } from './ids.ts';
 import { SeedManifest, type SeedState } from './manifest.ts';
 
 // Szenario `einladung-nach-entkopplung` (Spezifikation 5, Abschnitt 5 und Testing Decisions; #120): der
@@ -10,9 +10,9 @@ import { SeedManifest, type SeedState } from './manifest.ts';
 // und die Annahme reaktiviert die archivierte Kopplung desselben Paars. Alle IDs außer der Einladung stammen
 // aus #117.
 
-/** Erstellt eine Stunde vor der Uhr des Manifests, gültig 24 Stunden wie jede Einladung (`INVITATION_VALIDITY_MS`). */
-const createdAt = new Date(Date.parse(seedClock.instant) - 60 * 60_000).toISOString();
-const expiresAt = new Date(Date.parse(createdAt) + 24 * 60 * 60_000).toISOString();
+/** Erstellt eine Stunde vor der Uhr des Manifests (`seedClock`, 12:00 UTC), läuft am nächsten Tag ab. */
+const createdAt = '2026-10-14T11:00:00.000Z';
+const expiresAt = '2026-10-15T11:00:00.000Z';
 
 const afterUncoupling = nachEntkopplungManifest.target;
 

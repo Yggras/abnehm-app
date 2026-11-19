@@ -8,20 +8,25 @@ import type { RouteScreenProps } from '../navigation';
 import { useAcceptInvitation, useCheckInvitationCode } from '../online';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
+import { useCouplingState, usePartner } from './app-partner';
 import { couplingProblemOf } from './coupling-view';
-import { CoupledView, CouplingProblemNotice } from './CouplingParts';
+import { CoupledView, CouplingPending, CouplingProblemNotice, usePullWhile } from './CouplingParts';
 import { couplingTexts } from './texts';
 
 // Modaler Ablauf `partner.redeem` (Spezifikation 5, Abschnitt 5; #120): sechs Ziffern eingeben, lokal nur
 // Länge und Ziffern prüfen, „Weiter“ prüft den Code beim Server, ohne ihn zu verbrauchen, die Bestätigung
 // nennt die einladende Person und bei einer Reaktivierung, was zurückkommt, „Koppeln“ nimmt an. Die
-// Annahme holt die Kopplung per Pull in SQLite (#103). Nur online.
+// Annahme holt die Kopplung per Pull in SQLite (#103); erst wenn sie dort steht, zeigt die Ansicht „Ihr seid
+// gekoppelt“, bis dahin zieht sie im 10-Sekunden-Takt nach. Nur online.
 
 export function RedeemScreen({ target }: RouteScreenProps<'partner.redeem'>) {
   const [code, setCode] = useState('');
   const [invalid, setInvalid] = useState(false);
   const check = useCheckInvitationCode();
   const accept = useAcceptInvitation();
+  const coupling = useCouplingState(usePartner());
+  const accepted = check.state.type === 'ok' && accept.state.type === 'ok';
+  usePullWhile(accepted && coupling.type !== 'coupled');
 
   const otherCode = () => {
     accept.reset();
@@ -29,8 +34,10 @@ export function RedeemScreen({ target }: RouteScreenProps<'partner.redeem'>) {
   };
 
   let content;
-  if (check.state.type === 'ok' && accept.state.type === 'ok') {
-    content = <CoupledView partnerDisplayName={check.state.value.inviterDisplayName} reactivated={accept.state.value.reactivated} />;
+  if (accepted) {
+    content = coupling.type === 'coupled'
+      ? <CoupledView partnerDisplayName={coupling.partnerDisplayName} hatched={coupling.hatched} />
+      : <CouplingPending label={couplingTexts.loadingCoupling} />;
   } else if (check.state.type === 'ok') {
     const checkedCode = code;
     content = (

@@ -108,7 +108,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey,
 describe('Anzeigename im Szenario gekoppelt', () => {
   it('kommt nach dem Pull beim Partner am Kopplungsmitglied an und lässt die Zeitzone unberührt', async () => {
     const backend = await createTestBackend({ clock: createTestClock(gekoppelt.clock) });
-    await seedServer(backend.database, gekoppelt);
+    await seedServer(backend.database, gekoppelt, backend.inviteCodes);
     const philipp = await phone(backend, gekoppelt, 'philipp-iphone');
     const anna = await phone(backend, gekoppelt, 'anna-android');
     expect(anna.member(philipp.personId)?.displayName).toBe('Philipp');

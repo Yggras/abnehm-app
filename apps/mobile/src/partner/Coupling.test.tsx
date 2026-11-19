@@ -21,7 +21,7 @@ import { setTestGate } from '../session/testing/test-gate';
 import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport } from '../sync';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner, encouragementEntity } from '.';
-import { invitePullIntervalMs } from './InviteScreen';
+import { couplingPullIntervalMs as invitePullIntervalMs } from './CouplingParts';
 
 // Nachweis für #120 an den gerenderten modalen Abläufen `partner.invite` und `partner.redeem` mit dem echten
 // Verzeichnis `src/app`, dem Online-Test-Adapter der Einladungsabläufe (#103) und dem echten Partnerbereich
@@ -57,19 +57,30 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+/** Was ein Pull des Tests auf das Gerät bringt: eine neue Kopplung vor dem Schlüpfen oder eine reaktivierte mit Rollen. */
+type PulledCoupling = 'rollenwahl-offen' | 'gekoppelt';
+
 /**
  * Philipps iPhone ohne Kopplung (`solo`) mit echtem Partnerbereich. Ein Pull des Tests zieht nichts, bis
- * `coupleOnNextPull` die Kopplung aus `gekoppelt` bereitlegt.
+ * `coupleOnNextPull` eine Kopplung bereitlegt: aus `rollenwahl-offen` (neu, Momo im Ei) oder aus `gekoppelt` (Rollen
+ * vorhanden, wie nach einer Reaktivierung). Wie das echte Modul (`invitation-flows.ts`) stößt eine gelungene Annahme
+ * danach einen Sync an.
  */
 async function openPhilipp() {
   mockFlows = fakeInvitationFlows();
+  const acceptCode = mockFlows.acceptCode;
+  mockFlows.acceptCode = async (requestId, code) => {
+    const result = await acceptCode(requestId, code);
+    if (result.type === 'ok') await mockPull();
+    return result;
+  };
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   const database: LocalDatabase = await databases.open('konto_a');
   seedLocalDatabase(database, seedManifests.solo, 'philipp-iphone');
-  let couple = false;
+  let pulled: PulledCoupling | null = null;
   mockPull = jest.fn(async () => {
-    if (couple) seedLocalDatabase(database, seedManifests.gekoppelt, 'philipp-iphone');
+    if (pulled !== null) seedLocalDatabase(database, seedManifests[pulled], 'philipp-iphone');
   });
   const transport: SyncTransport = {
     push: async () => ({ type: 'unavailable' }),
@@ -90,8 +101,8 @@ async function openPhilipp() {
   });
   return {
     flows: mockFlows,
-    coupleOnNextPull() {
-      couple = true;
+    coupleOnNextPull(coupling: PulledCoupling = 'rollenwahl-offen') {
+      pulled = coupling;
     },
   };
 }
@@ -154,6 +165,20 @@ describe('partner.invite', () => {
     expect(screen).toHavePathname('/momo');
     expect(screen).toHaveSearchParams({ view: 'rollenwahl' });
     expect(screen.queryByRole('header', { name: 'Partner einladen' })).toBeNull();
+  });
+
+  it('nach einer Reaktivierung (Rollen kommen per Pull zurück): „Ihr seid wieder gekoppelt“ und der Weg zur Insel', async () => {
+    const philipp = await openPhilipp();
+    await renderRouter(appDir, { initialUrl: '/partner/invite' });
+    await screen.findByLabelText('Einladungscode 4 8 2 9 1 5');
+
+    philipp.coupleOnNextPull('gekoppelt');
+    await act(async () => mockPull());
+
+    expect(await screen.findByRole('header', { name: 'Ihr seid wieder gekoppelt' })).toBeOnTheScreen();
+    await user().press(screen.getByRole('button', { name: 'Zu eurer Insel' }));
+    expect(screen).toHavePathname('/momo');
+    expect(screen).toHaveSearchParams({});
   });
 
   it('offline: „Braucht Internet“ mit „Erneut versuchen“, das dieselbe Absicht wiederholt', async () => {
@@ -227,9 +252,9 @@ describe('partner.invite', () => {
 });
 
 describe('partner.redeem', () => {
-  async function enter(code: string) {
-    await user().type(await screen.findByLabelText('Einladungscode'), code);
-    await user().press(screen.getByRole('button', { name: 'Weiter' }));
+  async function enter(code: string, typist = user()) {
+    await typist.type(await screen.findByLabelText('Einladungscode'), code);
+    await typist.press(screen.getByRole('button', { name: 'Weiter' }));
   }
 
   it('prüft lokal nur Länge und Ziffern, ohne den Server zu fragen', async () => {
@@ -251,7 +276,9 @@ describe('partner.redeem', () => {
   });
 
   it('„Weiter“ prüft den Code, die Bestätigung nennt die einladende Person, „Koppeln“ nimmt an', async () => {
-    const { flows } = await openPhilipp();
+    const philipp = await openPhilipp();
+    const { flows } = philipp;
+    philipp.coupleOnNextPull();
     flows.respond('checkCode', { type: 'ok', value: { inviterDisplayName: 'Anna', reactivates: false } });
     await renderRouter(appDir, { initialUrl: '/partner/redeem' });
 
@@ -269,10 +296,31 @@ describe('partner.redeem', () => {
     expect(screen).toHaveSearchParams({ view: 'rollenwahl' });
   });
 
+  it('nach der Annahme zeigt es „Ihr seid gekoppelt“ erst, wenn der Pull die Kopplung in SQLite gebracht hat', async () => {
+    jest.useFakeTimers();
+    // Mit Testuhr braucht userEvent den Vorlauf der Timer (https://callstack.github.io/react-native-testing-library/docs/api/events/user-event).
+    const typist = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const philipp = await openPhilipp();
+    await renderRouter(appDir, { initialUrl: '/partner/redeem' });
+    await enter('482915', typist);
+    await typist.press(await screen.findByRole('button', { name: 'Koppeln' }));
+
+    // Der Sync nach der Annahme brachte noch nichts; die Ansicht wartet und zieht im 10-Sekunden-Takt nach.
+    expect(await screen.findByLabelText('Kopplung wird geladen …')).toBeOnTheScreen();
+    expect(screen.queryByText('Ihr seid gekoppelt')).toBeNull();
+    philipp.coupleOnNextPull();
+    await act(async () => jest.advanceTimersByTime(invitePullIntervalMs));
+
+    expect(await screen.findByRole('header', { name: 'Ihr seid gekoppelt' })).toBeOnTheScreen();
+    expect(mockPull).toHaveBeenCalledTimes(2);
+  });
+
   it('zeigt bei reactivates die Reaktivierungsvorschau und danach den Weg zur Insel statt zum Schlüpfen', async () => {
-    const { flows } = await openPhilipp();
+    const philipp = await openPhilipp();
+    const { flows } = philipp;
+    // Reaktiviert: Die Kopplung kommt mit den Rollen zurück, Momo ist schon geschlüpft (#83).
+    philipp.coupleOnNextPull('gekoppelt');
     flows.respond('checkCode', { type: 'ok', value: { inviterDisplayName: 'Anna', reactivates: true } });
-    flows.respond('acceptCode', { type: 'ok', value: { ...flows.defaults.acceptCode, reactivated: true } });
     await renderRouter(appDir, { initialUrl: '/partner/redeem' });
 
     await enter('482915');
@@ -340,7 +388,9 @@ describe('partner.redeem', () => {
   });
 
   it('offline: „Braucht Internet“ mit „Erneut versuchen“ beim Prüfen und beim Koppeln', async () => {
-    const { flows } = await openPhilipp();
+    const philipp = await openPhilipp();
+    const { flows } = philipp;
+    philipp.coupleOnNextPull();
     flows.respond('checkCode', { type: 'offline' });
     flows.respond('acceptCode', { type: 'offline' });
     await renderRouter(appDir, { initialUrl: '/partner/redeem' });
@@ -374,7 +424,8 @@ describe('partner.redeem', () => {
   });
 
   it('aus dem Onboarding aufgerufen, kehrt es nach der Kopplung mit „Weiter“ zu Schritt 11 zurück', async () => {
-    await openPhilipp();
+    const philipp = await openPhilipp();
+    philipp.coupleOnNextPull();
     setTestGate('onboarding');
     await renderRouter(appDir, { initialUrl: '/onboarding' });
     await act(async () => router.push('/partner/redeem'));

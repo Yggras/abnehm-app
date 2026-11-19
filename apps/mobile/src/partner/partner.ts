@@ -9,6 +9,7 @@ import type { Refresh, Source } from '../shell/followed-source';
 import type { TodaySource } from '../shell/today-registry';
 import { readLastPullAt, type SyncWriter } from '../sync';
 import type { ObserveNetwork } from '../sync/triggers';
+import { readCouplingState, type CouplingState } from './coupling-state';
 import { readEncourageSheet, sendEncouragement, type EncourageOutcome, type EncourageSheet } from './encouragement';
 import { partnerCardOf, wirPartnerOf, type PartnerReading, type WirPartner } from './partner-view';
 
@@ -47,6 +48,8 @@ export type Partner = Readonly<{
   encourageSheet: Source<EncourageView>;
   /** Feuert den Partner sofort an, ohne Rückfrage; offline geht die Anfeuerung beim nächsten Push raus. */
   encourage(messageKey: EncouragementKey): EncourageOutcome;
+  /** Stand der Kopplung für `partner.invite` und `partner.redeem` (#120): solo oder gekoppelt, und ob Momo geschlüpft ist. */
+  couplingState: Source<CouplingState>;
 }>;
 
 function readPartner(tx: ReadContext): PartnerReading {
@@ -113,5 +116,6 @@ export function createPartner(dependencies: PartnerDependencies): Partner {
     refresh: sync,
     encourageSheet,
     encourage: (messageKey) => database.transaction((tx) => sendEncouragement(tx, { writer, newId, clock }, messageKey)),
+    couplingState: followedReading(dependencies, readCouplingState, (state) => state),
   };
 }

@@ -1,4 +1,4 @@
-import { einladungNachEntkopplungManifest } from './einladung.ts';
+import { einladungNachEntkopplungManifest } from './einladung-nach-entkopplung.ts';
 import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';

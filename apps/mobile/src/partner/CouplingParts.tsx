@@ -1,54 +1,77 @@
+import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
-import { Button, Card, Notice, size, space, Text } from '../design';
+import { Button, Card, Notice, size, Skeleton, space, Text } from '../design';
 import { MomoFigure } from '../momo';
 import { closeRoute, openTarget } from '../navigation';
 import { useSessionGate } from '../session/use-session-gate';
+import { useSyncRefresh } from '../shell/SyncRefresh';
 import type { CouplingProblem } from './coupling-view';
 import { couplingTexts } from './texts';
 
 // Gemeinsame Teile der Kopplungsabläufe `partner.invite` und `partner.redeem` (Spezifikation 5,
-// Abschnitt 5; #120): der gescheiterte Ablauf und die Ansicht „Ihr seid gekoppelt“.
+// Abschnitt 5; #120): der gescheiterte Ablauf, das Warten auf den Pull und die Ansicht „Ihr seid gekoppelt“.
 
-/**
- * Satz mit nächstem Schritt; „Braucht Internet“ und unerwartete Fehler mit „Erneut versuchen“. `problem` nur für
- * Technik und einen nicht passenden Code, Begrenzung und bestehende Kopplung als neutraler Hinweis.
- */
-export function CouplingProblemNotice({ problem, onRetry }: { problem: CouplingProblem; onRetry: () => void }) {
-  const action = problem.retry ? { label: couplingTexts.retry, onPress: onRetry } : undefined;
-  switch (problem.cause) {
-    case 'offline':
-      return <Notice tone="problem" cause="technik" icon="offline" text={problem.text} action={action} />;
-    case 'technik':
-    case 'ungueltige_eingabe':
-      return <Notice tone="problem" cause={problem.cause} text={problem.text} action={action} />;
-    case 'hinweis':
-      return <Notice tone="hint" text={problem.text} action={action} />;
-  }
+/** Takt des Pulls, solange ein Ablauf auf die Kopplung in SQLite wartet (Spezifikation 5, Abschnitt 5). */
+export const couplingPullIntervalMs = 10_000;
+
+/** Satz mit nächstem Schritt; „Braucht Internet“ und unerwartete Fehler mit „Erneut versuchen“. */
+export function CouplingProblemNotice({ problem: { text, retry, look }, onRetry }: { problem: CouplingProblem; onRetry: () => void }) {
+  const action = retry ? { label: couplingTexts.retry, onPress: onRetry } : undefined;
+  return <Notice {...look} text={text} action={action} />;
+}
+
+/** Platzhalter, solange ein Ablauf läuft oder die Kopplung noch nicht per Pull angekommen ist. */
+export function CouplingPending({ label }: { label: string }) {
+  return (
+    <View accessible accessibilityLabel={label}>
+      <Skeleton width="100%" height={136} />
+    </View>
+  );
 }
 
 /**
- * „Ihr seid gekoppelt“ mit dem Weg zum Schlüpfen (`momo` mit `view: "rollenwahl"`). Nach einer Reaktivierung ist
- * Momo schon geschlüpft; dann heißt es „Ihr seid wieder gekoppelt“, und der Weg führt zur Insel. Aus dem Onboarding
- * aufgerufen, steht die Sitzungs-Weiche auf `onboarding`, und „Weiter“ kehrt zu Schritt 11 zurück.
+ * Startet im Takt `couplingPullIntervalMs` den Sync des App-Roots, solange `active` gilt und die Ansicht offen ist.
+ * Der Auslöser ist je Render eine neue Funktion; der Takt beginnt deshalb nicht neu mit ihm.
  */
-export function CoupledView({ partnerDisplayName, reactivated }: { partnerDisplayName: string; reactivated: boolean }) {
+export function usePullWhile(active: boolean) {
+  const latest = useSyncRefresh();
+  const refresh = useRef(latest);
+  useEffect(() => {
+    refresh.current = latest;
+  }, [latest]);
+  useEffect(() => {
+    if (!active) return undefined;
+    const interval = setInterval(() => {
+      void refresh.current?.().catch(() => undefined);
+    }, couplingPullIntervalMs);
+    return () => clearInterval(interval);
+  }, [active]);
+}
+
+/**
+ * „Ihr seid gekoppelt“ mit dem Weg zum Schlüpfen (`momo` mit `view: "rollenwahl"`). Ist Momo schon geschlüpft,
+ * hat eine Annahme die frühere Kopplung samt Rollen reaktiviert; eine neue Rollenwahl gibt es dann nicht (#83), und
+ * der Weg führt als „Ihr seid wieder gekoppelt“ zur Insel. Aus dem Onboarding aufgerufen, steht die Sitzungs-Weiche
+ * auf `onboarding`, und „Weiter“ kehrt zu Schritt 11 zurück.
+ */
+export function CoupledView({ partnerDisplayName, hatched }: { partnerDisplayName: string; hatched: boolean }) {
   const fromOnboarding = useSessionGate() === 'onboarding';
   return (
     <Card>
       <View testID="kopplung-gekoppelt" style={styles.coupled}>
         <MomoFigure mood="freut_sich" size={size.momoToday} />
         <Text variant="title" accessibilityRole="header" style={styles.center}>
-          {reactivated ? couplingTexts.reactivatedTitle : couplingTexts.coupledTitle}
+          {hatched ? couplingTexts.reactivatedTitle : couplingTexts.coupledTitle}
         </Text>
         <Text style={styles.center}>
-          {reactivated ? couplingTexts.reactivatedBody(partnerDisplayName) : couplingTexts.coupledBody(partnerDisplayName)}
+          {hatched ? couplingTexts.reactivatedBody(partnerDisplayName) : couplingTexts.coupledBody(partnerDisplayName)}
         </Text>
         {fromOnboarding ? (
           <Button block label={couplingTexts.continue} onPress={closeRoute} />
-        ) : reactivated ? (
+        ) : hatched ? (
           <Button block label={couplingTexts.toIsland} onPress={() => leaveFor({ type: 'momo' })} />
         ) : (
           <Button block label={couplingTexts.toHatching} onPress={() => leaveFor({ type: 'momo', view: 'rollenwahl' })} />

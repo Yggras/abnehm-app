@@ -25,9 +25,8 @@ import { canonicalDevice, dumpLocalDatabase } from '../../mobile/src/test-capabi
 import { policies } from '../src/authorization/authorization.ts';
 import { photoDraft, revocationNotice } from '../src/db/schema/index.ts';
 import type { TestBackend } from './support/app.ts';
-import type { Device } from './support/auth-client.ts';
+import { call, type Device } from './support/auth-client.ts';
 import { httpOutcome, resourceProbe } from './support/authorization.ts';
-import { call } from './support/auth-client.ts';
 import { coupleByInvitation } from './support/coupled-world.ts';
 import { completeOp } from './support/daily-goals.ts';
 import { canonical, runSteps, seeded, seedPhone as phone, stateOf } from './support/seed-world.ts';

@@ -48,10 +48,10 @@ const insertOrder = dependencyOrder(
 
 /**
  * Setzt Postgres auf den Ausgangszustand des Manifests. Scheitert eine Prüfung, bleibt nichts zurück.
- * Einladungen erhalten den HMAC ihres Codes aus `inviteCodes` des Manifests (#120); dafür braucht der Seeder
- * die Einladungscodes des Servers, sonst scheitert ein Manifest mit Einladungen.
+ * Einladungen erhalten den HMAC ihres Codes aus `inviteCodes` des Manifests (#120), gebildet mit den
+ * Einladungscodes des Servers.
  */
-export async function seedServer(database: Database, manifest: SeedManifest, codes?: Pick<InviteCodes, 'hmacOf'>): Promise<void> {
+export async function seedServer(database: Database, manifest: SeedManifest, codes: Pick<InviteCodes, 'hmacOf'>): Promise<void> {
   const rows = withInviteCodeHmacs(manifest, codes);
   for (const table of Object.keys(rows)) {
     if (!byName.has(table)) throw new Error(`Seed: unbekannte Tabelle ${table}`);
@@ -89,11 +89,10 @@ export async function seedServer(database: Database, manifest: SeedManifest, cod
 }
 
 /** Die Zeilen des Ausgangszustands, Einladungen samt HMAC ihres Codes unter dem Einladungs-Secret des Servers. */
-function withInviteCodeHmacs(manifest: SeedManifest, codes: Pick<InviteCodes, 'hmacOf'> | undefined): SeedRows {
+function withInviteCodeHmacs(manifest: SeedManifest, codes: Pick<InviteCodes, 'hmacOf'>): SeedRows {
   const rows = manifest.initial.server;
   const invitations = rows.invitation ?? [];
   if (invitations.length === 0) return rows;
-  if (codes === undefined) throw new Error('Seed: Einladungen brauchen die Einladungscodes des Servers');
   const codeOf = new Map<string, InviteCode>((manifest.extensions?.inviteCodes?.codes ?? []).map((entry) => [entry.invitationId, entry.code]));
   return {
     ...rows,
