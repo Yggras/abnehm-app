@@ -1,0 +1,128 @@
+#!/bin/sh
+# Hermetischer Test für scripts/worktree-entfernen: temporäres Repo mit
+# Worktrees, künstliche DerivedData mit info.plist (#333).
+set -eu
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+script="$root/scripts/worktree-entfernen"
+tmp=$(cd "$(mktemp -d)" && pwd -P)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+fail() {
+  echo "FEHLER: $*" >&2
+  [ -f "$tmp/output" ] && sed 's/^/  | /' "$tmp/output" >&2
+  exit 1
+}
+
+main="$tmp/app"
+worktrees="$tmp/app-worktrees"
+dd="$tmp/DerivedData"
+export ABNEHM_DERIVED_DATA="$dd"
+
+git init -q "$main"
+git -C "$main" -c user.name=Test -c user.email=test@example.com commit --allow-empty -qm initial
+mkdir -p "$worktrees" "$dd"
+for name in 1-eins 2-zwei 3-drei 4-vier; do
+  git -C "$main" worktree add -qb "work/$name" "$worktrees/$name"
+done
+# Wie im Repo ist apps/mobile/ios/ ignoriert.
+printf 'apps/mobile/ios/\n' >> "$main/.git/info/exclude"
+
+# Künstlicher DerivedData-Ordner von Xcode: <Name>/info.plist mit WorkspacePath.
+derived() {
+  mkdir -p "$dd/$1/Build/Products"
+  printf 'x%.0s' $(seq 1 2048) > "$dd/$1/Build/Products/binary"
+  cat > "$dd/$1/info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LastAccessedDate</key>
+	<date>2026-11-19T15:36:06Z</date>
+	<key>WorkspacePath</key>
+	<string>$2</string>
+</dict>
+</plist>
+EOF
+}
+
+mkdir -p "$worktrees/1-eins/apps/mobile/ios/Abnehm.xcworkspace"
+derived Abnehm-eins "$worktrees/1-eins/apps/mobile/ios/Abnehm.xcworkspace"
+derived Spike-eins "$worktrees/1-eins/spikes/x/ios/Spike.xcworkspace"
+derived Abnehm-zwei "$worktrees/2-zwei/apps/mobile/ios/Abnehm.xcworkspace"
+derived Abnehm-einsplus "$worktrees/1-einsplus/apps/mobile/ios/Abnehm.xcworkspace"
+derived Abnehm-weg "$worktrees/9-weg/apps/mobile/ios/Abnehm.xcworkspace"
+derived Abnehm-haupt "$main/apps/mobile/ios/Abnehm.xcworkspace"
+derived Fremd-weg "$tmp/anderes-projekt-worktrees/1-x/ios/Fremd.xcworkspace"
+derived Fremd "$tmp/anderes-projekt/ios/Fremd.xcworkspace"
+mkdir -p "$dd/ModuleCache.noindex" "$dd/CompilationCache.noindex" "$dd/SymbolCache.noindex"
+printf '<plist><dict><key>WorkspacePath</key><string>%s</string></dict></plist>\n' \
+  "$worktrees/9-weg/x" > "$dd/ModuleCache.noindex/info.plist"
+
+exists() { [ -e "$dd/$1" ] || fail "$2: $1 fehlt"; }
+gone() { [ ! -e "$dd/$1" ] || fail "$2: $1 noch da"; }
+
+cd "$main"
+
+# 1. Entfernen samt DerivedData des Worktrees.
+"$script" "$worktrees/1-eins" > "$tmp/output" 2>&1 || fail 'Entfernen fehlgeschlagen'
+[ ! -e "$worktrees/1-eins" ] || fail 'Worktree 1-eins existiert noch'
+git -C "$main" worktree list --porcelain | grep -F "$worktrees/1-eins" >/dev/null && fail '1-eins noch in git worktree list'
+gone Abnehm-eins 'Entfernen'
+gone Spike-eins 'Entfernen'
+for keep in Abnehm-zwei Abnehm-einsplus Abnehm-weg Abnehm-haupt Fremd Fremd-weg ModuleCache.noindex CompilationCache.noindex SymbolCache.noindex; do
+  exists "$keep" 'Entfernen'
+done
+grep -F "$dd/Abnehm-eins" "$tmp/output" >/dev/null || fail 'Ausgabe nennt gelöschten Ordner nicht'
+grep -i 'frei' "$tmp/output" >/dev/null || fail 'Ausgabe nennt frei gewordenen Platz nicht'
+git -C "$main" rev-parse --verify -q refs/heads/work/1-eins >/dev/null || fail 'Branch wurde gelöscht'
+
+# 2. Unsauberer Worktree: geänderte Datei bzw. ungetrackte Datei → Abbruch, nichts gelöscht.
+printf 'x\n' > "$worktrees/2-zwei/neu.txt"
+if "$script" "$worktrees/2-zwei" > "$tmp/output" 2>&1; then fail 'Ungetrackte Datei akzeptiert'; fi
+[ -e "$worktrees/2-zwei/neu.txt" ] || fail 'Worktree mit ungetrackter Datei angetastet'
+exists Abnehm-zwei 'Ungetrackt'
+git -C "$worktrees/2-zwei" add neu.txt
+git -C "$worktrees/2-zwei" -c user.name=Test -c user.email=test@example.com commit -qm neu
+printf 'y\n' > "$worktrees/2-zwei/neu.txt"
+if "$script" "$worktrees/2-zwei" > "$tmp/output" 2>&1; then fail 'Geänderte Datei akzeptiert'; fi
+[ -e "$worktrees/2-zwei" ] || fail 'Geänderter Worktree entfernt'
+exists Abnehm-zwei 'Geändert'
+git -C "$worktrees/2-zwei" checkout -q -- neu.txt
+
+# Ignorierte Build-Ordner verhindern das Entfernen nicht.
+mkdir -p "$worktrees/3-drei/apps/mobile/ios/build"
+printf 'x\n' > "$worktrees/3-drei/apps/mobile/ios/build/app"
+"$script" "$worktrees/3-drei" > "$tmp/output" 2>&1 || fail 'Ignorierter Build-Ordner verhindert Entfernen'
+[ ! -e "$worktrees/3-drei" ] || fail 'Worktree 3-drei existiert noch'
+
+# 3. Primärer Checkout, fremde und relative Pfade werden abgelehnt.
+if "$script" "$main" > "$tmp/output" 2>&1; then fail 'Primärer Checkout akzeptiert'; fi
+grep -F 'primäre Checkout' "$tmp/output" >/dev/null || fail 'Meldung zum primären Checkout fehlt'
+[ -d "$main/.git" ] || fail 'Primärer Checkout angetastet'
+exists Abnehm-haupt 'Primär'
+mkdir -p "$tmp/fremd"
+if "$script" "$tmp/fremd" > "$tmp/output" 2>&1; then fail 'Pfad außerhalb von git worktree list akzeptiert'; fi
+grep -F 'Kein Worktree dieses Repos' "$tmp/output" >/dev/null || fail 'Meldung zu fremdem Pfad fehlt'
+[ -d "$tmp/fremd" ] || fail 'Fremder Pfad angetastet'
+if "$script" "$worktrees/9-weg" > "$tmp/output" 2>&1; then fail 'Nicht existierender Pfad akzeptiert'; fi
+exists Abnehm-weg 'Nicht existierend'
+if "$script" "$worktrees/4-vier/" > /dev/null 2>&1; then :; else fail 'Abschließender Schrägstrich abgelehnt'; fi
+git -C "$main" worktree add -qb work/4-vier-neu "$worktrees/4-vier"
+(cd "$worktrees" && "$script" 4-vier) > "$tmp/output" 2>&1 && fail 'Relativer Pfad akzeptiert'
+[ -e "$worktrees/4-vier" ] || fail 'Relativer Pfad hat Worktree entfernt'
+if "$script" > "$tmp/output" 2>&1; then fail 'Aufruf ohne Argument akzeptiert'; fi
+
+# 4. --verwaiste: nur verwaiste Ordner dieses Repos.
+"$script" --verwaiste > "$tmp/output" 2>&1 || fail '--verwaiste fehlgeschlagen'
+gone Abnehm-einsplus '--verwaiste'
+gone Abnehm-weg '--verwaiste'
+for keep in Abnehm-zwei Abnehm-haupt Fremd Fremd-weg ModuleCache.noindex CompilationCache.noindex SymbolCache.noindex; do
+  exists "$keep" '--verwaiste'
+done
+[ -e "$worktrees/2-zwei" ] && [ -e "$worktrees/4-vier" ] || fail '--verwaiste hat Worktrees angetastet'
+grep -F "$dd/Abnehm-weg" "$tmp/output" >/dev/null || fail '--verwaiste nennt gelöschten Ordner nicht'
+
+# Fehlende DerivedData-Wurzel ist kein Fehler.
+ABNEHM_DERIVED_DATA="$tmp/gibt-es-nicht" "$script" --verwaiste > "$tmp/output" 2>&1 || fail 'Fehlende DerivedData-Wurzel'
+
+printf 'worktree-entfernen: OK\n'

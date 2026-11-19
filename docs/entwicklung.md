@@ -1168,6 +1168,7 @@ Alle Befehle laufen im Repo-Root:
 | `npm run bls-katalog --workspace @abnehm/mobile` | BLS-Katalog-Asset aus dem BLS 4.0 neu bauen (siehe „Ernährung: BLS-Katalog und Lebensmittelsuche“) |
 | `scripts/e2e-run --build` | E2E-Binaries bauen und Maestro auf iOS-Simulator und Android-Emulator ausführen (siehe „E2E, On-Device-Suite und Gerätesmoke“) |
 | `scripts/geraete-slot nehmen --warten` / `freigeben` / `status` | Gerätesperre für Simulatoren, Emulatoren und App-Builds (siehe „Gerätesperre“) |
+| `scripts/worktree-entfernen <absoluter-worktree-pfad>` / `--verwaiste` | Ticket-Worktree samt Xcode-DerivedData entfernen bzw. DerivedData nicht mehr vorhandener Worktrees löschen (siehe „Worktree entfernen“) |
 | `scripts/release-check …` | Release-Checkliste für einen Produktiv-Build; `scripts/prod` startet und verteilt freigegebene Stände ([`betrieb.md`](betrieb.md)) |
 
 Native Abhängigkeiten der App kommen immer per `npx expo install <paket>` aus `apps/mobile`, damit die Version zum SDK passt ([Expo CLI](https://docs.expo.dev/more/expo-cli/#install)). Die Ordner `ios/` und `android/` erzeugt Expo bei Bedarf (Continuous Native Generation). Sie stehen nicht in Git und werden nicht von Hand bearbeitet.
@@ -1189,6 +1190,17 @@ Simulatoren, Emulatoren und App-Builds nutzt auf diesem Rechner immer nur eine S
 - **Nur arm64 im Emulator-Build:** `scripts/app-build e2e android` ohne `--geraet` baut nur `arm64-v8a`, die ABI des AVD `medium_phone` (`abi.type` in seiner `config.ini`). Laut React Native spart das den Großteil der nativen Build-Zeit ([React Native: Speeding up your Build phase](https://reactnative.dev/docs/build-speed)). Gerätebuilds und Produktion bauen weiter alle ABIs, wie die Doku es für Release-Builds empfiehlt.
 - **Notfall:** `scripts/geraete-slot freigeben --erzwingen` löst die Sperre einer anderen Session. Agenten tun das nur nach Rücksprache mit Philipp.
 - **Test:** `scripts/test-geraete-slot` prüft das Skript hermetisch (xcrun, adb und docker gemockt), einschließlich der automatischen Erneuerung mit einer Attrappe der Agent-Session. `scripts/test-emulator-starten` prüft den Emulatorstart (adb und emulator gemockt).
+
+## Worktree entfernen
+
+Ticket-Worktrees entfernt `scripts/worktree-entfernen <absoluter-worktree-pfad>`, nicht `git worktree remove` von Hand ([#333](https://github.com/Yggras/abnehm-app/issues/333), Nutzerentscheidung vom 19.11.2026).
+
+- **Warum:** `git worktree remove` entfernt nur saubere Worktrees, also ohne ungetrackte Dateien und ohne Änderungen an getrackten ([git-worktree](https://git-scm.com/docs/git-worktree), „remove“). Ignorierte Ordner wie `apps/mobile/ios/`, `apps/mobile/android/` und `apps/mobile/build/` löscht es mit; das sagt die Doku nicht ausdrücklich, `scripts/test-worktree-entfernen` prüft es (ignorierter Build-Ordner). `scripts/app-build` löscht seine iOS-DerivedData selbst (`-derivedDataPath`, danach `rm -rf`). Liegen bleibt die DerivedData der Development Builds: `expo run:ios` baut in Xcodes Standardordner `~/Library/Developer/Xcode/DerivedData/<Scheme>-<Hash>/`, je Worktree ein eigener Ordner. Die [Expo-CLI-Doku](https://docs.expo.dev/more/expo-cli/) nennt keine Option, diesen Pfad zu setzen. Am 19.11.2026 lagen dort 18 Ordner mit rund 50 GB, deren Worktree nicht mehr existierte (je 2–5 GB), die Platte war zu 96 % voll ([#333](https://github.com/Yggras/abnehm-app/issues/333)).
+- **Zuordnung:** Das Skript liest den Schlüssel `WorkspacePath` aus der `info.plist` jedes DerivedData-Ordners (`plutil`). Dass Xcode dort den Workspace des Ordners einträgt, ist nicht dokumentiert, sondern beobachtet (19.11.2026, Xcode 27, [#333](https://github.com/Yggras/abnehm-app/issues/333)). Ändert Xcode das, findet das Skript keine Ordner mehr und löscht nichts. Ordner ohne `info.plist` und die gemeinsamen Caches (`*.noindex`, etwa `ModuleCache.noindex`, `CompilationCache.noindex`) betrachtet es nie.
+- **Entfernen:** Das Skript lehnt relative Pfade, den primären Checkout und Pfade außerhalb von `git worktree list` ab. Hat der Worktree Änderungen oder ungetrackte Dateien, bricht es ab, ohne etwas zu löschen. Sonst entfernt es ihn mit `git worktree remove` (nie `--force`) und löscht erst danach jeden DerivedData-Ordner, dessen `WorkspacePath` im Worktree liegt. Es meldet die gelöschten Ordner und den frei gewordenen Platz. Der Branch bleibt.
+- **`--verwaiste`:** löscht DerivedData-Ordner, deren `WorkspacePath` unter `<repo>-worktrees/<name>/` liegt, wenn dieser Worktree-Ordner nicht mehr existiert (Altlasten, von Hand entfernte Worktrees). DerivedData anderer Projekte, des primären Checkouts und vorhandener Worktrees bleibt.
+- **Android:** braucht keine Regel. Projektbuilds liegen im Worktree, `~/.gradle/caches` räumt Gradle selbst auf ([Gradle-Doku](https://docs.gradle.org/current/userguide/directory_layout.html), „Cleanup of caches and distributions“), der Emulator ist ein fester gemeinsamer.
+- **Test:** `scripts/test-worktree-entfernen` prüft das Skript hermetisch mit einem temporären Repo und künstlicher DerivedData; `ABNEHM_DERIVED_DATA` setzt dafür die DerivedData-Wurzel.
 
 ## Secrets
 

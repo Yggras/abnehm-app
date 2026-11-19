@@ -1,0 +1,189 @@
+#!/bin/sh
+# Entfernt einen Ticket-Worktree samt seiner Xcode-DerivedData (#333).
+#
+# `git worktree remove` löscht alles im Worktree, auch die ignorierten
+# Build-Ordner (apps/mobile/ios/, android/, build/). Liegen bleibt die
+# DerivedData der Development Builds: `expo run:ios` baut in Xcodes
+# Standardordner ~/Library/Developer/Xcode/DerivedData/<Scheme>-<Hash>/, je
+# Worktree ein eigener Ordner (2–5 GB). Jeder Ordner nennt seinen Workspace in
+# info.plist unter WorkspacePath; darüber ordnet das Skript ihn zu.
+#
+#   scripts/worktree-entfernen <absoluter-worktree-pfad>
+#   scripts/worktree-entfernen --verwaiste
+#
+# ABNEHM_DERIVED_DATA überschreibt die DerivedData-Wurzel (Test:
+# scripts/test-worktree-entfernen).
+set -eu
+
+usage() {
+  echo "Verwendung: $0 <absoluter-worktree-pfad>" >&2
+  echo "            $0 --verwaiste" >&2
+  exit 2
+}
+
+[ "$#" -eq 1 ] || usage
+
+derived_data=${ABNEHM_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData}
+
+git rev-parse --show-toplevel >/dev/null 2>&1 || {
+  echo "Fehler: Nicht in einem Git-Repository." >&2
+  exit 1
+}
+# Pfade aller Worktrees dieses Repos, der primäre Checkout zuerst.
+worktree_paths() {
+  git worktree list --porcelain | sed -n 's/^worktree //p'
+}
+
+primary=$(worktree_paths | head -n 1)
+worktrees_dir="$(dirname "$primary")/$(basename "$primary")-worktrees"
+
+# Kanonischer Pfad eines existierenden Verzeichnisses (Symlinks aufgelöst).
+canonical() {
+  (CDPATH= cd -- "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"
+}
+
+# Gibt je DerivedData-Ordner „<ordner>\t<WorkspacePath>“ aus. Gemeinsame Caches
+# (ModuleCache.noindex, CompilationCache.noindex, SymbolCache.noindex, …)
+# gehören keinem Workspace und werden nie betrachtet.
+derived_data_entries() {
+  [ -d "$derived_data" ] || return 0
+  for dir in "$derived_data"/*/; do
+    dir=${dir%/}
+    case "$(basename "$dir")" in
+      *.noindex|'*') continue ;;
+    esac
+    [ -f "$dir/info.plist" ] || continue
+    workspace=$(plutil -extract WorkspacePath raw -o - "$dir/info.plist" 2>/dev/null) || continue
+    [ -n "$workspace" ] || continue
+    printf '%s\t%s\n' "$dir" "$workspace"
+  done
+}
+
+# Liegt Pfad $1 in einem der Verzeichnisse $2…?
+inside() {
+  path=$1
+  shift
+  for base in "$@"; do
+    case "$path" in
+      "$base"|"$base"/*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Löscht die Ordner aus der Liste $1 (eine Zeile je Ordner) und meldet den Platz.
+delete_folders() {
+  total=0
+  count=0
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
+    # Nur direkte Unterordner der DerivedData-Wurzel.
+    [ "$(dirname "$dir")" = "${derived_data%/}" ] || continue
+    size=$(du -sk "$dir" 2>/dev/null | cut -f1)
+    size=${size:-0}
+    rm -rf "$dir"
+    total=$((total + size))
+    count=$((count + 1))
+    printf 'Gelöscht: %s (%s)\n' "$dir" "$(format_kb "$size")"
+  done < "$1"
+  if [ "$count" -eq 0 ]; then
+    echo "Keine DerivedData zu löschen."
+  fi
+  printf 'Frei geworden: %s in %d DerivedData-Ordner(n)\n' "$(format_kb "$total")" "$count"
+}
+
+format_kb() {
+  awk -v k="$1" 'BEGIN {
+    if (k >= 1048576) printf "%.1f GB", k / 1048576
+    else if (k >= 1024) printf "%.1f MB", k / 1024
+    else printf "%d KB", k
+  }'
+}
+
+list=$(mktemp)
+trap 'rm -f "$list"' EXIT HUP INT TERM
+
+if [ "$1" = --verwaiste ]; then
+  # Verwaist: WorkspacePath liegt unter <repo>-worktrees/<name>/, und dieser
+  # Worktree-Ordner existiert nicht mehr. Ordner anderer Projekte, des primären
+  # Checkouts und noch vorhandener Worktrees bleiben.
+  bases="$worktrees_dir"
+  [ -d "$worktrees_dir" ] && bases="$bases
+$(canonical "$worktrees_dir")"
+  derived_data_entries | while IFS="$(printf '\t')" read -r dir workspace; do
+    printf '%s\n' "$bases" | while IFS= read -r base; do
+      case "$workspace" in
+        "$base"/?*) ;;
+        *) continue ;;
+      esac
+      rest=${workspace#"$base"/}
+      name=${rest%%/*}
+      if [ ! -e "$base/$name" ]; then
+        printf '%s\n' "$dir"
+        break
+      fi
+    done
+  done > "$list"
+  delete_folders "$list"
+  exit 0
+fi
+
+case "$1" in
+  -*) usage ;;
+  /*) ;;
+  *)
+    echo "Fehler: Pfad muss absolut sein: $1" >&2
+    exit 2
+    ;;
+esac
+
+given=$1
+while [ "$given" != / ] && [ "${given%/}" != "$given" ]; do
+  given=${given%/}
+done
+if [ ! -d "$given" ]; then
+  echo "Fehler: Worktree existiert nicht: $given" >&2
+  exit 1
+fi
+target=$(canonical "$given")
+
+if [ "$target" = "$(canonical "$primary")" ]; then
+  echo "Fehler: Der primäre Checkout wird nie entfernt: $target" >&2
+  exit 1
+fi
+
+registered=0
+while IFS= read -r worktree; do
+  if [ "$(canonical "$worktree")" = "$target" ]; then
+    registered=1
+    break
+  fi
+done <<EOF
+$(worktree_paths)
+EOF
+if [ "$registered" -ne 1 ]; then
+  echo "Fehler: Kein Worktree dieses Repos (git worktree list): $target" >&2
+  exit 1
+fi
+
+changes=$(git -C "$target" status --porcelain --untracked-files=all)
+if [ -n "$changes" ]; then
+  echo "Fehler: Worktree hat Änderungen oder ungetrackte Dateien; nichts entfernt:" >&2
+  printf '%s\n' "$changes" | sed 's/^/  /' >&2
+  exit 1
+fi
+
+# DerivedData vor dem Entfernen zuordnen, gelöscht wird erst danach.
+derived_data_entries | while IFS="$(printf '\t')" read -r dir workspace; do
+  if inside "$workspace" "$target" "$given"; then
+    printf '%s\n' "$dir"
+  fi
+done > "$list"
+
+# Nie --force: Was git nicht sauber entfernen will, bleibt samt DerivedData.
+if ! git -C "$primary" worktree remove "$target"; then
+  echo "Fehler: git worktree remove fehlgeschlagen; nichts gelöscht." >&2
+  exit 1
+fi
+echo "Worktree entfernt: $target"
+delete_folders "$list"
