@@ -23,6 +23,8 @@ export type ChipProps = Pick<PressableProps, 'testOnly_pressed'> & {
   square?: boolean;
   /** Ausführlicher Name für Screenreader, etwa „Montag“ zum Chip „Mo“. */
   accessibilityLabel?: string;
+  /** Kurze Erklärung für Screenreader, etwa warum ein gesperrter Chip nicht wählbar ist. */
+  accessibilityHint?: string;
 };
 
 const roles = { single: 'radio', multiple: 'checkbox', action: 'button' } as const;
@@ -41,6 +43,7 @@ export function Chip({
   disabled = false,
   square = false,
   accessibilityLabel,
+  accessibilityHint,
   testOnly_pressed,
 }: ChipProps) {
   const isSelected = selection !== 'action' && selected;
@@ -48,6 +51,7 @@ export function Chip({
     <Pressable
       accessibilityRole={roles[selection]}
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled, ...(selection === 'action' ? {} : { checked: isSelected }) }}
       disabled={disabled}
       onPress={onPress}

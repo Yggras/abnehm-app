@@ -871,6 +871,151 @@ describe('Schritte 5–7 ohne Netz und mit „Zurück“', () => {
   });
 });
 
+async function openStepEight(options: Parameters<typeof openStepFive>[0] = {}) {
+  await openStepSeven(options);
+  await next();
+  await screen.findByRole('header', { name: 'Wochenplan' });
+}
+
+// Sporttage sind Kästchen, der Wiegetag eine Einzelauswahl; beide heißen wie der Wochentag.
+const sportDay = (name: string) => screen.getByRole('checkbox', { name });
+const weighDay = (name: string) => screen.getByRole('radio', { name });
+const weekRow = (name: string) => screen.getByLabelText(name);
+const savePlan = () => user.press(screen.getByRole('button', { name: 'Plan speichern' }));
+/** Heute laut Testuhr: Mittwoch, 14.10.2026, in Europe/Berlin. */
+const today = LocalDate.parse('2026-10-14');
+
+describe('Schritt 8 „Wochenplan“', () => {
+  it('wählt Dienstag, Donnerstag und Samstag als Sporttage und Montag als Wiegetag vor', async () => {
+    await openStepEight();
+
+    expect(screen.queryByText(/gilt ab morgen/)).toBeNull();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 8 von 11' });
+    for (const day of ['Dienstag', 'Donnerstag', 'Samstag']) expect(sportDay(day)).toBeChecked();
+    for (const day of ['Montag', 'Mittwoch', 'Freitag', 'Sonntag']) expect(sportDay(day)).not.toBeChecked();
+    expect(weighDay('Montag')).toBeChecked();
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1);
+  });
+
+  it('Sporttag und Wiegetag sperren sich gegenseitig, und der gesperrte Chip sagt, warum', async () => {
+    await openStepEight();
+
+    // Der Wiegetag ist kein Sporttag, Sporttage sind kein Wiegetag.
+    expect(sportDay('Montag')).toBeDisabled();
+    expect(sportDay('Montag')).toHaveProp('accessibilityHint', 'Montag ist dein Wiegetag. Dort ist das dritte Tagesziel „Gewogen“, darum ist er kein Sporttag.');
+    for (const day of ['Dienstag', 'Donnerstag', 'Samstag']) {
+      expect(weighDay(day)).toBeDisabled();
+      expect(weighDay(day)).toHaveProp('accessibilityHint', `${day} ist ein Sporttag. Dort ist das dritte Tagesziel „Sporteinheit“, darum ist er kein Wiegetag.`);
+    }
+    expect(screen.getByText('Montag ist dein Wiegetag. Dort ist das dritte Tagesziel „Gewogen“, darum ist er kein Sporttag.')).toBeOnTheScreen();
+    expect(screen.getByText('Sporttage sind kein Wiegetag: Dort ist das dritte Tagesziel „Sporteinheit“.')).toBeOnTheScreen();
+
+    await user.press(weighDay('Sonntag'));
+    expect(weighDay('Sonntag')).toBeChecked();
+    expect(sportDay('Montag')).toBeEnabled();
+    expect(sportDay('Sonntag')).toBeDisabled();
+
+    await user.press(sportDay('Mittwoch'));
+    expect(sportDay('Mittwoch')).toBeChecked();
+    expect(weighDay('Mittwoch')).toBeDisabled();
+
+    await user.press(sportDay('Dienstag'));
+    expect(sportDay('Dienstag')).not.toBeChecked();
+    expect(weighDay('Dienstag')).toBeEnabled();
+    expect(mockDevice.onboarding.readDraft()).toEqual(expect.objectContaining({ sportDays: ['mittwoch', 'donnerstag', 'samstag'], weighDay: 'sonntag' }));
+  });
+
+  it('erlaubt 0 bis 6 Sporttage', async () => {
+    await openStepEight();
+
+    for (const day of ['Mittwoch', 'Freitag', 'Sonntag']) await user.press(sportDay(day));
+    expect(screen.getAllByRole('checkbox', { checked: true })).toHaveLength(6);
+    // Der siebte Tag ist der Wiegetag.
+    expect(sportDay('Montag')).toBeDisabled();
+
+    for (const day of ['Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']) await user.press(sportDay(day));
+    expect(screen.queryAllByRole('checkbox', { checked: true })).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Plan speichern' })).toBeEnabled();
+  });
+
+  it('zeigt die drei Tagesziele je Wochentag und die Mindestdauer einer Sporteinheit', async () => {
+    await openStepEight();
+
+    // Plätze 1 und 2 stehen einmal über der Liste, je Zeile nur der dritte; der zugängliche Name nennt alle drei.
+    expect(screen.getByText('Jeden Tag: Ernährung erfasst und Wasserziel. Dazu je Wochentag:')).toBeOnTheScreen();
+    expect(weekRow('Montag: Ernährung erfasst, Wasserziel und Gewogen')).toBeOnTheScreen();
+    expect(weekRow('Dienstag: Ernährung erfasst, Wasserziel und Sporteinheit')).toBeOnTheScreen();
+    expect(weekRow('Mittwoch: Ernährung erfasst, Wasserziel und Im Kalorienbudget')).toBeOnTheScreen();
+    // 150 Minuten ÷ 3 Sporttage.
+    expect(screen.getByText('Eine Sporteinheit zählt ab 50 Minuten: dein Sportziel von 150 Minuten pro Woche, verteilt auf 3 Sporttage.')).toBeOnTheScreen();
+
+    await user.press(sportDay('Mittwoch'));
+    expect(weekRow('Mittwoch: Ernährung erfasst, Wasserziel und Sporteinheit')).toBeOnTheScreen();
+    // 150 ÷ 4 = 37,5, aufgerundet.
+    expect(screen.getByText('Eine Sporteinheit zählt ab 38 Minuten: dein Sportziel von 150 Minuten pro Woche, verteilt auf 4 Sporttage.')).toBeOnTheScreen();
+
+    for (const day of ['Dienstag', 'Mittwoch', 'Donnerstag', 'Samstag']) await user.press(sportDay(day));
+    expect(screen.getByText('Ohne Sporttag gibt es kein Tagesziel „Sporteinheit“. Dein Sportziel von 150 Minuten pro Woche bleibt.')).toBeOnTheScreen();
+  });
+
+  it('speichert ohne Netz und führt zu Schritt 9; erneutes Speichern nach „Zurück“ ergibt ein Startgewicht und heute drei Tagesziele', async () => {
+    await openStepEight();
+    mockDevice.faults.set({ transport: 'offline' });
+    const calls = mockDevice.server.calls().length;
+
+    await savePlan();
+
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 9 von 11' });
+    expect(mockDevice.startWeights()).toEqual([expect.objectContaining({ weightG: 80_000, entryId: mockDevice.onboarding.readDraft().startWeightEntryId })]);
+    expect(mockDevice.dailyGoalsOn(today)).toHaveLength(3);
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('header', { name: 'Wochenplan' })).toBeOnTheScreen();
+    // Heute gilt schon ein Plan: Änderungen gelten ab morgen (Spezifikation 1, Abschnitt 4; Entscheidung in #134).
+    expect(screen.getByText('Dein Plan gilt schon ab heute. Was du hier änderst, gilt ab morgen; deine Tagesziele für heute bleiben.')).toBeOnTheScreen();
+    await user.press(sportDay('Mittwoch'));
+    await savePlan();
+
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    expect(mockDevice.startWeights()).toHaveLength(1);
+    expect(mockDevice.dailyGoalsOn(today)).toHaveLength(3);
+    expect(mockDevice.weeklyPlanVersions()).toEqual([today, LocalDate.parse('2026-10-15')]);
+    expect(mockDevice.server.calls()).toHaveLength(calls);
+  });
+
+  it('bietet nach einem Fehler Wiederholen an; danach entsteht genau ein Startgewicht', async () => {
+    await openStepEight();
+    mockDevice.failWeightRecorder('wirft');
+
+    await savePlan();
+
+    expect(await screen.findByText('Dein Plan ist noch nicht gespeichert. Versuch es bitte noch einmal.')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Wochenplan' })).toBeOnTheScreen();
+    expect(mockDevice.takeErrors()).toEqual([new Error('WeightRecorder: Transaktion gescheitert')]);
+    expect(mockDevice.dailyGoalsOn(today)).toEqual([]);
+
+    mockDevice.failWeightRecorder(false);
+    await user.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
+
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    expect(mockDevice.startWeights()).toHaveLength(1);
+    expect(mockDevice.dailyGoalsOn(today)).toHaveLength(3);
+  });
+
+  it('„Zurück“ führt zu Schritt 7 und behält die Wahl', async () => {
+    await openStepEight();
+    await user.press(weighDay('Sonntag'));
+
+    await user.press(screen.getByRole('button', { name: 'Zurück' }));
+    expect(await screen.findByRole('header', { name: 'Ergebnis' })).toBeOnTheScreen();
+    await next();
+    await screen.findByRole('header', { name: 'Wochenplan' });
+
+    expect(weighDay('Sonntag')).toBeChecked();
+  });
+});
+
 describe('Zugänglichkeit', () => {
   const interactiveRoles = ['button', 'checkbox', 'radio'];
 
@@ -954,6 +1099,24 @@ describe('Zugänglichkeit', () => {
     for (const name of ['Kalorienbudget pro Tag verringern', 'Kalorienbudget pro Tag erhöhen', 'Wasserziel verringern', 'Wasserziel erhöhen', 'Sportziel verringern', 'Sportziel erhöhen', 'Herleitung ausblenden']) {
       expect(screen.getByRole('button', { name })).toBeOnTheScreen();
     }
+    await expectAccessible();
+  });
+
+  it('Schritt 8: deutsche Namen, 48-dp-Aktionen, Schrift bis Faktor 2,0, Auswahl und Sperre nicht nur über Farbe', async () => {
+    await openStepEight();
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(7);
+    expect(screen.getAllByRole('radio')).toHaveLength(7);
+    // Beide Gruppen tragen eine Überschrift; die Sperre steht als Satz da, nicht nur als graue Fläche.
+    expect(screen.getByRole('header', { name: 'Sporttage' })).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Wiegetag' })).toBeOnTheScreen();
+    expect(screen.getByText(/^Montag ist dein Wiegetag\./)).toBeOnTheScreen();
+    await expectAccessible();
+
+    mockDevice.failWeightRecorder('wirft');
+    await savePlan();
+    await screen.findByRole('button', { name: 'Erneut versuchen' });
+    mockDevice.takeErrors();
     await expectAccessible();
   });
 });
