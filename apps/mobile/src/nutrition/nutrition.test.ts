@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
@@ -408,14 +409,11 @@ describe('Eintrag ansehen', () => {
       localDate: '2026-10-13',
       meal: 'fruehstueck',
       captureMethod: 'suche',
-      foodRef: oatsRef,
       snapshot: oats,
       displayUnit: 'g',
       displayAmountMilli: 60_000,
-      totals: { milliKcal: 208_800, proteinMg: 7_932, carbsMg: 31_980, fatMg: 3_990 },
       consumedAt: morning,
       timeZone: 'Europe/Berlin',
-      fromPhoto: false,
     });
   });
 
@@ -513,6 +511,23 @@ describe('Eintrag ändern', () => {
 
     expect(() => context.nutrition.updateEntry(id, change)).toThrow(InvalidNutritionInputError);
     expect(() => context.nutrition.updateEntry(EntityId.parse(randomUUID()), change)).toThrow(InvalidNutritionInputError);
+  });
+
+  it('ändert, löscht und zeigt nur Einträge der eigenen Person', async () => {
+    const context = await setup();
+    const id = added(context);
+    const partner = randomUUID();
+    context.database.transaction((tx) => {
+      insertPersonForTest(tx, partner);
+      sqliteOf(tx).update(nutritionEntry).set({ personId: partner }).where(eq(nutritionEntry.id, id)).run();
+    });
+    const before = { rows: context.rows(), operations: context.operations() };
+
+    expect(() => context.nutrition.updateEntry(id, { meal: 'snacks', displayUnit: 'g', displayAmountMilli: 50_000 })).toThrow(InvalidNutritionInputError);
+    expect(() => context.nutrition.deleteEntry(id)).toThrow(InvalidNutritionInputError);
+    expect(context.nutrition.entry(id)).toBeNull();
+    expect(context.rows()).toEqual(before.rows);
+    expect(context.operations()).toEqual(before.operations);
   });
 
   it('„Rückgängig“ stellt die vorherigen Werte mit genau einer Operation wieder her und meldet den Tag', async () => {

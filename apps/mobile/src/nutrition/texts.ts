@@ -31,7 +31,12 @@ const weekdays = { montag: 'Montag', dienstag: 'Dienstag', mittwoch: 'Mittwoch',
 
 /** Lokaler Tag mit Wochentag, etwa „Mittwoch, 14.10.2026“. */
 export function dateText(localDate: LocalDate): string {
-  return `${weekdays[weekdayOf(localDate)]}, ${localDate.split('-').reverse().join('.')}`;
+  return `${weekdays[weekdayOf(localDate)]}, ${numericDate(localDate)}`;
+}
+
+/** Lokaler Tag als Zahl, etwa „14.10.2026“. */
+function numericDate(localDate: LocalDate): string {
+  return localDate.split('-').reverse().join('.');
 }
 
 /** Ganze kcal mit deutschem Tausenderpunkt, etwa „1.210 kcal“. */
@@ -104,10 +109,9 @@ export function referenceText(snapshot: Pick<NutritionSnapshot, 'baseUnit' | 're
  * „Dienstag, 13.10.2026“ bzw. „12.10.2026“. Der Tageskopf zeigt `day` kräftig und `date` gedämpft darunter.
  */
 export function logDayParts(localDate: LocalDate, today: LocalDate): { day: string; date: string } {
-  const numeric = localDate.split('-').reverse().join('.');
   if (localDate === today) return { day: nutritionTexts.today, date: dateText(localDate) };
   if (localDateAfter(localDate, 1) === today) return { day: 'Gestern', date: dateText(localDate) };
-  return { day: weekdays[weekdayOf(localDate)], date: numeric };
+  return { day: weekdays[weekdayOf(localDate)], date: numericDate(localDate) };
 }
 
 /** Tag im Protokoll in einer Zeile: „Heute, Mittwoch, 14.10.2026“, „Gestern, …“ oder Wochentag und Datum. */

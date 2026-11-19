@@ -108,7 +108,12 @@ export function readEntry(tx: ReadContext, entityId: EntityId): StoredEntry | un
     .from(nutritionEntry)
     .where(eq(nutritionEntry.id, entityId))
     .get();
-  return row && {
+  return row && storedOf(row);
+}
+
+/** Person, Tag, Löschzeitpunkt und Serverversion einer Zeile, wie sie `readEntry` und `readEntryContent` liefern. */
+function storedOf(row: { personId: string; localDate: string; deletedAt: string | null; serverVersion: string | null }): StoredEntry {
+  return {
     personId: EntityId.parse(row.personId),
     localDate: LocalDate.parse(row.localDate),
     deletedAt: row.deletedAt as Instant | null,
@@ -124,10 +129,7 @@ export function readEntryContent(tx: ReadContext, entityId: EntityId): StoredEnt
   const row = sqliteOf(tx).select().from(nutritionEntry).where(eq(nutritionEntry.id, entityId)).get();
   if (row === undefined) return undefined;
   return {
-    personId: EntityId.parse(row.personId),
-    localDate: LocalDate.parse(row.localDate),
-    deletedAt: row.deletedAt as Instant | null,
-    serverVersion: row.serverVersion as ServerVersion | null,
+    ...storedOf(row),
     content: NutritionEntryUpsert.parse({
       consumedAt: row.consumedAt,
       localDate: row.localDate,

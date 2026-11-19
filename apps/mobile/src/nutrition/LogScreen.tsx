@@ -1,11 +1,12 @@
-import { localDateAfter, MealKey, type LocalDate } from '@abnehm/contracts/base';
+import { localDateAfter, MealKey, type EntityId, type LocalDate } from '@abnehm/contracts/base';
 import type { NutritionEntryDeletedOutcome, NutritionEntryUpdatedOutcome } from '@abnehm/contracts/nutrition';
+import { usePathname } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useClock } from '../clock/clock-context';
 import { Button, Card, IconButton, ListGroup, ListRow, Sheet, size, Skeleton, space, Text } from '../design';
-import { openTarget } from '../navigation';
+import { openTarget, pathOf, routeCatalog } from '../navigation';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { useUndoableMessage } from '../shell/use-undoable-message';
 import { useNutrition } from './app-nutrition';
@@ -22,11 +23,25 @@ import { amountText, kcalText, logDayParts, logDayText, macrosText, mealNames, n
 // zurück; künftige Tage sind nicht erreichbar. Ein neuer Eintrag gehört zum gewählten Tag. Antippen eines
 // Eintrags öffnet seine Mengenansicht. Der Bildschirm spricht nur mit dem Ernährungsmodul.
 
+/** Pfade der übrigen Tabs; dorthin zu wechseln setzt den gewählten Tag zurück. */
+const otherTabPaths = new Set(
+  (Object.keys(routeCatalog) as (keyof typeof routeCatalog)[]).filter((name) => name !== 'log' && routeCatalog[name].presentation === 'tab').map(pathOf),
+);
+
 export function LogScreen() {
   const nutrition = useNutrition();
   const today = useLocalToday(useClock());
   // `null` folgt „heute“, auch über Mitternacht; ein früherer Tag bleibt gewählt.
   const [chosen, setChosen] = useState<LocalDate | null>(null);
+  // Das Protokoll öffnet „Heute“: Ein Wechsel auf einen anderen Tab setzt den Tag zurück. Ein Bildschirm
+  // darüber, etwa Erfassen beim Nachtragen, ist kein Tab und behält den Tag.
+  // Angepasst beim Rendern statt im Effekt (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const pathname = usePathname();
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (pathname !== seenPath) {
+    setSeenPath(pathname);
+    if (otherTabPaths.has(pathname)) setChosen(null);
+  }
   const localDate = chosen !== null && chosen < today ? chosen : today;
   const log = useDayLog(nutrition, localDate);
   return (
@@ -126,7 +141,7 @@ function DayHead({ log, today, onDay }: { log: DayLog; today: LocalDate; onDay: 
   );
 }
 
-function MealSection({ meal, localDate, onEntry }: { meal: DayLogMeal; localDate: LocalDate; onEntry: (id: DayLogMeal['entries'][number]['id']) => void }) {
+function MealSection({ meal, localDate, onEntry }: { meal: DayLogMeal; localDate: LocalDate; onEntry: (id: EntityId) => void }) {
   const name = mealNames[meal.meal];
   const hasEntries = meal.entries.length > 0;
   return (

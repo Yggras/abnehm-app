@@ -536,6 +536,18 @@ describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
     expect(screen.getByRole('button', { name: 'Nächster Tag' })).toBeDisabled();
   });
 
+  it('öffnet nach einem Tabwechsel wieder „Heute“', async () => {
+    await openLog();
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+    expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('tab', { name: 'Heute' }));
+    await user.press(screen.getByRole('tab', { name: 'Protokoll' }));
+
+    expect(await screen.findByRole('header', { name: 'Heute, Mittwoch, 14.10.2026' })).toBeOnTheScreen();
+  });
+
+  // Ein Erfassen-Bildschirm über dem Protokoll ist kein Tabwechsel: Nach dem Nachtragen bleibt der Tag gewählt.
   it('trägt eine vergessene Mahlzeit am Vortag nach: Der Eintrag gehört zum gewählten Tag', async () => {
     const { entries } = await openLog();
     await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));

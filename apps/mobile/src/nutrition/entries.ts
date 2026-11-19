@@ -1,5 +1,5 @@
 import type { ClockReading } from '@abnehm/clock';
-import { EntityId, Instant, TimeZone, type LocalDate, type MealKey } from '@abnehm/contracts/base';
+import { EntityId, Instant, TimeZone, type LocalDate, type MealKey, type ServerVersion } from '@abnehm/contracts/base';
 import type { DailyGoalCause } from '@abnehm/contracts/daily-goals';
 import {
   entryAmount,
@@ -83,15 +83,14 @@ export function newEntryPayload(reading: ClockReading, input: NewEntry, mealPhot
 }
 
 /** Legt einen Eintrag an, mit Outbox-Operation und Tagesmeldung in der Transaktion des Aufrufers. */
-export function addEntry(tx: TransactionContext, { clock, writer, persistence, newId }: EntryDependencies, input: NewEntry): EntryAdded {
+export function addEntry(tx: TransactionContext, dependencies: EntryDependencies, input: NewEntry): EntryAdded {
+  const { clock, newId } = dependencies;
   // Vor dem ersten Schreibzugriff: Eine ungültige Eingabe hinterlässt nichts.
   const reading = clock.read();
   const payload = newEntryPayload(reading, input, null);
   const personId = EntityId.parse(requireOwnPerson(tx).id);
   const entryId = newId();
-  writeEntry(tx, entryId, personId, payload, Instant.parse(reading.instant));
-  writer.upsert(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, payload, knownServerVersion: null });
-  persistence.reevaluateDailyGoals(tx, personId, [payload.localDate], 'eingabe');
+  persistEntry(tx, dependencies, { entryId, personId, payload, knownServerVersion: null, cause: 'eingabe', now: Instant.parse(reading.instant) });
   return {
     messageKey: 'ernaehrung.eintrag_hinzugefuegt',
     values: { meal: payload.meal, kcal: roundKcal(payload.totals.milliKcal) },
@@ -161,12 +160,18 @@ export function undoEntry(tx: TransactionContext, dependencies: EntryDependencie
       return;
     }
     case 'entry_deleted': {
-      const { clock, writer, persistence, newId } = dependencies;
-      const personId = EntityId.parse(requireOwnPerson(tx).id);
-      const entryId = newId();
-      writeEntry(tx, entryId, personId, undo.deleted, Instant.parse(clock.read().instant));
-      writer.upsert(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, payload: undo.deleted, knownServerVersion: null });
-      persistence.reevaluateDailyGoals(tx, personId, [undo.deleted.localDate], 'rueckgaengig');
+      const { clock, newId } = dependencies;
+      // Die Fotoverknüpfung kommt unverändert zurück, auch wenn das Foto inzwischen gelöscht ist (etwa durch
+      // einen Pull). Ob nur nicht gelöschte Fotos wieder verknüpft werden (Spezifikation 2, Abschnitt 6),
+      // entscheidet #164; bis dahin ist dieser Fall offen.
+      persistEntry(tx, dependencies, {
+        entryId: newId(),
+        personId: EntityId.parse(requireOwnPerson(tx).id),
+        payload: undo.deleted,
+        knownServerVersion: null,
+        cause: 'rueckgaengig',
+        now: Instant.parse(clock.read().instant),
+      });
       return;
     }
   }
@@ -175,7 +180,7 @@ export function undoEntry(tx: TransactionContext, dependencies: EntryDependencie
 /** Schreibt Menge, Einheit und Mahlzeit samt neu gerechneter Summen und Outbox-Operation; prüft vor dem Schreiben. */
 function writeChange(
   tx: TransactionContext,
-  { clock, writer, persistence }: EntryDependencies,
+  dependencies: EntryDependencies,
   entryId: EntityId,
   existing: StoredEntryContent,
   change: EntryChange,
@@ -186,15 +191,33 @@ function writeChange(
   if (amount.type === 'problem') throw new InvalidNutritionInputError(`Ungültige Menge: ${amount.problem}`);
   const parsed = NutritionEntryUpsert.safeParse({ ...content, meal: change.meal, amount: amount.amount, totals: entryTotals(content.snapshot, amount.amount) });
   if (!parsed.success) throw new InvalidNutritionInputError(`Ungültiger Eintrag: ${parsed.error.message}`);
-  const payload = parsed.data;
-  writeEntry(tx, entryId, existing.personId, payload, Instant.parse(clock.read().instant));
-  writer.upsert(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, payload, knownServerVersion: existing.serverVersion });
-  persistence.reevaluateDailyGoals(tx, existing.personId, [payload.localDate], cause);
+  persistEntry(tx, dependencies, {
+    entryId,
+    personId: existing.personId,
+    payload: parsed.data,
+    knownServerVersion: existing.serverVersion,
+    cause,
+    now: Instant.parse(dependencies.clock.read().instant),
+  });
 }
 
-/** Ein nicht gelöschter Eintrag; sonst `InvalidNutritionInputError`. */
+/** Eine Mutation: Zeile schreiben, genau eine Upsert-Operation in die Outbox und den Tag des Eintrags melden. */
+function persistEntry(
+  tx: TransactionContext,
+  { writer, persistence }: Pick<EntryDependencies, 'writer' | 'persistence'>,
+  entry: Readonly<{ entryId: EntityId; personId: EntityId; payload: NutritionEntryUpsert; knownServerVersion: ServerVersion | null; cause: DailyGoalCause; now: Instant }>,
+): void {
+  const { entryId, personId, payload, knownServerVersion, cause, now } = entry;
+  writeEntry(tx, entryId, personId, payload, now);
+  writer.upsert(tx, { entityType: nutritionEntryEntity.entityType, entityId: entryId, payload, knownServerVersion });
+  persistence.reevaluateDailyGoals(tx, personId, [payload.localDate], cause);
+}
+
+/** Ein nicht gelöschter Eintrag der eigenen Person; sonst `InvalidNutritionInputError`. */
 function requireLiving(tx: TransactionContext, entryId: EntityId): StoredEntryContent {
   const existing = readEntryContent(tx, entryId);
-  if (existing === undefined || existing.deletedAt !== null) throw new InvalidNutritionInputError(`Eintrag ${entryId} ist unbekannt oder gelöscht`);
+  if (existing === undefined || existing.deletedAt !== null || existing.personId !== requireOwnPerson(tx).id) {
+    throw new InvalidNutritionInputError(`Eintrag ${entryId} ist unbekannt, gelöscht oder nicht der eigene`);
+  }
   return existing;
 }

@@ -5,7 +5,6 @@ import {
   type CaptureMethod,
   type DisplayUnit,
   type EntryTotals,
-  type FoodRef,
   type NutritionSnapshot,
 } from '@abnehm/contracts/nutrition';
 
@@ -14,7 +13,8 @@ import { readOwnPerson } from '../local-db/person-header';
 import { entriesOfDay, readEntryContent } from './entry-repository';
 
 // Abfragen Tagesprotokoll und Tagesaufnahme (Spezifikation 2, Abschnitte 2 und 6): die nicht
-// gelöschten Einträge eines lokalen Tags, gegliedert nach den vier Mahlzeiten in fester Reihenfolge.
+// gelöschten Einträge eines lokalen Tags, gegliedert nach den vier Mahlzeiten in fester Reihenfolge,
+// dazu ein einzelner Eintrag für seine Mengenansicht (`readEntryDetail`).
 
 /** Ein Eintrag, wie ihn das Protokoll zeigt: Name, Menge und kcal. */
 export type DayLogEntry = Readonly<{
@@ -90,16 +90,13 @@ export type EntryDetail = Readonly<{
   localDate: LocalDate;
   meal: MealKey;
   captureMethod: CaptureMethod;
-  foodRef: FoodRef | null;
   /** Der gespeicherte Snapshot; eine neue Menge rechnet aus ihm. */
   snapshot: NutritionSnapshot;
   displayUnit: DisplayUnit;
   displayAmountMilli: number;
-  totals: EntryTotals;
   /** Erfassungszeitpunkt samt IANA-Zone der Erfassung. */
   consumedAt: Instant;
   timeZone: TimeZone;
-  fromPhoto: boolean;
 }>;
 
 /** Ein nicht gelöschter Eintrag der eigenen Person; sonst `null`. */
@@ -113,13 +110,10 @@ export function readEntryDetail(tx: ReadContext, entryId: EntityId): EntryDetail
     localDate: content.localDate,
     meal: content.meal,
     captureMethod: content.captureMethod,
-    foodRef: content.foodRef,
     snapshot: content.snapshot,
     displayUnit: content.amount.displayUnit,
     displayAmountMilli: content.amount.displayAmountMilli,
-    totals: content.totals,
     consumedAt: content.consumedAt,
     timeZone: content.timeZone,
-    fromPhoto: content.captureMethod === 'foto',
   };
 }
