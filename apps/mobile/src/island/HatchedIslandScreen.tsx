@@ -14,7 +14,7 @@ import type { BuildOutcome } from './build-object';
 import { buildOptions, type BlueprintOption } from './build-options';
 import { BuildSheet } from './BuildSheet';
 import { EventsSheet } from './EventsSheet';
-import type { ClaimOutcome, VisitorWish } from './island-events';
+import type { ClaimOutcome, ShownReward, VisitorWish } from './island-events';
 import type { HatchedIsland } from './hatched-island';
 import type { IslandEntry } from './IslandBar';
 import { IslandView } from './IslandView';
@@ -81,8 +81,8 @@ type SheetContent =
   | Readonly<{ type: 'bauen'; field: string | null }>
   | Readonly<{ type: 'objekt'; field: string }>
   | Readonly<{ type: 'lager' }>
-  /** `freshAtOpen`: die beim Öffnen neuen Ereignisstände. */
-  | Readonly<{ type: 'ereignisse'; freshAtOpen: ReadonlySet<EntityId> }>;
+  /** `freshAtOpen`: die beim Öffnen neuen Ereignisstände; `claimed`: was seitdem abgeholt wurde. */
+  | Readonly<{ type: 'ereignisse'; freshAtOpen: ReadonlySet<EntityId>; claimed: readonly ShownReward[] }>;
 
 /** Was im Modus mit leuchtenden Feldern gesetzt wird: ein Bauplan oder ein eigenes Objekt von der Insel bzw. aus dem Lager. */
 type Placing =
@@ -93,7 +93,7 @@ type Placing =
 const sheetForView = {
   bauen: { type: 'bauen', field: null },
   lager: { type: 'lager' },
-  ereignisse: { type: 'ereignisse', freshAtOpen: new Set() },
+  ereignisse: { type: 'ereignisse', freshAtOpen: new Set(), claimed: [] },
 } as const satisfies Partial<Record<NonNullable<TargetOf<'momo'>['view']>, SheetContent>>;
 
 type SheetView = keyof typeof sheetForView;
@@ -142,16 +142,17 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
       setPlacing(null);
       setSheet(
         content.type === 'ereignisse'
-          ? { type: 'ereignisse', freshAtOpen: new Set(island.events.open.filter((event) => !event.seen).map((event) => event.stateId)) }
+          ? { type: 'ereignisse', freshAtOpen: new Set(island.events.open.filter((event) => !event.seen).map((event) => event.stateId)), claimed: [] }
           : content,
       );
     },
     [island.events],
   );
   // Was beim Öffnen von „Ereignisse“ neu war, ist damit gesehen; Ansehen kostet nichts (#202).
+  const freshAtOpen = sheet?.type === 'ereignisse' ? sheet.freshAtOpen : null;
   useEffect(() => {
-    if (sheet?.type === 'ereignisse' && sheet.freshAtOpen.size > 0) markEventsSeen([...sheet.freshAtOpen]);
-  }, [sheet, markEventsSeen]);
+    if (freshAtOpen !== null && freshAtOpen.size > 0) markEventsSeen([...freshAtOpen]);
+  }, [freshAtOpen, markEventsSeen]);
   // Die Route `momo` mit `view: 'bauen'`, `'lager'` bzw. `'ereignisse'` öffnet das Sheet, sobald sie ankommt; danach
   // verlässt die Ansicht die Route, damit derselbe Link sie erneut öffnen kann
   // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
@@ -229,10 +230,11 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
     setPlacing({ type: 'umstellen', objectId: item.id, name: item.name, from: 'lager' });
   };
 
+  // Die Bestätigung steht im Sheet: Eine Meldung läge auf dem Gerät hinter dem nativen Sheet (Gerätelauf #202).
   const claim = (event: VisitorWish) => {
     const outcome = claimEventReward(event.stateId);
-    if (outcome.type === 'abgeholt') showMessage({ messageKey: 'insel.belohnung_abgeholt', values: { art: outcome.reward.type, name: outcome.reward.name } });
-    else notDone();
+    if (outcome.type !== 'abgeholt') return notDone();
+    setSheet((current) => (current?.type === 'ereignisse' ? { ...current, claimed: [...current.claimed, outcome.reward] } : current));
   };
 
   const placingTitle = placing === null ? null : placingTitleOf(placing);
@@ -266,7 +268,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, build, upgrade, p
         ) : sheet?.type === 'lager' ? (
           <StorageSheet items={objects.storage} onPlace={placeFromStorage} />
         ) : sheet?.type === 'ereignisse' ? (
-          <EventsSheet events={island.events.open} freshAtOpen={sheet.freshAtOpen} onClaim={claim} />
+          <EventsSheet events={island.events.open} freshAtOpen={sheet.freshAtOpen} claimed={sheet.claimed} onClaim={claim} />
         ) : sheet?.type === 'objekt' ? (
           objectSheet !== null && (
             <ObjectSheet

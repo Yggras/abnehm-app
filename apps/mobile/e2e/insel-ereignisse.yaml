@@ -42,7 +42,7 @@ name: Insel-Ereignisse und Besucher mit Wunsch
 - assertVisible: "Neu auf der Insel"
 - assertVisible: "Wünscht sich: Sitzbank"
 - assertVisible: "Bringt den Bauplan Brunnen mit"
-- assertNotVisible: "Belohnung abholen"
+- assertNotVisible: "Belohnung von Igel Ilse abholen"
 - takeScreenshot: ereignisse-1-neu
 - runFlow:
     when:
@@ -82,10 +82,11 @@ name: Insel-Ereignisse und Besucher mit Wunsch
     visible: "Offene Wünsche"
     timeout: 10000
 - assertNotVisible: "Neu auf der Insel"
+# Der Knopf trägt für Bedienungshilfen den Namen des Besuchers; Maestro findet ihn darüber.
 - assertVisible: "Kein Zeitdruck.*"
-- assertVisible: "Belohnung abholen"
+- assertVisible: "Belohnung von Igel Ilse abholen"
 - takeScreenshot: ereignisse-2-erfuellbar
-- tapOn: "Belohnung abholen"
+- tapOn: "Belohnung von Igel Ilse abholen"
 - extendedWaitUntil:
     visible: "Neuer Bauplan: Brunnen"
     timeout: 10000

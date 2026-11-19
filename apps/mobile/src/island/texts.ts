@@ -133,6 +133,9 @@ export const eventTexts = {
     reward.type === 'bauplan' ? `Bringt den Bauplan ${reward.name} mit` : `Bringt ${reward.name} für dein Lager mit`,
   howTo: (blueprint: string) => `Wenn du den Bauplan ${blueprint} baust, kannst du die Belohnung abholen.`,
   claim: 'Belohnung abholen',
+  /** Bestätigung im Sheet nach dem Abholen. */
+  claimed: (reward: Readonly<{ type: 'bauplan' | 'deko'; name: string }>) =>
+    reward.type === 'bauplan' ? `Neuer Bauplan: ${reward.name}` : `${reward.name} liegt jetzt in deinem Lager`,
   /** Zugänglicher Name von „Belohnung abholen“ in einer Karte. */
   claimFor: (visitor: string) => `Belohnung von ${visitor} abholen`,
 };

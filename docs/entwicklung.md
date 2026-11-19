@@ -399,7 +399,7 @@ Spezifikation 4, Abschnitt 9; #202. Bisher gibt es nur den Ereignistyp **Besuche
 - **Oberfläche** (`EventsSheet.tsx`):
   - „Ereignisse“ in der Leiste und die Route `momo` mit `view: 'ereignisse'` öffnen das Sheet in voller Höhe.
   - Was beim Öffnen neu war, gilt als gesehen und steht bis zum Schließen unter „Neu auf der Insel“. „Offene Wünsche“ mit „Kein Zeitdruck“ zeigt jeden noch nicht abgeholten Wunsch als Karte, neue eingeschlossen.
-  - „Belohnung abholen“ erscheint nur bei erfülltem Wunsch. Danach meldet die App „Neuer Bauplan: ‹Name›“ bzw. „‹Name› liegt jetzt in deinem Lager“.
+  - „Belohnung abholen“ erscheint nur bei erfülltem Wunsch. Danach bestätigt das Sheet oben „Neuer Bauplan: ‹Name›“ bzw. „‹Name› liegt jetzt in deinem Lager“. Eine Meldung des Meldungs-Hosts läge auf dem Gerät hinter dem nativen Sheet (Gerätelauf iPhone SE, #202).
   - Tiere, Besucher-Baupläne und Deko zeichnet `art.ts`. Motive und Sätze außer den Begriffen aus Abschnitt 9 sind Designwerte aus #202, nicht belegt.
 - **Tests:**
   - **Regeln:** `packages/game-rules/test/events.test.ts` mit Wahrheitstabellen für Deckel und Grenze von 4 offenen.

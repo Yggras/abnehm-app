@@ -2,7 +2,7 @@ import type { EntityId } from '@abnehm/contracts/base';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { boxShadow, Button, color, radius, size, space, Text } from '../design';
-import type { VisitorWish } from './island-events';
+import type { ShownReward, VisitorWish } from './island-events';
 import { ObjectPreview } from './ObjectPreview';
 import { eventTexts } from './texts';
 
@@ -10,23 +10,34 @@ import { eventTexts } from './texts';
 // Leiste oder die Route `momo` mit `view: 'ereignisse'`. Oben „Neu auf der Insel“: wer seit dem letzten
 // Ansehen angekommen ist, also was beim Öffnen neu war. Darunter „Offene Wünsche“ mit „Kein Zeitdruck“ und
 // einer Karte je Wunsch, neue eingeschlossen. Jede Karte zeigt den Besucher, seinen Wunsch und die
-// Belohnung; ist der Wunsch erfüllt, holt „Belohnung abholen“ sie ab. Ereignisse verfallen nie, es gibt
+// Belohnung; ist der Wunsch erfüllt, holt „Belohnung abholen“ sie ab. Was abgeholt ist, bestätigt das Sheet
+// oben selbst, denn eine Meldung des Meldungs-Hosts läge auf dem Gerät hinter dem nativen Sheet. Ereignisse verfallen nie, es gibt
 // keine Frist und keinen Zähler. Wie Bau-Sheet und Lager in voller Höhe mit scrollender Liste.
 
 export type EventsSheetProps = Readonly<{
   events: readonly VisitorWish[];
   /** Ereignisstände, die beim Öffnen des Sheets neu waren; sie bleiben bis zum Schließen oben. */
   freshAtOpen: ReadonlySet<EntityId>;
+  /** Seit dem Öffnen abgeholte Belohnungen; sie stehen als Bestätigung oben. */
+  claimed: readonly ShownReward[];
   onClaim(event: VisitorWish): void;
 }>;
 
-export function EventsSheet({ events, freshAtOpen, onClaim }: EventsSheetProps) {
+export function EventsSheet({ events, freshAtOpen, claimed, onClaim }: EventsSheetProps) {
   const fresh = events.filter((event) => freshAtOpen.has(event.stateId));
   return (
     <View style={styles.sheet}>
       <Text variant="title" accessibilityRole="header">
         {eventTexts.title}
       </Text>
+      {claimed.map((reward, index) => (
+        <View key={`${reward.key}-${index}`} style={styles.claimed} accessibilityLiveRegion="polite">
+          <ObjectPreview art={reward.art} />
+          <Text variant="bodyStrong" style={styles.text}>
+            {eventTexts.claimed(reward)}
+          </Text>
+        </View>
+      ))}
       {events.length === 0 ? (
         <Text tone="inkMuted">{eventTexts.empty}</Text>
       ) : (
@@ -103,6 +114,14 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   arrival: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  claimed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    padding: space[3],
+    borderRadius: radius.md,
+    backgroundColor: color.surfaceSunken,
+  },
   reward: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
   text: { flexGrow: 1, flexShrink: 1, flexBasis: 120, gap: space[1] },
 });

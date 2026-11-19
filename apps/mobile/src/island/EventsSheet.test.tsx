@@ -72,7 +72,8 @@ test('Tracer Bullet: Der neue Besuch steht unter „Neu auf der Insel“; nach d
   expect(screen.getAllByText('Igel Ilse ist zu Besuch')).toHaveLength(1);
   await user.press(screen.getByRole('button', { name: 'Belohnung von Igel Ilse abholen' }));
 
-  expect(within(screen.getByTestId('message-slot')).getByText('Neuer Bauplan: Brunnen')).toBeOnTheScreen();
+  // Die Bestätigung steht im Sheet; eine Meldung läge auf dem Gerät dahinter.
+  expect(within(screen.getByTestId('sheet')).getByText('Neuer Bauplan: Brunnen')).toBeOnTheScreen();
   expect(screen.getByText('Gerade wartet niemand auf dich. Besucher kommen ab und zu vorbei.')).toBeOnTheScreen();
   expect(commandTypes(world)).toEqual(['markEventsSeen', 'buildObject', 'claimEventReward']);
 
@@ -95,7 +96,7 @@ test('Deko als Belohnung liegt danach im Lager, wenn kein Besucher-Bauplan der R
   expect(screen.getByText('Bringt Muschel für dein Lager mit')).toBeOnTheScreen();
   await user.press(screen.getByRole('button', { name: 'Belohnung von Fuchs Fridolin abholen' }));
 
-  expect(within(screen.getByTestId('message-slot')).getByText('Muschel liegt jetzt in deinem Lager')).toBeOnTheScreen();
+  expect(within(screen.getByTestId('sheet')).getByText('Muschel liegt jetzt in deinem Lager')).toBeOnTheScreen();
   await openView('lager');
   expect(within(screen.getByTestId('lager')).getByText('Muschel')).toBeOnTheScreen();
 });
