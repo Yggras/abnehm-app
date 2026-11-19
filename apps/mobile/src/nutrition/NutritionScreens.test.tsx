@@ -586,7 +586,7 @@ describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
     await user.press(screen.getByRole('button', { name: oats }));
 
     expect(within(sheet()).getByRole('header', { name: 'Hafer Flocken' })).toBeOnTheScreen();
-    expect(within(sheet()).getByText('Frühstück · Heute, Mittwoch, 14.10.2026')).toBeOnTheScreen();
+    expect(within(sheet()).getByText('Frühstück · Heute')).toBeOnTheScreen();
     expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('60');
     expect(within(within(sheet()).getByTestId('einheiten')).getByRole('radio', { name: 'g' })).toBeChecked();
     expect(within(within(sheet()).getByTestId('mahlzeiten')).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual([

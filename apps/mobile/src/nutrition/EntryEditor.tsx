@@ -9,6 +9,7 @@ import type { EntryDetail } from './day-log';
 import type { EntryChange } from './entries';
 import {
   captureMethodNames,
+  captureTargetText,
   kcalText,
   logDayText,
   macrosText,
@@ -21,7 +22,7 @@ import {
 
 // Mengenansicht eines bestehenden Eintrags (Spezifikation 2, Abschnitt 6): dieselbe Mengenansicht wie beim
 // Hinzufügen, dazu Mahlzeit, aufklappbare Details und „Löschen“. Der Tag eines bestehenden Eintrags ist
-// nicht änderbar und steht nur in den Details; Duplizieren gibt es nicht. Eine neue Menge rechnet das Modul
+// nicht änderbar: Kopf und Details nennen ihn nur; Duplizieren gibt es nicht. Eine neue Menge rechnet das Modul
 // aus demselben Snapshot.
 
 const texts = nutritionTexts.edit;
@@ -65,7 +66,7 @@ export function EntryEditor({
               {snapshot.name}
             </Text>
             <Text variant="caption" tone="inkMuted">
-              {`${mealNames[entry.meal]} · ${logDayText(entry.localDate, today)}`}
+              {captureTargetText(entry.meal, entry.localDate, today)}
             </Text>
           </View>
           <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />

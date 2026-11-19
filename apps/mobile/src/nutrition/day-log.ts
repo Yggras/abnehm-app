@@ -10,7 +10,7 @@ import {
 
 import type { ReadContext } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
-import { entriesOfDay, readEntryContent } from './entry-repository';
+import { entriesOfDay, readOwnLivingEntry } from './entry-repository';
 
 // Abfragen Tagesprotokoll und Tagesaufnahme (Spezifikation 2, Abschnitte 2 und 6): die nicht
 // gelöschten Einträge eines lokalen Tags, gegliedert nach den vier Mahlzeiten in fester Reihenfolge,
@@ -101,9 +101,8 @@ export type EntryDetail = Readonly<{
 
 /** Ein nicht gelöschter Eintrag der eigenen Person; sonst `null`. */
 export function readEntryDetail(tx: ReadContext, entryId: EntityId): EntryDetail | null {
-  const person = readOwnPerson(tx);
-  const stored = readEntryContent(tx, entryId);
-  if (person === undefined || stored === undefined || stored.deletedAt !== null || stored.personId !== person.id) return null;
+  const stored = readOwnLivingEntry(tx, entryId);
+  if (stored === undefined) return null;
   const { content } = stored;
   return {
     id: entryId,

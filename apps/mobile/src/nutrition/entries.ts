@@ -16,7 +16,7 @@ import {
 import type { TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
 import { nutritionEntryEntity } from './entry-entity';
-import { readEntry, readEntryContent, tombstoneEntry, writeEntry, type StoredEntryContent } from './entry-repository';
+import { readEntry, readEntryContent, readOwnLivingEntry, tombstoneEntry, writeEntry, type StoredEntryContent } from './entry-repository';
 import type { NutritionDependencies } from './nutrition';
 
 // Befehle des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 6). Sie laufen in der Transaktion des
@@ -215,9 +215,7 @@ function persistEntry(
 
 /** Ein nicht gelöschter Eintrag der eigenen Person; sonst `InvalidNutritionInputError`. */
 function requireLiving(tx: TransactionContext, entryId: EntityId): StoredEntryContent {
-  const existing = readEntryContent(tx, entryId);
-  if (existing === undefined || existing.deletedAt !== null || existing.personId !== requireOwnPerson(tx).id) {
-    throw new InvalidNutritionInputError(`Eintrag ${entryId} ist unbekannt, gelöscht oder nicht der eigene`);
-  }
+  const existing = readOwnLivingEntry(tx, entryId);
+  if (existing === undefined) throw new InvalidNutritionInputError(`Eintrag ${entryId} ist unbekannt, gelöscht oder nicht der eigene`);
   return existing;
 }

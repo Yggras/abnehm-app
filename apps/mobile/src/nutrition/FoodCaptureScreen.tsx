@@ -53,16 +53,17 @@ export function FoodCaptureScreen({ target }: RouteScreenProps<'capture.food'>) 
 
 function AddFood({ meal, localDate, today }: { meal: MealKey; localDate: LocalDate; today: LocalDate }) {
   const nutrition = useNutrition();
+  const target = captureTargetText(meal, localDate, today);
   return (
     <ScreenFrame title={nutritionTexts.capture} presentation="modal">
       <Text variant="label" tone="inkMuted">
-        {captureTargetText(meal, localDate, today)}
+        {target}
       </Text>
       {nutrition === null ? (
         <CaptureSkeleton />
       ) : (
         <BlsCatalogProvider>
-          <AddSlots nutrition={nutrition} meal={meal} localDate={localDate} target={captureTargetText(meal, localDate, today)} />
+          <AddSlots nutrition={nutrition} meal={meal} localDate={localDate} target={target} />
         </BlsCatalogProvider>
       )}
     </ScreenFrame>

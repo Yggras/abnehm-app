@@ -4,6 +4,7 @@ import { EntityId, LocalDate, MealKey, type Instant, type ServerVersion } from '
 import { CaptureMethod, DisplayUnit, NutritionEntryUpsert, SnapshotSource, type FoodRef, type NutritionEntryRecord } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
+import { readOwnPerson } from '../local-db/person-header';
 import { nutritionEntry } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 
@@ -123,6 +124,13 @@ function storedOf(row: { personId: string; localDate: string; deletedAt: string 
 
 /** Ein gespeicherter Eintrag mit seinem vollständigen fachlichen Inhalt, wie ihn die Outbox überträgt. */
 export type StoredEntryContent = StoredEntry & Readonly<{ content: NutritionEntryUpsert }>;
+
+/** Ein nicht gelöschter Eintrag der eigenen Person mit vollständigem Inhalt; sonst `undefined`. */
+export function readOwnLivingEntry(tx: ReadContext, entityId: EntityId): StoredEntryContent | undefined {
+  const own = readOwnPerson(tx);
+  const stored = readEntryContent(tx, entityId);
+  return own !== undefined && stored !== undefined && stored.deletedAt === null && stored.personId === own.id ? stored : undefined;
+}
 
 /** Der vollständige Inhalt eines Eintrags; Ändern und „Rückgängig“ nach dem Löschen bauen darauf auf. */
 export function readEntryContent(tx: ReadContext, entityId: EntityId): StoredEntryContent | undefined {

@@ -82,7 +82,7 @@ export type Nutrition = Readonly<{
    */
   observeDayLog(localDate: LocalDate, listener: (log: DayLog | null) => void): () => void;
   /** Ein nicht gelöschter eigener Eintrag für die Mengenansicht; sonst `null`. */
-  entry(entryId: EntityId): EntryDetail | null;
+  entryDetail(entryId: EntityId): EntryDetail | null;
   /**
    * Vorbelegung der Mengenprüfung (Spezifikation 2, Abschnitt 6): die letzte Menge und Einheit dieses
    * Lebensmittels aus den eigenen Einträgen, sonst eine bekannte Portion, sonst 100 g bzw. 100 ml.
@@ -127,7 +127,7 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
     undo: (undoToken) => tokens.undo(undoToken),
     expire: (undoToken) => tokens.expire(undoToken),
     observeDayLog: (localDate, listener) => database.observe((tx) => readDayLog(tx, localDate), listener),
-    entry: (entryId) => database.read((tx) => readEntryDetail(tx, entryId)),
+    entryDetail: (entryId) => database.read((tx) => readEntryDetail(tx, entryId)),
     prefillAmount(foodRef, snapshot) {
       const latest = database.read((tx) => latestAmountOf(tx, EntityId.parse(requireOwnPerson(tx).id), foodRef));
       // Die letzte Menge gilt nur, wenn ihre Einheit im aktuellen Snapshot noch bekannt ist.

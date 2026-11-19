@@ -404,7 +404,7 @@ describe('Eintrag ansehen', () => {
     const context = await setup();
     const id = added(context, { ...breakfast, localDate: yesterday });
 
-    expect(context.nutrition.entry(id)).toEqual({
+    expect(context.nutrition.entryDetail(id)).toEqual({
       id,
       localDate: '2026-10-13',
       meal: 'fruehstueck',
@@ -422,8 +422,8 @@ describe('Eintrag ansehen', () => {
     const id = added(context);
     context.nutrition.deleteEntry(id);
 
-    expect(context.nutrition.entry(id)).toBeNull();
-    expect(context.nutrition.entry(EntityId.parse(randomUUID()))).toBeNull();
+    expect(context.nutrition.entryDetail(id)).toBeNull();
+    expect(context.nutrition.entryDetail(EntityId.parse(randomUUID()))).toBeNull();
   });
 });
 
@@ -525,7 +525,7 @@ describe('Eintrag ändern', () => {
 
     expect(() => context.nutrition.updateEntry(id, { meal: 'snacks', displayUnit: 'g', displayAmountMilli: 50_000 })).toThrow(InvalidNutritionInputError);
     expect(() => context.nutrition.deleteEntry(id)).toThrow(InvalidNutritionInputError);
-    expect(context.nutrition.entry(id)).toBeNull();
+    expect(context.nutrition.entryDetail(id)).toBeNull();
     expect(context.rows()).toEqual(before.rows);
     expect(context.operations()).toEqual(before.operations);
   });

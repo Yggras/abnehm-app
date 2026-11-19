@@ -79,7 +79,7 @@ function DayLogView({ nutrition, log, today, onDay }: { nutrition: Nutrition; lo
     <>
       <DayHead log={log} today={today} onDay={onDay} />
       {log.meals.map((meal) => (
-        <MealSection key={meal.meal} meal={meal} localDate={log.localDate} onEntry={(id) => setEditing(nutrition.entry(id))} />
+        <MealSection key={meal.meal} meal={meal} localDate={log.localDate} onEntry={(id) => setEditing(nutrition.entryDetail(id))} />
       ))}
       <Sheet visible={editing !== null} onClose={() => setEditing(null)} height="full">
         {editing === null ? null : (
