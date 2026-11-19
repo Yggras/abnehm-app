@@ -12,8 +12,11 @@ import { historyTexts } from './texts';
 /** Ein gemeinsames Ereignis mit sichtbarem Text, etwa „Momo ist geschlüpft“. */
 export type WirEvent = Readonly<{ id: string; occurredAt: Instant; icon: IconName; text: string }>;
 
-/** Eine Kalenderwoche des Verlaufs mit „Diese Woche“, „Letzte Woche“ oder „KW n“. */
-export type WeekGroup = Readonly<{ label: string; events: readonly WirEvent[] }>;
+/**
+ * Eine Kalenderwoche des Verlaufs mit „Diese Woche“, „Letzte Woche“ oder „KW n“. „KW n“ nennt kein Jahr; eindeutig
+ * ist die Woche erst über ihren Montag.
+ */
+export type WeekGroup = Readonly<{ monday: LocalDate; label: string; events: readonly WirEvent[] }>;
 
 /** „Neu bei euch“ zeigt die drei neuesten Ereignisse. */
 export const newsCount = 3;
@@ -48,6 +51,6 @@ export function historyOf(events: readonly WirEvent[], now: ClockReading): WeekG
   return [...groups].map(([monday, entries]) => {
     const weeksAgo = localDaysBetween(monday, thisWeek) / 7;
     const label = weeksAgo === 0 ? historyTexts.thisWeek : weeksAgo === 1 ? historyTexts.lastWeek : historyTexts.week(isoWeekOf(monday));
-    return { label, events: entries };
+    return { monday, label, events: entries };
   });
 }

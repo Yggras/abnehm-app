@@ -7,6 +7,8 @@ import { indexCatalog, type CatalogEntryKind } from '@abnehm/game-rules/catalog'
 import { gameCatalog } from '@abnehm/game-rules/content';
 
 import type { IconName } from '../design/icon-shapes';
+import { shellTexts } from '../shell/texts';
+import { isTestArtifact } from '../test-artifact';
 import { clockTimeOf, dataAgeOf } from './partner-view';
 import { ageText, sharedEventTexts, sharedTexts, type Spoken } from './texts';
 import { historyOf, newestFirst, newsCount, type WeekGroup, type WirEvent } from './wir-events';
@@ -40,8 +42,11 @@ export type SharedCard = Readonly<{
 export type ShownEvent = WirEvent & Readonly<{ when: Spoken }>;
 
 export type WirShared =
-  /** Keine `WirContributionSource` angemeldet: in Test-Artefakten ein Platzhalter (Spezifikation 0, Abschnitt 6). */
-  | Readonly<{ type: 'fehlt' }>
+  /**
+   * Keine `WirContributionSource` angemeldet: in Test-Artefakten ein Platzhalter, im Release ein
+   * Integrationsfehler (Spezifikation 0, Abschnitt 6).
+   */
+  | Readonly<{ type: 'missing' }>
   | Readonly<{ type: 'loading' }>
   | Readonly<{ type: 'error'; retryAction: UiActionIntent | undefined }>
   | Readonly<{
@@ -72,7 +77,11 @@ function validUntil(at: Instant | undefined, now: ClockReading): string | null {
 
 const dayMs = 24 * 60 * 60_000;
 
-/** Restlaufzeit in angefangenen Tagen; nach dem Ende entfällt sie. */
+/**
+ * Restlaufzeit in angefangenen 24-Stunden-Blöcken, nicht in Kalendertagen: Eine Challenge läuft 7 × 24 Stunden ab
+ * der Annahme, unabhängig von Zeitumstellungen (`challengeEndsAt` in `@abnehm/game-rules/challenges`). Nach dem
+ * Ende entfällt sie.
+ */
 function remaining(endsAt: Instant | undefined, now: ClockReading): string | null {
   if (endsAt === undefined) return null;
   const ms = Date.parse(endsAt) - Date.parse(now.instant);
@@ -127,10 +136,23 @@ const sharedEventIcons: Readonly<Record<SharedEventType, IconName>> = {
   challenge_beendet: 'flag',
 };
 
-/** Ein Spiel-`shared_event` als gemeinsames Ereignis; der Text entsteht aus dem `messageKey`. */
+/** Ein `messageKey` ohne Text im Katalog: im Release ein Integrationsfehler wie beim Meldungs-Host. */
+export class MissingSharedEventTextError extends Error {
+  constructor(messageKey: string) {
+    super(`Integrationsfehler: Text für das gemeinsame Ereignis „${messageKey}“ fehlt.`);
+    this.name = 'MissingSharedEventTextError';
+  }
+}
+
+/**
+ * Ein Spiel-`shared_event` als gemeinsames Ereignis; der Text entsteht aus dem `messageKey` (Spezifikation 0,
+ * Abschnitt 2). Fehlt er, zeigen Test-Artefakte „Text fehlt: …“, ein Release wirft.
+ */
 export function gameEventOf({ id, occurredAt, eventType, messageKey }: Of<'shared_event'>): WirEvent {
   const texts: Readonly<Record<string, string>> = sharedEventTexts;
-  return { id, occurredAt, icon: sharedEventIcons[eventType], text: texts[messageKey] ?? sharedEventTexts[`neu_bei_euch.${eventType}`] };
+  const text = Object.prototype.hasOwnProperty.call(texts, messageKey) ? texts[messageKey] : undefined;
+  if (text === undefined && !isTestArtifact()) throw new MissingSharedEventTextError(messageKey);
+  return { id, occurredAt, icon: sharedEventIcons[eventType], text: text ?? shellTexts.missingMessageText(messageKey) };
 }
 
 const byNewest = (a: WirContribution, b: WirContribution) => Date.parse(b.dataAsOf) - Date.parse(a.dataAsOf);
@@ -140,7 +162,7 @@ const byNewest = (a: WirContribution, b: WirContribution) => Date.parse(b.dataAs
  * gemeinsamen Ereignissen anderer Quellen. Veraltete Beiträge zeigen ihren Inhalt; `empty` heißt nichts zu zeigen.
  */
 export function wirSharedOf(state: ContributionState<WirContribution[]> | null, otherEvents: readonly WirEvent[], now: ClockReading): WirShared {
-  if (state === null) return { type: 'fehlt' };
+  if (state === null) return { type: 'missing' };
   switch (state.type) {
     case 'loading':
       return { type: 'loading' };
@@ -149,16 +171,36 @@ export function wirSharedOf(state: ContributionState<WirContribution[]> | null, 
     case 'empty':
     case 'ready':
     case 'stale': {
-      const data = state.type === 'empty' ? [] : [...state.data].sort(byNewest);
-      const events = newestFirst([...data.filter((entry) => entry.type === 'shared_event').map(gameEventOf), ...otherEvents]);
+      const responses: ResponseCard[] = [];
+      const challenges: SharedCard[] = [];
+      const projects: SharedCard[] = [];
+      const events: WirEvent[] = [...otherEvents];
+      for (const entry of state.type === 'empty' ? [] : [...state.data].sort(byNewest)) {
+        switch (entry.type) {
+          case 'pending_shared_action':
+            responses.push(responseOf(entry, now));
+            break;
+          case 'challenge':
+            if (needsResponse(entry)) responses.push(responseOf(entry, now));
+            else challenges.push(challengeOf(entry, now));
+            break;
+          case 'community_project':
+            projects.push(projectOf(entry));
+            break;
+          case 'shared_event':
+            events.push(gameEventOf(entry));
+            break;
+        }
+      }
+      const sorted = newestFirst(events);
       const shown = (event: WirEvent): ShownEvent => ({ ...event, when: ageText(dataAgeOf(event.occurredAt, now)) });
       return {
         type: 'ready',
-        responses: data.filter(needsResponse).map((entry) => responseOf(entry as Of<'challenge'> | Of<'pending_shared_action'>, now)),
-        challenges: data.filter((entry) => entry.type === 'challenge' && !needsResponse(entry)).map((entry) => challengeOf(entry as Of<'challenge'>, now)),
-        projects: data.filter((entry) => entry.type === 'community_project').map(projectOf),
-        news: events.slice(0, newsCount).map(shown),
-        history: historyOf(events, now).map((group) => ({ ...group, events: group.events.map(shown) })),
+        responses,
+        challenges,
+        projects,
+        news: sorted.slice(0, newsCount).map(shown),
+        history: historyOf(sorted, now).map((group) => ({ ...group, events: group.events.map(shown) })),
       };
     }
   }

@@ -127,7 +127,9 @@ function followedReading<R, V>(
 /**
  * Gemeinsame Bereiche von „Wir“ aus den Spiel-Beiträgen: neu bei jedem Zustand der Quelle und im Minutentakt,
  * weil „vor X Min.“, Restlaufzeit und die Kalenderwoche auch ohne neuen Beitrag weiterlaufen. Weitere
- * gemeinsame Ereignisse, etwa Anfeuerungen (#126), kommen als zweites Argument von `wirSharedOf` hinzu.
+ * gemeinsame Ereignisse, etwa Anfeuerungen (#126), reicht diese Funktion als zweites Argument an `wirSharedOf`
+ * weiter: Dafür abonniert sie zusätzlich deren Quelle, etwa eine Lesung der Kontodatenbank. Ableitung und
+ * Bildschirm bleiben dabei unverändert.
  */
 function followedShared({ wirContributions, clock, refresh }: Pick<PartnerDependencies, 'wirContributions' | 'clock' | 'refresh'>): Source<WirShared> {
   return {

@@ -50,6 +50,18 @@ describe('historyOf', () => {
     expect(grouped(late, '2027-01-06T12:00:00.000Z', TimeZone.parse('America/New_York'))).toEqual([['Letzte Woche', ['nacht']]]);
   });
 
+  it('trennt gleich beschriftete Wochen verschiedener Jahre über ihren Montag', () => {
+    // 15.10.2025 und 14.10.2026 liegen beide in KW 42.
+    const groups = historyOf(
+      [event('2025', '2025-10-15T10:00:00.000Z'), event('2026', '2026-10-14T10:00:00.000Z')],
+      readingOf(Instant.parse('2026-10-28T12:00:00.000Z'), berlin),
+    );
+    expect(groups.map(({ monday, label, events }) => [monday, label, events.map((entry) => entry.id)])).toEqual([
+      ['2026-10-12', 'KW 42', ['2026']],
+      ['2025-10-13', 'KW 42', ['2025']],
+    ]);
+  });
+
   it('hat ohne Ereignisse keine Gruppe', () => {
     expect(grouped([], '2027-01-06T12:00:00.000Z')).toEqual([]);
   });

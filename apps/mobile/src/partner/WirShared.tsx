@@ -12,6 +12,14 @@ import type { ResponseCard, SharedCard, ShownEvent, WirShared } from './wir-shar
 // `SharedSections` unter Partnerübersicht und Anfeuern: aktive gemeinsame Challenge, aktives
 // Gemeinschaftsprojekt, „Neu bei euch“. Ein Bereich ohne Inhalt entfällt still.
 
+/** „Wir“ ist gekoppelt, aber keine `WirContributionSource` angemeldet: im Release ein Integrationsfehler. */
+export class MissingWirContributionError extends Error {
+  constructor() {
+    super('Integrationsfehler: Die Beiträge von „Momo, Insel & Challenges“ für „Wir“ fehlen.');
+    this.name = 'MissingWirContributionError';
+  }
+}
+
 /** Antwortbedürftige Vorgänge: kompakte Karten mit 2-dp-Rahmen in `partner`, neueste zuerst. */
 export function Responses({ shared, partnerName }: { shared: WirShared; partnerName: string }) {
   if (shared.type !== 'ready') return null;
@@ -45,17 +53,19 @@ export function SharedSections({ shared }: { shared: WirShared }) {
   switch (shared.type) {
     case 'loading':
       return null;
-    case 'fehlt':
+    case 'missing':
       // Im Release ist ein fehlender Beitrag ein Integrationsfehler, kein stiller Platzhalter (Spezifikation 0,
-      // Abschnitt 6); dort lädt der Bereich wie auf „Heute“, bis die App-Sitzung die Quelle anmeldet.
-      return isTestArtifact() ? (
+      // Abschnitt 6). Die App-Sitzung meldet die Quelle vor dem Partnerbereich an und löst sie im selben Durchlauf
+      // wieder, ein gekoppeltes „Wir“ ohne Quelle kommt also nur bei einem Integrationsfehler vor.
+      if (!isTestArtifact()) throw new MissingWirContributionError();
+      return (
         <View testID="wir-spiel-platzhalter" style={styles.group}>
           <Notice tone="neutral" icon="hammer" text={shellTexts.placeholder} />
           <Text variant="caption" tone="inkMuted">
             {shellTexts.placeholderOwner(ownerName('momo'))}
           </Text>
         </View>
-      ) : null;
+      );
     case 'error': {
       const retry = shared.retryAction;
       return (
@@ -122,7 +132,7 @@ function News({ shared }: { shared: Extract<WirShared, { type: 'ready' }> }) {
             {sharedTexts.news}
           </Text>
           {shared.history.map((week) => (
-            <View key={week.label} testID="wir-verlauf-woche" style={styles.tight}>
+            <View key={week.monday} testID="wir-verlauf-woche" style={styles.tight}>
               <Text variant="label" tone="inkMuted" accessibilityRole="header">
                 {week.label}
               </Text>
