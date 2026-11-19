@@ -19,7 +19,7 @@ import type { Nutrition } from './nutrition';
 import { editableBaseOf, emptyOwnFoodDraft, ownFoodDraftOf, type OwnFoodDraft } from './own-food-input';
 import type { OwnFoodBase } from './own-foods';
 import { OwnFoodForm } from './OwnFoodForm';
-import { dateText, markNames, mealNames, nutritionTexts } from './texts';
+import { captureTargetText, markNames, nutritionTexts } from './texts';
 import { useLocalToday } from './use-day-log';
 
 // Hinzufügen-Bildschirm (Spezifikation 2, Abschnitt 6) für die Route `capture.food`: feste Plätze in
@@ -56,13 +56,13 @@ function AddFood({ meal, localDate, today }: { meal: MealKey; localDate: LocalDa
   return (
     <ScreenFrame title={nutritionTexts.capture} presentation="modal">
       <Text variant="label" tone="inkMuted">
-        {`${mealNames[meal]} · ${localDate === today ? nutritionTexts.today : dateText(localDate)}`}
+        {captureTargetText(meal, localDate, today)}
       </Text>
       {nutrition === null ? (
         <CaptureSkeleton />
       ) : (
         <BlsCatalogProvider>
-          <AddSlots nutrition={nutrition} meal={meal} localDate={localDate} />
+          <AddSlots nutrition={nutrition} meal={meal} localDate={localDate} target={captureTargetText(meal, localDate, today)} />
         </BlsCatalogProvider>
       )}
     </ScreenFrame>
@@ -82,7 +82,18 @@ type FormStep = Readonly<{
 
 const sameValues = (a: FoodValues, b: FoodValues) => JSON.stringify(foodValuesOf(a)) === JSON.stringify(foodValuesOf(b));
 
-function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: MealKey; localDate: LocalDate }) {
+function AddSlots({
+  nutrition,
+  meal,
+  localDate,
+  target,
+}: {
+  nutrition: Nutrition;
+  meal: MealKey;
+  localDate: LocalDate;
+  /** Mahlzeit und Tag, die auch der Mengenschritt nennt. */
+  target: string;
+}) {
   const search = useFoodSearch(nutrition);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Selection | null>(null);
@@ -206,6 +217,7 @@ function AddSlots({ nutrition, meal, localDate }: { nutrition: Nutrition; meal: 
           <AmountReview
             key={`${selected.ref.type}:${selected.ref.key}:${ownFoodChanges}`}
             selection={selected}
+            target={target}
             nutrition={nutrition}
             onClose={() => setSelected(null)}
             onAdd={(displayUnit, displayAmountMilli) => add(selected, displayUnit, displayAmountMilli)}

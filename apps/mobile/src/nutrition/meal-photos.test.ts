@@ -234,9 +234,14 @@ describe('Fotoeintrag löschen und „Rückgängig“ (#156)', () => {
     const restored = read().entries.find((entry) => entry.deletedAt === null && entry.snapshotName === 'Bratkartoffeln');
     expect(restored).toMatchObject({ captureMethod: 'foto', snapshotSource: 'ki', mealPhotoId: photos[0]!.id });
     expect(restored!.id).not.toBe(potatoEntry);
-    expect(dayLog()!.meals[1]!.entries.map(({ name, fromPhoto, aiEstimate }) => ({ name, fromPhoto, aiEstimate }))).toEqual([
-      { name: 'Hühnerei gebraten', fromPhoto: true, aiEstimate: false },
-      { name: 'Bratkartoffeln', fromPhoto: true, aiEstimate: true },
-    ]);
+    // Die Testuhr steht still und die IDs sind zufällig: Bei gleicher Zeit ist die Reihenfolge beliebig.
+    const shown = dayLog()!.meals[1]!.entries.map(({ name, fromPhoto, aiEstimate }) => ({ name, fromPhoto, aiEstimate }));
+    expect(shown).toHaveLength(2);
+    expect(shown).toEqual(
+      expect.arrayContaining([
+        { name: 'Hühnerei gebraten', fromPhoto: true, aiEstimate: false },
+        { name: 'Bratkartoffeln', fromPhoto: true, aiEstimate: true },
+      ]),
+    );
   });
 });

@@ -99,11 +99,26 @@ export function referenceText(snapshot: Pick<NutritionSnapshot, 'baseUnit' | 're
   return `${(snapshot.referenceAmount / baseAmountPerUnit[snapshot.baseUnit]).toLocaleString('de-DE', { maximumFractionDigits: 3 })} ${snapshot.baseUnit}`;
 }
 
-/** Tag im Protokoll: „Heute“, „Gestern“ oder Wochentag und Datum. */
+/**
+ * Tag im Protokoll in zwei Teilen: `day` ist „Heute“, „Gestern“ oder der Wochentag, `date` der Rest, etwa
+ * „Dienstag, 13.10.2026“ bzw. „12.10.2026“. Der Tageskopf zeigt `day` kräftig und `date` gedämpft darunter.
+ */
+export function logDayParts(localDate: LocalDate, today: LocalDate): { day: string; date: string } {
+  const numeric = localDate.split('-').reverse().join('.');
+  if (localDate === today) return { day: nutritionTexts.today, date: dateText(localDate) };
+  if (localDateAfter(localDate, 1) === today) return { day: 'Gestern', date: dateText(localDate) };
+  return { day: weekdays[weekdayOf(localDate)], date: numeric };
+}
+
+/** Tag im Protokoll in einer Zeile: „Heute, Mittwoch, 14.10.2026“, „Gestern, …“ oder Wochentag und Datum. */
 export function logDayText(localDate: LocalDate, today: LocalDate): string {
-  if (localDate === today) return `Heute, ${dateText(localDate)}`;
-  if (localDateAfter(localDate, 1) === today) return `Gestern, ${dateText(localDate)}`;
-  return dateText(localDate);
+  const { day, date } = logDayParts(localDate, today);
+  return `${day}, ${date}`;
+}
+
+/** Ziel beim Erfassen: Mahlzeit und Tag, heute kurz („Abendessen · Heute“), sonst wie im Protokoll. */
+export function captureTargetText(meal: MealKey, localDate: LocalDate, today: LocalDate): string {
+  return `${mealNames[meal]} · ${localDate === today ? nutritionTexts.today : logDayText(localDate, today)}`;
 }
 
 export const markNames: Readonly<Record<SearchMark, string>> = { favorit: 'Favorit', zuletzt: 'Zuletzt', eigen: 'Eigen', produkt: 'Produkt', bls: 'BLS' };

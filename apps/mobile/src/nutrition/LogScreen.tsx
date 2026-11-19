@@ -14,7 +14,7 @@ import type { EntryChange } from './entries';
 import { EntryEditor } from './EntryEditor';
 import type { Nutrition } from './nutrition';
 import { useDayLog, useLocalToday } from './use-day-log';
-import { amountText, kcalText, logDayText, macrosText, mealNames, nutritionTexts } from './texts';
+import { amountText, kcalText, logDayParts, logDayText, macrosText, mealNames, nutritionTexts } from './texts';
 
 // Tab „Protokoll“ (Spezifikation 2, Abschnitt 6): Kopf mit Tagesnavigation, Datum, Wochentag, Tagessumme und
 // aufklappbaren Tagesmakros, ohne Budgetvergleich (der bleibt auf „Heute“), darunter die vier Mahlzeiten mit
@@ -86,15 +86,20 @@ function DayLogView({ nutrition, log, today, onDay }: { nutrition: Nutrition; lo
 function DayHead({ log, today, onDay }: { log: DayLog; today: LocalDate; onDay: (day: LocalDate) => void }) {
   const [macrosShown, setMacrosShown] = useState(false);
   const isToday = log.localDate === today;
-  const day = logDayText(log.localDate, today);
+  const { day, date } = logDayParts(log.localDate, today);
   return (
     <Card>
       <View style={styles.head}>
         <View style={styles.dayRow}>
           <IconButton icon="back" accessibilityLabel={nutritionTexts.previousDay} onPress={() => onDay(localDateAfter(log.localDate, -1))} />
-          <Text variant="label" tone="inkMuted" accessibilityRole="header" style={styles.day}>
-            {day}
-          </Text>
+          <View accessible accessibilityRole="header" accessibilityLabel={logDayText(log.localDate, today)} style={styles.day}>
+            <Text variant="headline" style={styles.center}>
+              {day}
+            </Text>
+            <Text variant="label" tone="inkMuted" style={styles.center}>
+              {date}
+            </Text>
+          </View>
           <IconButton icon="chevron" accessibilityLabel={nutritionTexts.nextDay} disabled={isToday} onPress={() => onDay(localDateAfter(log.localDate, 1))} />
         </View>
         <View accessible accessibilityLabel={nutritionTexts.intake(isToday, log.intakeKcal)} style={styles.intake}>
@@ -190,7 +195,8 @@ function LogSkeleton() {
 const styles = StyleSheet.create({
   head: { gap: space[1] },
   dayRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  day: { flex: 1, textAlign: 'center' },
+  day: { flex: 1 },
+  center: { textAlign: 'center' },
   intake: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: space[2] },
   headActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   meal: { gap: space[2] },

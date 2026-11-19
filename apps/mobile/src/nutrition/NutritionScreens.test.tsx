@@ -92,7 +92,7 @@ describe('Protokoll', () => {
     await renderRouter(appDir, { initialUrl: '/log' });
 
     expect(await screen.findByRole('header', { name: 'Protokoll' })).toBeOnTheScreen();
-    expect(screen.getByText('Heute, Mittwoch, 14.10.2026')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Heute, Mittwoch, 14.10.2026' })).toBeOnTheScreen();
     // 60 g Hafer Flocken (208,8 kcal) und 150 g Apfel roh (87 kcal) aus `solo`.
     expect(screen.getByLabelText('Erfasst heute: 296 kcal')).toBeOnTheScreen();
     expect(screen.queryByText(/übrig|drüber|Budget/)).not.toBeOnTheScreen();
@@ -511,6 +511,11 @@ describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
 
     await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
     expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
+    // Der Tag steht kräftig, das Datum gedämpft darunter (Impeccable-Kritik: die Tageszeile war zu leise).
+    expect(within(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).getByText('Gestern').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fontSize: typeTokens.headline.fontSize })]),
+    );
+    expect(within(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).getByText('Dienstag, 13.10.2026')).toBeOnTheScreen();
     expect(screen.getByLabelText('Erfasst: 423 kcal')).toBeOnTheScreen();
     expect(within(meal('fruehstueck')).getByLabelText('Frühstück: Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt, 60 g, 220 kcal')).toBeOnTheScreen();
     expect(within(meal('abendessen')).getByText('Noch nichts eingetragen.')).toBeOnTheScreen();
@@ -518,6 +523,8 @@ describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
 
     await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
     expect(screen.getByRole('header', { name: 'Montag, 12.10.2026' })).toBeOnTheScreen();
+    expect(within(screen.getByRole('header', { name: 'Montag, 12.10.2026' })).getByText('Montag')).toBeOnTheScreen();
+    expect(within(screen.getByRole('header', { name: 'Montag, 12.10.2026' })).getByText('12.10.2026')).toBeOnTheScreen();
     expect(screen.getByLabelText('Erfasst: 0 kcal')).toBeOnTheScreen();
 
     await user.press(screen.getByRole('button', { name: 'Nächster Tag' }));
@@ -535,9 +542,11 @@ describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
 
     await user.press(screen.getByRole('button', { name: 'Abendessen hinzufügen' }));
     expect(screen).toHaveSearchParams({ meal: 'abendessen', localDate: '2026-10-13' });
-    expect(await screen.findByText('Abendessen · Dienstag, 13.10.2026')).toBeOnTheScreen();
+    // Suche und Mengenschritt nennen den Tag wie das Protokoll (Impeccable-Kritik).
+    expect(await screen.findByText('Abendessen · Gestern, Dienstag, 13.10.2026')).toBeOnTheScreen();
     await user.type(screen.getByLabelText('Lebensmittel suchen'), 'Apfelsaft');
     await user.press(screen.getByRole('button', { name: 'Apfelsaft, 44 kcal je 100 g, BLS' }));
+    expect(within(sheet()).getByText('Abendessen · Gestern, Dienstag, 13.10.2026')).toBeOnTheScreen();
     await user.press(within(sheet()).getByRole('button', { name: 'Hinzufügen' }));
 
     expect(screen).toHavePathname('/log');

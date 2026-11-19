@@ -29,6 +29,7 @@ export type Selection = Readonly<{
  */
 export function AmountReview({
   selection,
+  target,
   nutrition,
   onClose,
   onAdd,
@@ -36,6 +37,8 @@ export function AmountReview({
   onConversion,
 }: {
   selection: Selection;
+  /** Mahlzeit und Tag, etwa „Abendessen · Gestern, Dienstag, 13.10.2026“: Beim Nachtragen steht der Tag bis zum letzten Schritt. */
+  target: string;
   nutrition: Nutrition;
   onClose: () => void;
   onAdd: (displayUnit: DisplayUnit, displayAmountMilli: number) => void;
@@ -66,6 +69,9 @@ export function AmountReview({
         <View style={styles.grow}>
           <Text variant="title" accessibilityRole="header">
             {snapshot.name}
+          </Text>
+          <Text variant="caption" tone="inkMuted">
+            {target}
           </Text>
           <Text variant="caption" tone="inkMuted">
             {source}
