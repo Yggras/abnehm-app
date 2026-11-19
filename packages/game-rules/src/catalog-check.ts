@@ -14,6 +14,7 @@ import {
   type GameCatalog,
   type OwnedFieldKind,
 } from './catalog.ts';
+import { challengeDayCount, dailyGoalsPerDay } from './challenges.ts';
 import { fieldQuota } from './fields.ts';
 import { areaLevels } from './unlocks.ts';
 import { isWholeNumber } from './whole-number.ts';
@@ -155,10 +156,10 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
 }
 
 /**
- * Ein Maß ist erreichbar: eine feste Zahl von 1 bis 21 Tageszielen (drei je Tag) bzw. ein Bruchteil der
+ * Ein Maß ist erreichbar: eine feste Zahl von 1 bis 21 Tageszielen (drei je Tag, sieben Tage) bzw. ein Bruchteil der
  * geplanten Tage zwischen 0 und 1, sodass jeder geplante Tag zählt und nie mehr als geplant verlangt wird.
  */
 function measureFits(measure: ChallengeMeasure): boolean {
-  if (measure.type === 'tagesziele') return isWholeNumber(measure.required, 1) && measure.required <= 21;
+  if (measure.type === 'tagesziele') return isWholeNumber(measure.required, 1) && measure.required <= dailyGoalsPerDay * challengeDayCount;
   return isWholeNumber(measure.numerator, 1) && isWholeNumber(measure.denominator, 1) && measure.numerator <= measure.denominator;
 }

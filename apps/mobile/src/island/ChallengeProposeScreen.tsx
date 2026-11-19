@@ -11,7 +11,7 @@ import { useMessageHost } from '../shell/MessageHost';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { titleOf } from '../shell/texts';
 import { useChallengeShares, useChallengeStage, useGameService } from './app-game-service';
-import { openChallengeIdOf, type ChallengeStage } from './challenges';
+import type { ChallengeStage } from './challenges';
 import type { GameService } from './game-service';
 import { challengeTexts } from './texts';
 
@@ -39,8 +39,9 @@ function Content({ game, stage, shares }: { game: GameService | null; stage: Cha
     case 'ohne_kopplung':
       return <Notice tone="neutral" text={challengeTexts.solo} />;
     case 'vorschlag':
+      return <Elsewhere text={challengeTexts.alreadyProposed} challengeId={stage.proposal.challengeId} />;
     case 'aktiv':
-      return <Elsewhere text={stage.type === 'aktiv' ? challengeTexts.alreadyActive : challengeTexts.alreadyProposed} challengeId={openChallengeIdOf(stage)!} />;
+      return <Elsewhere text={challengeTexts.alreadyActive} challengeId={stage.challengeId} />;
     case 'frei':
       return shares === null ? <Loading /> : <Templates game={game} partner={stage.partnerDisplayName} shares={shares} unfitToday={stage.unfitToday} />;
   }

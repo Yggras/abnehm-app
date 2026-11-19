@@ -19,6 +19,9 @@ export const challengeDurationMs = 7 * 24 * hourMs;
 /** Zahl der lokalen Tage, deren Wochenplan den Anteil bestimmt. */
 export const challengeDayCount = 7;
 
+/** Tagesziele je geplantem Tag: drei Bausteine (Spezifikation 1). */
+export const dailyGoalsPerDay = 3;
+
 const after = (at: Instant, ms: number): Instant => Instant.parse(new Date(Date.parse(at) + ms).toISOString());
 
 /** Verfall eines Vorschlags: 48 Stunden nach dem Vorschlagen. */
@@ -42,10 +45,12 @@ export function challengeDays(startDate: LocalDate): LocalDate[] {
 }
 
 /**
- * Festgeschriebener Anteil einer Person samt der geplanten Tage, auf denen er beruht, oder `passt_nicht`,
- * wenn die Vorlage für sie an keinem Tag geplant ist.
+ * Festgeschriebener Anteil einer Person samt der geplanten Tage, auf denen er beruht, und der höchstens
+ * erfüllbaren Tagesziele (`possible`), oder `passt_nicht`, wenn die Vorlage für sie nicht erreichbar ist.
  */
-export type ChallengeShare = Readonly<{ type: 'passt'; required: number; planned: number }> | Readonly<{ type: 'passt_nicht' }>;
+export type ChallengeShare =
+  | Readonly<{ type: 'passt'; required: number; planned: number; possible: number }>
+  | Readonly<{ type: 'passt_nicht' }>;
 
 /** Geplante Tage der Vorlage in der Woche: Tage mit gültigem Plan bzw. mit dem gezählten Baustein. */
 export function plannedCount(template: ChallengeTemplate, week: readonly EffectivePlan[]): number {
@@ -63,12 +68,16 @@ export function plannedCount(template: ChallengeTemplate, week: readonly Effecti
  * - Baustein-Vorlagen: `ceil(Zähler / Nenner × geplante Tage)`, für „Ernährung im Blick“ und „Gut
  *   getrunken“ also 6 bei sieben geplanten Tagen, für „Aktive Woche“ `ceil(0,8 × geplante Sporteinheiten)`.
  *
- * Ohne geplanten Tag passt die Vorlage nicht; sie lässt sich dann weder vorschlagen noch annehmen.
+ * Ohne geplanten Tag passt die Vorlage nicht, ebenso wenn der Anteil mehr verlangt, als erfüllbar ist (bei
+ * „Gemeinsam dranbleiben“ drei Tagesziele je geplantem Tag; Nutzerentscheidung vom 19.11.2026 im Review von
+ * #210). Sie lässt sich dann weder vorschlagen noch annehmen.
  */
 export function challengeShare(template: ChallengeTemplate, week: readonly EffectivePlan[]): ChallengeShare {
   const planned = plannedCount(template, week);
-  if (planned === 0) return { type: 'passt_nicht' };
-  return { type: 'passt', required: requiredFor(template, planned), planned };
+  const required = requiredFor(template, planned);
+  const possible = template.measure.type === 'tagesziele' ? dailyGoalsPerDay * planned : planned;
+  if (planned === 0 || required > possible) return { type: 'passt_nicht' };
+  return { type: 'passt', required, planned, possible };
 }
 
 /**

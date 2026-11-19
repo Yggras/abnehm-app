@@ -147,7 +147,7 @@ describe('Challenges App ↔ Backend', () => {
 
     // Anna sieht die Vorschau selbst: „Ernährung im Blick“ ist bei ihr an keinem Tag geplant.
     expect((await annasPhone.game.challengeShares()).ernaehrung_im_blick).toEqual({ type: 'passt_nicht' });
-    expect((await annasPhone.game.challengeShares()).aktive_woche).toEqual({ type: 'passt', required: 3, planned: 3 });
+    expect((await annasPhone.game.challengeShares()).aktive_woche).toEqual({ type: 'passt', required: 3, planned: 3, possible: 3 });
     // Philipp kennt Annas Plan nicht; erst der Server lehnt ab.
     expect(philippsPhone.game.proposeChallenge('ernaehrung_im_blick')).toBe('vorgemerkt');
     await philippsPhone.sync();

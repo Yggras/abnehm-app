@@ -61,6 +61,8 @@ export type ChallengeProposal = Readonly<{
   expiresAt: Instant | null;
   /** Die eigene Annahme ist vorgemerkt; die Challenge startet mit dem nächsten Sync. */
   accepted: boolean;
+  /** Der Server hat die eigene Annahme abgelehnt, weil die Vorlage nicht zu beiden Wochenplänen passt. */
+  unfit: boolean;
 }>;
 
 /** Wo das Paar mit Challenges steht. */
@@ -163,6 +165,7 @@ export function readChallengeStage(tx: ReadContext, reading: ClockReading): Chal
         proposedAt: record.proposedAt,
         expiresAt: record.proposalExpiresAt,
         accepted: accepted.has(id),
+        unfit: unfitIds(tx, acceptKey).includes(id),
       },
     };
   }
@@ -170,10 +173,11 @@ export function readChallengeStage(tx: ReadContext, reading: ClockReading): Chal
   // der Server ab, sobald einer offen ist.
   const pending = pendingProposals(tx).filter((proposal) => !gone.has(proposal.challengeId)).at(-1);
   if (pending === undefined) return { type: 'frei', ...base, unfitToday: unfitToday(tx, reading) };
+
   return {
     type: 'vorschlag',
     ...base,
-    proposal: { challengeId: pending.challengeId, templateKey: pending.templateKey, by: 'self', proposedAt: null, expiresAt: null, accepted: false },
+    proposal: { challengeId: pending.challengeId, templateKey: pending.templateKey, by: 'self', proposedAt: null, expiresAt: null, accepted: false, unfit: false },
   };
 }
 
@@ -197,22 +201,28 @@ export function openChallengeIdOf(stage: ChallengeStage | null): EntityId | null
   return stage?.type === 'aktiv' ? stage.challengeId : null;
 }
 
-const unfitKey = 'challenge_passt_nicht';
-/** Je Vorlage der Zeitpunkt, zu dem der Server den eigenen Vorschlag als unpassend abgelehnt hat. */
-const UnfitTemplates = z.record(z.string(), Instant);
+/** Vom Server als unpassend abgelehnte eigene Vorschläge (je Vorlage) und Annahmen (je Challenge). */
+const proposeKey = 'challenge_passt_nicht';
+const acceptKey = 'challenge_annahme_passt_nicht';
+/** Je Schlüssel der Zeitpunkt der abgelehnten Operation. */
+const UnfitMarks = z.record(z.string(), Instant);
+
+function unfitMarks(tx: ReadContext, key: string): Record<string, Instant> {
+  const stored = UnfitMarks.safeParse(readDeviceState(tx, key));
+  return stored.success ? stored.data : {};
+}
 
 function unfitToday(tx: ReadContext, reading: ClockReading): string[] {
-  const stored = UnfitTemplates.safeParse(readDeviceState(tx, unfitKey));
-  if (!stored.success) return [];
-  return Object.entries(stored.data)
+  return Object.entries(unfitMarks(tx, proposeKey))
     .filter(([, at]) => readingOf(at, reading.timeZone).localDate === reading.localDate)
     .map(([templateKey]) => templateKey);
 }
 
-/** Merkt sich die Vorlage eines vom Server als unpassend abgelehnten eigenen Vorschlags. */
-function rememberUnfit(tx: TransactionContext, templateKey: string, at: Instant) {
-  const stored = UnfitTemplates.safeParse(readDeviceState(tx, unfitKey));
-  writeDeviceState(tx, unfitKey, { ...(stored.success ? stored.data : {}), [templateKey]: at }, at);
+const unfitIds = (tx: ReadContext, key: string) => Object.keys(unfitMarks(tx, key));
+
+/** Merkt sich eine vom Server als unpassend abgelehnte Vorlage bzw. Challenge. */
+function rememberUnfit(tx: TransactionContext, key: string, id: string, at: Instant) {
+  writeDeviceState(tx, key, { ...unfitMarks(tx, key), [id]: at }, at);
 }
 
 type ConfirmedProposal = ChallengeProposal & Readonly<{ proposedAt: Instant; expiresAt: Instant }>;
@@ -292,8 +302,8 @@ const onlyQueued = { referencePaths: [], apply: () => [], reconcileRejected: () 
 
 /**
  * Lokale Fachbefehle für die Sync-Engine: nur vorgemerkt, ohne lokale Fachzeile und ohne Bereinigung. Lehnt
- * der Server einen eigenen Vorschlag ab, weil die Vorlage nicht zu beiden Wochenplänen passt, merkt sich das
- * Gerät die Vorlage für den Tag.
+ * der Server einen eigenen Vorschlag oder eine Annahme ab, weil die Vorlage nicht zu beiden Wochenplänen
+ * passt, merkt sich das Gerät die Vorlage für den Tag bzw. die Challenge.
  */
 export const challengeLocalCommands: readonly LocalCommand[] = [
   {
@@ -302,10 +312,18 @@ export const challengeLocalCommands: readonly LocalCommand[] = [
     ...onlyQueued,
     reconcileRejected(tx, operation, { error }) {
       if (error.context?.grund !== challengeUnfitContext.grund) return;
-      rememberUnfit(tx, ProposeChallenge.parse(operation.payload).templateKey, operation.createdAt);
+      rememberUnfit(tx, proposeKey, ProposeChallenge.parse(operation.payload).templateKey, operation.createdAt);
     },
   },
-  { type: 'decideChallengeProposal', payload: DecideChallengeProposal, ...onlyQueued },
+  {
+    type: 'decideChallengeProposal',
+    payload: DecideChallengeProposal,
+    ...onlyQueued,
+    reconcileRejected(tx, operation, { error }) {
+      if (error.context?.grund !== challengeUnfitContext.grund) return;
+      rememberUnfit(tx, acceptKey, DecideChallengeProposal.parse(operation.payload).challengeId, operation.createdAt);
+    },
+  },
   { type: 'withdrawChallengeProposal', payload: WithdrawChallengeProposal, ...onlyQueued },
 ];
 

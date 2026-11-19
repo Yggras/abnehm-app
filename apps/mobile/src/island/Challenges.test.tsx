@@ -198,6 +198,28 @@ describe('challenge.detail: offener Vorschlag', () => {
     expect(screen.getByText('Dieser Vorschlag ist nicht mehr offen.')).toBeOnTheScreen();
   });
 
+  test('lehnt der Server die Annahme ab, weil der Plan des Partners nicht passt, nennt die Seite den Grund und bietet nur „Ablehnen“', async () => {
+    const opened = await world();
+    const challengeId = opened.challengeOnServer('anna', 'gut_getrunken');
+    opened.game.acceptChallenge(challengeId);
+    const [operation] = opened.operations();
+    opened.database.transaction((tx) => {
+      const command = challengeLocalCommands.find((candidate) => candidate.type === 'decideChallengeProposal')!;
+      if (!operation || !('businessKey' in operation)) throw new Error('Annahme fehlt in der Outbox');
+      command.reconcileRejected(tx, operation, {
+        type: 'permanently_rejected', operationId: operation.operationId,
+        error: { code: 'conflict', context: { grund: 'passt_nicht' }, retryable: false },
+        canonical: { type: 'absent', entityType: 'command_result', entityId: operation.operationId },
+      });
+      removeOperation(tx, operation.operationId);
+    });
+    await open(`/challenge/detail?challengeId=${challengeId}`, opened);
+
+    expect(screen.getByText('Passt gerade nicht zu euren Wochenplänen')).toBeOnTheScreen();
+    expect(screen.queryByRole('button', { name: 'Annehmen' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeOnTheScreen();
+  });
+
   test('passt die Vorlage nicht mehr zum eigenen Plan, bleibt nur „Ablehnen“', async () => {
     const opened = await world({ planReader: weeklyPlanReader(threeSportDaysPlan) });
     const challengeId = opened.challengeOnServer('anna', 'ernaehrung_im_blick');

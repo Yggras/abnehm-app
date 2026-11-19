@@ -152,11 +152,8 @@ export const challengeTexts = {
   intro: (partner: string) => `Sieben Tage, gemeinsam mit ${partner}. Jede Person erfüllt ihren eigenen Anteil.`,
   share: (share: ChallengeShare, measure: ChallengeMeasure): string => {
     if (share.type === 'passt_nicht') return challengeTexts.unfit;
-    // „17 von 21“ wie in #19; die Zahl der Tagesziele sind drei je geplantem Tag.
-    if (measure.type === 'tagesziele') {
-      const goals = 3 * share.planned;
-      return goals >= share.required ? `Dein Anteil: ${share.required} von ${goals} Tageszielen` : `Dein Anteil: ${share.required} erfüllte Tagesziele`;
-    }
+    // „17 von 21“ wie in #19; wie viele Tagesziele erfüllbar sind, sagen die Spielregeln.
+    if (measure.type === 'tagesziele') return `Dein Anteil: ${share.required} von ${share.possible} Tageszielen`;
     if (measure.baustein === 'sporteinheit') return `Dein Anteil: ${share.required} von ${share.planned} geplanten Sporteinheiten`;
     return `Dein Anteil: ${share.required} von ${share.planned} Tagen mit „${bausteinNames[measure.baustein]}“`;
   },

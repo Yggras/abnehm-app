@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { minutesOfDay, readingOf } from '@abnehm/clock';
-import { weekdayOf, type Instant } from '@abnehm/contracts/base';
+import { weekdayOf, type Instant, type TimeZone } from '@abnehm/contracts/base';
 import { wallClockTimeOf } from '@abnehm/contracts/notifications';
 import type { ChallengeShare } from '@abnehm/game-rules/challenges';
 
@@ -77,12 +77,15 @@ function Proposal({ game, proposal, partner, share }: { game: GameService; propo
           <Text variant="headline" accessibilityRole="header">{template.name}</Text>
           <Text>{template.description}</Text>
           {share === undefined ? null : <Text variant="label">{challengeTexts.share(share, template.measure)}</Text>}
+          {proposal.unfit && share?.type === 'passt' ? <Text variant="label">{challengeTexts.unfit}</Text> : null}
           <Status proposal={proposal} partner={partner} />
         </View>
       </Card>
       {fromPartner && !proposal.accepted ? (
         <View style={styles.actions}>
-          {share?.type === 'passt' ? <Button block label={challengeTexts.accept} onPress={() => game.acceptChallenge(proposal.challengeId)} /> : null}
+          {share?.type === 'passt' && !proposal.unfit ? (
+            <Button block label={challengeTexts.accept} onPress={() => game.acceptChallenge(proposal.challengeId)} />
+          ) : null}
           <Button block variant="secondary" label={challengeTexts.decline} onPress={() => game.declineChallenge(proposal.challengeId)} />
         </View>
       ) : null}
@@ -102,7 +105,7 @@ function Status({ proposal, partner }: { proposal: ChallengeProposal; partner: s
 }
 
 /** „Gilt bis Freitag, 14:00 Uhr“ in der Zone des Geräts. */
-function validUntil(expiresAt: Instant, timeZone: Parameters<typeof readingOf>[1]): string {
+function validUntil(expiresAt: Instant, timeZone: TimeZone): string {
   const reading = readingOf(expiresAt, timeZone);
   return challengeTexts.validUntil(weekdayNames[weekdayOf(reading.localDate)], wallClockTimeOf(minutesOfDay(reading)));
 }

@@ -295,7 +295,7 @@ describe('Challenges auf den geseedeten Geräten (#210)', () => {
 
     expect((await anna.game.challengeShares()).ernaehrung_im_blick).toEqual({ type: 'passt_nicht' });
     // Philipp plant „Ernährung erfasst“ montags, freitags und sonntags: ceil(6/7 × 3) = 3.
-    expect((await philipp.game.challengeShares()).ernaehrung_im_blick).toEqual({ type: 'passt', required: 3, planned: 3 });
+    expect((await philipp.game.challengeShares()).ernaehrung_im_blick).toEqual({ type: 'passt', required: 3, planned: 3, possible: 3 });
 
     expect(philipp.game.proposeChallenge('ernaehrung_im_blick')).toBe('vorgemerkt');
     await philipp.sync();
