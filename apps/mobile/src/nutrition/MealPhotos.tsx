@@ -20,7 +20,18 @@ const THUMB = 88;
 /** Höhe des Platzhalters, solange das vergrößerte Foto lädt (Designwert, nicht belegt; 4:3 auf dem iPhone SE). */
 const LARGE_PLACEHOLDER = 240;
 
-/** Die Vorschauen einer Mahlzeit; ohne Bild (offline, verweigert) bleibt die Stelle leer. */
+/** Ob das Gerät Internet hat; `null`, solange der Stand unbekannt ist. */
+function useOnline(nutrition: Nutrition): boolean | null {
+  const [online, setOnline] = useState<boolean | null>(null);
+  useEffect(() => nutrition.observeOnline(setOnline), [nutrition]);
+  return online;
+}
+
+/**
+ * Die Vorschauen einer Mahlzeit. Offline, auch nach einem Wechsel mitten in der Sitzung, und ohne Bild
+ * (verweigert, nicht abrufbar) bleibt die Stelle leer: Das Protokoll zeigt dann nur das Foto-/KI-Symbol.
+ * Mit unbekanntem Netzstatus versucht es den Abruf.
+ */
 export function MealPhotoStrip({
   nutrition,
   meal,
@@ -32,7 +43,8 @@ export function MealPhotoStrip({
   photoIds: readonly EntityId[];
   onOpen: (photoId: EntityId) => void;
 }) {
-  if (photoIds.length === 0) return null;
+  const online = useOnline(nutrition);
+  if (photoIds.length === 0 || online === false) return null;
   return (
     <View style={styles.strip}>
       {photoIds.map((photoId, index) => (
@@ -145,7 +157,13 @@ export function MealPhotoView({
             <Skeleton height={LARGE_PLACEHOLDER} radius="lg" />
           </View>
         ) : (
-          <Notice tone="hint" icon="camera" text={texts.unavailable} action={{ label: texts.retry, onPress: retry }} />
+          // Ohne Netz hilft Internet; verweigert oder ohne Datei heißt: Der Server hat das Foto nicht mehr.
+          <Notice
+            tone="hint"
+            icon="camera"
+            text={state.type === 'offline' ? texts.unavailable : texts.gone}
+            action={{ label: texts.retry, onPress: retry }}
+          />
         )}
         {detail?.partnerCoupled ? (
           <ListGroup>

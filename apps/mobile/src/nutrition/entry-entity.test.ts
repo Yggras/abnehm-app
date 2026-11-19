@@ -13,6 +13,7 @@ import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { createNutrition, nutritionEntryEntity } from '.';
+import { withoutPhotos } from './testing/without-photos';
 
 // Nachweis für #155: der Adapter des Ernährungseintrags in der Entitäts-Registry der App. Push, Pull
 // und Löschung über zwei Geräte prüft `apps/backend/test/nutrition-sync-app.test.ts`; hier geht es um
@@ -52,7 +53,7 @@ async function setup() {
   database.transaction((tx) => insertPersonForTest(tx, philipp));
   const clock = createTestClock({ instant: morning, timeZone: TimeZone.parse('Europe/Berlin') });
   const newId = () => EntityId.parse(randomUUID());
-  const nutrition = createNutrition({
+  const nutrition = createNutrition({ ...withoutPhotos,
     database, clock, newId,
     writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity]), clock, newId }),
     persistence: { reevaluateDailyGoals() {} },

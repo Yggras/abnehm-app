@@ -14,6 +14,7 @@ import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import { createNutrition } from '../../nutrition';
 import { openTestCatalog } from '../../nutrition/testing/test-catalog';
 import { canonicalDevice, dumpLocalDatabase, seedLocalDatabase } from './local-seed';
+import { withoutPhotos } from '../../nutrition/testing/without-photos';
 
 // Nachweis für #112: Seed der lokalen Kontodatenbank auf echtem SQLite (better-sqlite3, dieselben Migrationen).
 
@@ -52,7 +53,7 @@ describe('Seed der lokalen Datenbank', () => {
     const unused = () => {
       throw new Error('Die Suche schreibt nichts');
     };
-    const nutrition = createNutrition({ database, clock: { read: unused }, writer: { upsert: unused, delete: unused, command: unused }, persistence: { reevaluateDailyGoals: unused }, newId: unused });
+    const nutrition = createNutrition({ ...withoutPhotos, database, clock: { read: unused }, writer: { upsert: unused, delete: unused, command: unused }, persistence: { reevaluateDailyGoals: unused }, newId: unused });
 
     seedLocalDatabase(database, solo, 'philipp-iphone');
 

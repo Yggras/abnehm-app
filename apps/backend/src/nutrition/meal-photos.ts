@@ -2,7 +2,7 @@ import { and, eq, gt, isNull, lte, notExists, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
-import type { EntityId } from '@abnehm/contracts/base';
+import { EntityId } from '@abnehm/contracts/base';
 import type { ContractError } from '@abnehm/contracts/errors';
 import { ConfirmPhotoDraft, confirmPhotoDraftKey, MealPhotoRecord, MealPhotoUpsert, MealPhotoVariant } from '@abnehm/contracts/nutrition';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
@@ -77,7 +77,8 @@ export function createMealPhotos({
     return row?.imageKey ?? null;
   }
 
-  const synced: ServerSyncEntity = ownedEntity({
+  /** Die Entität nur mit Metadaten: Ihr Löschen setzt den Tombstone und lässt die Dateien liegen. */
+  const tombstoneOnly: ServerSyncEntity = ownedEntity({
     entityType: 'meal_photo',
     resource: 'meal_photo',
     table: mealPhoto,
@@ -98,7 +99,7 @@ export function createMealPhotos({
   });
 
   const entity: ServerSyncEntity = {
-    ...synced,
+    ...tombstoneOnly,
     /**
      * „Foto löschen“: Tombstone und sofort beide Fassungen aus der Fotoablage (Spezifikation 2, Abschnitt 9).
      * Die Dateien gehen schon im Savepoint der Operation. Rollt er danach zurück, bleibt ein Foto ohne
@@ -106,7 +107,7 @@ export function createMealPhotos({
      * sie wiederholt ihn, bis der Server ihn übernimmt.
      */
     async remove(tx, removal) {
-      await synced.remove(tx, removal);
+      await tombstoneOnly.remove(tx, removal);
       const imageKey = await imageKeyOf(tx, removal.entityId);
       if (imageKey !== null) await storage.deletePhoto(imageKey);
     },
@@ -244,9 +245,10 @@ export function createMealPhotos({
           .for('update');
         if (photo === undefined) return null;
         const serverVersion = await nextServerVersion(tx);
-        await tx.update(mealPhoto).set({ deletedAt: at, updatedAt: at, serverVersion }).where(eq(mealPhoto.id, id));
-        await recordChange(tx, { position: serverVersion, entityType: entity.entityType, entityId: id, operation: 'delete',
-          ownerPersonId: photo.personId, createdAt: at });
+        const ownerPersonId = EntityId.parse(photo.personId);
+        // Ohne Dateien: Die löscht der Job erst nach dem Commit.
+        await tombstoneOnly.remove(tx, { entityId: EntityId.parse(id), ownerPersonId, serverVersion, at });
+        await recordChange(tx, { position: serverVersion, entityType: entity.entityType, entityId: id, operation: 'delete', ownerPersonId, createdAt: at });
         return photo.imageKey;
       });
       if (imageKey !== null) await storage.deletePhoto(imageKey);

@@ -39,11 +39,13 @@ export type NutritionDependencies = Readonly<{
   /** Persistenzdienst der Tagesziele; jeder Befehl meldet seine Tage in derselben Transaktion. */
   persistence: Pick<DailyGoalPersistence, 'reevaluateDailyGoals'>;
   newId: () => EntityId;
+  /** Bildabruf eigener Mahlzeitenfotos über den Server (`createHttpMealPhotoImages`); Tests geben einen Fake. */
+  photoImages: MealPhotoImages;
   /**
-   * Bildabruf eigener Mahlzeitenfotos über den Server (`createHttpMealPhotoImages`). Ohne ihn, etwa in
-   * Tests ohne Server, ist jedes Foto `offline`: Das Protokoll zeigt dann nur das Foto-/KI-Symbol.
+   * Ob das Gerät Internet hat: zuerst der bekannte Stand, danach jede Änderung; ohne bekannten Stand meldet
+   * es nichts. Offline zeigt das Protokoll nur das Foto-/KI-Symbol (Spezifikation 2, Abschnitt 9).
    */
-  photoImages?: MealPhotoImages;
+  observeOnline: (listener: (online: boolean) => void) => () => void;
 }>;
 
 /** Vorbelegung der Mengenprüfung: Anzeigeeinheit und Menge in Tausendsteln. */
@@ -101,6 +103,8 @@ export type Nutrition = Readonly<{
    * Speicher; ohne Netz ist das Ergebnis `offline`.
    */
   mealPhotoImage(photoId: EntityId, variant: MealPhotoVariant): Promise<OnlineResult<MealPhotoImage>>;
+  /** Ob das Gerät Internet hat: zuerst der bekannte Stand, danach jede Änderung. */
+  observeOnline(listener: (online: boolean) => void): () => void;
   /**
    * „Mit Partner teilen“ eines eigenen Mahlzeitenfotos in einer eigenen lokalen Transaktion samt Outbox-
    * Operation. Wirft `InvalidNutritionInputError` für ein fremdes, unbekanntes oder gelöschtes Foto.
@@ -157,7 +161,8 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
     observeDayLog: (localDate, listener) => database.observe((tx) => readDayLog(tx, localDate), listener),
     entryDetail: (entryId) => database.read((tx) => readEntryDetail(tx, entryId)),
     observeMealPhoto: (photoId, listener) => database.observe((tx) => readMealPhotoDetail(tx, photoId), listener),
-    mealPhotoImage: (photoId, variant) => dependencies.photoImages?.(photoId, variant) ?? Promise.resolve({ type: 'offline' }),
+    mealPhotoImage: (photoId, variant) => dependencies.photoImages(photoId, variant),
+    observeOnline: (listener) => dependencies.observeOnline(listener),
     setPhotoSharing: (photoId, sharedWithPartner) => database.transaction((tx) => setPhotoSharing(tx, dependencies, photoId, sharedWithPartner)),
     deletePhoto: (photoId) => database.transaction((tx) => deletePhoto(tx, dependencies, photoId)),
     prefillAmount(foodRef, snapshot) {

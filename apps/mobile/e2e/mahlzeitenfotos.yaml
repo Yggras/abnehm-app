@@ -2,8 +2,8 @@
 # Philipps Mittagessen hat zwei Fotos: das geteilte zur Linsensuppe und den einzeln vom Teilen ausgenommenen
 # Obstsalat (`packages/contracts/seeds/gekoppelt.ts`, Teil `ernaehrung`). Online zeigt die Mahlzeit beide
 # Vorschauen; die erste öffnet die Fotoansicht mit dem vergrößerten Foto und „Mit Partner teilen“ (an, weil
-# gekoppelt). Ausschalten, dann „Foto löschen“ mit Rückfrage; danach bleibt nur der Obstsalat. Ohne Netz
-# zeigt das Protokoll nach einem Tageswechsel nur noch das Foto-/KI-Symbol der Einträge.
+# gekoppelt). Ausschalten, dann „Foto löschen“ mit Rückfrage; danach bleibt nur der Obstsalat. Geht das Gerät
+# offline, zeigt das Protokoll nur noch das Foto-/KI-Symbol der Einträge.
 #
 # Transport: Android schaltet den Flugmodus, iOS-Simulatoren haben keinen; dort ersetzt ihn der
 # Transport-Fehlermodus des E2E-Builds (`fehler?transport=offline`, wie in `sync-offline.yaml`). Die
@@ -75,13 +75,10 @@ name: Mahlzeitenfotos ansehen, freigeben und löschen
       - extendedWaitUntil:
           visible: ".*Transport-Fehlermodus: kein Netz.*"
           timeout: 10000
-# Ein Tageswechsel baut die Mahlzeiten neu auf; die Vorschau wird neu angefragt und kommt nicht an.
-- tapOn: "Vorheriger Tag"
-- tapOn: "Nächster Tag"
 - extendedWaitUntil:
-    visible: "Mittagessen: Linsensuppe, 300 g, 270 kcal, KI-Schätzung"
+    notVisible: "Mahlzeitenfoto, Mittagessen"
     timeout: 10000
-- assertNotVisible: "Mahlzeitenfoto, Mittagessen"
+- assertVisible: "Mittagessen: Linsensuppe, 300 g, 270 kcal, KI-Schätzung"
 - takeScreenshot: mahlzeitenfotos-6-offline
 
 # Netz zurück ---------------------------------------------------------------------------------------

@@ -57,6 +57,8 @@ export const operationMatrix = {
 } as const satisfies Readonly<Record<ResourceClass, MatrixRow>>;
 
 type RowOf<E extends ResourceEntity> = (typeof operationMatrix)[(typeof resourceEntities)[E]['resourceClass']];
+/** Nur die Eigentümerin: Kopplung und Freigaben der Klasse schützen diese Sicht nicht (#164). */
+type OwnerOnly<E extends ResourceEntity> = (typeof resourceEntities)[E] extends { ownerOnly: true } ? true : false;
 type OperationsOf<E extends ResourceEntity> = (typeof resourceEntities)[E] extends { onlyOperations: infer Only extends readonly Operation[] }
   ? Only
   : RowOf<E>['operations'];
@@ -66,8 +68,8 @@ export type DimensionsOf<E extends ResourceEntity, O extends Operation> =
   | 'ohne_sitzung'
   | 'fremde_person'
   | ((typeof resourceEntities)[E]['locatedBy'] extends 'id' ? 'manipulierte_id' : never)
-  | (O extends RowOf<E>['coupled'][number] ? 'entkopplung' : never)
-  | (O extends RowOf<E>['shared'][number] ? 'freigabeentzug' : never)
+  | (OwnerOnly<E> extends true ? never : O extends RowOf<E>['coupled'][number] ? 'entkopplung' : never)
+  | (OwnerOnly<E> extends true ? never : O extends RowOf<E>['shared'][number] ? 'freigabeentzug' : never)
   | (OperationsOf<E>['length'] extends (typeof operations)['length'] ? never : 'verbotene_operation');
 
 export type PublicPolicy = Readonly<{ kind: 'public'; dimensions: readonly never[] }>;
@@ -98,11 +100,12 @@ function operationsOf(entity: ResourceEntity): readonly Operation[] {
 
 function resourceDimensions(entity: ResourceEntity, operation: Operation): ProtectionDimension[] {
   const { resourceClass, locatedBy } = resourceEntities[entity];
+  const ownerOnly = (resourceEntities[entity] as { ownerOnly?: true }).ownerOnly === true;
   const matrix: MatrixRow = operationMatrix[resourceClass];
   const dimensions: ProtectionDimension[] = ['ohne_sitzung', 'fremde_person'];
   if (locatedBy === 'id') dimensions.push('manipulierte_id');
-  if (matrix.coupled.includes(operation)) dimensions.push('entkopplung');
-  if (matrix.shared.includes(operation)) dimensions.push('freigabeentzug');
+  if (!ownerOnly && matrix.coupled.includes(operation)) dimensions.push('entkopplung');
+  if (!ownerOnly && matrix.shared.includes(operation)) dimensions.push('freigabeentzug');
   if (operationsOf(entity).length < operations.length) dimensions.push('verbotene_operation');
   return dimensions;
 }

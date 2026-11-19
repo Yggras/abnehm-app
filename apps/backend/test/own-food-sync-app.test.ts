@@ -19,6 +19,7 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.
 import { defaultPassword, newDevice, signIn, type Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
 import { push, upsertOp } from './support/sync.ts';
+import { withoutPhotos } from '../../mobile/src/nutrition/testing/without-photos.ts';
 
 // Nachweis für #157: Das eigene Lebensmittel ist in der Entitäts-Registry beider Seiten angemeldet
 // (Upsert/Delete, Last-Write-Wins, Löschen ist ein Tombstone). Eine Korrektur eines BLS-Lebensmittels
@@ -68,7 +69,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     },
   });
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: () => {} });
-  const nutrition = createNutrition({ database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
+  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
   const search = nutrition.foodSearch(catalog.database);
   return {
     nutrition,

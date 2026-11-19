@@ -6,6 +6,7 @@ import { SportEntryUpsert, SportRecordedOutcome } from '@abnehm/contracts/tracke
 import { createNutrition, type DayLog } from '../nutrition';
 import { InvalidTrackerInputError } from '.';
 import { berlin, createTrackerWorld, noon, philipp, type TrackerWorld } from './testing/tracker-world';
+import { withoutPhotos } from '../nutrition/testing/without-photos';
 
 // Nachweis für #173: `recordSport` und sein Undo im Tracker-Modul (Spezifikation 3, Abschnitte 3 und 4)
 // gegen eine echte SQLite-Datei mit denselben Migrationen wie die App, gesteuert über die Testuhr. Jeder
@@ -74,7 +75,7 @@ describe('recordSport', () => {
 
   it('speichert optionale Kalorien in milli_kcal, ohne sie auf das Kalorienbudget gutzuschreiben', async () => {
     const { trackers, sports, dependencies } = await world();
-    const nutrition = createNutrition(dependencies);
+    const nutrition = createNutrition({ ...dependencies, ...withoutPhotos });
     const logs: (DayLog | null)[] = [];
     const stop = nutrition.observeDayLog(LocalDate.parse('2026-10-14'), (log) => logs.push(log));
 

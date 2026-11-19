@@ -297,6 +297,8 @@ export const nutritionTexts = {
     loading: 'Foto lädt',
     /** Die Fotoansicht ist geöffnet, das Bild kommt aber nicht an. */
     unavailable: 'Das Foto lässt sich gerade nicht laden. Es braucht Internet.',
+    /** Verweigert oder ohne Datei, etwa schon auf einem anderen Gerät gelöscht und noch nicht synchronisiert. */
+    gone: 'Das Foto ist nicht mehr verfügbar.',
     retry: 'Erneut laden',
     share: 'Mit Partner teilen',
     shareHint: 'Dein Partner sieht das Foto heute unter „Wir“, ohne Namen, Mengen oder kcal.',

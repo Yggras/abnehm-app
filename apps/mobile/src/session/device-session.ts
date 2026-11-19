@@ -155,7 +155,9 @@ function deviceState() {
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul; eigene Mahlzeitenfotos
       // ruft es online mit der Sitzung des Auth-Moduls ab (#164).
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId,
-        photoImages: createHttpMealPhotoImages({ baseUrl, fetch: session.auth.fetch }) });
+        photoImages: createHttpMealPhotoImages({ baseUrl, fetch: session.auth.fetch }),
+        // In Test-Artefakten überlagert vom Transport-Fehlermodus wie beim Partnerbereich (#114).
+        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
       // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
       // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`).
