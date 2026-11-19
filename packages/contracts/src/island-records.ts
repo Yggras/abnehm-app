@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { CatalogKey, EntityId, Instant } from './base.ts';
 import { uuidV5 } from './ids.ts';
-import { IslandEventKind } from './island.ts';
+import { ChallengeStatus, CommonStage, IslandEventKind } from './island.ts';
 import { SharedEventType } from './wir.ts';
 
 // Kanonische Datensätze der Inselinhalte im Sync (Spezifikation 0, Abschnitt 8 „Energie, Insel und
@@ -142,6 +142,68 @@ export function islandEventStateId(islandEventId: EntityId, personId: EntityId):
  */
 export function eventRewardId(islandEventStateId: EntityId): EntityId {
   return EntityId.parse(uuidV5(eventRewardNamespace, islandEventStateId));
+}
+
+const startedStatuses: readonly ChallengeStatus[] = ['aktiv', 'geschafft', 'abgelaufen', 'beendet'];
+const openStatuses: readonly ChallengeStatus[] = ['vorgeschlagen', 'aktiv'];
+
+/**
+ * Gemeinsame Challenge der Kopplung (Spezifikation 0, Abschnitt 8; Spezifikation 4, Abschnitt 10): Vorlage,
+ * vorschlagende Person, Status, Vorschlags-, Start- und Endzeit, gemeinsame Stufe und Challenge-Deko. Ein
+ * Vorschlag wird aktiv, abgelehnt, zurückgezogen oder verfällt; eine aktive Challenge endet geschafft,
+ * abgelaufen oder beendet. Nur der Server ändert sie. Die festgeschriebenen Anteile stehen je Person in
+ * `ChallengeRequirementRecord`; einen Partneranteil enthält die Challenge nie.
+ */
+export const ChallengeRecord = z
+  .strictObject({
+    couplingId: EntityId,
+    templateKey: CatalogKey,
+    proposerPersonId: EntityId,
+    status: ChallengeStatus,
+    proposedAt: Instant,
+    /** Verfall des Vorschlags, 48 Stunden nach `proposedAt`. */
+    proposalExpiresAt: Instant,
+    /** Annahmezeit beim Server; gesetzt genau ab dem Start. */
+    startedAt: Instant.nullable(),
+    /** Start plus 7 × 24 Stunden; gesetzt genau mit `startedAt`. */
+    endsAt: Instant.nullable(),
+    /** Gesetzt genau, sobald die Challenge oder der Vorschlag nicht mehr offen ist. */
+    endedAt: Instant.nullable(),
+    commonStage: CommonStage.nullable(),
+    challengeDecoKey: CatalogKey.nullable(),
+    createdAt: Instant,
+    updatedAt: Instant,
+  })
+  .refine((record) => (record.startedAt !== null) === startedStatuses.includes(record.status) && (record.startedAt === null) === (record.endsAt === null), {
+    message: 'Start und Ende genau bei gestarteten Challenges',
+    path: ['startedAt'],
+  })
+  .refine((record) => (record.endedAt === null) === openStatuses.includes(record.status), {
+    message: '`endedAt` genau bei beendeten Vorschlägen und Challenges',
+    path: ['endedAt'],
+  });
+export type ChallengeRecord = z.infer<typeof ChallengeRecord>;
+
+/**
+ * Festgeschriebener Challenge-Anteil einer Person: eigentümerlesbare Teilzeile der Challenge, die die
+ * Annahme anlegt (Spezifikation 4, Abschnitt 10). Nach dem Ende wird sie per Löschmarkierung ohne
+ * Nutzlast beendet (#211).
+ */
+export const ChallengeRequirementRecord = z.strictObject({
+  challengeId: EntityId,
+  couplingId: EntityId,
+  personId: EntityId,
+  requiredCount: z.int().positive(),
+  createdAt: Instant,
+  updatedAt: Instant,
+});
+export type ChallengeRequirementRecord = z.infer<typeof ChallengeRequirementRecord>;
+
+const challengeRequirementNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b6a';
+
+/** ID der Teilzeile einer Person; eine wiederholte Annahme trifft dieselbe Zeile. */
+export function challengeRequirementId(challengeId: EntityId, personId: EntityId): EntityId {
+  return EntityId.parse(uuidV5(challengeRequirementNamespace, `${challengeId}:${personId}`));
 }
 
 /** Belohnung eines Besuchers: ein Besucher-Bauplan für die Insel oder Deko ins Lager der Person. */

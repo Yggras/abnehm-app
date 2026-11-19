@@ -85,6 +85,9 @@ export const SeedScenarioKey = z.enum([
   'feldkonflikt',
   'ereignisse-voll',
   'levelaufstieg-ausstehend',
+  'challenge-vorgeschlagen',
+  'challenge-verfallen',
+  'challenge-passt-nicht',
   'budgetvorschlag-senken',
   'budgetvorschlag-anheben',
 ]);

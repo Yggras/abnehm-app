@@ -8,11 +8,13 @@ import {
   fieldPlans,
   isReservedKey,
   keyedEntryKinds,
+  type ChallengeMeasure,
   type FieldPlan,
   type FieldSide,
   type GameCatalog,
   type OwnedFieldKind,
 } from './catalog.ts';
+import { challengeDayCount, dailyGoalsPerDay } from './challenges.ts';
 import { fieldQuota } from './fields.ts';
 import { areaLevels } from './unlocks.ts';
 import { isWholeNumber } from './whole-number.ts';
@@ -35,7 +37,8 @@ export type CatalogRule =
   | 'entdeckung'
   | 'bauplatz'
   | 'jahreszeit'
-  | 'besucher';
+  | 'besucher'
+  | 'challenge';
 
 export type CatalogIssue = Readonly<{ rule: CatalogRule; key: string }>;
 
@@ -137,7 +140,11 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
     ];
     if (foreign.length > 0 || visitor.rewards.deko.length === 0) issue('besucher', visitor.key);
   }
-  for (const challenge of catalog.challengeTemplates) checkReference(deko, challenge.deko);
+  // Challenge-Vorlagen belohnen mit Challenge-Deko und verlangen je Person einen erreichbaren Anteil (#210).
+  for (const challenge of catalog.challengeTemplates) {
+    const ownDeko = checkReference(deko, challenge.deko) && deko.get(challenge.deko)!.origin === 'challenge';
+    if (!ownDeko || !measureFits(challenge.measure)) issue('challenge', challenge.key);
+  }
   const plaza = new Set(catalog.baseIsland.fields.filter((f) => f.kind === 'gemeinschaftsplatz').map((f) => fieldKey(baseIslandKey, f)));
   const sites = new Set<string>();
   for (const project of catalog.projects) {
@@ -146,4 +153,13 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
   }
 
   return issues;
+}
+
+/**
+ * Ein Maß ist erreichbar: eine feste Zahl von 1 bis 21 Tageszielen (drei je Tag, sieben Tage) bzw. ein Bruchteil der
+ * geplanten Tage zwischen 0 und 1, sodass jeder geplante Tag zählt und nie mehr als geplant verlangt wird.
+ */
+function measureFits(measure: ChallengeMeasure): boolean {
+  if (measure.type === 'tagesziele') return isWholeNumber(measure.required, 1) && measure.required <= dailyGoalsPerDay * challengeDayCount;
+  return isWholeNumber(measure.numerator, 1) && isWholeNumber(measure.denominator, 1) && measure.numerator <= measure.denominator;
 }

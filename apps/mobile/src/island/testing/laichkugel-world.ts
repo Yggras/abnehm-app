@@ -7,6 +7,7 @@ import { EntityId, Instant, LocalDate, ServerVersion, TimeZone } from '@abnehm/c
 import { dailyGoalKey } from '@abnehm/contracts/daily-goals';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import { IslandProgress, type IslandRole } from '@abnehm/contracts/island';
+import type { PlanReader } from '@abnehm/contracts/ports';
 import { IslandEventRecord, islandEventId, islandEventStateId, type IslandObjectOrigin, type VisitorEventDetails } from '@abnehm/contracts/island-records';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { visitorOccasionKey } from '@abnehm/game-rules/events';
@@ -20,7 +21,7 @@ import { appendBooking, energyBookingEntity } from '../../energy';
 import type { Haptics } from '../../haptics/haptics';
 import type { LocalDatabase } from '../../local-db';
 import { createLocalDatabases } from '../../local-db/local-databases';
-import { blueprintUnlock, communityProject, coupling, couplingMember, island, islandEvent, islandEventState, islandField, islandObject, islandProgress, sharedAction } from '../../local-db/schema';
+import { blueprintUnlock, challenge, communityProject, coupling, couplingMember, island, islandEvent, islandEventState, islandField, islandObject, islandProgress, sharedAction } from '../../local-db/schema';
 import { sqliteOf } from '../../local-db/sqlite';
 import { createBetterSqliteFiles } from '../../local-db/testing/better-sqlite';
 import type { Refresh } from '../../shell/followed-source';
@@ -30,6 +31,7 @@ import { createGameService, type GameService } from '../game-service';
 import { islandProgressOf, islandSyncEntities } from '../island-entities';
 import { anna, philipp } from './persons';
 import { quietGameDependencies } from './quiet-game';
+import { everyDayPlan, weeklyPlanReader } from './challenge-plans';
 
 // Testaufbau für Laichkugel, Rollenwahl und Schlüpfen (#180, #184): echte SQLite-Datei mit denselben
 // Migrationen wie die App, Philipp als eigene Person, Sync-Writer und der echte Spieldienst. Kopplung,
@@ -60,6 +62,11 @@ export type LaichkugelWorld = Readonly<{
   hatch(options?: Readonly<{ progress?: boolean }>): void;
   /** Ein vom Server bestätigter offener Vorschlag. */
   proposeOnServer(by: 'philipp' | 'anna', proposerRole: IslandRole): EntityId;
+  /**
+   * Ein vom Server bestätigter Challenge-Vorschlag, wie der Pull ihn ablegt (#210): heute um 12:00 Uhr UTC
+   * vorgeschlagen, Verfall 48 Stunden später. Setzt `couple()` voraus.
+   */
+  challengeOnServer(by: 'philipp' | 'anna', templateKey: string): EntityId;
   /** Gutschriften für erfüllte Tagesziele, wie sie der Pull ablegt. */
   credit(amount: number): void;
   /** ID des materialisierten Inselfelds zum Feldschlüssel (#194). */
@@ -82,16 +89,24 @@ export type LaichkugelWorld = Readonly<{
   close(): void;
 }>;
 
-export type LaichkugelWorldOptions = Readonly<{ haptics?: Haptics; refresh?: Refresh }>;
+export type LaichkugelWorldOptions = Readonly<{
+  haptics?: Haptics;
+  refresh?: Refresh;
+  /** Eigener Wochenplan für die Vorschau der Challenge-Anteile (#210); standardmäßig jeden Tag alles geplant. */
+  planReader?: PlanReader;
+}>;
 
-export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameDependencies.haptics, refresh = quietGameDependencies.refresh }: LaichkugelWorldOptions = {}): Promise<LaichkugelWorld> {
+export async function createLaichkugelWorld(
+  clock: Clock,
+  { haptics = quietGameDependencies.haptics, refresh = quietGameDependencies.refresh, planReader = weeklyPlanReader(everyDayPlan) }: LaichkugelWorldOptions = {},
+): Promise<LaichkugelWorld> {
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   let database = await databases.open('konto_philipp');
   database.transaction((tx) => insertPersonForTest(tx, philipp));
   const newId = () => EntityId.parse(randomUUID());
   const writer = createSyncWriter({ registry: createSyncRegistry([...foundationSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]), clock, newId });
-  const gameOf = (opened: LocalDatabase) => createGameService({ database: opened, writer, clock, newId, haptics, refresh });
+  const gameOf = (opened: LocalDatabase) => createGameService({ database: opened, writer, clock, newId, haptics, refresh, planReader });
   let game = gameOf(database);
   const fieldIdOf = (fieldKey: string) => {
     const field = database.read((tx) => sqliteOf(tx).select({ id: islandField.id }).from(islandField).where(eq(islandField.fieldKey, fieldKey)).get());
@@ -158,6 +173,19 @@ export async function createLaichkugelWorld(clock: Clock, { haptics = quietGameD
         sqliteOf(tx)
           .insert(sharedAction)
           .values({ id, couplingId, kind: 'rollenwahl', requesterPersonId: by === 'philipp' ? philipp : anna, payload: { proposerRole }, status: 'offen', ...synced })
+          .run(),
+      );
+      return id;
+    },
+    challengeOnServer(by, templateKey) {
+      const id = newId();
+      database.transaction((tx) =>
+        sqliteOf(tx)
+          .insert(challenge)
+          .values({
+            id, couplingId, templateKey, proposerPersonId: by === 'philipp' ? philipp : anna, status: 'vorgeschlagen',
+            proposedAt: at, proposalExpiresAt: '2026-10-16T12:00:00.000Z', ...synced,
+          })
           .run(),
       );
       return id;

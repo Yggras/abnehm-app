@@ -17,6 +17,14 @@ export const RoleRequestPayload = z.strictObject({
   senderDisplayName: DisplayName,
 });
 
+/** Nutzlast von `challenge_vorschlag` an den Partner (Spezifikation 4, Abschnitt 10; #210). */
+export const ChallengeProposalPayload = z.strictObject({
+  challengeId: EntityId,
+  templateKey: CatalogKey,
+  expiresAt: Instant,
+  senderDisplayName: DisplayName,
+});
+
 /** Nutzlast von `levelaufstieg`: das höchste neu erreichte Level (Spezifikation 0, Abschnitt 4). */
 export const LevelUpPayload = z.strictObject({ level: z.int().min(2) });
 
@@ -31,12 +39,7 @@ const payloads = {
   levelaufstieg: LevelUpPayload,
   gebiet: z.strictObject({ gebietKey: CatalogKey }),
   projektabschluss: z.strictObject({ templateKey: CatalogKey }),
-  challenge_vorschlag: z.strictObject({
-    challengeId: EntityId,
-    templateKey: CatalogKey,
-    expiresAt: Instant,
-    senderDisplayName: DisplayName,
-  }),
+  challenge_vorschlag: ChallengeProposalPayload,
   challenge_erfolg: z.strictObject({ challengeId: EntityId, templateKey: CatalogKey }),
   rollen_anfrage: RoleRequestPayload,
   deko_geschenk: z.strictObject({ actionId: EntityId, decoKey: CatalogKey, senderDisplayName: DisplayName }),

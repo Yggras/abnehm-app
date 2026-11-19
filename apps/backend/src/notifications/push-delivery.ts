@@ -6,6 +6,8 @@ import type { Clock } from '@abnehm/clock';
 import type { Instant } from '@abnehm/contracts/base';
 import { NotificationIntent, notificationTarget } from '@abnehm/contracts/notifications';
 import { notificationTexts } from '@abnehm/contracts/notification-texts';
+import { withCatalogNames } from '@abnehm/game-rules/catalog';
+import { gameCatalog } from '@abnehm/game-rules/content';
 
 import type { SessionAuthenticator } from '../auth/auth-module.ts';
 import type { Database, DbExecutor } from '../database.ts';
@@ -18,8 +20,9 @@ import { MAX_MESSAGES_PER_REQUEST, MAX_RECEIPT_IDS_PER_REQUEST, type ExpoPushMes
 
 // Push-Zusteller (Spezifikation 5, Abschnitt 9; #142): stellt jeden `NotificationIntent` höchstens einmal
 // je Installation über den Expo-Push-Port zu, holt die Quittungen und schließt den Intent ab. Er kennt die
-// Intent-Typen nicht: Text und Titel kommen aus dem gemeinsamen Textkatalog, das Ziel aus dem Intent-
-// Katalog; Bereiche, die den Ausgang brauchen (Anfeuern), melden einen Beobachter an.
+// Intent-Typen nicht: Text und Titel kommen aus dem gemeinsamen Textkatalog samt Namen aus dem Spielkatalog
+// (`withCatalogNames`), das Ziel aus dem Intent-Katalog; Bereiche, die den Ausgang brauchen (Anfeuern),
+// melden einen Beobachter an.
 //
 // Zustellversuch je Intent und Installation (`delivery_attempt`, nur Server):
 //   geplant ──senden──▶ gesendet ──Quittung ok──▶ quittiert
@@ -115,7 +118,8 @@ export function createPushDelivery({
   function contentOf(row: IntentRow): Omit<ExpoPushMessage, 'to'> | null {
     const intent = parsedIntent(row);
     if (intent === null) return null;
-    const rendered = notificationTexts.renderStored(intent.messageKey, intent.payload);
+    // Namen aus dem Spielkatalog, etwa der Vorlage eines Challenge-Vorschlags, ergänzt der Zusteller hier.
+    const rendered = notificationTexts.renderStored(intent.messageKey, withCatalogNames(gameCatalog, intent.payload));
     if (rendered.type === 'contract_error') return null;
     return {
       ...rendered.text,

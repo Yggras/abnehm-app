@@ -15,6 +15,7 @@ import { deviceHealthPlatform } from '../health/device-platform';
 import { appHealthImport } from '../health/app-health';
 import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
+import { challengeLocalCommands, challengeSyncEntities } from '../island/challenges';
 import { createGameService } from '../island/game-service';
 import { islandEventCommands } from '../island/island-events';
 import { islandObjectCommands } from '../island/object-commands';
@@ -64,7 +65,7 @@ const newId = () => EntityId.parse(uuid.v4());
 const todayPersonOpened = followTodayPerson(appTodayRegistry, appClock);
 const syncRegistry = createSyncRegistry([
   ...foundationSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, waterEntryEntity,
-  weightEntryEntity, sportEntryEntity, ...islandSyncEntities, notificationSettingEntity, encouragementEntity,
+  weightEntryEntity, sportEntryEntity, ...islandSyncEntities, ...challengeSyncEntities, notificationSettingEntity, encouragementEntity,
 ]);
 /** Mini-Tracker `trackers.water`; sein Wasserziel liest er über den `PlanReader` aus Spezifikation 1 (#128). */
 const waterTodayOpened = followTodayContribution(appTodayRegistry, 'tracker', 'trackers.water');
@@ -177,14 +178,15 @@ function deviceState() {
       persistence.registerMissingDaysHook(plan.materializeMissingDays);
       // „Heute“-Beiträge des Plan-Moduls: werten mit derselben Registry aus wie der Persistenzdienst (#136).
       const planToday = plan.today(dailyGoalRegistry);
-      // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“.
+      // Momo, Insel & Challenges (Spezifikation 4): Spieldienst des Tabs „Momo“ samt Beiträgen an „Heute“ und „Wir“;
+      // die Vorschau der Challenge-Anteile liest den eigenen Wochenplan über den `PlanReader` (#210).
       // Stimmungen folgen der Uhr im Takt von „Heute“; die Erfolgshaptik löst nur dieser Dienst aus (#188).
-      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh });
+      const game = createGameService({ database, writer: syncWriter, clock: appClock, newId, haptics: deviceHaptics, refresh: appTodayRefresh, planReader: ports.planReader });
       const installation = installationId(database, appClock, newId);
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installation, onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...islandEventCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
       });
       activeEngine = engine;
       // Partnerbereich (Spezifikation 5): „Wir“ und die Partner-Karte lesen nur den widerrufbaren Partnercache.

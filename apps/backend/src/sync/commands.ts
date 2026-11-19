@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 
 import type { CanonicalChange, CanonicalIdMapping, CommandType, EntityData, OutboxOperation, PushResult } from '@abnehm/contracts/sync';
-import type { ContractErrorCode } from '@abnehm/contracts/errors';
+import type { ContractError, ContractErrorCode } from '@abnehm/contracts/errors';
 
 import type { PersonActor, ResourceFacts, ResourcePolicy, ResourceTarget } from '../authorization/authorization.ts';
 import type { DbExecutor } from '../database.ts';
@@ -15,10 +15,17 @@ import type { DbExecutor } from '../database.ts';
 export class CommandRejection extends Error {
   readonly code: Exclude<ContractErrorCode, 'forbidden' | 'operation_conflict'>;
   readonly canonical: CanonicalChange | null;
-  constructor(code: Exclude<ContractErrorCode, 'forbidden' | 'operation_conflict'>, canonical: CanonicalChange | null = null) {
+  /** Strukturierter Grund ohne sichtbaren Text (`ContractError.context`), etwa `{ grund: 'passt_nicht' }`. */
+  readonly context: ContractError['context'];
+  constructor(
+    code: Exclude<ContractErrorCode, 'forbidden' | 'operation_conflict'>,
+    canonical: CanonicalChange | null = null,
+    context?: ContractError['context'],
+  ) {
     super(code);
     this.code = code;
     this.canonical = canonical;
+    this.context = context;
   }
 }
 

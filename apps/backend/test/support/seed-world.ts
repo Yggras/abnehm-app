@@ -11,6 +11,7 @@ import { InstallationId, PushResult, type OutboxOperation } from '@abnehm/contra
 import { islandEventCommands } from '../../../mobile/src/island/island-events.ts';
 import { islandObjectCommands } from '../../../mobile/src/island/object-commands.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
+import { challengeSyncEntities } from '../../../mobile/src/island/challenges.ts';
 import { createDailyGoalPersistence, createDaysChangedDispatcher, dailyGoalCommands, dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
@@ -52,7 +53,7 @@ import { encouragementEntity } from '../../../mobile/src/partner/encouragement.t
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
 export type SeedPhone = Readonly<{

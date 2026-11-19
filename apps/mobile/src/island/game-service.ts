@@ -2,7 +2,10 @@ import type { Clock } from '@abnehm/clock';
 import { EntityId, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import type { IslandRole, PlacementTarget } from '@abnehm/contracts/island';
+import type { PlanReader } from '@abnehm/contracts/ports';
 import type { WirContribution, WirContributionSource } from '@abnehm/contracts/wir';
+import type { ChallengeShare } from '@abnehm/game-rules/challenges';
+import { gameCatalog } from '@abnehm/game-rules/content';
 import { reactionMood, type MomoEvent } from '@abnehm/game-rules/mood';
 
 import { motion } from '../design/tokens';
@@ -14,6 +17,15 @@ import { messageStandingTime } from '../shell/message-timing';
 import type { TodaySource, TodayState } from '../shell/today-registry';
 import type { SyncWriter } from '../sync';
 import { buildObject, type BuildOutcome } from './build-object';
+import {
+  challengeCommands,
+  challengeContributionOf,
+  confirmedOpenProposal,
+  ownChallengeShare,
+  readChallengeStage,
+  type ChallengeOutcome,
+  type ChallengeStage,
+} from './challenges';
 import { takeGrowthIntro } from './growth-intro';
 import { claimEventReward, markEventsSeen, type ClaimOutcome } from './island-events';
 import { claimReaction, eventsOf, hapticOf, hasUnshownReactions, type MomoReaction } from './momo-reactions';
@@ -23,8 +35,8 @@ import { readIslandStage, roleChoiceCommands, type IslandStage, type RoleChoiceO
 
 // Spieldienst der App für den Tab „Momo“ (Spezifikation 4, Abschnitt 1): ein Lesemodell der Stufe von
 // der Laichkugel über die Rollenwahl (#180) bis zur geschlüpften Insel (#184), die Befehle der Rollenwahl,
-// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) samt Levelfeier (#200) und die Beiträge an „Heute“
-// (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`). Die App-Sitzung erzeugt ihn je
+// Bauen (#191), Aufwerten und Platzieren (#194), Ansehen und Abholen der Insel-Ereignisse (#202), das Einmal-Flag „So wächst Momo“, Momos Reaktionen und Stimmungen (#188) samt Levelfeier (#200), gemeinsame Challenges (#210) und die Beiträge an „Heute“
+// (`momo.character`) und „Wir“ (`pending_shared_action`, `shared_event`, `challenge`). Die App-Sitzung erzeugt ihn je
 // geöffneter Kontodatenbank und meldet ihn an (`src/session/device-session.ts`).
 
 export type GameServiceDependencies = Readonly<{
@@ -36,6 +48,8 @@ export type GameServiceDependencies = Readonly<{
   haptics: Haptics;
   /** Takt, zu dem die Stimmung ohne Datenbankänderung neu abgeleitet wird, etwa um 20:00 und am Tageswechsel. */
   refresh: Refresh;
+  /** Eigener Wochenplan für die Vorschau der Challenge-Anteile (Spezifikation 1, über die Area-Ports). */
+  planReader: PlanReader;
 }>;
 
 export type GameService = Readonly<{
@@ -78,6 +92,21 @@ export type GameService = Readonly<{
    * gemerkt (Einmal-Flag ohne Sync).
    */
   takeGrowthIntro(): boolean;
+  /**
+   * Meldet, wo das Paar mit Challenges steht, und jede Änderung nach einem Commit (#210); liefert die
+   * Abmeldung. Ein verfallener Vorschlag ist ab seiner Frist nicht mehr offen.
+   */
+  observeChallenges(listener: (stage: ChallengeStage) => void): () => void;
+  /** Vorschau des eigenen Anteils je Challenge-Vorlage aus dem eigenen Wochenplan ab heute. */
+  challengeShares(): Promise<Readonly<Record<string, ChallengeShare>>>;
+  /** Schlägt dem Partner eine Challenge-Vorlage vor; offline nur vorgemerkt. */
+  proposeChallenge(templateKey: string): ChallengeOutcome;
+  /** Nimmt den offenen Challenge-Vorschlag des Partners an; die Challenge startet mit dem nächsten Sync. */
+  acceptChallenge(challengeId: EntityId): ChallengeOutcome;
+  /** Lehnt den offenen Challenge-Vorschlag des Partners neutral ab. */
+  declineChallenge(challengeId: EntityId): ChallengeOutcome;
+  /** Zieht den eigenen, vom Server bestätigten Challenge-Vorschlag neutral zurück. */
+  withdrawChallenge(challengeId: EntityId): ChallengeOutcome;
   /** Beitrag `momo.character` für „Heute“. */
   momoCharacter: TodaySource<'momo.character'>;
   /** Beiträge von Spezifikation 4 für „Wir“. */
@@ -96,8 +125,50 @@ const openIslandAction = { actionId: 'wir.open_island', target: { type: 'momo' }
  */
 const reactionMsOf = (events: readonly MomoEvent[]) => (events.includes('levelaufstieg') ? messageStandingTime.default : motion.duration.celebrate);
 
-export function createGameService({ database, writer, clock, newId, haptics, refresh }: GameServiceDependencies): GameService {
+export function createGameService({ database, writer, clock, newId, haptics, refresh, planReader }: GameServiceDependencies): GameService {
   const commands = roleChoiceCommands({ writer, newId, timeZone: () => TimeZone.parse(clock.read().timeZone) });
+  const challenges = challengeCommands({ writer, newId });
+
+  /** Eigener Anteil je Vorlage aus den sieben lokalen Tagen ab heute. */
+  async function challengeShares(): Promise<Record<string, ChallengeShare>> {
+    const own = database.read((tx) => readOwnPerson(tx));
+    if (own === undefined) return {};
+    const today = LocalDate.parse(clock.read().localDate);
+    const keys = gameCatalog.challengeTemplates.map((template) => template.key);
+    const shares = await Promise.all(keys.map((key) => ownChallengeShare(planReader, EntityId.parse(own.id), key, today)));
+    return Object.fromEntries(keys.map((key, index) => [key, shares[index]!]));
+  }
+
+  /**
+   * „Wir“ zeigt Momo nicht; seine Beiträge folgen nur der Datenbank. Der Challenge-Vorschlag braucht den
+   * eigenen Anteil aus dem Wochenplan; diese Vorschau rechnet der `PlanReader` asynchron. Ein späteres
+   * Ergebnis ersetzt ein früheres nie rückwärts.
+   */
+  function observeWir(listener: (state: ContributionState<WirContribution[]>) => void) {
+    let latest = 0;
+    let stopped = false;
+    const emit = distinct(listener);
+    const stop = database.observe(
+      (tx) => ({ island: readIslandStage(tx), challenge: readChallengeStage(tx, clock.read()) }),
+      ({ island, challenge }) => {
+        const run = ++latest;
+        const islandState = wirContributionsOf(island);
+        const proposal = challenge.type === 'vorschlag' ? confirmedOpenProposal(challenge.proposal) : null;
+        if (islandState.type !== 'ready' || challenge.type !== 'vorschlag' || proposal === null) {
+          emit(islandState);
+          return;
+        }
+        void ownChallengeShare(planReader, challenge.personId, proposal.templateKey, LocalDate.parse(clock.read().localDate)).then((share) => {
+          if (stopped || run !== latest) return;
+          emit({ type: 'ready', data: [challengeContributionOf(proposal, share), ...islandState.data] });
+        });
+      },
+    );
+    return () => {
+      stopped = true;
+      stop();
+    };
+  }
   const mood = createMoodState(clock, refresh);
   const observeStage = (listener: (stage: IslandStage) => void) => mood.observe(database, 'insel', listener);
 
@@ -144,9 +215,14 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     place: (islandObjectId, target) => database.transaction((tx) => placeObject(tx, { writer, newId, clock }, { islandObjectId, target })),
     markEventsSeen: (stateIds) => void database.transaction((tx) => markEventsSeen(tx, { writer, clock }, stateIds)),
     claimEventReward: (stateId) => database.transaction((tx) => claimEventReward(tx, { writer, clock }, stateId)),
+    observeChallenges: (listener) => database.observe((tx) => readChallengeStage(tx, clock.read()), distinct(listener)),
+    challengeShares,
+    proposeChallenge: (templateKey) => database.transaction((tx) => challenges.propose(tx, clock.read(), templateKey)),
+    acceptChallenge: (challengeId) => database.transaction((tx) => challenges.accept(tx, clock.read(), challengeId)),
+    declineChallenge: (challengeId) => database.transaction((tx) => challenges.decline(tx, clock.read(), challengeId)),
+    withdrawChallenge: (challengeId) => database.transaction((tx) => challenges.withdraw(tx, clock.read(), challengeId)),
     momoCharacter: { subscribe: (listener) => mood.observe(database, 'heute', (stage) => listener(momoCharacterOf(stage))) },
-    // „Wir“ zeigt Momo nicht; seine Beiträge folgen nur der Datenbank.
-    wirContributions: { subscribe: (listener) => database.observe(readIslandStage, distinct((stage) => listener(wirContributionsOf(stage)))) },
+    wirContributions: { subscribe: observeWir },
   };
 }
 

@@ -16,6 +16,7 @@
     "./building": "./src/building.ts",
     "./mood": "./src/mood.ts",
     "./events": "./src/events.ts",
+    "./challenges": "./src/challenges.ts",
     "./content": "./content/index.ts",
     "./fixtures": "./fixtures/index.ts"
   },

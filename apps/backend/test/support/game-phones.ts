@@ -7,16 +7,19 @@ import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId } from '@abnehm/contracts/base';
 import type { ContributionState } from '@abnehm/contracts/contribution';
 import { MomoCharacterState } from '@abnehm/contracts/today';
+import type { PlanReader } from '@abnehm/contracts/ports';
 import { WirContributionsState, type WirContribution } from '@abnehm/contracts/wir';
 
 import { dailyGoalCompletionEntity } from '../../../mobile/src/daily-goals/index.ts';
 import { insertDailyGoalForTest } from '../../../mobile/src/daily-goals/testing/persisted.ts';
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
+import { challengeLocalCommands, challengeSyncEntities } from '../../../mobile/src/island/challenges.ts';
 import { islandEventCommands } from '../../../mobile/src/island/island-events.ts';
 import { islandObjectCommands } from '../../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../../mobile/src/island/game-service.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
 import type { IslandStage } from '../../../mobile/src/island/role-choice.ts';
+import type { ChallengeStage } from '../../../mobile/src/island/challenges.ts';
 import { sharedActionCommands } from '../../../mobile/src/island/shared-action-commands.ts';
 import { quietGameDependencies } from '../../../mobile/src/island/testing/quiet-game.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
@@ -34,11 +37,13 @@ import {
   foundationSyncEntities,
 } from '../../../mobile/src/sync/index.ts';
 import { pendingOperations } from '../../../mobile/src/sync/outbox.ts';
+import type { ReaderPort } from '../../src/partner-projections/projector.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './app.ts';
 import type { Device } from './auth-client.ts';
 import { personWithSession } from './authorization.ts';
 import { coupleByInvitation, worldStart } from './coupled-world.ts';
 import { earnEnergy } from './building.ts';
+import { everyDay, testWeeklyPlans } from './challenges.ts';
 import { snapshotOf, type ServerDailyGoal } from './daily-goals.ts';
 
 // Geräte mit dem Spieldienst der App (#180, #184, #191): Engine, Outbox und Adapter auf echtem SQLite
@@ -53,7 +58,7 @@ afterEach(() => {
 
 export type GamePhone = Awaited<ReturnType<typeof gamePhone>>;
 
-export async function gamePhone(backend: TestBackend, accountId: string, device: Device) {
+export async function gamePhone(backend: TestBackend, accountId: string, device: Device, { planReader = testWeeklyPlans(everyDay).reader }: { planReader?: PlanReader } = {}) {
   const files = createBetterSqliteFiles();
   const databases = createLocalDatabases({ openSqlite: files.openSqlite, onError: (error) => { throw error; } });
   cleanups.push(() => {
@@ -64,7 +69,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
   const clock = createTestClock(worldStart);
   const newId = () => EntityId.parse(randomUUID());
   // Erfüllungen und Buchungen bringen die Energie fürs Bauen (#191).
-  const registry = createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
+  const registry = createSyncRegistry([...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, dailyGoalCompletionEntity, energyBookingEntity]);
   const writer = createSyncWriter({ registry, clock, newId });
   let online = true;
   let dropNextPushResponse = false;
@@ -89,9 +94,9 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     }),
     clock,
     installationId: newId(),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...islandEventCommands] }),
   });
-  const game: GameService = createGameService({ database, writer, clock, newId, ...quietGameDependencies });
+  const game: GameService = createGameService({ database, writer, clock, newId, ...quietGameDependencies, planReader });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {
     let value: T | undefined;
     cleanups.push(subscribe((next) => (value = next)));
@@ -102,6 +107,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     database,
     clock,
     stage: latest<IslandStage>((listener) => game.observeStage(listener)),
+    challenges: latest<ChallengeStage>((listener) => game.observeChallenges(listener)),
     character: latest<TodayState<'momo.character'>>((listener) => game.momoCharacter.subscribe((state) => listener(MomoCharacterState.parse(state)))),
     wir: latest<ContributionState<WirContribution[]>>((listener) => game.wirContributions.subscribe((state) => listener(WirContributionsState.parse(state)))),
     offline: () => (online = false),
@@ -136,14 +142,17 @@ export function proposalOn(phone: GamePhone) {
   return stage.proposal;
 }
 
-/** Philipp und Anna mit je einem Gerät, noch ungekoppelt und auf dem Stand des Servers. */
-export async function gamePhones() {
+/**
+ * Philipp und Anna mit je einem Gerät, noch ungekoppelt und auf dem Stand des Servers. Tests der
+ * Challenge-Anteile (#210) geben dem Server einen `PlanReader`-Fake und den Geräten eigene Wochenpläne.
+ */
+export async function gamePhones({ planReader, phonePlanReader }: { planReader?: ReaderPort<PlanReader>; phonePlanReader?: PlanReader } = {}) {
   const clock = createTestClock(worldStart);
-  const backend = await createTestBackend({ clock });
+  const backend = await createTestBackend({ clock, ...(planReader !== undefined && { planReader }) });
   const philipp = await personWithSession(backend, 'philipp@example.test', 'Philipp');
   const anna = await personWithSession(backend, 'anna@example.test', 'Anna');
-  const philippsPhone = await gamePhone(backend, philipp.accountId, philipp.device);
-  const annasPhone = await gamePhone(backend, anna.accountId, anna.device);
+  const philippsPhone = await gamePhone(backend, philipp.accountId, philipp.device, { planReader: phonePlanReader });
+  const annasPhone = await gamePhone(backend, anna.accountId, anna.device, { planReader: phonePlanReader });
   await philippsPhone.sync();
   await annasPhone.sync();
   return { backend, clock, philipp, anna, philippsPhone, annasPhone };

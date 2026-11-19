@@ -17,6 +17,7 @@ import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
 import { personTimeZoneScenario } from './support/person-time-zone.ts';
 import { planCommandScenarios } from './support/plan.ts';
 import { sharedActionCommandScenarios } from './support/shared-actions.ts';
+import { challengeCommandScenarios } from './support/challenges.ts';
 import { installationB, pullAll, push } from './support/sync.ts';
 
 // Nachweis für #105: `completeDailyGoal` und `grantDailyBonus` auf dem Server (Spezifikation 0,
@@ -144,7 +145,7 @@ describe('Autorisierung der Fachbefehle', () => {
     const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
       confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
       upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario,
-      markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario } as unknown as Parameters<typeof registeredCommandCases>[1];
+      markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario, ...challengeCommandScenarios } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });
 
