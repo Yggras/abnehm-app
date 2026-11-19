@@ -13,6 +13,7 @@ import { ResultStep } from './ResultStep';
 import { SafetyCheckStep } from './SafetyCheckStep';
 import { stepNumber, stepTitles, type OnboardingFlowStep } from './steps';
 import { UnderageStep } from './UnderageStep';
+import { WeeklyPlanStep } from './WeeklyPlanStep';
 import { WelcomeStep } from './WelcomeStep';
 
 export class MissingOnboardingFlowStepError extends Error {
@@ -23,15 +24,16 @@ export class MissingOnboardingFlowStepError extends Error {
 }
 
 /** Wo der Ablauf nach Schritt 1 steht; `minderjaehrig` ist der Sperrbildschirm in Schritt 3. */
-type FlowPosition = 'koerperdaten' | 'minderjaehrig' | 'sicherheits_check' | 'aktivitaetsstufe' | 'zielgewicht' | 'ergebnis' | 'wochenplan';
+type FlowPosition = 'koerperdaten' | 'minderjaehrig' | 'sicherheits_check' | 'aktivitaetsstufe' | 'zielgewicht' | 'ergebnis' | 'wochenplan' | 'health';
 
 /**
  * Ablauf der Route `onboarding` (Zustand `onboarding` der Sitzungs-Weiche): Das Konto besteht, die
  * Person ist auf dem Gerät. Fehlt ihre Bestätigung des Hinweises, etwa nach einer Anmeldung, beginnt
  * der Ablauf bei Schritt 1; Schritt 2 entfällt mit Konto. Danach folgen Schritt 3 „Körperdaten“ und
- * Schritt 4 „Sicherheits-Check“ (#141) sowie die Schritte 5 „Aktivitätsstufe“, 6 „Zielgewicht und
- * Tempo“ und 7 „Ergebnis“ (#143). Ergibt das Geburtsdatum im Entwurf unter 18 Jahre, steht dort der
- * Sperrbildschirm, auch nach einem Neustart. Fortsetzen an einem späteren Schritt liefert #146.
+ * Schritt 4 „Sicherheits-Check“ (#141), die Schritte 5 „Aktivitätsstufe“, 6 „Zielgewicht und Tempo“
+ * und 7 „Ergebnis“ (#143) sowie Schritt 8 „Wochenplan“ (#144), der den Plan speichert und zu Schritt 9
+ * führt. Ergibt das Geburtsdatum im Entwurf unter 18 Jahre, steht dort der Sperrbildschirm, auch nach
+ * einem Neustart. Die Steckplätze 9–11, Abschluss und Fortsetzen an einem späteren Schritt liefert #146.
  */
 export function OnboardingFlow() {
   const onboarding = useOnboarding();
@@ -60,7 +62,7 @@ export function OnboardingFlow() {
 }
 
 /**
- * Schritte 3–7 samt Sperrbildschirm und dem Platzhalter für Schritt 8. Wo sie beginnen, bestimmt das
+ * Schritte 3–8 samt Sperrbildschirm und dem Platzhalter für Schritt 9. Wo sie beginnen, bestimmt das
  * Onboarding-Modul einmal beim Öffnen aus dem Entwurf: Ergibt das Geburtsdatum unter 18 Jahre, steht dort
  * die Sperre. Jeder Schritt liest beim Öffnen den Entwurf, „Zurück“ behält also alle Eingaben.
  */
@@ -83,7 +85,10 @@ function PlanSteps() {
     case 'ergebnis':
       return <ResultStep onBack={() => setPosition('zielgewicht')} onNext={() => setPosition('wochenplan')} />;
     case 'wochenplan':
-      return <PendingStep step="wochenplan" onBack={() => setPosition('ergebnis')} />;
+      return <WeeklyPlanStep onBack={() => setPosition('ergebnis')} onSaved={() => setPosition('health')} />;
+    case 'health':
+      // Erneutes Speichern nach „Zurück“ erzeugt keine Dublette (#144).
+      return <PendingStep step="health" onBack={() => setPosition('wochenplan')} />;
   }
 }
 

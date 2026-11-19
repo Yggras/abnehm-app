@@ -1,11 +1,13 @@
+import type { BausteinKey, Weekday } from '@abnehm/contracts/base';
 import type { BudgetSource } from '@abnehm/contracts/plan';
 
 import { goalTexts, kcalText, kgText } from '../plan-settings/texts';
+import { bausteinNames, germanList } from '../shell/texts';
 
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Sichtbare Texte und zugängliche Namen der Onboarding-Schritte 5 „Aktivitätsstufe“, 6 „Zielgewicht und
-// Tempo“ und 7 „Ergebnis“ (Spezifikation 1, Abschnitte 3 und 9). Begriffe, Prognose, Herleitung und
+// Tempo“, 7 „Ergebnis“ und 8 „Wochenplan“ (Spezifikation 1, Abschnitte 3, 4 und 9). Begriffe, Prognose, Herleitung und
 // Hinweise teilen sie wörtlich mit der Seite „Ziele“ (`goalTexts`), damit beide dasselbe sagen. Hinweise
 // zu Gesundheitswerten sind neutral formuliert und nie in `problem`-Farbe (Abschnitt 6).
 
@@ -66,4 +68,46 @@ export const resultTexts = {
   sport: goalTexts.sport,
   sportHint: goalTexts.sportHint,
   sportStep: goalTexts.sportStep,
+} as const;
+
+const weekdayNames: Readonly<Record<Weekday, string>> = {
+  montag: 'Montag', dienstag: 'Dienstag', mittwoch: 'Mittwoch', donnerstag: 'Donnerstag', freitag: 'Freitag', samstag: 'Samstag', sonntag: 'Sonntag',
+};
+const weekdayShort: Readonly<Record<Weekday, string>> = {
+  montag: 'Mo', dienstag: 'Di', mittwoch: 'Mi', donnerstag: 'Do', freitag: 'Fr', samstag: 'Sa', sonntag: 'So',
+};
+
+/**
+ * Schritt 8: Sporttage und Wiegetag, gegenseitig gesperrt mit Hinweis, und die Vorschau der Woche. Der
+ * Grund der Sperre folgt dem Standard-Wochenplan (Abschnitt 4): Der dritte Platz eines Tags ist am Sporttag
+ * „Sporteinheit“, am Wiegetag „Gewogen“.
+ */
+export const weeklyPlanTexts = {
+  intro: 'Wähle deine Sporttage und deinen Wiegetag. Daraus entstehen deine drei Tagesziele für jeden Wochentag.',
+  sportDays: 'Sporttage',
+  weighDay: 'Wiegetag',
+  weekday: (weekday: Weekday) => weekdayNames[weekday],
+  weekdayShort: (weekday: Weekday) => weekdayShort[weekday],
+  /** Am gesperrten Sporttag-Chip und als Satz unter den Sporttagen. */
+  weighDayLocked: (weekday: Weekday) =>
+    `${weekdayNames[weekday]} ist dein Wiegetag. Dort ist das dritte Tagesziel „${bausteinNames.gewogen}“, darum ist er kein Sporttag.`,
+  /** Am gesperrten Wiegetag-Chip. */
+  sportDayLocked: (weekday: Weekday) =>
+    `${weekdayNames[weekday]} ist ein Sporttag. Dort ist das dritte Tagesziel „${bausteinNames.sporteinheit}“, darum ist er kein Wiegetag.`,
+  /** Als Satz unter dem Wiegetag, solange es Sporttage gibt. */
+  sportDaysLocked: `Sporttage sind kein Wiegetag: Dort ist das dritte Tagesziel „${bausteinNames.sporteinheit}“.`,
+  preview: 'Deine Woche',
+  /** Zugänglicher Name einer Zeile der Vorschau, etwa „Montag: Ernährung erfasst, Wasserziel und Gewogen“. */
+  dayLabel: (weekday: Weekday, bausteine: readonly BausteinKey[]) => `${weekdayNames[weekday]}: ${germanList(bausteine.map((key) => bausteinNames[key]))}`,
+  dayGoals: (bausteine: readonly BausteinKey[]) => bausteine.map((key) => bausteinNames[key]).join(' · '),
+  /** Schwelle der Sporteinheit = Sportwochenziel ÷ Sporttage, aufgerundet (Abschnitt 3). */
+  minimumSession: (minutes: number, weeklyMinutes: number, sportDays: number) =>
+    `Eine Sporteinheit zählt ab ${minutes} Minuten: dein Sportziel von ${weeklyMinutes} Minuten pro Woche, verteilt auf ${sportDays} ${sportDays === 1 ? 'Sporttag' : 'Sporttage'}.`,
+  noSportDay: (weeklyMinutes: number) =>
+    `Ohne Sporttag gibt es kein Tagesziel „${bausteinNames.sporteinheit}“. Dein Sportziel von ${weeklyMinutes} Minuten pro Woche bleibt.`,
+  save: 'Plan speichern',
+  retry: 'Erneut versuchen',
+  failed: 'Dein Plan ist noch nicht gespeichert. Versuch es bitte noch einmal.',
+  /** Der Entwurf ergibt keinen Plan mehr, etwa nach einem Tageswechsel über einen Geburtstag. */
+  incomplete: resultTexts.incomplete,
 } as const;
