@@ -9,6 +9,7 @@ import { createLocalDatabases } from '../../mobile/src/local-db/local-databases.
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
 import { readPartnerCache } from '../../mobile/src/partner-cache/index.ts';
 import { createPartner, type Partner, type SharingView } from '../../mobile/src/partner/partner.ts';
+import { appWirContributions } from '../../mobile/src/shell/app-wir.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
 import { invalidatePartnerSummaries } from '../src/partner-projections/invalidations.ts';
 import { securityLog } from '../src/db/schema/index.ts';
@@ -46,6 +47,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
   });
   const engine = createSyncEngine({ database, registry, transport: http, clock, installationId: newId() });
   const partner: Partner = createPartner({
+    wirContributions: appWirContributions.source,
     database, clock, newId, writer: createSyncWriter({ registry, clock, newId }), sync: () => engine.sync(),
     observeOnline: () => () => {},
     refresh: () => () => {},
