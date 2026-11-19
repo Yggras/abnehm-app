@@ -269,11 +269,21 @@ function steinmauer(stage: Stage): ArtPrimitive[] {
   return drawing;
 }
 
-/** Briefkasten: Kasten auf einem Pfahl; Stufe 2 mit Fähnchen, Stufe 3 mit einem Brief im Schlitz. */
+/**
+ * Briefkasten: ein liegender Kasten mit gewölbtem Deckel und Schlitz auf einem Pfahl, breiter als hoch, damit er
+ * sich von der Laterne abhebt (Impeccable-Kritik zu #204); Stufe 2 mit Fähnchen, Stufe 3 mit einem Brief im Schlitz.
+ */
 function briefkasten(stage: Stage): ArtPrimitive[] {
-  const drawing: ArtPrimitive[] = [shadow(tile * 0.25), rect(-1.5, -20, 3, 20, 'islandWood'), ...box({ x: 0, y: -20 }, 6, 8, 'islandRoofAlt', 'islandRoofAlt')];
-  if (stage >= 2) drawing.push(rect(6, -34, 1.5, 9, 'islandWood'), { type: 'flaeche', points: [{ x: 7.5, y: -34 }, { x: 12, y: -32 }, { x: 7.5, y: -30 }], tone: 'islandRoof' });
-  if (stage >= 3) drawing.push(rect(-4, -33, 6, 3, 'surfaceCard'));
+  const drawing: ArtPrimitive[] = [
+    shadow(tile * 0.3),
+    rect(-1.5, -18, 3, 18, 'islandWood'),
+    { type: 'oval', x: -10, y: -31, width: 20, height: 8, tone: 'islandRoofAlt' },
+    rect(-10, -27, 20, 10, 'islandRoofAlt'),
+    { type: 'flaeche', points: [{ x: 0, y: -31 }, { x: 10, y: -31 }, { x: 10, y: -17 }, { x: 0, y: -17 }], tone: 'ink', opacity: opacity.shadeRight },
+    rect(-6, -25, 9, 1.5, 'ink'),
+  ];
+  if (stage >= 2) drawing.push(rect(9, -34, 1.5, 12, 'islandWood'), { type: 'flaeche', points: [{ x: 10.5, y: -34 }, { x: 15, y: -32 }, { x: 10.5, y: -30 }], tone: 'islandRoof' });
+  if (stage >= 3) drawing.push({ type: 'flaeche', points: [{ x: -5, y: -29 }, { x: 2, y: -30.5 }, { x: 2.5, y: -25 }, { x: -4.5, y: -24 }], tone: 'surfaceCard' });
   return drawing;
 }
 
