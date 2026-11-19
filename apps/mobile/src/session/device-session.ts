@@ -44,7 +44,7 @@ import { appTodayRefresh } from '../shell/today-refresh';
 import { createHttpSyncTransport, createLocalCommandRegistry, createSyncEngine, createSyncRegistry, createSyncWriter, foundationLocalCommands, foundationSyncEntities, type SyncEngine } from '../sync';
 import { startSyncTriggers } from '../sync/triggers';
 import { installationId, observeOutbox, observePendingSignature } from '../sync/device-metadata';
-import { appSportWeeks, appTrackers, appWeightDetail, createTrackers, sportEntryEntity, waterEntryEntity, weightEntryEntity } from '../trackers';
+import { appSportWeeks, appTrackers, appWeightDetail, createTrackers, sportEntryEntity, trackerDailyGoals, waterEntryEntity, weightEntryEntity } from '../trackers';
 import { createAppSession, type AppSession } from './app-session';
 import { followSessionGate, type SessionGateSource } from './session-gate';
 import { followPersonTimeZone } from './time-zone-follower';
@@ -145,11 +145,11 @@ function deviceState() {
     onAccountOpened(database) {
       const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError });
       // Baustein-Auswertung und Tages-Check-in (Spezifikation 0, Abschnitt 3): Die Ernährung registriert
-      // „Ernährung erfasst“, „Im Kalorienbudget“ und den Check-in `ernaehrung` (#166); Wasser, Sport und
-      // Gewicht folgen mit Spezifikation 3 (#178).
+      // „Ernährung erfasst“, „Im Kalorienbudget“ und den Check-in `ernaehrung` (#166), das Tracker-Modul
+      // Wasserziel, Sporteinheit, Gewogen und die Check-ins `wasser`, `sport` und `gewicht` (#178).
       const dailyGoalRegistry = createDailyGoalRegistry({
-        bausteine: [...nutritionDailyGoals.bausteine],
-        checkIns: [...nutritionDailyGoals.checkIns],
+        bausteine: [...nutritionDailyGoals.bausteine, ...trackerDailyGoals.bausteine],
+        checkIns: [...nutritionDailyGoals.checkIns, ...trackerDailyGoals.checkIns],
       });
       const persistence = createDailyGoalPersistence({ registry: dailyGoalRegistry, clock: appClock, writer: syncWriter, dispatcher });
       // Ernährung (Spezifikation 2): Protokoll und Erfassen sprechen nur mit diesem Modul.
