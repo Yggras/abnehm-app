@@ -1,0 +1,76 @@
+# Gerätelauf Koppeln (Spezifikation 5, Abschnitt 5 und Testing Decisions; #120), zwei Teile mit je eigenem Seed:
+#
+# 1. „Code teilen“ öffnet das Teilen-Menü: Seed `solo` öffnet `partner.invite`. Die App erzeugt am E2E-Backend
+#    einen Code und zeigt ihn mit „gültig bis …“; „Code teilen“ öffnet das System-Teilen-Menü.
+# 2. Code eines geseedeten zweiten Kontos eingeben → Reaktivierungsvorschau → gekoppelt: Seed
+#    `einladung-nach-entkopplung` (`packages/contracts/seeds/einladung-nach-entkopplung.ts`). Anna hat entkoppelt und danach
+#    den Code 271828 erzeugt. Philipp gibt ihn unter „Code eingeben“ ein, sieht „Mit Anna koppeln?“ samt
+#    Reaktivierungstext und koppelt. „Ihr seid wieder gekoppelt“ führt mit „Zu eurer Insel“ in den Tab „Momo“;
+#    dort ist die Insel wieder da, weil die Reaktivierung Rollen und Insel zurückbringt.
+#
+# Fehlercodes, Offline und die Rückkehr zum Aufrufer belegen die Komponententests
+# (`src/partner/Coupling.test.tsx`). Die Bildschirmfotos sind die Vorlage der Impeccable-Kritik. Einzeln mit
+# `scripts/e2e-run --ablauf koppeln`.
+appId: ${APP_ID}
+name: Koppeln per Code
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+
+# 1. Code teilen ------------------------------------------------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=solo&ziel=/partner/invite
+- extendedWaitUntil:
+    visible: "gültig bis .*"
+    timeout: 30000
+- assertVisible: "Partner einladen"
+- assertVisible: "Einladungscode.*"
+- takeScreenshot: koppeln-1-einladen
+- tapOn: "Code teilen"
+- runFlow:
+    file: teilablaeufe/teilen-menue.yaml
+
+# 2. Code eingeben → Reaktivierungsvorschau → gekoppelt ----------------------------------------------
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=einladung-nach-entkopplung&ziel=/partner/redeem
+# Den Hinweis „Sechs Ziffern“ lesen Screenreader als Hinweis des Felds; Maestro sieht deshalb nur das Feld.
+- extendedWaitUntil:
+    visible: "Einladungscode"
+    timeout: 30000
+- tapOn: "Einladungscode"
+- inputText: "271828"
+- takeScreenshot: koppeln-3-code-eingeben
+- tapOn: "Weiter"
+- extendedWaitUntil:
+    visible: "Mit Anna koppeln?"
+    timeout: 15000
+- assertVisible: "Ihr wart schon gekoppelt. Eure Insel und Momo kommen mit euren bisherigen Rollen und Freigaben zurück."
+- takeScreenshot: koppeln-4-reaktivierung
+- tapOn: "Koppeln"
+- extendedWaitUntil:
+    visible: "Ihr seid wieder gekoppelt"
+    timeout: 15000
+- assertVisible: "Du und Anna: Eure Insel und Momo sind wieder da."
+- takeScreenshot: koppeln-5-gekoppelt
+- tapOn: "Zu eurer Insel"
+# Die Reaktivierung bringt die geschlüpfte Insel zurück; auf diesem frisch installierten Gerät erklärt beim
+# ersten Öffnen „So wächst Momo“ das Wachstum (wie in `schluepfen.yaml`).
+- extendedWaitUntil:
+    visible: "Tagesziele bringen Energie."
+    timeout: 30000
+- takeScreenshot: koppeln-6-insel
+- tapOn: "Verstanden"
+- assertVisible: "Momos Insel.*"

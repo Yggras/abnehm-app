@@ -3,6 +3,7 @@ import { getTableColumns, is, sql } from 'drizzle-orm';
 import { getTableConfig, PgTable, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { EntityId } from '@abnehm/contracts/base';
+import type { InviteCode } from '@abnehm/contracts/coupling';
 import {
   authTables,
   canonicalRows,
@@ -15,6 +16,7 @@ import {
 } from '@abnehm/contracts/seeds';
 
 import type { Backend } from '../../src/backend.ts';
+import type { InviteCodes } from '../../src/coupling/invite-codes.ts';
 import type { Database, DbExecutor } from '../../src/database.ts';
 import * as schema from '../../src/db/schema/index.ts';
 import { seedPhotoFiles } from './photo-seed.ts';
@@ -44,9 +46,13 @@ const insertOrder = dependencyOrder(
   })),
 );
 
-/** Setzt Postgres auf den Ausgangszustand des Manifests. Scheitert eine Prüfung, bleibt nichts zurück. */
-export async function seedServer(database: Database, manifest: SeedManifest): Promise<void> {
-  const rows = manifest.initial.server;
+/**
+ * Setzt Postgres auf den Ausgangszustand des Manifests. Scheitert eine Prüfung, bleibt nichts zurück.
+ * Einladungen erhalten den HMAC ihres Codes aus `inviteCodes` des Manifests (#120), gebildet mit den
+ * Einladungscodes des Servers.
+ */
+export async function seedServer(database: Database, manifest: SeedManifest, codes: Pick<InviteCodes, 'hmacOf'>): Promise<void> {
+  const rows = withInviteCodeHmacs(manifest, codes);
   for (const table of Object.keys(rows)) {
     if (!byName.has(table)) throw new Error(`Seed: unbekannte Tabelle ${table}`);
   }
@@ -82,6 +88,22 @@ export async function seedServer(database: Database, manifest: SeedManifest): Pr
   });
 }
 
+/** Die Zeilen des Ausgangszustands, Einladungen samt HMAC ihres Codes unter dem Einladungs-Secret des Servers. */
+function withInviteCodeHmacs(manifest: SeedManifest, codes: Pick<InviteCodes, 'hmacOf'>): SeedRows {
+  const rows = manifest.initial.server;
+  const invitations = rows.invitation ?? [];
+  if (invitations.length === 0) return rows;
+  const codeOf = new Map<string, InviteCode>((manifest.extensions?.inviteCodes?.codes ?? []).map((entry) => [entry.invitationId, entry.code]));
+  return {
+    ...rows,
+    invitation: invitations.map((row) => {
+      const code = codeOf.get(String(row.id));
+      if (code === undefined) throw new Error(`Seed: Einladung ${String(row.id)} ohne Code`);
+      return { ...row, code_hmac: codes.hmacOf(code) };
+    }),
+  };
+}
+
 /**
  * Seed der Development-Abläufe (Seed-Route und Seed-Kommando, #117): Ausgangszustand herstellen, samt
  * Bilddaten in der Fotoablage (#162), dann die Serverschritte des Manifests ausführen. `entkoppeln` läuft
@@ -90,10 +112,10 @@ export async function seedServer(database: Database, manifest: SeedManifest): Pr
  */
 export async function seedScenario(
   database: Database,
-  { uncoupling, photoStorage }: Pick<Backend, 'uncoupling' | 'photoStorage'>,
+  { uncoupling, photoStorage, inviteCodes }: Pick<Backend, 'uncoupling' | 'photoStorage' | 'inviteCodes'>,
   manifest: SeedManifest,
 ): Promise<void> {
-  await seedServer(database, manifest);
+  await seedServer(database, manifest, inviteCodes);
   await seedPhotoFiles(photoStorage, manifest);
   for (const step of manifest.steps) {
     if (step.type !== 'entkoppeln') continue;

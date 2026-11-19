@@ -1,0 +1,15 @@
+# Teilablauf: Das System-Teilen-Menü ist offen (React-Native-Share-API, https://reactnative.dev/docs/share) und zeigt
+# den Einladungstext der App als Vorschau. iOS 27 zeigt das Menü als Popover mit gekürzter Vorschau
+# („Lass uns gemeinsam mit Momo start…“, beobachtet am 19.11.2026, #120). Danach schließt System-Zurück das Menü
+# auf Android; auf iOS beendet der nächste `launchApp` es.
+appId: ${APP_ID}
+---
+- extendedWaitUntil:
+    visible: "Lass uns gemeinsam mit Momo.*"
+    timeout: 20000
+- takeScreenshot: teilen-menue
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back

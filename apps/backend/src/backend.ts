@@ -130,10 +130,12 @@ export function createBackend({
   sync.registerEntity(notificationSettingEntity);
   sync.registerEntity(encouragementEntity);
   sync.registerCommand(sendEncouragementCommand);
+  // Einladungscodes unter dem Einladungs-Secret; der Seeder des Development-Backends bildet damit die HMACs geseedeter Codes (#120).
+  const inviteCodes = createInviteCodes(invitationSettings.codeSecret);
   const invitations = invitationRoutes({
     database,
     clock,
-    codes: createInviteCodes(invitationSettings.codeSecret),
+    codes: inviteCodes,
     limiter: createInvitationLimiter({ clock }),
     securityLog,
     ipAddressOf: auth.ipAddressOf,
@@ -159,6 +161,7 @@ export function createBackend({
     partnerProjections,
     sharedActions,
     uncoupling,
+    inviteCodes,
     jobs,
   };
 }

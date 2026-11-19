@@ -7,6 +7,7 @@ import {
   seedDays,
   seedIds,
   seedImageKeys,
+  seedInviteCodes,
   seedManifests,
   seedPassword,
   type SeedPart,
@@ -282,6 +283,25 @@ describe('Seed-Manifest', () => {
     const step = { type: 'tagesziele_auswerten', installation: 'philipp-ipad', localDates: [seedDays.heute], cause: 'app_oeffnung', operationIds: [first!.operationId] };
     expect(SeedManifest.safeParse({ ...zwei, steps: [step] }).error?.issues.map(({ message }) => message)).toEqual([
       `Operations-ID doppelt: ${first!.operationId}`,
+    ]);
+  });
+
+  it('Einladungen (#120): Klartext-Code in `inviteCodes`, nie der HMAC in der Zeile', () => {
+    const manifest = seedManifests['einladung-nach-entkopplung'];
+    const id = seedIds.invitation.annasEinladung;
+    const messages = (changed: object) => SeedManifest.safeParse({ ...manifest, ...changed }).error?.issues.map(({ message }) => message);
+    const [row] = manifest.initial.server.invitation!;
+    const withHmac = { ...manifest.initial, server: { ...manifest.initial.server, invitation: [{ ...row, code_hmac: 'abc' }] } };
+
+    expect(manifest.extensions?.inviteCodes).toEqual({ version: 1, codes: [{ invitationId: id, code: seedInviteCodes.annasEinladung }] });
+    expect(messages({ extensions: { ...manifest.extensions, inviteCodes: undefined } })).toEqual([
+      `initial: Einladung ${id} ohne Code in \`inviteCodes\``,
+      `target: Einladung ${id} ohne Code in \`inviteCodes\``,
+    ]);
+    expect(messages({ initial: withHmac })).toEqual([`initial: Einladung ${id} nennt ihren HMAC; der Seeder bildet ihn aus \`inviteCodes\``]);
+    const stray = { invitationId: seedIds.sharedAction.dekoGeschenk, code: '123456' };
+    expect(messages({ extensions: { ...manifest.extensions, inviteCodes: { version: 1, codes: [...manifest.extensions!.inviteCodes!.codes, stray] } } })).toEqual([
+      `Einladungscode ${stray.invitationId}: Einladung fehlt im Ausgangszustand`,
     ]);
   });
 });

@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { RedeemScreen } from '../../partner/RedeemScreen';
 
-export default placeholderRoute('partner.redeem');
+export default routeScreen('partner.redeem', RedeemScreen);

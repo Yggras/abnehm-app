@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { InviteScreen } from '../../partner/InviteScreen';
 
-export default placeholderRoute('partner.invite');
+export default routeScreen('partner.invite', InviteScreen);

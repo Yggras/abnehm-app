@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { createOpenedModule, useOpenedModule } from '../shell/opened-module';
 import type { Source } from '../shell/followed-source';
+import type { CouplingState } from './coupling-state';
 import type { EncourageView, Partner } from './partner';
 import type { WirPartner } from './partner-view';
 
@@ -18,7 +19,7 @@ export function usePartner(): Partner | null {
 type Loading = Readonly<{ type: 'loading' }>;
 
 /** Die Quellen des Partnerbereichs, die ein Bildschirm abonniert. */
-type SourceKey = 'wir' | 'encourageSheet';
+type SourceKey = 'wir' | 'encourageSheet' | 'couplingState';
 type ValueOf<K extends SourceKey> = Partner[K] extends Source<infer V> ? V : never;
 
 /**
@@ -43,4 +44,9 @@ export function useWirPartner(partner: Partner | null): WirPartner {
 /** Der Zustand des Sheets `partner.encourage`. */
 export function useEncourageView(partner: Partner | null): EncourageView {
   return usePartnerSource(partner, 'encourageSheet');
+}
+
+/** Stand der Kopplung für `partner.invite` und `partner.redeem` aus SQLite. */
+export function useCouplingState(partner: Partner | null): CouplingState {
+  return usePartnerSource(partner, 'couplingState');
 }

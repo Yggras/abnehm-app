@@ -180,7 +180,7 @@ export type SeedWorld = Readonly<{ backend: TestBackend; manifest: SeedManifest;
 /** Seedet Postgres und die Geräte aller Installationen; die Uhr des Backends steht auf der des Manifests. */
 export async function seeded(manifest: SeedManifest): Promise<SeedWorld> {
   const backend = await createTestBackend({ clock: createTestClock(manifest.clock) });
-  await seedServer(backend.database, manifest);
+  await seedServer(backend.database, manifest, backend.inviteCodes);
   await seedPhotoFiles(backend.photoStorage, manifest);
   const phones: Record<SeedKey, SeedPhone> = {};
   for (const { key } of manifest.installations) phones[key] = await seedPhone(backend, manifest, key);
@@ -211,7 +211,7 @@ export async function runSteps({ backend, manifest, phones }: SeedWorld): Promis
 
 /** Seedet Postgres und alle Geräte erneut, etwa nach Änderungen oder den Schritten. */
 export async function reseed({ backend, manifest, phones }: SeedWorld): Promise<void> {
-  await seedServer(backend.database, manifest);
+  await seedServer(backend.database, manifest, backend.inviteCodes);
   await seedPhotoFiles(backend.photoStorage, manifest);
   for (const [key, { database }] of Object.entries(phones)) seedLocalDatabase(database, manifest, key);
 }

@@ -40,13 +40,18 @@ export type WirPartner = Readonly<{ type: 'loading' }> | Readonly<{ type: 'solo'
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
+/** Uhrzeit einer Ablesung als „14:20“; auch für „gültig bis …“ der Einladung (#120). */
+export function clockTimeOf(reading: ClockReading): string {
+  const minutes = minutesOfDay(reading);
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
 export function dataAgeOf(dataAsOf: Instant, now: ClockReading): DataAge {
   const ms = Date.parse(now.instant) - Date.parse(dataAsOf);
   if (ms < 60_000) return { type: 'gerade_eben' };
   if (ms < 60 * 60_000) return { type: 'minuten', minutes: Math.floor(ms / 60_000) };
   const then = readingOf(dataAsOf, now.timeZone);
-  const minutes = minutesOfDay(then);
-  const time = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+  const time = clockTimeOf(then);
   if (then.localDate === now.localDate) return { type: 'heute', time };
   const [, month, day] = then.localDate.split('-');
   return { type: 'datum', day: day!, month: month!, time };

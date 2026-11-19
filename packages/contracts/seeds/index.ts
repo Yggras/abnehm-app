@@ -1,3 +1,4 @@
+import { einladungNachEntkopplungManifest } from './einladung-nach-entkopplung.ts';
 import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
@@ -36,7 +37,7 @@ export {
 export { canonicalJson, canonicalRows, dependencyOrder, withoutDerivedColumns } from './canonical.ts';
 export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts, vorDemSchluepfenParts } from './gekoppelt.ts';
-export { seedAccounts, seedClock, seedDays, seedIds, seedImageKeys, seedInstallations, seedPassword } from './ids.ts';
+export { seedAccounts, seedClock, seedDays, seedIds, seedImageKeys, seedInstallations, seedInviteCodes, seedPassword } from './ids.ts';
 export { ServerClockRequest, serverClockRoutePath } from './server-clock.ts';
 export { uncoupledState, uncouplingRequestOf, type SeedUncouplingRequest } from './nach-entkopplung.ts';
 
@@ -48,6 +49,7 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   frisches_konto: frischesKontoManifest,
   'solo-energie': soloEnergieManifest,
   'rollenwahl-offen': rollenwahlOffenManifest,
+  'einladung-nach-entkopplung': einladungNachEntkopplungManifest,
   'haelfte-voll': haelfteVollManifest,
   doppelausgabe: doppelausgabeManifest,
   feldkonflikt: feldkonfliktManifest,

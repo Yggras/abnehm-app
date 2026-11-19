@@ -105,7 +105,7 @@ type World = Readonly<{ backend: TestBackend; phones: Readonly<Record<SeedKey, P
 
 async function seeded(manifest: SeedManifest): Promise<World> {
   const backend = await createTestBackend({ clock: createTestClock(manifest.clock) });
-  await seedServer(backend.database, manifest);
+  await seedServer(backend.database, manifest, backend.inviteCodes);
   const phones: Record<SeedKey, Phone> = {};
   for (const { key } of manifest.installations) phones[key] = await phone(backend, manifest, key);
   return { backend, phones };
@@ -140,7 +140,7 @@ describe.each(['solo-energie', 'rollenwahl-offen', 'haelfte-voll'] as const)('Sz
     await runSyncSteps(manifest, world);
     expect(await stateOf(world)).toEqual(canonical(manifest.target));
 
-    await seedServer(world.backend.database, manifest);
+    await seedServer(world.backend.database, manifest, world.backend.inviteCodes);
     for (const [key, { database }] of Object.entries(world.phones)) seedLocalDatabase(database, manifest, key);
     expect(await stateOf(world)).toEqual(canonical(manifest.initial));
   });

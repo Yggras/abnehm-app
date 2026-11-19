@@ -51,6 +51,7 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('solo-ziele-ab-morgen', 'packages/contracts/test/seeds-ziele-einstellungen.test.ts'),
   manifest('gekoppelt', 'apps/backend/test/seed-app.test.ts'),
   manifest('nach_entkopplung', 'apps/backend/test/seed-app.test.ts'),
+  manifest('einladung-nach-entkopplung', 'apps/backend/test/seed-partner-app.test.ts'),
   manifest('frisches_konto', 'apps/backend/test/seed-app.test.ts'),
   manifest('leer'),
   manifest('teilweise'),

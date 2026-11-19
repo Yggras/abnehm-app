@@ -99,6 +99,7 @@ manifestSuite('kalorienbudget-unter-untergrenze');
 manifestSuite('kalorienbudget-im-budget');
 manifestSuite('kalorienbudget-ueber-budget');
 manifestSuite('veralteter_partnerstand');
+manifestSuite('einladung-nach-entkopplung');
 manifestSuite('zwei_installationen');
 manifestSuite('offline_sync');
 manifestSuite('solo-energie');
