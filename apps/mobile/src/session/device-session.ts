@@ -15,6 +15,7 @@ import { appHealthImport } from '../health/app-health';
 import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
 import { createGameService } from '../island/game-service';
+import { islandEventCommands } from '../island/island-events';
 import { islandObjectCommands } from '../island/object-commands';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
@@ -166,7 +167,7 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installationId(database, appClock, newId), onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...islandObjectCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...islandObjectCommands, ...islandEventCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
       });
       activeEngine = engine;
       // Partnerbereich (Spezifikation 5): „Wir“ und die Partner-Karte lesen nur den widerrufbaren Partnercache.

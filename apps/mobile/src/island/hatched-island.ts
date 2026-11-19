@@ -16,10 +16,11 @@ import { areaUnlock, blueprintUnlock, communityProject, couplingMember, island, 
 import { sqliteOf } from '../local-db/sqlite';
 import { halvesFor, type IslandHalves } from './halves';
 import { islandProgressOf } from './island-entities';
+import { readIslandEvents, type IslandEvents } from './island-events';
 
 // Die geschlüpfte Insel aus den lokalen Daten (Spezifikation 4, Abschnitte 2.1, 6, 7 und 11; #184, #191):
 // Rollen, Felder mit Besitzer, Objekte auf den Feldern, das eigene Lager (#194), freigeschaltete Gebiete, Inselfortschritt samt
-// Levelbalken, Momo und die gemeinsamen Ereignisse für „Wir“. Fast alles kommt per Pull vom Server; nur
+// Levelbalken, Momo, die gemeinsamen Ereignisse für „Wir“ und die offenen Insel-Ereignisse der Person (#202). Fast alles kommt per Pull vom Server; nur
 // eigene Bauten und damit die eigene Hälfte sind lokal sofort wirksam. Solange ein Teil fehlt, etwa
 // zwischen zwei Seiten desselben Pulls, ist die Insel noch nicht lesbar.
 
@@ -67,6 +68,8 @@ export type HatchedIsland = Readonly<{
   unlockedBlueprints: readonly string[];
   appearance: MomoAppearance;
   sharedEvents: readonly SharedIslandEvent[];
+  /** Was für die betrachtende Person auf der Insel wartet: Besucher mit Wunsch (#202). */
+  events: IslandEvents;
 }>;
 
 /**
@@ -149,6 +152,7 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
       .orderBy(asc(islandEvent.occurredAt))
       .all()
       .map((row) => ({ eventId: EntityId.parse(row.eventId), type: SharedEventType.parse(row.type), occurredAt: Instant.parse(row.occurredAt) })),
+    events: readIslandEvents(tx, { islandId, personId }),
   };
 }
 
