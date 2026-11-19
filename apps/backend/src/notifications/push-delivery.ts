@@ -218,8 +218,11 @@ export function createPushDelivery({
       .set({ active: false, updatedAt: at })
       .where(and(eq(pushInstallation.id, installationId), lte(pushInstallation.updatedAt, sentAt)));
 
-  /** Schreibt fällige Versuche vor dem HTTP-Aufruf als `gesendet` fest (eigene Transaktion). */
-  async function claimDue(at: Date): Promise<Claimed[]> {
+  /**
+   * Schreibt fällige Versuche vor dem HTTP-Aufruf als `gesendet` fest (eigene Transaktion). `full`, wenn
+   * der Stapel voll war und weitere fällige Versuche warten können, auch wenn keiner gesendet wird.
+   */
+  async function claimDue(at: Date): Promise<{ claimed: Claimed[]; full: boolean }> {
     return database.db.transaction(async (tx) => {
       const due = await tx
         .select({ attempt: deliveryAttempt, intent: notificationIntent, installation: pushInstallation })
@@ -255,7 +258,7 @@ export function createPushDelivery({
           claimed.push({ attemptId: attempt.id, sends, installationId: installation.id, intentCreatedAt: intent.createdAt, message });
         }
       }
-      return claimed;
+      return { claimed, full: due.length === MAX_MESSAGES_PER_REQUEST };
     });
   }
 
@@ -271,8 +274,8 @@ export function createPushDelivery({
 
   /** Sendet einen Stapel; liefert, ob es weitere fällige Versuche geben kann. */
   async function sendBatch(at: Date): Promise<boolean> {
-    const claimed = await claimDue(at);
-    if (claimed.length === 0) return false;
+    const { claimed, full } = await claimDue(at);
+    if (claimed.length === 0) return full;
     const outcome = await port.send(claimed.map(({ message }) => message));
 
     await database.db.transaction(async (tx) => {
@@ -296,7 +299,7 @@ export function createPushDelivery({
         }
       }
     });
-    return claimed.length === MAX_MESSAGES_PER_REQUEST;
+    return full;
   }
 
   // 3. Quittungen --------------------------------------------------------------------------------------
