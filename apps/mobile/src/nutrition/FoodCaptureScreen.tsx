@@ -1,5 +1,5 @@
 import type { LocalDate, MealKey } from '@abnehm/contracts/base';
-import { foodRefKey, foodValuesOf, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
+import { foodRefKey, foodValuesOf, sameFoodValues, type CaptureMethod, type DisplayUnit, type FoodValues } from '@abnehm/contracts/nutrition';
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -84,8 +84,6 @@ type FormStep = Readonly<{
   /** Beim Ändern das Lebensmittel, aus dem das Formular kam: Speichern ohne Änderung kehrt zu ihm zurück. */
   from?: Selection;
 }>;
-
-const sameValues = (a: FoodValues, b: FoodValues) => JSON.stringify(foodValuesOf(a)) === JSON.stringify(foodValuesOf(b));
 
 function AddSlots({
   nutrition,
@@ -178,7 +176,7 @@ function AddSlots({
 
   /** Ohne Änderung entsteht nichts: Erst eine geänderte Fassung wird zum eigenen Lebensmittel (#157). */
   const submit = (step: FormStep, values: FoodValues) => {
-    if (step.from !== undefined && sameValues(values, step.from.snapshot)) {
+    if (step.from !== undefined && sameFoodValues(values, step.from.snapshot)) {
       setForm(null);
       setSelected(step.from);
       return;

@@ -15,6 +15,7 @@ import {
 
 import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
+import { recentDays } from './quick-foods';
 import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
 
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
@@ -250,7 +251,7 @@ export const nutritionTexts = {
     rowLabel: (name: string, amount: string, kcal: number) => `${name}, ${amount}, ${kcalText(kcal)}`,
     showAll: (count: number) => `Alle ${count} anzeigen`,
     showFewer: 'Weniger anzeigen',
-    noRecent: (meal: MealKey) => `Was du in den letzten 30 Tagen ${mealPhrases[meal]} eingetragen hast, steht hier.`,
+    noRecent: (meal: MealKey) => `Was du in den letzten ${recentDays} Tagen ${mealPhrases[meal]} eingetragen hast, steht hier.`,
     noFavorites: 'Markiere ein Lebensmittel mit dem Stern, dann steht es hier.',
   },
   /** Schalter in Mengenprüfung und Eintragsdetails (#158). */

@@ -19,7 +19,7 @@ import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { amountPrefill, type AmountPrefill } from './amount-prefill';
 import { createBlsCatalog } from './bls-catalog';
-import { createCurrentFoods } from './current-foods';
+import { createCurrentFoods, type CurrentFoods } from './current-foods';
 import { readDayLog, readEntryDetail, type DayLog, type EntryDetail } from './day-log';
 import { addEntry, deleteEntry, undoEntry, updateEntry, type EntryChange, type EntryUndo, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
@@ -50,7 +50,6 @@ export type NutritionDependencies = Readonly<{
   observeOnline: (listener: (online: boolean) => void) => () => void;
 }>;
 
-export type { AmountPrefill } from './amount-prefill';
 
 export type Nutrition = Readonly<{
   /**
@@ -170,6 +169,7 @@ export type Nutrition = Readonly<{
 export function createNutrition(dependencies: NutritionDependencies): Nutrition {
   const { database } = dependencies;
   const tokens = createUndoTokens();
+  const currentFoods = new WeakMap<CatalogDatabase, CurrentFoods>();
   /** Meldung und Werte eines Befehls nach seiner Transaktion, samt Undo-Token. */
   const outcome = <K extends string, V>({ messageKey, values, undo }: Readonly<{ messageKey: K; values: V; undo: EntryUndo }>) => ({
     messageKey,
@@ -206,18 +206,25 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
       }),
     observeQuickFoods: (catalog, meal, listener) => database.observe((tx) => quickFoodsOf(tx, catalog, meal), listener),
     recordFavoriteUse: (catalog, ref) =>
-      database.transaction((tx) => refreshFoodFavorites(tx, dependencies, createCurrentFoods(createBlsCatalog(catalog)), ref)),
+      database.transaction((tx) => refreshFoodFavorites(tx, dependencies, currentFoodsOf(catalog), ref)),
     observeFoodFavorite: (food, listener) => database.observe((tx) => readOwnPerson(tx) !== undefined && isFoodFavorite(tx, food), listener),
     markFoodFavorite: (food) => database.transaction((tx) => markFoodFavorite(tx, dependencies, food)),
     unmarkFoodFavorite: (food) => database.transaction((tx) => unmarkFoodFavorite(tx, dependencies, food)),
   };
+
+  /** Auflösung der Referenzen über diesem Katalog; je Katalog einmal gebaut. */
+  function currentFoodsOf(catalog: CatalogDatabase): CurrentFoods {
+    let foods = currentFoods.get(catalog);
+    if (foods === undefined) currentFoods.set(catalog, (foods = createCurrentFoods(createBlsCatalog(catalog))));
+    return foods;
+  }
 
   /** Beide Listen des Hinzufügen-Bildschirms; `null` ohne eigene Person. „Zuletzt verwendet“ endet heute. */
   function quickFoodsOf(tx: ReadContext, catalog: CatalogDatabase, meal: MealKey): QuickFoods | null {
     const person = readOwnPerson(tx);
     if (person === undefined) return null;
     const personId = EntityId.parse(person.id);
-    const foods = createCurrentFoods(createBlsCatalog(catalog));
+    const foods = currentFoodsOf(catalog);
     return { recent: recentFoods(tx, foods, personId, meal, dependencies.clock.read().localDate), favorites: favoriteFoods(tx, foods, personId) };
   }
 }

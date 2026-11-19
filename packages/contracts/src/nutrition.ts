@@ -105,6 +105,24 @@ export function foodValuesOf({ name, baseUnit, referenceAmount, milliKcal, prote
   return { name, baseUnit, referenceAmount, milliKcal, proteinMg, carbsMg, fatMg, portions };
 }
 
+/** Ob zwei Lebensmittel dieselben Werte haben: Name, Einheit, Bezugsmenge, Nährwerte und Umrechnungen in derselben Reihenfolge. */
+export function sameFoodValues(a: FoodValues, b: FoodValues): boolean {
+  const scalar = (['name', 'baseUnit', 'referenceAmount', 'milliKcal', 'proteinMg', 'carbsMg', 'fatMg'] as const).every((key) => a[key] === b[key]);
+  return (
+    scalar &&
+    a.portions.length === b.portions.length &&
+    a.portions.every((portion, index) => {
+      const other = b.portions[index];
+      return other !== undefined && portion.unit === other.unit && portion.label === other.label && portion.baseAmount === other.baseAmount;
+    })
+  );
+}
+
+/** Ob zwei Snapshots gleich sind: dieselben Werte, dieselbe Quelle und Quellenangabe. */
+export function sameSnapshot(a: NutritionSnapshot, b: NutritionSnapshot): boolean {
+  return sameFoodValues(a, b) && a.source === b.source && a.attribution === b.attribution;
+}
+
 /**
  * Regeln der Werte eines Lebensmittels (Spezifikation 2, Abschnitt 2), für Snapshot und eigenes
  * Lebensmittel gleich: nicht negative Nährwerte (`nutrient`), Makros höchstens in Höhe der Bezugsmenge,

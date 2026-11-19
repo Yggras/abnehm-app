@@ -1,5 +1,5 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
-import { foodFavoriteId, FoodFavoriteUpsert, foodRefKey, foodValuesOf, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import { foodFavoriteId, FoodFavoriteUpsert, foodRefKey, foodValuesOf, sameSnapshot, type FoodRef, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { requireOwnPerson } from '../local-db/person-header';
@@ -112,8 +112,4 @@ function persist(tx: TransactionContext, { clock, writer }: FavoriteDependencies
   const knownServerVersion = readFoodFavorite(tx, entityId)?.serverVersion ?? null;
   writeFoodFavorite(tx, entityId, personId, payload, Instant.parse(clock.read().instant));
   writer.upsert(tx, { entityType: foodFavoriteEntity.entityType, entityId, payload, knownServerVersion });
-}
-
-function sameSnapshot(a: NutritionSnapshot, b: NutritionSnapshot): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
 }

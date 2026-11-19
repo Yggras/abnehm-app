@@ -25,4 +25,5 @@ export { ownFoodEntity } from './own-food-entity';
 export { rebuildOwnFoodIndex, type OwnFoodChoice } from './own-food-repository';
 export type { OwnFoodBase } from './own-foods';
 export type { QuickFood, QuickFoods } from './quick-foods';
-export { createNutrition, type AmountPrefill, type Nutrition, type NutritionDependencies } from './nutrition';
+export type { AmountPrefill } from './amount-prefill';
+export { createNutrition, type Nutrition, type NutritionDependencies } from './nutrition';

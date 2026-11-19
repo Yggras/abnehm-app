@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
 
 import { EntityId, type Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { BaseUnit, foodValuesOf, OwnFoodOrigin, ownFoodSnapshot, type FoodRef, type FoodValues, type NutritionSnapshot, type OwnFoodRecord, type OwnFoodUpsert } from '@abnehm/contracts/nutrition';
+import { BaseUnit, foodValuesOf, OwnFoodOrigin, ownFoodSnapshot, sameFoodValues, type FoodRef, type FoodValues, type NutritionSnapshot, type OwnFoodRecord, type OwnFoodUpsert } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { ownFood } from '../local-db/schema';
@@ -118,14 +118,13 @@ export function livingOwnFood(tx: ReadContext, entityId: EntityId): OwnFoodChoic
  * demselben Snapshot angelegt hat (#158).
  */
 export function ownFoodWithValues(tx: ReadContext, values: FoodValues): OwnFoodChoice | undefined {
-  const wanted = JSON.stringify(foodValuesOf(values));
   const row = sqliteOf(tx)
     .select()
     .from(ownFood)
     .where(and(eq(ownFood.name, values.name), isNull(ownFood.originType), isNull(ownFood.deletedAt)))
     .orderBy(asc(ownFood.createdAt), asc(ownFood.id))
     .all()
-    .find((candidate) => JSON.stringify(valuesOf(candidate)) === wanted);
+    .find((candidate) => sameFoodValues(valuesOf(candidate), values));
   return row && { ref: { type: 'eigen', key: EntityId.parse(row.id) }, snapshot: ownFoodSnapshot(valuesOf(row)) };
 }
 
