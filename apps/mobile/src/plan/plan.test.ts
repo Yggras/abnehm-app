@@ -272,7 +272,9 @@ describe('Erstplan speichern', () => {
   it('nach „Zurück“ mit geänderter Eingabe gilt die Änderung ab morgen; heute bleibt die erste Fassung, das Startgewicht bleibt eines', async () => {
     const { plan, weights, goals, weeklyPlanDays, operations, reports } = await setup();
 
+    expect(plan.hasPlanToday()).toBe(false);
     await plan.saveInitialPlan(draft);
+    expect(plan.hasPlanToday()).toBe(true);
     reports.splice(0);
     await expect(plan.saveInitialPlan({ ...draft, weightG: 80_500, waterTargetMl: 2_000, sportDays: ['mittwoch'] })).resolves.toEqual({
       type: 'gespeichert',

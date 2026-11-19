@@ -56,7 +56,7 @@ export type PlanSaveResult =
   | Readonly<{ type: 'fehlgeschlagen' }>;
 
 /** Was das Onboarding vom Plan-Modul der geöffneten Kontodatenbank braucht. */
-export type OnboardingPlan = Pick<Plan, 'saveInitialPlan' | 'settings'>;
+export type OnboardingPlan = Pick<Plan, 'saveInitialPlan' | 'hasPlanToday'>;
 
 export type Onboarding = {
   /** Schritt 2: legt das Konto samt Person an; die Bestätigung aus Schritt 1 folgt mit der Person. */
@@ -95,7 +95,7 @@ export type Onboarding = {
    */
   savePlan(): Promise<PlanSaveResult>;
   /**
-   * Ob heute schon Zielversion und Wochenplanversion gelten, etwa nach „Zurück“ aus Schritt 9. Dann legt
+   * Ob heute schon ein Plan gilt (`Plan.hasPlanToday`), etwa nach „Zurück“ aus Schritt 9. Dann legt
    * erneutes Speichern nur geänderte Fassungen ab morgen an, und Schritt 8 sagt das (Spezifikation 1,
    * Abschnitt 4; Entscheidung in #134).
    */
@@ -232,10 +232,7 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
       });
     },
 
-    hasPlanToday() {
-      const { weeklyPlan, goal } = requireOpened().plan.settings();
-      return weeklyPlan.current !== null && goal.current !== null;
-    },
+    hasPlanToday: () => requireOpened().plan.hasPlanToday(),
 
     async savePlan() {
       const { database, plan } = requireOpened();

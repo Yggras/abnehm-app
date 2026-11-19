@@ -1,11 +1,12 @@
 import type { BausteinKey, Weekday } from '@abnehm/contracts/base';
 
-import { bausteinNames, germanList, weekdayNames, weekdayShortNames } from '../shell/texts';
+import { bausteinNames, germanList, weekdayNames } from '../shell/texts';
 import { resultTexts } from './goal-texts';
 
 // Sichtbare Texte und zugängliche Namen von Onboarding-Schritt 8 „Wochenplan“ (Spezifikation 1, Abschnitte 4
 // und 9). Der Grund der Sperre folgt dem Standard-Wochenplan: Der dritte Platz eines Tags ist am Sporttag
-// „Sporteinheit“, am Wiegetag „Gewogen“.
+// „Sporteinheit“, am Wiegetag „Gewogen“. Die Inhalte stehen in Spezifikation 1 (Sperre, Vorschau,
+// Mindestdauer, „ab morgen“); die Formulierungen selbst sind Designwerte, nicht belegt.
 
 const names = (bausteine: readonly BausteinKey[]) => germanList(bausteine.map((key) => bausteinNames[key]));
 
@@ -13,8 +14,6 @@ export const weeklyPlanTexts = {
   intro: 'Wähle deine Sporttage und deinen Wiegetag. Daraus entstehen deine drei Tagesziele für jeden Wochentag.',
   sportDays: 'Sporttage',
   weighDay: 'Wiegetag',
-  weekday: (weekday: Weekday) => weekdayNames[weekday],
-  weekdayShort: (weekday: Weekday) => weekdayShortNames[weekday],
   /** Am gesperrten Sporttag-Chip und als Satz unter den Sporttagen. */
   weighDayLocked: (weekday: Weekday) =>
     `${weekdayNames[weekday]} ist dein Wiegetag. Dort ist das dritte Tagesziel „${bausteinNames.gewogen}“, darum ist er kein Sporttag.`,
@@ -33,7 +32,6 @@ export const weeklyPlanTexts = {
   dayLabel: (weekday: Weekday, bausteine: readonly BausteinKey[]) => `${weekdayNames[weekday]}: ${names(bausteine)}`,
   /** Über der Vorschau: die zwei Ziele, die jeden Tag gelten; je Wochentag steht dann nur das dritte. */
   everyDay: (bausteine: readonly BausteinKey[]) => `Jeden Tag: ${names(bausteine)}. Dazu je Wochentag:`,
-  baustein: (key: BausteinKey) => bausteinNames[key],
   /** Schwelle der Sporteinheit = Sportwochenziel ÷ Sporttage, aufgerundet (Abschnitt 3). */
   minimumSession: (minutes: number, weeklyMinutes: number, sportDays: number) =>
     `Eine Sporteinheit zählt ab ${minutes} Minuten: dein Sportziel von ${weeklyMinutes} Minuten pro Woche, verteilt auf ${sportDays} ${sportDays === 1 ? 'Sporttag' : 'Sporttage'}.`,

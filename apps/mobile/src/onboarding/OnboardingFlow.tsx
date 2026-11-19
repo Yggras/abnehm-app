@@ -87,7 +87,6 @@ function PlanSteps() {
     case 'wochenplan':
       return <WeeklyPlanStep onBack={() => setPosition('ergebnis')} onSaved={() => setPosition('health')} />;
     case 'health':
-      // Erneutes Speichern nach „Zurück“ erzeugt keine Dublette (#144).
       return <PendingStep step="health" onBack={() => setPosition('wochenplan')} />;
   }
 }

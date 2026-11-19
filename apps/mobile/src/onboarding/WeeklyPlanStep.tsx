@@ -6,6 +6,7 @@ import { Weekday } from '@abnehm/contracts/base';
 import { useClock } from '../clock/clock-context';
 import { Chip, ListGroup, ListRow, Notice, space, Text } from '../design';
 import { SectionTitle } from '../settings/SectionTitle';
+import { bausteinNames, weekdayNames, weekdayShortNames } from '../shell/texts';
 import type { OnboardingDraftChange } from './draft';
 import { useOnboarding } from './OnboardingContext';
 import { OnboardingFrame } from './OnboardingFrame';
@@ -116,8 +117,8 @@ export function WeeklyPlanStep({ onBack, onSaved }: WeeklyPlanStepProps) {
             {preview.days.map(({ weekday, bausteine, thirdBaustein }) => (
               <ListRow
                 key={weekday}
-                title={texts.weekday(weekday)}
-                value={texts.baustein(thirdBaustein)}
+                title={weekdayNames[weekday]}
+                value={bausteinNames[thirdBaustein]}
                 accessibilityLabel={texts.dayLabel(weekday, bausteine)}
               />
             ))}
@@ -154,8 +155,8 @@ function WeekdayChips({
         return (
           <Chip
             key={weekday}
-            label={texts.weekdayShort(weekday)}
-            accessibilityLabel={texts.weekday(weekday)}
+            label={weekdayShortNames[weekday]}
+            accessibilityLabel={weekdayNames[weekday]}
             accessibilityHint={hint ?? undefined}
             selection={selection}
             square
@@ -171,6 +172,10 @@ function WeekdayChips({
 
 const styles = StyleSheet.create({
   section: { gap: space[3] },
-  /** Sieben quadratische Chips passen mit 4 dp Abstand in eine Zeile des iPhone SE; bei großer Schrift brechen sie um. */
+  /**
+   * 7 × 44 dp + 6 × 4 dp = 332 dp passen in die 343 dp Inhaltsbreite des iPhone SE (375 pt Bildschirm,
+   * https://developer.apple.com/design/human-interface-guidelines/layout, minus 2 × 16 dp Rand); im Simulator
+   * „iPhone SE (3. Generation)“ am 19.11.2026 einzeilig gesehen (#144). Bei großer Schrift brechen sie um.
+   */
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space[1] },
 });

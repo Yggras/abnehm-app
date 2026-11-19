@@ -97,6 +97,11 @@ export type Plan = Readonly<{
    */
   saveInitialPlan(draft: InitialPlanDraft): Promise<InitialPlanResult>;
   /**
+   * Ob heute schon Zielversion und Wochenplanversion der eigenen Person gelten. Dann legt „Erstplan
+   * speichern“ nur geänderte Fassungen ab morgen an; Onboarding-Schritt 8 sagt das vorher (#144).
+   */
+  hasPlanToday(): boolean;
+  /**
    * Ziele ändern (Spezifikation 1, Abschnitte 4 und 10): eine vollständige Zielversion ab morgen mit
    * denselben Prüfungen wie beim Erstplan, in einer lokalen Transaktion samt `createGoalVersion` und der
    * Meldung der Tage von morgen bis heute + 13 mit `planaenderung`. Eine weitere Änderung am selben Tag
@@ -193,6 +198,14 @@ export function createPlan(dependencies: PlanDependencies): Plan {
         goalVersionId: goalVersionId(personId, validFrom),
         weeklyPlanVersionId: weeklyPlanVersionId(personId, validFrom),
       };
+    },
+
+    hasPlanToday() {
+      const { today } = readClock();
+      return database.read((tx) => {
+        const own = readOwnPerson(tx);
+        return own !== undefined && hasPlanOn(tx, EntityId.parse(own.id), today);
+      });
     },
 
     changeGoals(draft) {
