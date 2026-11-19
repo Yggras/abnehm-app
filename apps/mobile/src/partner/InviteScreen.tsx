@@ -36,7 +36,7 @@ export function InviteScreen({ target }: RouteScreenProps<'partner.invite'>) {
   return (
     <ScreenFrame title={titleOf(target)} presentation="modal">
       {coupled !== null ? (
-        <CoupledView partnerDisplayName={coupled.partnerDisplayName} hatched={coupled.hatched} />
+        <CoupledView coupled={coupled} />
       ) : state.type === 'ok' ? (
         <InviteCode invitation={state.value} />
       ) : problem !== null ? (

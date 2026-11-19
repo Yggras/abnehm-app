@@ -8,6 +8,7 @@ import { MomoFigure } from '../momo';
 import { closeRoute, openTarget } from '../navigation';
 import { useSessionGate } from '../session/use-session-gate';
 import { useSyncRefresh } from '../shell/SyncRefresh';
+import type { Coupled } from './coupling-state';
 import type { CouplingProblem } from './coupling-view';
 import { couplingTexts } from './texts';
 
@@ -57,7 +58,7 @@ export function usePullWhile(active: boolean) {
  * der Weg führt als „Ihr seid wieder gekoppelt“ zur Insel. Aus dem Onboarding aufgerufen, steht die Sitzungs-Weiche
  * auf `onboarding`, und „Weiter“ kehrt zu Schritt 11 zurück.
  */
-export function CoupledView({ partnerDisplayName, hatched }: { partnerDisplayName: string; hatched: boolean }) {
+export function CoupledView({ coupled: { partnerDisplayName, hatched } }: { coupled: Coupled }) {
   const fromOnboarding = useSessionGate() === 'onboarding';
   return (
     <Card>

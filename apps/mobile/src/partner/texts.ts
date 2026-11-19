@@ -1,4 +1,5 @@
 import type { AreaKey } from '@abnehm/contracts/base';
+import type { InviteCode } from '@abnehm/contracts/coupling';
 import type { PartnerDailyGoalStage, PartnerSummaryEnvelope } from '@abnehm/contracts/partner';
 
 import { titleOf } from '../shell/texts';
@@ -49,11 +50,15 @@ export const couplingTexts = {
   /** Ohne Pronomen: Im Paar lädt mal die eine, mal die andere Person ein (Impeccable-Kritik zu #120). */
   inviteIntro: 'Gib deinem Partner diesen Code. Er wird in der App unter „Code eingeben“ eingetragen.',
   /** Zugänglicher Name des Codes: Ziffer für Ziffer statt „vierhundertzweiundachtzig …“. */
-  codeSpoken: (code: string) => `Einladungscode ${code.split('').join(' ')}`,
+  codeSpoken: (code: InviteCode) => `Einladungscode ${code.split('').join(' ')}`,
   validUntil: (when: string) => `gültig bis ${when}`,
+  /** Ablaufzeit in „gültig bis …“ (`validUntilWhen`). */
+  today: (time: string) => `heute, ${time}`,
+  tomorrow: (time: string) => `morgen, ${time}`,
+  onDate: (date: string, time: string) => `${date}, ${time}`,
   share: 'Code teilen',
   /** Einladungstext im System-Teilen-Menü; der Code steht ohne Leerzeichen, damit er sich so einfügen lässt. */
-  shareMessage: (code: string) => `Lass uns gemeinsam mit Momo starten! Gib in der App unter „Code eingeben“ diesen Code ein: ${code}`,
+  shareMessage: (code: InviteCode) => `Lass uns gemeinsam mit Momo starten! Gib in der App unter „Code eingeben“ diesen Code ein: ${code}`,
   waiting: 'Sobald dein Partner den Code eingibt, seid ihr gekoppelt. Lass diese Ansicht so lange offen oder schau später auf „Wir“.',
   coupledTitle: 'Ihr seid gekoppelt',
   coupledBody: (name: string) => `Du und ${name} kümmert euch ab jetzt gemeinsam um Momo.`,
@@ -87,7 +92,7 @@ export const couplingTexts = {
 } as const;
 
 /** Der Code in zwei Dreiergruppen, etwa „482 915“. */
-export function groupedCode(code: string): string {
+export function groupedCode(code: InviteCode): string {
   return `${code.slice(0, 3)} ${code.slice(3)}`;
 }
 

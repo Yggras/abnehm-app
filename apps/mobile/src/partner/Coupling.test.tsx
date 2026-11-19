@@ -21,7 +21,7 @@ import { setTestGate } from '../session/testing/test-gate';
 import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport } from '../sync';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner, encouragementEntity } from '.';
-import { couplingPullIntervalMs as invitePullIntervalMs } from './CouplingParts';
+import { couplingPullIntervalMs } from './CouplingParts';
 
 // Nachweis für #120 an den gerenderten modalen Abläufen `partner.invite` und `partner.redeem` mit dem echten
 // Verzeichnis `src/app`, dem Online-Test-Adapter der Einladungsabläufe (#103) und dem echten Partnerbereich
@@ -143,21 +143,21 @@ describe('partner.invite', () => {
     await renderRouter(appDir, { initialUrl: '/partner/invite' });
     await screen.findByLabelText('Einladungscode 4 8 2 9 1 5');
 
-    await act(async () => jest.advanceTimersByTime(invitePullIntervalMs - 1));
+    await act(async () => jest.advanceTimersByTime(couplingPullIntervalMs - 1));
     expect(mockPull).not.toHaveBeenCalled();
     await act(async () => jest.advanceTimersByTime(1));
     expect(mockPull).toHaveBeenCalledTimes(1);
-    await act(async () => jest.advanceTimersByTime(invitePullIntervalMs));
+    await act(async () => jest.advanceTimersByTime(couplingPullIntervalMs));
     expect(mockPull).toHaveBeenCalledTimes(2);
     expect(screen.queryByText('Ihr seid gekoppelt')).toBeNull();
 
     philipp.coupleOnNextPull();
-    await act(async () => jest.advanceTimersByTime(invitePullIntervalMs));
+    await act(async () => jest.advanceTimersByTime(couplingPullIntervalMs));
 
     expect(await screen.findByRole('header', { name: 'Ihr seid gekoppelt' })).toBeOnTheScreen();
     expect(screen.getByText('Du und Anna kümmert euch ab jetzt gemeinsam um Momo.')).toBeOnTheScreen();
     // Gekoppelt endet der Takt.
-    await act(async () => jest.advanceTimersByTime(3 * invitePullIntervalMs));
+    await act(async () => jest.advanceTimersByTime(3 * couplingPullIntervalMs));
     expect(mockPull).toHaveBeenCalledTimes(3);
 
     jest.useRealTimers();
@@ -205,6 +205,14 @@ describe('partner.invite', () => {
 
     expect(await screen.findByText(text)).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Erneut versuchen' })).toBeNull();
+  });
+
+  it('eine abgelehnte Sitzung zeigt bis zum Wechsel der Weiche den allgemeinen Text', async () => {
+    const { flows } = await openPhilipp();
+    flows.respond('createCode', { type: 'unauthorized' });
+    await renderRouter(appDir, { initialUrl: '/partner/invite' });
+
+    expect(await screen.findByText('Das hat gerade nicht geklappt. Versuch es erneut.')).toBeOnTheScreen();
   });
 
   it('ein unerwarteter Ausgang zeigt den allgemeinen Text mit „Erneut versuchen“', async () => {
@@ -309,7 +317,7 @@ describe('partner.redeem', () => {
     expect(await screen.findByLabelText('Kopplung wird geladen …')).toBeOnTheScreen();
     expect(screen.queryByText('Ihr seid gekoppelt')).toBeNull();
     philipp.coupleOnNextPull();
-    await act(async () => jest.advanceTimersByTime(invitePullIntervalMs));
+    await act(async () => jest.advanceTimersByTime(couplingPullIntervalMs));
 
     expect(await screen.findByRole('header', { name: 'Ihr seid gekoppelt' })).toBeOnTheScreen();
     expect(mockPull).toHaveBeenCalledTimes(2);

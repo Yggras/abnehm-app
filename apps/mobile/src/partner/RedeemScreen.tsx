@@ -36,7 +36,7 @@ export function RedeemScreen({ target }: RouteScreenProps<'partner.redeem'>) {
   let content;
   if (accepted) {
     content = coupling.type === 'coupled'
-      ? <CoupledView partnerDisplayName={coupling.partnerDisplayName} hatched={coupling.hatched} />
+      ? <CoupledView coupled={coupling} />
       : <CouplingPending label={couplingTexts.loadingCoupling} />;
   } else if (check.state.type === 'ok') {
     const checkedCode = code;

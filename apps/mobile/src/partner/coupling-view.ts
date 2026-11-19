@@ -14,10 +14,10 @@ import { couplingTexts } from './texts';
 export function validUntilWhen(expiresAt: Instant, now: ClockReading): string {
   const then = readingOf(expiresAt, now.timeZone);
   const time = clockTimeOf(then);
-  if (then.localDate === now.localDate) return `heute, ${time}`;
-  if (then.localDate === localDateAfter(now.localDate, 1)) return `morgen, ${time}`;
+  if (then.localDate === now.localDate) return couplingTexts.today(time);
+  if (then.localDate === localDateAfter(now.localDate, 1)) return couplingTexts.tomorrow(time);
   const [, month, day] = then.localDate.split('-');
-  return `${day}.${month}., ${time}`;
+  return couplingTexts.onDate(`${day}.${month}.`, time);
 }
 
 /** Ton, Anlass und Symbol des Hinweises; `problem` nur für Technik und einen nicht passenden Code. */
@@ -55,6 +55,9 @@ export function couplingProblemOf(state: FlowState<unknown, InvitationErrorCode>
         case 'invite_consumed':
         case 'invite_self':
           return { text: couplingTexts.codeMismatch, retry: false, look: inputLook };
+        default:
+          // Ein neuer Fehlercode soll hier auffallen, statt still als allgemeiner Fehler zu enden.
+          return state.code satisfies never;
       }
     // Eine abgelehnte Sitzung sperrt das Auth-Modul schon; bis die Weiche wechselt, gilt der allgemeine Text.
     case 'unauthorized':
