@@ -98,6 +98,23 @@ describe('Job-Registry', () => {
     }
   });
 
+  it('prüft ohne Angabe mindestens so oft wie der kürzeste Job, etwa die Arbeitsschleife des Push-Zustellers', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const clock = createTestClock(start);
+    const jobs = createJobRegistry({ clock });
+    const loop = countingJob('schleife', 5_000);
+    jobs.register(loop);
+    jobs.register(countingJob('taeglich', 24 * 60 * 60_000));
+
+    const stop = jobs.start();
+    await vi.advanceTimersByTimeAsync(0);
+    clock.advanceBy(5_000);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await stop();
+
+    expect(loop.runs).toBe(2);
+  });
+
   it('prüft im Backend-Prozess regelmäßig auf fällige Jobs und hält auf Wunsch an', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const clock = createTestClock(start);

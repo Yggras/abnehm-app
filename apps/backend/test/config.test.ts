@@ -49,7 +49,20 @@ describe('readConfig', () => {
       invitations: { codeSecret: inviteCodeSecret },
       photoStorageDirectory: '/var/lib/abnehm/fotos',
       mealVision: null,
+      expoPush: { accessToken: null },
     });
+  });
+
+  it('liest das optionale Expo-Zugriffstoken aus der Secret-Datei; leer oder ohne Variable sendet das Backend ohne', async () => {
+    const file = await secretFile('geheim-123');
+    const token = await secretFile('expo-token-xyz\n', 'expo_access_token');
+    const empty = await secretFile('', 'expo_access_token');
+
+    expect(readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, EXPO_ACCESS_TOKEN_FILE: token }).expoPush).toEqual({ accessToken: 'expo-token-xyz' });
+    expect(readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, EXPO_ACCESS_TOKEN_FILE: empty }).expoPush).toEqual({ accessToken: null });
+    expect(readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file }).expoPush).toEqual({ accessToken: null });
+    // Das Token selbst steht nur in der Datei, nie in einer Variablen.
+    expect(readConfig({ ...baseEnvironment, DATABASE_PASSWORD_FILE: file, EXPO_ACCESS_TOKEN: 'aus-variable' }).expoPush).toEqual({ accessToken: null });
   });
 
   it('liest das Einladungs-Secret aus der Secret-Datei und verlangt mindestens 32 Zeichen', async () => {

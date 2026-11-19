@@ -66,7 +66,9 @@ export function createJobRegistry({ clock }: { clock: Clock }): JobRegistry {
       jobs.set(job.name, { job, lastStartedAt: null, running: null });
     },
     runDue,
-    start({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS } = {}) {
+    // Ohne Angabe so oft wie der kürzeste Job, höchstens im Standardabstand: Die Arbeitsschleife des
+    // Push-Zustellers läuft alle paar Sekunden (Spezifikation 5, Abschnitt 9).
+    start({ pollIntervalMs = Math.min(DEFAULT_POLL_INTERVAL_MS, ...[...jobs.values()].map((entry) => entry.job.intervalMs)) } = {}) {
       void runDue();
       const timer = setInterval(() => void runDue(), pollIntervalMs);
       return async () => {

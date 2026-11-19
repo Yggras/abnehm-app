@@ -125,6 +125,16 @@ export const testCapabilities: readonly TestCapability[] = [
     markers: ['fake_fotoanalyse'],
   },
   {
+    // #142: Fake des Expo-Push-Ports mit steuerbaren Tickets, Quittungen, Verbindungs- und Teilfehlern. Die
+    // Integrationstests des Zustellers nutzen ihn direkt; das Development-Backend sendet wie das produktive
+    // über den HTTP-Adapter, damit Gerätetests echte Pushes erhalten.
+    key: 'fake-expo-push',
+    description: 'Fake des Expo-Push-Ports für die Tests des Push-Zustellers; nur in Test-Artefakten, ohne Route und ohne Schalter',
+    modules: ['apps/backend/dev/push/'],
+    entries: {},
+    markers: ['fake_expo_push'],
+  },
+  {
     // #183: Attrappe des Health-Plattform-Adapters mit den Szenarien aus Spezifikation 3, Abschnitt 9. Die
     // Integrationstests nutzen sie direkt, Development- und E2E-Build per Link `health`; im Produktionsbuild
     // gilt der Adapter der Plattform.

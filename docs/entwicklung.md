@@ -923,6 +923,31 @@ Die Push-Installation aus Abschnitt 9 der [Spezifikation 5](https://github.com/Y
   - `apps/backend/test/push-registration-app.test.ts` prüft die App gegen die echte Hono-App.
   - `src/notifications/push-registration.test.ts` prüft das Modul mit dem Fake-Mitteilungs-Port auf SQLite.
 
+### Push-Zusteller
+
+Der Zusteller aus Abschnitt 9 der [Spezifikation 5](https://github.com/Yggras/abnehm-app/issues/87) ([#142](https://github.com/Yggras/abnehm-app/issues/142)) stellt jeden `NotificationIntent` höchstens einmal je Installation über Expo Push zu. Format, Grenzen und Fehlercodes stehen bei [Expo: Sending notifications](https://docs.expo.dev/push-notifications/sending-notifications/).
+
+- **Schnittstelle** (`apps/backend/src/notifications/push-delivery.ts`, in `createBackend` als `pushDelivery`):
+  - `deliverDue(now)` plant offene Intents, sendet fällige Versuche und schließt Intents ab.
+  - `processReceipts(now)` holt fällige Quittungen und schließt ebenfalls ab.
+  - `onFinalStatus(type, observer)` meldet einen Beobachter für den Endstatus an. Er läuft in der Transaktion, die den Status schreibt. Anfeuern schreibt so seinen Push-Status zurück (`writeBackEncouragementPushStatus`), mit Serverversion, also per Pull sichtbar; `keine_installation` erscheint dort als `fehlgeschlagen`. Andere Intent-Typen kennt der Zusteller nicht: Titel und Text kommen aus `notificationTexts`, das Ziel aus `notificationTarget`.
+- **Auslöser:** Die Arbeitsschleife `push_zustellung` (alle 5 s) und die Aufbewahrung `zustellversuche_aufbewahrung` (täglich, löscht Versuche nach 30 Tagen) melden sich an der Job-Registry an. Ohne Angabe prüft die Registry so oft, wie ihr kürzester Job verlangt. Zusätzlich ruft `insertNotificationIntent` in der Transaktion `pg_notify('notification_intent')` auf. Postgres stellt die Benachrichtigung erst nach dem Commit zu ([NOTIFY](https://www.postgresql.org/docs/current/sql-notify.html)); `pushDelivery.listen()` (in `serve.ts`) stößt dann die Schleife an. Ein Lauf zur Zeit je Prozess; ein Anstoß während eines Laufs führt zu genau einem weiteren.
+- **Ablauf:**
+  1. Offene Intents ohne Versuch werden unter `FOR UPDATE SKIP LOCKED` ausgewählt.
+  2. „Partner-Pushes“ aus beim Zustellen → `unterdrueckt`. Ohne aktive Installation mit gültiger Sitzung → `keine_installation`; gültig ist eine Sitzung laut `sessions.validSessionIds` des Auth-Moduls (nicht widerrufen, `expires_at` nach der Serveruhr). Ein Intent ohne Text im Katalog oder älter als 24 Stunden → `fehlgeschlagen`.
+  3. Je Installation entsteht ein Versuch `geplant`. Vor dem HTTP-Aufruf schreibt eine eigene Transaktion ihn als `gesendet` fest, mit erhöhter Versuchszahl.
+  4. Höchstens 100 Nachrichten je Anfrage, mit `channelId: partner_momo`, `interruptionLevel: active`, `ttl` 86.400 s und `data` nach `ServerPushData` (`intentId`, `target`).
+  5. Ausgänge des Ports: Tickets → Ticket-ID speichern; Fehler-Ticket `MessageRateExceeded` → `ticket_fehler` und Wiederholung; anderes Fehler-Ticket → `aufgegeben`. Nachweislich nicht gesendet (Verbindungsfehler vor dem Senden, 429, 5xx) → zurück nach `geplant`; andere 4xx → `aufgegeben`. Unbekannter Ausgang (Zeitüberschreitung, Abbruch) → bleibt `gesendet` ohne Ticket und wird nach 10 Minuten `aufgegeben`. Wiederholungen nach 30 s · 2^(n−1), höchstens fünf Sendungen und höchstens 24 Stunden nach Erzeugung des Intents (Designwerte).
+  6. Quittungen frühestens 15 Minuten nach dem Senden, fehlende alle 15 Minuten erneut, nach 24 Stunden `quittung_fehler` mit `quittung_fehlt`.
+  7. `DeviceNotRegistered` in Ticket oder Quittung deaktiviert die Installation, sofern sie seit dem Senden nicht neu registriert wurde.
+  8. Sind alle Versuche beendet, ist der Intent `zugestellt`, wenn mindestens einer `quittiert` ist, sonst `fehlgeschlagen`.
+- **Expo-Push-Port** (`expo-push.ts`): `send` und `getReceipts`, beide werfen nie. Der HTTP-Adapter `createExpoPushClient` wiederholt nichts selbst und schickt `Authorization: Bearer …`, wenn ein Zugriffstoken der [erweiterten Push-Sicherheit](https://docs.expo.dev/push-notifications/sending-notifications/#additional-security) konfiguriert ist (`EXPO_ACCESS_TOKEN_FILE`, siehe „Secrets“). Produktives und Development-Backend senden über ihn. Gerätetests bekommen so echte Pushes; das APNs-Entitlement für iOS folgt in [#313](https://github.com/Yggras/abnehm-app/issues/313).
+- **Fake** (`apps/backend/dev/push/fake-expo-push.ts`, Testfähigkeit `fake-expo-push`): steuerbare Fehler-Tickets und Quittungen je Token, Verbindungsfehler, unbekannter Ausgang und Absturz mitten in der Anfrage. Er ist nur in Tests verdrahtet (`createTestApp`), ohne Route und ohne Schalter.
+- **Tests:**
+  - `apps/backend/test/push-delivery-app.test.ts` prüft gegen isoliertes Postgres, echte Hono-App, Testuhr und Fake alle Fälle aus den Testing Decisions von #87: Absturz, Zeitüberschreitung und zwei parallele Arbeitsschleifen, außerdem Stapel über 100.
+  - `apps/backend/test/expo-push.test.ts` prüft den HTTP-Adapter über ein eingespeistes `fetch`.
+  - Release-Sperren: `test/release-sperren.test.ts`, Block „Fake des Expo-Push-Ports“.
+
 ### Ernährung: Modul, Protokoll und Erfassen aus der Suche
 
 Das App-Modul „Ernährung“, das Tagesprotokoll und den ersten Erfassungsweg (Abschnitte 1, 2, 6 und 11 der [Spezifikation 2](https://github.com/Yggras/abnehm-app/issues/81)) liefert [#155](https://github.com/Yggras/abnehm-app/issues/155).
@@ -1043,6 +1068,7 @@ Simulatoren, Emulatoren und App-Builds nutzt auf diesem Rechner immer nur eine S
 
 - Das Datenbankpasswort liegt in `secrets/postgres_password`, das Better-Auth-Secret in `secrets/better_auth_secret` und das Secret für die HMACs der Einladungscodes in `secrets/invite_code_secret`. Die beiden letzten haben mindestens 32 Zeichen, nur das Backend erhält sie. `scripts/dev-secrets` erzeugt alle zufällig, und `npm run backend` ruft das Skript selbst auf.
 - Den API-Schlüssel für die KI-Fotoanalyse (#161) liest das Backend aus der Datei in `ANTHROPIC_API_KEY_FILE`. `scripts/dev-secrets` legt ihn nicht an, denn das Development-Backend analysiert mit dem Fake. Das produktive Backend startet ohne ihn nicht; der Passwort-Reset braucht ihn nicht.
+- Das Zugriffstoken der erweiterten Push-Sicherheit von Expo (#142) liest das Backend aus der Datei in `EXPO_ACCESS_TOKEN_FILE`. Es ist optional: Ohne Variable oder bei leerer Datei sendet das Backend ohne Token. Die lokale Entwicklung braucht es nicht.
 - `secrets/` ist von Git und vom Docker-Build-Kontext ausgeschlossen.
 - Docker Compose bindet die Datei zur Laufzeit als Secret unter `/run/secrets/` ein. Das Backend liest Geheimnisse nur aus Dateien (`*_FILE`), nie aus Umgebungsvariablen, Git oder dem Image ([#22](https://github.com/Yggras/abnehm-app/issues/22)).
 - Die Integrationstests erzeugen für jeden Lauf ein eigenes Zufallspasswort.
