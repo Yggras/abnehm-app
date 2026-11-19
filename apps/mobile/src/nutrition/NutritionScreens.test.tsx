@@ -2,12 +2,15 @@
 import { act, screen, userEvent, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import type * as React from 'react';
+import { Dimensions, StyleSheet, type TextStyle } from 'react-native';
 
 import { EntityId, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
 import { photoDraftSnapshot } from '@abnehm/contracts/nutrition';
 import { seedClock, seedDays, seedIds, seedManifests } from '@abnehm/contracts/seeds';
 
 import { testCapabilities } from '../build-capabilities';
+import { textScale, type as typeTokens } from '../design';
+import { hitArea } from '../design/testing/hit-area';
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
 import { createLocalDatabases } from '../local-db/local-databases';
 import { nutritionEntry, ownFood } from '../local-db/schema';
@@ -19,7 +22,7 @@ import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appNutrition, createNutrition, nutritionEntryEntity, ownFoodEntity } from '.';
 import type * as TestCatalogModule from './testing/test-catalog';
 
-// Nachweis für #155 und #157 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
+// Nachweis für #155, #156 und #157 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
 // echten Verzeichnis `src/app`, dem echten Ernährungsmodul über einer mit `solo` geseedeten SQLite-Datei
 // und einem kleinen BLS-Testkatalog. Ein Eintrag aus der Suche landet im Protokoll; „Rückgängig“ entfernt
 // ihn wieder. Eigene Lebensmittel entstehen im Formular, aus einer Korrektur oder einer fehlenden
@@ -89,7 +92,7 @@ describe('Protokoll', () => {
     await renderRouter(appDir, { initialUrl: '/log' });
 
     expect(await screen.findByRole('header', { name: 'Protokoll' })).toBeOnTheScreen();
-    expect(screen.getByText('Heute, Mittwoch, 14.10.2026')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Heute, Mittwoch, 14.10.2026' })).toBeOnTheScreen();
     // 60 g Hafer Flocken (208,8 kcal) und 150 g Apfel roh (87 kcal) aus `solo`.
     expect(screen.getByLabelText('Erfasst heute: 296 kcal')).toBeOnTheScreen();
     expect(screen.queryByText(/übrig|drüber|Budget/)).not.toBeOnTheScreen();
@@ -98,7 +101,12 @@ describe('Protokoll', () => {
     expect(within(breakfast).getByRole('header', { name: 'Frühstück, 296 kcal' })).toBeOnTheScreen();
     expect(within(breakfast).getByLabelText('Frühstück: Hafer Flocken, 60 g, 209 kcal')).toBeOnTheScreen();
     expect(within(breakfast).getByLabelText('Frühstück: Apfel roh, 150 g, 87 kcal')).toBeOnTheScreen();
-    expect(within(breakfast).getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual(['Frühstück hinzufügen']);
+    // Einträge öffnen ihre Mengenansicht (#156).
+    expect(within(breakfast).getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual([
+      'Frühstück hinzufügen',
+      'Frühstück: Hafer Flocken, 60 g, 209 kcal',
+      'Frühstück: Apfel roh, 150 g, 87 kcal',
+    ]);
 
     for (const [key, name] of [['mittagessen', 'Mittagessen'], ['abendessen', 'Abendessen'], ['snacks', 'Snacks']] as const) {
       expect(within(meal(key)).getByRole('header', { name })).toBeOnTheScreen();
@@ -235,7 +243,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
     expect(within(sheet).getByText(problem, { includeHiddenElements: true })).toBeOnTheScreen();
     expect(within(sheet).getByLabelText('Menge')).toHaveProp('accessibilityHint', `Fehler: ${problem}`);
     expect(screen).toHavePathname('/capture/food');
-    expect(entries()).toHaveLength(2);
+    expect(entries()).toHaveLength(5);
   });
 
   it('kehrt nach dem Speichern auch ohne Rückweg ins Protokoll zurück, etwa nach einem Link', async () => {
@@ -276,7 +284,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
     await user.press(undo);
     await act(async () => {});
 
-    expect(entries()).toHaveLength(2);
+    expect(entries()).toHaveLength(5);
     expect(operations()).toEqual(['upsert_entity', 'delete_entity']);
     expect(within(meal('snacks')).getByText('Noch nichts eingetragen.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Erfasst heute: 296 kcal')).toBeOnTheScreen();
@@ -478,5 +486,253 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     expect(screen.getByLabelText('Lebensmittel suchen')).toHaveDisplayValue('Bircher');
     expect(screen.queryByText('Bircher-Müsli, selbst gemacht')).not.toBeOnTheScreen();
     expect(screen.getByText('Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt')).toBeOnTheScreen();
+  });
+});
+
+// Nachweis für #156 am gerenderten Bildschirm: Tagesnavigation, aufklappbare Makros, Bearbeiten und Löschen
+// mit „Rückgängig“. `solo` hat heute 60 g Hafer Flocken und 150 g Apfel roh zum Frühstück, gestern
+// Frühstück, Mittagessen und Snacks ohne Abendessen (423 kcal).
+describe('Tagesnavigation, Bearbeiten und Löschen (#156)', () => {
+  const sheet = () => screen.getByTestId('sheet');
+  const oats = 'Frühstück: Hafer Flocken, 60 g, 209 kcal';
+  async function openLog() {
+    const account = await openAccount();
+    await renderRouter(appDir, { initialUrl: '/log' });
+    await screen.findByLabelText('Erfasst heute: 296 kcal');
+    return account;
+  }
+
+  it('öffnet „Heute“, blättert tageweise zurück, springt mit „Heute“ zurück und erreicht keine künftigen Tage', async () => {
+    await openLog();
+
+    expect(screen.getByRole('header', { name: 'Heute, Mittwoch, 14.10.2026' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Nächster Tag' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Heute' })).not.toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+    expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
+    // Der Tag steht kräftig, das Datum gedämpft darunter (Impeccable-Kritik: die Tageszeile war zu leise).
+    expect(within(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).getByText('Gestern').props.style).toEqual(
+      expect.arrayContaining([expect.objectContaining({ fontSize: typeTokens.headline.fontSize })]),
+    );
+    expect(within(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).getByText('Dienstag, 13.10.2026')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Erfasst: 423 kcal')).toBeOnTheScreen();
+    expect(within(meal('fruehstueck')).getByLabelText('Frühstück: Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt, 60 g, 220 kcal')).toBeOnTheScreen();
+    expect(within(meal('abendessen')).getByText('Noch nichts eingetragen.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Nächster Tag' })).toBeEnabled();
+
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+    expect(screen.getByRole('header', { name: 'Montag, 12.10.2026' })).toBeOnTheScreen();
+    expect(within(screen.getByRole('header', { name: 'Montag, 12.10.2026' })).getByText('Montag')).toBeOnTheScreen();
+    expect(within(screen.getByRole('header', { name: 'Montag, 12.10.2026' })).getByText('12.10.2026')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Erfasst: 0 kcal')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Nächster Tag' }));
+    expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Heute' }));
+    expect(screen.getByRole('header', { name: 'Heute, Mittwoch, 14.10.2026' })).toBeOnTheScreen();
+    expect(screen.getByLabelText('Erfasst heute: 296 kcal')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Nächster Tag' })).toBeDisabled();
+  });
+
+  it('öffnet nach einem Tabwechsel wieder „Heute“', async () => {
+    await openLog();
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+    expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('tab', { name: 'Heute' }));
+    await user.press(screen.getByRole('tab', { name: 'Protokoll' }));
+
+    expect(await screen.findByRole('header', { name: 'Heute, Mittwoch, 14.10.2026' })).toBeOnTheScreen();
+  });
+
+  // Ein Erfassen-Bildschirm über dem Protokoll ist kein Tabwechsel: Nach dem Nachtragen bleibt der Tag gewählt.
+  it('trägt eine vergessene Mahlzeit am Vortag nach: Der Eintrag gehört zum gewählten Tag', async () => {
+    const { entries } = await openLog();
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+
+    await user.press(screen.getByRole('button', { name: 'Abendessen hinzufügen' }));
+    expect(screen).toHaveSearchParams({ meal: 'abendessen', localDate: '2026-10-13' });
+    // Suche und Mengenschritt nennen den Tag wie das Protokoll (Impeccable-Kritik).
+    expect(await screen.findByText('Abendessen · Gestern, Dienstag, 13.10.2026')).toBeOnTheScreen();
+    await user.type(screen.getByLabelText('Lebensmittel suchen'), 'Apfelsaft');
+    await user.press(screen.getByRole('button', { name: 'Apfelsaft, 44 kcal je 100 g, BLS' }));
+    expect(within(sheet()).getByText('Abendessen · Gestern, Dienstag, 13.10.2026')).toBeOnTheScreen();
+    await user.press(within(sheet()).getByRole('button', { name: 'Hinzufügen' }));
+
+    expect(screen).toHavePathname('/log');
+    expect(entries()).toEqual(expect.arrayContaining([expect.objectContaining({ meal: 'abendessen', snapshotName: 'Apfelsaft', localDate: '2026-10-13' })]));
+    // Zurück im Protokoll des Vortags.
+    expect(await within(meal('abendessen')).findByLabelText('Abendessen: Apfelsaft, 100 g, 44 kcal')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Erfasst: 467 kcal')).toBeOnTheScreen();
+  });
+
+  it('klappt die Tagesmakros auf und zu, gerundet auf ganze g, unter 10 g auf eine Nachkommastelle', async () => {
+    await openLog();
+    expect(screen.queryByText(/^Eiweiß/)).not.toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Makros anzeigen' }));
+    // Eiweiß 7.932 + 636 mg, Kohlenhydrate 31.980 + 17.550 mg, Fett 3.990 + 750 mg.
+    expect(screen.getByText('Eiweiß 8,6 g · Kohlenhydrate 50 g · Fett 4,7 g')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Makros ausblenden' }));
+    expect(screen.queryByText(/^Eiweiß/)).not.toBeOnTheScreen();
+  });
+
+  it('Antippen öffnet die Mengenansicht mit Menge, Einheit, Mahlzeit und Details; Speichern rechnet neu', async () => {
+    const { entries, operations } = await openLog();
+
+    await user.press(screen.getByRole('button', { name: oats }));
+
+    expect(within(sheet()).getByRole('header', { name: 'Hafer Flocken' })).toBeOnTheScreen();
+    expect(within(sheet()).getByText('Frühstück · Heute')).toBeOnTheScreen();
+    expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('60');
+    expect(within(within(sheet()).getByTestId('einheiten')).getByRole('radio', { name: 'g' })).toBeChecked();
+    expect(within(within(sheet()).getByTestId('mahlzeiten')).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual([
+      'Frühstück', 'Mittagessen', 'Abendessen', 'Snacks',
+    ]);
+    expect(within(sheet()).getByRole('radio', { name: 'Frühstück' })).toBeChecked();
+    expect(within(sheet()).getByText('209 kcal')).toBeOnTheScreen();
+    // Kein Weg, den Tag zu ändern oder den Eintrag zu duplizieren.
+    expect(within(sheet()).getAllByRole('button').map((button) => button.props.accessibilityLabel)).toEqual([
+      'Schließen', 'Details anzeigen', 'Speichern', 'Löschen',
+    ]);
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Details anzeigen' }));
+    for (const detail of [
+      'Tag: Heute, Mittwoch, 14.10.2026',
+      'Erfasst um: 08:40 Uhr',
+      'Erfasst über: Suche',
+      'Quelle: Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0',
+      'Je 100 g: 348 kcal · Eiweiß 13 g · Kohlenhydrate 53 g · Fett 6,7 g',
+    ]) {
+      expect(within(sheet()).getByLabelText(detail)).toBeOnTheScreen();
+    }
+    // Mit aufgeklappten Details scrollt der Inhalt, „Speichern“ und „Löschen“ stehen fest darunter
+    // (auf dem iPhone SE waren sie sonst unerreichbar; Gerätelauf und Impeccable-Kritik).
+    const scroll = within(sheet()).getByTestId('sheet-scroll');
+    // https://reactnative.dev/docs/scrollview#keyboardshouldpersisttaps
+    expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
+    expect(within(scroll).getByLabelText('Erfasst über: Suche')).toBeOnTheScreen();
+    for (const name of ['Speichern', 'Löschen']) {
+      expect(within(sheet()).getByRole('button', { name })).toBeOnTheScreen();
+      expect(within(scroll).queryByRole('button', { name })).not.toBeOnTheScreen();
+    }
+    await user.press(within(sheet()).getByRole('button', { name: 'Details ausblenden' }));
+    expect(within(sheet()).queryByLabelText('Erfasst über: Suche')).not.toBeOnTheScreen();
+
+    await user.clear(within(sheet()).getByLabelText('Menge'));
+    await user.type(within(sheet()).getByLabelText('Menge'), '45');
+    expect(within(sheet()).getByText('157 kcal')).toBeOnTheScreen();
+    await user.press(within(sheet()).getByRole('radio', { name: 'Snacks' }));
+    await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
+
+    expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
+    expect(entries().find((entry) => entry.snapshotName === 'Hafer Flocken')).toMatchObject({ meal: 'snacks', localDate: '2026-10-14', displayAmountMilli: 45_000, totalMilliKcal: 156_600 });
+    expect(operations()).toEqual(['upsert_entity']);
+    expect(await within(meal('snacks')).findByLabelText('Snacks: Hafer Flocken, 45 g, 157 kcal')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Erfasst heute: 244 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Eintrag gespeichert')).toBeOnTheScreen();
+
+    await user.press(screen.getByRole('button', { name: 'Rückgängig' }));
+    expect(await within(meal('fruehstueck')).findByLabelText(oats)).toBeOnTheScreen();
+  });
+
+  it('zeigt bei einer ungültigen Menge den Lösungsweg und speichert nichts', async () => {
+    const { operations } = await openLog();
+    await user.press(screen.getByRole('button', { name: oats }));
+
+    await user.clear(within(sheet()).getByLabelText('Menge'));
+    await user.type(within(sheet()).getByLabelText('Menge'), '0');
+    await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
+
+    expect(within(sheet()).getByText('Gib eine Menge über 0 ein, etwa 60.', { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(operations()).toEqual([]);
+  });
+
+  it('schließt ohne Änderung, ohne etwas zu schreiben', async () => {
+    const { operations } = await openLog();
+    await user.press(screen.getByRole('button', { name: oats }));
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
+
+    expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
+    expect(operations()).toEqual([]);
+    expect(screen.queryByText('Eintrag gespeichert')).not.toBeOnTheScreen();
+  });
+
+  it('löscht ohne Dialog mit „Eintrag gelöscht“; „Rückgängig“ legt einen neuen Eintrag mit identischem Inhalt an', async () => {
+    const { entries, operations } = await openLog();
+    const before = entries().find((entry) => entry.snapshotName === 'Hafer Flocken')!;
+    await user.press(screen.getByRole('button', { name: oats }));
+
+    await user.press(within(sheet()).getByRole('button', { name: 'Löschen' }));
+
+    expect(screen.queryByTestId('sheet')).not.toBeOnTheScreen();
+    expect(within(meal('fruehstueck')).queryByLabelText(oats)).not.toBeOnTheScreen();
+    expect(screen.getByLabelText('Erfasst heute: 87 kcal')).toBeOnTheScreen();
+    expect(screen.getByText('Eintrag gelöscht')).toBeOnTheScreen();
+    expect(operations()).toEqual(['delete_entity']);
+
+    const undo = screen.getByRole('button', { name: 'Rückgängig' });
+    await user.press(undo);
+    await user.press(undo);
+    await act(async () => {});
+
+    expect(await within(meal('fruehstueck')).findByLabelText(oats)).toBeOnTheScreen();
+    expect(operations()).toEqual(['delete_entity', 'upsert_entity']);
+    const restored = entries().find((entry) => entry.snapshotName === 'Hafer Flocken')!;
+    expect(restored.id).not.toBe(before.id);
+    expect({ ...restored, id: null, createdAt: null, updatedAt: null, serverVersion: null }).toEqual({ ...before, id: null, createdAt: null, updatedAt: null, serverVersion: null });
+  });
+
+  it('Aktionen haben mindestens 48 × 48 dp', async () => {
+    await openLog();
+    const fits = (name: string, within_: ReturnType<typeof within> | typeof screen = screen) => {
+      const area = hitArea(within_.getByRole('button', { name }));
+      expect({ name, fits: area.width >= 48 && area.height >= 48 }).toEqual({ name, fits: true });
+    };
+
+    fits('Vorheriger Tag');
+    fits('Nächster Tag');
+    fits('Makros anzeigen');
+    fits(oats);
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+    fits('Heute');
+    await user.press(screen.getByRole('button', { name: 'Heute' }));
+    await user.press(screen.getByRole('button', { name: oats }));
+    fits('Details anzeigen', within(sheet()));
+    fits('Speichern', within(sheet()));
+    fits('Löschen', within(sheet()));
+    fits('Schließen', within(sheet()));
+  });
+});
+
+describe('Schriftfaktor 2,0 (#156)', () => {
+  const initial = { window: Dimensions.get('window'), screen: Dimensions.get('screen') };
+  beforeEach(() => Dimensions.set({ window: { ...initial.window, fontScale: 2 }, screen: { ...initial.screen, fontScale: 2 } }));
+  afterEach(() => Dimensions.set(initial));
+
+  it('Texte wachsen mit; Blättern, Bearbeiten und Löschen bleiben bedienbar', async () => {
+    const { entries } = await openAccount();
+    await renderRouter(appDir, { initialUrl: '/log' });
+    await screen.findByLabelText('Erfasst heute: 296 kcal');
+    await user.press(screen.getByRole('button', { name: 'Makros anzeigen' }));
+    await user.press(screen.getByRole('button', { name: 'Frühstück: Hafer Flocken, 60 g, 209 kcal' }));
+    await user.press(within(screen.getByTestId('sheet')).getByRole('button', { name: 'Details anzeigen' }));
+
+    // Nur Stile mit eigener Grenze (große Zahlen, Tab-Beschriftungen der Shell) wachsen weniger als 2,0.
+    const limits = Object.entries(textScale.limit).map(([token, limit]) => [typeTokens[token as keyof typeof textScale.limit].fontSize, limit] as const);
+    for (const text of screen.queryAllByText(/[\s\S]+/, { includeHiddenElements: true })) {
+      const { fontSize } = StyleSheet.flatten(text.props.style as TextStyle) ?? {};
+      expect(text.props.allowFontScaling).not.toBe(false);
+      expect(text.props.maxFontSizeMultiplier).toBeGreaterThanOrEqual(limits.find(([size]) => size === fontSize)?.[1] ?? textScale.max);
+    }
+
+    await user.press(within(screen.getByTestId('sheet')).getByRole('button', { name: 'Löschen' }));
+    expect(entries()).toHaveLength(4);
+    await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
+    expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
   });
 });

@@ -16,7 +16,9 @@ import {
   MealPhotoUpsert,
   NutritionEntryAddedOutcome,
   NutritionEntryAddedValues,
+  NutritionEntryDeletedOutcome,
   NutritionEntryRecord,
+  NutritionEntryUpdatedOutcome,
   NutritionEntryUpsert,
   NutritionSnapshot,
   OwnFoodOrigin,
@@ -369,6 +371,21 @@ export const nutritionFixtures = {
     invalid: {
       'ohne Rückgängig': { messageKey: 'ernaehrung.eintrag_hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 } },
       'fremde Meldung': { messageKey: 'wasser.hinzugefuegt', values: { meal: 'fruehstueck', kcal: 209 }, undoToken: 'undo-7f3a' },
+    },
+  }),
+  NutritionEntryUpdatedOutcome: fixtures(NutritionEntryUpdatedOutcome, {
+    valid: { 'Eintrag gespeichert': { messageKey: 'ernaehrung.eintrag_gespeichert', values: {}, undoToken: 'undo-7f3a' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'ernaehrung.eintrag_gespeichert', values: {} },
+      'mit Name': { messageKey: 'ernaehrung.eintrag_gespeichert', values: { name: 'Hafer Flocken' }, undoToken: 'undo-7f3a' },
+      'Meldung des Hinzufügens': { messageKey: 'ernaehrung.eintrag_hinzugefuegt', values: {}, undoToken: 'undo-7f3a' },
+    },
+  }),
+  NutritionEntryDeletedOutcome: fixtures(NutritionEntryDeletedOutcome, {
+    valid: { 'Eintrag gelöscht': { messageKey: 'ernaehrung.eintrag_geloescht', values: {}, undoToken: 'undo-7f3a' } },
+    invalid: {
+      'ohne Rückgängig': { messageKey: 'ernaehrung.eintrag_geloescht', values: {} },
+      'mit kcal': { messageKey: 'ernaehrung.eintrag_geloescht', values: { kcal: 209 }, undoToken: 'undo-7f3a' },
     },
   }),
   PhotoMediaType: fixtures(PhotoMediaType, {
