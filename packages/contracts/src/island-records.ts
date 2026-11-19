@@ -100,3 +100,22 @@ export const IslandEventRecord = z.strictObject({
   updatedAt: Instant,
 });
 export type IslandEventRecord = z.infer<typeof IslandEventRecord>;
+
+/** Belohnung eines Besuchers: ein Besucher-Bauplan für die Insel oder Deko ins Lager der Person. */
+export const VisitorReward = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('bauplan'), key: CatalogKey }),
+  z.strictObject({ type: z.literal('deko'), key: CatalogKey }),
+]);
+export type VisitorReward = z.infer<typeof VisitorReward>;
+
+/**
+ * Inhalt von `reward` bei einem Besucher mit Wunsch (Spezifikation 4, Abschnitt 9): der gewünschte Bauplan
+ * und die Belohnung. Spezifikation 0, Abschnitt 8, kennt für das Ereignis kein eigenes Bedingungsfeld; die
+ * Bedingung steht deshalb mit der Belohnung im Feld `reward`. Bis zum Abholen ist die Belohnung geplant,
+ * danach die tatsächlich gewährte.
+ */
+export const VisitorEventDetails = z.strictObject({
+  wish: z.strictObject({ type: z.literal('bauplan_bauen'), blueprintKey: CatalogKey }),
+  reward: VisitorReward,
+});
+export type VisitorEventDetails = z.infer<typeof VisitorEventDetails>;

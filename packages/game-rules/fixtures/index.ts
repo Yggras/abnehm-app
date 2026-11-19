@@ -60,7 +60,7 @@ export const tracer = {
 const blueprint = (key: string, role: Blueprint['role'], origin: 'level' | 'entdeckung' | 'besucher', priceLevel: number): Blueprint => ({
   key, name: key, role, origin, priceLevel, art: stageArt(key),
 });
-const deko = (key: string): Deko => ({ key, name: key, origin: 'entdeckung', art: key });
+const deko = (key: string, origin: 'entdeckung' | 'besucher' = 'entdeckung'): Deko => ({ key, name: key, origin, art: key });
 
 /** Feldplan eines Gebiets: je Seite 10 Felder Ecke und 30 Rollenbereich, 16 × 5 ab (x, y). */
 export function areaFields(x: number, y: number) {
@@ -107,6 +107,10 @@ export function testCatalog(): GameCatalog {
       blueprint('t_natur_2', 'natur', 'level', 2),
       blueprint('t_bauen_4', 'bauen', 'level', 4),
       blueprint('t_natur_4', 'natur', 'level', 4),
+      // Besucher-Baupläne (Spezifikation 4, Abschnitt 9): zwei für Bauen, einer für Natur.
+      blueprint('t_bes_bauen_a', 'bauen', 'besucher', 2),
+      blueprint('t_bes_bauen_b', 'bauen', 'besucher', 3),
+      blueprint('t_bes_natur_a', 'natur', 'besucher', 2),
       ...areas.flatMap((a) => [
         ...a.discoveryBlueprints.bauen.map((key) => blueprint(key, 'bauen', 'entdeckung', a.unlockLevel)),
         ...a.discoveryBlueprints.natur.map((key) => blueprint(key, 'natur', 'entdeckung', a.unlockLevel)),
@@ -121,8 +125,11 @@ export function testCatalog(): GameCatalog {
     baseIsland,
     areas,
     landscapeTemplates: [template('erste', 1), template('zweite', 2)],
-    deko: areas.flatMap((a) => a.discoveryDeko.map(deko)),
-    visitorTemplates: [],
+    deko: [...areas.flatMap((a) => a.discoveryDeko.map((key) => deko(key))), deko('t_bes_deko_1', 'besucher'), deko('t_bes_deko_2', 'besucher')],
+    visitorTemplates: [
+      { key: 't_igel', name: 'Igel', animal: 't_igel', wish: 'bauplan_bauen', rewards: { blueprints: ['t_bes_bauen_a', 't_bes_natur_a'], deko: ['t_bes_deko_1'] } },
+      { key: 't_fuchs', name: 'Fuchs', animal: 't_fuchs', wish: 'bauplan_bauen', rewards: { blueprints: ['t_bes_bauen_b'], deko: ['t_bes_deko_2'] } },
+    ],
     accessories: [],
     projects: [{ key: 't_projekt', name: 'Testprojekt', landmark: 't_projekt', site: 'grundinsel:7:2' }],
     challengeTemplates: [],

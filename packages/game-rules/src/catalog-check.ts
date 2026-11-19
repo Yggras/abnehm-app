@@ -34,7 +34,8 @@ export type CatalogRule =
   | 'gebiet_level'
   | 'entdeckung'
   | 'bauplatz'
-  | 'jahreszeit';
+  | 'jahreszeit'
+  | 'besucher';
 
 export type CatalogIssue = Readonly<{ rule: CatalogRule; key: string }>;
 
@@ -128,9 +129,13 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
   for (const entry of catalog.deko) {
     if (entry.origin === 'jahreszeit' && !isWholeNumber(entry.yearIndex, 1)) issue('jahreszeit', entry.key);
   }
+  // Besucher bringen Besucher-Baupläne und, wenn keiner mehr übrig ist, Deko aus ihrem Pool (#202).
   for (const visitor of catalog.visitorTemplates) {
-    visitor.rewards.blueprints.forEach((key) => checkReference(blueprints, key));
-    visitor.rewards.deko.forEach((key) => checkReference(deko, key));
+    const foreign = [
+      ...visitor.rewards.blueprints.filter((key) => checkReference(blueprints, key) && blueprints.get(key)!.origin !== 'besucher'),
+      ...visitor.rewards.deko.filter((key) => checkReference(deko, key) && deko.get(key)!.origin !== 'besucher'),
+    ];
+    if (foreign.length > 0 || visitor.rewards.deko.length === 0) issue('besucher', visitor.key);
   }
   for (const challenge of catalog.challengeTemplates) checkReference(deko, challenge.deko);
   const plaza = new Set(catalog.baseIsland.fields.filter((f) => f.kind === 'gemeinschaftsplatz').map((f) => fieldKey(baseIslandKey, f)));
