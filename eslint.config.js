@@ -315,6 +315,12 @@ export default defineConfig([
             allowedIn: ['apps/mobile/src/health/health-connect.ts', 'apps/mobile/src/health/device-platform.android.ts'],
             message: 'Health Connect läuft über den Health-Plattform-Adapter aus apps/mobile/src/health/.',
           },
+          {
+            // Spezifikation 3, Abschnitt 2 (#193): wie Health Connect; Bibliothekstypen bleiben im Adapter.
+            modules: ['@kingstinct/react-native-healthkit', '@react-native-healthkit/core', 'react-native-nitro-modules'],
+            allowedIn: ['apps/mobile/src/health/healthkit.ts', 'apps/mobile/src/health/device-platform.ts', 'apps/mobile/src/app-config.test.ts'],
+            message: 'HealthKit läuft über den Health-Plattform-Adapter aus apps/mobile/src/health/.',
+          },
         ],
       ],
     },

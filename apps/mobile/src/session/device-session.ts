@@ -98,9 +98,8 @@ const budgetTodayOpened = followTodayContribution(appTodayRegistry, 'ziele', 'nu
 const partnerTodayOpened = followTodayContribution(appTodayRegistry, 'partner', 'partner');
 const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, newId });
 /**
- * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183): Android Health Connect (#195); auf iOS
- * ist Health nicht verfügbar, bis HealthKit (#193) seinen Adapter liefert. In Test-Artefakten übernimmt ab
- * dem Link `health` die Attrappe.
+ * Health-Plattform des Geräts (Spezifikation 3, Abschnitt 6; #183): iOS HealthKit (#193), Android Health
+ * Connect (#195). In Test-Artefakten übernimmt ab dem Link `health` die Attrappe.
  */
 const devicePlatform = deviceHealthPlatform(appClock);
 const healthPlatform = testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform;

@@ -25,3 +25,10 @@ jest.mock('@shopify/react-native-skia', () => {
 jest.mock('../src/notifications/expo-port', () => ({
   expoNotificationPort: require('../src/test-capabilities/notifications').createFakeNotificationPort({ permission: 'undetermined' }),
 }));
+
+// Health-Plattform des Geräts (#193): HealthKit lädt beim Import ein natives Nitro-Modul, das es in Jest
+// nicht gibt. Tests mit der echten App bekommen deshalb eine Plattform ohne Health; den HealthKit-Adapter
+// prüft `src/health/healthkit.test.ts` mit einer Attrappe des Clients, den Import die Attrappe der Naht.
+jest.mock('../src/health/device-platform', () => ({
+  deviceHealthPlatform: () => require('../src/health/platform').unavailableHealthPlatform('apple_health'),
+}));
