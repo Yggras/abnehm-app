@@ -1,5 +1,7 @@
 import {
+  AreaUnlockedPayload,
   ChallengeProposalPayload,
+  CheckInTextValues,
   DeactivatePushInstallationParams,
   defaultNotificationSetting,
   EncouragementNotificationPayload,
@@ -51,6 +53,28 @@ const pushData = {
 } as const;
 
 export const notificationFixtures = {
+  CheckInTextValues: fixtures(CheckInTextValues, {
+    valid: {
+      'Mittag heute: Ernährung und Wasser mit Fortschritt': {
+        moment: 'mittag',
+        topics: [{ type: 'ernaehrung' }, { type: 'wasser', progress: { countedMl: 400, targetMl: 1_500 } }],
+        islandEventKind: null,
+      },
+      'Abend am künftigen Sporttag mit Insel-Zusatz': {
+        moment: 'abend',
+        topics: [{ type: 'ernaehrung' }, { type: 'wasser', progress: null }, { type: 'sport' }],
+        islandEventKind: 'besuch',
+      },
+    },
+    invalid: {
+      'ohne Anlass': { moment: 'abend', topics: [], islandEventKind: null },
+      'Sport am Mittag': { moment: 'mittag', topics: [{ type: 'sport' }], islandEventKind: null },
+      'Gewicht vor Ernährung': { moment: 'abend', topics: [{ type: 'gewicht' }, { type: 'ernaehrung' }], islandEventKind: null },
+      'Wasser doppelt': { moment: 'abend', topics: [{ type: 'wasser', progress: null }, { type: 'wasser', progress: null }], islandEventKind: null },
+      'Gewichtswert am Anlass': { moment: 'abend', topics: [{ type: 'gewicht', weightG: 81_200 }], islandEventKind: null },
+      'Kalorienbudget als Anlass': { moment: 'abend', topics: [{ type: 'kalorienbudget' }], islandEventKind: null },
+    },
+  }),
   ServerPushData: fixtures(ServerPushData, {
     valid: {
       'Anfeuern öffnet „Wir“ bei der Anfeuerung': pushData,
@@ -140,6 +164,10 @@ export const notificationFixtures = {
   LevelUpPayload: fixtures(LevelUpPayload, {
     valid: { 'Level 2': { level: 2 }, 'Level 61': { level: 61 } },
     invalid: { 'Level 1 ist kein Aufstieg': { level: 1 }, 'kein ganzes Level': { level: 2.5 }, 'mit Energiemenge': { level: 4, energy: 12 } },
+  }),
+  AreaUnlockedPayload: fixtures(AreaUnlockedPayload, {
+    valid: { 'Gebiet 1': { gebietKey: 'schilfwiese' }, 'endloses Gebiet': { gebietKey: 'endlos_1_duenen' } },
+    invalid: { 'ohne Gebiet': {}, 'Feldschlüssel': { gebietKey: 'schilfwiese:0:-1' }, 'mit Level': { gebietKey: 'schilfwiese', level: 4 } },
   }),
   EncouragementNotificationPayload: fixtures(EncouragementNotificationPayload, {
     valid: { 'Anna, Gemeinsam für Momo': { senderDisplayName: 'Anna', encouragementKey: 'gemeinsam_fuer_momo' } },

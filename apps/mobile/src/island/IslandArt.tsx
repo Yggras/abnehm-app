@@ -3,12 +3,13 @@ import type { ArtKey } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { Circle, Group, Oval, Path } from '@shopify/react-native-skia';
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
+import { Easing, useDerivedValue, useSharedValue, withDelay, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { color, size, useMotion, type ColorToken } from '../design';
 import { MomoRig, momoVisual } from '../momo';
 import { artOf, shadow, type ArtPrimitive } from './art';
 import type { Point, Polygon } from './scene-model';
+import { transformationMotion } from './transformation-motion';
 
 // Skia-Zeichnungen der Inselansicht. Flächig ohne Konturen und Verläufe, zweitönig mit Licht von
 // links oben: rechte Hälften `opacity-shade-right`, linke Flächen `opacity-shade-left`, Schlagschatten
@@ -152,6 +153,48 @@ export function Particle({ at, phase, tone, progress }: { at: Point; phase: numb
  * Designwert, nicht belegt).
  */
 const momoOnIslandFrame = 40;
+
+/**
+ * Verwandlungsszene (#204): Die alte Form blendet aus, die neue ein, beide werden dabei kurz größer und wieder
+ * kleiner, um Momos Bodenpunkt. Takt und Größe aus `transformationMotion`; mit „Bewegung reduzieren“ eine reine
+ * Überblendung in `duration-fast`.
+ */
+export function MomoTransforming({ at, from, appearance, reduceMotion }: { at: Point; from: MomoAppearance; appearance: MomoAppearance; reduceMotion: boolean }) {
+  const { morph, grow } = transformationMotion(reduceMotion);
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(1, { duration: morph, easing: Easing.inOut(Easing.quad) });
+    // Die Szene gilt der einen Verwandlung; ein späterer Wechsel der Einstellung animiert nichts neu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const transform = useDerivedValue(() => {
+    const scale = 1 + grow * Math.sin(Math.PI * progress.value);
+    return [{ translateX: at.x }, { translateY: at.y }, { scale }, { translateX: -at.x }, { translateY: -at.y }];
+  });
+  const fadeOut = useDerivedValue(() => 1 - progress.value);
+  return (
+    <Group transform={transform}>
+      <Group opacity={fadeOut}>
+        <MomoOnIsland at={at} appearance={from} reduceMotion={reduceMotion} />
+      </Group>
+      <Group opacity={progress}>
+        <MomoOnIsland at={at} appearance={appearance} reduceMotion={reduceMotion} />
+      </Group>
+    </Group>
+  );
+}
+
+/** Nebel über einem eben freigeschalteten Gebiet: Er zieht nach Verwandlung und Schwenk ab (#204). */
+export function LiftingFog({ cells, tone, opacity, reduceMotion }: { cells: readonly Polygon[]; tone: ColorToken; opacity: number; reduceMotion: boolean }) {
+  const { morph, pan, lift } = transformationMotion(reduceMotion);
+  const fade = useSharedValue(opacity);
+  useEffect(() => {
+    fade.value = withDelay(morph + pan, withTiming(0, { duration: lift, easing: Easing.out(Easing.quad) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const path = useMemo(() => fogPath(cells), [cells]);
+  return <Path path={path} color={color[tone]} opacity={fade} />;
+}
 
 /**
  * Momo auf der Insel: das Skia-Rig (`src/momo`) mit dem Bodenpunkt auf der Feldmitte, darunter der

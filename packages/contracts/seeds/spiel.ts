@@ -1,10 +1,11 @@
+import { areaOccasionKey, areaUnlockAt, discoveryStatus } from '@abnehm/game-rules/areas';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import { openVisitFacts, planVisitors, visitorSlotOf } from '@abnehm/game-rules/events';
 import { levelOccasionKey } from '@abnehm/game-rules/unlocks';
 
 import { EntityId, LocalDate } from '../src/base.ts';
 import { BuildObject, buildObjectKey, PlaceObject, placeObjectKey } from '../src/island.ts';
-import { islandEventId } from '../src/island-records.ts';
+import { DiscoveryEventDetails, islandContentId, islandEventId, islandEventStateId } from '../src/island-records.ts';
 import { notificationIntentId } from '../src/notifications.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
 import { buildSeedState, changedOnServer, pulledBy, withDeviceState, type SeedEntity, type SeedPart } from './build.ts';
@@ -39,7 +40,11 @@ import { afterSync, changedOffline, processed, type OfflineChange } from './sync
 //   Philipps iPhone und Annas Android. Offline hat Anna zwei Apfelbäume und einen Beerenstrauch gebaut; mit
 //   37 verbaut ist auch ihre Hälfte voll. Vor dem Sync zeigt Philipps iPhone Level 3 und „Momo wartet auf
 //   Anna“. Annas Sync hebt die Insel mit dem dritten Bau auf Level 4: Ereignis `level:<insel>:4` und je ein
-//   Push-Intent an beide. Philipps Pull bringt Level 4 und das Ereignis auf sein iPhone.
+//   Push-Intent an beide. Philipps Pull bringt Level 4 und das Ereignis auf sein iPhone. Level 4 ist ein Formlevel:
+//   Mit dem Aufstieg kommen die Schilfwiese, die Entdeckung mit je einem Ereignisstand und ein `gebiet`-Push an
+//   beide (#204).
+// - `formwechsel` („Formwechsel bei Level 4“, #204): der Stand von `levelaufstieg-ausstehend` nach beiden Syncs;
+//   im Tab „Momo“ steht die Verwandlung von der Kaulquappe zum Hüpfer noch aus.
 // - `ereignisse-voll` („volles Ereignis-Kontingent (4 offen)“, #202): `gekoppelt` ohne die Besucher von
 //   heute. Philipp hat vier Besuche der letzten vier Tage nicht abgeholt, Anna einen von gestern. Philipps
 //   Pull am Mittag erzeugt die Besucher des Tages: Philipp bekommt wegen der Grenze von 4 offenen keinen,
@@ -513,6 +518,89 @@ function levelEvent(level: number): SeedEntity {
   };
 }
 
+/** Philipp und Anna nach Person geordnet, wie der Server Ereignisstände und Intents schreibt. */
+const membersInOrder = [philipp, anna].sort();
+
+/** Gebiet des Formlevels mit Seite a für Philipp (Bauen) und Seite b für Anna (Natur). */
+function areaAt(level: number) {
+  const unlock = areaUnlockAt(gameCatalog, { level, sides: { a: philipp, b: anna } });
+  if (unlock === null) throw new Error(`Seed: kein Gebiet bei Level ${level}`);
+  return unlock;
+}
+
+/**
+ * Gebiet und Entdeckung eines Formlevels, wie `area-unlock.ts` im Backend sie schreibt (#204): Freischaltung,
+ * Felder beider Personen (Seite a Philipp mit Bauen, Seite b Anna), die Entdeckungs-Baupläne, die Entdeckung und
+ * je Person ein Ereignisstand, in derselben Reihenfolge wie auf dem Server.
+ */
+function areaEntities(level: number): SeedEntity[] {
+  const islandId = EntityId.parse(seedIds.island.philippAnna);
+  const unlock = areaAt(level);
+  const owned = { island_id: islandId, coupling_id: couplingId };
+  const entity = (table: string, row: SeedEntity['row']): SeedEntity => ({ table, entityType: table, couplingId, row });
+  const occasionKey = areaOccasionKey(islandId, unlock.area.key);
+  const eventId = islandEventId(islandId, occasionKey);
+  const discovery = DiscoveryEventDetails.parse(unlock.discovery);
+  return [
+    entity('area_unlock', { id: islandContentId('area_unlock', islandId, unlock.area.key), ...owned, area_key: unlock.area.key, level, unlocked_at: now, created_at: now }),
+    ...unlock.fields.map((field) =>
+      entity('island_field', { id: islandContentId('island_field', islandId, field.key), ...owned, field_key: field.key, owner_person_id: field.ownerPersonId, created_at: now }),
+    ),
+    ...discovery.blueprints.map((key) =>
+      entity('blueprint_unlock', { id: islandContentId('blueprint_unlock', islandId, key), ...owned, catalog_key: key, reason: 'entdeckung', unlocked_at: now, created_at: now }),
+    ),
+    entity('island_event', {
+      id: eventId,
+      ...owned,
+      type: 'entdeckung',
+      template_key: null,
+      responsible_person_id: null,
+      occasion_key: occasionKey,
+      status: discoveryStatus(discovery),
+      reward: discovery,
+      occurred_at: now,
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+    }),
+    ...membersInOrder.map(
+      (personId): SeedEntity => ({
+        table: 'island_event_state',
+        entityType: 'island_event_state',
+        ownerPersonId: personId,
+        row: {
+          id: islandEventStateId(eventId, EntityId.parse(personId)),
+          island_event_id: eventId,
+          person_id: personId,
+          seen_at: null,
+          claimed_at: null,
+          created_at: now,
+          updated_at: now,
+          deleted_at: null,
+        },
+      }),
+    ),
+  ];
+}
+
+/** Der offene `gebiet`-Intent an eine Person; Quelle ist die Entdeckung (#204). */
+function areaIntent(level: number, recipientPersonId: string): SeedRow {
+  const islandId = EntityId.parse(seedIds.island.philippAnna);
+  const { area } = areaAt(level);
+  const sourceEventId = islandEventId(islandId, areaOccasionKey(islandId, area.key));
+  return {
+    intent_id: notificationIntentId({ sourceEventId, recipientPersonId: EntityId.parse(recipientPersonId), type: 'gebiet' }),
+    source_event_id: sourceEventId,
+    recipient_person_id: recipientPersonId,
+    type: 'gebiet',
+    message_key: 'gebiet',
+    payload: { gebietKey: area.key },
+    status: 'offen',
+    created_at: now,
+    status_changed_at: now,
+  };
+}
+
 /** Der offene `levelaufstieg`-Intent an eine Person; nur Server, ohne Sync. */
 function levelIntent(level: number, recipientPersonId: string): SeedRow {
   const sourceEventId = levelEvent(level).row.id as string;
@@ -556,10 +644,13 @@ function levelaufstiegAusstehend() {
   const changes = arrivals.flatMap(({ build, n }, index) => {
     const accepted = [...haelfteVollBauten, ...arrivals.slice(0, index + 1).map((arrival) => arrival.build)];
     const built = serverBuild(initial, build, n, accepted);
-    return progressOf(accepted).level > progressOf(haelfteVollBauten).level ? [...built, levelEvent(progressOf(accepted).level)] : built;
+    // Level 4 ist ein Formlevel: Mit dem Aufstieg kommen Schilfwiese und Entdeckung (#204).
+    const level = progressOf(accepted).level;
+    return level > progressOf(haelfteVollBauten).level ? [...built, levelEvent(level), ...areaEntities(level)] : built;
   });
   const server = changedOnServer(initial, { createdAt: now, changes });
-  const withIntents = { ...server, server: { ...server.server, notification_intent: [levelIntent(4, philipp), levelIntent(4, anna)] } };
+  const intents = [levelIntent(4, philipp), levelIntent(4, anna), ...membersInOrder.map((personId) => areaIntent(4, personId))];
+  const withIntents = { ...server, server: { ...server.server, notification_intent: intents } };
   // Anna sendet und zieht, danach zieht Philipp.
   const target = afterSync(
     withIntents,
@@ -594,5 +685,55 @@ export const levelaufstiegAusstehendManifest = SeedManifest.parse({
     { type: 'sync', installation: iphone },
   ],
   target: levelaufstiegAusstehendStates.target,
+  extensions: gekoppeltExtensions,
+});
+
+/**
+ * Gerätezustand je Installation für die Momo-Szenen (#184, #200, #204): `momo_levelfeier` ist das zuletzt gefeierte
+ * Level (`level-celebration.ts`), `momo_verwandlung` das Level, bei dem der Tab „Momo“ Momo zuletzt gezeigt hat
+ * (`transformation.ts`), `momo_so_waechst_momo` das Einmal-Flag von „So wächst Momo“ (`growth-intro.ts`); ohne
+ * es läge die Erklärung über der Verwandlung. Ersetzt diese Einträge.
+ */
+function shownLevels(state: SeedState, levels: Readonly<{ celebrated: number; transformed: number }>, at: string): SeedState {
+  const islandId = seedIds.island.philippAnna;
+  const rows: SeedRow[] = [
+    { key: 'momo_levelfeier', value: { islandId, level: levels.celebrated }, updated_at: at },
+    { key: 'momo_verwandlung', value: { islandId, level: levels.transformed }, updated_at: at },
+    { key: 'momo_so_waechst_momo', value: { shownAt: at }, updated_at: at },
+  ];
+  const devices = Object.fromEntries(
+    Object.entries(state.devices).map(([key, device]) => [
+      key,
+      { ...device, rows: { ...device.rows, device_state: [...(device.rows.device_state ?? []).filter((row) => !rows.some((own) => own.key === row.key)), ...rows] } },
+    ]),
+  );
+  return { server: state.server, devices };
+}
+
+/**
+ * `formwechsel` („Formwechsel bei Level 4“, #204): der Stand von `levelaufstieg-ausstehend` nach beiden Syncs.
+ * Die Insel ist auf Level 4, Momo ein Hüpfer, die Schilfwiese freigeschaltet, und die Entdeckung wartet auf beide.
+ * Beide Geräte haben Level 4 auf „Heute“ schon gefeiert und „So wächst Momo“ gesehen, Momo im Tab „Momo“ aber
+ * zuletzt auf Level 3: Beim nächsten Öffnen des Tabs verwandelt sich Momo von der Kaulquappe in den Hüpfer, danach
+ * zieht der Nebel von der Schilfwiese ab. Ein Sync ändert nichts.
+ */
+const formwechselState = (() => {
+  const { server, devices } = shownLevels(levelaufstiegAusstehendStates.target, { celebrated: 4, transformed: 3 }, now);
+  // Die verarbeiteten Operationen von Annas Bauten gehören zum Weg dorthin, nicht zum Ausgangszustand.
+  return { server: Object.fromEntries(Object.entries(server).filter(([table]) => table !== 'processed_operation')), devices };
+})();
+
+export const formwechselManifest = SeedManifest.parse({
+  formatVersion: 1,
+  scenario: 'formwechsel',
+  revision: 1,
+  clock: seedClock,
+  localDates: seedDays,
+  catalogVersion: null,
+  accounts: [seedAccounts.philipp, seedAccounts.anna],
+  installations: [seedInstallations.philippIphone, seedInstallations.annaAndroid],
+  initial: formwechselState,
+  steps: [{ type: 'sync', installation: iphone }],
+  target: formwechselState,
   extensions: gekoppeltExtensions,
 });

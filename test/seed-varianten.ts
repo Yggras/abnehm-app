@@ -76,6 +76,7 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('feldkonflikt', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('ereignisse-voll', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('levelaufstieg-ausstehend', 'apps/backend/test/seed-island-app.test.ts'),
+  manifest('formwechsel', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('challenge-vorgeschlagen', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('challenge-verfallen', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('challenge-passt-nicht', 'apps/backend/test/seed-island-app.test.ts'),

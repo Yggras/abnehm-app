@@ -88,20 +88,24 @@ export const blueprintUnlockEntity = serverManaged({
     BlueprintUnlockRecord.parse({ ...owned(row), catalogKey: row.catalogKey, reason: row.reason, unlockedAt: iso(row.unlockedAt), createdAt: iso(row.createdAt) }),
 });
 
+export const islandFieldEntity = serverManaged({
+  entityType: 'island_field',
+  resource: 'island_field',
+  table: islandField,
+  record: (row) => IslandFieldRecord.parse({ ...owned(row), fieldKey: row.fieldKey, ownerPersonId: row.ownerPersonId, createdAt: iso(row.createdAt) }),
+});
+
+export const areaUnlockEntity = serverManaged({
+  entityType: 'area_unlock',
+  resource: 'area_unlock',
+  table: areaUnlock,
+  record: (row) => AreaUnlockRecord.parse({ ...owned(row), areaKey: row.areaKey, level: row.level, unlockedAt: iso(row.unlockedAt), createdAt: iso(row.createdAt) }),
+});
+
 export const islandSyncEntities: readonly ServerSyncEntity[] = [
-  serverManaged({
-    entityType: 'island_field',
-    resource: 'island_field',
-    table: islandField,
-    record: (row) => IslandFieldRecord.parse({ ...owned(row), fieldKey: row.fieldKey, ownerPersonId: row.ownerPersonId, createdAt: iso(row.createdAt) }),
-  }),
+  islandFieldEntity,
   blueprintUnlockEntity,
-  serverManaged({
-    entityType: 'area_unlock',
-    resource: 'area_unlock',
-    table: areaUnlock,
-    record: (row) => AreaUnlockRecord.parse({ ...owned(row), areaKey: row.areaKey, level: row.level, unlockedAt: iso(row.unlockedAt), createdAt: iso(row.createdAt) }),
-  }),
+  areaUnlockEntity,
   serverManaged({
     entityType: 'community_project',
     resource: 'community_project',

@@ -64,6 +64,13 @@
       "when": 1792528058216,
       "tag": "0008_online_request_abmelden",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795116068202,
+      "tag": "0009_food_favorite_removed_at",
+      "breakpoints": true
     }
   ]
 }

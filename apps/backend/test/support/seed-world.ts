@@ -17,7 +17,7 @@ import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import type { LocalDatabase } from '../../../mobile/src/local-db/index.ts';
 import { createLocalDatabases } from '../../../mobile/src/local-db/local-databases.ts';
 import { createBetterSqliteFiles } from '../../../mobile/src/local-db/testing/better-sqlite.ts';
-import { intakeReaderOf, mealPhotoEntity, nutritionEntryEntity, confirmPhotoDraftCommand, ownFoodEntity } from '../../../mobile/src/nutrition/index.ts';
+import { confirmPhotoDraftCommand, foodFavoriteEntity, intakeReaderOf, mealPhotoEntity, nutritionEntryEntity, ownFoodEntity } from '../../../mobile/src/nutrition/index.ts';
 import { readPartnerCache } from '../../../mobile/src/partner-cache/index.ts';
 import { budgetSuggestionEntity, createPlan, goalVersionEntity, planCommands, weeklyPlanVersionEntity } from '../../../mobile/src/plan/index.ts';
 import {
@@ -53,7 +53,7 @@ import { encouragementEntity } from '../../../mobile/src/partner/encouragement.t
 
 /** Alle Sync-Entitäten der App, wie im Composition Root. */
 const registry = createSyncRegistry([
-  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, notificationSettingEntity, encouragementEntity,
+  ...foundationSyncEntities, ...islandSyncEntities, ...challengeSyncEntities, goalVersionEntity, weeklyPlanVersionEntity, budgetSuggestionEntity, dailyGoalCompletionEntity, energyBookingEntity, waterEntryEntity, weightEntryEntity, sportEntryEntity, nutritionEntryEntity, mealPhotoEntity, ownFoodEntity, foodFavoriteEntity, notificationSettingEntity, encouragementEntity,
 ]);
 
 export type SeedPhone = Readonly<{

@@ -1,4 +1,4 @@
-import { withinWordMinimumLength, type SearchQuery } from './search-text';
+import { searchNames, withinWordMinimumLength, type SearchQuery } from './search-text';
 
 // Rangfolge innerhalb einer Gruppe der Lebensmittelsuche (Spezifikation 2, Abschnitt 4; #154), gleich
 // für den BLS-Katalog und die eigenen Lebensmittel (#157): Der Name beginnt mit der Anfrage, und dort
@@ -72,4 +72,32 @@ export function rankedSearch(query: SearchQuery, limit: number, source: SearchSo
     ORDER BY tier, length(search_name), search_name, ${key}
     LIMIT ${bind(limit)}`;
   return { sql, params };
+}
+
+/**
+ * Dieselbe Stufe wie `rankedSearch` für einen einzelnen Namen, ohne Datenbank: für die kurzen Listen der
+ * Lebensmittelfavoriten und „Zuletzt verwendet“ (#158). `null`, wenn der Name nicht trifft. Die
+ * FTS5-Präfixsuche trifft, wenn jedes Suchwort am Anfang eines Worts einer der beiden Schreibweisen steht.
+ */
+export function rankName(query: SearchQuery, name: string): number | null {
+  const { searchName, searchAlt } = searchNames(name);
+  const spellings = searchAlt === null ? [searchName] : [searchName, searchAlt];
+  const compact = query.terms.join('');
+  const endsAtWordBoundary = spellings.some((spelling) =>
+    Array.from({ length: maxSpacesBeforeBoundary + 1 }, (_, spaces) => compact.length + spaces).some(
+      (end) => spelling.slice(0, end).replaceAll(' ', '') === compact && [undefined, ' '].includes(spelling[end]),
+    ),
+  );
+  if (endsAtWordBoundary) return 0;
+  if (spellings.some((spelling) => spelling.replaceAll(' ', '').startsWith(compact))) return 1;
+  const words = spellings.flatMap((spelling) => spelling.split(' '));
+  if (query.terms.every((term) => words.some((word) => word.startsWith(term)))) return 2;
+  const withinWords =
+    query.terms.some((term) => term.length >= withinWordMinimumLength) &&
+    query.terms.every((term) =>
+      term.length >= withinWordMinimumLength
+        ? spellings.some((spelling) => spelling.includes(term))
+        : spellings.some((spelling) => ` ${spelling}`.includes(` ${term}`)),
+    );
+  return withinWords ? 3 : null;
 }

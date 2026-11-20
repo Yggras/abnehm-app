@@ -412,6 +412,7 @@ describe('Eintrag ansehen', () => {
       localDate: '2026-10-13',
       meal: 'fruehstueck',
       captureMethod: 'suche',
+      foodRef: { type: 'bls', key: 'C133000' },
       snapshot: oats,
       displayUnit: 'g',
       displayAmountMilli: 60_000,

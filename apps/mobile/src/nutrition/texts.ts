@@ -15,6 +15,7 @@ import {
 
 import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
+import { recentDays } from './quick-foods';
 import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
 
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
@@ -25,6 +26,14 @@ export const mealNames: Readonly<Record<MealKey, string>> = {
   mittagessen: 'Mittagessen',
   abendessen: 'Abendessen',
   snacks: 'Snacks',
+};
+
+/** Mahlzeit als Ergänzung, etwa „zum Frühstück“ oder „als Snack“. */
+const mealPhrases: Readonly<Record<MealKey, string>> = {
+  fruehstueck: 'zum Frühstück',
+  mittagessen: 'zum Mittagessen',
+  abendessen: 'zum Abendessen',
+  snacks: 'als Snack',
 };
 
 const weekdays = { montag: 'Montag', dienstag: 'Dienstag', mittwoch: 'Mittwoch', donnerstag: 'Donnerstag', freitag: 'Freitag', samstag: 'Samstag', sonntag: 'Sonntag' } as const;
@@ -234,6 +243,19 @@ export const nutritionTexts = {
     eigenes_lebensmittel: 'Eigenes Lebensmittel anlegen',
   },
   slotInWork: 'Kommt noch',
+  /** „Zuletzt verwendet“ und Lebensmittelfavoriten auf dem Hinzufügen-Bildschirm (#158). */
+  quick: {
+    /** Unterzeile einer Zeile: vorbelegte Menge und ihre kcal. */
+    row: (amount: string, kcal: number) => `${amount} · ${kcalText(kcal)}`,
+    /** Zugänglicher Name einer Zeile: Name, vorbelegte Menge und kcal. */
+    rowLabel: (name: string, amount: string, kcal: number) => `${name}, ${amount}, ${kcalText(kcal)}`,
+    showAll: (count: number) => `Alle ${count} anzeigen`,
+    showFewer: 'Weniger anzeigen',
+    noRecent: (meal: MealKey) => `Was du in den letzten ${recentDays} Tagen ${mealPhrases[meal]} eingetragen hast, steht hier.`,
+    noFavorites: 'Markiere ein Lebensmittel mit dem Stern, dann steht es hier.',
+  },
+  /** Schalter in Mengenprüfung und Eintragsdetails (#158). */
+  favorite: 'Lebensmittelfavorit',
   /** Ohne Suchtreffer: das eigene Lebensmittel mit dem Suchtext als Namen anlegen. */
   createNamed: (name: string) => `„${name.trim()}“ als eigenes Lebensmittel anlegen`,
   ownFood: {

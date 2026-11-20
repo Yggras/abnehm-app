@@ -13,9 +13,10 @@ import {
   type SeedPart,
 } from '../seeds/index.ts';
 import { soloParts } from '../seeds/solo.ts';
-import { AreaKey, LocalDate, ServerVersion } from '../src/base.ts';
+import { AreaKey, EntityId, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
+import { foodFavoriteId } from '../src/nutrition.ts';
 import { EncouragementKey, PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
 import { CreateGoalVersion } from '../src/plan.ts';
 import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, weekMinutes, weightChange, weightForecast, weightTrend } from '../src/tracker-rules.ts';
@@ -27,6 +28,8 @@ import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, week
 
 const solo = seedManifests.solo;
 const philipp = seedIds.person.philipp;
+/** Der Lebensmittelfavorit „Bircher-Müsli, selbst gemacht“ in `solo` (#158), ID aus Person und Referenz. */
+const bircherFavorite = foodFavoriteId(EntityId.parse(philipp), { type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) });
 
 const orNull = (value: unknown) => (value === null || value === undefined ? null : String(value));
 
@@ -81,8 +84,26 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...[seedIds.ownFood.philippBircher, seedIds.ownFood.philippApfel].map((id) =>
         expect.objectContaining({ entity_type: 'own_food', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      expect.objectContaining({ entity_type: 'food_favorite', entity_id: bircherFavorite, owner_person_id: philipp, operation: 'upsert' }),
+      ...[seedIds.nutritionEntry.philippZuletztFenster.innerhalb, seedIds.nutritionEntry.philippZuletztFenster.ausserhalb].map((id) =>
+        expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.sportEntry.philippVorwoche.map((id) =>
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+    ]);
+  });
+
+  it('enthält einen Lebensmittelfavoriten und Frühstücke in und vor dem 30-Tage-Fenster von „Zuletzt verwendet“ (#158)', () => {
+    const rows = solo.initial.devices['philipp-iphone']!.rows;
+
+    expect(rows.food_favorite).toEqual([
+      expect.objectContaining({ id: bircherFavorite, food_ref_type: 'eigen', food_ref_key: seedIds.ownFood.philippBircher, removed_at: null, deleted_at: null }),
+    ]);
+    expect(solo.initial.server.food_favorite).toEqual(rows.food_favorite);
+    const window = rows.nutrition_entry!.filter((row) => String(row.local_date) < seedDays.zielstart).map(({ local_date, meal, food_ref_key }) => ({ local_date, meal, food_ref_key }));
+    // Heute ist der 14.10.: Das Fenster beginnt am 15.09.
+    expect(window).toEqual([
+      { local_date: '2026-09-15', meal: 'fruehstueck', food_ref_key: 'C514300' },
+      { local_date: '2026-09-14', meal: 'fruehstueck', food_ref_key: 'D701700' },
     ]);
   });
 
@@ -882,12 +903,41 @@ describe('Spielverlauf der Partner-Szenarien (#191)', () => {
     expect((server.notification_intent ?? []).map((row) => [row.recipient_person_id, row.payload])).toEqual(
       expect.arrayContaining([[philipp, { level: 4 }], [anna, { level: 4 }]]),
     );
-    expect(server.notification_intent).toHaveLength(2);
+    // Level 4 ist ein Formlevel: dazu je ein `gebiet`-Push an beide (#204).
+    expect((server.notification_intent ?? []).map((row) => [row.type, row.recipient_person_id]).sort()).toEqual(
+      [['gebiet', anna], ['gebiet', philipp], ['levelaufstieg', anna], ['levelaufstieg', philipp]].sort(),
+    );
     expect(server.processed_operation?.map(({ outcome, person_id }) => [outcome, person_id])).toEqual(Array(3).fill(['applied', anna]));
     for (const device of Object.values(devices)) {
       expect(device.outbox).toEqual([]);
       expect(progressOf(device.rows.island_progress)).toMatchObject({ level: 4 });
       expect(levelEvents(device.rows.island_event)).toHaveLength(1);
+    }
+  });
+
+  it('levelaufstieg-ausstehend und formwechsel: Mit Level 4 kommen Schilfwiese, Entdeckung und je Gerät nur der eigene Ereignisstand (#204)', () => {
+    const { server, devices } = seedManifests['levelaufstieg-ausstehend'].target;
+    expect(server.area_unlock).toEqual([expect.objectContaining({ area_key: 'schilfwiese', level: 4 })]);
+    expect((server.island_field ?? []).filter((row) => String(row.field_key).startsWith('schilfwiese:'))).toHaveLength(80);
+    const discovery = (server.island_event ?? []).filter((row) => row.type === 'entdeckung');
+    expect(discovery).toEqual([expect.objectContaining({ occasion_key: `gebiet:${seedIds.island.philippAnna}:schilfwiese`, status: 'erfuellbar' })]);
+    expect(server.island_event_state?.filter((row) => row.island_event_id === discovery[0]!.id)).toHaveLength(2);
+    for (const [key, person] of [['philipp-iphone', philipp], ['anna-android', anna]] as const) {
+      const states = (devices[key]!.rows.island_event_state ?? []).filter((row) => row.island_event_id === discovery[0]!.id);
+      expect(states.map((row) => row.person_id)).toEqual([person]);
+    }
+
+    const formwechsel = seedManifests.formwechsel;
+    expect(formwechsel.target).toEqual(formwechsel.initial);
+    for (const device of Object.values(formwechsel.initial.devices)) {
+      expect(device.rows.device_state).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: 'momo_levelfeier', value: { islandId: seedIds.island.philippAnna, level: 4 } }),
+          expect.objectContaining({ key: 'momo_verwandlung', value: { islandId: seedIds.island.philippAnna, level: 3 } }),
+          // „So wächst Momo“ ist gesehen; sonst läge die Erklärung über der Verwandlung.
+          expect.objectContaining({ key: 'momo_so_waechst_momo' }),
+        ]),
+      );
     }
   });
 });

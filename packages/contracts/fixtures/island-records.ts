@@ -4,6 +4,7 @@ import {
   ChallengeRecord,
   ChallengeRequirementRecord,
   CommunityProjectRecord,
+  DiscoveryEventDetails,
   IslandEventRecord,
   IslandEventStateRecord,
   IslandFieldRecord,
@@ -180,6 +181,17 @@ export const islandRecordFixtures = {
     invalid: {
       'ohne Wunsch': { reward: { type: 'deko', key: 'muschel' } },
       'Wunsch ohne Bauplan': { wish: { type: 'bauplan_bauen' }, reward: { type: 'deko', key: 'muschel' } },
+    },
+  }),
+  DiscoveryEventDetails: fixtures(DiscoveryEventDetails, {
+    valid: {
+      'Gebiet 1 mit Deko': { areaKey: 'schilfwiese', blueprints: ['steinmauer', 'briefkasten', 'seerosenteich', 'schilfgras'], deko: ['steinfrosch'] },
+      'endloses Gebiet ohne Deko': { areaKey: 'endlos_1_duenen', blueprints: ['steinmauer', 'seerosenteich'], deko: [] },
+    },
+    invalid: {
+      'ohne Gebiet': { blueprints: [], deko: [] },
+      'Deko als Text': { areaKey: 'schilfwiese', blueprints: [], deko: 'steinfrosch' },
+      'mit Energie': { areaKey: 'schilfwiese', blueprints: [], deko: [], energy: 3 },
     },
   }),
 };

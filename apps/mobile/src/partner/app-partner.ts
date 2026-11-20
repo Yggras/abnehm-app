@@ -5,6 +5,7 @@ import type { Source } from '../shell/followed-source';
 import type { CouplingState } from './coupling-state';
 import type { EncourageView, Partner, SharingView } from './partner';
 import type { WirPartner } from './partner-view';
+import type { WirShared } from './wir-shared';
 
 // Der Partnerbereich des geöffneten Kontos für „Wir“. Die App-Sitzung meldet ihn an, sobald eine
 // Kontodatenbank offen ist (`src/session/device-session.ts`), und löst ihn beim Sperren wieder.
@@ -19,7 +20,7 @@ export function usePartner(): Partner | null {
 type Loading = Readonly<{ type: 'loading' }>;
 
 /** Die Quellen des Partnerbereichs, die ein Bildschirm abonniert. */
-type SourceKey = 'wir' | 'encourageSheet' | 'couplingState' | 'sharing' | 'invitationCreated';
+type SourceKey = 'wir' | 'shared' | 'encourageSheet' | 'couplingState' | 'sharing' | 'invitationCreated';
 type ValueOf<K extends SourceKey> = Partner[K] extends Source<infer V> ? V : never;
 
 /**
@@ -39,6 +40,11 @@ function usePartnerSource<K extends SourceKey>(partner: Partner | null, key: K):
 /** Der aktuelle Partnerzustand für „Wir“. */
 export function useWirPartner(partner: Partner | null): WirPartner {
   return usePartnerSource(partner, 'wir');
+}
+
+/** Die gemeinsamen Bereiche von „Wir“: Vorgänge, Challenge, Gemeinschaftsprojekt und „Neu bei euch“. */
+export function useWirShared(partner: Partner | null): WirShared {
+  return usePartnerSource(partner, 'shared');
 }
 
 /** Der Zustand des Sheets `partner.encourage`. */

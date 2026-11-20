@@ -4,7 +4,9 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button, Chip, IconButton, space, Text, TextField } from '../design';
 import { defaultAmountMilli } from './amount-input';
+import type { AmountPrefill } from './amount-prefill';
 import { AmountFields, useAmountDraft } from './AmountFields';
+import { FavoriteToggle } from './FavoriteToggle';
 import type { Nutrition } from './nutrition';
 import { conversionFields, type ConversionUnit } from './own-food-fields';
 import { checkPortionDraft, editableBaseOf } from './own-food-input';
@@ -18,8 +20,15 @@ export type Selection = Readonly<{
   ref: FoodRef;
   snapshot: NutritionSnapshot;
   captureMethod: CaptureMethod;
-  /** Vorgewählte Einheit, etwa die gerade eingetragene Umrechnung; sonst die Vorbelegung des Moduls. */
+  /** Vorgewählte Einheit, etwa die gerade eingetragene Umrechnung; sonst `prefill` oder die Vorbelegung des Moduls. */
   unit?: DisplayUnit;
+  /** Vorbelegte Menge aus „Zuletzt verwendet“ oder den Lebensmittelfavoriten (#158). */
+  prefill?: AmountPrefill;
+  /**
+   * `false`, wenn die Referenz nicht mehr verfügbar ist und die gespeicherte Fassung gilt (Rückfall, #158):
+   * Dann lässt sich das Lebensmittel selbst nicht mehr ändern.
+   */
+  available?: boolean;
 }>;
 
 /**
@@ -35,6 +44,7 @@ export function AmountReview({
   onAdd,
   onEdit,
   onConversion,
+  onFailed,
 }: {
   selection: Selection;
   /** Mahlzeit und Tag, etwa „Abendessen · Gestern, Dienstag, 13.10.2026“: Beim Nachtragen steht der Tag bis zum letzten Schritt. */
@@ -44,19 +54,21 @@ export function AmountReview({
   onAdd: (displayUnit: DisplayUnit, displayAmountMilli: number) => void;
   onEdit: () => void;
   onConversion: (conversion: PortionConversion) => void;
+  /** Ein Befehl des Favoriten-Schalters ist technisch gescheitert. */
+  onFailed: (error: unknown) => void;
 }) {
   const { snapshot } = selection;
   const [prefill] = useState(() =>
-    selection.unit === undefined
-      ? nutrition.prefillAmount(selection.ref, snapshot)
-      : { displayUnit: selection.unit, displayAmountMilli: defaultAmountMilli(snapshot, selection.unit) },
+    selection.unit !== undefined
+      ? { displayUnit: selection.unit, displayAmountMilli: defaultAmountMilli(snapshot, selection.unit) }
+      : (selection.prefill ?? nutrition.prefillAmount(selection.ref, snapshot)),
   );
   const draft = useAmountDraft(snapshot, prefill);
   const [addingConversion, setAddingConversion] = useState(false);
   // Die Quellenangabe nennt die Quelle schon (BLS, Open Food Facts); sonst die Art der Werte.
   const source = snapshot.attribution ?? sourceNames[snapshot.source];
   // Ändern lässt sich ein eigenes oder ein BLS-Lebensmittel; ein Barcode-Produkt erst mit #160.
-  const base = editableBaseOf(selection.ref);
+  const base = selection.available === false ? undefined : editableBaseOf(selection.ref);
   const missing = (['stueck', 'portion'] as const).filter((candidate) => !snapshot.portions.some((portion) => portion.unit === candidate));
 
   if (addingConversion && base !== undefined) {
@@ -77,6 +89,7 @@ export function AmountReview({
             {source}
           </Text>
         </View>
+        <FavoriteToggle nutrition={nutrition} food={selection} onFailed={onFailed} />
         <IconButton icon="close" accessibilityLabel={nutritionTexts.close} onPress={onClose} />
       </View>
       <AmountFields snapshot={snapshot} draft={draft} />

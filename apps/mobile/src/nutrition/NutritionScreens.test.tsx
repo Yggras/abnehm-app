@@ -13,21 +13,22 @@ import { textScale, type as typeTokens } from '../design';
 import { hitArea } from '../design/testing/hit-area';
 import { insertPersonForTest } from '../daily-goals/testing/persisted';
 import { createLocalDatabases } from '../local-db/local-databases';
-import { nutritionEntry, ownFood } from '../local-db/schema';
+import { foodFavorite, nutritionEntry, ownFood } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
-import { appNutrition, createNutrition, nutritionEntryEntity, ownFoodEntity } from '.';
+import { appNutrition, createNutrition, foodFavoriteEntity, nutritionEntryEntity, ownFoodEntity } from '.';
 import type * as TestCatalogModule from './testing/test-catalog';
 import { withoutPhotos } from './testing/without-photos';
 
-// Nachweis für #155, #156 und #157 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
+// Nachweis für #155, #156, #157 und #158 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
 // echten Verzeichnis `src/app`, dem echten Ernährungsmodul über einer mit `solo` geseedeten SQLite-Datei
 // und einem kleinen BLS-Testkatalog. Ein Eintrag aus der Suche landet im Protokoll; „Rückgängig“ entfernt
 // ihn wieder. Eigene Lebensmittel entstehen im Formular, aus einer Korrektur oder einer fehlenden
-// Umrechnung und werden in Stück oder Portion erfasst.
+// Umrechnung und werden in Stück oder Portion erfasst. Gewohntes kommt mit zwei Tipps aus „Zuletzt verwendet“
+// oder den Lebensmittelfavoriten.
 
 jest.setTimeout(30_000);
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
@@ -67,7 +68,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
   const newId = () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
   const nutrition = createNutrition({ ...withoutPhotos,
     database, clock, newId,
-    writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity]), clock, newId }),
+    writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity, foodFavoriteEntity]), clock, newId }),
     persistence: { reevaluateDailyGoals() {} },
   });
   const release = appNutrition.opened(nutrition);
@@ -81,6 +82,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
     nutrition,
     entries: () => database.read((tx) => sqliteOf(tx).select().from(nutritionEntry).all()).filter((row) => row.deletedAt === null),
     ownFoods: () => database.read((tx) => sqliteOf(tx).select().from(ownFood).all()),
+    favorites: () => database.read((tx) => sqliteOf(tx).select().from(foodFavorite).all()).filter((row) => row.removedAt === null),
     operations: () => database.read((tx) => pendingOperations(tx, 100)).map(({ type }) => type),
   };
 }
@@ -163,10 +165,11 @@ describe('Protokoll', () => {
 });
 
 describe('Hinzufügen und Mengenprüfung', () => {
-  async function openCapture(mealKey = 'fruehstueck') {
+  // Das Abendessen hat in `solo` keine Einträge: Seine Suche zeigt BLS-Treffer ohne „Zuletzt verwendet“ (#158).
+  async function openCapture(mealKey = 'abendessen') {
     const account = await openAccount();
     await renderRouter(appDir, { initialUrl: '/log' });
-    await user.press(await screen.findByRole('button', { name: `${{ fruehstueck: 'Frühstück', snacks: 'Snacks' }[mealKey]} hinzufügen` }));
+    await user.press(await screen.findByRole('button', { name: `${{ abendessen: 'Abendessen', snacks: 'Snacks' }[mealKey]} hinzufügen` }));
     return account;
   }
   const search = () => screen.getByLabelText('Lebensmittel suchen');
@@ -244,7 +247,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
     expect(within(sheet).getByText(problem, { includeHiddenElements: true })).toBeOnTheScreen();
     expect(within(sheet).getByLabelText('Menge')).toHaveProp('accessibilityHint', `Fehler: ${problem}`);
     expect(screen).toHavePathname('/capture/food');
-    expect(entries()).toHaveLength(5);
+    expect(entries()).toHaveLength(7);
   });
 
   it('kehrt nach dem Speichern auch ohne Rückweg ins Protokoll zurück, etwa nach einem Link', async () => {
@@ -285,7 +288,7 @@ describe('Hinzufügen und Mengenprüfung', () => {
     await user.press(undo);
     await act(async () => {});
 
-    expect(entries()).toHaveLength(5);
+    expect(entries()).toHaveLength(7);
     expect(operations()).toEqual(['upsert_entity', 'delete_entity']);
     expect(within(meal('snacks')).getByText('Noch nichts eingetragen.')).toBeOnTheScreen();
     expect(screen.getByLabelText('Erfasst heute: 296 kcal')).toBeOnTheScreen();
@@ -295,7 +298,8 @@ describe('Hinzufügen und Mengenprüfung', () => {
 describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
   async function openCapture() {
     const account = await openAccount();
-    await renderRouter(appDir, { initialUrl: '/capture/food?meal=fruehstueck&localDate=2026-10-14' });
+    // Das Abendessen hat in `solo` keine Einträge: Seine Suche zeigt BLS-Treffer ohne „Zuletzt verwendet“ (#158).
+    await renderRouter(appDir, { initialUrl: '/capture/food?meal=abendessen&localDate=2026-10-14' });
     await screen.findByLabelText('Lebensmittel suchen');
     return account;
   }
@@ -369,7 +373,7 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
       expect.objectContaining({ captureMethod: 'eigenes_lebensmittel', foodRefType: 'eigen', displayUnit: 'portion', displayAmountMilli: 500, baseAmount: 150_000, totalMilliKcal: 180_000 }),
     ]));
     expect(operations()).toEqual(['upsert_entity', 'upsert_entity']);
-    expect(await within(meal('fruehstueck')).findByLabelText('Frühstück: Linsen-Dal, 0,5 Portionen, 180 kcal')).toBeOnTheScreen();
+    expect(await within(meal('abendessen')).findByLabelText('Abendessen: Linsen-Dal, 0,5 Portionen, 180 kcal')).toBeOnTheScreen();
   });
 
   it('bietet ohne Suchtreffer „Eigenes Lebensmittel anlegen“ mit vorausgefülltem Namen an', async () => {
@@ -389,7 +393,8 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     await openCapture();
 
     await search('Bircher');
-    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Eigen' }));
+    // Das selbst gemachte Bircher-Müsli ist in `solo` Lebensmittelfavorit (#158).
+    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Favorit' }));
     expect(within(sheet()).getAllByRole('radio').map((chip) => chip.props.accessibilityLabel)).toEqual(['g', '1 Glas']);
     expect(within(sheet()).getByRole('button', { name: 'Stück eintragen' })).toBeOnTheScreen();
     await user.press(within(sheet()).getByRole('button', { name: 'Schließen' }));
@@ -467,7 +472,7 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
   it('ändert und löscht ein eigenes Lebensmittel nach Rückfrage', async () => {
     const { ownFoods, operations } = await openCapture();
     await search('Bircher');
-    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Eigen' }));
+    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Favorit' }));
     await user.press(within(sheet()).getByRole('button', { name: 'Bearbeiten' }));
     expect(within(form()).getByRole('header', { name: 'Eigenes Lebensmittel bearbeiten' })).toBeOnTheScreen();
     expect(within(form()).getByLabelText('1 Portion hat')).toHaveDisplayValue('250');
@@ -483,10 +488,174 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
 
     expect(ownFoods()[0]).toMatchObject({ id: seedIds.ownFood.philippBircher, deletedAt: expect.any(String) });
     expect(operations()).toEqual(['upsert_entity', 'delete_entity']);
-    // Zurück in der Suche: Das eigene Lebensmittel ist weg, der BLS-Treffer bleibt.
+    // Zurück in der Suche: Das eigene Lebensmittel ist weg, der BLS-Treffer bleibt. Sein Favorit bleibt mit der
+    // gespeicherten Fassung nutzbar (Spezifikation 2, Abschnitt 3; #158), lässt sich aber nicht mehr bearbeiten.
+    // Die Fassung folgt den aktuellen Werten beim Verwenden des Favoriten, hier beim Antippen vor der Änderung.
     expect(screen.getByLabelText('Lebensmittel suchen')).toHaveDisplayValue('Bircher');
-    expect(screen.queryByText('Bircher-Müsli, selbst gemacht')).not.toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Favorit' })).toBeOnTheScreen();
     expect(screen.getByText('Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt')).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Favorit' }));
+    expect(within(sheet()).queryByRole('button', { name: 'Bearbeiten' })).not.toBeOnTheScreen();
+  });
+});
+
+// Nachweis für #158 am gerenderten Bildschirm: „Zuletzt verwendet“ und Lebensmittelfavoriten an ihren festen
+// Plätzen, je höchstens fünf, danach „Alle anzeigen“; ein Tipp führt in die Mengenprüfung mit vorbelegter Menge
+// und Erfassungsart `zuletzt` bzw. `lebensmittelfavorit`. `solo` hat zum Frühstück heute Hafer Flocken und
+// Apfel roh (überdeckt vom eigenen „Apfel roh“), gestern Müslimischung Bircher Art, am 15.09. Knuspermüsli und
+// am 14.09., einen Tag vor dem 30-Tage-Fenster, Haferflocken-Nussplätzchen. Lebensmittelfavorit ist das selbst
+// gemachte Bircher-Müsli.
+describe('Zuletzt verwendet und Lebensmittelfavoriten (#158)', () => {
+  const sheet = () => screen.getByTestId('sheet');
+  const recent = () => screen.getByTestId('platz-zuletzt');
+  const favorites = () => screen.getByTestId('platz-lebensmittelfavoriten');
+  const search = () => screen.getByLabelText('Lebensmittel suchen');
+  const rowNames = (slot: ReturnType<typeof screen.getByTestId>) => within(slot).queryAllByRole('button').map((row) => row.props.accessibilityLabel as string);
+
+  async function openCapture(mealKey: 'fruehstueck' | 'abendessen' = 'fruehstueck', before?: (account: Awaited<ReturnType<typeof openAccount>>) => void) {
+    const account = await openAccount();
+    before?.(account);
+    await renderRouter(appDir, { initialUrl: `/capture/food?meal=${mealKey}&localDate=2026-10-14` });
+    await within(await screen.findByTestId('platz-zuletzt')).findAllByRole('header');
+    return account;
+  }
+
+  it('zeigt „Zuletzt verwendet“ der Mahlzeit eindeutig und zuletzt verwendete zuerst, mit letzter Menge, ohne Einträge vor dem 30-Tage-Fenster', async () => {
+    await openCapture();
+
+    expect(within(recent()).getByRole('header', { name: 'Zuletzt verwendet' })).toBeOnTheScreen();
+    expect(rowNames(recent())).toEqual([
+      'Apfel roh, 150 g, 87 kcal',
+      'Hafer Flocken, 60 g, 209 kcal',
+      'Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt, 60 g, 220 kcal',
+      'Knuspermüslimischung, klassisch, gesüßt, angereichert mit Vitaminen und Mineralstoffen, 50 g, 211 kcal',
+    ]);
+    expect(within(recent()).queryByText('Haferflocken-Nussplätzchen')).not.toBeOnTheScreen();
+    expect(within(favorites()).getByRole('header', { name: 'Lebensmittelfavoriten' })).toBeOnTheScreen();
+    // Ohne Eintrag mit dem Favoriten ist die bekannte Portion vorbelegt: 1 Glas (250 g) mit 375 kcal.
+    expect(rowNames(favorites())).toEqual(['Bircher-Müsli, selbst gemacht, 1 Portion, 375 kcal']);
+  });
+
+  it('erfasst Gewohntes mit zwei Tipps aus „Zuletzt verwendet“: Mengenprüfung mit letzter Menge, Erfassungsart `zuletzt`', async () => {
+    const { entries } = await openCapture();
+
+    await user.press(within(recent()).getByRole('button', { name: 'Hafer Flocken, 60 g, 209 kcal' }));
+    expect(within(sheet()).getByRole('header', { name: 'Hafer Flocken' })).toBeOnTheScreen();
+    expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('60');
+    await user.press(within(sheet()).getByRole('button', { name: 'Hinzufügen' }));
+
+    expect(screen).toHavePathname('/log');
+    expect(entries()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ meal: 'fruehstueck', captureMethod: 'zuletzt', foodRefKey: 'C133000', displayAmountMilli: 60_000, consumedAt: seedClock.instant }),
+    ]));
+  });
+
+  it('erfasst einen Lebensmittelfavoriten mit zwei Tipps: vorbelegte Portion, Erfassungsart `lebensmittelfavorit`', async () => {
+    const { entries } = await openCapture();
+
+    await user.press(within(favorites()).getByRole('button', { name: 'Bircher-Müsli, selbst gemacht, 1 Portion, 375 kcal' }));
+    expect(within(sheet()).getByRole('radio', { name: '1 Glas' })).toBeChecked();
+    expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('1');
+    expect(within(sheet()).getByRole('switch', { name: 'Lebensmittelfavorit' })).toBeChecked();
+    await user.press(within(sheet()).getByRole('button', { name: 'Hinzufügen' }));
+
+    expect(entries()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ meal: 'fruehstueck', captureMethod: 'lebensmittelfavorit', foodRefType: 'eigen', foodRefKey: seedIds.ownFood.philippBircher, displayUnit: 'portion', totalMilliKcal: 375_000 }),
+    ]));
+  });
+
+  it('zeigt je Liste höchstens fünf Einträge, danach „Alle anzeigen“', async () => {
+    await openCapture('fruehstueck', ({ nutrition }) => {
+      for (const [key, name, milliKcal] of [['F110600', 'Apfelsaft', 44_000], ['F506100', 'Granatapfel roh', 79_000], ['X537063', 'Rotkohl mit Apfel gedünstet', 62_000]] as const) {
+        nutrition.addEntry({
+          localDate: LocalDate.parse(seedDays.gestern), meal: 'fruehstueck', captureMethod: 'suche', foodRef: { type: 'bls', key },
+          snapshot: { name, baseUnit: 'g', referenceAmount: 100_000, milliKcal, proteinMg: 0, carbsMg: 0, fatMg: 0, portions: [], source: 'bls', attribution: 'BLS 4.0' },
+          displayUnit: 'g', displayAmountMilli: 100_000,
+        });
+      }
+    });
+
+    expect(rowNames(recent())).toHaveLength(5 + 1);
+    expect(within(recent()).getByRole('button', { name: 'Alle 7 anzeigen' })).toBeOnTheScreen();
+
+    await user.press(within(recent()).getByRole('button', { name: 'Alle 7 anzeigen' }));
+    expect(rowNames(recent())).toHaveLength(7 + 1);
+    await user.press(within(recent()).getByRole('button', { name: 'Weniger anzeigen' }));
+    expect(rowNames(recent())).toHaveLength(5 + 1);
+    // Die Favoritenliste hat nur einen Eintrag und damit kein „Alle anzeigen“.
+    expect(within(favorites()).queryByRole('button', { name: /^Alle/ })).not.toBeOnTheScreen();
+  });
+
+  it('nennt ohne Einträge und Favoriten, was dort künftig steht', async () => {
+    await openCapture('abendessen', ({ nutrition }) => nutrition.unmarkFoodFavorite({ ref: { type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) } }));
+
+    expect(within(recent()).getByText('Was du in den letzten 30 Tagen zum Abendessen eingetragen hast, steht hier.')).toBeOnTheScreen();
+    expect(within(favorites()).getByText('Markiere ein Lebensmittel mit dem Stern, dann steht es hier.')).toBeOnTheScreen();
+  });
+
+  it('stellt in der Suche Favoriten und „Zuletzt verwendet“ vor eigene Lebensmittel und BLS, mit Quellenmarke', async () => {
+    await openCapture();
+
+    await user.type(search(), 'Bircher');
+
+    expect(screen.getAllByRole('button').map((button) => button.props.accessibilityLabel).filter((label) => /je 100 g/.test(label))).toEqual([
+      'Bircher-Müsli, selbst gemacht, 150 kcal je 100 g, Favorit',
+      'Müslimischung Bircher Art (mit Trockenfrüchten und Nüssen) ungesüßt, 366 kcal je 100 g, Zuletzt',
+    ]);
+  });
+
+  it('markiert und entfernt einen Lebensmittelfavoriten in der Mengenprüfung', async () => {
+    const { favorites: stored } = await openCapture();
+    await user.type(search(), 'Haferflocken');
+    await user.press(screen.getByRole('button', { name: 'Hafer Flocken, 348 kcal je 100 g, Zuletzt' }));
+    const star = () => within(sheet()).getByRole('switch', { name: 'Lebensmittelfavorit' });
+    expect(star()).not.toBeChecked();
+
+    await user.press(star());
+    expect(star()).toBeChecked();
+    expect(stored()).toEqual(expect.arrayContaining([expect.objectContaining({ foodRefType: 'bls', foodRefKey: 'C133000' })]));
+    await user.press(within(sheet()).getByRole('button', { name: 'Schließen' }));
+    await user.clear(search());
+    expect(rowNames(favorites())).toContain('Hafer Flocken, 60 g, 209 kcal');
+
+    await user.press(within(favorites()).getByRole('button', { name: 'Hafer Flocken, 60 g, 209 kcal' }));
+    await user.press(star());
+    expect(star()).not.toBeChecked();
+    expect(stored()).toEqual([expect.objectContaining({ foodRefType: 'eigen', foodRefKey: seedIds.ownFood.philippBircher })]);
+  });
+
+  it('markiert in den Eintragsdetails auch eine KI-Schätzung: Daraus entsteht zuerst ein eigenes Lebensmittel', async () => {
+    const { nutrition, ownFoods, favorites: stored } = await openAccount();
+    nutrition.confirmPhotoDraft({
+      draftId: EntityId.parse('5c7e9a1b-3d5f-4a7c-9e1b-5d7f9a1c3e03'),
+      localDate: LocalDate.parse(seedDays.heute),
+      meal: 'mittagessen',
+      components: [{
+        foodRef: null,
+        snapshot: photoDraftSnapshot({ name: 'Bratkartoffeln', baseUnit: 'g', baseAmount: 180_000, milliKcal: 270_000, proteinMg: 4_000, carbsMg: 32_000, fatMg: 13_000 }),
+        displayUnit: 'g',
+        displayAmountMilli: 180_000,
+      }],
+    });
+    await renderRouter(appDir, { initialUrl: '/log' });
+    await user.press(await screen.findByRole('button', { name: 'Mittagessen: Bratkartoffeln, 180 g, 270 kcal, KI-Schätzung' }));
+    const star = () => within(sheet()).getByRole('switch', { name: 'Lebensmittelfavorit' });
+    expect(star()).not.toBeChecked();
+
+    await user.press(star());
+
+    expect(star()).toBeChecked();
+    const potatoes = ownFoods().find((food) => food.name === 'Bratkartoffeln');
+    expect(potatoes).toMatchObject({ referenceAmount: 180_000, milliKcal: 270_000, originType: null });
+    expect(stored()).toEqual(expect.arrayContaining([expect.objectContaining({ foodRefType: 'eigen', foodRefKey: potatoes!.id })]));
+    // Erneut geöffnet erkennt der Stern das schon angelegte eigene Lebensmittel; ein zweiter Tipp entfernt die
+    // Markierung, statt ein weiteres anzulegen.
+    await user.press(within(sheet()).getByRole('button', { name: 'Schließen' }));
+    await user.press(screen.getByRole('button', { name: 'Mittagessen: Bratkartoffeln, 180 g, 270 kcal, KI-Schätzung' }));
+    expect(star()).toBeChecked();
+    await user.press(star());
+    expect(star()).not.toBeChecked();
+    expect(ownFoods().filter((food) => food.name === 'Bratkartoffeln')).toHaveLength(1);
   });
 });
 
@@ -732,7 +901,7 @@ describe('Schriftfaktor 2,0 (#156)', () => {
     }
 
     await user.press(within(screen.getByTestId('sheet')).getByRole('button', { name: 'Löschen' }));
-    expect(entries()).toHaveLength(4);
+    expect(entries()).toHaveLength(6);
     await user.press(screen.getByRole('button', { name: 'Vorheriger Tag' }));
     expect(screen.getByRole('header', { name: 'Gestern, Dienstag, 13.10.2026' })).toBeOnTheScreen();
   });

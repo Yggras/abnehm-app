@@ -6,6 +6,7 @@ import {
   seedCreated as created,
   seedDailyGoals,
   seedDay as day,
+  seedFoodFavorite,
   seedGoalVersion,
   seedManualOrigin,
   seedOwnFood,
@@ -14,7 +15,7 @@ import {
   seedWeeklyPlan,
   type SeedWeeklyPlan,
 } from './rows.ts';
-import type { BausteinKey } from '../src/base.ts';
+import { EntityId, type BausteinKey } from '../src/base.ts';
 import { goalSettingsVariants, type GoalSettingsVariant } from './ziele-einstellungen.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
@@ -431,6 +432,40 @@ export const soloEigeneLebensmittel: SeedPart = {
   ],
 };
 
+/**
+ * Lebensmittelfavorit und „Zuletzt verwendet“ (Spezifikation 2, Abschnitt 7; #158), nur in `solo` und seinen
+ * Varianten: Das selbst gemachte Bircher-Müsli ist Lebensmittelfavorit. Dazu je ein Frühstück am ersten
+ * Tag im 30-Tage-Fenster von „Zuletzt verwendet“ (15.09., heute eingeschlossen) und am letzten Tag davor
+ * (14.09.): Die Knuspermischung erscheint im Frühstück unter „Zuletzt verwendet“, die Haferflocken-Nussplätzchen nicht.
+ * Beide Tage liegen vor dem Onboarding; Tagesziele gibt es dort nicht. Werte je 100 g aus dem BLS 4.0.
+ */
+export const soloLebensmittelfavoriten: SeedPart = {
+  area: 'ernaehrung',
+  entities: [
+    seedFoodFavorite({
+      personId: philipp, at: '2026-10-12T06:10:00.000Z',
+      favorite: {
+        foodRef: { type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) },
+        snapshot: {
+          name: 'Bircher-Müsli, selbst gemacht', baseUnit: 'g', referenceAmount: 100_000, milliKcal: 150_000, proteinMg: 4_500, carbsMg: 21_000, fatMg: 5_200,
+          portions: [{ unit: 'portion', label: '1 Glas', baseAmount: 250_000 }], source: 'eigen', attribution: null,
+        },
+        removedAt: null,
+      },
+    }),
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippZuletztFenster.innerhalb, personId: philipp, at: '2026-09-15T06:20:00.000Z', localDate: '2026-09-15', meal: 'fruehstueck',
+      food: { key: 'C514300', name: 'Knuspermüslimischung, klassisch, gesüßt, angereichert mit Vitaminen und Mineralstoffen', milliKcal: 421_000, proteinMg: 9_000, carbsMg: 56_400, fatMg: 15_950 },
+      grams: 50,
+    }),
+    seedBlsEntry({
+      id: seedIds.nutritionEntry.philippZuletztFenster.ausserhalb, personId: philipp, at: '2026-09-14T06:20:00.000Z', localDate: '2026-09-14', meal: 'fruehstueck',
+      food: { key: 'D701700', name: 'Haferflocken-Nussplätzchen', milliKcal: 517_000, proteinMg: 9_699, carbsMg: 37_900, fatMg: 35_161 },
+      grams: 40,
+    }),
+  ],
+};
+
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
 const soloPartsWith = ({ water, sport, plan, weights, goal, goalSettings }: SoloVariant): readonly SeedPart[] => [
   goalSettings === undefined ? soloFundament : soloFundamentWith(goalSettings.person),
@@ -451,13 +486,14 @@ export const soloParts = soloPartsWith(soloVariants.solo);
 /** `solo` oder eine seiner Varianten (`SoloVariant`). */
 function soloScenario(scenario: SoloScenario): SeedManifest {
   const state = buildSeedState({
-    parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, sportVorwoche],
+    parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, soloLebensmittelfavoriten, sportVorwoche],
     createdAt: seedClock.instant,
     devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
   });
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 10: ein Lebensmittelfavorit und Frühstücke am Rand des 30-Tage-Fensters seit #158.
     // Revision 9: Ernährungseinträge am Vortag ohne Abendessen seit #156.
     // Revision 8: Sporteinträge der Vorwoche samt einem Tag mit zwei Einheiten seit #174.
     // Revision 7: unentschiedene Erlaubnis für Mitteilungen auf dem iPhone seit #125.
@@ -465,7 +501,7 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
     // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 9,
+    revision: 10,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,

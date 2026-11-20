@@ -9,7 +9,16 @@ import { onboardingManifests } from './onboarding.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { ernaehrungRandzustandManifests } from './randzustaende-ernaehrung.ts';
 import { soloManifests } from './solo.ts';
-import { doppelausgabeManifest, ereignisseVollManifest, feldkonfliktManifest, haelfteVollManifest, levelaufstiegAusstehendManifest, rollenwahlOffenManifest, soloEnergieManifest } from './spiel.ts';
+import {
+  doppelausgabeManifest,
+  ereignisseVollManifest,
+  feldkonfliktManifest,
+  formwechselManifest,
+  haelfteVollManifest,
+  levelaufstiegAusstehendManifest,
+  rollenwahlOffenManifest,
+  soloEnergieManifest,
+} from './spiel.ts';
 import { syncSzenarioManifests } from './sync-szenarien.ts';
 import { tageszielManifests } from './tagesziele.ts';
 import { veralteterPartnerstandManifest } from './veralteter-partnerstand.ts';
@@ -59,6 +68,7 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   feldkonflikt: feldkonfliktManifest,
   'ereignisse-voll': ereignisseVollManifest,
   'levelaufstieg-ausstehend': levelaufstiegAusstehendManifest,
+  formwechsel: formwechselManifest,
   'challenge-vorgeschlagen': challengeVorgeschlagenManifest,
   'challenge-verfallen': challengeVerfallenManifest,
   'challenge-passt-nicht': challengePasstNichtManifest,
