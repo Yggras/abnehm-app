@@ -91,12 +91,15 @@ export const seedIds = {
   // 0021/7–15: Philipps frühere Messungen der letzten 30 Tage in den Partner-Szenarien (#181), 0021/16: sein Waagenimport.
   // 0021/17–20: Annas frühere Messungen in den Partner-Szenarien (#181).
   // 0021/21–30: Philipps Startgewicht und Messungen der letzten 21 Tage in den Budgetvorschlag-Szenarien (#150).
+  // 0021/31: die `entryId` des Startgewichts im Onboarding-Entwurf von `onboarding-unterbrochen` (#146); noch
+  // ohne Zeile, sie entsteht erst mit „Plan speichern“ in Schritt 8.
   weightEntry: {
     philippVorgestern: id('0021', 1), philippGestern: id('0021', 2), annaGestern: id('0021', 3), philippVerlauf: [id('0021', 4), id('0021', 5), id('0021', 6)],
     philippMonat: Array.from({ length: 9 }, (_, index) => id('0021', 7 + index)),
     philippWaage: id('0021', 16),
     annaVerlauf: [id('0021', 17), id('0021', 18), id('0021', 19), id('0021', 20)],
     philippBudgetvorschlag: Array.from({ length: 10 }, (_, index) => id('0021', 21 + index)),
+    philippOnboardingEntwurf: id('0021', 31),
   },
   // 0022/4: Philipps kurze Einheit von heute, nur im Randzustand `teilweise` (#113).
   // 0022/5–8: Philipps übrige Einheiten dieser Woche in `solo` und seinen Sport-Varianten (#173).

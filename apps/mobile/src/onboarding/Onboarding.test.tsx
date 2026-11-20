@@ -8,10 +8,13 @@ import type * as React from 'react';
 import { startOfLocalDate } from '@abnehm/clock';
 import { createTestClock } from '@abnehm/clock/testing';
 import { DisplayName, Instant, LocalDate, TimeZone } from '@abnehm/contracts/base';
+import { seedManifests, type SeedManifest } from '@abnehm/contracts/seeds';
 
+import { Button } from '../design';
 import { hitArea } from '../design/testing/hit-area';
 import { textScale } from '../design/tokens';
 import type * as DeviceSession from '../session/device-session';
+import type * as OnboardingRegistryModule from '../shell/onboarding-registry';
 import { createOnboardingDevice, type OnboardingDevice } from './testing/harness';
 
 // Onboarding-Schritte 1 und 2 und die Einrichtung des Kontos mit dem echten `src/app` (#138): Das
@@ -36,6 +39,14 @@ jest.mock('../session/device-session', () => ({
   // Bildschirme und Onboarding-Modul lesen dieselbe Testuhr, wie auf dem Gerät dieselbe Uhr.
   appClock: mockClock,
 }));
+// Die Steckplätze 9–11 zeigen die Platzhalter der Registry (Spezifikation 1, „Testing Decisions“): Die Beiträge,
+// die der Composition Root beim Laden anmeldet, bleiben außen vor. Ein Test meldet eigene über `mockSlots` an.
+jest.mock('../shell/onboarding-registry', () => {
+  const actual = jest.requireActual<typeof OnboardingRegistryModule>('../shell/onboarding-registry');
+  const slots = actual.createOnboardingRegistry();
+  return { ...actual, mockSlots: slots, appOnboardingRegistry: { register: () => () => {}, element: slots.element } };
+});
+const { mockSlots } = jest.requireMock<{ mockSlots: OnboardingRegistryModule.OnboardingRegistry }>('../shell/onboarding-registry');
 // Jest zeichnet `@expo/ui` nicht: das Geburtsdatum als Textfeld mit dem Zeitpunkt, Sheets inline.
 jest.mock('../design/native/DateTimePicker', () => jest.requireActual('../design/testing/text-date-time-picker'));
 jest.mock('../design/native/Sheet', () => jest.requireActual('../design/testing/inline-sheet'));
@@ -1016,6 +1027,230 @@ describe('Schritt 8 „Wochenplan“', () => {
   });
 });
 
+const placeholder = 'Dieser Schritt ist noch in Arbeit.';
+const skip = () => user.press(screen.getByRole('button', { name: 'Überspringen' }));
+const back = () => user.press(screen.getByRole('button', { name: 'Zurück' }));
+
+/** Bis Schritt 8 ausgefüllt und den Plan gespeichert: Die App steht bei Schritt 9. */
+async function openStepNine() {
+  await openStepEight();
+  await savePlan();
+  await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' });
+}
+
+/** Startet die App neu: dasselbe Gerät mit derselben Kontodatenbank, die Oberfläche von vorn (wie unter 18). */
+async function restartApp() {
+  await renderRouter(appDir, { initialUrl: '/' });
+}
+
+/** Operationen der Outbox außer dem Person-Upsert, den jeder Schritt mit Personenfeldern ersetzt. */
+const otherOperations = () => mockDevice.outbox().filter((operation) => !(operation.type === 'upsert_entity' && operation.entityType === 'person'));
+
+/** Wartet, bis die Weiche nach dem Abschluss „Heute“ öffnet. */
+async function expectToday() {
+  await waitFor(() => expect(screen).toHavePathname('/'));
+  expect(mockDevice.gate.get()).toBe('today');
+}
+
+describe('Steckplätze 9–11 und Abschluss', () => {
+  const stops: (() => void)[] = [];
+  afterEach(() => {
+    for (const stop of stops.splice(0)) stop();
+  });
+
+  it('überspringt 9–11 mit den Platzhaltern, schließt ab und öffnet „Heute“; die Ergebnisse speichert es nicht', async () => {
+    await openStepNine();
+    const operations = otherOperations();
+
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 9 von 11' });
+    expect(screen.getByText(placeholder)).toBeOnTheScreen();
+    expect(screen.getByText('Kommt mit: Wasser, Sport, Gewicht & Health')).toBeOnTheScreen();
+    await skip();
+
+    expect(await screen.findByRole('header', { name: 'Benachrichtigungen' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 10 von 11' });
+    expect(screen.getByText('Kommt mit: Partner & Benachrichtigungen')).toBeOnTheScreen();
+    await skip();
+
+    expect(await screen.findByRole('header', { name: 'Partner einladen' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 11 von 11, erreicht' });
+    expect(mockDevice.ownPerson()?.onboardingStatus).toBe('begonnen');
+    await skip();
+
+    await expectToday();
+    expect(mockDevice.ownPerson()).toEqual(expect.objectContaining({ onboardingStatus: 'abgeschlossen', onboardingCompletedAt: clock.read().instant }));
+    expect(mockDevice.outbox()).toContainEqual(
+      expect.objectContaining({ entityType: 'person', payload: expect.objectContaining({ onboardingStatus: 'abgeschlossen' }) }),
+    );
+    // Nur der Onboarding-Stand an der Person ist neu; die Ergebnisse der Steckplätze landen nirgends.
+    expect(otherOperations()).toEqual(operations);
+  });
+
+  it('ein Beitrag zeichnet Inhalt und Hauptaktion; sein Ergebnis führt weiter wie „Überspringen“', async () => {
+    function HealthStep({ complete }: OnboardingRegistryModule.OnboardingStepProps<'health'>) {
+      return <Button label="Verbinden" onPress={() => complete({ type: 'health_connected' })} />;
+    }
+    function PartnerStep({ complete }: OnboardingRegistryModule.OnboardingStepProps<'partner'>) {
+      return <Button label="Code teilen" onPress={() => complete({ type: 'partner_invite_created' })} />;
+    }
+    stops.push(mockSlots.register('tracker', 'health', HealthStep), mockSlots.register('partner', 'partner', PartnerStep));
+    await openStepNine();
+
+    expect(screen.queryByText(placeholder)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Überspringen' })).toBeOnTheScreen();
+    await user.press(screen.getByRole('button', { name: 'Verbinden' }));
+
+    expect(await screen.findByRole('header', { name: 'Benachrichtigungen' })).toBeOnTheScreen();
+    await skip();
+    await screen.findByRole('header', { name: 'Partner einladen' });
+    await user.press(screen.getByRole('button', { name: 'Code teilen' }));
+
+    await expectToday();
+    expect(mockDevice.ownPerson()?.onboardingStatus).toBe('abgeschlossen');
+  });
+
+  it('„Zurück“ führt von Schritt 11 bis zu Schritt 8, und Schritt 9 folgt wieder auf „Plan speichern“', async () => {
+    await openStepNine();
+    await skip();
+    await screen.findByRole('header', { name: 'Benachrichtigungen' });
+    await skip();
+    await screen.findByRole('header', { name: 'Partner einladen' });
+
+    await back();
+    expect(await screen.findByRole('header', { name: 'Benachrichtigungen' })).toBeOnTheScreen();
+    await back();
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    await back();
+    expect(await screen.findByRole('header', { name: 'Wochenplan' })).toBeOnTheScreen();
+    await savePlan();
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    expect(mockDevice.ownPerson()?.onboardingStatus).toBe('begonnen');
+  });
+
+  it('nach einem Neustart am gemerkten der Schritte 9–11; geht der Fortschritt verloren, wieder bei Schritt 9', async () => {
+    await openStepNine();
+    await skip();
+    await screen.findByRole('header', { name: 'Benachrichtigungen' });
+
+    await restartApp();
+    expect(await screen.findByRole('header', { name: 'Benachrichtigungen' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 10 von 11' });
+
+    mockDevice.forgetDeviceState('onboarding_step');
+    await restartApp();
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 9 von 11' });
+  });
+});
+
+describe('Fortsetzen', () => {
+  it('nach einem Abbruch aus dem lokalen Entwurf am letzten offenen Schritt, mit allen Eingaben', async () => {
+    await openStepFive();
+    await user.press(levelCard(midLevel));
+    await next();
+    await screen.findByRole('header', { name: 'Zielgewicht und Tempo' });
+
+    await restartApp();
+
+    expect(await screen.findByRole('header', { name: 'Zielgewicht und Tempo' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 6 von 11' });
+    await back();
+    expect(await screen.findByRole('header', { name: 'Aktivitätsstufe' })).toBeOnTheScreen();
+    expect(levelCard(midLevel)).toBeChecked();
+  });
+});
+
+describe('Fortsetzen nach einer Anmeldung, bestimmt aus dem Pull-Stand', () => {
+  /** Meldet über „Ich habe schon ein Konto“ mit dem Testkonto des Szenarios an; sein erster Pull bringt den Stand. */
+  async function signInSeeded(manifest: SeedManifest, installation: string) {
+    const credentials = mockDevice.addSeededAccount(manifest, installation);
+    await openApp();
+    await toAccountStep();
+    await user.press(screen.getByRole('button', { name: 'Ich habe schon ein Konto' }));
+    await screen.findByRole('header', { name: 'Anmelden' });
+    await fill('E-Mail-Adresse', credentials.email);
+    await fill('Passwort', credentials.password);
+    await user.press(screen.getByRole('button', { name: 'Anmelden' }));
+  }
+
+  it('Onboarding abgeschlossen (`solo`): „Heute“', async () => {
+    await signInSeeded(seedManifests['solo'], 'philipp-iphone');
+
+    await expectToday();
+  });
+
+  it('Zielversion vorhanden (`zweites-geraet`): Schritt 9 auf diesem Gerät, ohne „Zurück“ in die Schritte davor', async () => {
+    await signInSeeded(seedManifests['zweites-geraet'], 'philipp-ipad');
+
+    expect(await screen.findByRole('header', { name: 'Gesundheitsdaten verbinden' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 9 von 11' });
+    expect(screen.queryByRole('button', { name: 'Zurück' })).toBeNull();
+    await skip();
+    await screen.findByRole('header', { name: 'Benachrichtigungen' });
+    await skip();
+    await screen.findByRole('header', { name: 'Partner einladen' });
+    await skip();
+
+    await expectToday();
+    expect(mockDevice.ownPerson()).toEqual(expect.objectContaining({ onboardingStatus: 'abgeschlossen', heightCm: 182 }));
+  });
+
+  it('Hinweis nicht bestätigt (`frisches_konto`): Schritt 1', async () => {
+    // Ohne Übergabe aus Schritt 1 dieses Geräts, etwa nach einem Neustart vor dem ersten Pull.
+    const credentials = mockDevice.addSeededAccount(seedManifests['frisches_konto'], 'philipp-iphone');
+    await mockDevice.session.auth.signIn(credentials);
+    await mockDevice.onboarding.setUpAccount();
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    expect(await screen.findByRole('header', { name: 'Willkommen bei Gemeinsam leichter' })).toBeOnTheScreen();
+    expect(screen).toHavePathname('/onboarding');
+  });
+
+  it('sonst ab Schritt 3 mit dem lokalen Entwurf (`onboarding-unterbrochen`): am letzten offenen Schritt 6', async () => {
+    await signInSeeded(seedManifests['onboarding-unterbrochen'], 'philipp-iphone');
+
+    expect(await screen.findByRole('header', { name: 'Zielgewicht und Tempo' })).toBeOnTheScreen();
+    expect(progressOf()).toHaveAccessibilityValue({ text: 'Schritt 6 von 11' });
+    await back();
+    expect(await screen.findByRole('header', { name: 'Aktivitätsstufe' })).toBeOnTheScreen();
+    expect(levelCard(midLevel)).toBeChecked();
+  });
+
+  it('ohne Entwurf ab Schritt 3', async () => {
+    await mockDevice.addAccount(anna);
+    await openApp();
+    await toAccountStep();
+    await user.press(screen.getByRole('button', { name: 'Ich habe schon ein Konto' }));
+    await fill('E-Mail-Adresse', anna.email);
+    await fill('Passwort', anna.password);
+    await user.press(screen.getByRole('button', { name: 'Anmelden' }));
+
+    await expectStepThree();
+  });
+
+  it('bis der erste vollständige Pull angekommen ist, zeigt die App einen Ladezustand statt eines Onboardings', async () => {
+    await mockDevice.addAccount(anna);
+    mockDevice.interruptPull(true);
+    await openApp();
+    await toAccountStep();
+    await user.press(screen.getByRole('button', { name: 'Ich habe schon ein Konto' }));
+    await fill('E-Mail-Adresse', anna.email);
+    await fill('Passwort', anna.password);
+    await user.press(screen.getByRole('button', { name: 'Anmelden' }));
+
+    expect(await screen.findByLabelText('Einen Moment, wir holen deinen Stand.')).toBeOnTheScreen();
+    expect(screen).toHavePathname('/onboarding');
+    expect(screen.queryByRole('progressbar', { name: 'Fortschritt der Einrichtung' })).toBeNull();
+
+    mockDevice.interruptPull(false);
+    await act(async () => {
+      await mockDevice.pull();
+    });
+
+    await expectStepThree();
+  });
+});
+
 describe('Zugänglichkeit', () => {
   const interactiveRoles = ['button', 'checkbox', 'radio'];
 
@@ -1118,6 +1353,32 @@ describe('Zugänglichkeit', () => {
     await screen.findByRole('button', { name: 'Erneut versuchen' });
     mockDevice.takeErrors();
     await expectAccessible();
+  });
+
+  it('Steckplätze 9–11: deutsche Namen, 48-dp-Aktionen, Schrift bis Faktor 2,0', async () => {
+    await openStepNine();
+    for (const next of ['Benachrichtigungen', 'Partner einladen']) {
+      expect(screen.getByRole('button', { name: 'Überspringen' })).toBeOnTheScreen();
+      expect(screen.getByRole('button', { name: 'Zurück' })).toBeOnTheScreen();
+      await expectAccessible();
+      await skip();
+      await screen.findByRole('header', { name: next });
+    }
+    await expectAccessible();
+  });
+
+  it('Ladezustand: deutscher zugänglicher Name, Schrift bis Faktor 2,0', async () => {
+    await mockDevice.addAccount(anna);
+    mockDevice.interruptPull(true);
+    await mockDevice.session.auth.signIn(anna);
+    await mockDevice.onboarding.setUpAccount();
+    await renderRouter(appDir, { initialUrl: '/' });
+
+    expect(await screen.findByLabelText('Einen Moment, wir holen deinen Stand.')).toBeOnTheScreen();
+    for (const text of screen.queryAllByText(/[\s\S]*/, { includeHiddenElements: true })) {
+      expect(text.props.allowFontScaling).not.toBe(false);
+      expect([textScale.max, ...Object.values(textScale.limit)]).toContain(text.props.maxFontSizeMultiplier);
+    }
   });
 });
 

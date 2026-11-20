@@ -5,6 +5,7 @@ import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
+import { onboardingManifests } from './onboarding.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { ernaehrungRandzustandManifests } from './randzustaende-ernaehrung.ts';
 import { soloManifests } from './solo.ts';
@@ -46,7 +47,7 @@ export {
   type SeedValue,
 } from './manifest.ts';
 export { canonicalJson, canonicalRows, dependencyOrder, withoutDerivedColumns } from './canonical.ts';
-export { buildSeedState, changedOnServer, pulledBy, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
+export { buildSeedState, changedOnServer, pulledBy, withDeviceState, type SeedArea, type SeedDevicePlan, type SeedEntity, type SeedPart } from './build.ts';
 export { gekoppeltParts, vorDemSchluepfenParts } from './gekoppelt.ts';
 export { seedAccounts, seedClock, seedDays, seedIds, seedImageKeys, seedInstallations, seedInviteCodes, seedPassword } from './ids.ts';
 export { budgetvorschlagBudget, budgetvorschlagReadings } from './budgetvorschlag.ts';
@@ -77,4 +78,5 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   ...syncSzenarioManifests,
   ...tageszielManifests,
   ...budgetvorschlagManifests,
+  ...onboardingManifests,
 };

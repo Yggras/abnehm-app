@@ -5,10 +5,12 @@ import type { AppAuth, RegisterResult, SignInResult } from '../auth';
 import type { LocalDatabase } from '../local-db';
 import { readOwnPerson } from '../local-db/person-header';
 import type { Plan } from '../plan';
-import { updateOwnPerson, type SyncCycleResult, type SyncWriter } from '../sync';
+import { readLastPullAt, updateOwnPerson, type SyncCycleResult, type SyncWriter } from '../sync';
 import { checkBodyData, type BodyDataCheck, type BodyDataProblem } from './body-data';
 import { readOnboardingDraft, updateOnboardingDraft, type OnboardingDraft, type OnboardingDraftChange } from './draft';
 import { keepsManualBudget } from './goals';
+import { readOnboardingStep, writeOnboardingStep, type ResumableStep } from './position';
+import { isSlotStep } from './steps';
 import { initialPlanDraftOf } from './week';
 
 // Onboarding-Modul (Spezifikation 1, Abschnitte 1 und 9): der Weg vom Willkommen bis „Heute“. Vor dem
@@ -23,7 +25,10 @@ export type OnboardingAuth = Pick<AppAuth, 'register' | 'signIn' | 'bootstrapPer
 
 /** Stand der eigenen Person für die Route `onboarding`. */
 export type OnboardingProgress =
-  /** Keine Kontodatenbank geöffnet oder die Person ist noch nicht per Pull angekommen. */
+  /**
+   * Keine Kontodatenbank geöffnet, oder der erste vollständige Pull ist noch nicht angekommen: Erst mit ihm
+   * sind Person, Zielversion und Wochenplan da, aus denen sich der Einstieg ergibt (Spezifikation 1, Abschnitt 9).
+   */
   | Readonly<{ type: 'laedt' }>
   | Readonly<{ type: 'bereit'; disclaimerAccepted: boolean }>;
 
@@ -55,8 +60,18 @@ export type PlanSaveResult =
   /** Startgewicht oder lokale Transaktion sind gescheitert; Wiederholen erzeugt keine Dublette. */
   | Readonly<{ type: 'fehlgeschlagen' }>;
 
+/** Wo der Ablauf mit Konto fortsetzt: ein Schritt ab 3 oder in Schritt 3 der Sperrbildschirm unter 18. */
+export type OnboardingPosition = ResumableStep | 'minderjaehrig';
+
+/** Ausgang des Abschlusses nach Schritt 11. */
+export type CompletionResult =
+  /** `onboarding_status = abgeschlossen` liegt an der Person; die Sitzungs-Weiche öffnet „Heute“. */
+  | Readonly<{ type: 'abgeschlossen' }>
+  /** Die lokale Transaktion ist gescheitert; der Fehler ging an `onError`. */
+  | Readonly<{ type: 'fehlgeschlagen' }>;
+
 /** Was das Onboarding vom Plan-Modul der geöffneten Kontodatenbank braucht. */
-export type OnboardingPlan = Pick<Plan, 'saveInitialPlan' | 'hasPlanToday'>;
+export type OnboardingPlan = Pick<Plan, 'saveInitialPlan' | 'hasPlanToday' | 'hasGoalVersion'>;
 
 export type Onboarding = {
   /** Schritt 2: legt das Konto samt Person an; die Bestätigung aus Schritt 1 folgt mit der Person. */
@@ -100,6 +115,26 @@ export type Onboarding = {
    * Abschnitt 4; Entscheidung in #134).
    */
   hasPlanToday(): boolean;
+  /**
+   * Wo der Ablauf mit Konto und bestätigtem Hinweis fortsetzt (Spezifikation 1, Abschnitt 9), etwa nach einem
+   * Abbruch oder einer Anmeldung. Hat die Person eine Zielversion, auch von einem anderen Gerät, beginnt er
+   * bei Schritt 9 oder dem gemerkten der Schritte 9–11. Sonst setzt er am gemerkten Schritt aus dem Entwurf
+   * fort; ohne bestätigte Körperdaten bei Schritt 3, unter 18 Jahren beim Sperrbildschirm.
+   */
+  resume(): OnboardingPosition;
+  /** Merkt den Schritt, an dem der Ablauf jetzt steht, als Gerätezustand. */
+  enterStep(step: ResumableStep): void;
+  /**
+   * Ob der Entwurf dieses Geräts bestätigte Körperdaten trägt. Nur dann führt „Zurück“ aus Schritt 9 in die
+   * Schritte davor; auf einem zweiten Gerät gibt es keinen Entwurf.
+   */
+  hasConfirmedDraft(): boolean;
+  /**
+   * Abschluss nach Schritt 11, erledigt oder übersprungen: setzt über den Person-Upsert (#110)
+   * `onboarding_status = abgeschlossen` samt `onboarding_completed_at`. Danach öffnet die Sitzungs-Weiche
+   * „Heute“. Ein Fehler geht an `onError` und endet als `fehlgeschlagen`.
+   */
+  complete(): CompletionResult;
   /** Für `onAccountOpened` der App-Sitzung mit dem Plan-Modul dieser Datenbank; die Rückgabe löst die Beobachtung beim Sperren. */
   opened(database: LocalDatabase, plan: OnboardingPlan): () => void;
 };
@@ -121,6 +156,11 @@ type Handover = { accountId: string; disclaimerAcceptedAt: Instant; displayName:
 type OwnPerson = { accountId: string; disclaimerAccepted: boolean };
 
 const loading: OnboardingProgress = { type: 'laedt' };
+
+/** Körperdaten gültig und mit „Weiter“ in Schritt 3 bestätigt, erkennbar an der `entryId` des Startgewichts. */
+function bodyDataConfirmed(draft: OnboardingDraft, body: BodyDataCheck): boolean {
+  return body.type === 'vollstaendig' && draft.startWeightEntryId !== undefined;
+}
 
 export function createOnboarding({ auth, clock, writer, sync, onError, newId }: OnboardingOptions): Onboarding {
   let handover: Handover | null = null;
@@ -234,6 +274,45 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
 
     hasPlanToday: () => requireOpened().plan.hasPlanToday(),
 
+    resume() {
+      // Die Weiche „`disclaimer_accepted_at` fehlt → Schritt 1“ steht davor in der Route (`progress`). Eine
+      // Zielversion gibt es erst nach Schritt 8, also nie ohne Bestätigung; die Reihenfolge aus Abschnitt 9
+      // ergibt dasselbe.
+      const { database, plan } = requireOpened();
+      const { localDate } = clock.read();
+      const { step, draft } = database.read((tx) => ({ step: readOnboardingStep(tx), draft: readOnboardingDraft(tx) }));
+      if (plan.hasGoalVersion()) return step !== undefined && isSlotStep(step) ? step : 'health';
+      const body = checkBodyData(draft, localDate);
+      if (body.type === 'minderjaehrig') return 'minderjaehrig';
+      if (step === undefined || !bodyDataConfirmed(draft, body)) return 'koerperdaten';
+      // Ohne Zielversion ist der Plan noch nicht gespeichert; Schritt 8 ist dann der letzte offene.
+      return isSlotStep(step) ? 'wochenplan' : step;
+    },
+
+    enterStep(step) {
+      const { instant } = clock.read();
+      requireDatabase().transaction((tx) => writeOnboardingStep(tx, step, instant));
+    },
+
+    hasConfirmedDraft() {
+      const { localDate } = clock.read();
+      return requireDatabase().read((tx) => {
+        const draft = readOnboardingDraft(tx);
+        return bodyDataConfirmed(draft, checkBodyData(draft, localDate));
+      });
+    },
+
+    complete() {
+      const { instant } = clock.read();
+      try {
+        requireDatabase().transaction((tx) => updateOwnPerson(tx, writer, { onboardingStatus: 'abgeschlossen', onboardingCompletedAt: instant }, instant));
+        return { type: 'abgeschlossen' };
+      } catch (error) {
+        onError(error);
+        return { type: 'fehlgeschlagen' };
+      }
+    },
+
     async savePlan() {
       const { database, plan } = requireOpened();
       const draft = initialPlanDraftOf(database.read(readOnboardingDraft), clock.read().localDate);
@@ -257,7 +336,9 @@ export function createOnboarding({ auth, clock, writer, sync, onError, newId }: 
       const stop = database.observe(
         (tx) => {
           const row = readOwnPerson(tx);
-          return row === undefined ? null : { accountId: row.accountId, disclaimerAccepted: row.disclaimerAcceptedAt !== null };
+          // Die Person kann mit der ersten Seite kommen; der Einstieg steht erst nach der letzten fest.
+          if (row === undefined || readLastPullAt(tx) === null) return null;
+          return { accountId: row.accountId, disclaimerAccepted: row.disclaimerAcceptedAt !== null };
         },
         (person) => {
           // Der Upsert löst eine neue Meldung aus; erst sie zeigt die bestätigte Person, so dass die Route

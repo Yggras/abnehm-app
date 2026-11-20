@@ -84,6 +84,8 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('zeitzonen_reisen', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   manifest('budgetvorschlag-senken', 'packages/contracts/test/seeds-budgetvorschlag.test.ts', 'apps/mobile/src/plan/budget-suggestion-seeds.test.ts'),
   manifest('budgetvorschlag-anheben', 'packages/contracts/test/seeds-budgetvorschlag.test.ts', 'apps/mobile/src/plan/budget-suggestion-seeds.test.ts'),
+  manifest('onboarding-unterbrochen', 'apps/mobile/src/onboarding/Onboarding.test.tsx'),
+  manifest('zweites-geraet', 'apps/mobile/src/onboarding/Onboarding.test.tsx'),
   profile('uhr-ungesichert-24h'),
   profile('uhr-reise'),
   profile('transport-offline'),

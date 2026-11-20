@@ -296,6 +296,20 @@ describe('Erstplan speichern', () => {
     expect(reports.filter((report) => report.cause === 'planaenderung')).toEqual([{ personId: philipp, localDates: october(15, 27), cause: 'planaenderung' }]);
   });
 
+  it('eine Zielversion besteht, gleich ab welchem Tag; heute gilt sie in einer Zone, in der noch gestern ist, aber nicht', async () => {
+    const { plan, clock } = await setup();
+    expect(plan.hasGoalVersion()).toBe(false);
+
+    await plan.saveInitialPlan(draft);
+    expect(plan.hasGoalVersion()).toBe(true);
+
+    // Ein Gerät in Los Angeles: Dort ist noch der 14.10. früh, die Fassungen gelten ab heute in Berlin.
+    clock.setTimeZone(TimeZone.parse('America/Los_Angeles'));
+    clock.advanceBy(-11 * 60 * 60 * 1_000);
+    expect(plan.hasPlanToday()).toBe(false);
+    expect(plan.hasGoalVersion()).toBe(true);
+  });
+
   it('lehnt einen ungültigen Entwurf ab, bevor es etwas schreibt oder wiegt', async () => {
     const { plan, weightCalls, goals, operations, reports } = await setup();
 

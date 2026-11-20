@@ -59,6 +59,17 @@ export function readGoalVersionsUntil(tx: ReadContext, personId: EntityId, local
     .map((row) => storedGoalVersion(row)!.values);
 }
 
+/** Ob die Person überhaupt eine Zielversion hat, gleich ab welchem Tag. */
+export function hasGoalVersion(tx: ReadContext, personId: EntityId): boolean {
+  const row = sqliteOf(tx)
+    .select({ id: goalVersion.id })
+    .from(goalVersion)
+    .where(and(eq(goalVersion.personId, personId), isNull(goalVersion.deletedAt)))
+    .limit(1)
+    .get();
+  return row !== undefined;
+}
+
 /** Die Zeile der Zielversion mit dem größten `valid_from` ≤ Tag; die eine Stelle dieser Regel in SQLite. */
 function goalVersionRowOn(tx: ReadContext, personId: EntityId, localDate: LocalDate) {
   return sqliteOf(tx)

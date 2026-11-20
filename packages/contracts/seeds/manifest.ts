@@ -38,7 +38,8 @@ export const seedFormatVersion = 1;
  * ‚ab morgen‘“ aus Spezifikation 1, Abschnitt 12, für die Einstellungsseite „Ziele“ (#147).
  * `ernaehrung-*` und `kalorienbudget-*` sind die Randzustände der Ernährung aus Spezifikation 2,
  * Abschnitt 13 (#166). `levelaufstieg-ausstehend` ist „Levelaufstieg ausstehend vor und nach dem Pull“ aus
- * Spezifikation 4, Abschnitt 13 (#200), `formwechsel` „Formwechsel bei Level 4“ (#204).
+ * Spezifikation 4, Abschnitt 13 (#200), `formwechsel` „Formwechsel bei Level 4“ (#204). `onboarding-unterbrochen`
+ * und `zweites-geraet` sind „Onboarding unterbrochen“ und „zweites Gerät“ aus Spezifikation 1, Abschnitt 12 (#146).
  */
 export const SeedScenarioKey = z.enum([
   'solo',
@@ -91,6 +92,8 @@ export const SeedScenarioKey = z.enum([
   'challenge-passt-nicht',
   'budgetvorschlag-senken',
   'budgetvorschlag-anheben',
+  'onboarding-unterbrochen',
+  'zweites-geraet',
 ]);
 export type SeedScenarioKey = z.infer<typeof SeedScenarioKey>;
 

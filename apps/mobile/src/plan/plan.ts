@@ -24,7 +24,7 @@ import { createDailyGoalMaterialization } from './daily-goals';
 import { calculatorInput, keptSuggestedBudget, previewGoals, type GoalDraft } from './goal-draft';
 import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
 import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
-import { readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
+import { hasGoalVersion, readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
 import { createPlanToday, noBudgetNotices, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
 import { freeWeeklyPlan, standardWeeklyPlan, type WeekChoice, type WeekChoiceError, type WeeklyPlanDayError, type WeeklyPlanInput } from './weekly-plan';
 
@@ -102,6 +102,11 @@ export type Plan = Readonly<{
    * speichern“ nur geänderte Fassungen ab morgen an; Onboarding-Schritt 8 sagt das vorher (#144).
    */
   hasPlanToday(): boolean;
+  /**
+   * Ob die eigene Person schon eine Zielversion hat, gleich ab welchem Tag, etwa von einem anderen Gerät per
+   * Pull. Dann setzt das Onboarding bei Schritt 9 fort (Spezifikation 1, Abschnitt 9). Ohne Person `false`.
+   */
+  hasGoalVersion(): boolean;
   /**
    * Ziele ändern (Spezifikation 1, Abschnitte 4 und 10): eine vollständige Zielversion ab morgen mit
    * denselben Prüfungen wie beim Erstplan, in einer lokalen Transaktion samt `createGoalVersion` und der
@@ -216,6 +221,13 @@ export function createPlan(dependencies: PlanDependencies): Plan {
       return database.read((tx) => {
         const own = readOwnPerson(tx);
         return own !== undefined && hasPlanOn(tx, EntityId.parse(own.id), today);
+      });
+    },
+
+    hasGoalVersion() {
+      return database.read((tx) => {
+        const own = readOwnPerson(tx);
+        return own !== undefined && hasGoalVersion(tx, EntityId.parse(own.id));
       });
     },
 

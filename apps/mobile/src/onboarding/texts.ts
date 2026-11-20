@@ -58,6 +58,11 @@ export const onboardingTexts = {
   setupWaiting: 'Einen Moment, wir holen deine Daten.',
   setupNameIntro: 'Fast geschafft: Wie sollen wir dich nennen?',
   setupConfirm: 'Konto einrichten',
+
+  /** Ladezustand der Route `onboarding` bis zum ersten vollständigen Pull. */
+  loading: 'Einen Moment, wir holen deinen Stand.',
+  /** Der Abschluss nach Schritt 11 ist lokal gescheitert; „Überspringen“ bzw. die Hauptaktion versuchen es erneut. */
+  completionFailed: 'Das hat nicht geklappt. Versuch es bitte noch einmal.',
 } as const;
 
 const { heightCm, weightG, minimumAgeYears } = bodyInputLimits;
