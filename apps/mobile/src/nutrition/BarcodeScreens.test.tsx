@@ -2,8 +2,7 @@
 import { act, screen, userEvent, within } from '@testing-library/react-native';
 import { renderRouter } from 'expo-router/testing-library';
 import type * as React from 'react';
-import type * as ReactNative from 'react-native';
-import { Dimensions, StyleSheet, type TextStyle } from 'react-native';
+import { Dimensions, StyleSheet, type TextStyle, type View } from 'react-native';
 
 import { EntityId, Instant, TimeZone } from '@abnehm/contracts/base';
 import { ownFoodBarcodeId } from '@abnehm/contracts/nutrition';
@@ -57,7 +56,7 @@ const mockCamera = {
 };
 jest.mock('expo-camera', () => {
   const { createElement, useState } = jest.requireActual<typeof React>('react');
-  const { View } = jest.requireActual<typeof ReactNative>('react-native');
+  const { View: MockView } = jest.requireActual<{ View: typeof View }>('react-native');
   const response = () => ({ status: mockCamera.status, granted: mockCamera.status === 'granted', canAskAgain: mockCamera.canAskAgain, expires: 'never' });
   return {
     useCameraPermissions() {
@@ -75,7 +74,7 @@ jest.mock('expo-camera', () => {
     CameraView(props: { onBarcodeScanned?: (result: { type: string; data: string }) => void; barcodeScannerSettings?: { barcodeTypes: string[] }; accessibilityLabel?: string }) {
       mockCamera.onScan = props.onBarcodeScanned;
       mockCamera.barcodeTypes = props.barcodeScannerSettings?.barcodeTypes ?? [];
-      return createElement(View, { testID: 'kamera', accessible: true, accessibilityLabel: props.accessibilityLabel });
+      return createElement(MockView, { testID: 'kamera', accessible: true, accessibilityLabel: props.accessibilityLabel });
     },
   };
 });
