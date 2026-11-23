@@ -9,23 +9,23 @@ import { ContributeToProject, contributeToProjectKey, type IslandRole } from '..
 import { islandContentId, islandEventId } from '../src/island-records.ts';
 import { notificationIntentId } from '../src/notifications.ts';
 import { currentSyncSchemaVersion, OutboxOperation } from '../src/sync.ts';
-import { buildSeedState, changedOnServer, pulledBy, type SeedEntity } from './build.ts';
+import { buildSeedState, changedOnServer, type SeedEntity } from './build.ts';
 import { gekoppeltExtensions, gekoppeltPartsBuilt } from './gekoppelt.ts';
 import { seedAccounts, seedClock, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedRow, type SeedState, type SeedValue } from './manifest.ts';
-import { changedOffline, processed, type OfflineChange } from './sync-szenarien.ts';
+import { afterSync, changedOffline, processed, type OfflineChange } from './sync-szenarien.ts';
 
 // Szenario der Gemeinschaftsprojekte (Spezifikation 4, Abschnitt 13; #208), mit denselben IDs, derselben Uhr und
 // derselben Zone wie `gekoppelt`:
 //
 // - `projekt-abschluss` („Projektabschluss mit Start des nächsten Projekts“): `gekoppelt`, aber noch ohne Bauten, also
-//   auf Level 1 mit Projekt 1, dem Gartenhäuschen (je 20 Bedarf). Offline hat Anna auf ihrem Android 20 Energie in
-//   ihren Natur-Anteil eingezahlt, Philipp auf seinem iPhone 20 in seinen Bau-Anteil. Erst synct Anna: Ihr Anteil ist
-//   voll, gemeinsam ist das Projekt „gut unterwegs“. Dann Philipp: Beide Anteile sind voll, das Gartenhäuschen ist im
+//   auf Level 1 mit Projekt 1, dem Gartenhäuschen (je 20 Bedarf). Anna hat heute um 10:00 Uhr 20 Energie in ihren
+//   Natur-Anteil eingezahlt; ihr Anteil ist auf dem Server voll, Philipps iPhone hat das noch nicht gezogen. Offline hat
+//   Philipp um 11:00 Uhr 20 in seinen Bau-Anteil eingezahlt. Sein Sync macht beide Anteile voll: Das Gartenhäuschen ist im
 //   selben Befehl fertig, sein Wahrzeichen steht, und Projekt 2 beginnt, im ausgelieferten Katalog der
 //   Gartenhäuschen-Ausbau mit je 30 Bedarf. Mit 20 verbaut je Person steigt die Insel dabei auf Level 2; der Katalog
-//   hat dort keine Freischaltung. Zuletzt holt Annas Android den Abschluss ab. Beide bekommen je einen Intent
-//   `projektabschluss` und `levelaufstieg`.
+//   hat dort keine Freischaltung. Beide bekommen je einen Intent `projektabschluss` und `levelaufstieg`. Nur Philipps
+//   iPhone ist dabei, damit ein einziges Gerät den Abschluss zeigt (Gerätelauf und Impeccable-Kritik).
 //
 // Ohne Bauten, weil ein Abschluss sonst über Schwelle(4) = 36 auf das erste Formlevel samt Gebiet führte; das zeigen
 // `levelaufstieg-ausstehend` und `formwechsel` (#200, #204). Alle Werte sind erfunden.
@@ -35,7 +35,6 @@ const anna = seedIds.person.anna;
 const couplingId = seedIds.coupling.philippAnna;
 const islandId = EntityId.parse(seedIds.island.philippAnna);
 const iphone = seedInstallations.philippIphone.key;
-const android = seedInstallations.annaAndroid.key;
 const now = seedClock.instant;
 const today = LocalDate.parse(seedDays.heute);
 const firstProject = seedIds.communityProject.gartenhaeuschen;
@@ -43,12 +42,15 @@ const nextProject = islandContentId('community_project', islandId, '2');
 const membersInOrder = [philipp, anna].sort();
 
 /** Je Person eine Einzahlung von 20 in den Anteil ihrer Rolle; `n` ist die laufende Nummer. */
-type SeedContribution = Readonly<{ personId: string; role: IslandRole; n: number; operationId: string; at: string }>;
+type SeedContribution = Readonly<{ personId: string; role: IslandRole; n: number; at: string }>;
 
 const einzahlungen = {
-  anna: { personId: anna, role: 'natur', n: 1, operationId: seedIds.operation.projektAbschluss.android, at: '2026-10-14T10:00:00.000Z' },
-  philipp: { personId: philipp, role: 'bauen', n: 2, operationId: seedIds.operation.projektAbschluss.iphone, at: '2026-10-14T11:00:00.000Z' },
+  anna: { personId: anna, role: 'natur', n: 1, at: '2026-10-14T10:00:00.000Z' },
+  philipp: { personId: philipp, role: 'bauen', n: 2, at: '2026-10-14T11:00:00.000Z' },
 } as const satisfies Record<string, SeedContribution>;
+
+/** Philipps Offline-Einzahlung in der Outbox seines iPhones. */
+const philippsOperation = seedIds.operation.projektAbschluss;
 
 const amount = 20;
 
@@ -107,7 +109,7 @@ function offlineContribution(contribution: SeedContribution): OfflineChange {
     rows: contributionEntities(contribution, contribution.at).map(({ table, row }) => ({ table, row: { ...row, server_version: null } })),
     operation: OutboxOperation.parse({
       type: 'contributeToProject',
-      operationId: contribution.operationId,
+      operationId: philippsOperation,
       businessKey: contributeToProjectKey(payload.commandId),
       payload,
       knownServerVersion: null,
@@ -125,20 +127,21 @@ function serverRow(state: SeedState, table: string, id: string): SeedRow {
 }
 
 /** Eine neue Fassung einer Kopplungszeile zur Uhr des Servers; die Serverversion vergibt `changedOnServer`. */
-function revised(state: SeedState, table: string, id: string, changes: SeedRow): SeedEntity {
+function revised(state: SeedState, table: string, id: string, changes: SeedRow, at: string = now): SeedEntity {
   const row = Object.fromEntries(Object.entries(serverRow(state, table, id)).filter(([column]) => column !== 'server_version'));
-  return { table, entityType: table, couplingId, row: { ...row, ...changes, updated_at: now } };
+  return { table, entityType: table, couplingId, row: { ...row, ...changes, updated_at: at } };
 }
 
 /** Der Inselfortschritt nach den Einzahlungen, wie der Projector ihn schreibt: Mitglieder nach Person, ohne Energiemengen. */
-function progressAfter(state: SeedState, spent: Readonly<Record<string, number>>, activeProject: { [key: string]: SeedValue }): SeedEntity {
+function progressAfter(state: SeedState, spent: Readonly<Record<string, number>>, activeProject: { [key: string]: SeedValue }, at: string = now): SeedEntity {
   const { level, levelNeed, halves } = islandProgress([spent[membersInOrder[0]!]!, spent[membersInOrder[1]!]!]);
-  return revised(state, 'island_progress', seedIds.islandProgress.philippAnna, {
-    level,
-    level_need: levelNeed,
-    content: { members: membersInOrder.map((personId, index) => ({ personId, ...halves[index]! })), activeProject },
-    data_as_of: now,
-  });
+  return revised(
+    state,
+    'island_progress',
+    seedIds.islandProgress.philippAnna,
+    { level, level_need: levelNeed, content: { members: membersInOrder.map((personId, index) => ({ personId, ...halves[index]! })), activeProject }, data_as_of: at },
+    at,
+  );
 }
 
 /** Ein gemeinsames Ereignis der Insel, wie der Server es mit seinem Anlassschlüssel schreibt. */
@@ -182,25 +185,21 @@ function intent(type: 'projektabschluss' | 'levelaufstieg', occasionKey: string,
 }
 
 function projektAbschluss() {
-  const synced = buildSeedState({
-    parts: gekoppeltPartsBuilt([]),
-    createdAt: now,
-    devices: { [iphone]: { personId: philipp, cursor: 'latest' }, [android]: { personId: anna, cursor: 'latest' } },
-  });
-  const initial = [
-    [android, einzahlungen.anna],
-    [iphone, einzahlungen.philipp],
-  ].reduce<SeedState>((state, [installation, contribution]) => changedOffline(state, installation as string, [offlineContribution(contribution as SeedContribution)]), synced);
-
+  const synced = buildSeedState({ parts: gekoppeltPartsBuilt([]), createdAt: now, devices: { [iphone]: { personId: philipp, cursor: 'latest' } } });
   const first = projectAt(gameCatalog, 1);
   const next = projectAt(gameCatalog, 2);
   const completed = projectOccasionKey(islandId, 1);
   const levelTwo = levelOccasionKey(islandId, 2);
-  // Annas Einzahlung: Ihr Natur-Anteil ist voll, gemeinsam die Hälfte von 40, also „gut unterwegs“.
-  const annas = [
-    ...contributionEntities(einzahlungen.anna, now),
-    progressAfter(initial, { [anna]: amount, [philipp]: 0 }, { projectId: firstProject, templateKey: first.templateKey, sequenceNumber: 1, stage: 'gut_unterwegs' }),
-  ];
+  // Annas Einzahlung um 10:00 Uhr: Ihr Natur-Anteil ist voll, gemeinsam die Hälfte von 40, also „gut unterwegs“.
+  const annaAt = einzahlungen.anna.at;
+  const withAnnas = changedOnServer(synced, {
+    createdAt: annaAt,
+    changes: [
+      ...contributionEntities(einzahlungen.anna, annaAt),
+      progressAfter(synced, { [anna]: amount, [philipp]: 0 }, { projectId: firstProject, templateKey: first.templateKey, sequenceNumber: 1, stage: 'gut_unterwegs' }, annaAt),
+    ],
+  });
+  const initial = changedOffline(withAnnas, iphone, [offlineContribution(einzahlungen.philipp)]);
   // Philipps Einzahlung: Projekt 1 fertig, Projekt 2 beginnt, das Ereignis, dann der Fortschritt auf Level 2 samt Aufstieg.
   const philipps = [
     ...contributionEntities(einzahlungen.philipp, now),
@@ -228,27 +227,23 @@ function projektAbschluss() {
     progressAfter(initial, { [anna]: amount, [philipp]: amount }, { projectId: nextProject, templateKey: next.templateKey, sequenceNumber: 2, stage: 'gestartet' }),
     sharedEvent('levelaufstieg', levelTwo, null),
   ] satisfies SeedEntity[];
-  const server = changedOnServer(initial, { createdAt: now, changes: [...annas, ...philipps] });
-  const intents = [
-    ...membersInOrder.map((personId) => intent('projektabschluss', completed, personId, { templateKey: first.templateKey })),
-    ...membersInOrder.map((personId) => intent('levelaufstieg', levelTwo, personId, { level: 2 })),
-  ];
+  const server = changedOnServer(initial, { createdAt: now, changes: philipps });
   const withResults: SeedState = {
     server: {
       ...server.server,
-      notification_intent: intents,
-      processed_operation: [
-        { ...processed(einzahlungen.anna.operationId, 'applied', { command: 'contributeToProject', businessKey: contributeToProjectKey(EntityId.parse(seedIds.contributeCommand(1))) }), person_id: anna },
-        processed(einzahlungen.philipp.operationId, 'applied', { command: 'contributeToProject', businessKey: contributeToProjectKey(EntityId.parse(seedIds.contributeCommand(2))) }),
+      notification_intent: [
+        ...membersInOrder.map((personId) => intent('projektabschluss', completed, personId, { templateKey: first.templateKey })),
+        ...membersInOrder.map((personId) => intent('levelaufstieg', levelTwo, personId, { level: 2 })),
       ],
     },
     devices: server.devices,
   };
-  const pulled = pulledBy(pulledBy(withResults, android, anna), iphone, philipp);
-  return {
-    initial,
-    target: { server: pulled.server, devices: Object.fromEntries(Object.entries(pulled.devices).map(([key, device]) => [key, { ...device, outbox: [] }])) },
-  };
+  const target = afterSync(
+    withResults,
+    [processed(philippsOperation, 'applied', { command: 'contributeToProject', businessKey: contributeToProjectKey(EntityId.parse(seedIds.contributeCommand(einzahlungen.philipp.n))) })],
+    [iphone],
+  );
+  return { initial, target };
 }
 
 const projektAbschlussStates = projektAbschluss();
@@ -261,14 +256,10 @@ export const projektAbschlussManifest = SeedManifest.parse({
   localDates: seedDays,
   catalogVersion: null,
   accounts: [seedAccounts.philipp, seedAccounts.anna],
-  installations: [seedInstallations.philippIphone, seedInstallations.annaAndroid],
+  installations: [seedInstallations.philippIphone],
   initial: projektAbschlussStates.initial,
-  // Erst Annas Android, dann Philipps iPhone mit dem Abschluss, zuletzt holt Annas Android ihn ab.
-  steps: [
-    { type: 'sync', installation: android },
-    { type: 'sync', installation: iphone },
-    { type: 'sync', installation: android },
-  ],
+  // Philipps Sync: Push mit dem Abschluss, danach der Pull mit Annas Einzahlung, beiden Projekten und dem Aufstieg.
+  steps: [{ type: 'sync', installation: iphone }],
   target: projektAbschlussStates.target,
   extensions: gekoppeltExtensions,
 });

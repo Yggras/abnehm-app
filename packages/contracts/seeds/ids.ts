@@ -167,8 +167,8 @@ export const seedIds = {
     /** Erfüllungen in den Randzuständen der Ernährung (#166). */
     ernaehrungErfuellt: [id('0090', 52)],
     kalorienbudgetInnerhalb: [id('0090', 53)],
-    /** Offline-Einzahlungen in `projekt-abschluss` (#208): Annas Android und Philipps iPhone. */
-    projektAbschluss: { android: id('0090', 59), iphone: id('0090', 60) },
+    /** Philipps Offline-Einzahlung in `projekt-abschluss` (#208). */
+    projektAbschluss: id('0090', 59),
     /** Upsert des neuen Budgetvorschlags im Schritt `budgetvorschlag_pruefen` (#150). */
     budgetvorschlag: { senken: id('0090', 57), anheben: id('0090', 58) },
   },

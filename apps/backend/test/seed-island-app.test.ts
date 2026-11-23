@@ -222,25 +222,21 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     }
   });
 
-  it('projekt-abschluss: Beide haben offline eingezahlt; nach den Syncs steht das Gartenhäuschen, und der Ausbau beginnt (#208)', { timeout: 30_000 }, async () => {
+  it('projekt-abschluss: Philipp hat offline eingezahlt; sein Sync macht das Gartenhäuschen fertig, und der Ausbau beginnt (#208)', { timeout: 30_000 }, async () => {
     const manifest = seedManifests['projekt-abschluss'];
     const world = await seeded(manifest);
-    const [iphone, android] = [world.phones['philipp-iphone']!, world.phones['anna-android']!];
-    // Offline ist der eigene Anteil voll; gemeinsam steht das Projekt noch am Anfang.
-    for (const phone of [iphone, android]) {
-      expect(islandOf(phone).project).toMatchObject({ sequenceNumber: 1, name: 'Gartenhäuschen', own: { paid: 20, need: 20 }, stage: 'gestartet' });
-      expect(islandOf(phone).landmarks).toEqual([]);
-    }
+    const iphone = world.phones['philipp-iphone']!;
+    // Offline ist Philipps Anteil voll; Annas Einzahlung kennt das iPhone noch nicht.
+    expect(islandOf(iphone).project).toMatchObject({ sequenceNumber: 1, name: 'Gartenhäuschen', own: { paid: 20, need: 20 }, stage: 'gestartet' });
+    expect(islandOf(iphone).landmarks).toEqual([]);
 
     await runSyncSteps(manifest, world);
 
-    for (const phone of [iphone, android]) {
-      expect(islandOf(phone).project).toMatchObject({ sequenceNumber: 2, kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet' });
-      expect(islandOf(phone).landmarks).toEqual([{ projectKey: 'gartenhaeuschen', site: 'grundinsel:7:2', art: 'gartenhaeuschen', size: 1 }]);
-      expect(islandOf(phone).progress.level).toBe(2);
-      // Abschluss und Aufstieg entstehen im selben Befehl, zur selben Zeit.
-      expect(islandOf(phone).sharedEvents.map((event) => event.type).sort()).toEqual(['levelaufstieg', 'momo_geschluepft', 'projektabschluss']);
-    }
+    expect(islandOf(iphone).project).toMatchObject({ sequenceNumber: 2, kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet' });
+    expect(islandOf(iphone).landmarks).toEqual([{ projectKey: 'gartenhaeuschen', site: 'grundinsel:7:2', art: 'gartenhaeuschen', size: 1 }]);
+    expect(islandOf(iphone).progress.level).toBe(2);
+    // Abschluss und Aufstieg entstehen im selben Befehl, zur selben Zeit.
+    expect(islandOf(iphone).sharedEvents.map((event) => event.type).sort()).toEqual(['levelaufstieg', 'momo_geschluepft', 'projektabschluss']);
   });
 
   it('ereignisse-voll: Philipp sieht seine 4 offenen Wünsche; der Pull bringt ihm keinen neuen Besuch (#202)', { timeout: 30_000 }, async () => {
