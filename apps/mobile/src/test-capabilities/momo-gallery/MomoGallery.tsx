@@ -101,7 +101,7 @@ function Island() {
     <>
       {islandCases.map(({ title, momo, minutesOfDay }) => {
         const scene = islandScene({
-          island: { fields, fog: [], objects, momo },
+          island: { fields, fog: [], objects, momo, landmarks: [], scaffold: null },
           viewerPersonId: 'galerie',
           mode: 'ansehen',
           localTime: { localDate: LocalDate.parse('2026-10-14'), minutesOfDay },

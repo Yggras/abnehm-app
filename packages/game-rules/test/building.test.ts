@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { gameCatalog } from '../content/index.ts';
-import { decideBuild, decidePlacement, decideUpgrade, nextStage, serverDebtLimit, type BuildRequest, type PlaceRequest, type UpgradeRequest } from '../src/building.ts';
+import { decideBuild, decidePlacement, decideUpgrade, nextStage, type BuildRequest, type PlaceRequest, type UpgradeRequest } from '../src/building.ts';
+import { serverDebtLimit } from '../src/spending.ts';
 import { indexCatalog } from '../src/catalog.ts';
 
 // Nachweis für #191: Was App und Server vor einem Bau prüfen (Spezifikation 4, Abschnitte 3, 4 und 11).

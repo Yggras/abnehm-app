@@ -7,7 +7,7 @@ import { Easing, useDerivedValue, useSharedValue, withDelay, withSpring, withTim
 
 import { color, size, useMotion, type ColorToken } from '../design';
 import { MomoRig, momoVisual } from '../momo';
-import { artOf, shadow, type ArtPrimitive } from './art';
+import { artOf, landmarkDrawing, shadow, type ArtPrimitive } from './art';
 import type { Point, Polygon } from './scene-model';
 import { transformationMotion } from './transformation-motion';
 
@@ -66,6 +66,17 @@ export function ObjectArt({ at, art, foliage, appearing = false }: { at: Point; 
     <Appear at={at}>
       {shapes}
     </Appear>
+  );
+}
+
+/** Ein Wahrzeichen mittig auf seinem Bauplatz, je Ausbau größer (`landmarkDrawing`, #208). */
+export function LandmarkArt({ at, art, size, foliage }: { at: Point; art: ArtKey; size: number; foliage: ColorToken }) {
+  return (
+    <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>
+      {landmarkDrawing(art, size).map((primitive, index) => (
+        <Primitive key={index} primitive={primitive} foliage={foliage} />
+      ))}
+    </Group>
   );
 }
 

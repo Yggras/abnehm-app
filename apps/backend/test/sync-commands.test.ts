@@ -11,6 +11,7 @@ import { CommandRejection } from '../src/sync/commands.ts';
 import { createTestBackend, type TestBackend } from './support/app.ts';
 import { authorizationCases, personWithSession, registeredCommandCases, httpOutcome, type AuthorizationScenario } from './support/authorization.ts';
 import { buildObjectCommandScenario, placeObjectCommandScenario, upgradeObjectCommandScenario } from './support/building.ts';
+import { contributeToProjectCommandScenario } from './support/projects.ts';
 import { claimEventRewardScenario, markEventsSeenScenario } from './support/island-events.ts';
 import { dailyGoalCommandScenarios } from './support/daily-goals.ts';
 import { sendEncouragementScenario } from './support/encouragement.ts';
@@ -107,7 +108,7 @@ describe('Fachbefehl über Push', () => {
     // Die Welten der echten Fachbefehle sind andere; deren Fälle laufen in ihren eigenen Tests.
     const real = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
       confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
-      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario,
+      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario, contributeToProject: contributeToProjectCommandScenario,
       markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario, ...challengeCommandScenarios } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(() => registeredCommandCases(backend, real)).toThrow('saveMealFavorite');
     const scenario = {

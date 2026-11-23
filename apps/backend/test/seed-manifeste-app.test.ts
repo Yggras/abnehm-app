@@ -115,6 +115,7 @@ manifestSuite('formwechsel');
 manifestSuite('challenge-vorgeschlagen');
 manifestSuite('challenge-verfallen');
 manifestSuite('challenge-passt-nicht');
+manifestSuite('projekt-abschluss');
 manifestSuite('budgetvorschlag-senken');
 manifestSuite('budgetvorschlag-anheben');
 manifestSuite('onboarding-unterbrochen');

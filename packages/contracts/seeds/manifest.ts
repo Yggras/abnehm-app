@@ -90,6 +90,7 @@ export const SeedScenarioKey = z.enum([
   'challenge-vorgeschlagen',
   'challenge-verfallen',
   'challenge-passt-nicht',
+  'projekt-abschluss',
   'budgetvorschlag-senken',
   'budgetvorschlag-anheben',
   'onboarding-unterbrochen',

@@ -26,6 +26,7 @@ import {
   type ChallengeOutcome,
   type ChallengeStage,
 } from './challenges';
+import { contributeToProject, type ContributeOutcome } from './community-project';
 import { takeGrowthIntro } from './growth-intro';
 import { takeTransformation, type Transformation } from './transformation';
 import { claimEventReward, markEventsSeen, type ClaimOutcome } from './island-events';
@@ -84,6 +85,11 @@ export type GameService = Readonly<{
   upgrade(islandObjectId: EntityId): UpgradeOutcome;
   /** Stellt ein eigenes Objekt kostenlos auf ein freies eigenes Feld oder legt es ins Lager (#194). */
   place(islandObjectId: EntityId, target: PlacementTarget): PlaceOutcome;
+  /**
+   * Zahlt eigene Energie in den Anteil der eigenen Rolle am aktiven Gemeinschaftsprojekt ein, höchstens bis zum
+   * Restbedarf; eigener Anteil und eigene Hälfte wachsen sofort, auch offline. Der Abschluss kommt mit dem Sync (#208).
+   */
+  contribute(request: Readonly<{ projectId: EntityId; amount: number }>): ContributeOutcome;
   /** Merkt eigene Insel-Ereignisse als gesehen vor, auch offline (#202); Ansehen kostet nichts. */
   markEventsSeen(stateIds: readonly EntityId[]): void;
   /** Holt die Belohnung eines erfüllten Wunschs vorläufig ab, auch offline; der Server bestätigt sie (#202). */
@@ -123,6 +129,7 @@ const inviteAction = { actionId: 'momo.invite_partner', target: { type: 'partner
 const roleChoiceAction = { actionId: 'momo.open_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 const answerRoleChoiceAction = { actionId: 'wir.answer_role_choice', target: { type: 'momo', view: 'rollenwahl' } } as const;
 const openIslandAction = { actionId: 'wir.open_island', target: { type: 'momo' } } as const;
+const openProjectAction = { actionId: 'wir.open_project', target: { type: 'momo', view: 'projekt' } } as const;
 
 /**
  * Wie lange Momo nach einem eigenen Ereignis reagiert: `duration-celebrate` (Design-System › Bewegung), beim
@@ -224,6 +231,7 @@ export function createGameService({ database, writer, clock, newId, haptics, ref
     build: (request) => database.transaction((tx) => buildObject(tx, { writer, newId, clock }, request)),
     upgrade: (islandObjectId) => database.transaction((tx) => upgradeObject(tx, { writer, newId, clock }, { islandObjectId })),
     place: (islandObjectId, target) => database.transaction((tx) => placeObject(tx, { writer, newId, clock }, { islandObjectId, target })),
+    contribute: (request) => database.transaction((tx) => contributeToProject(tx, { writer, newId, clock }, request)),
     markEventsSeen: (stateIds) => void database.transaction((tx) => markEventsSeen(tx, { writer, clock }, stateIds)),
     claimEventReward: (stateId) => database.transaction((tx) => claimEventReward(tx, { writer, clock }, stateId)),
     observeChallenges: (listener) => database.observe((tx) => readChallengeStage(tx, clock.read()), distinct(listener)),
@@ -281,16 +289,30 @@ export function momoCharacterOf(stage: IslandStage): TodayState<'momo.character'
  * bestätigten Vorschlag des Partners in der aktiven Kopplung, solange sie ihn nicht schon angenommen hat.
  * Aktionen einer archivierten Kopplung sind beendet, auch wenn sie lokal noch offen sind (#107);
  * `readIslandStage` liest nur die aktive. Nach dem Schlüpfen die gemeinsamen Ereignisse der Insel für
- * „Neu bei euch“ als `shared_event`, bisher „Momo ist geschlüpft“ (#184) und „Levelaufstieg“ (#200).
+ * „Neu bei euch“ als `shared_event`, etwa „Momo ist geschlüpft“ (#184), „Levelaufstieg“ (#200) und „Projekt fertig“
+ * (#208), dazu das aktive Gemeinschaftsprojekt als `community_project` mit eigenem Stand und Bedarf, nur als Stufe gemeinsam.
  */
 export function wirContributionsOf(stage: IslandStage): ContributionState<WirContribution[]> {
   if (stage.type === 'ohne_person') return { type: 'loading' };
   if (stage.type === 'geschluepft') {
     if (stage.island === null) return { type: 'loading' };
-    const { islandId, sharedEvents } = stage.island;
+    const { islandId, sharedEvents, project } = stage.island;
     return {
       type: 'ready',
-      data: sharedEvents.map((event) => ({
+      data: [
+        {
+          type: 'community_project',
+          id: project.projectId,
+          dataAsOf: stage.island.progress.dataAsOf,
+          action: openProjectAction,
+          projectId: project.projectId,
+          templateKey: project.templateKey,
+          ownRole: project.ownRole,
+          ownCount: project.own.paid,
+          ownRequired: project.own.need,
+          stage: project.stage,
+        },
+        ...sharedEvents.map((event): WirContribution => ({
         type: 'shared_event',
         id: event.eventId,
         dataAsOf: event.occurredAt,
@@ -301,6 +323,7 @@ export function wirContributionsOf(stage: IslandStage): ContributionState<WirCon
         messageKey: `neu_bei_euch.${event.type}`,
         objectId: islandId,
       })),
+      ],
     };
   }
   if (stage.type !== 'rollenwahl' || stage.proposal?.by !== 'partner' || stage.proposal.createdAt === null || stage.proposal.accepted) {

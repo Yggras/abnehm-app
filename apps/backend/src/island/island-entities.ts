@@ -6,9 +6,10 @@ import {
   IslandEventStateRecord,
   IslandFieldRecord,
   IslandObjectRecord,
+  ProjectContributionRecord,
 } from '@abnehm/contracts/island-records';
 
-import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandEventState, islandField, islandObject, islandProgress } from '../db/schema/index.ts';
+import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandEventState, islandField, islandObject, islandProgress, projectContribution } from '../db/schema/index.ts';
 import { iso, isoOrNull, serverManaged, type ServerSyncEntity } from '../sync/registry.ts';
 import { islandProgressRecord } from './progress-projector.ts';
 
@@ -102,27 +103,51 @@ export const areaUnlockEntity = serverManaged({
   record: (row) => AreaUnlockRecord.parse({ ...owned(row), areaKey: row.areaKey, level: row.level, unlockedAt: iso(row.unlockedAt), createdAt: iso(row.createdAt) }),
 });
 
+/** Gemeinschaftsprojekt: entsteht beim Schlüpfen und mit jedem Projektabschluss (#208), beide Mitglieder sehen es. */
+export const communityProjectEntity = serverManaged({
+  entityType: 'community_project',
+  resource: 'community_project',
+  table: communityProject,
+  record: (row) =>
+    CommunityProjectRecord.parse({
+      ...owned(row),
+      sequenceNumber: row.sequenceNumber,
+      templateKey: row.templateKey,
+      buildNeed: row.buildNeed,
+      natureNeed: row.natureNeed,
+      status: row.status,
+      completedAt: isoOrNull(row.completedAt),
+      createdAt: iso(row.createdAt),
+      updatedAt: iso(row.updatedAt),
+    }),
+});
+
+/**
+ * Projekteinzahlung (#208): entsteht nur in `contributeToProject` und ist lesbar nur für ihre Person (Regel
+ * `fachbuchungen`). Der Partner sieht den gemeinsamen Stand nur als Stufe im Inselfortschritt.
+ */
+export const projectContributionEntity = serverManaged({
+  entityType: 'project_contribution',
+  resource: 'project_contribution',
+  table: projectContribution,
+  record: (row) =>
+    ProjectContributionRecord.parse({
+      communityProjectId: row.communityProjectId,
+      personId: row.personId,
+      role: row.role,
+      amount: row.amount,
+      energyBookingId: row.energyBookingId,
+      commandId: row.commandId,
+      createdAt: iso(row.createdAt),
+    }),
+});
+
 export const islandSyncEntities: readonly ServerSyncEntity[] = [
   islandFieldEntity,
   blueprintUnlockEntity,
   areaUnlockEntity,
-  serverManaged({
-    entityType: 'community_project',
-    resource: 'community_project',
-    table: communityProject,
-    record: (row) =>
-      CommunityProjectRecord.parse({
-        ...owned(row),
-        sequenceNumber: row.sequenceNumber,
-        templateKey: row.templateKey,
-        buildNeed: row.buildNeed,
-        natureNeed: row.natureNeed,
-        status: row.status,
-        completedAt: isoOrNull(row.completedAt),
-        createdAt: iso(row.createdAt),
-        updatedAt: iso(row.updatedAt),
-      }),
-  }),
+  communityProjectEntity,
+  projectContributionEntity,
   islandEventEntity,
   islandEventStateEntity,
   islandObjectEntity,

@@ -19,6 +19,7 @@ export const sharedEvent = '3e5f7a9b-2c4d-4e6f-8a1b-3c5d7e9f1a03';
 export const islandField = '3e5f7a9b-2c4d-4e6f-8a1b-3c5d7e9f1a04';
 export const islandEvent = '3e5f7a9b-2c4d-4e6f-8a1b-3c5d7e9f1a05';
 export const islandEventState = '3e5f7a9b-2c4d-4e6f-8a1b-3c5d7e9f1a06';
+export const contribution = '3e5f7a9b-2c4d-4e6f-8a1b-3c5d7e9f1a07';
 export const command = '4f6a8b0c-3d5e-4f7a-9b2c-4d6e8f0a2b01';
 export const booking = '4f6a8b0c-3d5e-4f7a-9b2c-4d6e8f0a2b02';
 export const completion = '6b8c0d2e-5f7a-4b9c-8d1e-6f8a0b2c4d01';

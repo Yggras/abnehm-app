@@ -37,6 +37,7 @@ export type CatalogRule =
   | 'gebiet_level'
   | 'entdeckung'
   | 'bauplatz'
+  | 'ausbau'
   | 'jahreszeit'
   | 'besucher'
   | 'challenge';
@@ -152,6 +153,10 @@ export function checkCatalog(catalog: GameCatalog): CatalogIssue[] {
     if (!plaza.has(project.site) || sites.has(project.site)) issue('bauplatz', project.key);
     sites.add(project.site);
   }
+  // Nach dem letzten Projekt geht es mit Ausbauten weiter (#208): ohne Vorlage gäbe es kein nächstes Projekt.
+  const projects = new Map(catalog.projects.map((project) => [project.key, project]));
+  if (catalog.projects.length > 0 && catalog.projectExpansions.length === 0) issue('ausbau', 'projectExpansions');
+  for (const expansion of catalog.projectExpansions) checkReference(projects, expansion.project);
 
   return issues;
 }

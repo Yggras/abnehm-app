@@ -5,6 +5,7 @@ import type { UiActionIntent } from '@abnehm/contracts/routes';
 import { needsResponse, type SharedEventType, type WirContribution } from '@abnehm/contracts/wir';
 import { indexCatalog, type CatalogEntryKind } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
+import { projectTemplate } from '@abnehm/game-rules/projects';
 
 import type { IconName } from '../design/icon-shapes';
 import { shellTexts } from '../shell/texts';
@@ -65,7 +66,7 @@ export type WirShared =
 const catalog = indexCatalog(gameCatalog);
 
 /** Sichtbarer Name eines Katalogeintrags; ein unbekannter Schlüssel zeigt den allgemeinen Namen der Art. */
-function catalogName(kind: Extract<CatalogEntryKind, 'challenge_vorlage' | 'gemeinschaftsprojekt'>, key: string, fallback: string): string {
+function catalogName(kind: Extract<CatalogEntryKind, 'challenge_vorlage'>, key: string, fallback: string): string {
   const found = catalog.find(kind, key);
   return found.type === 'found' ? found.entry.name : fallback;
 }
@@ -120,7 +121,8 @@ function projectOf({ id, action, templateKey, ownRole, ownCount, ownRequired, st
     id,
     action,
     eyebrow: sharedTexts.project,
-    title: catalogName('gemeinschaftsprojekt', templateKey, sharedTexts.project),
+    // Projekt oder Ausbau (#208), erkannt am Vorlagenschlüssel.
+    title: projectTemplate(gameCatalog, templateKey)?.name ?? sharedTexts.project,
     lines: [sharedTexts.projectShare(ownRole, ownCount, ownRequired), sharedTexts.stage(stage)],
   };
 }

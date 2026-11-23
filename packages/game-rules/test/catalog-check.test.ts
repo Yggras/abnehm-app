@@ -131,6 +131,12 @@ describe('Katalogprüfung', () => {
     expect(checkCatalog({ ...catalog, projects: [...catalog.projects, onBeach] })).toContainEqual({ rule: 'bauplatz', key: 't_projekt_2' });
   });
 
+  it('verlangt nach dem letzten Projekt mindestens eine Ausbau-Vorlage für ein bekanntes Projekt (#208)', () => {
+    expect(checkCatalog({ ...catalog, projectExpansions: [] })).toContainEqual({ rule: 'ausbau', key: 'projectExpansions' });
+    const foreign = { key: 't_fremder_ausbau', name: 'Fremd', project: 't_unbekannt' };
+    expect(checkCatalog({ ...catalog, projectExpansions: [foreign] })).toContainEqual({ rule: 'verweis_unbekannt', key: 't_unbekannt' });
+  });
+
   it('verlangt Besucher mit Belohnungen der Herkunft `besucher` und mindestens einer Deko (#202)', () => {
     const igel = catalog.visitorTemplates[0]!;
     const withVisitor = (rewards: typeof igel.rewards) => ({ ...catalog, visitorTemplates: [{ ...igel, rewards }] });

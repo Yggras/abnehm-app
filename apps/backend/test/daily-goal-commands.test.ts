@@ -11,6 +11,7 @@ import { defaultPassword, newDevice, signIn } from './support/auth-client.ts';
 import { authorizationCases, personWithSession, registeredCommandCases } from './support/authorization.ts';
 import { sendEncouragementScenario } from './support/encouragement.ts';
 import { buildObjectCommandScenario, placeObjectCommandScenario, upgradeObjectCommandScenario } from './support/building.ts';
+import { contributeToProjectCommandScenario } from './support/projects.ts';
 import { claimEventRewardScenario, markEventsSeenScenario } from './support/island-events.ts';
 import { bonusOp, completeOp, dailyGoalCommandScenarios, insertDailyGoals } from './support/daily-goals.ts';
 import { confirmPhotoDraftScenario } from './support/meal-photos.ts';
@@ -141,10 +142,10 @@ describe('Autorisierung der Fachbefehle', () => {
   it('das Backend meldet genau diese Fachbefehle an; für jeden gibt es ein Szenario', async () => {
     const { backend } = await setup();
     // `updatePersonTimeZone` (#110), die gemeinsamen Aktionen (#107), die Fassungen (#128), `confirmPhotoDraft` (#162), `buildObject` (#191),
-    // `sendEncouragement` (#123) sowie `upgradeObject` und `placeObject` (#194) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
+    // `sendEncouragement` (#123), `upgradeObject` und `placeObject` (#194) sowie `contributeToProject` (#208) prüfen eigene Tests; hier stehen sie nur für die Vollständigkeit.
     const all = { ...dailyGoalCommandScenarios, ...planCommandScenarios, ...sharedActionCommandScenarios, updatePersonTimeZone: personTimeZoneScenario,
       confirmPhotoDraft: confirmPhotoDraftScenario, buildObject: buildObjectCommandScenario, sendEncouragement: sendEncouragementScenario,
-      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario,
+      upgradeObject: upgradeObjectCommandScenario, placeObject: placeObjectCommandScenario, contributeToProject: contributeToProjectCommandScenario,
       markEventsSeen: markEventsSeenScenario, claimEventReward: claimEventRewardScenario, ...challengeCommandScenarios } as unknown as Parameters<typeof registeredCommandCases>[1];
     expect(registeredCommandCases(backend, all).length).toBeGreaterThan(0);
   });

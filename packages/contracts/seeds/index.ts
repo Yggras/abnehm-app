@@ -5,6 +5,7 @@ import { frischesKontoManifest } from './frisches-konto.ts';
 import { gekoppeltManifest } from './gekoppelt.ts';
 import type { SeedManifest, SeedScenarioKey } from './manifest.ts';
 import { nachEntkopplungManifest } from './nach-entkopplung.ts';
+import { projektAbschlussManifest } from './projekte.ts';
 import { onboardingManifests } from './onboarding.ts';
 import { randzustandManifests } from './randzustaende.ts';
 import { ernaehrungRandzustandManifests } from './randzustaende-ernaehrung.ts';
@@ -72,6 +73,7 @@ export const seedManifests: Readonly<Record<SeedScenarioKey, SeedManifest>> = {
   'challenge-vorgeschlagen': challengeVorgeschlagenManifest,
   'challenge-verfallen': challengeVerfallenManifest,
   'challenge-passt-nicht': challengePasstNichtManifest,
+  'projekt-abschluss': projektAbschlussManifest,
   ...randzustandManifests,
   ...ernaehrungRandzustandManifests,
   veralteter_partnerstand: veralteterPartnerstandManifest,

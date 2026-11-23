@@ -2,7 +2,7 @@ import type { IslandRole } from '@abnehm/contracts/island';
 
 import { baseIslandKey, fieldKey, type FieldSide, type GameCatalog } from './catalog.ts';
 import { islandProgress, type MemberHalf } from './progress.ts';
-import { projectNeed } from './projects.ts';
+import { projectAt } from './projects.ts';
 import { unlocksAt, type UnlockedBlueprint } from './unlocks.ts';
 
 // Schlüpfen (Spezifikation 4, Abschnitte 5 und 7): Was die angenommene Rollenwahl materialisiert. Die
@@ -54,9 +54,7 @@ export function hatching(catalog: GameCatalog, { proposerPersonId, proposerRole,
   if (proposerPersonId === partnerPersonId) throw new Error('Schlüpfen braucht zwei verschiedene Personen');
   const roles = { [proposerRole]: proposerPersonId, [otherRole(proposerRole)]: partnerPersonId } as Record<IslandRole, string>;
   const sides: Record<FieldSide, string> = { [sideOfRole.bauen]: roles.bauen, [sideOfRole.natur]: roles.natur } as Record<FieldSide, string>;
-  const first = catalog.projects[0];
-  if (first === undefined) throw new Error('Der Spielkatalog hat kein Gemeinschaftsprojekt');
-  const need = projectNeed(1);
+  const first = projectAt(catalog, 1);
   return {
     roles,
     fields: catalog.baseIsland.fields.map((field) => ({
@@ -64,7 +62,7 @@ export function hatching(catalog: GameCatalog, { proposerPersonId, proposerRole,
       ownerPersonId: 'side' in field ? sides[field.side] : null,
     })),
     blueprints: unlocksAt(catalog, 1).blueprints,
-    project: { sequenceNumber: 1, templateKey: first.key, buildNeed: need, natureNeed: need },
+    project: { sequenceNumber: 1, templateKey: first.templateKey, buildNeed: first.need, natureNeed: first.need },
     event: hatchedEvent,
     progress: startProgress([proposerPersonId, partnerPersonId]),
   };
