@@ -34,6 +34,8 @@ export type CoupledPartner = Readonly<{
   age: DataAge | null;
   /** Letzter vollständiger Pull älter als 10 Minuten oder Gerät offline. */
   stale: boolean;
+  /** Ob das Gerät online ist; nur dann fragt „Wir“ die Fotos von heute ab (#122). */
+  online: boolean;
 }>;
 
 export type WirPartner = Readonly<{ type: 'loading' }> | Readonly<{ type: 'solo' }> | Readonly<{ type: 'coupled' } & CoupledPartner>;
@@ -77,6 +79,7 @@ export function wirPartnerOf(reading: PartnerReading, online: boolean, now: Cloc
     summaries: cache.summaries,
     age: newest === null ? null : dataAgeOf(newest, now),
     stale: isStale(lastPullAt, online, now),
+    online,
   };
 }
 

@@ -12,6 +12,7 @@ import { readLastPullAt, type SyncWriter } from '../sync';
 import type { ObserveNetwork } from '../sync/triggers';
 import { readCouplingState, type CouplingState } from './coupling-state';
 import { readEncourageSheet, sendEncouragement, type EncourageOutcome, type EncourageSheet } from './encouragement';
+import type { PartnerPhotos } from './partner-photos';
 import { partnerCardOf, wirPartnerOf, type PartnerReading, type WirPartner } from './partner-view';
 import { changeSharing, readSharing, type Sharing, type SharingChange, type SharingOutcome } from './sharing';
 import { wirSharedOf, type WirShared } from './wir-shared';
@@ -40,6 +41,11 @@ export type PartnerDependencies = Readonly<{
    * solange keine `WirContributionSource` angemeldet ist (#124).
    */
   wirContributions: Source<WirContributionsSlot>;
+  /**
+   * „Fotos von heute“ (#122): Fotoliste und Bildabruf online über den Server (`createHttpPartnerPhotos`); Tests
+   * geben einen Fake (`testing/fake-partner-photos.ts`).
+   */
+  photos: PartnerPhotos;
 }>;
 
 /** Sheet `partner.encourage` samt Netzstatus, der die Bestätigung bestimmt; `loading` bis zur ersten Lesung. */
@@ -57,6 +63,8 @@ export type Partner = Readonly<{
   todayCard: TodaySource<'partner'>;
   /** Pull-to-Refresh auf „Wir“: startet den Sync. */
   refresh(): Promise<unknown>;
+  /** „Fotos von heute“: nur online abrufen, nichts davon landet in SQLite oder einer Datei. */
+  photos: PartnerPhotos;
   /** Sheet `partner.encourage`: Name des Partners und die verbleibenden Anfeuerungen mit Push heute. */
   encourageSheet: Source<EncourageView>;
   /** Feuert den Partner sofort an, ohne Rückfrage; offline geht die Anfeuerung beim nächsten Push raus. */
@@ -152,7 +160,7 @@ function followedShared({ wirContributions, clock, refresh }: Pick<PartnerDepend
 }
 
 export function createPartner(dependencies: PartnerDependencies): Partner {
-  const { database, clock, sync, writer, newId } = dependencies;
+  const { database, clock, sync, writer, newId, photos } = dependencies;
   let invitationCreated = false;
   const invitationListeners = new Set<(created: boolean) => void>();
   // Alter des Stands und die 10-Minuten-Grenze ändern sich auch ohne Commit.
@@ -168,6 +176,7 @@ export function createPartner(dependencies: PartnerDependencies): Partner {
     shared: followedShared(dependencies),
     todayCard: { subscribe: (listener) => wir.subscribe((partner) => listener(partnerCardOf(partner))) },
     refresh: sync,
+    photos,
     encourageSheet,
     encourage: (messageKey) => database.transaction((tx) => sendEncouragement(tx, { writer, newId, clock }, messageKey)),
     couplingState: followedReading(dependencies, readCouplingState, (state) => state),

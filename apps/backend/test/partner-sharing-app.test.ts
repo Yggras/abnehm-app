@@ -18,6 +18,7 @@ import type { Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
 import { coupleByInvitation, worldStart, worldToday } from './support/coupled-world.ts';
 import { testNutritionProjector, testRecorders } from './support/partner-projectors.ts';
+import { withoutPartnerPhotos } from '../../mobile/src/partner/testing/fake-partner-photos.ts';
 
 // Nachweis für #129: Anna schaltet auf ihrem Gerät die Ernährungs-Freigabe über den Partnerbereich der App ab, wie der
 // Schalter auf „Partner & Freigaben“ es tut. Engine, Outbox und Partnercache der App laufen auf echtem SQLite gegen die
@@ -46,7 +47,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     },
   });
   const engine = createSyncEngine({ database, registry, transport: http, clock, installationId: newId() });
-  const partner: Partner = createPartner({
+  const partner: Partner = createPartner({ ...withoutPartnerPhotos,
     wirContributions: appWirContributions.source,
     database, clock, newId, writer: createSyncWriter({ registry, clock, newId }), sync: () => engine.sync(),
     observeOnline: () => () => {},

@@ -4,5 +4,6 @@
 export { appPartner } from './app-partner';
 export { encouragementEntity, sendEncouragementCommand } from './encouragement';
 export { createPartner, type EncourageView, type Partner, type PartnerDependencies } from './partner';
+export { createHttpPartnerPhotos, type PartnerPhotos } from './partner-photos';
 export { dataAgeOf } from './partner-view';
 export { partnerHeadline, partnerTexts, standText } from './texts';

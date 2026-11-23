@@ -29,6 +29,7 @@ import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner, encouragementEntity } from '.';
 import { PartnerStep } from './PartnerStep';
+import { withoutPartnerPhotos } from './testing/fake-partner-photos';
 
 // Onboarding-Schritt 11 `partner` (#129; Spezifikation 5, Abschnitt 5) über den Steckplatz der Onboarding-Registry
 // aus #110, mit den echten modalen Abläufen `partner.invite` und `partner.redeem` aus `src/app`, dem Online-Test-
@@ -83,7 +84,7 @@ async function openStep(scenario: 'solo' | 'gekoppelt' = 'solo') {
   };
   const registry = createSyncRegistry([...foundationSyncEntities, encouragementEntity]);
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId() });
-  const partner = createPartner({
+  const partner = createPartner({ ...withoutPartnerPhotos,
     wirContributions: appWirContributions.source,
     database, clock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock, newId }), newId,
     observeOnline: () => () => {},

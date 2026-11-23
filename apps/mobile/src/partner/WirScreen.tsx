@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Card, color, Icon, Notice, size, Skeleton, space, Text, useLargeTextLayout } from '../design';
@@ -6,16 +7,19 @@ import { MomoFigure } from '../momo';
 import { areaIcons } from '../shell/area-icons';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner, useWirShared } from './app-partner';
+import type { Partner } from './partner';
 import { PartnerAvatar } from './PartnerAvatar';
 import { PartnerStage } from './PartnerStage';
 import { partnerActions, type CoupledPartner, type WirPartner } from './partner-view';
 import { areaNames, partnerHeadline, partnerTexts, standText, summaryText, type Spoken } from './texts';
 import type { WirShared } from './wir-shared';
+import { PhotosRow, useTodayPhotos, type TodayPhotos } from './WirPhotos';
 import { Responses, SharedSections } from './WirShared';
 
 // Tab „Wir“ (Spezifikation 5, Abschnitt 2; #121, #124): ohne Kopplung der Leerzustand „Momo wartet im Ei“,
 // gekoppelt antwortbedürftige Vorgänge, Partnerübersicht, Anfeuern-Karte, Challenge, Gemeinschaftsprojekt und
-// „Neu bei euch“. Fotos von heute (#122) und erhaltene Anfeuerungen samt „Danke“ (#126) ergänzen ihre Tickets.
+// „Neu bei euch“. „Fotos von heute“ (#122) steht beim Bereich Ernährung; erhaltene Anfeuerungen samt „Danke“
+// (#126) ergänzt ihr Ticket.
 // Partnerinhalte tragen die Partnerfarbe und stehen nie neben eigenen Werten.
 
 
@@ -23,14 +27,17 @@ export function WirScreen() {
   const partner = usePartner();
   const state = useWirPartner(partner);
   const shared = useWirShared(partner);
+  const photos = useTodayPhotos(partner, state.type === 'coupled' && state.online);
+  // Pull-to-Refresh startet den Sync und lädt „Fotos von heute“ neu (Spezifikation 5, Abschnitt 2).
+  const refresh = partner === null ? undefined : () => Promise.all([partner.refresh(), photos.reload()]);
   return (
-    <ScreenFrame title={partnerTexts.title} presentation="tab" onRefresh={partner?.refresh}>
-      <WirContent state={state} shared={shared} />
+    <ScreenFrame title={partnerTexts.title} presentation="tab" onRefresh={refresh}>
+      <WirContent partner={partner} state={state} shared={shared} photos={photos} />
     </ScreenFrame>
   );
 }
 
-function WirContent({ state, shared }: { state: WirPartner; shared: WirShared }) {
+function WirContent({ partner, state, shared, photos }: { partner: Partner | null; state: WirPartner; shared: WirShared; photos: TodayPhotos }) {
   switch (state.type) {
     case 'loading':
       return (
@@ -42,7 +49,7 @@ function WirContent({ state, shared }: { state: WirPartner; shared: WirShared })
     case 'solo':
       return <Solo />;
     case 'coupled':
-      return <Coupled partner={state} shared={shared} />;
+      return <Coupled partner={state} shared={shared} photos={partner === null ? null : { partner, photos: photos.photos }} />;
   }
 }
 
@@ -69,13 +76,13 @@ function Solo() {
  * Feste Reihenfolge nach Spezifikation 5, Abschnitt 2: antwortbedürftige Vorgänge, Partnerübersicht (mit dem
  * neutralen Offline-Hinweis darüber), Anfeuern, Challenge, Gemeinschaftsprojekt, „Neu bei euch“.
  */
-function Coupled({ partner, shared }: { partner: Readonly<{ type: 'coupled' } & CoupledPartner>; shared: WirShared }) {
+function Coupled({ partner, shared, photos }: { partner: Readonly<{ type: 'coupled' } & CoupledPartner>; shared: WirShared; photos: OverviewPhotos }) {
   const stand = partner.age === null ? null : standText(partner.age, partner.stale);
   return (
     <>
       <Responses shared={shared} partnerName={partner.displayName} />
       {partner.stale ? <Notice tone="neutral" icon="offline" text={stand?.shown ?? partnerTexts.offline} /> : null}
-      <Overview partner={partner} stand={stand} />
+      <Overview partner={partner} stand={stand} photos={photos} />
       <Card>
         <View testID="wir-anfeuern" style={styles.group}>
           <Text variant="headline" accessibilityRole="header">
@@ -90,12 +97,22 @@ function Coupled({ partner, shared }: { partner: Readonly<{ type: 'coupled' } & 
   );
 }
 
-/** Partnerübersicht: Avatar, Name, grober Tageszielstand und je freigegebenem Bereich eine Zeile. */
-function Overview({ partner, stand }: { partner: CoupledPartner; stand: Spoken | null }) {
+/** „Fotos von heute“ samt dem Partnerbereich, der die Bilder abruft; `null` ohne geöffnetes Konto. */
+type OverviewPhotos = Readonly<{ partner: Partner; photos: TodayPhotos['photos'] }> | null;
+
+/**
+ * Partnerübersicht: Avatar, Name, grober Tageszielstand und je freigegebenem Bereich eine Zeile. „Fotos von heute“
+ * steht beim Bereich Ernährung, also direkt nach dessen Zeile oder, ohne Ernährungsfreigabe, an ihrer Stelle.
+ */
+function Overview({ partner, stand, photos }: { partner: CoupledPartner; stand: Spoken | null; photos: OverviewPhotos }) {
   const singleColumn = useLargeTextLayout();
   const name = partner.displayName;
   const stage = partner.dailyGoal?.stage ?? null;
   const spokenStand = stand === null ? '' : `, ${stand.spoken}`;
+  const nutritionIndex = partner.summaries.findIndex((summary) => summary.type === 'ernaehrung');
+  /** Die Fotozeile hinter der Zeile `index`; `-1` steht vor allen Bereichen. */
+  const photosAt = (index: number) =>
+    photos !== null && index === nutritionIndex ? <PhotosRow partner={photos.partner} name={name} photos={photos.photos} /> : null;
   return (
     <Card>
       <View testID="wir-partneruebersicht" style={styles.group}>
@@ -106,27 +123,30 @@ function Overview({ partner, stand }: { partner: CoupledPartner; stand: Spoken |
             {stage === null ? null : <PartnerStage stage={stage} />}
           </View>
         </View>
-        {partner.summaries.map((summary) => {
+        {photosAt(-1)}
+        {partner.summaries.map((summary, index) => {
           const value = summaryText(summary);
           const area = areaNames[summary.type];
           return (
-            <View
-              key={summary.type}
-              testID={`wir-bereich-${summary.type}`}
-              accessible
-              accessibilityLabel={`${name}, ${area}: ${value.spoken}${spokenStand}`}
-              style={[styles.row, singleColumn && styles.stacked]}
-            >
-              <View style={styles.rowLabel}>
-                <Icon name={areaIcons[summary.type]} tone="partner" />
-                <Text variant="label" tone="inkMuted">
-                  {area}
+            <Fragment key={summary.type}>
+              <View
+                testID={`wir-bereich-${summary.type}`}
+                accessible
+                accessibilityLabel={`${name}, ${area}: ${value.spoken}${spokenStand}`}
+                style={[styles.row, singleColumn && styles.stacked]}
+              >
+                <View style={styles.rowLabel}>
+                  <Icon name={areaIcons[summary.type]} tone="partner" />
+                  <Text variant="label" tone="inkMuted">
+                    {area}
+                  </Text>
+                </View>
+                <Text style={!singleColumn && styles.value}>
+                  {value.shown}
                 </Text>
               </View>
-              <Text style={!singleColumn && styles.value}>
-                {value.shown}
-              </Text>
-            </View>
+              {photosAt(index)}
+            </Fragment>
           );
         })}
         {stand !== null && !partner.stale ? (

@@ -45,7 +45,7 @@ import { notificationSettingEntity } from '../notifications/notification-setting
 import { createPushInstallationTransport } from '../notifications/push-installation-transport';
 import { startPushRegistration } from '../notifications/push-registration';
 import { createDeviceInvitationFlows } from '../online';
-import { appPartner, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
+import { appPartner, createHttpPartnerPhotos, createPartner, encouragementEntity, sendEncouragementCommand } from '../partner';
 import { PartnerStep } from '../partner/PartnerStep';
 import { appGoalSettings, appPlan, budgetSuggestionEntity, createPlan, followDailyGoalTriggers, goalVersionEntity, planCommands, planReaderOf, weeklyPlanVersionEntity } from '../plan';
 // Direkt aus den Fachdateien, nicht über `../settings`: Das Sammelmodul exportiert Bildschirme, die über
@@ -214,6 +214,8 @@ function deviceState() {
         database, clock: appClock, refresh: appTodayRefresh, sync: () => engine.sync(), writer: syncWriter, newId,
         // „Wir“ komponiert die Spiel-Beiträge, die `game.wirContributions` unten am Steckplatz anmeldet (#124).
         wirContributions: appWirContributions.source,
+        // „Fotos von heute“ (#122): Fotoliste und Bildabruf online mit der Sitzung des Auth-Moduls (#165).
+        photos: createHttpPartnerPhotos({ baseUrl, fetch: session.auth.fetch }),
         // In Test-Artefakten überlagert vom Transport-Fehlermodus wie die Sync-Auslöser (#114).
         observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline,
       });

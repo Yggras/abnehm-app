@@ -27,6 +27,7 @@ import { TodayContent } from '../shell/TodayScreen';
 import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities, type SyncTransport } from '../sync';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner } from '.';
+import { withoutPartnerPhotos } from './testing/fake-partner-photos';
 
 // Nachweis für #121 am gerenderten Bildschirm: Tab „Wir“ mit dem echten Verzeichnis `src/app` und der
 // Partner-Karte auf „Heute“ über die Heute-Registry. Darunter liegen der echte Partnerbereich, die echte
@@ -77,7 +78,7 @@ async function openPhilipp(
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId() });
   const online = new Set<(online: boolean) => void>();
   const ticks = new Set<() => void>();
-  const partner = createPartner({
+  const partner = createPartner({ ...withoutPartnerPhotos,
     database, clock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock, newId }), newId, wirContributions,
     observeOnline: (listener) => { online.add(listener); return () => online.delete(listener); },
     refresh: (update) => { ticks.add(update); return () => ticks.delete(update); },
