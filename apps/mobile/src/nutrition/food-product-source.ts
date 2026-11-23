@@ -1,4 +1,4 @@
-import { foodNameMaxLength, maxBaseAmount, type BaseUnit, type PortionConversion } from '@abnehm/contracts/nutrition';
+import { foodNameMaxLength, maxBaseAmount, NutritionSnapshot, type BaseUnit, type PortionConversion } from '@abnehm/contracts/nutrition';
 
 // Naht `FoodProductSource` (Spezifikation 2, Abschnitte 1, 3 und 5; #160): Abfrage eines Barcodes bei
 // Open Food Facts direkt aus der App. Der produktive Adapter fragt die Produkt-API v3 ab, die OFF für neue
@@ -24,6 +24,35 @@ export type OffProduct = Readonly<{
   /** Nur Portionen, die OFF eindeutig in der Basiseinheit angibt. */
   portions: readonly PortionConversion[];
 }>;
+
+/** Quellenangabe der Produkte (https://world.openfoodfacts.org/terms-of-use). */
+export const offAttribution = 'Daten von Open Food Facts (openfoodfacts.org), ODbL';
+
+/** Bezugsmenge 100 g bzw. 100 ml in mg bzw. ml. */
+const per100: Readonly<Record<BaseUnit, number>> = { g: 100_000, ml: 100 };
+
+/**
+ * Ein vollständiges Produkt als Snapshot der Quelle `off` mit Quellenangabe; `null`, wenn ein Name, kcal oder ein
+ * Makro fehlt oder die Werte die Regeln des Snapshots verletzen (etwa Makros über der Bezugsmenge).
+ */
+export function productSnapshot(product: OffProduct): NutritionSnapshot | null {
+  const { name, baseUnit, milliKcalPer100, proteinMgPer100, carbsMgPer100, fatMgPer100 } = product;
+  // Unvollständig, wenn kcal oder einer der drei Makros fehlt (Spezifikation 2, Abschnitt 3).
+  if (name === null || milliKcalPer100 === null || proteinMgPer100 === null || carbsMgPer100 === null || fatMgPer100 === null) return null;
+  const parsed = NutritionSnapshot.safeParse({
+    name,
+    baseUnit,
+    referenceAmount: per100[baseUnit],
+    milliKcal: milliKcalPer100,
+    proteinMg: proteinMgPer100,
+    carbsMg: carbsMgPer100,
+    fatMg: fatMgPer100,
+    portions: product.portions,
+    source: 'off',
+    attribution: offAttribution,
+  });
+  return parsed.success ? parsed.data : null;
+}
 
 /**
  * Ausgang einer Abfrage. `offline`: Open Food Facts nicht erreicht. `unavailable`: OFF hat geantwortet,

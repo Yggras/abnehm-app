@@ -124,7 +124,7 @@ export function withDeviceState(state: SeedState, installation: SeedKey, rows: r
  * Hängt Zeilen einer nur lokalen, nie synchronisierten Tabelle an eine Installation an, etwa den
  * Open-Food-Facts-Cache (`off_cache`, #160). Der Server kennt sie nicht; ein Sync ändert sie nicht.
  */
-export function withLocalRows(state: SeedState, installation: SeedKey, table: string, rows: readonly SeedRow[]): SeedState {
+export function withLocalRows(state: SeedState, installation: SeedKey, table: 'device_state' | 'off_cache', rows: readonly SeedRow[]): SeedState {
   const device = state.devices[installation];
   if (device === undefined) throw new Error(`Lokale Zeilen: keine Installation ${installation}`);
   const local = [...(device.rows[table] ?? []), ...rows];

@@ -42,7 +42,7 @@ export type FoodRefType = z.infer<typeof FoodRefType>;
 export const BlsKey = z.string().regex(/^[A-Z][0-9A-Z]{6}$/);
 
 /** Barcode als GTIN-8, -12, -13 oder -14 (https://www.gs1.org/standards/id-keys/gtin); UPC-E hat 8 Stellen. */
-const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
+export const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
 
 const BlsRef = z.strictObject({ type: z.literal(FoodRefType.enum.bls), key: BlsKey });
 const OffRef = z.strictObject({ type: z.literal(FoodRefType.enum.off), key: Barcode });

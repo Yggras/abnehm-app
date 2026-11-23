@@ -9,7 +9,9 @@ import {
   type CaptureMethod,
   type DisplayUnit,
   type EntryTotals,
+  type FoodRefType,
   type NutritionSnapshot,
+  type OwnFoodOrigin,
   type SnapshotSource,
 } from '@abnehm/contracts/nutrition';
 
@@ -17,9 +19,6 @@ import type { AmountInputProblem } from './amount-input';
 import type { SearchMark } from './food-search';
 import { recentDays } from './quick-foods';
 import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
-
-/** Externe Quelle, deren Daten eine Korrektur unverändert lässt: BLS oder Open Food Facts. */
-export type ExternalSource = 'bls' | 'off';
 
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
 // („1.210 kcal“, „0,5 Stück“), Einheiten mit Leerzeichen, ohne Schuld- und Verlust-Framing.
@@ -138,6 +137,9 @@ export function captureTargetText(meal: MealKey, localDate: LocalDate, today: Lo
 }
 
 export const markNames: Readonly<Record<SearchMark, string>> = { favorit: 'Favorit', zuletzt: 'Zuletzt', eigen: 'Eigen', produkt: 'Produkt', bls: 'BLS' };
+
+/** Die Daten einer externen Quelle, die eine Korrektur unverändert lässt (Spezifikation 2, Abschnitt 3). */
+const externalDataNames: Readonly<Record<OwnFoodOrigin['type'], string>> = { bls: 'BLS-Daten', off: 'Daten von Open Food Facts' };
 
 export const sourceNames: Readonly<Record<SnapshotSource, string>> = { bls: 'BLS', off: 'Open Food Facts', eigen: 'Eigenes Lebensmittel', ki: 'KI-Schätzung' };
 
@@ -265,10 +267,8 @@ export const nutritionTexts = {
     create: 'Eigenes Lebensmittel anlegen',
     edit: 'Eigenes Lebensmittel bearbeiten',
     correct: 'Werte korrigieren',
-    correctHint: (source: ExternalSource) =>
-      source === 'bls'
-        ? 'Die BLS-Daten bleiben unverändert. Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.'
-        : 'Die Daten von Open Food Facts bleiben unverändert. Deine Fassung gilt ab jetzt für diesen Barcode.',
+    correctHint: (source: OwnFoodOrigin['type']) =>
+      `Die ${externalDataNames[source]} bleiben unverändert. ${source === 'bls' ? 'Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.' : 'Deine Fassung gilt ab jetzt für diesen Barcode.'}`,
     name: 'Name',
     unit: 'Einheit',
     referenceAmount: 'Werte gelten für',
@@ -308,10 +308,10 @@ export const nutritionTexts = {
   addConversion: (missing: readonly ConversionUnit[]) => `${missing.map((unit) => conversionTexts[unit].name).join(' oder ')} eintragen`,
   conversion: {
     title: 'Umrechnung eintragen',
-    hint: (source: ExternalSource | 'eigen') =>
+    hint: (source: FoodRefType) =>
       source === 'eigen'
         ? 'Die Umrechnung wird an deinem eigenen Lebensmittel gespeichert.'
-        : `Daraus entsteht ein eigenes Lebensmittel; die ${source === 'bls' ? 'BLS-Daten' : 'Daten von Open Food Facts'} bleiben unverändert.`,
+        : `Daraus entsteht ein eigenes Lebensmittel; die ${externalDataNames[source]} bleiben unverändert.`,
     unitName: (unit: ConversionUnit) => conversionTexts[unit].name,
     back: 'Zurück',
   },
@@ -331,12 +331,12 @@ export const nutritionTexts = {
     /** Wortlaut aus Spezifikation 2, Abschnitt 5 (#35). */
     offline: 'Kein Netz – Produkt manuell anlegen oder später scannen',
     unavailable: 'Open Food Facts antwortet gerade nicht. Versuch es gleich noch einmal oder leg das Produkt selbst an.',
-    unavailableFinal: 'Das Produkt lässt sich gerade nicht abfragen. Leg es selbst an oder versuch es später noch einmal.',
     retry: 'Erneut versuchen',
     createManually: 'Produkt manuell anlegen',
     scanLater: 'Später scannen',
     notFoundHint: 'Open Food Facts kennt dieses Produkt noch nicht. Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
     incompleteHint: 'Bei diesem Produkt fehlen Werte. Ergänze sie vom Etikett; ab dann gilt deine Fassung für diesen Barcode.',
+    invalidHint: 'Die Werte dieses Produkts passen nicht zusammen. Prüf sie am Etikett; ab dann gilt deine Fassung für diesen Barcode.',
     manualHint: 'Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
   },
   /** Eigene Mahlzeitenfotos im Protokoll und in der Fotoansicht (Spezifikation 2, Abschnitt 9; #164). */

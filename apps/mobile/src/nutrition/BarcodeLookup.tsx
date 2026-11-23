@@ -5,6 +5,7 @@ import { Button, Notice, Skeleton, space, Text } from '../design';
 import { useOnlineRead } from '../online';
 import type { BarcodeResolution } from './barcode';
 import type { FoodChoice } from './current-foods';
+import type { OffProduct } from './food-product-source';
 import type { Nutrition } from './nutrition';
 import { nutritionTexts } from './texts';
 
@@ -15,10 +16,16 @@ import { nutritionTexts } from './texts';
 
 const texts = nutritionTexts.barcode;
 
+/**
+ * Warum „Eigenes Lebensmittel anlegen“ öffnet: Werte fehlen, sie verletzen die Regeln des Snapshots (etwa Makros
+ * über der Bezugsmenge), OFF kennt das Produkt nicht, oder die Person legt es ohne Antwort von OFF selbst an.
+ */
+export type CreateReason = 'incomplete' | 'invalid' | 'not_found' | 'manual';
+
 /** Was der Hinzufügen-Bildschirm aus einer Auflösung macht, die nicht hier stehen bleibt. */
 export type BarcodeOutcome =
   | Readonly<{ type: 'found'; food: FoodChoice }>
-  | Readonly<{ type: 'create'; resolution: Extract<BarcodeResolution, { type: 'incomplete' | 'not_found' | 'offline_unknown' | 'unavailable' }> }>;
+  | Readonly<{ type: 'create'; barcode: string; product: OffProduct | null; reason: CreateReason }>;
 
 export function BarcodeLookup({
   nutrition,
@@ -35,20 +42,19 @@ export function BarcodeLookup({
   // Jeder Versuch hat einen eigenen Schlüssel, damit „Erneut versuchen“ wieder „Produkt wird gesucht …“ zeigt.
   const [attempt, setAttempt] = useState(0);
   const { state } = useOnlineRead(['barcode', barcode, String(attempt)], async () => ({ type: 'ok', value: await nutrition.resolveBarcode(barcode) }) as const);
-  const retry = () => setAttempt((count) => count + 1);
   const resolution = state.type === 'ok' ? state.value : null;
 
   useEffect(() => {
-    if (resolution === null) return;
-    if (resolution.type === 'found') onOutcome({ type: 'found', food: resolution.food });
-    else if (resolution.type === 'incomplete' || resolution.type === 'not_found') onOutcome({ type: 'create', resolution });
+    const outcome = resolution === null ? null : outcomeOf(resolution);
+    if (outcome !== null) onOutcome(outcome);
     // Nur je neuem Ergebnis; der Aufrufer verlässt diesen Schritt danach.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolution]);
 
-  const manual = (from: Extract<BarcodeOutcome, { type: 'create' }>['resolution']) => (
-    <Button variant="secondary" icon="pencil" label={texts.createManually} block onPress={() => onOutcome({ type: 'create', resolution: from })} />
-  );
+  const manual = <Button variant="secondary" icon="pencil" label={texts.createManually} block onPress={() => onOutcome({ type: 'create', barcode, product: null, reason: 'manual' })} />;
+  const later = <Button variant="text" label={texts.scanLater} block onPress={onCancel} />;
+  // Alles außer „sucht noch“ und einer Auflösung, die gleich weiterführt, bleibt hier stehen.
+  const unanswered = resolution?.type === 'unavailable' || (state.type !== 'pending' && state.type !== 'ok');
 
   return (
     <View style={styles.lookup} testID="barcode-ergebnis">
@@ -63,15 +69,15 @@ export function BarcodeLookup({
       {resolution?.type === 'offline_unknown' ? (
         <>
           <Notice tone="neutral" icon="offline" text={texts.offline} />
-          {manual(resolution)}
-          <Button variant="text" label={texts.scanLater} block onPress={onCancel} />
+          {manual}
+          {later}
         </>
-      ) : resolution?.type === 'unavailable' || (state.type !== 'pending' && state.type !== 'ok') ? (
+      ) : unanswered ? (
         <>
-          <Notice tone="neutral" text={resolution?.type === 'unavailable' && resolution.retryable ? texts.unavailable : texts.unavailableFinal} />
-          {resolution?.type !== 'unavailable' || resolution.retryable ? <Button label={texts.retry} block onPress={retry} /> : null}
-          {manual(resolution?.type === 'unavailable' ? resolution : { type: 'unavailable', barcode, retryable: false })}
-          <Button variant="text" label={texts.scanLater} block onPress={onCancel} />
+          <Notice tone="neutral" text={texts.unavailable} />
+          <Button label={texts.retry} block onPress={() => setAttempt((count) => count + 1)} />
+          {manual}
+          {later}
         </>
       ) : (
         <View style={styles.pending} accessible accessibilityLabel={texts.resolving}>
@@ -81,6 +87,25 @@ export function BarcodeLookup({
       )}
     </View>
   );
+}
+
+/** Die Folge einer Auflösung, die nicht hier stehen bleibt; sonst `null`. */
+function outcomeOf(resolution: BarcodeResolution): BarcodeOutcome | null {
+  switch (resolution.type) {
+    case 'found':
+      return { type: 'found', food: resolution.food };
+    case 'incomplete': {
+      const { product } = resolution;
+      // Sind Name, kcal und alle Makros da, verletzen die Werte nur die Regeln des Snapshots.
+      const complete = [product.name, product.milliKcalPer100, product.proteinMgPer100, product.carbsMgPer100, product.fatMgPer100].every((value) => value !== null);
+      return { type: 'create', barcode: resolution.barcode, product, reason: complete ? 'invalid' : 'incomplete' };
+    }
+    case 'not_found':
+      return { type: 'create', barcode: resolution.barcode, product: null, reason: 'not_found' };
+    case 'offline_unknown':
+    case 'unavailable':
+      return null;
+  }
 }
 
 const styles = StyleSheet.create({

@@ -1,13 +1,13 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 
 import { Instant } from '@abnehm/contracts/base';
-import { BaseUnit, NutritionSnapshot } from '@abnehm/contracts/nutrition';
+import { BaseUnit, type NutritionSnapshot } from '@abnehm/contracts/nutrition';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { offCache } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { accountSearchQuery } from './account-search';
-import type { OffProduct } from './food-product-source';
+import { productSnapshot, type OffProduct } from './food-product-source';
 import { searchNames, type SearchQuery } from './search-text';
 
 // Repository des lokalen Open-Food-Facts-Caches (Spezifikation 2, Abschnitt 3; #160): die einzige Stelle, die
@@ -18,34 +18,8 @@ import { searchNames, type SearchQuery } from './search-text';
 // Produkte; unvollständige lassen sich nicht erfassen und erscheinen deshalb nicht in der Suche. Ihn pflegt
 // dieses Repository bei jedem Schreiben und der Test-Seeder mit `rebuildOffCacheIndex`.
 
-/** Quellenangabe der Produkte (https://world.openfoodfacts.org/terms-of-use). */
-export const offAttribution = 'Daten von Open Food Facts (openfoodfacts.org), ODbL';
-
-/** Bezugsmenge 100 g bzw. 100 ml in mg bzw. ml. */
-const per100: Readonly<Record<BaseUnit, number>> = { g: 100_000, ml: 100 };
-
 /** Ein Cache-Eintrag: das Produkt und wann es zuletzt bei Open Food Facts abgefragt wurde. */
 export type CachedProduct = Readonly<{ product: OffProduct; fetchedAt: Instant }>;
-
-/** Ein vollständiges Produkt als Snapshot; `null`, wenn ein Name, kcal oder ein Makro fehlt oder die Werte nicht passen. */
-export function productSnapshot(product: OffProduct): NutritionSnapshot | null {
-  const { name, baseUnit, milliKcalPer100, proteinMgPer100, carbsMgPer100, fatMgPer100 } = product;
-  // Unvollständig, wenn kcal oder einer der drei Makros fehlt (Spezifikation 2, Abschnitt 3).
-  if (name === null || milliKcalPer100 === null || proteinMgPer100 === null || carbsMgPer100 === null || fatMgPer100 === null) return null;
-  const parsed = NutritionSnapshot.safeParse({
-    name,
-    baseUnit,
-    referenceAmount: per100[baseUnit],
-    milliKcal: milliKcalPer100,
-    proteinMg: proteinMgPer100,
-    carbsMg: carbsMgPer100,
-    fatMg: fatMgPer100,
-    portions: product.portions,
-    source: 'off',
-    attribution: offAttribution,
-  });
-  return parsed.success ? parsed.data : null;
-}
 
 /** Der Cache-Eintrag zum Barcode; sonst `undefined`. */
 export function readCachedProduct(tx: ReadContext, barcode: string): CachedProduct | undefined {

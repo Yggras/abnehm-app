@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { TimeZone } from '@abnehm/contracts/base';
 import type { NotificationPermission } from '@abnehm/contracts/notifications';
+import { Barcode } from '@abnehm/contracts/nutrition';
 import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
@@ -77,8 +78,7 @@ const galleryParams = z.strictObject({ ansicht: z.enum(momoGalleryViews).default
 const productParams = z
   .strictObject({
     ergebnis: z.enum([...fakeProductModes, 'echt']).optional(),
-    // Wie die Lebensmittelreferenz: GTIN-8, -12, -13 oder -14.
-    scan: z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/).optional(),
+    scan: Barcode.optional(),
   })
   .refine((params) => params.ergebnis !== undefined || params.scan !== undefined);
 const notificationParams = z.strictObject({

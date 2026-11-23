@@ -27,6 +27,6 @@ export type { OwnFoodBase } from './own-foods';
 export type { QuickFood, QuickFoods } from './quick-foods';
 export type { AmountPrefill } from './amount-prefill';
 export type { BarcodeResolution } from './barcode';
-export { createOffProductSource, offUserAgent, type FoodProductSource, type OffProduct, type ProductLookup } from './food-product-source';
+export type { FoodProductSource } from './food-product-source';
 export { rebuildOffCacheIndex } from './off-cache-repository';
 export { createNutrition, type Nutrition, type NutritionDependencies } from './nutrition';

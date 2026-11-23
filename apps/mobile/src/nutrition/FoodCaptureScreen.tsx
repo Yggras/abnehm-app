@@ -16,7 +16,7 @@ import { AmountReview, type Selection } from './AmountReview';
 import { BlsCatalogProvider, useFoodSearch, useQuickFoods, useRecordFavoriteUse } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
 import type { Nutrition } from './nutrition';
-import { BarcodeLookup, type BarcodeOutcome } from './BarcodeLookup';
+import { BarcodeLookup, type BarcodeOutcome, type CreateReason } from './BarcodeLookup';
 import { BarcodeScanner } from './BarcodeScanner';
 import { emptyOwnFoodDraft, ownFoodDraftOf, ownFoodDraftOfProduct, type OwnFoodDraft } from './own-food-input';
 import type { OwnFoodBase } from './own-foods';
@@ -41,6 +41,14 @@ type LaterSlot = (typeof laterSlots)[number];
 const slotIcons: Readonly<Record<LaterSlot, IconName>> = {
   foto: 'camera',
   mahlzeitenfavoriten: 'plate',
+};
+
+/** Hinweis über „Eigenes Lebensmittel anlegen“ nach einem Scan, je nach Grund (#160). */
+const createHints: Readonly<Record<CreateReason, string>> = {
+  incomplete: nutritionTexts.barcode.incompleteHint,
+  invalid: nutritionTexts.barcode.invalidHint,
+  not_found: nutritionTexts.barcode.notFoundHint,
+  manual: nutritionTexts.barcode.manualHint,
 };
 
 /** So viele Einträge zeigt jede Liste, danach „Alle anzeigen“ (Spezifikation 2, Abschnitt 6; Designwert, nicht belegt). */
@@ -186,12 +194,11 @@ function AddSlots({
       pick({ ...outcome.food, captureMethod: 'barcode' }, false);
       return;
     }
-    const { resolution } = outcome;
     setForm({
-      base: { type: 'off', key: resolution.barcode },
-      initial: resolution.type === 'incomplete' ? ownFoodDraftOfProduct(resolution.product) : emptyOwnFoodDraft(),
+      base: { type: 'off', key: outcome.barcode },
+      initial: outcome.product === null ? emptyOwnFoodDraft() : ownFoodDraftOfProduct(outcome.product),
       title: nutritionTexts.ownFood.create,
-      hint: resolution.type === 'incomplete' ? nutritionTexts.barcode.incompleteHint : resolution.type === 'not_found' ? nutritionTexts.barcode.notFoundHint : nutritionTexts.barcode.manualHint,
+      hint: createHints[outcome.reason],
       captureMethod: 'barcode',
     });
   };

@@ -5,8 +5,8 @@ import { FoodRef } from '@abnehm/contracts/nutrition';
 import type { LocalDatabase } from '../local-db';
 import type { FoodChoice } from './current-foods';
 import { InvalidNutritionInputError } from './entries';
-import type { FoodProductSource, OffProduct, ProductLookup } from './food-product-source';
-import { productSnapshot, readCachedProduct, writeCachedProduct } from './off-cache-repository';
+import { productSnapshot, type FoodProductSource, type OffProduct, type ProductLookup } from './food-product-source';
+import { readCachedProduct, writeCachedProduct } from './off-cache-repository';
 import { overlayingOwnFood } from './own-food-repository';
 
 // Barcode-Auflösung (Spezifikation 2, Abschnitt 5; #160) in der Reihenfolge: eigenes Lebensmittel mit diesem

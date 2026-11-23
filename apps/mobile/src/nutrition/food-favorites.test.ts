@@ -22,7 +22,7 @@ import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { createNutrition, foodFavoriteEntity, InvalidNutritionInputError, mealPhotoEntity, nutritionEntryEntity, ownFoodEntity, type FoodSearchResult, type QuickFoods } from '.';
-import { offAttribution } from './off-cache-repository';
+import { offAttribution } from './food-product-source';
 import { openTestCatalog, testCatalogFoods } from './testing/test-catalog';
 import { withoutNetwork } from './testing/without-network';
 

@@ -204,6 +204,8 @@ describe('Barcode scannen (#160)', () => {
     await startScan();
     expect(await screen.findByText('Zum Scannen braucht die App die Kamera. Bilder werden nicht gespeichert.')).toBeOnTheScreen();
     expect(mockCamera.requests).toBe(0);
+    // Auch hier führt ein Weg zu den Systemeinstellungen (Android fragt nach der ersten Ablehnung erneut).
+    expect(screen.getByRole('button', { name: 'Einstellungen öffnen' })).toBeOnTheScreen();
     await user.press(screen.getByRole('button', { name: 'Kamera erlauben' }));
     expect(await screen.findByLabelText('Kamerabild zum Scannen')).toBeOnTheScreen();
   });
@@ -279,6 +281,38 @@ describe('Barcode scannen (#160)', () => {
     await user.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
     expect(await amountReview('Naturjoghurt 3,5 %')).toBeOnTheScreen();
     expect(source.calls).toEqual([yoghurt, yoghurt]);
+  });
+
+  it('unavailable ohne Wiederholungshinweis von OFF bietet trotzdem „Erneut versuchen“ und den manuellen Weg', async () => {
+    let answer: 'unavailable' | 'found' = 'unavailable';
+    const catalog = createFakeFoodProductSource();
+    const source: FoodProductSource = {
+      lookup: (barcode, signal) => (answer === 'unavailable' ? Promise.resolve({ type: 'unavailable', retryable: false }) : catalog.lookup(barcode, signal)),
+    };
+    await openCapture(source);
+    await startScan();
+    await screen.findByLabelText('Kamerabild zum Scannen');
+    await scan(yoghurt);
+
+    expect(await screen.findByText('Open Food Facts antwortet gerade nicht. Versuch es gleich noch einmal oder leg das Produkt selbst an.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Produkt manuell anlegen' })).toBeOnTheScreen();
+    answer = 'found';
+    await user.press(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    expect(await amountReview('Naturjoghurt 3,5 %')).toBeOnTheScreen();
+  });
+
+  it('Werte, die nicht zusammenpassen, nennt das Formular als solche, nicht als fehlend', async () => {
+    // 60 g Eiweiß, 50 g Kohlenhydrate und 10 g Fett sind mehr als 100 g.
+    const source = createFakeFoodProductSource({
+      products: { [yoghurt]: { name: 'Proteinriegel', brand: null, baseUnit: 'g', milliKcalPer100: 380_000, proteinMgPer100: 60_000, carbsMgPer100: 50_000, fatMgPer100: 10_000, portions: [] } },
+    });
+    await openCapture(source);
+    await startScan();
+    await screen.findByLabelText('Kamerabild zum Scannen');
+    await scan(yoghurt);
+
+    expect(await screen.findByText('Die Werte dieses Produkts passen nicht zusammen. Prüf sie am Etikett; ab dann gilt deine Fassung für diesen Barcode.')).toBeOnTheScreen();
+    expect(within(form()).getByLabelText('Eiweiß')).toHaveDisplayValue('60');
   });
 
   it('ein eigenes Lebensmittel mit diesem Barcode überdeckt den Cache und lässt sich ändern, aber nicht löschen', async () => {
