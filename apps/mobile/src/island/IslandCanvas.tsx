@@ -214,6 +214,10 @@ function Item({ item, foliage, motion: { progress, pulse, reduceMotion } }: { it
     }
     case 'objekt':
       return <ObjectArt at={item.at} art={item.art} foliage={foliage} appearing={item.appearing} />;
+    case 'wahrzeichen':
+      return <ObjectArt at={item.at} art={item.art} foliage={foliage} scale={item.scale} />;
+    case 'geruest':
+      return <ObjectArt at={item.at} art={item.art} foliage={foliage} />;
     case 'momo':
       return item.from === null ? (
         <MomoOnIsland at={item.at} appearance={item.appearance} reduceMotion={reduceMotion} />

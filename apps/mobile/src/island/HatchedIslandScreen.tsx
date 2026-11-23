@@ -12,6 +12,7 @@ import { openTarget, type TargetOf } from '../navigation';
 import { useMessageHost } from '../shell/MessageHost';
 import { MomoAppearanceProvider, MomoFigure } from '../momo';
 import type { BuildOutcome } from './build-object';
+import type { ContributeOutcome } from './community-project';
 import { buildOptions, type BlueprintOption } from './build-options';
 import { BuildSheet } from './BuildSheet';
 import { EventsSheet } from './EventsSheet';
@@ -23,6 +24,7 @@ import { areaCells, islandLayout } from './layout';
 import type { PlaceOutcome, UpgradeOutcome } from './object-commands';
 import { objectOptions, type StorageItem } from './object-options';
 import { ObjectSheet } from './ObjectSheet';
+import { ProjectSheet } from './ProjectSheet';
 import type { IslandSceneInput, SceneHit } from './scene-model';
 import { StorageSheet } from './StorageSheet';
 import { buildTexts, momoSheetTexts, objectTexts } from './texts';
@@ -50,6 +52,10 @@ import type { Transformation } from './transformation';
 // Ereignisse (#202): „Ereignisse“ in der Leiste (auch über die Route `momo` mit `view: 'ereignisse'`) öffnet
 // das Sheet „Ereignisse“. Was beim Öffnen neu war, gilt damit als gesehen (`markEventsSeen`) und bleibt bis
 // zum Schließen oben unter „Neu auf der Insel“. Ein erfüllter Wunsch lässt sich dort abholen, auch offline.
+//
+// Gemeinschaftsprojekte (#208): „Projekt“ in der Leiste (auch über die Route `momo` mit `view: 'projekt'`) öffnet
+// das Projekt-Sheet mit eigenem Anteil, gemeinsamer Stufe und „Einzahlen“. Auf der Insel steht das Gerüst des
+// aktiven Projekts auf seinem Bauplatz und wächst mit der Stufe; fertige Projekte stehen dort als Wahrzeichen.
 
 const catalog = indexCatalog(gameCatalog);
 
@@ -65,6 +71,8 @@ export type HatchedIslandScreenProps = Readonly<{
   upgrade(islandObjectId: EntityId): UpgradeOutcome;
   /** Platziert über den Spieldienst (`GameService.place`). */
   place(islandObjectId: EntityId, target: PlacementTarget): PlaceOutcome;
+  /** Zahlt ins aktive Gemeinschaftsprojekt ein (`GameService.contribute`). */
+  contribute(request: Readonly<{ projectId: EntityId; amount: number }>): ContributeOutcome;
   /** Merkt Ereignisse als gesehen vor (`GameService.markEventsSeen`). */
   markEventsSeen(stateIds: readonly EntityId[]): void;
   /** Holt eine Belohnung ab (`GameService.claimEventReward`). */
@@ -91,6 +99,7 @@ type SheetContent =
   | Readonly<{ type: 'bauen'; field: string | null }>
   | Readonly<{ type: 'objekt'; field: string }>
   | Readonly<{ type: 'lager' }>
+  | Readonly<{ type: 'projekt' }>
   /** `freshAtOpen`: die beim Öffnen neuen Ereignisstände; `claimed`: was seitdem abgeholt wurde. */
   | Readonly<{ type: 'ereignisse'; freshAtOpen: ReadonlySet<EntityId>; claimed: readonly ShownReward[] }>;
 
@@ -103,6 +112,7 @@ type Placing =
 const sheetForView = {
   bauen: { type: 'bauen', field: null },
   lager: { type: 'lager' },
+  projekt: { type: 'projekt' },
   ereignisse: { type: 'ereignisse', freshAtOpen: new Set(), claimed: [] },
 } as const satisfies Partial<Record<NonNullable<TargetOf<'momo'>['view']>, SheetContent>>;
 
@@ -116,7 +126,7 @@ function placingTitleOf(placing: Placing): string {
   return placing.from === 'insel' ? objectTexts.moving(placing.name) : objectTexts.placing(placing.name);
 }
 
-export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformation, build, upgrade, place, markEventsSeen, claimEventReward, onOpen, challengeEntry = null, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
+export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformation, build, upgrade, place, contribute, markEventsSeen, claimEventReward, onOpen, challengeEntry = null, requestedView, onViewHandled, bottomInset }: HatchedIslandScreenProps) {
   const [sheet, setSheet] = useState<SheetContent | null>(null);
   const [placing, setPlacing] = useState<Placing | null>(null);
   const [appearing, setAppearing] = useState<string | null>(null);
@@ -192,8 +202,10 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformatio
       ...islandLayout(gameCatalog, { fields: island.fields, unlockedAreas: island.unlockedAreas }),
       objects: island.objects,
       momo: island.appearance,
+      landmarks: island.landmarks,
+      scaffold: { site: island.project.site, stage: island.project.stage },
     }),
-    [island.fields, island.unlockedAreas, island.objects, island.appearance],
+    [island.fields, island.unlockedAreas, island.objects, island.appearance, island.landmarks, island.project.site, island.project.stage],
   );
   const transformationScene = useMemo(
     () => (transformation === null ? null : { from: { ...island.appearance, formKey: transformation.from }, lifting: areaCells(gameCatalog, transformation.areas) }),
@@ -306,6 +318,15 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformatio
           />
         ) : sheet?.type === 'bauen' ? (
           <BuildSheet onField={sheet.field !== null} energy={island.energy} options={options.blueprints(sheet.field)} onChoose={choose} />
+        ) : sheet?.type === 'projekt' ? (
+          <ProjectSheet
+            project={island.project}
+            energy={island.energy}
+            onContribute={(amount) => {
+              const outcome = contribute({ projectId: island.project.projectId, amount });
+              return outcome.type === 'eingezahlt' ? outcome.amount : null;
+            }}
+          />
         ) : sheet?.type === 'lager' ? (
           <StorageSheet items={objects.storage} onPlace={placeFromStorage} />
         ) : sheet?.type === 'ereignisse' ? (

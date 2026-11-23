@@ -507,3 +507,42 @@ describe('Treffer-Umkehrung', () => {
   });
 });
 
+describe('Gemeinschaftsprojekt (#208)', () => {
+  // Der Bauplatz liegt auf dem Strand-Feld (2, 1); seine Mitte bei Zoom 1 ist (32, 64).
+  const site = 'grundinsel:2:1';
+
+  test.each([
+    ['gestartet', 'geruest_gestartet'],
+    ['gut_unterwegs', 'geruest_gut_unterwegs'],
+    ['fast_geschafft', 'geruest_fast_geschafft'],
+  ] as const)('das Gerüst steht mittig auf dem Bauplatz und wächst mit der Stufe: %s', (stage, art) => {
+    const scene = islandScene(request({ island: { ...island, scaffold: { site, stage } } }));
+
+    expect(ofType(scene.items, 'geruest')).toEqual([{ layer: 'objekte', type: 'geruest', field: site, at: { x: 32, y: 64 }, art }]);
+  });
+
+  test('ein fertiges Wahrzeichen steht auf seinem Bauplatz; jeder Ausbau vergrößert es', () => {
+    const scene = (size: number) => islandScene(request({ island: { ...island, landmarks: [{ site, art: 'gartenhaeuschen', size }] } }));
+
+    expect(ofType(scene(1).items, 'wahrzeichen')).toEqual([{ layer: 'objekte', type: 'wahrzeichen', field: site, at: { x: 32, y: 64 }, art: 'gartenhaeuschen', scale: 1 }]);
+    const scales = [1, 2, 3].map((size) => ofType(scene(size).items, 'wahrzeichen')[0]!.scale);
+    expect(scales[1]).toBeGreaterThan(scales[0]!);
+    expect(scales[2]).toBeGreaterThan(scales[1]!);
+  });
+
+  test('beim Ausbau steht das Gerüst um das vorhandene Wahrzeichen, davor gezeichnet; beides zwischen den Objekten nach Zeile + Spalte', () => {
+    const scene = islandScene(request({ island: { ...island, landmarks: [{ site, art: 'gartenhaeuschen', size: 1 }], scaffold: { site, stage: 'gestartet' } } }));
+    const standing = scene.items.filter((item) => item.layer === 'objekte').map((item) => item.type);
+
+    // Momo auf (1, 0) steht weiter hinten als der Bauplatz (2, 1).
+    expect(standing).toEqual(['momo', 'wahrzeichen', 'geruest']);
+  });
+
+  test('ohne Projekt gibt es weder Gerüst noch Wahrzeichen', () => {
+    const scene = islandScene(request());
+
+    expect(ofType(scene.items, 'geruest')).toEqual([]);
+    expect(ofType(scene.items, 'wahrzeichen')).toEqual([]);
+  });
+});
+

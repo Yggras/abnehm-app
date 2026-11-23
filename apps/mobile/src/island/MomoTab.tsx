@@ -46,6 +46,7 @@ export function MomoTab({ target }: RouteScreenProps<'momo'>) {
       build={game.build}
       upgrade={game.upgrade}
       place={game.place}
+      contribute={game.contribute}
       markEventsSeen={game.markEventsSeen}
       claimEventReward={game.claimEventReward}
       onOpen={(view) => openTarget({ type: 'momo', view })}

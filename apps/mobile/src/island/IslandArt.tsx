@@ -58,10 +58,11 @@ export function fogPath(cells: readonly Polygon[]): string {
  * (`appearing`) erscheint mit Feder (`spring-bouncy`), bei „Bewegung reduzieren“ als Überblendung in
  * `duration-fast` (Spezifikation 4, Abschnitt 7; Design-System › Bewegung).
  */
-export function ObjectArt({ at, art, foliage, appearing = false }: { at: Point; art: ArtKey; foliage: ColorToken; appearing?: boolean }) {
+/** Eine Grafik mittig auf ihrem Feld; `scale` vergrößert sie um den Fußpunkt, etwa ein ausgebautes Wahrzeichen (#208). */
+export function ObjectArt({ at, art, foliage, appearing = false, scale = 1 }: { at: Point; art: ArtKey; foliage: ColorToken; appearing?: boolean; scale?: number }) {
   const { drawing } = artOf(art);
   const shapes = drawing.map((primitive, index) => <Primitive key={index} primitive={primitive} foliage={foliage} />);
-  if (!appearing) return <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>{shapes}</Group>;
+  if (!appearing) return <Group transform={[{ translateX: at.x }, { translateY: at.y }, { scale }]}>{shapes}</Group>;
   return (
     <Appear at={at}>
       {shapes}

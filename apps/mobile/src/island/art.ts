@@ -1,3 +1,4 @@
+import { CommonStage } from '@abnehm/contracts/island';
 import type { ArtKey, Stage } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 
@@ -487,6 +488,55 @@ const animals: Readonly<Record<string, () => ArtPrimitive[]>> = {
   ],
 };
 
+// --- Gemeinschaftsprojekte (#208) --------------------------------------------------------------------
+
+/**
+ * Gerüst des aktiven Projekts je gemeinsamer Stufe: aus Holzstangen und Bohlen, mit jeder Stufe höher und mit
+ * einer Lage mehr. Bei `fast_geschafft` steht schon der Dachfirst. Motiv und Maße sind Designwerte aus #208, nicht
+ * belegt; die Gerüst-Stufen je Projekt kann #209 ersetzen.
+ */
+function scaffold(stage: CommonStage): ArtPrimitive[] {
+  const level = { gestartet: 1, gut_unterwegs: 2, fast_geschafft: 3, geschafft: 3 }[stage];
+  const height = 8 + 8 * level;
+  const pole = (x: number, y: number) => rect(x - 1, y - height, 2, height, 'islandWood');
+  const plank = (y: number) => rect(-16, y, 32, 2.5, 'islandWood');
+  const drawing: ArtPrimitive[] = [
+    shadow(tile * 0.55),
+    // Bohlenstapel am Fuß: Hier wird gebaut.
+    rect(-20, -3, 12, 3, 'islandWood'),
+    { type: 'flaeche', points: [{ x: -20, y: -3 }, { x: -8, y: -3 }, { x: -8, y: 0 }, { x: -20, y: 0 }], tone: 'ink', opacity: opacity.shadeRight },
+    pole(-14, -2),
+    pole(14, -2),
+  ];
+  if (level >= 2) drawing.push(pole(-5, -6), pole(5, -6));
+  for (let lage = 1; lage <= level; lage += 1) drawing.push(plank(-2 - 8 * lage));
+  if (level >= 3) drawing.push({ type: 'flaeche', points: [{ x: -16, y: -2 - height }, { x: 0, y: -10 - height }, { x: 16, y: -2 - height }], tone: 'islandRoof', opacity: 0.6 });
+  if (stage === 'geschafft') drawing.push(rect(-1, -18 - height, 2, 8, 'islandWood'), { type: 'flaeche', points: [{ x: 1, y: -18 - height }, { x: 8, y: -15 - height }, { x: 1, y: -12 - height }], tone: 'islandLamp' });
+  return drawing;
+}
+
+/**
+ * Wahrzeichen von Projekt 1: ein Gartenhäuschen mit Giebeldach, Tür und Fenster. Platzhalter aus #208, damit das
+ * fertige Projekt auf der Insel sichtbar steht; die Wahrzeichen-Grafiken liefert #209.
+ */
+function gartenhaeuschen(): ArtPrimitive[] {
+  return [
+    shadow(tile * 0.6),
+    ...box({ x: 0, y: 0 }, 16, 14, 'islandSand', 'islandSand'),
+    { type: 'flaeche', points: [{ x: -18, y: -14 }, { x: 0, y: -28 }, { x: 0, y: -14 + 8 }], tone: 'islandRoof' },
+    { type: 'flaeche', points: [{ x: 0, y: -28 }, { x: 18, y: -14 }, { x: 0, y: -14 + 8 }], tone: 'islandRoof' },
+    { type: 'flaeche', points: [{ x: 0, y: -28 }, { x: 18, y: -14 }, { x: 0, y: -14 + 8 }], tone: 'ink', opacity: opacity.shadeRight },
+    rect(-11, -11, 5, 8, 'islandWood'),
+    rect(4, -10, 6, 5, 'islandLamp'),
+  ];
+}
+
+/** Grafiken der Gemeinschaftsprojekte: Gerüst je Stufe (`geruest_<stufe>`) und Wahrzeichen je Grafikschlüssel. */
+const projectArt: (readonly [ArtKey, ArtSpec])[] = [
+  ...CommonStage.options.map((stage) => [`geruest_${stage}`, { stage: 1, lit: false, light: null, drawing: scaffold(stage) }] as const),
+  ['gartenhaeuschen', { stage: 1, lit: false, light: null, drawing: gartenhaeuschen() }],
+];
+
 /** Neutraler Block für einen Schlüssel ohne Grafik. */
 const block: ArtSpec = {
   stage: 1,
@@ -538,6 +588,7 @@ const flatArt: (readonly [ArtKey, ArtSpec])[] = [
 
 const byArt = new Map<ArtKey, ArtSpec>([
   ...flatArt,
+  ...projectArt,
   ...gameCatalog.blueprints.flatMap((blueprint) => {
     const motif = motifs[blueprint.key];
     if (motif === undefined) return [];

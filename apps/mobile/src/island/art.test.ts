@@ -80,3 +80,24 @@ test.each(flatArt)('%s %s hat eine eigene Zeichnung, passt auf ein Feld und leuc
   expect(bounds.width).toBeLessThanOrEqual(tile);
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(fieldHeight / 2);
 });
+
+// Gemeinschaftsprojekte (#208): Das Gerüst wächst mit der gemeinsamen Stufe; das Wahrzeichen von Projekt 1 ist gezeichnet.
+const scaffoldStages = ['gestartet', 'gut_unterwegs', 'fast_geschafft'] as const;
+
+test('das Gerüst wird mit jeder gemeinsamen Stufe höher und hat eine Lage mehr', () => {
+  const [one, two, three] = scaffoldStages.map((stage) => artOf(`geruest_${stage}`));
+  for (const spec of [one, two, three]) expect(spec).not.toBe(artOf('unbekannt'));
+  expect(artBounds(two!).height).toBeGreaterThan(artBounds(one!).height);
+  expect(artBounds(three!).height).toBeGreaterThan(artBounds(two!).height);
+  expect(two!.drawing.length).toBeGreaterThan(one!.drawing.length);
+  expect(three!.drawing.length).toBeGreaterThan(two!.drawing.length);
+});
+
+test.each([...scaffoldStages.map((stage) => `geruest_${stage}`), 'gartenhaeuschen'])('%s steht mittig auf dem Bauplatz und ist höchstens zwei Felder hoch', (art) => {
+  const bounds = artBounds(artOf(art));
+  expect(artOf(art)).not.toBe(artOf('unbekannt'));
+  expect(bounds.height).toBeLessThanOrEqual(2 * fieldHeight);
+  expect(bounds.width).toBeLessThanOrEqual(tile);
+  expect(Math.abs(bounds.x + bounds.width / 2)).toBeLessThanOrEqual(4);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(fieldHeight / 2);
+});

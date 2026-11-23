@@ -1,4 +1,4 @@
-import type { IslandRole, MomoForm } from '@abnehm/contracts/island';
+import type { CommonStage, IslandRole, MomoForm } from '@abnehm/contracts/island';
 import type { ChallengeMeasure, Season } from '@abnehm/game-rules/catalog';
 import type { ChallengeShare } from '@abnehm/game-rules/challenges';
 
@@ -116,6 +116,28 @@ export const objectTexts = {
     challenge: 'Challenge-Deko',
     deko: 'Deko',
   },
+};
+
+/**
+ * Texte des Projekt-Sheets (#208). „Dein Anteil: 12 von 30“, „Dein Anteil ist voll“ und „Einzahlen“ stehen in
+ * Spezifikation 4, Abschnitt 8, die Stufen ebendort; die übrigen Sätze sind Designwerte dieses Tickets (nicht
+ * belegt). Kein Satz nennt, was dem Partner fehlt.
+ */
+export const projectTexts = {
+  kind: { projekt: 'Gemeinschaftsprojekt', ausbau: 'Ausbau eures Wahrzeichens' } satisfies Record<'projekt' | 'ausbau', string>,
+  ownShare: (paid: number, need: number) => `Dein Anteil: ${paid} von ${need}`,
+  ownShareLabel: 'Dein Anteil',
+  ownFull: 'Dein Anteil ist voll',
+  stage: (stage: CommonStage) => `Gemeinsam: ${projectTexts.stageNames[stage]}`,
+  stageNames: { gestartet: 'gestartet', gut_unterwegs: 'gut unterwegs', fast_geschafft: 'fast geschafft', geschafft: 'geschafft' } satisfies Record<CommonStage, string>,
+  howItWorks: 'Jeder füllt seinen Anteil mit eigener Energie, ohne Frist. Sind beide Anteile voll, steht euer Wahrzeichen.',
+  amount: 'Betrag',
+  amountValue: (amount: number) => `${amount} Energie`,
+  contribute: 'Einzahlen',
+  contributeLabel: (amount: number) => `${amount} Energie einzahlen`,
+  /** Bestätigung im Sheet: Eine Meldung läge auf dem Gerät hinter dem nativen Sheet (Gerätelauf #202). */
+  contributed: (amount: number) => `${amount} Energie eingezahlt`,
+  noEnergy: 'Gerade hast du keine Energie. Erfüllte Tagesziele bringen neue.',
 };
 
 /**
