@@ -50,6 +50,13 @@
       "when": 1795116069684,
       "tag": "0006_food_favorite_removed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795459424876,
+      "tag": "0007_off_cache_search",
+      "breakpoints": true
     }
   ]
 }

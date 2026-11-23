@@ -24,7 +24,7 @@ import { pendingOperations } from '../sync/outbox';
 import { createNutrition, foodFavoriteEntity, InvalidNutritionInputError, mealPhotoEntity, nutritionEntryEntity, ownFoodEntity, type FoodSearchResult, type QuickFoods } from '.';
 import { offAttribution } from './off-cache-repository';
 import { openTestCatalog, testCatalogFoods } from './testing/test-catalog';
-import { withoutPhotos } from './testing/without-photos';
+import { withoutNetwork } from './testing/without-network';
 
 // Nachweis für #158: Lebensmittelfavoriten und „Zuletzt verwendet“ im App-Modul „Ernährung“
 // (Spezifikation 2, Abschnitte 4, 6 und 7) gegen eine echte SQLite-Datei mit denselben Migrationen wie die
@@ -106,7 +106,7 @@ async function setup({ catalogFoods = testCatalogFoods }: { catalogFoods?: typeo
   const clock = createTestClock({ instant: morning, timeZone: TimeZone.parse('Europe/Berlin') });
   const newId = () => EntityId.parse(randomUUID());
   const writer = createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity, foodFavoriteEntity, mealPhotoEntity]), clock, newId });
-  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
+  const nutrition = createNutrition({ ...withoutNetwork, database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
 
   /** Ein Eintrag aus Suche, Favorit oder „Zuletzt“; die Uhr läuft danach eine Minute weiter. */
   const add = (

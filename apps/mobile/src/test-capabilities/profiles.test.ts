@@ -108,7 +108,7 @@ describe('Link `profil`', () => {
   it('der Eingang stellt das Profil sofort und meldet Plan und Ablesung', () => {
     const faults = createFaultController();
     const clock = fixedClock();
-    const inbox = createTestInbox({ faults, clock, notifications: createNotificationTestControl(), deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) } });
+    const inbox = createTestInbox({ faults, clock, notifications: createNotificationTestControl(), deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) }, foodProducts: { apply: () => undefined } });
 
     inbox.receive(parseTestLink('abnehmapp-dev://profil?name=server-nicht-verfuegbar')!);
 

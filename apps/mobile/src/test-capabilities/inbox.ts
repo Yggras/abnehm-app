@@ -4,6 +4,7 @@ import type { AppTestClock } from './clock';
 import type { DeviceSuitePhase, DeviceSuiteReport } from './device-suite/suite';
 import type { HealthConnectOutcome } from '../health';
 import type { FaultController, FaultPlan } from './faults';
+import type { TestFoodProducts, TestFoodProductMode } from './food-products';
 import type { TestHealth } from './health';
 import type { TestHealthScenario } from './health-scenarios';
 import type { TestLink, TestLinkPath } from './links';
@@ -31,6 +32,8 @@ export type TestStatus =
   | Readonly<{ type: 'health_gestellt'; scenario: TestHealthScenario; outcome: HealthConnectOutcome['type'] | 'ohne_konto' | 'fehlgeschlagen' }>
   | Readonly<{ type: 'mitteilungen_gestellt'; mode: NotificationTestMode }>
   | Readonly<{ type: 'momo_galerie'; view: MomoGalleryView }>
+  /** `mode` ist der gestellte Modus der Produktquelle, `scan` der hinterlegte Barcode; je `null`, wenn der Link ihn nicht nennt. */
+  | Readonly<{ type: 'produkt_gestellt'; mode: TestFoodProductMode | null; scan: string | null }>
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 export type SeedHandler = (run: SeedRun) => Promise<SeedOutcome>;
@@ -44,6 +47,8 @@ export type TestInboxOptions = {
   deviceSuite(phase: DeviceSuitePhase): Promise<DeviceSuiteReport>;
   /** Health-Attrappe (#183). */
   health: Pick<TestHealth, 'apply'>;
+  /** Fake der Produktquelle samt Test-Scan (#160). */
+  foodProducts: Pick<TestFoodProducts, 'apply'>;
 };
 
 export type TestInbox = {
@@ -54,7 +59,7 @@ export type TestInbox = {
   subscribe(listener: () => void): () => void;
 };
 
-export function createTestInbox({ faults, clock, notifications, deviceSuite, health }: TestInboxOptions): TestInbox {
+export function createTestInbox({ faults, clock, notifications, deviceSuite, health, foodProducts }: TestInboxOptions): TestInbox {
   let current: TestStatus = { type: 'ruhe' };
   const listeners = new Set<() => void>();
   const queue: SeedRun[] = [];
@@ -125,6 +130,9 @@ export function createTestInbox({ faults, clock, notifications, deviceSuite, hea
           return setStatus({ type: 'mitteilungen_gestellt', mode: notifications.mode() });
         case 'momo-galerie':
           return setStatus({ type: 'momo_galerie', view: link.view });
+        case 'produkt':
+          foodProducts.apply({ mode: link.mode, scan: link.scan });
+          return setStatus({ type: 'produkt_gestellt', mode: link.mode ?? null, scan: link.scan ?? null });
         case 'seed':
           queue.push({ scenario: link.scenario, installation: link.installation, target: link.target });
           void drain();

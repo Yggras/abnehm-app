@@ -14,7 +14,7 @@ import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { createNutrition, InvalidNutritionInputError, mealPhotoEntity, nutritionEntryEntity, type DayLog, type MealPhotoDetail } from '.';
-import { withoutPhotos } from './testing/without-photos';
+import { withoutNetwork } from './testing/without-network';
 
 // Nachweis für #164 an der Naht des App-Moduls „Ernährung“: eigene Mahlzeitenfotos im Tagesprotokoll, die
 // Fotoansicht mit Freigabeschalter, „Mit Partner teilen“ als generisches Upsert, „Foto löschen“ als Tombstone
@@ -47,7 +47,7 @@ async function setup(manifest: SeedManifest = seedManifests.gekoppelt) {
   const newId = () => EntityId.parse(randomUUID());
   const writer = createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, mealPhotoEntity]), clock, newId });
   const reports: unknown[] = [];
-  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, newId, persistence: { reevaluateDailyGoals: (_tx, ...report) => void reports.push(report) } });
+  const nutrition = createNutrition({ ...withoutNetwork, database, clock, writer, newId, persistence: { reevaluateDailyGoals: (_tx, ...report) => void reports.push(report) } });
   const dayLog = () => {
     let log: DayLog | null = null;
     nutrition.observeDayLog(today, (next) => (log = next))();

@@ -255,6 +255,18 @@ export function foodFavoriteId(personId: EntityId, foodRef: FoodRef): EntityId {
   return EntityId.parse(uuidV5(foodFavoriteNamespace, `food_favorite:${personId}:${foodRefKey(foodRef)}`));
 }
 
+const ownFoodBarcodeNamespace = '3f6d9b2e-7a41-4c8d-a5e0-6b1f2c9d4e17';
+
+/**
+ * Deterministische ID eines eigenen Lebensmittels mit Barcode-Herkunft aus Person und Barcode
+ * (Spezifikation 2, Abschnitt 11; #160): Korrigieren zwei Geräte offline dasselbe Produkt, entsteht genau
+ * ein eigenes Lebensmittel, wie es der Index `own_food_barcode_uq` verlangt. Wirft bei einem Barcode,
+ * den die Lebensmittelreferenz nicht nimmt.
+ */
+export function ownFoodBarcodeId(personId: EntityId, barcode: string): EntityId {
+  return EntityId.parse(uuidV5(ownFoodBarcodeNamespace, `own_food:${personId}:${Barcode.parse(barcode)}`));
+}
+
 /** Einheit, in der die Person eine Menge eingibt und sieht. */
 export const DisplayUnit = z.enum(['g', 'ml', 'stueck', 'portion']);
 export type DisplayUnit = z.infer<typeof DisplayUnit>;

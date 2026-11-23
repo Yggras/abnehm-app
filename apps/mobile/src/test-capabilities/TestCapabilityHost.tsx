@@ -61,6 +61,8 @@ function statusNotice(status: TestStatus) {
     case 'mitteilungen_gestellt':
       return <Notice tone="neutral" text={notificationModeText(status.mode)} />;
     case 'momo_galerie':
+    // Ohne Hinweis, damit Bildschirmfotos des Scanners und seiner Folgezustände nichts verdeckt (#160).
+    case 'produkt_gestellt':
       return null;
     case 'ungueltig':
       return <Notice tone="problem" cause="ungueltige_eingabe" text={`Ungültiger Link „${status.capability}“ der Testfähigkeiten. Parameter stehen in docs/entwicklung.md.`} />;

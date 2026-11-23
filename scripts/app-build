@@ -46,6 +46,11 @@ done
 if [[ "$variant" == "produktion" ]]; then
   device=true
   [[ "$api_url" =~ ^https://[^/]+$ ]] || { echo "Der Produktionsbuild braucht --api-url https://<host> ohne Pfad." >&2; exit 2; }
+  # Open Food Facts verlangt eine Kontaktadresse im User-Agent (#160). Sie steht nicht im Repo, sondern in der
+  # Umgebung oder in apps/mobile/.env.local, die Expo beim Bündeln liest.
+  off_contact="${EXPO_PUBLIC_OFF_CONTACT:-$(sed -n 's/^EXPO_PUBLIC_OFF_CONTACT=//p' "$mobile/.env.local" 2>/dev/null | tail -n 1)}"
+  [[ -n "${off_contact// /}" ]] || { echo "Der Produktionsbuild braucht EXPO_PUBLIC_OFF_CONTACT (Kontaktadresse für Open Food Facts) in der Umgebung oder in apps/mobile/.env.local." >&2; exit 2; }
+  export EXPO_PUBLIC_OFF_CONTACT="$off_contact"
 fi
 
 port="${E2E_BACKEND_PORT:-8788}"

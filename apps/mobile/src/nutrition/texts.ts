@@ -18,6 +18,9 @@ import type { SearchMark } from './food-search';
 import { recentDays } from './quick-foods';
 import { conversionFields, conversionUnitOf, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
 
+/** Externe Quelle, deren Daten eine Korrektur unverändert lässt: BLS oder Open Food Facts. */
+export type ExternalSource = 'bls' | 'off';
+
 // Sichtbare Texte und zugängliche Namen der Ernährung (Spezifikation 2, Abschnitt 12): deutsche Zahlen
 // („1.210 kcal“, „0,5 Stück“), Einheiten mit Leerzeichen, ohne Schuld- und Verlust-Framing.
 
@@ -262,7 +265,10 @@ export const nutritionTexts = {
     create: 'Eigenes Lebensmittel anlegen',
     edit: 'Eigenes Lebensmittel bearbeiten',
     correct: 'Werte korrigieren',
-    correctHint: 'Die BLS-Daten bleiben unverändert. Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.',
+    correctHint: (source: ExternalSource) =>
+      source === 'bls'
+        ? 'Die BLS-Daten bleiben unverändert. Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.'
+        : 'Die Daten von Open Food Facts bleiben unverändert. Deine Fassung gilt ab jetzt für diesen Barcode.',
     name: 'Name',
     unit: 'Einheit',
     referenceAmount: 'Werte gelten für',
@@ -302,10 +308,36 @@ export const nutritionTexts = {
   addConversion: (missing: readonly ConversionUnit[]) => `${missing.map((unit) => conversionTexts[unit].name).join(' oder ')} eintragen`,
   conversion: {
     title: 'Umrechnung eintragen',
-    hint: (eigen: boolean) =>
-      eigen ? 'Die Umrechnung wird an deinem eigenen Lebensmittel gespeichert.' : 'Daraus entsteht ein eigenes Lebensmittel; die BLS-Daten bleiben unverändert.',
+    hint: (source: ExternalSource | 'eigen') =>
+      source === 'eigen'
+        ? 'Die Umrechnung wird an deinem eigenen Lebensmittel gespeichert.'
+        : `Daraus entsteht ein eigenes Lebensmittel; die ${source === 'bls' ? 'BLS-Daten' : 'Daten von Open Food Facts'} bleiben unverändert.`,
     unitName: (unit: ConversionUnit) => conversionTexts[unit].name,
     back: 'Zurück',
+  },
+  /** Barcode-Scan und seine Folgezustände (Spezifikation 2, Abschnitt 5; #160). */
+  barcode: {
+    title: 'Barcode scannen',
+    hint: 'Halte den Barcode in den Rahmen. Der Scan startet von selbst.',
+    camera: 'Kamerabild zum Scannen',
+    cancel: 'Abbrechen',
+    permissionHint: 'Zum Scannen braucht die App die Kamera. Bilder werden nicht gespeichert.',
+    allowCamera: 'Kamera erlauben',
+    denied: 'Die Kamera ist für die App ausgeschaltet. Erlaube sie in den Einstellungen oder such das Lebensmittel.',
+    openSettings: 'Einstellungen öffnen',
+    cameraFailed: 'Die Kamera lässt sich gerade nicht starten. Such das Lebensmittel oder leg es selbst an.',
+    resolving: 'Produkt wird gesucht …',
+    barcode: (code: string) => `Barcode ${code}`,
+    /** Wortlaut aus Spezifikation 2, Abschnitt 5 (#35). */
+    offline: 'Kein Netz – Produkt manuell anlegen oder später scannen',
+    unavailable: 'Open Food Facts antwortet gerade nicht. Versuch es gleich noch einmal oder leg das Produkt selbst an.',
+    unavailableFinal: 'Das Produkt lässt sich gerade nicht abfragen. Leg es selbst an oder versuch es später noch einmal.',
+    retry: 'Erneut versuchen',
+    createManually: 'Produkt manuell anlegen',
+    scanLater: 'Später scannen',
+    notFoundHint: 'Open Food Facts kennt dieses Produkt noch nicht. Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
+    incompleteHint: 'Bei diesem Produkt fehlen Werte. Ergänze sie vom Etikett; ab dann gilt deine Fassung für diesen Barcode.',
+    manualHint: 'Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
   },
   /** Eigene Mahlzeitenfotos im Protokoll und in der Fotoansicht (Spezifikation 2, Abschnitt 9; #164). */
   photo: {

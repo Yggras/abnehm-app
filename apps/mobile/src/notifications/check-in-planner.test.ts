@@ -15,7 +15,7 @@ import type { LocalDatabase } from '../local-db';
 import { createLocalDatabases } from '../local-db/local-databases';
 import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createNutrition, nutritionDailyGoals, nutritionEntryEntity } from '../nutrition';
-import { withoutPhotos } from '../nutrition/testing/without-photos';
+import { withoutNetwork } from '../nutrition/testing/without-network';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { createFakeNotificationPort, type FakeNotificationPort } from '../test-capabilities/notifications';
 import { createTrackers, sportEntryEntity, trackerDailyGoals, waterEntryEntity, weightEntryEntity } from '../trackers';
@@ -129,7 +129,7 @@ async function world({ at = morning, weeklyPlans: initialPlans = [weeklyPlan(wee
     checkIns: [...(withoutNutritionCheckIn ? [] : nutritionDailyGoals.checkIns), ...trackerDailyGoals.checkIns],
   });
   const persistence = createDailyGoalPersistence({ registry, clock, writer, dispatcher });
-  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, persistence, newId });
+  const nutrition = createNutrition({ ...withoutNetwork, database, clock, writer, persistence, newId });
   const trackers = createTrackers({ database, clock, writer, persistence, newId });
   const settings = createNotificationSettings({ database, writer, clock });
   const port: FakeNotificationPort = createFakeNotificationPort({ permission: 'granted' });

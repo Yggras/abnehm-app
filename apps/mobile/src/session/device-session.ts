@@ -36,6 +36,7 @@ import {
   nutritionEntryEntity,
   ownFoodEntity,
 } from '../nutrition';
+import { deviceFoodProductSource } from '../nutrition/device-food-products';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications, type NotificationPort } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
@@ -103,6 +104,12 @@ const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, n
  */
 const devicePlatform = deviceHealthPlatform(appClock);
 const healthPlatform = testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform;
+/**
+ * Open Food Facts für den Barcode-Scan (Spezifikation 2, Abschnitt 3; #160). In Test-Artefakten übernimmt ab
+ * dem Link `produkt` der Fake der `FoodProductSource`.
+ */
+const deviceFoodProducts = deviceFoodProductSource(onError);
+const foodProducts = testCapabilities?.adapters.foodProducts(deviceFoodProducts) ?? deviceFoodProducts;
 /** Ob die App im Vordergrund ist, laut React Native; meldet jede Änderung. */
 function observeAppForeground(listener: (active: boolean) => void) {
   const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
@@ -173,7 +180,10 @@ function deviceState() {
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId,
         photoImages: createHttpMealPhotoImages({ baseUrl, fetch: session.auth.fetch }),
         // In Test-Artefakten überlagert vom Transport-Fehlermodus wie beim Partnerbereich (#114).
-        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline });
+        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline,
+        // Barcodes fragt die App direkt bei Open Food Facts ab, ohne Sitzung (#160); in Test-Artefakten ab dem
+        // Link `produkt` über den Fake.
+        foodProducts });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
       // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
       // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`).

@@ -1,7 +1,7 @@
 // App-Modul „Ernährung“ (Spezifikation 2, Abschnitt 1): die lokale Lebensmittelsuche (#154), die
 // Befehle „Eintrag hinzufügen“ und „Rückgängig“ sowie die Abfragen Tagesprotokoll und Vorbelegung
 // (#155), die Fotomahlzeit (#162), die eigenen Lebensmittel samt Suchindex (#157), Lebensmittelfavoriten
-// und „Zuletzt verwendet“ (#158) sowie die Beiträge
+// und „Zuletzt verwendet“ (#158), die Barcode-Auflösung samt OFF-Cache (#160) sowie die Beiträge
 // zu Tagesziel-Registry und Tages-Check-in und der Lese-Port `IntakeReader` (#166). Bildschirme sprechen
 // nur mit dieser Schnittstelle, nie direkt mit Drizzle, SQLite oder Netzwerk. Kein anderer Bereich liest
 // die Ernährungstabellen.
@@ -26,4 +26,7 @@ export { rebuildOwnFoodIndex, type OwnFoodChoice } from './own-food-repository';
 export type { OwnFoodBase } from './own-foods';
 export type { QuickFood, QuickFoods } from './quick-foods';
 export type { AmountPrefill } from './amount-prefill';
+export type { BarcodeResolution } from './barcode';
+export { createOffProductSource, offUserAgent, type FoodProductSource, type OffProduct, type ProductLookup } from './food-product-source';
+export { rebuildOffCacheIndex } from './off-cache-repository';
 export { createNutrition, type Nutrition, type NutritionDependencies } from './nutrition';

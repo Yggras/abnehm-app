@@ -109,7 +109,7 @@ test('der Stand des Mitteilungs-Ports steht nach dem Link kurz da und gibt dann 
   jest.useFakeTimers();
   try {
     const notifications = createNotificationTestControl();
-    const realInbox = createTestInbox({ faults: createFaultController(), clock: {} as AppTestClock, notifications, deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) } });
+    const realInbox = createTestInbox({ faults: createFaultController(), clock: {} as AppTestClock, notifications, deviceSuite: () => Promise.reject(new Error('nicht im Test')), health: { apply: () => Promise.resolve(null) }, foodProducts: { apply: () => undefined } });
     await renderRouter(
       {
         _layout: () => (

@@ -30,7 +30,7 @@ import { createBetterSqliteFiles } from '../local-db/testing/better-sqlite';
 import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { createNutrition, intakeReaderOf, nutritionDailyGoals, nutritionEntryEntity, type NutritionDayFacts } from '.';
-import { withoutPhotos } from './testing/without-photos';
+import { withoutNetwork } from './testing/without-network';
 
 // Nachweis für #166: die Beiträge der Ernährung zu den Verträgen aus Spezifikation 0, Abschnitt 3
 // (Spezifikation 2, Abschnitt 10). Die Evaluatoren für „Ernährung erfasst“ und „Im Kalorienbudget“ und
@@ -202,7 +202,7 @@ async function world({ at = noon }: { at?: Instant } = {}) {
   const dispatcher = createDaysChangedDispatcher({ database, observers: [], onError: (error) => { throw error; } });
   const registry: DailyGoalRegistry = createDailyGoalRegistry(nutritionDailyGoals);
   const persistence = createDailyGoalPersistence({ registry, clock, writer, dispatcher });
-  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, persistence, newId });
+  const nutrition = createNutrition({ ...withoutNetwork, database, clock, writer, persistence, newId });
   const goals: Record<string, { id: string; snapshot: DailyGoalSnapshot }> = {};
   return {
     database,

@@ -21,7 +21,7 @@ import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appNutrition, createNutrition, foodFavoriteEntity, nutritionEntryEntity, ownFoodEntity } from '.';
 import type * as TestCatalogModule from './testing/test-catalog';
-import { withoutPhotos } from './testing/without-photos';
+import { withoutNetwork } from './testing/without-network';
 
 // Nachweis für #155, #156, #157 und #158 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
 // echten Verzeichnis `src/app`, dem echten Ernährungsmodul über einer mit `solo` geseedeten SQLite-Datei
@@ -66,7 +66,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
   if (seeded) seedLocalDatabase(database, seedManifests.solo, 'philipp-iphone');
   else database.transaction((tx) => insertPersonForTest(tx, seedIds.person.philipp));
   const newId = () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
-  const nutrition = createNutrition({ ...withoutPhotos,
+  const nutrition = createNutrition({ ...withoutNetwork,
     database, clock, newId,
     writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity, foodFavoriteEntity]), clock, newId }),
     persistence: { reevaluateDailyGoals() {} },
