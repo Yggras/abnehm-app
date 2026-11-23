@@ -1,9 +1,10 @@
-import type { AreaKey, LocalDate, Weekday } from '@abnehm/contracts/base';
+import type { AreaKey, LocalDate, MealKey, Weekday } from '@abnehm/contracts/base';
 import type { InviteCode } from '@abnehm/contracts/coupling';
 import type { CommonStage, IslandRole } from '@abnehm/contracts/island';
 import type { PartnerDailyGoalStage, PartnerSummaryEnvelope } from '@abnehm/contracts/partner';
 import type { SharedEventType, WirContribution } from '@abnehm/contracts/wir';
 
+import { mealNames } from '../nutrition/texts';
 import { longDateText, titleOf, weekdayNames } from '../shell/texts';
 import type { DataAge } from './partner-view';
 
@@ -37,6 +38,27 @@ export const partnerTexts = {
   loading: 'Partner lädt …',
   /** Veraltet, aber noch ohne Datenstand, etwa zwischen zwei Pull-Seiten direkt nach dem Koppeln. */
   offline: 'Offline',
+} as const;
+
+/**
+ * „Fotos von heute“ (Spezifikation 5, Abschnitte 2 und 12; #122). Wörtlich aus der Spezifikation: der Titel,
+ * „+N“ und der zugängliche Name „Mahlzeitenfoto von Anna, Mittagessen“. Die Position bei mehreren Fotos, die
+ * Vollbildansicht und der Platzhalter sind Designwerte (nicht belegt), angelehnt an eigene Fotos (#164).
+ */
+export const photoTexts = {
+  title: 'Fotos von heute',
+  /** Zugänglicher Name eines Fotos; bei mehreren mit Position, wie bei eigenen Fotos. */
+  name: (name: string, meal: MealKey, of?: Readonly<{ position: number; count: number }>) =>
+    `Mahlzeitenfoto von ${name}, ${mealNames[meal]}${of === undefined || of.count < 2 ? '' : `, ${of.position} von ${of.count}`}`,
+  more: (count: number) => `+${count}`,
+  moreSpoken: (name: string, count: number) => `${count} ${count === 1 ? 'weiteres Mahlzeitenfoto' : 'weitere Mahlzeitenfotos'} von ${name}`,
+  /** Kopf der Vollbildansicht: Mahlzeit und Position. */
+  position: (position: number, count: number) => `${position} von ${count}`,
+  meal: (meal: MealKey) => mealNames[meal],
+  /** Das Bild kommt nicht an: neutral, ohne Fehlerton (Spezifikation 5, Abschnitt 2). */
+  unavailable: (name: string, meal: MealKey) => `${photoTexts.name(name, meal)}, nicht geladen`,
+  loading: 'Foto lädt',
+  close: 'Schließen',
 } as const;
 
 /**

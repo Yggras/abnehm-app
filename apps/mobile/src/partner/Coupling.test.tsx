@@ -23,6 +23,7 @@ import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncE
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner, encouragementEntity } from '.';
 import { couplingPullIntervalMs } from './CouplingParts';
+import { withoutPartnerPhotos } from './testing/fake-partner-photos';
 
 // Nachweis für #120 an den gerenderten modalen Abläufen `partner.invite` und `partner.redeem` mit dem echten
 // Verzeichnis `src/app`, dem Online-Test-Adapter der Einladungsabläufe (#103) und dem echten Partnerbereich
@@ -89,7 +90,7 @@ async function openPhilipp() {
   };
   const registry = createSyncRegistry([...foundationSyncEntities, encouragementEntity]);
   const engine = createSyncEngine({ database, registry, transport, clock: mockClock, installationId: mockNewId() });
-  const partner = createPartner({
+  const partner = createPartner({ ...withoutPartnerPhotos,
     wirContributions: appWirContributions.source,
     database, clock: mockClock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock: mockClock, newId: mockNewId }), newId: mockNewId,
     observeOnline: () => () => {},

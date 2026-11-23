@@ -3,7 +3,6 @@ import { Hono } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId } from '@abnehm/contracts/base';
-import type { ContractError } from '@abnehm/contracts/errors';
 import { ConfirmPhotoDraft, confirmPhotoDraftKey, MealPhotoRecord, MealPhotoUpsert, OwnMealPhotoRequest } from '@abnehm/contracts/nutrition';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 
@@ -16,6 +15,7 @@ import { CommandRejection, type ServerCommand } from '../sync/commands.ts';
 import { ownedEntity, type ServerSyncEntity } from '../sync/registry.ts';
 import { canonicalAfterWrite, upsertEntity } from '../sync/sync.ts';
 import { mealPhotoImages } from './photo-image.ts';
+import { invalidVariant, servePhoto } from './photo-response.ts';
 import type { PhotoStorage } from './photo-storage.ts';
 
 // Mahlzeitenfotos auf dem Server (Spezifikation 2, Abschnitte 8, 9 und 11; #162, #164). Ein Mahlzeitenfoto
@@ -48,16 +48,6 @@ const ORPHAN_CLEANUP_INTERVAL_MS = 5 * 60_000;
  * kann (Spezifikation 2, Abschnitt 9).
  */
 const ORPHAN_AFTER_MS = 24 * 60 * 60_000;
-
-/** Antwort auf eine unbekannte Fassung; die ID hat der Guard schon geprüft. */
-const invalidRequest = { code: 'invalid_payload', retryable: false } as const satisfies ContractError;
-
-/**
- * Antwort-Header des Bildabrufs: JPEG, nie als etwas anderes interpretiert und nicht cachebar (`no-store`,
- * RFC 9111, Abschnitt 5.2.2.5, https://www.rfc-editor.org/rfc/rfc9111#name-no-store). Die App hält das Bild
- * nur im Speicher (Spezifikation 2, Abschnitt 9).
- */
-const imageHeaders = { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } as const;
 
 export function createMealPhotos({
   database,
@@ -265,13 +255,8 @@ export function createMealPhotos({
      */
     .get('/nutrition/meal-photos/:id/:variant', guard(policies.resource('meal_photo_own', 'lesen'), (c) => ({ id: c.req.param('id') })), async (c) => {
       const request = OwnMealPhotoRequest.safeParse({ photoId: c.req.param('id'), variant: c.req.param('variant') });
-      if (!request.success) return c.json(invalidRequest, 400);
-      const { photoId, variant } = request.data;
-      const imageKey = await imageKeyOf(database.db, photoId);
-      const image = imageKey === null ? null : await storage.readPhoto(imageKey, variant);
-      // Ohne Datei, etwa zwischen Löschen und Retry: kein Bild und nichts Cachebares.
-      if (image === null) return c.body(null, 404, { 'cache-control': 'no-store' });
-      return c.body(new Uint8Array(image), 200, imageHeaders);
+      if (!request.success) return c.json(invalidVariant, 400);
+      return servePhoto(c, { database, storage }, request.data.photoId, request.data.variant);
     });
 
   return { entity, confirmCommand, routes, storageCleanupJob, orphanCleanupJob };

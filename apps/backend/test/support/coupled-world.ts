@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
 
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { Instant, TimeZone, type AreaKey } from '@abnehm/contracts/base';
+import { Instant, TimeZone, type AreaKey, type MealKey } from '@abnehm/contracts/base';
 
 import {
   policies,
@@ -254,18 +254,25 @@ export const insert = {
     });
     return id;
   },
-  /** Geteiltes Mahlzeitenfoto mit einem Ernährungseintrag am Tag `localDate`. */
-  async mealPhoto(world: CoupledWorld, owner: WorldPerson, { shared = true, localDate = worldToday } = {}) {
+  /**
+   * Geteiltes Mahlzeitenfoto mit einem Ernährungseintrag am Tag `localDate`. Ohne Bilddateien: Für den
+   * Bildabruf entsteht ein Foto über die Fotoanalyse (`support/meal-photos.ts`).
+   */
+  async mealPhoto(
+    world: CoupledWorld,
+    owner: WorldPerson,
+    { shared = true, localDate = worldToday, capturedAt = now, meal = 'mittagessen' as MealKey } = {},
+  ) {
     const id = randomUUID();
     const db = world.backend.database.db;
-    await db.insert(mealPhoto).values({ id, personId: owner.personId, imageKey: `foto/${id}`, capturedAt: now, sharedWithPartner: shared, ...sync });
+    await db.insert(mealPhoto).values({ id, personId: owner.personId, imageKey: randomBytes(32).toString('base64url'), capturedAt, sharedWithPartner: shared, ...sync });
     await db.insert(nutritionEntry).values({
       id: randomUUID(),
       personId: owner.personId,
-      consumedAt: now,
+      consumedAt: capturedAt,
       ...day,
       localDate,
-      meal: 'mittagessen',
+      meal,
       captureMethod: 'foto',
       baseAmount: 300_000,
       displayUnit: 'g',

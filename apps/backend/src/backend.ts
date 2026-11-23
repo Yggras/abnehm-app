@@ -27,6 +27,7 @@ import { nutritionEntryEntity } from './nutrition/entry-entity.ts';
 import { foodFavoriteEntity } from './nutrition/food-favorite-entity.ts';
 import type { MealVisionAnalyzer } from './nutrition/meal-vision.ts';
 import { createMealPhotos } from './nutrition/meal-photos.ts';
+import { createPartnerPhotos } from './nutrition/partner-photos.ts';
 import { encouragementEntity, sendEncouragementCommand, writeBackEncouragementPushStatus } from './notifications/encouragement.ts';
 import type { ExpoPushPort } from './notifications/expo-push.ts';
 import { createPushDelivery } from './notifications/push-delivery.ts';
@@ -161,6 +162,8 @@ export function createBackend({
   const mealPhotos = createMealPhotos({ database, clock, storage: photoStorage, entries: nutritionEntries });
   sync.registerEntity(mealPhotos.entity);
   sync.registerCommand(mealPhotos.confirmCommand);
+  // Fotoliste und Bildabruf für den Partner (#165): reine Online-Abläufe, keine Sync-Entität.
+  const partnerPhotos = createPartnerPhotos({ database, clock, storage: photoStorage });
   // Wasser, Sport und Gewicht (Spezifikation 3); jede Push-Annahme invalidiert die Zusammenfassung ihres Bereichs (#181).
   sync.registerEntity(invalidatingPartnerSummaries('wasser', waterEntryEntity));
   sync.registerEntity(invalidatingPartnerSummaries('gewicht', weightEntryEntity));
@@ -200,7 +203,7 @@ export function createBackend({
   jobs.register(mealPhotos.orphanCleanupJob);
   for (const job of pushDelivery.jobs) jobs.register(job);
   return {
-    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts, mealPhotos, pushInstallations }),
+    app: createApp({ database, clock, auth, authorization, sync, invitations, logout, photoDrafts, mealPhotos, partnerPhotos, pushInstallations }),
     clock,
     photoStorage,
     securityLog,

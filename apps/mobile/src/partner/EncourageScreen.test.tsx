@@ -20,6 +20,7 @@ import { createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncE
 import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appPartner, createPartner, encouragementEntity } from '.';
+import { withoutPartnerPhotos } from './testing/fake-partner-photos';
 
 // Nachweis für #123 am gerenderten Sheet `partner.encourage` mit dem echten Verzeichnis `src/app`, dem
 // echten Partnerbereich und einer mit `gekoppelt` geseedeten SQLite-Datei: Philipp hat Anna dort heute
@@ -59,7 +60,7 @@ async function openPhilipp() {
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId() });
   const online = new Set<(online: boolean) => void>();
   const ticks = new Set<() => void>();
-  const partner = createPartner({
+  const partner = createPartner({ ...withoutPartnerPhotos,
     wirContributions: appWirContributions.source,
     database, clock, sync: () => engine.sync(), writer: createSyncWriter({ registry, clock, newId }), newId,
     observeOnline: (listener) => { online.add(listener); return () => online.delete(listener); },
