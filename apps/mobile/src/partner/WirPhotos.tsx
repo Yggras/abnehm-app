@@ -1,13 +1,12 @@
 import type { PartnerPhotoList } from '@abnehm/contracts/partner';
 import { useIsFocused } from 'expo-router';
-import { useState } from 'react';
-import { FlatList, Image, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, FlatList, Image, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { boxShadow, color, Icon, IconButton, pressedEdge, radius, Skeleton, space, Text } from '../design';
 import { useOnlineRead } from '../online';
-import type { Partner } from './partner';
-import type { PartnerPhotoVariant } from './partner-photos';
+import type { PartnerPhotos, PartnerPhotoVariant } from './partner-photos';
 import { photoTexts } from './texts';
 
 // „Fotos von heute“ (Spezifikation 5, Abschnitt 2; #122): die Zeile beim Bereich Ernährung der Partnerübersicht
@@ -23,6 +22,11 @@ type Photo = PartnerPhotoList['photos'][number];
 const THUMB = 56;
 /** Höchstens so viele Vorschauen, danach „+N“ (Spezifikation 5, Abschnitt 2). */
 const MAX_PREVIEWS = 4;
+/**
+ * Abstand, in dem die sichtbare Liste neue Handles holt: vor deren Ablauf nach höchstens 10 Minuten
+ * (Spezifikation 0, Abschnitt 5). Die Minute Vorlauf ist ein Designwert, nicht belegt.
+ */
+const LIST_RENEW_MS = 9 * 60_000;
 
 export type TodayPhotos = Readonly<{
   /** Die Fotos der Liste; leer offline, ohne Ergebnis, bei leerer Liste und bei `forbidden`. */
@@ -34,17 +38,30 @@ export type TodayPhotos = Readonly<{
 /**
  * Die Fotoliste des Partners für „Wir“. Abgefragt wird nur, solange „Wir“ sichtbar und das Gerät online ist;
  * jedes erneute Sichtbar- oder Onlinewerden ist ein neuer Besuch mit eigenem Schlüssel und damit frischer Liste.
+ * Während des Besuchs erneuert sie sich alle 9 Minuten und bei Rückkehr der App in den Vordergrund.
  */
-export function useTodayPhotos(partner: Partner | null, online: boolean): TodayPhotos {
+export function useTodayPhotos(source: PartnerPhotos | null, online: boolean): TodayPhotos {
   const focused = useIsFocused();
-  const active = partner !== null && online && focused;
+  const active = source !== null && online && focused;
   // Jeder Wechsel zu „aktiv“ ist ein neuer Besuch; angepasst noch im Rendern, damit der alte Schlüssel nie abfragt
   // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
   const [visit, setVisit] = useState({ active: false, count: 0 });
   if (visit.active !== active) setVisit({ active, count: active ? visit.count + 1 : visit.count });
-  const { state, retry } = useOnlineRead(['partnerfotos', 'liste', visit.count], () => partner!.photos.list(), {
-    enabled: active && visit.active,
-  });
+  const enabled = active && visit.active;
+  const { state, retry } = useOnlineRead(['partnerfotos', 'liste', visit.count], () => source!.list(), { enabled });
+  // Bleibt „Wir“ sichtbar, erneuert sich die Liste vor Ablauf der Handles und bei Rückkehr in den Vordergrund;
+  // bis die neue Liste da ist, bleibt die alte stehen (TanStack behält `data` beim erneuten Abruf).
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const timer = setInterval(() => void retry(), LIST_RENEW_MS);
+    const appState = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void retry();
+    });
+    return () => {
+      clearInterval(timer);
+      appState.remove();
+    };
+  }, [enabled, retry]);
   return {
     photos: active && state.type === 'ok' ? state.value.photos : [],
     reload: () => (active ? retry() : Promise.resolve()),
@@ -52,7 +69,7 @@ export function useTodayPhotos(partner: Partner | null, online: boolean): TodayP
 }
 
 /** Die Zeile „Fotos von heute“; ohne Fotos entfällt sie still. */
-export function PhotosRow({ partner, name, photos }: { partner: Partner; name: string; photos: readonly Photo[] }) {
+export function PhotosRow({ source, name, photos }: { source: PartnerPhotos; name: string; photos: readonly Photo[] }) {
   const [opened, setOpened] = useState<number | null>(null);
   if (photos.length === 0) return null;
   const previews = photos.slice(0, MAX_PREVIEWS);
@@ -74,7 +91,7 @@ export function PhotosRow({ partner, name, photos }: { partner: Partner; name: s
             onPress={() => setOpened(index)}
             style={({ pressed }) => [styles.thumb, pressed && pressedEdge('card', 'cardPressed')]}
           >
-            <PartnerImage partner={partner} name={name} photo={photo} variant="vorschau" />
+            <PartnerImage source={source} name={name} photo={photo} variant="vorschau" />
           </Pressable>
         ))}
         {more > 0 ? (
@@ -91,7 +108,7 @@ export function PhotosRow({ partner, name, photos }: { partner: Partner; name: s
         ) : null}
       </View>
       {opened === null ? null : (
-        <PhotoViewer partner={partner} name={name} photos={photos} initialIndex={opened} onClose={() => setOpened(null)} />
+        <PhotoViewer source={source} name={name} photos={photos} initialIndex={opened} onClose={() => setOpened(null)} />
       )}
     </View>
   );
@@ -101,10 +118,10 @@ export function PhotosRow({ partner, name, photos }: { partner: Partner; name: s
  * Ein Bild per Handle: lädt als Fläche in Bildform, kommt als Foto oder bei jedem Fehler als neutraler
  * Platzhalter mit Kamera-Symbol, nie im Ton `problem`.
  */
-function PartnerImage({ partner, name, photo, variant, label }: {
-  partner: Partner; name: string; photo: Photo; variant: PartnerPhotoVariant; label?: string;
+function PartnerImage({ source, name, photo, variant, label }: {
+  source: PartnerPhotos; name: string; photo: Photo; variant: PartnerPhotoVariant; label?: string;
 }) {
-  const { state } = useOnlineRead(['partnerfoto', photo.handle, variant], () => partner.photos.image(photo.handle, variant));
+  const { state } = useOnlineRead(['partnerfoto', photo.handle, variant], () => source.image(photo.handle, variant));
   const fill = variant === 'gross' ? styles.large : styles.fill;
   if (state.type === 'ok') {
     return (
@@ -123,6 +140,7 @@ function PartnerImage({ partner, name, photo, variant, label }: {
   if (state.type === 'pending' || state.type === 'idle') {
     return (
       <View accessible={label !== undefined} accessibilityLabel={label === undefined ? undefined : photoTexts.loading} style={fill}>
+        {/* 240 dp beim vergrößerten Foto: Designwert, nicht belegt. */}
         <Skeleton height={variant === 'gross' ? 240 : THUMB} radius="md" />
       </View>
     );
@@ -141,8 +159,8 @@ function PartnerImage({ partner, name, photo, variant, label }: {
 }
 
 /** Vollbildansicht zum Wischen: je Foto eine Seite in voller Breite, oben Mahlzeit, Position und „Schließen“. */
-function PhotoViewer({ partner, name, photos, initialIndex, onClose }: {
-  partner: Partner; name: string; photos: readonly Photo[]; initialIndex: number; onClose: () => void;
+function PhotoViewer({ source, name, photos, initialIndex, onClose }: {
+  source: PartnerPhotos; name: string; photos: readonly Photo[]; initialIndex: number; onClose: () => void;
 }) {
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(initialIndex);
@@ -178,7 +196,7 @@ function PhotoViewer({ partner, name, photos, initialIndex, onClose }: {
             renderItem={({ item, index: position }) => (
               <View style={[styles.page, { width }]}>
                 <PartnerImage
-                  partner={partner}
+                  source={source}
                   name={name}
                   photo={item}
                   variant="gross"

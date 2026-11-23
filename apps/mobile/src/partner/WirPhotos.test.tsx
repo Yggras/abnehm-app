@@ -7,7 +7,7 @@ import { act, screen, userEvent, waitFor, within } from '@testing-library/react-
 import { router } from 'expo-router';
 import { renderRouter } from 'expo-router/testing-library';
 import type * as React from 'react';
-import type { RefreshControlProps } from 'react-native';
+import { AppState, type AppStateStatus, type RefreshControlProps } from 'react-native';
 
 import { createTestClock } from '@abnehm/clock/testing';
 import { EntityId, Instant, TimeZone, type MealKey, type SyncCursor } from '@abnehm/contracts/base';
@@ -103,7 +103,7 @@ async function settle() {
   for (let round = 0; round < 10; round++) {
     await act(async () => {
       await Promise.resolve();
-      jest.runOnlyPendingTimers();
+      jest.advanceTimersByTime(0);
     });
   }
 }
@@ -269,6 +269,44 @@ describe('„Fotos von heute“ nur bei sichtbarem „Wir“', () => {
     await act(() => router.navigate('/partner'));
     await photosRow();
     expect(philipp.listCalls()).toBe(2);
+  });
+});
+
+describe('„Fotos von heute“ bleibt frisch, solange „Wir“ sichtbar ist', () => {
+  it('erneuert die Liste vor Ablauf der Handles (10 Minuten); die Zeile bleibt dabei stehen', async () => {
+    const philipp = await openPhilipp();
+    await renderRouter(appDir, { initialUrl: '/partner' });
+    await photosRow();
+    await settle();
+    await act(async () => { jest.advanceTimersByTime(8 * 60_000); });
+    await settle();
+    expect(philipp.listCalls()).toBe(1);
+
+    await act(async () => { jest.advanceTimersByTime(60_000); });
+    expect(screen.getByTestId('wir-fotos')).toBeOnTheScreen();
+    await settle();
+
+    expect(philipp.listCalls()).toBe(2);
+    expect(philipp.imageCalls()).toContainEqual(['bild', 'handle_0002_00000000', 'vorschau']);
+    expect(screen.getByTestId('wir-fotos')).toBeOnTheScreen();
+  });
+
+  it('erneuert die Liste bei Rückkehr in den Vordergrund', async () => {
+    const philipp = await openPhilipp();
+    await renderRouter(appDir, { initialUrl: '/partner' });
+    await photosRow();
+    await settle();
+    expect(philipp.listCalls()).toBe(1);
+
+    const listeners = jest.mocked(AppState.addEventListener).mock.calls
+      .filter(([type]) => type === 'change')
+      .map(([, listener]) => listener as (state: AppStateStatus) => void);
+    await act(async () => { for (const listener of listeners) listener('background'); });
+    await act(async () => { for (const listener of listeners) listener('active'); });
+    await settle();
+
+    expect(philipp.listCalls()).toBe(2);
+    expect(screen.getByTestId('wir-fotos')).toBeOnTheScreen();
   });
 });
 

@@ -8,6 +8,7 @@ import { areaIcons } from '../shell/area-icons';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner, useWirShared } from './app-partner';
 import type { Partner } from './partner';
+import type { PartnerPhotos } from './partner-photos';
 import { PartnerAvatar } from './PartnerAvatar';
 import { PartnerStage } from './PartnerStage';
 import { partnerActions, type CoupledPartner, type WirPartner } from './partner-view';
@@ -27,7 +28,7 @@ export function WirScreen() {
   const partner = usePartner();
   const state = useWirPartner(partner);
   const shared = useWirShared(partner);
-  const photos = useTodayPhotos(partner, state.type === 'coupled' && state.online);
+  const photos = useTodayPhotos(partner?.photos ?? null, state.type === 'coupled' && state.online);
   // Pull-to-Refresh startet den Sync und lädt „Fotos von heute“ neu (Spezifikation 5, Abschnitt 2).
   const refresh = partner === null ? undefined : () => Promise.all([partner.refresh(), photos.reload()]);
   return (
@@ -49,7 +50,7 @@ function WirContent({ partner, state, shared, photos }: { partner: Partner | nul
     case 'solo':
       return <Solo />;
     case 'coupled':
-      return <Coupled partner={state} shared={shared} photos={partner === null ? null : { partner, photos: photos.photos }} />;
+      return <Coupled partner={state} shared={shared} photos={partner === null ? null : { source: partner.photos, photos: photos.photos }} />;
   }
 }
 
@@ -98,7 +99,7 @@ function Coupled({ partner, shared, photos }: { partner: Readonly<{ type: 'coupl
 }
 
 /** „Fotos von heute“ samt dem Partnerbereich, der die Bilder abruft; `null` ohne geöffnetes Konto. */
-type OverviewPhotos = Readonly<{ partner: Partner; photos: TodayPhotos['photos'] }> | null;
+type OverviewPhotos = Readonly<{ source: PartnerPhotos; photos: TodayPhotos['photos'] }> | null;
 
 /**
  * Partnerübersicht: Avatar, Name, grober Tageszielstand und je freigegebenem Bereich eine Zeile. „Fotos von heute“
@@ -112,7 +113,7 @@ function Overview({ partner, stand, photos }: { partner: CoupledPartner; stand: 
   const nutritionIndex = partner.summaries.findIndex((summary) => summary.type === 'ernaehrung');
   /** Die Fotozeile hinter der Zeile `index`; `-1` steht vor allen Bereichen. */
   const photosAt = (index: number) =>
-    photos !== null && index === nutritionIndex ? <PhotosRow partner={photos.partner} name={name} photos={photos.photos} /> : null;
+    photos !== null && index === nutritionIndex ? <PhotosRow source={photos.source} name={name} photos={photos.photos} /> : null;
   return (
     <Card>
       <View testID="wir-partneruebersicht" style={styles.group}>

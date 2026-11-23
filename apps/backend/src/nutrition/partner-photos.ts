@@ -3,13 +3,13 @@ import { Hono, type Context } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, MealKey, TimeZone } from '@abnehm/contracts/base';
-import type { ContractError } from '@abnehm/contracts/errors';
 import { MealPhotoVariant } from '@abnehm/contracts/nutrition';
 
 import { guard, partnerResponse, policies } from '../authorization/authorization.ts';
 import type { Database } from '../database.ts';
 import { mealPhoto, nutritionEntry, person } from '../db/schema/index.ts';
 import { createPartnerPhotoHandles, type PartnerPhotoHandles } from './partner-photo-handles.ts';
+import { invalidVariant, servePhoto } from './photo-response.ts';
 import type { PhotoStorage } from './photo-storage.ts';
 
 // Geteilte Mahlzeitenfotos für den Partner (Spezifikation 2, Abschnitt 9; #165): die beiden reinen
@@ -22,12 +22,6 @@ import type { PhotoStorage } from './photo-storage.ts';
 
 /** Höchstens so viele Fotos je Tag (Spezifikation 0, Abschnitt 5; Designwert, nicht belegt). */
 export const PARTNER_PHOTO_LIST_MAX = 12;
-
-/** Antwort auf eine unbekannte Fassung; das Handle hat der Guard schon geprüft. */
-const invalidRequest = { code: 'invalid_payload', retryable: false } as const satisfies ContractError;
-
-/** Wie beim Bildabruf eigener Fotos (`meal-photos.ts`): JPEG, nie umgedeutet und nicht cachebar. */
-const imageHeaders = { 'content-type': 'image/jpeg', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } as const;
 
 /** Steht für ein Handle, das zu keinem Foto führt; die Regel findet damit nichts und verweigert. */
 const NO_PHOTO = 'ungueltiges-handle';
@@ -104,13 +98,10 @@ export function createPartnerPhotos({
       guard(policies.resource('meal_photo', 'lesen'), locatePhoto),
       async (c) => {
         const variant = MealPhotoVariant.safeParse(c.req.param('variant'));
-        if (!variant.success) return c.json(invalidRequest, 400);
+        if (!variant.success) return c.json(invalidVariant, 400);
         const photoId = resolved.get(c.req.raw);
-        const [photo] = photoId === undefined ? [] : await database.db.select({ imageKey: mealPhoto.imageKey }).from(mealPhoto).where(eq(mealPhoto.id, photoId));
-        const image = photo === undefined ? null : await storage.readPhoto(photo.imageKey, variant.data);
-        // Ohne Datei, etwa zwischen Löschen und Aufräumen: kein Bild und nichts Cachebares.
-        if (image === null) return c.body(null, 404, { 'cache-control': 'no-store' });
-        return c.body(new Uint8Array(image), 200, imageHeaders);
+        if (photoId === undefined) return c.body(null, 404, { 'cache-control': 'no-store' });
+        return servePhoto(c, { database, storage }, photoId, variant.data);
       },
     );
 

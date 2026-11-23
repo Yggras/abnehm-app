@@ -1,9 +1,9 @@
 import type { AppType } from '@abnehm/backend/rpc';
 import { hc } from 'hono/client';
 
-import { ContractError } from '@abnehm/contracts/errors';
 import { PartnerPhotoList, type PartnerPhotoRequest } from '@abnehm/contracts/partner';
 
+import { fetchOnline, type OnlineResponse } from '../online/fetch-online';
 import { fetchMemoryImage, type MemoryImage } from '../online/memory-image';
 import type { OnlineResult } from '../online/online-result';
 
@@ -24,9 +24,6 @@ export type PartnerPhotos = Readonly<{
   image(handle: string, variant: PartnerPhotoVariant): Promise<OnlineResult<MemoryImage, 'forbidden'>>;
 }>;
 
-/** Längste Wartezeit auf die Fotoliste (Designwert, nicht belegt), wie beim Bildabruf. */
-const TIMEOUT_MS = 10_000;
-
 /**
  * `fetch` ist das des Auth-Moduls (`AppAuth.fetch`): Es hängt die Sitzung an und sperrt bei `401`. Ohne
  * Netz oder bei einem Serverfehler ist das Ergebnis `offline`.
@@ -34,33 +31,15 @@ const TIMEOUT_MS = 10_000;
 export function createHttpPartnerPhotos({ baseUrl, fetch }: { baseUrl: string; fetch: typeof globalThis.fetch }): PartnerPhotos {
   const photos = hc<AppType>(baseUrl, { fetch }).v1.nutrition['partner-photos'];
   return {
-    async list() {
-      const abort = new AbortController();
-      const timeout = setTimeout(() => abort.abort(), TIMEOUT_MS);
-      try {
+    list: () =>
+      fetchOnline<OnlineResponse, PartnerPhotoList>(
         // Nur der Erfolg ist im RPC-Typ beschrieben; Guard und Auth antworten auch mit 401 und 403.
-        let response: Pick<Response, 'status' | 'json'>;
-        try {
-          response = await photos.$get(undefined, { init: { signal: abort.signal } });
-        } catch {
-          return { type: 'offline' };
-        }
-        if (response.status === 401) return { type: 'unauthorized' };
-        if (response.status >= 500) return { type: 'offline' };
-        const body: unknown = await response.json().catch(() => undefined);
-        if (response.status === 200) {
-          const list = PartnerPhotoList.safeParse(body);
+        (signal): Promise<OnlineResponse> => photos.$get(undefined, { init: { signal } }),
+        async (response) => {
+          const list = PartnerPhotoList.safeParse(await response.json().catch(() => undefined));
           return list.success ? { type: 'ok', value: list.data } : { type: 'failed' };
-        }
-        const error = ContractError.safeParse(body);
-        return error.success && error.data.code === 'forbidden' ? { type: 'rejected', code: 'forbidden' } : { type: 'failed' };
-      } catch {
-        // Abgebrochen oder unterwegs abgerissen.
-        return { type: 'offline' };
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
+        },
+      ),
     image: (handle, variant) => fetchMemoryImage((signal) => photos[':handle'][':variant'].$get({ param: { handle, variant } }, { init: { signal } })),
   };
 }

@@ -1,5 +1,4 @@
-import { ContractError } from '@abnehm/contracts/errors';
-
+import { fetchOnline, type OnlineResponse } from './fetch-online';
 import type { OnlineResult } from './online-result';
 
 // Bildabruf nur in den Arbeitsspeicher (Spezifikation 0, Abschnitt 5; Spezifikation 2, Abschnitt 9): eigene
@@ -20,9 +19,6 @@ import type { OnlineResult } from './online-result';
 /** Ein abgerufenes Bild, nur im Speicher. */
 export type MemoryImage = Readonly<{ uri: string }>;
 
-/** Längste Wartezeit auf ein Bild (Designwert, nicht belegt), wie bei den Einladungsabläufen. */
-const TIMEOUT_MS = 10_000;
-
 /** Base64 eines Bildes in Stücken, damit `String.fromCharCode` nicht an der Argumentzahl scheitert. */
 function base64Of(bytes: Uint8Array): string {
   const chunk = 0x8000;
@@ -31,34 +27,16 @@ function base64Of(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-type ImageResponse = Pick<Response, 'status' | 'headers' | 'arrayBuffer' | 'json'>;
+type ImageResponse = OnlineResponse & Pick<Response, 'headers' | 'arrayBuffer'>;
 
 /**
- * Ruft ein JPEG über `request` ab, etwa einen Hono-RPC-Aufruf mit dem `fetch` des Auth-Moduls. Ohne Netz,
- * nach Zeitüberschreitung oder bei einem Serverfehler ist das Ergebnis `offline`, bei `403 forbidden`
- * `rejected`, bei `401` `unauthorized`.
+ * Ruft ein JPEG über `request` ab (Zeitlimit und Fehlerfälle: `fetchOnline`). Eine `200`-Antwort ohne JPEG ist
+ * `failed`.
  */
-export async function fetchMemoryImage(request: (signal: AbortSignal) => Promise<ImageResponse>): Promise<OnlineResult<MemoryImage, 'forbidden'>> {
-  const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort(), TIMEOUT_MS);
-  try {
-    let response: ImageResponse;
-    try {
-      response = await request(abort.signal);
-    } catch {
-      return { type: 'offline' };
-    }
-    if (response.status === 200 && response.headers.get('content-type') === 'image/jpeg') {
-      return { type: 'ok', value: { uri: `data:image/jpeg;base64,${base64Of(new Uint8Array(await response.arrayBuffer()))}` } };
-    }
-    if (response.status === 401) return { type: 'unauthorized' };
-    if (response.status >= 500) return { type: 'offline' };
-    const error = ContractError.safeParse(await response.json().catch(() => undefined));
-    return error.success && error.data.code === 'forbidden' ? { type: 'rejected', code: 'forbidden' } : { type: 'failed' };
-  } catch {
-    // Abgebrochen oder unterwegs abgerissen.
-    return { type: 'offline' };
-  } finally {
-    clearTimeout(timeout);
-  }
+export function fetchMemoryImage(request: (signal: AbortSignal) => Promise<ImageResponse>): Promise<OnlineResult<MemoryImage, 'forbidden'>> {
+  return fetchOnline<ImageResponse, MemoryImage>(request, async (response) =>
+    response.headers.get('content-type') === 'image/jpeg'
+      ? { type: 'ok', value: { uri: `data:image/jpeg;base64,${base64Of(new Uint8Array(await response.arrayBuffer()))}` } }
+      : { type: 'failed' },
+  );
 }

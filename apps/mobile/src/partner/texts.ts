@@ -56,7 +56,7 @@ export const photoTexts = {
   position: (position: number, count: number) => `${position} von ${count}`,
   meal: (meal: MealKey) => mealNames[meal],
   /** Das Bild kommt nicht an: neutral, ohne Fehlerton (Spezifikation 5, Abschnitt 2). */
-  unavailable: (name: string, meal: MealKey) => `Mahlzeitenfoto von ${name}, ${mealNames[meal]}, nicht geladen`,
+  unavailable: (name: string, meal: MealKey) => `${photoTexts.name(name, meal)}, nicht geladen`,
   loading: 'Foto lädt',
   close: 'Schließen',
 } as const;
