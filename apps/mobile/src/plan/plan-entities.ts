@@ -1,9 +1,11 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import {
+  AcceptBudgetSuggestion,
   BudgetSuggestionRecord,
   BudgetSuggestionUpsert,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
+  goalVersionId,
   GoalVersionRecord,
   MaterializeDailyGoals,
   planVersionOfKey,
@@ -118,6 +120,27 @@ export const planCommands: readonly LocalCommand[] = [
     reconcileRejected(tx, operation) {
       const version = planVersionOfKey('wochenplan', operation.businessKey);
       if (version !== null) removeUnconfirmedWeeklyPlan(tx, version.id);
+    },
+  },
+  {
+    type: 'acceptBudgetSuggestion',
+    payload: AcceptBudgetSuggestion,
+    referencePaths: [],
+    apply: onlyThePlanModule('acceptBudgetSuggestion'),
+    /**
+     * Ohne Annahme auf dem Server verschwindet die unbestätigte Zielversion ab morgen (#151). Nennt die
+     * Ablehnung den Vorschlag, übernimmt die Engine danach dessen kanonischen Stand, etwa `abgelehnt` von einem
+     * anderen Gerät. Sonst hat der Server den Status nicht geändert: Der Vorschlag ist lokal wieder offen.
+     */
+    reconcileRejected(tx, operation, { canonical }) {
+      const { suggestionId, goalVersion } = AcceptBudgetSuggestion.parse(operation.payload);
+      const suggestion = readBudgetSuggestion(tx, suggestionId);
+      if (suggestion === undefined) return;
+      removeUnconfirmedGoalVersion(tx, goalVersionId(suggestion.record.personId, goalVersion.validFrom));
+      const namesSuggestion = canonical.type !== 'absent' && canonical.entityType === budgetSuggestionEntity.entityType && canonical.entityId === suggestionId;
+      if (namesSuggestion || suggestion.record.status !== 'angenommen') return;
+      const { personId, createdAt: _createdAt, updatedAt, ...values } = suggestion.record;
+      writeBudgetSuggestion(tx, suggestionId, personId, BudgetSuggestionUpsert.parse({ ...values, status: 'offen' }), updatedAt);
     },
   },
   {

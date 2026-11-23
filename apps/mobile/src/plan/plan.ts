@@ -4,6 +4,8 @@ import { planChangeDays } from '@abnehm/contracts/daily-goals';
 import type { ContractError } from '@abnehm/contracts/errors';
 import { calculateGoals, type GoalCalculatorResult, type GoalInputError } from '@abnehm/contracts/goal-calculator';
 import {
+  AcceptBudgetSuggestion,
+  acceptBudgetSuggestionKey,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   goalVersionId,
@@ -19,11 +21,11 @@ import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db
 import { readOwnPerson, requireOwnPerson } from '../local-db/person-header';
 import type { Refresh, Source } from '../shell/followed-source';
 import { updateOwnPerson, type SyncWriter } from '../sync';
-import { createBudgetSuggestions, type BudgetSuggestionCheck, type BudgetSuggestionReaders } from './budget-suggestion';
+import { createBudgetSuggestions, type BudgetSuggestionCheck, type BudgetSuggestionReaders, type BudgetSuggestionView } from './budget-suggestion';
 import { createDailyGoalMaterialization } from './daily-goals';
 import { calculatorInput, keptSuggestedBudget, previewGoals, type GoalDraft } from './goal-draft';
 import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
-import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
+import { budgetSuggestionEntity, goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { hasGoalVersion, readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
 import { createPlanToday, noBudgetNotices, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
 import { freeWeeklyPlan, standardWeeklyPlan, type WeekChoice, type WeekChoiceError, type WeeklyPlanDayError, type WeeklyPlanInput } from './weekly-plan';
@@ -63,6 +65,12 @@ export type GoalChangeResult =
   | Readonly<{ type: 'unveraendert'; validFrom: LocalDate }>
   /** Der Entwurf verletzt eine Eingabegrenze; geschrieben wurde nichts. */
   | Readonly<{ type: 'ungueltig'; errors: GoalInputError[] }>;
+
+export type BudgetSuggestionDecision =
+  | Readonly<{ type: 'angenommen'; validFrom: LocalDate; goalVersionId: EntityId }>
+  | Readonly<{ type: 'abgelehnt' }>
+  /** Der Vorschlag ist schon entschieden, überholt oder unbekannt; es gibt nichts mehr zu entscheiden. */
+  | Readonly<{ type: 'nicht_offen' }>;
 
 export type WeeklyPlanChangeResult =
   | Readonly<{ type: 'gespeichert'; validFrom: LocalDate; weeklyPlanVersionId: EntityId }>
@@ -153,6 +161,17 @@ export type Plan = Readonly<{
    * samt Upsert in einer lokalen Transaktion; ohne eigene Person tut es nichts.
    */
   checkBudgetSuggestion(readers: BudgetSuggestionReaders): Promise<BudgetSuggestionCheck>;
+  /** Lesemodell des Sheets `plan.budget_suggestion` (Spezifikation 1, Abschnitt 7; #151). */
+  budgetSuggestion(suggestionId: EntityId): BudgetSuggestionView;
+  /**
+   * Budgetvorschlag entscheiden (Spezifikation 1, Abschnitt 7; #151), nur für einen offenen Vorschlag.
+   * „Annehmen“ legt in einer lokalen Transaktion eine Zielversion ab morgen an: die ab morgen ohnehin
+   * gültige Fassung mit dem vorgeschlagenen Budget und der Herkunft `budgetvorschlag`. Den Vorschlag setzt
+   * es auf `angenommen`, sendet beides als Fachbefehl `acceptBudgetSuggestion` und meldet die Tage von
+   * morgen bis heute + 13 mit `planaenderung`. Passt der Vorschlag nicht zu dieser Fassung, etwa weil ab
+   * morgen der Haltemodus gilt, ist er überholt. „Ablehnen“ setzt `abgelehnt` als Upsert.
+   */
+  decideBudgetSuggestion(suggestionId: EntityId, decision: 'annehmen' | 'ablehnen'): BudgetSuggestionDecision;
   /**
    * „Heute“-Beiträge `momo.daily_goals` und `nutrition.budget` (Spezifikation 1, Abschnitt 6). Sie werten
    * mit derselben Registry aus wie der Persistenzdienst der Tagesziele.
@@ -290,6 +309,34 @@ export function createPlan(dependencies: PlanDependencies): Plan {
 
     checkBudgetSuggestion: (readers) => budgetSuggestions.check(readers),
 
+    budgetSuggestion(suggestionId) {
+      const days = readClock();
+      return database.read((tx) => budgetSuggestions.view(tx, EntityId.parse(requireOwnPerson(tx).id), suggestionId, days));
+    },
+
+    decideBudgetSuggestion(suggestionId, decision) {
+      const { today, tomorrow, at } = readClock();
+      return database.transaction((tx): BudgetSuggestionDecision => {
+        const personId = EntityId.parse(requireOwnPerson(tx).id);
+        const open = budgetSuggestions.open(tx, personId, suggestionId);
+        if (open === undefined) return { type: 'nicht_offen' };
+        if (decision === 'ablehnen') {
+          budgetSuggestions.settle(tx, open, 'abgelehnt', at);
+          return { type: 'abgelehnt' };
+        }
+        const goal = acceptedGoalVersion(readGoalVersionOn(tx, personId, tomorrow), open.record.suggestedBudgetMilliKcal, tomorrow);
+        if (goal === null) {
+          budgetSuggestions.settle(tx, open, 'ueberholt', at);
+          return { type: 'nicht_offen' };
+        }
+        // Erst entscheiden, dann die Fassung schreiben: Sie überholt so nur andere offene Vorschläge.
+        budgetSuggestions.settle(tx, open, 'angenommen', at);
+        saveGoalVersion(tx, personId, goal, at, open.id);
+        persistence.reevaluateDailyGoals(tx, personId, planChangeDays(tomorrow, today), 'planaenderung');
+        return { type: 'angenommen', validFrom: tomorrow, goalVersionId: goalVersionId(personId, tomorrow) };
+      });
+    },
+
     today: (evaluator) => createPlanToday({ database, clock, dailyGoals: evaluator }, { ...noBudgetNotices, budgetSuggestion: budgetSuggestions.notice }),
   };
 
@@ -326,21 +373,39 @@ export function createPlan(dependencies: PlanDependencies): Plan {
    * Legt die Zielversion an oder ersetzt die desselben Tags. Gleicht sie der an ihrem `validFrom` ohnehin
    * gültigen Fassung, entsteht nichts, und das Ergebnis ist `false`. Eine neue Fassung setzt einen offenen
    * Budgetvorschlag in derselben Transaktion auf `ueberholt` (Spezifikation 1, Abschnitt 7).
+   *
+   * Mit `acceptedSuggestionId` stammt die Fassung aus dem Annehmen dieses Vorschlags und reist als
+   * `acceptBudgetSuggestion` statt als `createGoalVersion`; der Vorschlag ist dann schon entschieden.
    */
-  function saveGoalVersion(tx: TransactionContext, personId: EntityId, goal: CreateGoalVersion, at: Instant): boolean {
+  function saveGoalVersion(tx: TransactionContext, personId: EntityId, goal: CreateGoalVersion, at: Instant, acceptedSuggestionId?: EntityId): boolean {
     const inForce = readGoalVersionOn(tx, personId, goal.validFrom);
-    if (inForce !== undefined && sameValues({ ...inForce.values, validFrom: goal.validFrom }, goal)) return false;
+    if (acceptedSuggestionId === undefined && inForce !== undefined && sameValues({ ...inForce.values, validFrom: goal.validFrom }, goal)) return false;
     const id = goalVersionId(personId, goal.validFrom);
     writeGoalVersion(tx, id, personId, goal, at);
     budgetSuggestions.supersede(tx, personId, at);
-    writer.command(tx, {
-      type: 'createGoalVersion',
-      businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),
-      payload: goal,
-      knownServerVersion: inForce?.values.validFrom === goal.validFrom ? inForce.serverVersion : null,
-      affectedRefs: [{ entityType: goalVersionEntity.entityType, entityId: id }],
-      referencePaths: [],
-    });
+    const goalRef = { entityType: goalVersionEntity.entityType, entityId: id };
+    writer.command(
+      tx,
+      acceptedSuggestionId === undefined
+        ? {
+            type: 'createGoalVersion',
+            businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),
+            payload: goal,
+            knownServerVersion: inForce?.values.validFrom === goal.validFrom ? inForce.serverVersion : null,
+            affectedRefs: [goalRef],
+            referencePaths: [],
+          }
+        : {
+            // Ein Schlüssel je Vorschlag und keine Serverversion: Nimmt ein zweites Gerät denselben Vorschlag
+            // gleich an, ist das für den Server dieselbe Annahme.
+            type: 'acceptBudgetSuggestion',
+            businessKey: acceptBudgetSuggestionKey(acceptedSuggestionId),
+            payload: AcceptBudgetSuggestion.parse({ suggestionId: acceptedSuggestionId, goalVersion: goal }),
+            knownServerVersion: null,
+            affectedRefs: [goalRef, { entityType: budgetSuggestionEntity.entityType, entityId: acceptedSuggestionId }],
+            referencePaths: [],
+          },
+    );
     return true;
   }
 
@@ -360,6 +425,23 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     });
     return true;
   }
+}
+
+/**
+ * Die Zielversion aus einem angenommenen Vorschlag: die ab `validFrom` ohnehin gültige Fassung mit dem
+ * vorgeschlagenen Budget und der Herkunft `budgetvorschlag`, alle übrigen Werte übernommen (Spezifikation 1,
+ * Abschnitt 7). `null`, wenn der Vorschlag nicht mehr dazu passt: im Haltemodus, für den es keinen Vorschlag
+ * gibt, oder mit einem Budget außerhalb von Untergrenze und Gesamtumsatz dieser Fassung.
+ */
+function acceptedGoalVersion(inForce: StoredGoalVersion | undefined, suggestedBudgetMilliKcal: number, validFrom: LocalDate): CreateGoalVersion | null {
+  if (inForce === undefined || inForce.values.maintenanceReason !== null) return null;
+  const goal = AcceptBudgetSuggestion.shape.goalVersion.safeParse({
+    ...inForce.values,
+    validFrom,
+    calorieBudgetMilliKcal: suggestedBudgetMilliKcal,
+    budgetSource: 'budgetvorschlag',
+  });
+  return goal.success ? goal.data : null;
 }
 
 /** Ob an diesem Tag schon Zielversion und Wochenplanversion der Person gelten. */

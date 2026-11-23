@@ -6,16 +6,23 @@ import {
   kcalOfMilliKcal,
   minimumMealCategoriesPerDay,
   type BudgetSuggestionDirection,
+  type BudgetSuggestionStatus,
 } from '@abnehm/contracts/plan';
-import type { IntakeReader, WeightTrendReader } from '@abnehm/contracts/ports';
+import type { IntakeReader, Pace, WeightTrendReader } from '@abnehm/contracts/ports';
 
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 import { readOwnPerson } from '../local-db/person-header';
 import type { SyncWriter } from '../sync';
 import { budgetSuggestionEntity } from './plan-entities';
-import { readBudgetSuggestion, readLastDecisionAt, readOpenBudgetSuggestion, writeBudgetSuggestion } from './budget-suggestion-repository';
-import { readGoalVersionsUntil, type GoalVersionValues } from './plan-repository';
+import {
+  readBudgetSuggestion,
+  readLastDecisionAt,
+  readOpenBudgetSuggestion,
+  writeBudgetSuggestion,
+  type StoredBudgetSuggestion,
+} from './budget-suggestion-repository';
+import { readGoalVersionOn, readGoalVersionsUntil, type GoalVersionValues } from './plan-repository';
 import type { BudgetNoticeReader } from './today-contributions';
 
 // Budgetvorschlag (Spezifikation 1, Abschnitt 7; Regel nach Vorentscheidung 2 in #57): Nach mindestens drei
@@ -105,10 +112,36 @@ type Decision =
   | Readonly<{ type: 'vorschlag'; direction: BudgetSuggestionDirection; suggestedBudgetMilliKcal: number }>
   | Readonly<{ type: 'kein_vorschlag'; reason: NoBudgetSuggestionReason }>;
 
+/**
+ * Lesemodell des Sheets `plan.budget_suggestion` (Spezifikation 1, Abschnitt 7; #151). Aktionen gibt es nur
+ * für einen offenen Vorschlag; ein entschiedener, überholter oder unbekannter öffnet kein Sheet mit Aktionen.
+ */
+export type BudgetSuggestionView =
+  | Readonly<{
+      type: 'offen';
+      direction: BudgetSuggestionDirection;
+      previousBudgetKcal: number;
+      suggestedBudgetKcal: number;
+      /** Das heute gewählte Tempo, an dem die Prüfung den Trend gemessen hat; im Haltemodus `null`. */
+      pace: Pace | null;
+      /** Ab diesem Tag gilt das vorgeschlagene Budget nach dem Annehmen: morgen. */
+      validFrom: LocalDate;
+    }>
+  | Readonly<{ type: 'entschieden'; status: Exclude<BudgetSuggestionStatus, 'offen'> }>
+  | Readonly<{ type: 'unbekannt' }>;
+
 export type BudgetSuggestions = Readonly<{
   check(readers: BudgetSuggestionReaders): Promise<BudgetSuggestionCheck>;
   /** Setzt einen offenen Vorschlag in der Transaktion einer neuen Zielversion auf `ueberholt`. */
   supersede(tx: TransactionContext, personId: EntityId, at: Instant): void;
+  /** Der Vorschlag mit dieser ID, sofern er der Person gehört und offen ist. */
+  open(tx: ReadContext, personId: EntityId, id: EntityId): StoredBudgetSuggestion | undefined;
+  /**
+   * Entscheidet einen offenen Vorschlag. `abgelehnt` und `ueberholt` reisen als Upsert; `angenommen` schreibt
+   * nur die Zeile, weil der Fachbefehl `acceptBudgetSuggestion` den Status zum Server trägt.
+   */
+  settle(tx: TransactionContext, open: StoredBudgetSuggestion, status: Exclude<BudgetSuggestionStatus, 'offen'>, at: Instant): void;
+  view(tx: ReadContext, personId: EntityId, id: EntityId, days: Readonly<{ today: LocalDate; tomorrow: LocalDate }>): BudgetSuggestionView;
   /** Hinweis `budget_suggestion` der Ernährungskarte, solange ein Vorschlag offen ist. */
   notice: BudgetNoticeReader<'budget_suggestion'>;
 }>;
@@ -168,10 +201,29 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
 
     supersede(tx, personId, at) {
       const open = readOpenBudgetSuggestion(tx, personId);
-      if (open === undefined) return;
-      const { personId: _owner, createdAt: _createdAt, updatedAt: _updatedAt, ...values } = open.record;
-      const payload = BudgetSuggestionUpsert.parse({ ...values, status: 'ueberholt' });
-      save(tx, { id: open.id, personId, payload, at, knownServerVersion: open.serverVersion });
+      if (open !== undefined) settle(tx, open, 'ueberholt', at);
+    },
+
+    open(tx, personId, id) {
+      const stored = readBudgetSuggestion(tx, id);
+      return stored?.record.personId === personId && stored.record.status === 'offen' ? stored : undefined;
+    },
+
+    settle,
+
+    view(tx, personId, id, { today, tomorrow }) {
+      const stored = readBudgetSuggestion(tx, id);
+      if (stored === undefined || stored.record.personId !== personId) return { type: 'unbekannt' };
+      const { status, direction, previousBudgetMilliKcal, suggestedBudgetMilliKcal } = stored.record;
+      if (status !== 'offen') return { type: 'entschieden', status };
+      return {
+        type: 'offen',
+        direction,
+        previousBudgetKcal: kcalOfMilliKcal(previousBudgetMilliKcal),
+        suggestedBudgetKcal: kcalOfMilliKcal(suggestedBudgetMilliKcal),
+        pace: readGoalVersionOn(tx, personId, today)?.values.pace ?? null,
+        validFrom: tomorrow,
+      };
     },
 
     notice(tx, personId) {
@@ -185,6 +237,13 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
       };
     },
   };
+
+  function settle(tx: TransactionContext, open: StoredBudgetSuggestion, status: Exclude<BudgetSuggestionStatus, 'offen'>, at: Instant): void {
+    const { personId, createdAt: _createdAt, updatedAt: _updatedAt, ...values } = open.record;
+    const payload = BudgetSuggestionUpsert.parse({ ...values, status });
+    if (status === 'angenommen') writeBudgetSuggestion(tx, open.id, personId, payload, at);
+    else save(tx, { id: open.id, personId, payload, at, knownServerVersion: open.serverVersion });
+  }
 
   /** Schreibt den Vorschlag und in derselben Transaktion seinen Upsert in die Outbox. */
   function save(
