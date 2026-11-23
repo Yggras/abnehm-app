@@ -48,6 +48,8 @@ export const unknownFakeBarcode = '4000000000037';
 
 export type FakeFoodProductSource = FoodProductSource &
   Readonly<{
+    /** Kennzeichnet den Fake auch im minifizierten Bundle (Release-Test). */
+    marker: typeof fakeFoodProductSourceMarker;
     setMode(mode: FakeProductMode): void;
     mode(): FakeProductMode;
     /** Abgefragte Barcodes in Reihenfolge. */
@@ -64,6 +66,7 @@ export function createFakeFoodProductSource({
   let mode = initial;
   const calls: string[] = [];
   return {
+    marker: fakeFoodProductSourceMarker,
     calls,
     mode: () => mode,
     setMode(next) {

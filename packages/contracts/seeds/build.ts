@@ -117,10 +117,18 @@ export function buildSeedState({
  * nicht importieren, deshalb belegt ein Test der App, dass er den Wert liest.
  */
 export function withDeviceState(state: SeedState, installation: SeedKey, rows: readonly SeedRow[]): SeedState {
+  return withLocalRows(state, installation, 'device_state', rows);
+}
+
+/**
+ * Hängt Zeilen einer nur lokalen, nie synchronisierten Tabelle an eine Installation an, etwa den
+ * Open-Food-Facts-Cache (`off_cache`, #160). Der Server kennt sie nicht; ein Sync ändert sie nicht.
+ */
+export function withLocalRows(state: SeedState, installation: SeedKey, table: string, rows: readonly SeedRow[]): SeedState {
   const device = state.devices[installation];
-  if (device === undefined) throw new Error(`Gerätezustand: keine Installation ${installation}`);
-  const deviceState = [...(device.rows.device_state ?? []), ...rows];
-  return { server: state.server, devices: { ...state.devices, [installation]: { ...device, rows: { ...device.rows, device_state: deviceState } } } };
+  if (device === undefined) throw new Error(`Lokale Zeilen: keine Installation ${installation}`);
+  const local = [...(device.rows[table] ?? []), ...rows];
+  return { server: state.server, devices: { ...state.devices, [installation]: { ...device, rows: { ...device.rows, [table]: local } } } };
 }
 
 /**

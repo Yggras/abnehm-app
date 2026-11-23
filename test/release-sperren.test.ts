@@ -173,7 +173,7 @@ describe('Registry der Testfähigkeiten', () => {
   it('jeder registrierte Deep Link wird ausschließlich im Deep-Link-Modul der Testfähigkeiten angenommen', () => {
     const handler = read(deepLinkHandler);
     const paths = testCapabilities.flatMap(({ entries }) => entries.deepLinks ?? []);
-    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'health', 'mitteilungen', 'momo-galerie', 'profil', 'seed', 'uhr']);
+    expect(paths.sort()).toEqual(['fehler', 'geraetetest', 'health', 'mitteilungen', 'momo-galerie', 'produkt', 'profil', 'seed', 'uhr']);
     for (const path of paths) expect(handler, path).toContain(`'${path}'`);
     expect(testCapabilities.some(({ modules }) => belongsTo(deepLinkHandler, modules))).toBe(true);
   });
@@ -446,6 +446,57 @@ describe('Health-Attrappe (#183)', () => {
   });
 });
 
+// Fake der Produktquelle (#160) ------------------------------------------------------------------------
+//
+// Die allgemeinen Prüfungen laufen für `fake-produktquelle` über die Registry. Dieser Block ist der eigene
+// negative Produktionsartefakt-Test, den #112 für neue Testfähigkeiten verlangt: Das Produktions-Bundle
+// enthält den Adapter für Open Food Facts, aber weder den Fake noch seine Modi noch den Link oder den
+// Test-Scan, und es gibt keinen Schalter, der ihn dort einschaltet.
+
+describe('Fake der Produktquelle (#160)', () => {
+  const capability = testCapabilities.find(({ key }) => key === 'fake-produktquelle')!;
+  const productFakeMarker = 'fake_produktquelle';
+  /** Zeichenfolgen nur des Fakes und seines Links, die auch ein minifiziertes Bundle behält. */
+  const fakeReferences = [productFakeMarker, 'zeitueberschreitung', 'nicht_gefunden', 'Naturjoghurt 3,5 %'];
+
+  it('ist zentral registriert, mit Modulen, Link und Marker', () => {
+    expect(read('apps/mobile/src/nutrition/testing/fake-food-product-source.ts')).toContain(`fakeFoodProductSourceMarker = '${productFakeMarker}'`);
+    expect(capability).toMatchObject({
+      modules: ['apps/mobile/src/nutrition/testing/fake-food-product-source.ts', 'apps/mobile/src/test-capabilities/food-products.ts'],
+      entries: { deepLinks: ['produkt'] },
+      markers: [productFakeMarker],
+    });
+  });
+
+  it('das Produktions-Bundle enthält den Adapter für Open Food Facts, aber weder Fake noch Modi noch Link', () => {
+    for (const bundle of bundles.production) {
+      expect(bundle.sources, bundle.platform).toEqual(
+        expect.arrayContaining(['apps/mobile/src/nutrition/food-product-source.ts', 'apps/mobile/src/nutrition/device-food-products.ts']),
+      );
+      expect(bundle.js.includes('/api/v3/product/'), bundle.platform).toBe(true);
+      expect(bundle.sources.filter((source) => belongsTo(source, capability.modules)), bundle.platform).toEqual([]);
+      for (const reference of fakeReferences) expect(bundle.js.includes(reference), `${bundle.platform}: ${reference}`).toBe(false);
+    }
+  });
+
+  it('Gegenprobe: Development- und E2E-Bundle enthalten den Fake samt Modi', () => {
+    for (const bundle of [...bundles.development, ...bundles.e2e]) {
+      expect(bundle.sources, bundle.platform).toEqual(expect.arrayContaining(capability.modules));
+      for (const reference of fakeReferences) expect(bundle.js.includes(reference), `${bundle.platform}: ${reference}`).toBe(true);
+    }
+  });
+
+  it('App-Code erreicht den Fake nur über die Grenze der Testfähigkeiten, ohne Schalter der Konfiguration', () => {
+    const root = read('apps/mobile/src/session/device-session.ts');
+    expect(root).toContain('testCapabilities?.adapters.foodProducts(deviceFoodProducts) ?? deviceFoodProducts');
+    expect(root).not.toMatch(/fake-food-product-source|test-capabilities\/food-products/);
+    // Die Produktquelle des Geräts kennt keine Umgebungsvariable außer der Kontaktadresse.
+    const device = read('apps/mobile/src/nutrition/device-food-products.ts');
+    expect(device.match(/process\.env\.[A-Z_]+/g)).toEqual(['process.env.EXPO_PUBLIC_OFF_CONTACT']);
+    expect(device).not.toMatch(/fake|testing/i);
+  });
+});
+
 describe('Produktions-Bundle der App', () => {
   describe.each(testCapabilities.map((capability) => [capability.key, capability] as const))('%s', (_, capability: TestCapability) => {
     it('enthält kein Modul der Fähigkeit', () => {
@@ -476,7 +527,7 @@ describe('Produktions-Bundle der App', () => {
   it.each(['development', 'e2e'] as const)('Gegenprobe: das %s-Bundle enthält jede Fähigkeit der App samt Markern', (artifact) => {
     const appCapabilities = testCapabilities.filter(({ modules }) => modules.some((module) => module.startsWith('apps/mobile/')));
     expect(appCapabilities.map(({ key }) => key).sort()).toEqual([
-      'fehler-adapter', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'mitteilungen', 'momo-galerie', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
+      'fake-produktquelle', 'fehler-adapter', 'geraetetest', 'health-attrappe', 'laufzeitprofile', 'mitteilungen', 'momo-galerie', 'seed', 'serveruhr', 'testgeruest', 'testuhr', 'transport-fehlermodus',
     ]);
     for (const bundle of bundles[artifact]) {
       for (const capability of appCapabilities) {
