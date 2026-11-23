@@ -481,7 +481,7 @@ describe('Fake der Produktquelle (#160)', () => {
 
   it('Gegenprobe: Development- und E2E-Bundle enthalten den Fake samt Modi', () => {
     for (const bundle of [...bundles.development, ...bundles.e2e]) {
-      expect(bundle.sources, bundle.platform).toEqual(expect.arrayContaining(capability.modules));
+      expect(bundle.sources, bundle.platform).toEqual(expect.arrayContaining([...capability.modules]));
       for (const reference of fakeReferences) expect(bundle.js.includes(reference), `${bundle.platform}: ${reference}`).toBe(true);
     }
   });
