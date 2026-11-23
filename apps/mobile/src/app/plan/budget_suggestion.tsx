@@ -1,3 +1,4 @@
-import { placeholderRoute } from '../../shell/Placeholder';
+import { routeScreen } from '../../navigation';
+import { BudgetSuggestionScreen } from '../../plan-settings';
 
-export default placeholderRoute('plan.budget_suggestion');
+export default routeScreen('plan.budget_suggestion', BudgetSuggestionScreen);

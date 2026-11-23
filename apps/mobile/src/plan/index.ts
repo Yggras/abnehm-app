@@ -5,6 +5,7 @@
 // Fassungen in `@abnehm/contracts/plan`.
 export {
   createPlan,
+  type BudgetSuggestionDecision,
   type GoalChangeResult,
   type PlanSettings,
   type WeeklyPlanChangeResult,
@@ -14,7 +15,7 @@ export {
   type PlanDependencies,
 } from './plan';
 export { appGoalSettings, appPlan, useAppPlan, useGoalSettings } from './app-plan';
-export type { BudgetSuggestionCheck, BudgetSuggestionReaders, NoBudgetSuggestionReason } from './budget-suggestion';
+export type { BudgetSuggestionCheck, BudgetSuggestionReaders, BudgetSuggestionView, NoBudgetSuggestionReason } from './budget-suggestion';
 export { followDailyGoalTriggers } from './daily-goal-triggers';
 export { previewGoals, type GoalDraft } from './goal-draft';
 export type { GoalChangeCheck, GoalChangeIntent, GoalSettings, GoalSettingsState, GoalVersionField, GoalVersionView } from './goal-settings';

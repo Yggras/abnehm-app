@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { standardWeekDays } from '../fixtures/plan.ts';
+import { referenceGoalVersion as referenceGoal, standardWeekDays } from '../fixtures/plan.ts';
 import { EntityId, Instant, LocalDate, TimeZone } from '../src/base.ts';
 import { dailyGoalId, dailyGoalsKey } from '../src/daily-goals.ts';
 import { calculateGoals, type GoalCalculation, type GoalCalculatorInput } from '../src/goal-calculator.ts';
 import {
+  AcceptBudgetSuggestion,
+  acceptBudgetSuggestionKey,
   budgetSuggestionId,
+  budgetSuggestionOfAcceptKey,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   dailyGoalSnapshotsOf,
@@ -210,6 +213,38 @@ describe('IDs und fachliche Schlüssel', () => {
     });
     expect(planVersionOfKey('zielversion', 'zielversion:kein-uuid:2026-10-14:x')).toBeNull();
     expect(planVersionOfKey('zielversion', `zielversion:${philipp}:2026-13-40:${change}`)).toBeNull();
+  });
+
+  it('tragen beim Annehmen eines Budgetvorschlags genau einen Schlüssel je Vorschlag: eine Wiederholung trifft dieselbe Annahme (#151)', () => {
+    const suggestion = budgetSuggestionId(philipp, day('2026-10-13'));
+    const key = acceptBudgetSuggestionKey(suggestion);
+    expect(key).toBe(acceptBudgetSuggestionKey(suggestion));
+    expect(key).not.toBe(acceptBudgetSuggestionKey(budgetSuggestionId(anna, day('2026-10-13'))));
+    expect(budgetSuggestionOfAcceptKey(key)).toBe(suggestion);
+    expect(budgetSuggestionOfAcceptKey(planVersionKey('zielversion', philipp, day('2026-10-14'), change))).toBeNull();
+    expect(budgetSuggestionOfAcceptKey('budgetvorschlag:kein-uuid')).toBeNull();
+  });
+});
+
+describe('Annehmen eines Budgetvorschlags (#151)', () => {
+  const suggestionId = budgetSuggestionId(philipp, day('2026-10-13'));
+  const accepted = { ...referenceGoal, validFrom: day('2026-10-15'), calorieBudgetMilliKcal: 1_770_000, budgetSource: 'budgetvorschlag' } as const;
+
+  it('trägt den Vorschlag und eine vollständige, stimmige Zielversion mit der Herkunft Budgetvorschlag', () => {
+    expect(AcceptBudgetSuggestion.parse({ suggestionId, goalVersion: accepted })).toEqual({ suggestionId, goalVersion: accepted });
+  });
+
+  it('lehnt eine andere Herkunft, eine unstimmige Zielversion und ein Budget außerhalb von Untergrenze und Gesamtumsatz ab', () => {
+    for (const goalVersion of [
+      { ...accepted, budgetSource: 'manuell' },
+      { ...accepted, budgetSource: 'berechnet', calorieBudgetMilliKcal: referenceGoal.calorieBudgetMilliKcal },
+      { ...accepted, basalMetabolicRateMilliKcal: 1_600_000 },
+      { ...accepted, calorieBudgetMilliKcal: 1_400_000 },
+      { ...accepted, calorieBudgetMilliKcal: 2_200_000 },
+    ]) {
+      expect(AcceptBudgetSuggestion.safeParse({ suggestionId, goalVersion }).success, JSON.stringify(goalVersion)).toBe(false);
+    }
+    expect(AcceptBudgetSuggestion.safeParse({ suggestionId, goalVersion: accepted, extra: true }).success).toBe(false);
   });
 });
 

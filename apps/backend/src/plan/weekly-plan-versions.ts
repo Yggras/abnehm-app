@@ -7,7 +7,7 @@ import { policies } from '../authorization/authorization.ts';
 import { weeklyPlanDay, weeklyPlanVersion } from '../db/schema/index.ts';
 import type { ServerCommand } from '../sync/commands.ts';
 import type { ServerSyncEntity } from '../sync/registry.ts';
-import { planCommandTarget, savePlanVersion } from './plan-versions.ts';
+import { planCommandTarget, requireVersionKey, savePlanVersion } from './plan-versions.ts';
 
 // Wochenplanversion auf dem Server (Spezifikation 1, Abschnitte 4 und 11): eine Zeile samt ihren sieben
 // Wochentagen mit je drei verschiedenen, geordneten Bausteinen. Sie entsteht nur über den Fachbefehl
@@ -56,8 +56,9 @@ export const createWeeklyPlanVersionCommand: ServerCommand<CreateWeeklyPlanVersi
   canonicalRequest: (operation) => CreateWeeklyPlanVersion.parse(operation.payload),
   duplicate: () => [],
   async execute(tx, { actor, payload, businessKey, at }) {
+    requireVersionKey('wochenplan', businessKey, payload.validFrom);
     return savePlanVersion(tx, { kind: 'wochenplan', entity: weeklyPlanVersionEntity, personId: actor.personId,
-      validFrom: payload.validFrom, businessKey, at, async write(id, serverVersion) {
+      validFrom: payload.validFrom, at, async write(id, serverVersion) {
         await tx
           .insert(weeklyPlanVersion)
           .values({ id, personId: actor.personId, validFrom: payload.validFrom, createdAt: at, updatedAt: at, serverVersion })

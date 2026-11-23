@@ -1,15 +1,17 @@
 /** @jest-environment node */
 import { createTestClock, type TestClock } from '@abnehm/clock/testing';
-import { Instant, LocalDate, localDateAfter, localDaysBetween } from '@abnehm/contracts/base';
-import { budgetSuggestionId, goalVersionId, type BudgetSuggestionUpsert } from '@abnehm/contracts/plan';
+import { Instant, LocalDate, localDateAfter, localDaysBetween, ServerVersion } from '@abnehm/contracts/base';
+import { acceptBudgetSuggestionKey, budgetSuggestionId, goalVersionId, type BudgetSuggestionUpsert } from '@abnehm/contracts/plan';
 import type { DailyIntakeSeries, WeightTrendSeries } from '@abnehm/contracts/ports';
+import type { CanonicalState, OutboxOperation } from '@abnehm/contracts/sync';
 
 import { fakeIntakeReader, fakeWeightTrendReader } from '../area-ports/testing/fakes';
 import { budgetSuggestion } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import type { TodayState } from '../shell/today-registry';
+import { createLocalCommandRegistry, createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
-import type { BudgetSuggestionCheck, BudgetSuggestionReaders, GoalDraft, NoBudgetSuggestionReason } from '.';
+import { planCommands, type BudgetSuggestionCheck, type BudgetSuggestionReaders, type GoalDraft, type NoBudgetSuggestionReason } from '.';
 import { writeBudgetSuggestion } from './budget-suggestion-repository';
 import { readGoalVersionOn, writeGoalVersion } from './plan-repository';
 import { berlin, createPlanTodayWorld, philipp, type PlanTodayWorld } from './testing/today-world';
@@ -445,5 +447,175 @@ describe('Budgetvorschlag: überholt', () => {
 
     world.clock.set(noonOn('2026-10-15'));
     await expect(world.plan.checkBudgetSuggestion(readers(stalled))).resolves.toMatchObject({ type: 'vorgeschlagen', suggestionId: budgetSuggestionId(philipp, day('2026-10-14')) });
+  });
+});
+
+// Nachweis für #151: die Entscheidung über den Vorschlag am Plan-Modul. Annehmen ist der Fachbefehl
+// `acceptBudgetSuggestion` mit der Zielversion ab morgen, Ablehnen der Upsert `abgelehnt`.
+
+const tomorrow = '2026-10-15';
+type World = Awaited<ReturnType<typeof setup>>;
+type CommandOperation = Extract<OutboxOperation, { businessKey: string }>;
+
+const accepts = (world: World) =>
+  world.database.read((tx) => pendingOperations(tx, 100)).filter((operation): operation is CommandOperation => operation.type === 'acceptBudgetSuggestion');
+const goalOn = (world: World, localDate: string) => world.database.read((tx) => readGoalVersionOn(tx, philipp, day(localDate)))!.values;
+
+/** Ein offener Vorschlag von heute; die Uhr steht danach später am selben Tag, damit die Entscheidung einen eigenen Zeitpunkt trägt. */
+async function suggested() {
+  const world = await setup();
+  await world.plan.checkBudgetSuggestion(readers(stalled));
+  world.clock.set(Instant.parse('2026-10-14T15:00:00.000Z'));
+  return world;
+}
+
+describe('Budgetvorschlag: Lesemodell des Sheets', () => {
+  it('zeigt einen offenen Vorschlag mit bisherigem und vorgeschlagenem Budget, Richtung, Differenz und Tempo', async () => {
+    const world = await suggested();
+    expect(world.plan.budgetSuggestion(id)).toEqual({
+      type: 'offen',
+      direction: 'senken',
+      previousBudgetKcal: 1_920,
+      suggestedBudgetKcal: 1_770,
+      differenceKcal: 150,
+      pace: 'entspannt',
+    });
+  });
+
+  it('kennt entschiedene, überholte und unbekannte Vorschläge, ohne Aktionen anzubieten', async () => {
+    const world = await suggested();
+    const past = budgetSuggestionId(philipp, day('2026-09-15'));
+    expect(world.plan.budgetSuggestion(past)).toEqual({ type: 'unbekannt' });
+    world.pastSuggestion('abgelehnt', '2026-09-16T10:00:00.000Z');
+    expect(world.plan.budgetSuggestion(past)).toEqual({ type: 'nicht_offen', status: 'abgelehnt' });
+
+    world.changeGoalsOn(today, { waterTargetMl: 2_000 });
+    expect(world.plan.budgetSuggestion(id)).toEqual({ type: 'nicht_offen', status: 'ueberholt' });
+  });
+});
+
+describe('Budgetvorschlag: Annehmen', () => {
+  it('legt in einer Transaktion die Zielversion ab morgen mit dem Vorschlag als Budget an, setzt ihn auf angenommen und sendet acceptBudgetSuggestion', async () => {
+    const world = await suggested();
+    const current = goalOn(world, today);
+    const before = world.database.read((tx) => pendingOperations(tx, 100)).length;
+
+    expect(world.plan.decideBudgetSuggestion(id, 'annehmen')).toEqual({ type: 'angenommen', validFrom: tomorrow, goalVersionId: goalVersionId(philipp, day(tomorrow)) });
+
+    const goalVersion = { ...current, validFrom: tomorrow, calorieBudgetMilliKcal: 1_770_000, budgetSource: 'budgetvorschlag' };
+    expect(goalOn(world, tomorrow)).toEqual(goalVersion);
+    expect(world.suggestions()).toEqual([expect.objectContaining({ id, status: 'angenommen', updatedAt: '2026-10-14T15:00:00.000Z' })]);
+    // Genau eine Operation: Der Fachbefehl trägt Zielversion und Statuswechsel, ohne eigenen Upsert und ohne createGoalVersion.
+    expect(world.database.read((tx) => pendingOperations(tx, 100)).slice(before)).toEqual([
+      expect.objectContaining({ type: 'acceptBudgetSuggestion', businessKey: acceptBudgetSuggestionKey(id), payload: { suggestionId: id, goalVersion }, knownServerVersion: null }),
+    ]);
+    expect(world.notice()).toBeUndefined();
+  });
+
+  it('meldet die Tage von morgen bis heute + 13 mit planaenderung wie jede neue Fassung', async () => {
+    const world = await suggested();
+    const reports = jest.spyOn(world.persistence, 'reevaluateDailyGoals');
+
+    world.plan.decideBudgetSuggestion(id, 'annehmen');
+
+    const days = Array.from({ length: 13 }, (_, index) => localDateAfter(day(tomorrow), index));
+    expect(reports).toHaveBeenCalledWith(expect.anything(), philipp, days, 'planaenderung');
+  });
+
+  it('ein zweites Annehmen oder Ablehnen ändert nichts mehr: genau eine Zielversion und ein Befehl', async () => {
+    const world = await suggested();
+    world.plan.decideBudgetSuggestion(id, 'annehmen');
+
+    expect(world.plan.decideBudgetSuggestion(id, 'annehmen')).toEqual({ type: 'nicht_offen' });
+    expect(world.plan.decideBudgetSuggestion(id, 'ablehnen')).toEqual({ type: 'nicht_offen' });
+    expect(accepts(world)).toHaveLength(1);
+    expect(world.suggestions()).toEqual([expect.objectContaining({ status: 'angenommen' })]);
+    expect(world.plan.budgetSuggestion(id)).toEqual({ type: 'nicht_offen', status: 'angenommen' });
+  });
+
+  it('übernimmt die übrigen Werte einer bevorstehenden Fassung ab morgen und ersetzt sie', async () => {
+    const world = await setup();
+    // Ziele ab morgen geändert, bevor die Prüfung des Tags den Vorschlag anlegt.
+    world.changeGoalsOn(today, { waterTargetMl: 2_000 });
+    await world.plan.checkBudgetSuggestion(readers(stalled));
+
+    expect(world.plan.decideBudgetSuggestion(id, 'annehmen')).toMatchObject({ type: 'angenommen', validFrom: tomorrow });
+    expect(goalOn(world, tomorrow)).toMatchObject({ validFrom: tomorrow, waterTargetMl: 2_000, calorieBudgetMilliKcal: 1_770_000, budgetSource: 'budgetvorschlag' });
+  });
+
+  it('überholt den Vorschlag, wenn er nicht zur Fassung ab morgen passt, etwa weil ab morgen der Haltemodus gilt', async () => {
+    const world = await setup();
+    world.changeGoalsOn(today, { pace: null });
+    await world.plan.checkBudgetSuggestion(readers(stalled));
+
+    expect(world.plan.decideBudgetSuggestion(id, 'annehmen')).toEqual({ type: 'nicht_offen' });
+    expect(world.suggestions()).toEqual([expect.objectContaining({ id, status: 'ueberholt' })]);
+    expect(accepts(world)).toEqual([]);
+    expect(world.upserts().at(-1)).toMatchObject({ entityId: id, payload: { status: 'ueberholt' } });
+  });
+});
+
+describe('Budgetvorschlag: Ablehnen', () => {
+  it('setzt den Status abgelehnt als Upsert; der Hinweis verschwindet, und keine Zielversion entsteht', async () => {
+    const world = await suggested();
+
+    expect(world.plan.decideBudgetSuggestion(id, 'ablehnen')).toEqual({ type: 'abgelehnt' });
+
+    expect(world.suggestions()).toEqual([expect.objectContaining({ id, status: 'abgelehnt', updatedAt: '2026-10-14T15:00:00.000Z' })]);
+    expect(world.upserts().at(-1)).toMatchObject({ entityId: id, payload: { ...window, status: 'abgelehnt' } });
+    expect(goalOn(world, tomorrow).validFrom).toBe('2026-09-16');
+    expect(accepts(world)).toEqual([]);
+    expect(world.notice()).toBeUndefined();
+  });
+
+  it('danach greift die 14-Tage-Sperre ab der Entscheidung', async () => {
+    const world = await suggested();
+    world.plan.decideBudgetSuggestion(id, 'ablehnen');
+
+    world.clock.set(noonOn('2026-10-27'));
+    await expect(world.plan.checkBudgetSuggestion(readers(stalled))).resolves.toEqual(none('entscheidung_zu_neu'));
+    world.clock.set(noonOn('2026-10-28'));
+    await expect(world.plan.checkBudgetSuggestion(readers(stalled))).resolves.not.toEqual(none('entscheidung_zu_neu'));
+  });
+});
+
+describe('Budgetvorschlag: Abgleich einer dauerhaft abgelehnten Annahme', () => {
+  function reject(world: World, canonical: CanonicalState, code: 'conflict' | 'operation_conflict' = 'conflict') {
+    const writer = createSyncWriter({ registry: createSyncRegistry([]), clock: world.clock, newId: () => id });
+    const commands = createLocalCommandRegistry({ database: world.database, writer, commands: planCommands });
+    const [operation] = accepts(world);
+    world.database.transaction((tx) =>
+      commands.reconcileRejected(tx, operation!, { type: 'permanently_rejected', operationId: operation!.operationId, error: { code, retryable: false }, canonical }),
+    );
+  }
+
+  it('entfernt die unbestätigte Zielversion ab morgen und öffnet den Vorschlag wieder, wenn der Server ihn offen ließ', async () => {
+    const world = await suggested();
+    world.plan.decideBudgetSuggestion(id, 'annehmen');
+
+    reject(world, { type: 'record', entityType: 'goal_version', entityId: goalVersionId(philipp, day(tomorrow)), serverVersion: ServerVersion.parse('7'), data: {} });
+
+    expect(goalOn(world, tomorrow).validFrom).toBe('2026-09-16');
+    expect(world.suggestions()).toEqual([expect.objectContaining({ id, status: 'offen' })]);
+  });
+
+  it('lässt den Vorschlag angenommen, wenn ein anderes Gerät ihn schon mit anderer Fassung angenommen hat (operation_conflict)', async () => {
+    const world = await suggested();
+    world.plan.decideBudgetSuggestion(id, 'annehmen');
+
+    reject(world, { type: 'absent', entityType: 'command_result', entityId: accepts(world)[0]!.operationId }, 'operation_conflict');
+
+    expect(goalOn(world, tomorrow).validFrom).toBe('2026-09-16');
+    expect(world.suggestions()).toEqual([expect.objectContaining({ id, status: 'angenommen' })]);
+  });
+
+  it('überlässt den Status dem kanonischen Vorschlag, wenn der Server ihn nennt', async () => {
+    const world = await suggested();
+    world.plan.decideBudgetSuggestion(id, 'annehmen');
+
+    reject(world, { type: 'record', entityType: 'budget_suggestion', entityId: id, serverVersion: ServerVersion.parse('7'), data: {} });
+
+    expect(goalOn(world, tomorrow).validFrom).toBe('2026-09-16');
+    expect(world.suggestions()).toEqual([expect.objectContaining({ id, status: 'angenommen' })]);
   });
 });

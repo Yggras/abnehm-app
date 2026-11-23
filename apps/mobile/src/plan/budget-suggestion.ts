@@ -1,21 +1,32 @@
 import { readingOf, type Clock } from '@abnehm/clock';
 import { EntityId, Instant, LocalDate, localDateAfter, localDaysBetween, type ServerVersion, type TimeZone } from '@abnehm/contracts/base';
 import {
+  AcceptBudgetSuggestion,
+  acceptBudgetSuggestionKey,
   budgetSuggestionId,
   BudgetSuggestionUpsert,
+  goalVersionId,
   kcalOfMilliKcal,
   minimumMealCategoriesPerDay,
   type BudgetSuggestionDirection,
+  type BudgetSuggestionStatus,
 } from '@abnehm/contracts/plan';
-import type { IntakeReader, WeightTrendReader } from '@abnehm/contracts/ports';
+import type { IntakeReader, Pace, WeightTrendReader } from '@abnehm/contracts/ports';
 
 import type { LocalDatabase, ReadContext, TransactionContext } from '../local-db';
 import { readDeviceState, writeDeviceState } from '../local-db/device-state';
 import { readOwnPerson } from '../local-db/person-header';
 import type { SyncWriter } from '../sync';
-import { budgetSuggestionEntity } from './plan-entities';
-import { readBudgetSuggestion, readLastDecisionAt, readOpenBudgetSuggestion, writeBudgetSuggestion } from './budget-suggestion-repository';
-import { readGoalVersionsUntil, type GoalVersionValues } from './plan-repository';
+import { budgetSuggestionEntity, goalVersionEntity } from './plan-entities';
+import {
+  readBudgetSuggestion,
+  readLastDecisionAt,
+  readOpenBudgetSuggestion,
+  withStatus,
+  writeBudgetSuggestion,
+  type StoredBudgetSuggestion,
+} from './budget-suggestion-repository';
+import { readGoalVersionOn, readGoalVersionsUntil, writeGoalVersion, type GoalVersionValues } from './plan-repository';
 import type { BudgetNoticeReader } from './today-contributions';
 
 // Budgetvorschlag (Spezifikation 1, Abschnitt 7; Regel nach Vorentscheidung 2 in #57): Nach mindestens drei
@@ -105,10 +116,41 @@ type Decision =
   | Readonly<{ type: 'vorschlag'; direction: BudgetSuggestionDirection; suggestedBudgetMilliKcal: number }>
   | Readonly<{ type: 'kein_vorschlag'; reason: NoBudgetSuggestionReason }>;
 
+/**
+ * Lesemodell des Sheets `plan.budget_suggestion` (Spezifikation 1, Abschnitt 7; #151). Aktionen gibt es nur
+ * für einen offenen Vorschlag; ein entschiedener (`angenommen`, `abgelehnt`), überholter oder unbekannter
+ * öffnet kein Sheet mit Aktionen.
+ */
+export type BudgetSuggestionView =
+  | Readonly<{
+      type: 'offen';
+      direction: BudgetSuggestionDirection;
+      previousBudgetKcal: number;
+      suggestedBudgetKcal: number;
+      /** Um so viel kcal ändert sich das Budget, in der Richtung des Vorschlags. */
+      differenceKcal: number;
+      /** Das heute gewählte Tempo, an dem die Prüfung den Trend gemessen hat; im Haltemodus `null`. */
+      pace: Pace | null;
+    }>
+  | Readonly<{ type: 'nicht_offen'; status: Exclude<BudgetSuggestionStatus, 'offen'> }>
+  | Readonly<{ type: 'unbekannt' }>;
+
 export type BudgetSuggestions = Readonly<{
   check(readers: BudgetSuggestionReaders): Promise<BudgetSuggestionCheck>;
   /** Setzt einen offenen Vorschlag in der Transaktion einer neuen Zielversion auf `ueberholt`. */
   supersede(tx: TransactionContext, personId: EntityId, at: Instant): void;
+  /** Der Vorschlag mit dieser ID, sofern er der Person gehört und offen ist. */
+  open(tx: ReadContext, personId: EntityId, id: EntityId): StoredBudgetSuggestion | undefined;
+  /** Setzt einen offenen Vorschlag auf `abgelehnt` oder `ueberholt`, samt Upsert. */
+  settle(tx: TransactionContext, open: StoredBudgetSuggestion, status: Extract<BudgetSuggestionStatus, 'abgelehnt' | 'ueberholt'>, at: Instant): void;
+  /**
+   * Nimmt einen offenen Vorschlag an (#151): setzt ihn auf `angenommen`, schreibt die Zielversion ab morgen,
+   * überholt danach andere offene Vorschläge und sendet beides als Fachbefehl `acceptBudgetSuggestion`, ohne
+   * eigenen Upsert. Ein Schlüssel je Vorschlag und keine Serverversion: Nimmt ein zweites Gerät denselben
+   * Vorschlag gleich an, ist das für den Server dieselbe Annahme.
+   */
+  accept(tx: TransactionContext, open: StoredBudgetSuggestion, goal: AcceptBudgetSuggestion['goalVersion'], at: Instant): void;
+  view(tx: ReadContext, personId: EntityId, id: EntityId, today: LocalDate): BudgetSuggestionView;
   /** Hinweis `budget_suggestion` der Ernährungskarte, solange ein Vorschlag offen ist. */
   notice: BudgetNoticeReader<'budget_suggestion'>;
 }>;
@@ -168,10 +210,52 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
 
     supersede(tx, personId, at) {
       const open = readOpenBudgetSuggestion(tx, personId);
-      if (open === undefined) return;
-      const { personId: _owner, createdAt: _createdAt, updatedAt: _updatedAt, ...values } = open.record;
-      const payload = BudgetSuggestionUpsert.parse({ ...values, status: 'ueberholt' });
-      save(tx, { id: open.id, personId, payload, at, knownServerVersion: open.serverVersion });
+      if (open !== undefined) settle(tx, open, 'ueberholt', at);
+    },
+
+    open(tx, personId, id) {
+      const stored = readBudgetSuggestion(tx, id);
+      return stored?.record.personId === personId && stored.record.status === 'offen' ? stored : undefined;
+    },
+
+    settle,
+
+    accept(tx, open, goal, at) {
+      const { personId } = open.record;
+      writeBudgetSuggestion(tx, open.id, personId, withStatus(open.record, 'angenommen'), at);
+      const goalId = goalVersionId(personId, goal.validFrom);
+      writeGoalVersion(tx, goalId, personId, goal, at);
+      // Erst entschieden, dann überholt: Die neue Fassung überholt nur andere offene Vorschläge.
+      const other = readOpenBudgetSuggestion(tx, personId);
+      if (other !== undefined) settle(tx, other, 'ueberholt', at);
+      writer.command(tx, {
+        type: 'acceptBudgetSuggestion',
+        businessKey: acceptBudgetSuggestionKey(open.id),
+        payload: AcceptBudgetSuggestion.parse({ suggestionId: open.id, goalVersion: goal }),
+        knownServerVersion: null,
+        affectedRefs: [
+          { entityType: goalVersionEntity.entityType, entityId: goalId },
+          { entityType: budgetSuggestionEntity.entityType, entityId: open.id },
+        ],
+        referencePaths: [],
+      });
+    },
+
+    view(tx, personId, id, today) {
+      const stored = readBudgetSuggestion(tx, id);
+      if (stored === undefined || stored.record.personId !== personId) return { type: 'unbekannt' };
+      const { status, direction, previousBudgetMilliKcal, suggestedBudgetMilliKcal } = stored.record;
+      if (status !== 'offen') return { type: 'nicht_offen', status };
+      const previousBudgetKcal = kcalOfMilliKcal(previousBudgetMilliKcal);
+      const suggestedBudgetKcal = kcalOfMilliKcal(suggestedBudgetMilliKcal);
+      return {
+        type: 'offen',
+        direction,
+        previousBudgetKcal,
+        suggestedBudgetKcal,
+        differenceKcal: Math.abs(suggestedBudgetKcal - previousBudgetKcal),
+        pace: readGoalVersionOn(tx, personId, today)?.values.pace ?? null,
+      };
     },
 
     notice(tx, personId) {
@@ -185,6 +269,10 @@ export function createBudgetSuggestions({ database, clock, writer }: Readonly<{ 
       };
     },
   };
+
+  function settle(tx: TransactionContext, open: StoredBudgetSuggestion, status: Extract<BudgetSuggestionStatus, 'abgelehnt' | 'ueberholt'>, at: Instant): void {
+    save(tx, { id: open.id, personId: open.record.personId, payload: withStatus(open.record, status), at, knownServerVersion: open.serverVersion });
+  }
 
   /** Schreibt den Vorschlag und in derselben Transaktion seinen Upsert in die Outbox. */
   function save(
