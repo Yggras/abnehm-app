@@ -58,10 +58,13 @@ function Suggestion({ plan, suggestionId }: { plan: Plan; suggestionId: EntityId
     <>
       <ListGroup>
         <ValueRow title={texts.previous} value={texts.perDay(view.previousBudgetKcal)} />
-        <ValueRow title={texts.suggested} value={texts.perDay(view.suggestedBudgetKcal)} />
+        <ValueRow
+          title={texts.suggested}
+          value={texts.perDay(view.suggestedBudgetKcal)}
+          subtitle={texts.difference(view.direction, view.differenceKcal)}
+        />
       </ListGroup>
       <Text>{texts.reason(view.direction, view.pace)}</Text>
-      <Text>{texts.effect(view.direction, view.differenceKcal)}</Text>
       <Text tone="inkMuted">{texts.onlyWithConfirmation}</Text>
       <View style={styles.actions}>
         <Button label={texts.accept} block onPress={() => decide('annehmen')} />

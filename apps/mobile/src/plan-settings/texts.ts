@@ -117,20 +117,22 @@ export const goalTexts = {
 
 /**
  * Texte des Sheets `plan.budget_suggestion` (Spezifikation 1, Abschnitt 7; #151). Die Begründung vergleicht den
- * Gewichtstrend der letzten drei Wochen neutral mit dem gewählten Tempo, ohne Bewertung oder Schuld.
+ * Gewichtstrend der letzten drei Wochen neutral mit dem gewählten Tempo, ohne Bewertung oder Schuld. Die
+ * Differenz steht als Unterzeile beim Vorschlag. Der Hinweis auf den nächsten Vorschlag folgt der Sperre von
+ * 14 Tagen nach jeder Entscheidung (Abschnitt 7, Voraussetzungen).
  */
 export const budgetSuggestionTexts = {
   loading: 'Budgetvorschlag wird geladen',
   previous: 'Bisheriges Budget',
   suggested: 'Vorschlag ab morgen',
   perDay: (kcal: number) => `${kcalText(kcal)} pro Tag`,
+  difference: (direction: BudgetSuggestionDirection, differenceKcal: number) =>
+    `${kcalText(differenceKcal)} ${direction === 'senken' ? 'weniger' : 'mehr'}`,
   reason: (direction: BudgetSuggestionDirection, pace: Pace | null) =>
     `In den letzten drei Wochen hast du laut Gewichtstrend ${direction === 'senken' ? 'weniger' : 'mehr'} abgenommen, als dein ${
       pace === null ? 'gewähltes Tempo' : `Tempo „${paceNames[pace]}“ (${paceRates[pace]})`
-    } vorsieht.`,
-  effect: (direction: BudgetSuggestionDirection, differenceKcal: number) =>
-    `Mit ${kcalText(differenceKcal)} ${direction === 'senken' ? 'weniger' : 'mehr'} am Tag kommst du näher an dieses Tempo.`,
-  onlyWithConfirmation: 'Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst.',
+    } vorsieht. Mit dem neuen Budget kommst du näher an dieses Tempo.`,
+  onlyWithConfirmation: 'Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst. Einen neuen Vorschlag gibt es frühestens in zwei Wochen.',
   accept: 'Übernehmen ab morgen',
   decline: 'Nicht jetzt',
   closed: {

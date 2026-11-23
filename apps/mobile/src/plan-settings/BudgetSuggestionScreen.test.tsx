@@ -66,12 +66,15 @@ describe('Anzeige', () => {
     await open();
 
     expect(screen.getByLabelText('Bisheriges Budget: 1.620 kcal pro Tag')).toBeOnTheScreen();
-    expect(screen.getByLabelText('Vorschlag ab morgen: 1.514 kcal pro Tag')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Vorschlag ab morgen: 1.514 kcal pro Tag, 106 kcal weniger')).toBeOnTheScreen();
     expect(
-      screen.getByText('In den letzten drei Wochen hast du laut Gewichtstrend weniger abgenommen, als dein Tempo „entspannt“ (etwa 0,5 kg pro Woche) vorsieht.'),
+      screen.getByText(
+        'In den letzten drei Wochen hast du laut Gewichtstrend weniger abgenommen, als dein Tempo „entspannt“ (etwa 0,5 kg pro Woche) vorsieht. Mit dem neuen Budget kommst du näher an dieses Tempo.',
+      ),
     ).toBeOnTheScreen();
-    expect(screen.getByText('Mit 106 kcal weniger am Tag kommst du näher an dieses Tempo.')).toBeOnTheScreen();
-    expect(screen.getByText('Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst.')).toBeOnTheScreen();
+    expect(
+      screen.getByText('Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst. Einen neuen Vorschlag gibt es frühestens in zwei Wochen.'),
+    ).toBeOnTheScreen();
     expect(accept()).toBeOnTheScreen();
     expect(decline()).toBeOnTheScreen();
   });
@@ -79,11 +82,12 @@ describe('Anzeige', () => {
   test('beim Anheben ebenso neutral, ohne Bewertung', async () => {
     await open(raise);
 
-    expect(screen.getByLabelText('Vorschlag ab morgen: 1.770 kcal pro Tag')).toBeOnTheScreen();
+    expect(screen.getByLabelText('Vorschlag ab morgen: 1.770 kcal pro Tag, 150 kcal mehr')).toBeOnTheScreen();
     expect(
-      screen.getByText('In den letzten drei Wochen hast du laut Gewichtstrend mehr abgenommen, als dein Tempo „entspannt“ (etwa 0,5 kg pro Woche) vorsieht.'),
+      screen.getByText(
+        'In den letzten drei Wochen hast du laut Gewichtstrend mehr abgenommen, als dein Tempo „entspannt“ (etwa 0,5 kg pro Woche) vorsieht. Mit dem neuen Budget kommst du näher an dieses Tempo.',
+      ),
     ).toBeOnTheScreen();
-    expect(screen.getByText('Mit 150 kcal mehr am Tag kommst du näher an dieses Tempo.')).toBeOnTheScreen();
   });
 
   test.each([
@@ -155,7 +159,7 @@ describe('Zugänglichkeit und Sprache', () => {
     test('bleiben Werte, Begründung und beide Aktionen erreichbar', async () => {
       await open();
 
-      expect(screen.getByLabelText('Vorschlag ab morgen: 1.514 kcal pro Tag')).toBeOnTheScreen();
+      expect(screen.getByLabelText('Vorschlag ab morgen: 1.514 kcal pro Tag, 106 kcal weniger')).toBeOnTheScreen();
       expect(accept()).toBeOnTheScreen();
       expect(decline()).toBeOnTheScreen();
     });
