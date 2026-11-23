@@ -12,8 +12,8 @@ import type { TestHealthScenario } from './health-scenarios';
 // Testfähigkeit `health-attrappe` (`test/test-capabilities.ts`).
 //
 // `health?szenario=geraet` stellt zurück auf die Plattform des Builds (Health Connect bzw. HealthKit) und
-// verbindet sie: der Gerätetest der echten Adapter (#195), solange Onboarding-Schritt (#189) und
-// Einstellungsseite (#190) fehlen.
+// verbindet sie: der Gerätetest der echten Adapter (#195) ohne Onboarding, solange die Einstellungsseite
+// (#190) fehlt.
 
 export type TestHealth = Readonly<{
   /** Umhüllt den Adapter der Plattform; einmal je Prozess. */

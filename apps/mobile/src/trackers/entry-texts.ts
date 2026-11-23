@@ -39,7 +39,9 @@ export function timeText(instant: Instant, timeZone: TimeZone): string {
  * (`spikes/health-hintergrund/RESULTS.md`, „Quellen erkennen“). Den Anzeigenamen „Google Health (Fitbit)“ legt
  * Spezifikation 3, Abschnitt 6 fest (https://github.com/Yggras/abnehm-app/issues/86, „Prüfung der Quell-Apps“).
  */
-const knownSourceApps: Readonly<Record<string, string>> = { 'com.fitbit.FitbitMobile': 'Google Health (Fitbit)' };
+export const fitbitSourceAppId = 'com.fitbit.FitbitMobile';
+
+const knownSourceApps: Readonly<Record<string, string>> = { [fitbitSourceAppId]: 'Google Health (Fitbit)' };
 
 /** Quell-App eines Imports: bekannter Anzeigename, sonst der gelieferte, sonst die Kennung; ohne beides `null`. */
 export function sourceAppText(id: string | null, name: string | null): string | null {
