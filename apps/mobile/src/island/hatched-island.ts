@@ -99,7 +99,7 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
   const islandId = EntityId.parse(found.id);
   const progress = islandProgressOf(progressRow);
   const ownRole = IslandRole.parse(own.role);
-  const projects = readProjects(tx, { islandId, progress, personId, ownRole });
+  const projects = readProjects(tx, { islandId, progress, personId, ownRole, energy });
   if (projects === null) return null;
   // Verbaute Energie dieser Insel: alle ihre Objekte und Projekte, auch eingelagerte Objekte.
   const holdings = {

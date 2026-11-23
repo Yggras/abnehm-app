@@ -38,7 +38,7 @@ describe('Gemeinschaftsprojekte App ↔ Backend', { timeout: 60_000 }, () => {
     const world = await fundedPhones();
     const { philippsPhone, annasPhone } = world;
     const first = projectOf(philippsPhone);
-    expect(first).toMatchObject({ sequenceNumber: 1, kind: 'projekt', name: 'Gartenhäuschen', ownRole: 'bauen', own: { paid: 0, need: 20 }, stage: 'gestartet' });
+    expect(first).toMatchObject({ templateKey: 'gartenhaeuschen', kind: 'projekt', name: 'Gartenhäuschen', ownRole: 'bauen', own: { paid: 0, need: 20 }, contribution: { type: 'moeglich', max: 20 }, stage: 'gestartet' });
 
     // Offline: Der eigene Anteil und die eigene Hälfte wachsen sofort.
     philippsPhone.offline();
@@ -65,7 +65,7 @@ describe('Gemeinschaftsprojekte App ↔ Backend', { timeout: 60_000 }, () => {
 
     for (const phone of [annasPhone, philippsPhone]) {
       const island = islandOf(phone);
-      expect(island.project).toMatchObject({ sequenceNumber: 2, kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet', site: 'grundinsel:7:2' });
+      expect(island.project).toMatchObject({ templateKey: 'gartenhaeuschen_ausbau', kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet', site: 'grundinsel:7:2' });
       expect(island.landmarks).toEqual([{ projectKey: 'gartenhaeuschen', site: 'grundinsel:7:2', art: 'gartenhaeuschen', size: 1 }]);
       expect(island.sharedEvents.map((event) => event.type)).toContain('projektabschluss');
     }

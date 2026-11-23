@@ -9,20 +9,19 @@ import { projectTexts } from './texts';
 // Inhalt des Projekt-Sheets (Spezifikation 4, Abschnitt 8; #208), geöffnet über „Projekt“ in der Leiste und die
 // Route `momo` mit `view: 'projekt'`. Es zeigt den eigenen Anteil exakt („Dein Anteil: 12 von 30“, voll „Dein
 // Anteil ist voll“) und den gemeinsamen Fortschritt nur als Stufe; exakte Partnerwerte und „Partner fehlt“ gibt
-// es nie. „Einzahlen“ zahlt den gewählten Betrag ein, höchstens den Restbedarf des Anteils und die eigene Energie.
+// es nie. „Einzahlen“ zahlt den gewählten Betrag ein; was geht, sagt die Spielregel (`project.contribution`):
+// höchstens der Restbedarf des Anteils und die eigene Energie.
 // Die Bestätigung steht im Sheet, weil eine Meldung auf dem Gerät hinter dem nativen Sheet läge (Gerätelauf #202).
 
 export type ProjectSheetProps = Readonly<{
   project: IslandProject;
-  /** Angezeigte eigene Energie, mindestens 0. */
-  energy: number;
   /** Zahlt ein; liefert den eingezahlten Betrag oder `null`, wenn das Gerät ablehnt. */
   onContribute(amount: number): number | null;
 }>;
 
-export function ProjectSheet({ project, energy, onContribute }: ProjectSheetProps) {
-  const rest = Math.max(project.own.need - project.own.paid, 0);
-  const max = Math.min(rest, energy);
+export function ProjectSheet({ project, onContribute }: ProjectSheetProps) {
+  const { contribution } = project;
+  const max = contribution.type === 'moeglich' ? contribution.max : 0;
   const [chosen, setChosen] = useState<number | null>(null);
   const [contributed, setContributed] = useState<number | null>(null);
   // Ohne eigene Wahl der höchste mögliche Betrag; nach einer Einzahlung höchstens, was noch geht.
@@ -43,7 +42,7 @@ export function ProjectSheet({ project, energy, onContribute }: ProjectSheetProp
             {projectTexts.kind[project.kind]}
           </Text>
           <Text variant="title" accessibilityRole="header">
-            {project.name}
+            {project.name ?? projectTexts.kind[project.kind]}
           </Text>
           <Text tone="inkMuted">{projectTexts.stage(project.stage)}</Text>
         </View>
@@ -51,7 +50,7 @@ export function ProjectSheet({ project, energy, onContribute }: ProjectSheetProp
       <Text variant="label" tone="inkMuted">
         {projectTexts.howItWorks}
       </Text>
-      {rest === 0 ? (
+      {contribution.type === 'voll' ? (
         <Text variant="bodyStrong">{projectTexts.ownFull}</Text>
       ) : (
         <ProgressBar label={projectTexts.ownShareLabel} value={project.own.paid} target={project.own.need} valueText={projectTexts.ownShare(project.own.paid, project.own.need)} />
@@ -61,8 +60,8 @@ export function ProjectSheet({ project, energy, onContribute }: ProjectSheetProp
           {projectTexts.contributed(contributed)}
         </Text>
       )}
-      {rest > 0 &&
-        (max === 0 ? (
+      {contribution.type !== 'voll' &&
+        (contribution.type === 'keine_energie' ? (
           <View style={styles.note}>
             <EnergySymbol size="sm" />
             <Text variant="label" tone="inkMuted" style={styles.noteText}>

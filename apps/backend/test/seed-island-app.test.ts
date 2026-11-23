@@ -227,12 +227,12 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
     const world = await seeded(manifest);
     const iphone = world.phones['philipp-iphone']!;
     // Offline ist Philipps Anteil voll; Annas Einzahlung kennt das iPhone noch nicht.
-    expect(islandOf(iphone).project).toMatchObject({ sequenceNumber: 1, name: 'Gartenhäuschen', own: { paid: 20, need: 20 }, stage: 'gestartet' });
+    expect(islandOf(iphone).project).toMatchObject({ templateKey: 'gartenhaeuschen', name: 'Gartenhäuschen', own: { paid: 20, need: 20 }, stage: 'gestartet' });
     expect(islandOf(iphone).landmarks).toEqual([]);
 
     await runSyncSteps(manifest, world);
 
-    expect(islandOf(iphone).project).toMatchObject({ sequenceNumber: 2, kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet' });
+    expect(islandOf(iphone).project).toMatchObject({ templateKey: 'gartenhaeuschen_ausbau', kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet' });
     expect(islandOf(iphone).landmarks).toEqual([{ projectKey: 'gartenhaeuschen', site: 'grundinsel:7:2', art: 'gartenhaeuschen', size: 1 }]);
     expect(islandOf(iphone).progress.level).toBe(2);
     // Abschluss und Aufstieg entstehen im selben Befehl, zur selben Zeit.

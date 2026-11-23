@@ -1,4 +1,4 @@
-import { and, eq, sum } from 'drizzle-orm';
+import { eq, sum } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { energyBookingId, summarizeEnergy } from '@abnehm/contracts/energy';
@@ -7,7 +7,7 @@ import { islandContentId, islandEventId } from '@abnehm/contracts/island-records
 import { notificationIntentId } from '@abnehm/contracts/notifications';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { commonStage, decideContribution, projectAt, projectOccasionKey } from '@abnehm/game-rules/projects';
+import { commonStage, decideContribution, projectAt, projectOccasionKey, shareNeed } from '@abnehm/game-rules/projects';
 
 import { policies } from '../authorization/authorization.ts';
 import { changeWriter, updated } from '../coupling/change-writer.ts';
@@ -56,7 +56,7 @@ export const contributeToProjectCommand: ServerCommand<ContributeToProject> = {
     if (role === null) throw new CommandRejection('conflict', await canonicalProject());
 
     const paid = await paidByRole(tx, payload.projectId);
-    const need = { bauen: project.buildNeed, natur: project.natureNeed };
+    const need = { bauen: shareNeed(project, 'bauen'), natur: shareNeed(project, 'natur') };
     const bookings = (await readBookings(tx, [actor.personId])).get(actor.personId)!;
     const decision = decideContribution({
       requested: payload.amount,
@@ -157,7 +157,7 @@ async function completeProject(
   });
   changes.push(await canonicalAfterWrite(tx, islandEventEntity, eventId));
 
-  const members = await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(and(eq(couplingMember.couplingId, couplingId)));
+  const members = await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(eq(couplingMember.couplingId, couplingId));
   for (const { personId } of members) {
     const recipientPersonId = EntityId.parse(personId);
     await insertNotificationIntent(tx, {

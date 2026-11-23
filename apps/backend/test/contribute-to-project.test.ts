@@ -5,6 +5,9 @@ import { EntityId } from '@abnehm/contracts/base';
 import { energyBookingId, summarizeEnergy } from '@abnehm/contracts/energy';
 import type { IslandProgress } from '@abnehm/contracts/island';
 import { islandEventId } from '@abnehm/contracts/island-records';
+import { notificationTexts } from '@abnehm/contracts/notification-texts';
+import { withCatalogNames } from '@abnehm/game-rules/catalog';
+import { gameCatalog } from '@abnehm/game-rules/content';
 import { projectOccasionKey } from '@abnehm/game-rules/projects';
 
 import { islandProgress } from '../src/db/schema/index.ts';
@@ -124,7 +127,14 @@ describe('contributeToProject', { timeout: 30_000 }, () => {
     const { events, intents } = await completionsOf(world);
     expect(events).toMatchObject([{ id: islandEventId(world.islandId, occasionKey), occasionKey, templateKey: 'gartenhaeuschen', status: 'abgeschlossen' }]);
     expect(intents.map((intent) => intent.recipientPersonId).sort()).toEqual([world.anna.personId, world.philipp.personId].sort());
-    for (const intent of intents) expect(intent).toMatchObject({ sourceEventId: events[0]!.id, messageKey: 'projektabschluss', payload: { templateKey: 'gartenhaeuschen' } });
+    for (const intent of intents) {
+      expect(intent).toMatchObject({ sourceEventId: events[0]!.id, messageKey: 'projektabschluss', payload: { templateKey: 'gartenhaeuschen' } });
+      // Der Text aus Spezifikation 4, Abschnitt 12, mit dem Namen, den der Zusteller aus dem Katalog ergänzt.
+      expect(notificationTexts.renderStored(intent.messageKey, withCatalogNames(gameCatalog, intent.payload))).toEqual({
+        type: 'rendered',
+        text: { title: 'Gartenhäuschen ist fertig 🎉', body: 'Euer Wahrzeichen steht. Das nächste Gemeinschaftsprojekt wartet schon.' },
+      });
+    }
 
     // Die Antwort bringt beide Projekte, das Ereignis und den Fortschritt mit dem neuen Projekt.
     const types = result.changes?.map((change) => change.entityType);

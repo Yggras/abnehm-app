@@ -154,6 +154,10 @@ _Avoid_: Challenge, Gruppenquest
 Das auf der Insel sichtbare Bauwerk eines fertigen Gemeinschaftsprojekts.
 _Avoid_: Monument, Trophäe
 
+**Ausbau**:
+Ein Gemeinschaftsprojekt nach dem letzten Projekt der festen Reihenfolge: Es entsteht aus einer wiederverwendbaren Ausbau-Vorlage, vergrößert fertig ein vorhandenes Wahrzeichen sichtbar und braucht keinen eigenen Platz. Nicht zu verwechseln mit **Aufwerten**, das ein eigenes Objekt eine Stufe hebt.
+_Avoid_: Erweiterung, Upgrade
+
 **Gemeinschaftsplatz**:
 Der gemeinsame Inselbereich, auf dem Gemeinschaftsprojekte entstehen und ihre Wahrzeichen stehen; dort baut keine Person einzeln.
 _Avoid_: Marktplatz, Gemeinschaftsfeld

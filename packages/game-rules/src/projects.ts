@@ -1,7 +1,8 @@
-import type { CommonStage } from '@abnehm/contracts/island';
+import { shownEnergy } from '@abnehm/contracts/energy';
+import type { CommonStage, IslandRole } from '@abnehm/contracts/island';
 
-import { spend, type Checker, type SpendingRefusal } from './building.ts';
 import type { ArtKey, GameCatalog } from './catalog.ts';
+import { spend, type Checker, type SpendingRefusal } from './spending.ts';
 import { assertWholeNumber } from './whole-number.ts';
 
 // Gemeinschaftsprojekte und gemeinsame Stufe (Spezifikation 4, Abschnitt 8; Werte neu festgelegt,
@@ -35,32 +36,58 @@ export function projectOccasionKey(islandId: string, sequenceNumber: number): st
   return `projekt:${islandId}:${assertWholeNumber(sequenceNumber, 1, 'Projektnummer')}`;
 }
 
-/** Gemeinschaftsprojekt Nummer n: aus der festen Reihenfolge oder, danach, ein Ausbau. */
-export type ProjectSlot = Readonly<{
-  sequenceNumber: number;
+/** Was ein gespeichertes Projekt ist: ein neues Wahrzeichen oder der Ausbau eines vorhandenen, mit dessen Bauplatz und Grafik. */
+export type ProjectTemplateFacts = Readonly<{
   kind: 'projekt' | 'ausbau';
   /** Katalogschlüssel des Projekts bzw. der Ausbau-Vorlage; Vorlagenschlüssel des gespeicherten Projekts. */
   templateKey: string;
   name: string;
   /** Schlüssel des Projekts, dessen Wahrzeichen entsteht bzw. wächst. */
   landmarkOf: string;
-  /** Bedarf je Anteil (Bauen und Natur), festgeschrieben beim Start. */
-  need: number;
+  /** Bauplatz dieses Wahrzeichens am Gemeinschaftsplatz. */
+  site: string;
+  /** Grafik dieses Wahrzeichens. */
+  landmark: ArtKey;
 }>;
 
+/** Gemeinschaftsprojekt Nummer n samt seinem beim Start festgeschriebenen Bedarf je Anteil. */
+export type ProjectSlot = ProjectTemplateFacts & Readonly<{ sequenceNumber: number; need: number }>;
+
 /**
- * Projekt Nummer n (Spezifikation 4, Abschnitt 8): erst die Projekte in Katalogreihenfolge, danach die
- * Ausbau-Vorlagen der Reihe nach, immer wieder. Ohne Ausbau-Vorlage gibt es nach dem letzten Projekt keines;
- * das verhindert die Katalogprüfung (`ausbau`).
+ * Ein Projekt über seinen gespeicherten Vorlagenschlüssel; `null`, wenn der Katalog ihn nicht kennt. Bestehende Inseln
+ * bleiben so gültig, auch wenn ein späterer Katalog vor den Ausbau-Vorlagen weitere Projekte einfügt (Spezifikation 4,
+ * Abschnitt 4: Schlüssel werden nie umgewidmet).
+ */
+export function projectTemplate(catalog: GameCatalog, templateKey: string): ProjectTemplateFacts | null {
+  const facts = (kind: ProjectTemplateFacts['kind'], name: string, landmarkOf: string): ProjectTemplateFacts | null => {
+    const landmark = catalog.projects.find((project) => project.key === landmarkOf);
+    return landmark === undefined ? null : { kind, templateKey, name, landmarkOf, site: landmark.site, landmark: landmark.landmark };
+  };
+  const project = catalog.projects.find((candidate) => candidate.key === templateKey);
+  if (project !== undefined) return facts('projekt', project.name, project.key);
+  const expansion = catalog.projectExpansions.find((candidate) => candidate.key === templateKey);
+  return expansion === undefined ? null : facts('ausbau', expansion.name, expansion.project);
+}
+
+/**
+ * Projekt Nummer n (Spezifikation 4, Abschnitt 8), das der Server beim Start festschreibt: erst die Projekte in
+ * Katalogreihenfolge, danach die Ausbau-Vorlagen der Reihe nach, immer wieder. Ohne Ausbau-Vorlage gibt es nach dem
+ * letzten Projekt keines; das verhindert die Katalogprüfung (`ausbau`).
  */
 export function projectAt(catalog: GameCatalog, sequenceNumber: number): ProjectSlot {
   const need = projectNeed(sequenceNumber);
-  const project = catalog.projects[sequenceNumber - 1];
-  if (project !== undefined) return { sequenceNumber, kind: 'projekt', templateKey: project.key, name: project.name, landmarkOf: project.key, need };
   const expansions = catalog.projectExpansions;
-  if (expansions.length === 0) throw new Error('Der Spielkatalog hat keine Ausbau-Vorlage');
-  const expansion = expansions[(sequenceNumber - catalog.projects.length - 1) % expansions.length]!;
-  return { sequenceNumber, kind: 'ausbau', templateKey: expansion.key, name: expansion.name, landmarkOf: expansion.project, need };
+  const template =
+    catalog.projects[sequenceNumber - 1]?.key ??
+    (expansions.length === 0 ? undefined : expansions[(sequenceNumber - catalog.projects.length - 1) % expansions.length]!.key);
+  const facts = template === undefined ? null : projectTemplate(catalog, template);
+  if (facts === null) throw new Error(`Der Spielkatalog hat kein Projekt Nummer ${sequenceNumber}`);
+  return { ...facts, sequenceNumber, need };
+}
+
+/** Bedarf des Anteils einer Rolle, wie beim Start des Projekts festgeschrieben. */
+export function shareNeed(project: Readonly<{ buildNeed: number; natureNeed: number }>, role: IslandRole): number {
+  return role === 'bauen' ? project.buildNeed : project.natureNeed;
 }
 
 export type ContributionRequest = Readonly<{
@@ -91,15 +118,30 @@ export function decideContribution({ requested, share, balance, checkedBy }: Con
   return spending.type === 'erlaubt' ? { type: 'erlaubt', amount: spending.price } : spending;
 }
 
+/** Was das Gerät zum Einzahlen anbietet: ein voller Anteil, keine Energie oder Beträge von 1 bis `max`. */
+export type ContributionOption = Readonly<{ type: 'voll' }> | Readonly<{ type: 'keine_energie' }> | Readonly<{ type: 'moeglich'; max: number }>;
+
+/** Höchstens der Restbedarf und der angezeigte Bestand, nach derselben Regel wie `decideContribution` auf dem Gerät. */
+export function contributionOption(share: Share, balance: number): ContributionOption {
+  const rest = share.need - share.paid;
+  if (rest <= 0) return { type: 'voll' };
+  const max = Math.min(rest, shownEnergy(balance));
+  return max === 0 ? { type: 'keine_energie' } : { type: 'moeglich', max };
+}
+
 /** Ein Wahrzeichen auf seinem Bauplatz; `size` wächst mit jedem fertigen Ausbau ab 1. */
 export type Landmark = Readonly<{ projectKey: string; site: string; art: ArtKey; size: number }>;
 
-/** Die Wahrzeichen der fertigen Projekte (Nummern), in Katalogreihenfolge. */
-export function landmarks(catalog: GameCatalog, completed: readonly number[]): Landmark[] {
+/**
+ * Die Wahrzeichen der fertigen Projekte (Vorlagenschlüssel in Projektreihenfolge), in Katalogreihenfolge. Ein Ausbau
+ * vergrößert sein Wahrzeichen, wenn es schon steht; unbekannte Schlüssel zählen nicht.
+ */
+export function landmarks(catalog: GameCatalog, completed: readonly string[]): Landmark[] {
   const sizes = new Map<string, number>();
-  for (const slot of [...completed].sort((a, b) => a - b).map((n) => projectAt(catalog, n))) {
-    if (slot.kind === 'projekt') sizes.set(slot.landmarkOf, 1);
-    else if (sizes.has(slot.landmarkOf)) sizes.set(slot.landmarkOf, sizes.get(slot.landmarkOf)! + 1);
+  for (const facts of completed.map((templateKey) => projectTemplate(catalog, templateKey))) {
+    if (facts === null) continue;
+    if (facts.kind === 'projekt') sizes.set(facts.landmarkOf, 1);
+    else if (sizes.has(facts.landmarkOf)) sizes.set(facts.landmarkOf, sizes.get(facts.landmarkOf)! + 1);
   }
   return catalog.projects.flatMap((project) => {
     const size = sizes.get(project.key);

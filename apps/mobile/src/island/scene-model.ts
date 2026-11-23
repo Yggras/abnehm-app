@@ -38,9 +38,9 @@ export type IslandSceneInput = Readonly<{
   objects: readonly SceneObject[];
   momo: MomoAppearance;
   /** Wahrzeichen der fertigen Gemeinschaftsprojekte (#208). */
-  landmarks?: readonly SceneLandmark[];
-  /** Gerüst des aktiven Projekts; `null` ohne Projekt, etwa vor dem Schlüpfen. */
-  scaffold?: SceneScaffold | null;
+  landmarks: readonly SceneLandmark[];
+  /** Gerüst des aktiven Projekts; `null`, wenn der Katalog der App seinen Bauplatz nicht kennt. */
+  scaffold: SceneScaffold | null;
 }>;
 
 /** Lokale Uhrzeit der betrachtenden Person: Tag und Minute des Tages aus einer Ablesung der Uhr (`minutesOfDay`). */
@@ -219,13 +219,13 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
     return [{ cell: field, item }];
   });
   // Wahrzeichen vor ihrem Gerüst: Beim Ausbau steht das Gerüst um das vorhandene Wahrzeichen (#208).
-  for (const landmark of island.landmarks ?? []) {
+  for (const landmark of island.landmarks) {
     const field = fieldsByKey.get(landmark.site);
     if (field === undefined) continue;
     standing.push({ cell: field, item: { layer: 'objekte', type: 'wahrzeichen', field: field.key, at: project.center(field), art: landmark.art, scale: landmarkScale(landmark.size) } });
   }
-  const scaffoldField = island.scaffold == null ? undefined : fieldsByKey.get(island.scaffold.site);
-  if (scaffoldField !== undefined && island.scaffold != null) {
+  const scaffoldField = island.scaffold === null ? undefined : fieldsByKey.get(island.scaffold.site);
+  if (scaffoldField !== undefined && island.scaffold !== null) {
     standing.push({ cell: scaffoldField, item: { layer: 'objekte', type: 'geruest', field: scaffoldField.key, at: project.center(scaffoldField), art: `geruest_${island.scaffold.stage}` } });
   }
   if (place !== null) {

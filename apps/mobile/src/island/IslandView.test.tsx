@@ -26,7 +26,7 @@ const progress = IslandProgress.parse(contractFixtures.island!.IslandProgress!.v
 const halves = halvesFor(progress, philipp, 81);
 const momo = MomoAppearance.parse(Object.values(contractFixtures.island!.MomoAppearance!.valid).find((value) => (value as MomoAppearance).stage === 'geschluepft'));
 const fields = hatching(gameCatalog, { proposerPersonId: philipp, proposerRole: 'bauen', partnerPersonId: anna }).fields;
-const island = { ...islandLayout(gameCatalog, { fields, unlockedAreas: [] }), objects: [], momo };
+const island = { ...islandLayout(gameCatalog, { fields, unlockedAreas: [] }), objects: [], momo, landmarks: [], scaffold: null };
 // Mittwoch, 14. Oktober 2026, 14 Uhr in Berlin: Herbst, Tag.
 const clock = createTestClock({ instant: Instant.parse('2026-10-14T12:00:00.000Z'), timeZone: TimeZone.parse('Europe/Berlin') });
 

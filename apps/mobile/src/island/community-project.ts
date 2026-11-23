@@ -4,7 +4,7 @@ import { EntityId } from '@abnehm/contracts/base';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import { ContributeToProject, contributeToProjectKey, type CommonStage, type IslandProgress, type IslandRole } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { decideContribution, landmarks, projectAt, type ContributionDecision, type Landmark } from '@abnehm/game-rules/projects';
+import { contributionOption, decideContribution, landmarks, projectTemplate, shareNeed, type ContributionDecision, type ContributionOption, type Landmark } from '@abnehm/game-rules/projects';
 
 import { appendBooking, energyBookingEntity, readEnergy, removeUnconfirmedBooking } from '../energy';
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -25,50 +25,49 @@ import { onlyTheGameService, playingRole, type IslandCommandDependencies } from 
 /** Das aktive Gemeinschaftsprojekt aus Sicht der Person. */
 export type IslandProject = Readonly<{
   projectId: EntityId;
-  sequenceNumber: number;
   /** Ein neues Wahrzeichen oder der Ausbau eines vorhandenen. */
   kind: 'projekt' | 'ausbau';
   templateKey: string;
-  name: string;
-  /** Bauplatz des Wahrzeichens, das entsteht bzw. wächst; dort steht das Gerüst. */
-  site: string;
-  /** Grafik dieses Wahrzeichens. */
-  landmarkArt: string;
+  /** Name aus dem Spielkatalog; `null`, wenn der Katalog dieser App den Schlüssel noch nicht kennt. */
+  name: string | null;
+  /** Bauplatz des Wahrzeichens, das entsteht bzw. wächst; dort steht das Gerüst. `null` wie `name`. */
+  site: string | null;
   ownRole: IslandRole;
   /** Eigene Einzahlungen in den Anteil der eigenen Rolle und dessen Bedarf; exakt nur für die Person selbst. */
   own: Readonly<{ paid: number; need: number }>;
+  /** Was das Gerät zum Einzahlen anbietet, nach den Spielregeln (`contributionOption`). */
+  contribution: ContributionOption;
   /** Gemeinsamer Fortschritt nur als Stufe, aus dem Inselfortschritt. */
   stage: CommonStage;
 }>;
 
-/** Das aktive Projekt der Projektion und die Wahrzeichen der fertigen; `null`, solange das Projekt lokal fehlt. */
+/**
+ * Das aktive Projekt der Projektion und die Wahrzeichen der fertigen, erkannt an ihren gespeicherten
+ * Vorlagenschlüsseln; `null`, solange das Projekt lokal fehlt. `energy` ist der angezeigte eigene Bestand.
+ */
 export function readProjects(
   tx: ReadContext,
-  { islandId, progress, personId, ownRole }: Readonly<{ islandId: EntityId; progress: IslandProgress; personId: EntityId; ownRole: IslandRole }>,
+  { islandId, progress, personId, ownRole, energy }: Readonly<{ islandId: EntityId; progress: IslandProgress; personId: EntityId; ownRole: IslandRole; energy: number }>,
 ): Readonly<{ project: IslandProject; landmarks: readonly Landmark[] }> | null {
   const db = sqliteOf(tx);
   const rows = db.select().from(communityProject).where(eq(communityProject.islandId, islandId)).orderBy(asc(communityProject.sequenceNumber)).all();
   const active = rows.find((row) => row.id === progress.activeProject.projectId);
   if (active === undefined) return null;
-  const slot = projectAt(gameCatalog, active.sequenceNumber);
-  const site = gameCatalog.projects.find((project) => project.key === slot.landmarkOf);
+  const template = projectTemplate(gameCatalog, active.templateKey);
+  const own = { paid: ownPaid(tx, active.id, personId, ownRole), need: shareNeed(active, ownRole) };
   return {
     project: {
       projectId: EntityId.parse(active.id),
-      sequenceNumber: active.sequenceNumber,
-      kind: slot.kind,
+      kind: template?.kind ?? 'projekt',
       templateKey: active.templateKey,
-      name: slot.templateKey === active.templateKey ? slot.name : active.templateKey,
-      site: site?.site ?? '',
-      landmarkArt: site?.landmark ?? slot.landmarkOf,
+      name: template?.name ?? null,
+      site: template?.site ?? null,
       ownRole,
-      own: { paid: ownPaid(tx, active.id, personId, ownRole), need: ownRole === 'bauen' ? active.buildNeed : active.natureNeed },
+      own,
+      contribution: contributionOption(own, energy),
       stage: progress.activeProject.stage,
     },
-    landmarks: landmarks(
-      gameCatalog,
-      rows.filter((row) => row.status === 'fertig').map((row) => row.sequenceNumber),
-    ),
+    landmarks: landmarks(gameCatalog, rows.filter((row) => row.status === 'fertig').map((row) => row.templateKey)),
   };
 }
 
@@ -103,7 +102,7 @@ export function contributeToProject(
 
   const decision = decideContribution({
     requested: request.amount,
-    share: { paid: ownPaid(tx, project.id, personId, role), need: role === 'bauen' ? project.buildNeed : project.natureNeed },
+    share: { paid: ownPaid(tx, project.id, personId, role), need: shareNeed(project, role) },
     balance: readEnergy(tx, personId).balance,
     checkedBy: 'geraet',
   });

@@ -28,6 +28,8 @@ const island: IslandSceneInput = {
   fog: [],
   objects: [],
   momo,
+  landmarks: [],
+  scaffold: null,
 };
 
 const request = (overrides: Partial<IslandSceneRequest> = {}): IslandSceneRequest => ({
@@ -231,7 +233,7 @@ describe('Gebietsfreischaltung (#204)', () => {
   const hatched = hatching(gameCatalog, { proposerPersonId: anna, proposerRole: 'natur', partnerPersonId: philipp }).fields;
   const unlocked = areaUnlockAt(gameCatalog, { level: 4, sides: sidesOf(gameCatalog, hatched)! })!;
   const sceneOf = (fields: typeof hatched, unlockedAreas: readonly string[], transformation: IslandSceneRequest['transformation'] = null) =>
-    islandScene(request({ island: { ...islandLayout(gameCatalog, { fields, unlockedAreas }), objects: [], momo }, transformation }));
+    islandScene(request({ island: { ...islandLayout(gameCatalog, { fields, unlockedAreas }), objects: [], momo, landmarks: [], scaffold: null }, transformation }));
 
   test('der Nebel ist weg, sobald ein Gebiet freigeschaltet ist; seine Felder gehören dann ihren Personen', () => {
     const before = sceneOf(hatched, []);

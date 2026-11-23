@@ -80,6 +80,14 @@ describe('Textkatalog für Benachrichtigungen', () => {
     expect(notificationTexts.renderStored('challenge_vorschlag', payload)).toMatchObject({ type: 'contract_error', error: { code: 'invalid_payload' } });
   });
 
+  it('der gemeinsame Katalog: Projektabschluss mit dem Namen des Projekts aus dem Spielkatalog (Spezifikation 4, Abschnitt 12; #208)', () => {
+    expect(notificationTexts.render('projektabschluss', { templateKey: 'gartenhaeuschen', templateName: 'Gartenhäuschen' })).toEqual({
+      title: 'Gartenhäuschen ist fertig 🎉',
+      body: 'Euer Wahrzeichen steht. Das nächste Gemeinschaftsprojekt wartet schon.',
+    });
+    expect(notificationTexts.renderStored('projektabschluss', { templateKey: 'gartenhaeuschen' })).toMatchObject({ type: 'contract_error', error: { code: 'invalid_payload' } });
+  });
+
   it('der Eintrag passt zu Schlüssel und Werten des Intents aus den Fixtures', () => {
     for (const name of ['Rollenwahl', 'Levelaufstieg an Anna'] as const) {
       const intent = NotificationIntent.parse(notificationFixtures.NotificationIntent.valid[name]);

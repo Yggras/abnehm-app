@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CatalogKey } from './base.ts';
 import type { ContractError } from './errors.ts';
 import {
   AreaUnlockedPayload,
@@ -147,6 +148,14 @@ export const notificationTexts = defineNotificationTexts({
     title: 'Neues Gebiet auf eurer Insel 🏝️',
     body: 'Der Nebel zieht ab – es gibt etwas zu entdecken.',
   })),
+  /**
+   * Spezifikation 4, Abschnitt 12: an beide, sobald ein Gemeinschaftsprojekt fertig ist (#208). Den Namen des
+   * Projekts ergänzt der Zusteller aus dem Spielkatalog (`templateName`); die Payload trägt nur den Schlüssel.
+   */
+  projektabschluss: notificationText(
+    z.strictObject({ templateKey: CatalogKey, templateName: z.string().min(1).max(80) }),
+    ({ templateName }) => ({ title: `${templateName} ist fertig 🎉`, body: 'Euer Wahrzeichen steht. Das nächste Gemeinschaftsprojekt wartet schon.' }),
+  ),
   'rollen_anfrage.rollenwahl': notificationText(
     RoleRequestPayload.extend({ kind: z.literal('rollenwahl') }),
     ({ senderDisplayName }) => ({ title: `${senderDisplayName} schlägt eure Rollen vor`, body: 'Wenn du zustimmst, schlüpft Momo 🐣' }),

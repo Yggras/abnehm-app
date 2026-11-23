@@ -203,7 +203,7 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformatio
       objects: island.objects,
       momo: island.appearance,
       landmarks: island.landmarks,
-      scaffold: { site: island.project.site, stage: island.project.stage },
+      scaffold: island.project.site === null ? null : { site: island.project.site, stage: island.project.stage },
     }),
     [island.fields, island.unlockedAreas, island.objects, island.appearance, island.landmarks, island.project.site, island.project.stage],
   );
@@ -321,7 +321,6 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformatio
         ) : sheet?.type === 'projekt' ? (
           <ProjectSheet
             project={island.project}
-            energy={island.energy}
             onContribute={(amount) => {
               const outcome = contribute({ projectId: island.project.projectId, amount });
               return outcome.type === 'eingezahlt' ? outcome.amount : null;
