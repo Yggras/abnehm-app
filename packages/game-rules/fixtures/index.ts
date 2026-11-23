@@ -132,6 +132,7 @@ export function testCatalog(): GameCatalog {
     ],
     accessories: [],
     projects: [{ key: 't_projekt', name: 'Testprojekt', landmark: 't_projekt', site: 'grundinsel:7:2' }],
+    projectExpansions: [{ key: 't_projekt_ausbau', name: 'Testausbau', project: 't_projekt' }],
     challengeTemplates: [],
   };
 }

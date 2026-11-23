@@ -24,7 +24,7 @@ type FieldRef = Readonly<{ key: string; ownerPersonId: string | null }>;
 type Person = Readonly<{ personId: string; role: IslandRole }>;
 
 /** Wer den Bestand prüft: `geraet` nur bei ausreichendem Bestand, `server` nur bis zur Schutzgrenze. */
-type Checker = 'geraet' | 'server';
+export type Checker = 'geraet' | 'server';
 
 export type BuildRequest = Readonly<{
   blueprintKey: string;
@@ -41,7 +41,7 @@ export type BuildRequest = Readonly<{
 type PlacementRefusal = Readonly<{ type: 'verboten'; reason: Extract<PlacementDecision, { type: 'verboten' }>['reason'] }>;
 
 /** Ausgabe abgelehnt: auf dem Server die Schutzgrenze, auf dem Gerät mit dem, was zum Preis fehlt. */
-type SpendingRefusal =
+export type SpendingRefusal =
   | Readonly<{ type: 'verboten'; reason: 'schutzgrenze' }>
   /** Preis und was dazu fehlt; die Oberfläche zeigt neutral „Noch ‹n› Energie“. */
   | Readonly<{ type: 'verboten'; reason: 'zu_wenig_energie'; price: number; missing: number }>;
@@ -138,7 +138,8 @@ function placedAs(catalog: CatalogIndex, object: ObjectRef): PlacementRequest['o
   return catalog.find('deko', object.catalogKey).type === 'found' ? { type: 'deko' } : null;
 }
 
-function spend(price: number, balance: number, checkedBy: Checker): Spending {
+/** Ob die Person `price` ausgeben darf; gemeinsam für Bauen, Aufwerten und Einzahlen (#208). */
+export function spend(price: number, balance: number, checkedBy: Checker): Spending {
   if (checkedBy === 'server') return balance - price < serverDebtLimit ? { type: 'verboten', reason: 'schutzgrenze' } : { type: 'erlaubt', price };
   // Ein negativer Zwischenstand zählt wie angezeigt als 0 (Spezifikation 0, Abschnitt 4).
   const available = shownEnergy(balance);

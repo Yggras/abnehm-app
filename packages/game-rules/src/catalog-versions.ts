@@ -16,6 +16,7 @@ const dedications: { [K in KeyedEntryKind]: (entry: CatalogEntries[K]) => string
   besuchervorlage: () => 'besuchervorlage',
   accessoire: (accessory) => `accessoire:${accessory.slot}`,
   gemeinschaftsprojekt: (project) => `gemeinschaftsprojekt:${project.sequenceNumber}`,
+  ausbauvorlage: (expansion) => `ausbauvorlage:${expansion.project}`,
   challenge_vorlage: () => 'challenge_vorlage',
 };
 

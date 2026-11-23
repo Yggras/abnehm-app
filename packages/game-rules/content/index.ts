@@ -3,14 +3,14 @@ import { accessories } from './accessories.ts';
 import { areaBlueprints, areaDeko, areas } from './areas.ts';
 import { baseIsland } from './base-island.ts';
 import { challengeDeko, challengeTemplates } from './challenges.ts';
-import { firstProject, startBlueprints } from './start.ts';
+import { firstExpansion, firstProject, startBlueprints } from './start.ts';
 import { visitorBlueprints, visitorDeko, visitorTemplates } from './visitors.ts';
 
 // Der ausgelieferte Spielkatalog (Spezifikation 4, Abschnitt 4). Jede Änderung erhöht `version` und
 // legt mit `npm run catalog:snapshot --workspace @abnehm/game-rules` den Schnappschuss dazu an.
 
 export const gameCatalog: GameCatalog = {
-  version: 5,
+  version: 6,
   blueprints: [...startBlueprints, ...visitorBlueprints, ...areaBlueprints],
   levelUnlocks: [],
   baseIsland,
@@ -20,5 +20,6 @@ export const gameCatalog: GameCatalog = {
   visitorTemplates: [...visitorTemplates],
   accessories: [...accessories],
   projects: [firstProject],
+  projectExpansions: [firstExpansion],
   challengeTemplates: [...challengeTemplates],
 };
