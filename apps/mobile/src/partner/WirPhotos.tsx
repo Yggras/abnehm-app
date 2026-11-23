@@ -31,6 +31,8 @@ const LIST_RENEW_MS = 9 * 60_000;
 export type TodayPhotos = Readonly<{
   /** Die Fotos der Liste; leer offline, ohne Ergebnis, bei leerer Liste und bei `forbidden`. */
   photos: readonly Photo[];
+  /** Woher die Bilder kommen; `null` ohne geöffnetes Konto. */
+  source: PartnerPhotos | null;
   /** Pull-to-Refresh: lädt die Liste neu, sofern sie gerade abgefragt werden darf. */
   reload(): Promise<unknown>;
 }>;
@@ -48,7 +50,7 @@ export function useTodayPhotos(source: PartnerPhotos | null, online: boolean): T
   const [visit, setVisit] = useState({ active: false, count: 0 });
   if (visit.active !== active) setVisit({ active, count: active ? visit.count + 1 : visit.count });
   const enabled = active && visit.active;
-  const { state, retry } = useOnlineRead(['partnerfotos', 'liste', visit.count], () => source!.list(), { enabled });
+  const { state, retry } = useOnlineRead(['partnerfotos', 'liste', visit.count], () => (source === null ? Promise.resolve({ type: 'offline' } as const) : source.list()), { enabled });
   // Bleibt „Wir“ sichtbar, erneuert sich die Liste vor Ablauf der Handles und bei Rückkehr in den Vordergrund;
   // bis die neue Liste da ist, bleibt die alte stehen (TanStack behält `data` beim erneuten Abruf).
   useEffect(() => {
@@ -64,14 +66,15 @@ export function useTodayPhotos(source: PartnerPhotos | null, online: boolean): T
   }, [enabled, retry]);
   return {
     photos: active && state.type === 'ok' ? state.value.photos : [],
+    source,
     reload: () => (active ? retry() : Promise.resolve()),
   };
 }
 
 /** Die Zeile „Fotos von heute“; ohne Fotos entfällt sie still. */
-export function PhotosRow({ source, name, photos }: { source: PartnerPhotos; name: string; photos: readonly Photo[] }) {
+export function PhotosRow({ today: { photos, source }, name }: { today: TodayPhotos; name: string }) {
   const [opened, setOpened] = useState<number | null>(null);
-  if (photos.length === 0) return null;
+  if (source === null || photos.length === 0) return null;
   const previews = photos.slice(0, MAX_PREVIEWS);
   const more = photos.length - previews.length;
   return (

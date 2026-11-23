@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 
 import type { Clock } from '@abnehm/clock';
 import { EntityId, MealKey, TimeZone } from '@abnehm/contracts/base';
-import { MealPhotoVariant } from '@abnehm/contracts/nutrition';
+import { PartnerPhotoRequest } from '@abnehm/contracts/partner';
 
 import { guard, partnerResponse, policies } from '../authorization/authorization.ts';
 import type { Database } from '../database.ts';
@@ -97,11 +97,11 @@ export function createPartnerPhotos({
       '/nutrition/partner-photos/:handle/:variant',
       guard(policies.resource('meal_photo', 'lesen'), locatePhoto),
       async (c) => {
-        const variant = MealPhotoVariant.safeParse(c.req.param('variant'));
-        if (!variant.success) return c.json(invalidVariant, 400);
+        const request = PartnerPhotoRequest.safeParse({ handle: c.req.param('handle'), variant: c.req.param('variant') });
+        if (!request.success) return c.json(invalidVariant, 400);
         const photoId = resolved.get(c.req.raw);
         if (photoId === undefined) return c.body(null, 404, { 'cache-control': 'no-store' });
-        return servePhoto(c, { database, storage }, photoId, variant.data);
+        return servePhoto(c, { database, storage }, photoId, request.data.variant);
       },
     );
 

@@ -111,6 +111,25 @@ describe('Fotoliste', () => {
     expect(list.photos.map(({ meal }) => meal)).toEqual(['abendessen']);
   });
 
+  it('jedes gelistete Handle gibt der Bildabruf frei: Liste und Regel `meal_photo` sehen dieselben Fotos', async () => {
+    const world = await coupledWorld();
+    // Gemischter Tag: sichtbare Fotos an beiden Rändern des lokalen Tags, dazu alles, was beide ausschließen müssen.
+    await insert.mealPhoto(world, world.anna, { capturedAt: new Date('2026-10-13T22:00:00.000Z'), meal: 'fruehstueck' });
+    await insert.mealPhoto(world, world.anna, { meal: 'abendessen' });
+    await insert.mealPhoto(world, world.anna, { shared: false });
+    await insert.mealPhoto(world, world.anna, { localDate: '2026-10-13' });
+    const orphan = await insert.mealPhoto(world, world.anna);
+    await world.backend.database.db.update(nutritionEntry).set({ deletedAt: new Date(worldStart.instant) }).where(eq(nutritionEntry.mealPhotoId, orphan));
+
+    const { list } = await photoList(world.backend, world.philipp.device);
+
+    expect(list.photos.map(({ meal }) => meal)).toEqual(['fruehstueck', 'abendessen']);
+    for (const { handle } of list.photos) {
+      // Ohne Datei in der Fotoablage antwortet der freigegebene Abruf mit 404, verweigert wäre 403.
+      expect((await fetchImage(world.backend, world.philipp.device, handle)).status).toBe(404);
+    }
+  });
+
   it('enthält keine Namen, Mengen, kcal, Makros, Zeitpunkte oder Roh-IDs', async () => {
     const world = await coupledWorld();
     const { payload, imageKey } = await confirmedPhoto(world, world.anna);

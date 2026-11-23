@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
 
@@ -265,7 +265,7 @@ export const insert = {
   ) {
     const id = randomUUID();
     const db = world.backend.database.db;
-    await db.insert(mealPhoto).values({ id, personId: owner.personId, imageKey: `foto/${id}`, capturedAt, sharedWithPartner: shared, ...sync });
+    await db.insert(mealPhoto).values({ id, personId: owner.personId, imageKey: randomBytes(32).toString('base64url'), capturedAt, sharedWithPartner: shared, ...sync });
     await db.insert(nutritionEntry).values({
       id: randomUUID(),
       personId: owner.personId,

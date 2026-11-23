@@ -7,8 +7,6 @@ import { MomoFigure } from '../momo';
 import { areaIcons } from '../shell/area-icons';
 import { ScreenFrame } from '../shell/ScreenFrame';
 import { usePartner, useWirPartner, useWirShared } from './app-partner';
-import type { Partner } from './partner';
-import type { PartnerPhotos } from './partner-photos';
 import { PartnerAvatar } from './PartnerAvatar';
 import { PartnerStage } from './PartnerStage';
 import { partnerActions, type CoupledPartner, type WirPartner } from './partner-view';
@@ -33,12 +31,12 @@ export function WirScreen() {
   const refresh = partner === null ? undefined : () => Promise.all([partner.refresh(), photos.reload()]);
   return (
     <ScreenFrame title={partnerTexts.title} presentation="tab" onRefresh={refresh}>
-      <WirContent partner={partner} state={state} shared={shared} photos={photos} />
+      <WirContent state={state} shared={shared} photos={photos} />
     </ScreenFrame>
   );
 }
 
-function WirContent({ partner, state, shared, photos }: { partner: Partner | null; state: WirPartner; shared: WirShared; photos: TodayPhotos }) {
+function WirContent({ state, shared, photos }: { state: WirPartner; shared: WirShared; photos: TodayPhotos }) {
   switch (state.type) {
     case 'loading':
       return (
@@ -50,7 +48,7 @@ function WirContent({ partner, state, shared, photos }: { partner: Partner | nul
     case 'solo':
       return <Solo />;
     case 'coupled':
-      return <Coupled partner={state} shared={shared} photos={partner === null ? null : { source: partner.photos, photos: photos.photos }} />;
+      return <Coupled partner={state} shared={shared} photos={photos} />;
   }
 }
 
@@ -77,7 +75,7 @@ function Solo() {
  * Feste Reihenfolge nach Spezifikation 5, Abschnitt 2: antwortbedürftige Vorgänge, Partnerübersicht (mit dem
  * neutralen Offline-Hinweis darüber), Anfeuern, Challenge, Gemeinschaftsprojekt, „Neu bei euch“.
  */
-function Coupled({ partner, shared, photos }: { partner: Readonly<{ type: 'coupled' } & CoupledPartner>; shared: WirShared; photos: OverviewPhotos }) {
+function Coupled({ partner, shared, photos }: { partner: Readonly<{ type: 'coupled' } & CoupledPartner>; shared: WirShared; photos: TodayPhotos }) {
   const stand = partner.age === null ? null : standText(partner.age, partner.stale);
   return (
     <>
@@ -98,22 +96,18 @@ function Coupled({ partner, shared, photos }: { partner: Readonly<{ type: 'coupl
   );
 }
 
-/** „Fotos von heute“ samt dem Partnerbereich, der die Bilder abruft; `null` ohne geöffnetes Konto. */
-type OverviewPhotos = Readonly<{ source: PartnerPhotos; photos: TodayPhotos['photos'] }> | null;
-
 /**
  * Partnerübersicht: Avatar, Name, grober Tageszielstand und je freigegebenem Bereich eine Zeile. „Fotos von heute“
  * steht beim Bereich Ernährung, also direkt nach dessen Zeile oder, ohne Ernährungsfreigabe, an ihrer Stelle.
  */
-function Overview({ partner, stand, photos }: { partner: CoupledPartner; stand: Spoken | null; photos: OverviewPhotos }) {
+function Overview({ partner, stand, photos }: { partner: CoupledPartner; stand: Spoken | null; photos: TodayPhotos }) {
   const singleColumn = useLargeTextLayout();
   const name = partner.displayName;
   const stage = partner.dailyGoal?.stage ?? null;
   const spokenStand = stand === null ? '' : `, ${stand.spoken}`;
   const nutritionIndex = partner.summaries.findIndex((summary) => summary.type === 'ernaehrung');
-  /** Die Fotozeile hinter der Zeile `index`; `-1` steht vor allen Bereichen. */
-  const photosAt = (index: number) =>
-    photos !== null && index === nutritionIndex ? <PhotosRow source={photos.source} name={name} photos={photos.photos} /> : null;
+  const photosRow = <PhotosRow today={photos} name={name} />;
+  const withoutNutrition = nutritionIndex === -1;
   return (
     <Card>
       <View testID="wir-partneruebersicht" style={styles.group}>
@@ -124,7 +118,8 @@ function Overview({ partner, stand, photos }: { partner: CoupledPartner; stand: 
             {stage === null ? null : <PartnerStage stage={stage} />}
           </View>
         </View>
-        {photosAt(-1)}
+        {/* Ohne Ernährungsfreigabe stehen die Fotos an der Stelle der Ernährungszeile, vor allen Bereichen. */}
+        {withoutNutrition ? photosRow : null}
         {partner.summaries.map((summary, index) => {
           const value = summaryText(summary);
           const area = areaNames[summary.type];
@@ -146,7 +141,7 @@ function Overview({ partner, stand, photos }: { partner: CoupledPartner; stand: 
                   {value.shown}
                 </Text>
               </View>
-              {photosAt(index)}
+              {index === nutritionIndex ? photosRow : null}
             </Fragment>
           );
         })}
