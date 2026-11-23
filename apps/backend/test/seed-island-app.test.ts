@@ -11,6 +11,7 @@ import { islandSyncEntities } from '../../mobile/src/island/island-entities.ts';
 import { dailyGoalCompletionEntity } from '../../mobile/src/daily-goals/index.ts';
 import { energyBookingEntity } from '../../mobile/src/energy/index.ts';
 import { islandEventCommands } from '../../mobile/src/island/island-events.ts';
+import { communityProjectCommands } from '../../mobile/src/island/community-project.ts';
 import { islandObjectCommands } from '../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../mobile/src/island/game-service.ts';
 import type { MomoReaction } from '../../mobile/src/island/momo-reactions.ts';
@@ -90,7 +91,7 @@ async function phone(backend: TestBackend, manifest: SeedManifest, key: SeedKey)
     }),
     clock,
     installationId: InstallationId.parse(installation.installationId),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...islandEventCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...communityProjectCommands, ...islandEventCommands] }),
   });
   // Die Vorschau der Challenge-Anteile liest den Wochenplan des Seeds aus der Gerätedatenbank (#210).
   const game = createGameService({ database, writer, clock, newId, ...quietGameDependencies, planReader: planReaderOf(database) });
@@ -218,6 +219,27 @@ describe('Spieldienst auf den geseedeten Geräten', () => {
       expect(at(phone, second)).toBe('grundinsel:2:2');
       expect(islandOf(phone).storage.map((object) => object.id)).toEqual([first]);
       expect(islandOf(phone).energy).toBe(23);
+    }
+  });
+
+  it('projekt-abschluss: Beide haben offline eingezahlt; nach den Syncs steht das Gartenhäuschen, und der Ausbau beginnt (#208)', { timeout: 30_000 }, async () => {
+    const manifest = seedManifests['projekt-abschluss'];
+    const world = await seeded(manifest);
+    const [iphone, android] = [world.phones['philipp-iphone']!, world.phones['anna-android']!];
+    // Offline ist der eigene Anteil voll; gemeinsam steht das Projekt noch am Anfang.
+    for (const phone of [iphone, android]) {
+      expect(islandOf(phone).project).toMatchObject({ sequenceNumber: 1, name: 'Gartenhäuschen', own: { paid: 20, need: 20 }, stage: 'gestartet' });
+      expect(islandOf(phone).landmarks).toEqual([]);
+    }
+
+    await runSyncSteps(manifest, world);
+
+    for (const phone of [iphone, android]) {
+      expect(islandOf(phone).project).toMatchObject({ sequenceNumber: 2, kind: 'ausbau', name: 'Gartenhäuschen-Ausbau', own: { paid: 0, need: 30 }, stage: 'gestartet' });
+      expect(islandOf(phone).landmarks).toEqual([{ projectKey: 'gartenhaeuschen', site: 'grundinsel:7:2', art: 'gartenhaeuschen', size: 1 }]);
+      expect(islandOf(phone).progress.level).toBe(2);
+      // Abschluss und Aufstieg entstehen im selben Befehl, zur selben Zeit.
+      expect(islandOf(phone).sharedEvents.map((event) => event.type).sort()).toEqual(['levelaufstieg', 'momo_geschluepft', 'projektabschluss']);
     }
   });
 

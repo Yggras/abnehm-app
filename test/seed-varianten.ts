@@ -80,6 +80,7 @@ export const seedVariants: readonly SeedVariant[] = [
   manifest('challenge-vorgeschlagen', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('challenge-verfallen', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('challenge-passt-nicht', 'apps/backend/test/seed-island-app.test.ts'),
+  manifest('projekt-abschluss', 'apps/backend/test/seed-island-app.test.ts'),
   manifest('tage_ohne_app_oeffnung', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   manifest('zeitzonen_reisen', 'packages/contracts/test/seeds-tagesziele.test.ts'),
   manifest('budgetvorschlag-senken', 'packages/contracts/test/seeds-budgetvorschlag.test.ts', 'apps/mobile/src/plan/budget-suggestion-seeds.test.ts'),

@@ -167,6 +167,8 @@ export const seedIds = {
     /** Erfüllungen in den Randzuständen der Ernährung (#166). */
     ernaehrungErfuellt: [id('0090', 52)],
     kalorienbudgetInnerhalb: [id('0090', 53)],
+    /** Offline-Einzahlungen in `projekt-abschluss` (#208): Annas Android und Philipps iPhone. */
+    projektAbschluss: { android: id('0090', 59), iphone: id('0090', 60) },
     /** Upsert des neuen Budgetvorschlags im Schritt `budgetvorschlag_pruefen` (#150). */
     budgetvorschlag: { senken: id('0090', 57), anheben: id('0090', 58) },
   },
@@ -193,6 +195,9 @@ export const seedIds = {
   buildCommand: (n: number) => id('0054', n),
   /** IDs der Spielbefehle `placeObject` (#194), fortlaufend. */
   placeCommand: (n: number) => id('0055', n),
+  /** Projekteinzahlungen (#208) und die IDs ihrer Spielbefehle, je Einzahlung dieselbe laufende Nummer. */
+  contribution: (n: number) => id('0058', n),
+  contributeCommand: (n: number) => id('0059', n),
   partnerSharing: {
     philipp: { ernaehrung: id('0043', 1), wasser: id('0043', 2), sport: id('0043', 3), gewicht: id('0043', 4) },
     anna: { ernaehrung: id('0043', 5), wasser: id('0043', 6), sport: id('0043', 7), gewicht: id('0043', 8) },
