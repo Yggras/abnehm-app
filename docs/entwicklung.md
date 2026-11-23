@@ -224,7 +224,7 @@ Trainings und Gewichte aus Apple Health bzw. Health Connect (Abschnitte 2, 3 und
 | `prices` | `basePrice(bauplan)`, `upgradePrice(bauplan, stufe)` |
 | `fields` | `fieldQuota(gebiete)`; `placement({ field, person, object })` ergibt `erlaubt` oder `verboten` mit Grund `gemeinsamer_bereich`, `fremdes_feld` bzw. `falsche_rolle` |
 | `unlocks` | `unlocksAt(katalog, level)`: Baupläne samt Grund (`start`, `level`, `entdeckung`), neue Form und Gebiet (fest oder endlos). Dazu `formAt(level)`. |
-| `projects` | `projectNeed(n)` und `commonStage([a, b])`, die gemeinsame Stufe von Projekt und Challenge |
+| `projects` | `projectNeed(n)` und `commonStage([a, b])`, die gemeinsame Stufe von Projekt und Challenge. Seit #208: `projectAt(katalog, n)` (Projekt Nummer n, nach dem letzten Katalogprojekt die Ausbau-Vorlagen der Reihe nach), `decideContribution` (höchstens bis zum Restbedarf, `anteil_voll`, Bestand wie beim Bauen), `landmarks(katalog, fertige)` und `projectOccasionKey(insel, n)` (Abschnitt „Gemeinschaftsprojekte“) |
 | `hatching` | `hatching(katalog, { proposerPersonId, proposerRole, partnerPersonId })`: Rollen, Felder der Grundinsel mit Besitzer, Start-Baupläne und Projekt 1 beim Schlüpfen; `otherRole(rolle)` (#184) |
 | `building` | `decideBuild(katalogIndex, anfrage)`: `erlaubt` mit Preis oder `verboten` mit Grund (`unbekannter_schluessel`, `nicht_freigeschaltet`, Platzierungsgründe, `zu_wenig_energie` samt `price` und `missing` (seit #194), `schutzgrenze`). `checkedBy: 'geraet'` verlangt ausreichenden angezeigten Bestand, `checkedBy: 'server'` nur die Schutzgrenze `serverDebtLimit` (−30) (#191). `nextStage(stufe)`, `decideUpgrade` (genau eine Stufe weiter, nur Gebautes: `nicht_aufwertbar`, `falsche_stufe`, Bestand wie beim Bauen) und `decidePlacement` (Platzierungsregeln für Gebautes mit der Rolle seines Bauplans und für Deko) (#194) |
 | `mood` | `momoMood(fakten)`, Momos Stimmung je Ansicht; `reactionMood(ereignisse)` und `strongestEvent(ereignisse)` für eigene Ereignisse (`MomoEvent`) eines Commits (#188, Abschnitt „Momo-Reaktionen und Stimmungen“) |
@@ -384,6 +384,32 @@ Die Fachbefehle `upgradeObject` und `placeObject` sowie das persönliche Lager (
   - **App gegen Hono-App:** `object-commands-app.test.ts` prüft Tracer, Gerätegrenzen, den Feldkonflikt auf zwei Geräten (das verdrängte Objekt liegt nach dem Pull auf beiden im Lager), einen Pull über eine offene Operation, dieselbe Aufwertung auf zwei Geräten und die Bereinigung einer Platzierung, die der Server ohne Datensatz ablehnt. Die Helfer `hatchedPhones`, `energize`, `islandOf` und `fieldOn` liegen in `test/support/game-phones.ts`.
   - **Oberfläche:** `object-options.test.ts` prüft die Optionen als reine Funktion, `ObjectsAndStorage.test.tsx` den Ablauf im Tab mit dem echten Spieldienst: Tracer, Partnerobjekt, Lager, Route und Abbrechen.
   - **Seed:** `feldkonflikt` prüfen `packages/contracts/test/seeds.test.ts`, die Manifest-Suite und `seed-island-app.test.ts`.
+
+### Gemeinschaftsprojekte
+
+Einzahlen, Projektabschluss und das Projekt-Sheet (Abschnitte 2.2, 2.5, 8 und 13 der [Spezifikation 4](https://github.com/Yggras/abnehm-app/issues/83), [#208](https://github.com/Yggras/abnehm-app/issues/208)). Die neun Projekte, die Ausbau-Vorlagen und die Wahrzeichen-Grafiken liefert [#209](https://github.com/Yggras/abnehm-app/issues/209).
+
+- **Spielregeln und Katalog** (`@abnehm/game-rules/projects`):
+  - `projectAt(katalog, n)` ist Projekt Nummer n: zuerst die Projekte in Katalogreihenfolge, danach die Ausbau-Vorlagen (`projectExpansions`, Art `ausbauvorlage`) der Reihe nach, immer wieder. Der Bedarf je Anteil ist `projectNeed(n)`.
+  - Eine Ausbau-Vorlage nennt das Projekt, dessen Wahrzeichen sie vergrößert. `checkCatalog` verlangt nach dem letzten Projekt mindestens eine Vorlage (`ausbau`). Solange der Katalog nur Projekt 1 kennt, folgt der Gartenhäuschen-Ausbau (Katalog 6, Nutzerentscheidung in #208).
+  - `decideContribution({ requested, share, balance, checkedBy })` zahlt höchstens den Restbedarf des Anteils ein. Der Bestand gilt wie beim Bauen (Gerät: angezeigter Bestand; Server: Schutzgrenze −30), beides mit dem gekürzten Betrag. Ein voller Anteil ist `anteil_voll`.
+  - `landmarks(katalog, fertigeNummern)` liefert die Wahrzeichen der fertigen Projekte; jede fertige Ausbau-Vorlage erhöht die Größe ihres Wahrzeichens um 1.
+- **Vertrag:** `ContributeToProject` (`commandId`, `contributionId`, `projectId`, `amount`, `localDate`) mit `contributeToProjectKey(commandId)` = `einzahlen:‹commandId›`. Eine Rolle nennt die Nutzlast nie; sie kommt aus der Kopplung. Die `project_contribution_debit` heißt `energyBookingId(commandId)`. Den Datensatz der Einzahlung überträgt `ProjectContributionRecord` (`@abnehm/contracts/island-records`). Das nächste Projekt heißt `islandContentId('community_project', insel, '‹n›')`.
+- **Server** (`apps/backend/src/island/community-projects.ts`):
+  - Die Autorisierung `community_project` lässt nur aktive Mitglieder der Kopplung zu, der das Projekt gehört.
+  - Der Befehl sperrt die Projektzeile (`for update`) und ordnet so gleichzeitige Einzahlungen beider. Ein fertiges Projekt oder ein voller Anteil ist `conflict` mit dem Projekt als kanonischem Datensatz.
+  - Er schreibt Buchung und Einzahlung (`project_contribution`, nur für die eigene Person lesbar) mit dem gekürzten Betrag.
+  - Sind danach beide Anteile voll, schreibt er im selben Befehl das Projekt als `fertig`, das nächste Projekt, das Ereignis `projektabschluss` (Anlassschlüssel `projekt:‹insel›:‹n›`, Vorlagenschlüssel des Projekts) und je einen Intent `projektabschluss` an beide.
+  - Zuletzt berechnet `progressChanges` den Inselfortschritt samt möglichem Levelaufstieg neu.
+- **App** (`apps/mobile/src/island/community-project.ts`):
+  - `game.contribute({ projectId, amount })` zahlt offline ein: Buchung, Einzahlung und Outbox-Operation in einer Transaktion. Den eigenen Anteil rechnet das Gerät nur aus den eigenen Einzahlungen mit der aktuellen Rolle. Nach einem Rollentausch kann der Server deshalb weniger annehmen, wenn der Partner vorher in diesen Anteil eingezahlt hat; der kanonische Datensatz ersetzt dann den lokalen. Eine dauerhafte Ablehnung entfernt Einzahlung und Buchung (`communityProjectCommands` für alle Befehls-Registries).
+  - `readHatchedIsland` liefert `project` (aktives Projekt der Projektion mit Art, Name, Bauplatz, eigenem Anteil und gemeinsamer Stufe) und `landmarks`. „Wir“ bekommt `community_project` mit der Aktion `momo` und `view: 'projekt'`.
+- **Oberfläche:**
+  - „Projekt“ in der Leiste und die Route `momo` mit `view: 'projekt'` öffnen das Projekt-Sheet (`ProjectSheet.tsx`). Es zeigt „Dein Anteil: ‹n› von ‹m›“ bzw. „Dein Anteil ist voll“, die Stufe als „Gemeinsam: …“, einen Betrag (vorgeschlagen ist das Mögliche) und „Einzahlen“. Ohne Energie steht ein neutraler Satz statt des Knopfs.
+  - Das Szenenmodell zeichnet das Gerüst des aktiven Projekts (`geruest_‹stufe›`) auf dessen Bauplatz und die Wahrzeichen fertiger Projekte, je fertigem Ausbau 15 % größer (höchstens dreimal). Beim Ausbau steht das Gerüst vor dem Wahrzeichen. Gerüst und Gartenhäuschen sind Platzhalter-Grafiken aus #208 (`art.ts`).
+  - Sätze außer den Zitaten aus Spezifikation 4, Abschnitt 8 sind Designwerte aus #208, nicht belegt (`projectTexts` in `texts.ts`).
+- **Tests:** Spielregeln in `packages/game-rules/test/projects.test.ts`; Server in `apps/backend/test/contribute-to-project.test.ts` (Tracer, Kürzen, zweites Gerät, Retry, Abschluss, Rollentausch, Partner-Pull, Autorisierungsmatrix über `contributeToProjectCommandScenario` in `test/support/projects.ts`); App gegen Hono-App in `community-project-app.test.ts`; Oberfläche in `scene-model.test.ts`, `art.test.ts` und `ProjectSheet.test.tsx`.
+- **Seed `projekt-abschluss`** (`packages/contracts/seeds/projekte.ts`, „Projektabschluss mit Start des nächsten Projekts“): `gekoppelt` ohne Bauten. Anna (Android) und Philipp (iPhone) haben offline je 20 eingezahlt. Nach den Syncs ist das Gartenhäuschen fertig, der Ausbau beginnt, und die Insel steigt auf Level 2. Ohne Bauten, weil der Abschluss sonst über Level 4 samt Gebiet führte. Seed-Link etwa `abnehmapp-dev://seed?szenario=projekt-abschluss&installation=anna-android`.
 
 ### Insel-Ereignisse: Erzeugung und Besucher mit Wunsch
 
