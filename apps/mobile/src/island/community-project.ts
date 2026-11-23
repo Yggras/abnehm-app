@@ -4,7 +4,7 @@ import { EntityId } from '@abnehm/contracts/base';
 import { energyBookingId } from '@abnehm/contracts/energy';
 import { ContributeToProject, contributeToProjectKey, type CommonStage, type IslandProgress, type IslandRole } from '@abnehm/contracts/island';
 import { gameCatalog } from '@abnehm/game-rules/content';
-import { contributionOption, decideContribution, landmarks, projectTemplate, shareNeed, type ContributionDecision, type ContributionOption, type Landmark } from '@abnehm/game-rules/projects';
+import { contributionOption, decideContribution, landmarks, projectTemplate, shareNeed, type ContributionDecision, type ContributionOption, type Landmark, type ProjectKind } from '@abnehm/game-rules/projects';
 
 import { appendBooking, energyBookingEntity, readEnergy, removeUnconfirmedBooking } from '../energy';
 import type { ReadContext, TransactionContext } from '../local-db';
@@ -26,7 +26,7 @@ import { onlyTheGameService, playingRole, type IslandCommandDependencies } from 
 export type IslandProject = Readonly<{
   projectId: EntityId;
   /** Ein neues Wahrzeichen oder der Ausbau eines vorhandenen. */
-  kind: 'projekt' | 'ausbau';
+  kind: ProjectKind;
   templateKey: string;
   /** Name aus dem Spielkatalog; `null`, wenn der Katalog dieser App den Schlüssel noch nicht kennt. */
   name: string | null;

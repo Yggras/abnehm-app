@@ -531,9 +531,14 @@ function gartenhaeuschen(): ArtPrimitive[] {
   ];
 }
 
-/** Grafiken der Gemeinschaftsprojekte: Gerüst je Stufe (`geruest_<stufe>`) und Wahrzeichen je Grafikschlüssel. */
+/** Grafikschlüssel des Gerüsts zu einer gemeinsamen Stufe. */
+export function scaffoldArt(stage: CommonStage): ArtKey {
+  return `geruest_${stage}`;
+}
+
+/** Grafiken der Gemeinschaftsprojekte: Gerüst je Stufe (`scaffoldArt`) und Wahrzeichen je Grafikschlüssel. */
 const projectArt: (readonly [ArtKey, ArtSpec])[] = [
-  ...CommonStage.options.map((stage) => [`geruest_${stage}`, { stage: 1, lit: false, light: null, drawing: scaffold(stage) }] as const),
+  ...CommonStage.options.map((stage) => [scaffoldArt(stage), { stage: 1, lit: false, light: null, drawing: scaffold(stage) }] as const),
   ['gartenhaeuschen', { stage: 1, lit: false, light: null, drawing: gartenhaeuschen() }],
 ];
 

@@ -1,8 +1,7 @@
-import { shownEnergy } from '@abnehm/contracts/energy';
 import type { CommonStage, IslandRole } from '@abnehm/contracts/island';
 
 import type { ArtKey, GameCatalog } from './catalog.ts';
-import { spend, type Checker, type SpendingRefusal } from './spending.ts';
+import { availableOnDevice, spend, type Checker, type SpendingRefusal } from './spending.ts';
 import { assertWholeNumber } from './whole-number.ts';
 
 // Gemeinschaftsprojekte und gemeinsame Stufe (Spezifikation 4, Abschnitt 8; Werte neu festgelegt,
@@ -36,9 +35,12 @@ export function projectOccasionKey(islandId: string, sequenceNumber: number): st
   return `projekt:${islandId}:${assertWholeNumber(sequenceNumber, 1, 'Projektnummer')}`;
 }
 
+/** Ein neues Wahrzeichen (`projekt`) oder der Ausbau eines vorhandenen (`ausbau`). */
+export type ProjectKind = 'projekt' | 'ausbau';
+
 /** Was ein gespeichertes Projekt ist: ein neues Wahrzeichen oder der Ausbau eines vorhandenen, mit dessen Bauplatz und Grafik. */
 export type ProjectTemplateFacts = Readonly<{
-  kind: 'projekt' | 'ausbau';
+  kind: ProjectKind;
   /** Katalogschlüssel des Projekts bzw. der Ausbau-Vorlage; Vorlagenschlüssel des gespeicherten Projekts. */
   templateKey: string;
   name: string;
@@ -59,7 +61,7 @@ export type ProjectSlot = ProjectTemplateFacts & Readonly<{ sequenceNumber: numb
  * Abschnitt 4: Schlüssel werden nie umgewidmet).
  */
 export function projectTemplate(catalog: GameCatalog, templateKey: string): ProjectTemplateFacts | null {
-  const facts = (kind: ProjectTemplateFacts['kind'], name: string, landmarkOf: string): ProjectTemplateFacts | null => {
+  const facts = (kind: ProjectKind, name: string, landmarkOf: string): ProjectTemplateFacts | null => {
     const landmark = catalog.projects.find((project) => project.key === landmarkOf);
     return landmark === undefined ? null : { kind, templateKey, name, landmarkOf, site: landmark.site, landmark: landmark.landmark };
   };
@@ -125,7 +127,7 @@ export type ContributionOption = Readonly<{ type: 'voll' }> | Readonly<{ type: '
 export function contributionOption(share: Share, balance: number): ContributionOption {
   const rest = share.need - share.paid;
   if (rest <= 0) return { type: 'voll' };
-  const max = Math.min(rest, shownEnergy(balance));
+  const max = Math.min(rest, availableOnDevice(balance));
   return max === 0 ? { type: 'keine_energie' } : { type: 'moeglich', max };
 }
 

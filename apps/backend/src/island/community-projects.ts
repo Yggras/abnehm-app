@@ -1,4 +1,4 @@
-import { eq, sum } from 'drizzle-orm';
+import { asc, eq, sum } from 'drizzle-orm';
 
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import { energyBookingId, summarizeEnergy } from '@abnehm/contracts/energy';
@@ -157,7 +157,7 @@ async function completeProject(
   });
   changes.push(await canonicalAfterWrite(tx, islandEventEntity, eventId));
 
-  const members = await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(eq(couplingMember.couplingId, couplingId));
+  const members = await tx.select({ personId: couplingMember.personId }).from(couplingMember).where(eq(couplingMember.couplingId, couplingId)).orderBy(asc(couplingMember.personId));
   for (const { personId } of members) {
     const recipientPersonId = EntityId.parse(personId);
     await insertNotificationIntent(tx, {

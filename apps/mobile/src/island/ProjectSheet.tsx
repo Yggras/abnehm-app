@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, EnergySymbol, ProgressBar, space, Stepper, Text } from '../design';
+import { scaffoldArt } from './art';
 import type { IslandProject } from './community-project';
 import { ObjectPreview } from './ObjectPreview';
 import { projectTexts } from './texts';
@@ -36,7 +37,7 @@ export function ProjectSheet({ project, onContribute }: ProjectSheetProps) {
   return (
     <View style={styles.sheet}>
       <View style={styles.header}>
-        <ObjectPreview art={`geruest_${project.stage}`} />
+        <ObjectPreview art={scaffoldArt(project.stage)} />
         <View style={styles.title}>
           <Text variant="label" tone="inkMuted">
             {projectTexts.kind[project.kind]}

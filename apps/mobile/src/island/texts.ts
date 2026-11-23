@@ -1,6 +1,7 @@
 import type { CommonStage, IslandRole, MomoForm } from '@abnehm/contracts/island';
 import type { ChallengeMeasure, Season } from '@abnehm/game-rules/catalog';
 import type { ChallengeShare } from '@abnehm/game-rules/challenges';
+import type { ProjectKind } from '@abnehm/game-rules/projects';
 
 import { formNames } from '../momo';
 import { bausteinNames } from '../shell/texts';
@@ -124,7 +125,7 @@ export const objectTexts = {
  * belegt). Kein Satz nennt, was dem Partner fehlt.
  */
 export const projectTexts = {
-  kind: { projekt: 'Gemeinschaftsprojekt', ausbau: 'Ausbau eures Wahrzeichens' } satisfies Record<'projekt' | 'ausbau', string>,
+  kind: { projekt: 'Gemeinschaftsprojekt', ausbau: 'Ausbau eures Wahrzeichens' } satisfies Record<ProjectKind, string>,
   ownShare: (paid: number, need: number) => `Dein Anteil: ${paid} von ${need}`,
   ownShareLabel: 'Dein Anteil',
   ownFull: 'Dein Anteil ist voll',
@@ -134,7 +135,7 @@ export const projectTexts = {
   howItWorks: {
     projekt: 'Jeder füllt seinen Anteil mit eigener Energie, ohne Frist. Sind beide Anteile voll, steht euer Wahrzeichen.',
     ausbau: 'Jeder füllt seinen Anteil mit eigener Energie, ohne Frist. Sind beide Anteile voll, wird euer Wahrzeichen größer.',
-  } satisfies Record<'projekt' | 'ausbau', string>,
+  } satisfies Record<ProjectKind, string>,
   amount: 'Betrag',
   amountValue: (amount: number) => `${amount} Energie`,
   contribute: 'Einzahlen',

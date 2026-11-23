@@ -3,7 +3,7 @@ import type { CommonStage, MomoAppearance } from '@abnehm/contracts/island';
 import { fieldKey, type ArtKey, type FieldKind, type Season } from '@abnehm/game-rules/catalog';
 
 import { opacity, size, type ColorToken } from '../design';
-import { artOf } from './art';
+import { artOf, scaffoldArt } from './art';
 
 // Szenenmodell der Inselansicht (Spezifikation 4, Abschnitt 7): eine reine Funktion von Inselzustand,
 // betrachtender Person, Modus, lokaler Uhrzeit und Zoom auf eine geordnete Zeichenliste. Der
@@ -226,7 +226,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   }
   const scaffoldField = island.scaffold === null ? undefined : fieldsByKey.get(island.scaffold.site);
   if (scaffoldField !== undefined && island.scaffold !== null) {
-    standing.push({ cell: scaffoldField, item: { layer: 'objekte', type: 'geruest', field: scaffoldField.key, at: project.center(scaffoldField), art: `geruest_${island.scaffold.stage}` } });
+    standing.push({ cell: scaffoldField, item: { layer: 'objekte', type: 'geruest', field: scaffoldField.key, at: project.center(scaffoldField), art: scaffoldArt(island.scaffold.stage) } });
   }
   if (place !== null) {
     const { field } = place;

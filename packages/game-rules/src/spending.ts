@@ -19,10 +19,14 @@ export type SpendingRefusal =
 
 export type Spending = Readonly<{ type: 'erlaubt'; price: number }> | SpendingRefusal;
 
+/** Was das Gerät ausgeben darf: der angezeigte Bestand; ein negativer Zwischenstand zählt als 0 (Spezifikation 0, Abschnitt 4). */
+export function availableOnDevice(balance: number): number {
+  return shownEnergy(balance);
+}
+
 /** Ob die Person `price` ausgeben darf. */
 export function spend(price: number, balance: number, checkedBy: Checker): Spending {
   if (checkedBy === 'server') return balance - price < serverDebtLimit ? { type: 'verboten', reason: 'schutzgrenze' } : { type: 'erlaubt', price };
-  // Ein negativer Zwischenstand zählt wie angezeigt als 0 (Spezifikation 0, Abschnitt 4).
-  const available = shownEnergy(balance);
+  const available = availableOnDevice(balance);
   return available < price ? { type: 'verboten', reason: 'zu_wenig_energie', price, missing: price - available } : { type: 'erlaubt', price };
 }

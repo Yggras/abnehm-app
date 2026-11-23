@@ -11,7 +11,6 @@ import { spend, type Checker, type SpendingRefusal } from './spending.ts';
 // Stufe, Platzierungsregeln und der Bestand (`spending.ts`). Ob das Feld frei ist, prüfen diese Regeln nicht; das Gerät baut und platziert nur auf freie
 // Felder, und der Server verdrängt bei einem Konflikt ins Lager. Platzieren ist kostenlos (#194).
 
-export { serverDebtLimit } from './spending.ts';
 
 /** Feldschlüssel und Besitzer eines materialisierten Inselfelds. */
 type FieldRef = Readonly<{ key: string; ownerPersonId: string | null }>;
