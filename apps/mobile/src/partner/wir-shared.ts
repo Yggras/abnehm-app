@@ -65,7 +65,7 @@ export type WirShared =
 const catalog = indexCatalog(gameCatalog);
 
 /** Sichtbarer Name eines Katalogeintrags; ein unbekannter Schlüssel zeigt den allgemeinen Namen der Art. */
-function catalogName(kind: Extract<CatalogEntryKind, 'challenge_vorlage' | 'gemeinschaftsprojekt'>, key: string, fallback: string): string {
+function catalogName(kind: Extract<CatalogEntryKind, 'challenge_vorlage' | 'gemeinschaftsprojekt' | 'ausbauvorlage'>, key: string, fallback: string): string {
   const found = catalog.find(kind, key);
   return found.type === 'found' ? found.entry.name : fallback;
 }
@@ -120,7 +120,8 @@ function projectOf({ id, action, templateKey, ownRole, ownCount, ownRequired, st
     id,
     action,
     eyebrow: sharedTexts.project,
-    title: catalogName('gemeinschaftsprojekt', templateKey, sharedTexts.project),
+    // Nach dem letzten Projekt folgen Ausbauten (#208); deren Name steht unter den Ausbau-Vorlagen.
+    title: catalogName('gemeinschaftsprojekt', templateKey, catalogName('ausbauvorlage', templateKey, sharedTexts.project)),
     lines: [sharedTexts.projectShare(ownRole, ownCount, ownRequired), sharedTexts.stage(stage)],
   };
 }

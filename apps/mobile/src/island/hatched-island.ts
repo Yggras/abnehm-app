@@ -8,6 +8,7 @@ import { indexCatalog, type ArtKey } from '@abnehm/game-rules/catalog';
 import { gameCatalog } from '@abnehm/game-rules/content';
 import type { IslandFieldOwner } from '@abnehm/game-rules/hatching';
 import { spentOnIsland } from '@abnehm/game-rules/progress';
+import type { Landmark } from '@abnehm/game-rules/projects';
 import { formAt } from '@abnehm/game-rules/unlocks';
 
 import { bookingsOf } from '../energy';
@@ -16,6 +17,7 @@ import { areaUnlock, blueprintUnlock, communityProject, couplingMember, island, 
 import { sqliteOf } from '../local-db/sqlite';
 import { halvesFor, type IslandHalves } from './halves';
 import { islandProgressOf } from './island-entities';
+import { readProjects, type IslandProject } from './community-project';
 import { readIslandEvents, type IslandEvents } from './island-events';
 
 // Die geschlüpfte Insel aus den lokalen Daten (Spezifikation 4, Abschnitte 2.1, 6, 7 und 11; #184, #191):
@@ -70,6 +72,10 @@ export type HatchedIsland = Readonly<{
   sharedEvents: readonly SharedIslandEvent[];
   /** Was für die betrachtende Person auf der Insel wartet: Besucher mit Wunsch (#202). */
   events: IslandEvents;
+  /** Das aktive Gemeinschaftsprojekt mit eigenem Anteil und gemeinsamer Stufe (#208). */
+  project: IslandProject;
+  /** Die Wahrzeichen der fertigen Projekte auf ihren Bauplätzen (#208). */
+  landmarks: readonly Landmark[];
 }>;
 
 /**
@@ -92,6 +98,9 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
   if (found === undefined || progressRow == null || own?.role == null || partner === undefined) return null;
   const islandId = EntityId.parse(found.id);
   const progress = islandProgressOf(progressRow);
+  const ownRole = IslandRole.parse(own.role);
+  const projects = readProjects(tx, { islandId, progress, personId, ownRole });
+  if (projects === null) return null;
   // Verbaute Energie dieser Insel: alle ihre Objekte und Projekte, auch eingelagerte Objekte.
   const holdings = {
     objectIds: new Set(db.select({ id: islandObject.id }).from(islandObject).where(eq(islandObject.islandId, islandId)).all().map((row) => row.id)),
@@ -103,7 +112,7 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
     viewerPersonId: personId,
     partnerPersonId: EntityId.parse(partner.personId),
     partnerDisplayName: partner.displayName,
-    ownRole: IslandRole.parse(own.role),
+    ownRole,
     energy,
     progress,
     halves: halvesFor(progress, personId, spentOnIsland(bookingsOf(tx, personId), holdings)),
@@ -158,6 +167,7 @@ export function readHatchedIsland(tx: ReadContext, { couplingId, personId, energ
         occurredAt: Instant.parse(row.occurredAt),
       })),
     events: readIslandEvents(tx, { islandId, personId }),
+    ...projects,
   };
 }
 
