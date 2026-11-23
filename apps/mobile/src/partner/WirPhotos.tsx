@@ -2,7 +2,7 @@ import type { PartnerPhotoList } from '@abnehm/contracts/partner';
 import { useIsFocused } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Image, Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { boxShadow, color, Icon, IconButton, pressedEdge, radius, Skeleton, space, Text } from '../design';
 import { useOnlineRead } from '../online';
@@ -149,41 +149,46 @@ function PhotoViewer({ partner, name, photos, initialIndex, onClose }: {
   const current = photos[Math.min(index, photos.length - 1)]!;
   return (
     <Modal visible animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <SafeAreaView testID="partnerfoto-vollbild" style={styles.viewer}>
-        <View style={styles.bar}>
-          <View style={styles.grow}>
-            <Text variant="headline" tone="onInverse" accessibilityRole="header">
-              {photoTexts.meal(current.meal)}
-            </Text>
-            <Text variant="caption" tone="onInverse">
-              {photoTexts.position(index + 1, photos.length)}
-            </Text>
-          </View>
-          <IconButton icon="close" accessibilityLabel={photoTexts.close} onPress={onClose} />
-        </View>
-        <FlatList
-          testID="partnerfoto-seiten"
-          data={photos}
-          keyExtractor={(photo) => photo.handle}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          initialScrollIndex={initialIndex}
-          getItemLayout={(_, item) => ({ length: width, offset: width * item, index: item })}
-          onMomentumScrollEnd={({ nativeEvent }) => setIndex(Math.max(0, Math.min(photos.length - 1, Math.round(nativeEvent.contentOffset.x / width))))}
-          renderItem={({ item, index: position }) => (
-            <View style={[styles.page, { width }]}>
-              <PartnerImage
-                partner={partner}
-                name={name}
-                photo={item}
-                variant="gross"
-                label={photoTexts.name(name, item.meal, { position: position + 1, count: photos.length })}
-              />
+      {/* Eigener Provider an der Wurzel des Modals, sonst lag die Kopfzeile auf dem iPhone unter der Statusleiste
+          (Gerätelauf #122; „You may need to add it in other places like the root of modals“,
+          https://rnsac.appandflow.com/docs/api/safe-area-provider). */}
+      <SafeAreaProvider>
+        <SafeAreaView testID="partnerfoto-vollbild" style={styles.viewer}>
+          <View style={styles.bar}>
+            <View style={styles.grow}>
+              <Text variant="headline" tone="onInverse" accessibilityRole="header">
+                {photoTexts.meal(current.meal)}
+              </Text>
+              <Text variant="caption" tone="onInverse">
+                {photoTexts.position(index + 1, photos.length)}
+              </Text>
             </View>
-          )}
-        />
-      </SafeAreaView>
+            <IconButton icon="close" accessibilityLabel={photoTexts.close} onPress={onClose} />
+          </View>
+          <FlatList
+            testID="partnerfoto-seiten"
+            data={photos}
+            keyExtractor={(photo) => photo.handle}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={initialIndex}
+            getItemLayout={(_, item) => ({ length: width, offset: width * item, index: item })}
+            onMomentumScrollEnd={({ nativeEvent }) => setIndex(Math.max(0, Math.min(photos.length - 1, Math.round(nativeEvent.contentOffset.x / width))))}
+            renderItem={({ item, index: position }) => (
+              <View style={[styles.page, { width }]}>
+                <PartnerImage
+                  partner={partner}
+                  name={name}
+                  photo={item}
+                  variant="gross"
+                  label={photoTexts.name(name, item.meal, { position: position + 1, count: photos.length })}
+                />
+              </View>
+            )}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

@@ -27,11 +27,12 @@ name: Fotos von heute in „Wir“
 - extendedWaitUntil:
     visible: "Fotos von heute"
     timeout: 30000
+# Die Vorschau liegt in einem zugänglichen Button; iOS fasst dessen Kinder zusammen, die testID des Bildes ist für
+# Maestro dort nicht sichtbar. Geprüft wird die Beschriftung des Buttons, das geladene Bild belegt die
+# Vollbildansicht (`partnerfoto-gross` gibt es nur bei geladenem Bild) und das Bildschirmfoto.
 - extendedWaitUntil:
-    visible:
-      id: "partnerfoto-vorschau"
+    visible: "Mahlzeitenfoto von Anna, Mittagessen"
     timeout: 15000
-- assertVisible: "Mahlzeitenfoto von Anna, Mittagessen"
 - takeScreenshot: partnerfotos-1-wir
 
 # Vollbildansicht --------------------------------------------------------------------------------------
