@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { createTestClock } from '@abnehm/clock/testing';
 import { Instant, TimeZone } from '@abnehm/contracts/base';
 
-import { openIslandScreen } from './testing/island-screen';
+import { fieldOnScreen, openIslandScreen, tap } from './testing/island-screen';
 import type { LaichkugelWorld } from './testing/laichkugel-world';
 import type * as mockSkia from './testing/skia-mock';
 
@@ -78,4 +78,13 @@ test('ohne Energie steht neutral, woher neue kommt, statt eines Knopfs; die Rout
   expect(screen.getByRole('header', { name: 'Gartenhäuschen' })).toBeOnTheScreen();
   expect(screen.getByText('Gerade hast du keine Energie. Erfüllte Tagesziele bringen neue.')).toBeOnTheScreen();
   expect(screen.queryByRole('button', { name: /einzahlen/ })).toBeNull();
+});
+
+test('ein Tipp auf das Gerüst am Bauplatz öffnet das Projekt', async () => {
+  await openIslandScreen(clock, cleanups, { energy: 4 });
+  // Bauplatz von Projekt 1: `grundinsel:7:2` am Gemeinschaftsplatz.
+  await tap(fieldOnScreen(7, 2));
+
+  expect(screen.getByRole('header', { name: 'Gartenhäuschen' })).toBeOnTheScreen();
+  expect(screen.getByText('Dein Anteil: 0 von 20')).toBeOnTheScreen();
 });

@@ -244,6 +244,8 @@ export function HatchedIslandScreen({ island, takeGrowthIntro, takeTransformatio
       return;
     }
     if (objects.sheetAt(hit.field) !== null) setSheet({ type: 'objekt', field: hit.field });
+    // Gerüst und Wahrzeichen stehen auf ihrem Bauplatz; ein Tipp darauf öffnet das Projekt (Impeccable-Kritik zu #208).
+    else if (hit.field === island.project.site || island.landmarks.some((landmark) => landmark.site === hit.field)) openSheet(sheetForView.projekt);
     else if (options.opensSheet(hit.field)) setSheet({ type: 'bauen', field: hit.field });
   };
 
