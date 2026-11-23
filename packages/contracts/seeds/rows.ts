@@ -1,9 +1,10 @@
 import type { SeedEntity } from './build.ts';
+import type { SeedRow } from './manifest.ts';
 import { seedClock, seedUtcOffsetMinutes } from './ids.ts';
 import { EntityId, LocalDate, type BausteinKey, type MealKey } from '../src/base.ts';
 import { dailyGoalCompletionId, dailyGoalKey, type DailyGoalSlot } from '../src/daily-goals.ts';
 import { dailyBonusKey, energyBookingId } from '../src/energy.ts';
-import { entryAmount, entryTotals, FoodFavoriteUpsert, foodFavoriteId, NutritionSnapshot, OwnFoodUpsert } from '../src/nutrition.ts';
+import { entryAmount, entryTotals, FoodFavoriteUpsert, foodFavoriteId, FoodRef, NutritionSnapshot, OwnFoodUpsert, PortionConversion } from '../src/nutrition.ts';
 
 // Zeilenhelfer der Bereichsbeiträge: wiederkehrende Zeilenformen der Spezifikationen 1–3 in der
 // kanonischen Form des Manifests. Der Baukasten (`build.ts`) kennt sie nicht; er setzt nur zusammen.
@@ -212,6 +213,36 @@ export function seedOwnFood(options: { id: string; personId: string; at: string;
       origin_key: food.origin?.key ?? null,
       ...seedCreated(options.at),
     },
+  };
+}
+
+/**
+ * Ein Eintrag des lokalen Open-Food-Facts-Caches (Spezifikation 2, Abschnitt 3; #160): nur auf dem Gerät, nie
+ * synchronisiert. Werte je 100 g bzw. 100 ml; `null` fehlt bei OFF und macht das Produkt unvollständig.
+ */
+export function seedOffCacheRow(options: {
+  barcode: string;
+  name: string;
+  brand: string | null;
+  baseUnit: 'g' | 'ml';
+  milliKcal: number | null;
+  proteinMg: number | null;
+  carbsMg: number | null;
+  fatMg: number | null;
+  portions: readonly PortionConversion[];
+  fetchedAt: string;
+}): SeedRow {
+  return {
+    barcode: FoodRef.parse({ type: 'off', key: options.barcode }).key,
+    name: options.name,
+    brand: options.brand,
+    base_unit: options.baseUnit,
+    milli_kcal_per_100: options.milliKcal,
+    protein_mg_per_100: options.proteinMg,
+    carbs_mg_per_100: options.carbsMg,
+    fat_mg_per_100: options.fatMg,
+    portions: options.portions.map((portion) => PortionConversion.parse(portion)),
+    fetched_at: options.fetchedAt,
   };
 }
 

@@ -1,6 +1,6 @@
 // Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112, #114). Sie führt jede
 // Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Serveruhr,
-// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite, Health-Attrappe und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
+// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite, Health-Attrappe, Fake der Produktquelle und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
 // Development Build und der E2E-Build (`APP_VARIANT=e2e`, ein Release-Binary für Maestro).
 // `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit, dass weder das
 // Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält (Gegenprobe: die
@@ -152,6 +152,17 @@ export const testCapabilities: readonly TestCapability[] = [
     ],
     entries: { deepLinks: ['health'] },
     markers: ['health_attrappe'],
+  },
+  {
+    // #160: Fake der `FoodProductSource` mit `found`, `not_found`, `incomplete`, 429/503 und Zeitüberschreitung
+    // (Spezifikation 2, Abschnitt 13). Die Modultests nutzen ihn direkt, Development- und E2E-Build per Link
+    // `produkt`, der auch einen Barcode für den nächsten Scanner hinterlegt; im Produktionsbuild fragt die App
+    // nur Open Food Facts.
+    key: 'fake-produktquelle',
+    description: 'Fake der Produktquelle (Open Food Facts) samt Test-Scan, gestellt per Link `produkt?ergebnis=<modus>[&scan=<barcode>]`',
+    modules: ['apps/mobile/src/nutrition/testing/fake-food-product-source.ts', 'apps/mobile/src/test-capabilities/food-products.ts'],
+    entries: { deepLinks: ['produkt'] },
+    markers: ['fake_produktquelle'],
   },
   {
     // #125: speicherbasierter Fake des Mitteilungs-Ports (Spezifikation 5, Abschnitt 8). In Test-Artefakten

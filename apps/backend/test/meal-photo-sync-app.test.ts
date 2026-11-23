@@ -27,7 +27,7 @@ import { mealPhoto, nutritionEntry } from '../src/db/schema/index.ts';
 import { testBaseUrl, type TestBackend } from './support/app.ts';
 import type { Device } from './support/auth-client.ts';
 import { analyzedDraft, lunchtime, photoWorld } from './support/meal-photos.ts';
-import { withoutPhotos } from '../../mobile/src/nutrition/testing/without-photos.ts';
+import { withoutNetwork } from '../../mobile/src/nutrition/testing/without-network.ts';
 
 // Nachweis für #162 über die App-Engine: „Mahlzeit hinzufügen“ im App-Modul „Ernährung“ geht als ein
 // Fachbefehl `confirmPhotoDraft` über die echte Hono-App nach Postgres. Mit gültigem Entwurf übernimmt
@@ -65,7 +65,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device, cl
   const commands = createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, confirmPhotoDraftCommand({ persistence })] });
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: persistence.onCanonicalChanges, commands });
   return {
-    nutrition: createNutrition({ ...withoutPhotos, database, clock, writer, persistence, newId }),
+    nutrition: createNutrition({ ...withoutNetwork, database, clock, writer, persistence, newId }),
     sync: () => engine.sync(),
     rows: () => database.read((tx) => ({ photos: sqliteOf(tx).select().from(localMealPhoto).all(), entries: sqliteOf(tx).select().from(localNutritionEntry).all() })),
   };

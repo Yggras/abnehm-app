@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { EntityId, type Instant, type ServerVersion } from '@abnehm/contracts/base';
 import { BaseUnit, foodValuesOf, OwnFoodOrigin, ownFoodSnapshot, sameFoodValues, type FoodRef, type FoodValues, type NutritionSnapshot, type OwnFoodRecord, type OwnFoodUpsert } from '@abnehm/contracts/nutrition';
@@ -6,7 +6,7 @@ import { BaseUnit, foodValuesOf, OwnFoodOrigin, ownFoodSnapshot, sameFoodValues,
 import type { ReadContext, TransactionContext } from '../local-db';
 import { ownFood } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
-import { rankedSearch, type SearchParam } from './ranked-search';
+import { accountSearchQuery } from './account-search';
 import { searchNames, type SearchQuery } from './search-text';
 
 // Repository der eigenen Lebensmittel (Spezifikation 2, Abschnitt 3): neben dem Sync-Adapter die
@@ -141,9 +141,8 @@ export function overlayingOwnFood(tx: ReadContext, origin: OwnFoodOrigin): OwnFo
 
 /** Die nicht gelöschten eigenen Lebensmittel zur Anfrage, in der Rangfolge aus `ranked-search.ts`. */
 export function searchOwnFoods(tx: ReadContext, query: SearchQuery, limit: number): OwnFoodChoice[] {
-  const ranked = rankedSearch(query, limit, { table: 'own_food_search', fts: 'own_food_search', columns: 'own_food_id AS id', key: 'own_food_id' });
   const ids = sqliteOf(tx)
-    .all<{ id: string }>(bound(ranked.sql, ranked.params))
+    .all<{ id: string }>(accountSearchQuery(query, limit, { table: 'own_food_search', fts: 'own_food_search', columns: 'own_food_id AS id', key: 'own_food_id' }))
     .map((row) => row.id);
   if (ids.length === 0) return [];
   const rows = sqliteOf(tx)
@@ -179,11 +178,4 @@ function insertIndexRow(tx: TransactionContext, entityId: string, name: string):
 
 function valuesOf(row: typeof ownFood.$inferSelect) {
   return foodValuesOf({ ...row, baseUnit: BaseUnit.parse(row.baseUnit) });
-}
-
-/** Text mit `?`-Platzhaltern und Parametern als Drizzle-Abfrage; der Text enthält sonst kein `?`. */
-function bound(text: string, params: readonly SearchParam[]): SQL {
-  const parts = text.split('?');
-  if (parts.length !== params.length + 1) throw new Error('Platzhalter und Parameter passen nicht zusammen');
-  return sql.join(parts.map((part, index) => (index < params.length ? sql`${sql.raw(part)}${params[index]}` : sql.raw(part))));
 }

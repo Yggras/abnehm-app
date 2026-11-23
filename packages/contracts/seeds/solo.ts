@@ -1,4 +1,4 @@
-import { buildSeedState, type SeedEntity, type SeedPart } from './build.ts';
+import { buildSeedState, withLocalRows, type SeedEntity, type SeedPart } from './build.ts';
 import { seedAccounts, seedClock, seedDayEnds, seedDays, seedIds, seedInstallations } from './ids.ts';
 import { SeedManifest, type SeedScenarioKey } from './manifest.ts';
 import {
@@ -9,6 +9,7 @@ import {
   seedFoodFavorite,
   seedGoalVersion,
   seedManualOrigin,
+  seedOffCacheRow,
   seedOwnFood,
   seedSportEntry,
   seedWaterEntry,
@@ -16,6 +17,7 @@ import {
   type SeedWeeklyPlan,
 } from './rows.ts';
 import { EntityId, type BausteinKey } from '../src/base.ts';
+import { ownFoodBarcodeId } from '../src/nutrition.ts';
 import { goalSettingsVariants, type GoalSettingsVariant } from './ziele-einstellungen.ts';
 
 // Szenario `solo` (Spezifikation 0, Abschnitt 12): Philipp hat das Onboarding abgeschlossen, ist
@@ -466,6 +468,54 @@ export const soloLebensmittelfavoriten: SeedPart = {
   ],
 };
 
+/**
+ * Gescannte Produkte (Spezifikation 2, Abschnitte 3, 5 und 13; #160), nur in `solo` und seinen Varianten. Barcodes,
+ * Namen und Werte sind erfunden, die GTIN-13-Prüfziffern gültig. Synchronisiert ist nur ein eigenes Lebensmittel mit
+ * Barcode-Herkunft: die Korrektur des Skyrs (4000000000051) mit deterministischer ID. Es überdeckt den
+ * Cache-Eintrag desselben Barcodes in Auflösung und Suche.
+ */
+export const soloBarcodeProdukte = {
+  skyr: '4000000000051',
+  haferdrink: '4000000000044',
+  knaeckebrot: '4000000000068',
+} as const;
+
+const soloBarcodeKorrektur: SeedPart = {
+  area: 'ernaehrung',
+  entities: [
+    seedOwnFood({
+      id: ownFoodBarcodeId(EntityId.parse(philipp), soloBarcodeProdukte.skyr), personId: philipp, at: '2026-10-13T07:00:00.000Z',
+      food: {
+        name: 'Skyr Natur', baseUnit: 'g', referenceAmount: 100_000, milliKcal: 63_000, proteinMg: 11_000, carbsMg: 4_000, fatMg: 200,
+        portions: [{ unit: 'portion', label: '1 Becher', baseAmount: 150_000 }], origin: { type: 'off', key: soloBarcodeProdukte.skyr },
+      },
+    }),
+  ],
+};
+
+/**
+ * Der lokale OFF-Cache des iPhones (nie synchronisiert): ein vollständiges Getränk in ml mit Portion, der Skyr
+ * in der Fassung von Open Food Facts (überdeckt von der Korrektur) und ein unvollständiges Produkt ohne kcal.
+ * Dessen Eintrag ist älter als 30 Tage; ein Online-Scan aktualisiert ihn im Hintergrund.
+ */
+const soloOffCache = [
+  seedOffCacheRow({
+    barcode: soloBarcodeProdukte.haferdrink, name: 'Haferdrink Barista', brand: 'Testmühle', baseUnit: 'ml',
+    milliKcal: 59_000, proteinMg: 1_000, carbsMg: 6_600, fatMg: 3_000, portions: [{ unit: 'portion', label: null, baseAmount: 200 }],
+    fetchedAt: '2026-10-12T16:00:00.000Z',
+  }),
+  seedOffCacheRow({
+    barcode: soloBarcodeProdukte.skyr, name: 'Skyr Natur', brand: 'Testmolkerei', baseUnit: 'g',
+    milliKcal: 66_000, proteinMg: 11_000, carbsMg: 4_000, fatMg: 200, portions: [],
+    fetchedAt: '2026-10-13T06:55:00.000Z',
+  }),
+  seedOffCacheRow({
+    barcode: soloBarcodeProdukte.knaeckebrot, name: 'Vollkornknäckebrot', brand: null, baseUnit: 'g',
+    milliKcal: null, proteinMg: 10_000, carbsMg: 60_000, fatMg: 2_000, portions: [],
+    fetchedAt: '2026-09-01T10:00:00.000Z',
+  }),
+];
+
 /** Beiträge des Szenarios in Reihenfolge; ein Bereich ergänzt hier seinen Beitrag. */
 const soloPartsWith = ({ water, sport, plan, weights, goal, goalSettings }: SoloVariant): readonly SeedPart[] => [
   goalSettings === undefined ? soloFundament : soloFundamentWith(goalSettings.person),
@@ -485,14 +535,20 @@ export const soloParts = soloPartsWith(soloVariants.solo);
 
 /** `solo` oder eine seiner Varianten (`SoloVariant`). */
 function soloScenario(scenario: SoloScenario): SeedManifest {
-  const state = buildSeedState({
-    parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, soloLebensmittelfavoriten, sportVorwoche],
-    createdAt: seedClock.instant,
-    devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
-  });
+  const state = withLocalRows(
+    buildSeedState({
+      parts: [...soloPartsWith(soloVariants[scenario]), soloEigeneLebensmittel, soloLebensmittelfavoriten, sportVorwoche, soloBarcodeKorrektur],
+      createdAt: seedClock.instant,
+      devices: { [seedInstallations.philippIphone.key]: { personId: philipp, cursor: 'latest' } },
+    }),
+    seedInstallations.philippIphone.key,
+    'off_cache',
+    soloOffCache,
+  );
   return SeedManifest.parse({
     formatVersion: 1,
     scenario,
+    // Revision 11: gescannte Produkte seit #160 (eine Barcode-Korrektur, drei Einträge im lokalen OFF-Cache).
     // Revision 10: ein Lebensmittelfavorit und Frühstücke am Rand des 30-Tage-Fensters seit #158.
     // Revision 9: Ernährungseinträge am Vortag ohne Abendessen seit #156.
     // Revision 8: Sporteinträge der Vorwoche samt einem Tag mit zwei Einheiten seit #174.
@@ -501,7 +557,7 @@ function soloScenario(scenario: SoloScenario): SeedManifest {
     // Revision 5: Sporteinträge seit #173 im Änderungsprotokoll, eine Einheit mehr am Montag.
     // Revision 4: Gewichtseinträge seit #175 im Änderungsprotokoll, heute ist Wiegetag. Revision 3:
     // Philipps Frühstück aus der Suche seit #155; Revision 2: Wassereinträge seit #171 im Änderungsprotokoll.
-    revision: 10,
+    revision: 11,
     clock: seedClock,
     localDates: seedDays,
     catalogVersion: null,

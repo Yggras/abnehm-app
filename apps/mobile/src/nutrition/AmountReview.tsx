@@ -9,7 +9,7 @@ import { AmountFields, useAmountDraft } from './AmountFields';
 import { FavoriteToggle } from './FavoriteToggle';
 import type { Nutrition } from './nutrition';
 import { conversionFields, type ConversionUnit } from './own-food-fields';
-import { checkPortionDraft, editableBaseOf } from './own-food-input';
+import { checkPortionDraft } from './own-food-input';
 import { conversionProblemText, nutritionTexts, ownFoodProblemText, sourceNames } from './texts';
 
 // Mengenprüfung des Hinzufügen-Bildschirms (Spezifikation 2, Abschnitte 2 und 6) samt dem Schritt
@@ -67,12 +67,13 @@ export function AmountReview({
   const [addingConversion, setAddingConversion] = useState(false);
   // Die Quellenangabe nennt die Quelle schon (BLS, Open Food Facts); sonst die Art der Werte.
   const source = snapshot.attribution ?? sourceNames[snapshot.source];
-  // Ändern lässt sich ein eigenes oder ein BLS-Lebensmittel; ein Barcode-Produkt erst mit #160.
-  const base = selection.available === false ? undefined : editableBaseOf(selection.ref);
+  // Ändern lässt sich jedes verfügbare Lebensmittel: ein eigenes selbst, ein BLS- oder Barcode-Produkt als
+  // eigenes Lebensmittel mit dieser Herkunftsreferenz.
+  const base = selection.available === false ? undefined : selection.ref;
   const missing = (['stueck', 'portion'] as const).filter((candidate) => !snapshot.portions.some((portion) => portion.unit === candidate));
 
   if (addingConversion && base !== undefined) {
-    return <ConversionStep snapshot={snapshot} own={base.type === 'eigen'} missing={missing} onBack={() => setAddingConversion(false)} onSave={onConversion} />;
+    return <ConversionStep snapshot={snapshot} source={base.type} missing={missing} onBack={() => setAddingConversion(false)} onSave={onConversion} />;
   }
 
   return (
@@ -125,13 +126,14 @@ export function AmountReview({
  */
 function ConversionStep({
   snapshot,
-  own,
+  source,
   missing,
   onBack,
   onSave,
 }: {
   snapshot: NutritionSnapshot;
-  own: boolean;
+  /** Woraus die Umrechnung wird: das eigene Lebensmittel selbst oder ein neues aus der externen Quelle. */
+  source: FoodRef['type'];
   missing: readonly ConversionUnit[];
   onBack: () => void;
   onSave: (conversion: PortionConversion) => void;
@@ -182,7 +184,7 @@ function ConversionStep({
         problem={labelProblem === undefined ? undefined : ownFoodProblemText(conversionFields[unit].label, labelProblem, snapshot.baseUnit)}
       />
       <Text variant="label" tone="inkMuted">
-        {texts.hint(own)}
+        {texts.hint(source)}
       </Text>
       <Button
         label={nutritionTexts.ownFood.save}

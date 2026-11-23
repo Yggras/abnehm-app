@@ -1,4 +1,5 @@
 import {
+  Barcode,
   BaseUnit,
   BlsKey,
   CaptureMethod,
@@ -197,6 +198,10 @@ export const nutritionFixtures = {
   BlsKey: fixtures(BlsKey, {
     valid: { 'Buchstabe und sechs Ziffern': 'C133000', 'mit Buchstaben in der Mitte': 'B6A2100' },
     invalid: { 'sechs Stellen': 'C13300', 'kleingeschrieben': 'c133000', 'Ziffer vorn': '1133000' },
+  }),
+  Barcode: fixtures(Barcode, {
+    valid: { 'EAN-8 bzw. UPC-E': '40004170', 'UPC-A': '012345678905', 'EAN-13': '4000000000013', 'GTIN-14': '14000000000010' },
+    invalid: { 'fünf Stellen': '12345', 'neun Stellen': '123456789', 'mit Buchstaben': '400000000001A', 'mit Leerzeichen': '4000 00000013' },
   }),
   FoodRef: fixtures(FoodRef, {
     valid: {

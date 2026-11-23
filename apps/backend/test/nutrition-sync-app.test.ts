@@ -26,7 +26,7 @@ import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.
 import { defaultPassword, newDevice, signIn, type Device } from './support/auth-client.ts';
 import { personWithSession } from './support/authorization.ts';
 import { push, upsertOp } from './support/sync.ts';
-import { withoutPhotos } from '../../mobile/src/nutrition/testing/without-photos.ts';
+import { withoutNetwork } from '../../mobile/src/nutrition/testing/without-network.ts';
 
 // Nachweis für #155: Der Ernährungseintrag ist in der Entitäts-Registry beider Seiten angemeldet. Ein
 // Eintrag aus dem App-Modul „Ernährung“ geht über die echte Hono-App nach Postgres und kommt per Pull
@@ -97,7 +97,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     },
   });
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: persistence.onCanonicalChanges });
-  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, persistence, newId });
+  const nutrition = createNutrition({ ...withoutNetwork, database, clock, writer, persistence, newId });
   return {
     nutrition,
     sync: () => engine.sync(),

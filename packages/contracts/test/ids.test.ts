@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EntityId } from '../src/base.ts';
 import { uuidV5 } from '../src/ids.ts';
 import { eventRewardId, islandContentId } from '../src/island-records.ts';
-import { foodFavoriteId } from '../src/nutrition.ts';
+import { foodFavoriteId, ownFoodBarcodeId } from '../src/nutrition.ts';
 import { importedSportEntryId, importedWeightEntryId } from '../src/trackers.ts';
 
 // Nachweis für #105: deterministische IDs nach RFC 9562, Abschnitt 5.5 (UUIDv5, SHA-1).
@@ -90,6 +90,30 @@ describe('ID des Lebensmittelfavoriten (#158)', () => {
       foodFavoriteId(philipp, { type: 'eigen', key: anna }),
     ]);
     expect(ids.size).toBe(5);
+  });
+});
+
+describe('ID eines eigenen Lebensmittels mit Barcode-Herkunft (#160)', () => {
+  const philipp = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b01');
+  const anna = EntityId.parse('0b3f9a52-6c1e-4d7a-9f20-1a5e8c4d2b02');
+
+  it('ist deterministisch aus Person und Barcode, also auf zwei Geräten dieselbe', () => {
+    expect(ownFoodBarcodeId(philipp, '4000417025005')).toBe(ownFoodBarcodeId(philipp, '4000417025005'));
+    expect(EntityId.safeParse(ownFoodBarcodeId(philipp, '4000417025005')).success).toBe(true);
+  });
+
+  it('unterscheidet Person und Barcode und nie die ID eines Favoriten desselben Barcodes', () => {
+    const ids = new Set([
+      ownFoodBarcodeId(philipp, '4000417025005'),
+      ownFoodBarcodeId(anna, '4000417025005'),
+      ownFoodBarcodeId(philipp, '40004170'),
+      foodFavoriteId(philipp, { type: 'off', key: '4000417025005' }),
+    ]);
+    expect(ids.size).toBe(4);
+  });
+
+  it('nimmt nur Barcodes, die auch die Lebensmittelreferenz nimmt', () => {
+    expect(() => ownFoodBarcodeId(philipp, '12345')).toThrow();
   });
 });
 
