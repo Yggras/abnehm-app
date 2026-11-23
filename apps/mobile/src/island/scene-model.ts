@@ -92,8 +92,8 @@ export type SceneItem =
   | Readonly<{ layer: 'felder'; type: 'feld'; field: string; polygon: Polygon; tone: ColorToken; tint: AreaTint | null }>
   /** `at` ist die Mitte des Felds; dort steht das Objekt mittig (Design-System › Insel). `appearing`: eben gebaut. */
   | Readonly<{ layer: 'objekte'; type: 'objekt'; id: string; field: string; at: Point; art: ArtKey; appearing: boolean }>
-  /** Wahrzeichen eines fertigen Projekts mittig auf seinem Bauplatz, je Ausbau größer (`scale`, #208). */
-  | Readonly<{ layer: 'objekte'; type: 'wahrzeichen'; field: string; at: Point; art: ArtKey; scale: number }>
+  /** Wahrzeichen eines fertigen Projekts mittig auf seinem Bauplatz; `size` wächst je Ausbau, gezeichnet von `landmarkDrawing` (#208). */
+  | Readonly<{ layer: 'objekte'; type: 'wahrzeichen'; field: string; at: Point; art: ArtKey; size: number }>
   /** Gerüst des aktiven Projekts; `art` ist die Grafik seiner gemeinsamen Stufe (#208). */
   | Readonly<{ layer: 'objekte'; type: 'geruest'; field: string; at: Point; art: ArtKey }>
   /** `from`: die alte Form während der Verwandlung (#204), sonst `null`. */
@@ -139,14 +139,6 @@ export type Daytime = 'tag' | 'abend';
 
 /** Deckkraft der Bereichsfärbung (Spezifikation 4, Abschnitt 7; Design-System › Insel: „je 28 % Deckkraft“). */
 const areaTintOpacity = 0.28;
-
-/** Vergrößerung eines Wahrzeichens je fertigem Ausbau, höchstens dreimal (Designwerte aus #208, nicht belegt). */
-const landmarkGrowth = { step: 0.15, maxSteps: 3 } as const;
-
-/** Größe eines Wahrzeichens nach `size − 1` fertigen Ausbauten. */
-function landmarkScale(size: number): number {
-  return 1 + landmarkGrowth.step * Math.min(Math.max(size - 1, 0), landmarkGrowth.maxSteps);
-}
 
 /** Deckkraft der Hervorhebung eines angetippten Felds (Designwert aus #182, nicht belegt). */
 const selectionOpacity = 0.5;
@@ -222,7 +214,7 @@ export function islandScene({ island, viewerPersonId, mode, localTime, zoom, sel
   for (const landmark of island.landmarks) {
     const field = fieldsByKey.get(landmark.site);
     if (field === undefined) continue;
-    standing.push({ cell: field, item: { layer: 'objekte', type: 'wahrzeichen', field: field.key, at: project.center(field), art: landmark.art, scale: landmarkScale(landmark.size) } });
+    standing.push({ cell: field, item: { layer: 'objekte', type: 'wahrzeichen', field: field.key, at: project.center(field), art: landmark.art, size: landmark.size } });
   }
   const scaffoldField = island.scaffold === null ? undefined : fieldsByKey.get(island.scaffold.site);
   if (scaffoldField !== undefined && island.scaffold !== null) {

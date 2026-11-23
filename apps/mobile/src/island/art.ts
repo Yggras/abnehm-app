@@ -531,6 +531,34 @@ function gartenhaeuschen(): ArtPrimitive[] {
   ];
 }
 
+/**
+ * Wie ein Ausbau ein Wahrzeichen vergrößert (Spezifikation 4, Abschnitt 8; Nutzerentscheidung zu PR #341: jeder Ausbau
+ * sichtbar, ohne Deckel). Jeder fertige Ausbau setzt das Wahrzeichen eine Sockelstufe aus Stein höher; die ersten drei
+ * vergrößern es zusätzlich um je 15 %. Ein reines Vergrößern mit abnehmenden Schritten wäre nach wenigen Ausbauten
+ * nicht mehr zu sehen, ein unbegrenztes sprengte das Feld. Werte sind Designwerte aus #208, nicht belegt; eigene
+ * Ausbau-Grafiken je Wahrzeichen bringt #209.
+ */
+const landmarkGrowth = { plinthLayer: 6, scaleStep: 0.15, scaledExpansions: 3 } as const;
+
+/** Die Zeichnung eines Wahrzeichens der Größe `size` (1 ohne Ausbau, je fertigem Ausbau eins mehr) um die Feldmitte. */
+export function landmarkDrawing(art: ArtKey, size: number): ArtPrimitive[] {
+  const expansions = Math.max(size - 1, 0);
+  const drawing = artOf(art).drawing;
+  if (expansions === 0) return [...drawing];
+  const scale = 1 + landmarkGrowth.scaleStep * Math.min(expansions, landmarkGrowth.scaledExpansions);
+  const lift = expansions * landmarkGrowth.plinthLayer;
+  const plinth = Array.from({ length: expansions }, (_, layer) =>
+    box({ x: 0, y: -layer * landmarkGrowth.plinthLayer }, tile * 0.3, landmarkGrowth.plinthLayer, 'islandStone', 'islandStone'),
+  ).flat();
+  const lifted = scaled(drawing, scale).map((shape) => shifted(shape, -lift));
+  return [shadow(tile * 0.6), ...plinth, ...lifted];
+}
+
+/** Eine Grundform, um `dy` nach unten (positiv) bzw. oben (negativ) verschoben. */
+function shifted(shape: ArtPrimitive, dy: number): ArtPrimitive {
+  return shape.type === 'flaeche' ? { ...shape, points: shape.points.map(({ x, y }) => ({ x, y: y + dy })) } : { ...shape, y: shape.y + dy };
+}
+
 /** Grafikschlüssel des Gerüsts zu einer gemeinsamen Stufe. */
 export function scaffoldArt(stage: CommonStage): ArtKey {
   return `geruest_${stage}`;

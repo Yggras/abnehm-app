@@ -7,7 +7,7 @@ import { Easing, useDerivedValue, useSharedValue, withDelay, withSpring, withTim
 
 import { color, size, useMotion, type ColorToken } from '../design';
 import { MomoRig, momoVisual } from '../momo';
-import { artOf, shadow, type ArtPrimitive } from './art';
+import { artOf, landmarkDrawing, shadow, type ArtPrimitive } from './art';
 import type { Point, Polygon } from './scene-model';
 import { transformationMotion } from './transformation-motion';
 
@@ -58,15 +58,25 @@ export function fogPath(cells: readonly Polygon[]): string {
  * (`appearing`) erscheint mit Feder (`spring-bouncy`), bei „Bewegung reduzieren“ als Überblendung in
  * `duration-fast` (Spezifikation 4, Abschnitt 7; Design-System › Bewegung).
  */
-/** Eine Grafik mittig auf ihrem Feld; `scale` vergrößert sie um den Fußpunkt, etwa ein ausgebautes Wahrzeichen (#208). */
-export function ObjectArt({ at, art, foliage, appearing = false, scale = 1 }: { at: Point; art: ArtKey; foliage: ColorToken; appearing?: boolean; scale?: number }) {
+export function ObjectArt({ at, art, foliage, appearing = false }: { at: Point; art: ArtKey; foliage: ColorToken; appearing?: boolean }) {
   const { drawing } = artOf(art);
   const shapes = drawing.map((primitive, index) => <Primitive key={index} primitive={primitive} foliage={foliage} />);
-  if (!appearing) return <Group transform={[{ translateX: at.x }, { translateY: at.y }, { scale }]}>{shapes}</Group>;
+  if (!appearing) return <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>{shapes}</Group>;
   return (
     <Appear at={at}>
       {shapes}
     </Appear>
+  );
+}
+
+/** Ein Wahrzeichen mittig auf seinem Bauplatz, je Ausbau größer (`landmarkDrawing`, #208). */
+export function LandmarkArt({ at, art, size, foliage }: { at: Point; art: ArtKey; size: number; foliage: ColorToken }) {
+  return (
+    <Group transform={[{ translateX: at.x }, { translateY: at.y }]}>
+      {landmarkDrawing(art, size).map((primitive, index) => (
+        <Primitive key={index} primitive={primitive} foliage={foliage} />
+      ))}
+    </Group>
   );
 }
 

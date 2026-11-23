@@ -523,13 +523,10 @@ describe('Gemeinschaftsprojekt (#208)', () => {
     expect(ofType(scene.items, 'geruest')).toEqual([{ layer: 'objekte', type: 'geruest', field: site, at: { x: 32, y: 64 }, art }]);
   });
 
-  test('ein fertiges Wahrzeichen steht auf seinem Bauplatz; jeder Ausbau vergrößert es', () => {
-    const scene = (size: number) => islandScene(request({ island: { ...island, landmarks: [{ site, art: 'gartenhaeuschen', size }] } }));
+  test('ein fertiges Wahrzeichen steht mit seiner Größe auf seinem Bauplatz; wie es wächst, zeichnet `landmarkDrawing`', () => {
+    const scene = islandScene(request({ island: { ...island, landmarks: [{ site, art: 'gartenhaeuschen', size: 4 }] } }));
 
-    expect(ofType(scene(1).items, 'wahrzeichen')).toEqual([{ layer: 'objekte', type: 'wahrzeichen', field: site, at: { x: 32, y: 64 }, art: 'gartenhaeuschen', scale: 1 }]);
-    const scales = [1, 2, 3].map((size) => ofType(scene(size).items, 'wahrzeichen')[0]!.scale);
-    expect(scales[1]).toBeGreaterThan(scales[0]!);
-    expect(scales[2]).toBeGreaterThan(scales[1]!);
+    expect(ofType(scene.items, 'wahrzeichen')).toEqual([{ layer: 'objekte', type: 'wahrzeichen', field: site, at: { x: 32, y: 64 }, art: 'gartenhaeuschen', size: 4 }]);
   });
 
   test('beim Ausbau steht das Gerüst um das vorhandene Wahrzeichen, davor gezeichnet; beides zwischen den Objekten nach Zeile + Spalte', () => {
