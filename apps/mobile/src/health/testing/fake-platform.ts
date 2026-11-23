@@ -15,6 +15,7 @@ import type {
   HealthWeightRecord,
   HealthWorkoutRecord,
 } from '../platform';
+import { fitbitSourceAppId } from '../../trackers/entry-texts';
 import { daysBefore, tallyOrigins } from '../platform';
 
 // Health-Attrappe (Spezifikation 3, Abschnitte 2 und 9; #183): deterministisch steuerbare Implementierung
@@ -27,7 +28,7 @@ import { daysBefore, tallyOrigins } from '../platform';
 export const healthFakeMarker = 'health_attrappe';
 
 /** Kennung von Google Health (Fitbit) als Quell-App (Spezifikation 3, Abschnitt 6). */
-export const fitbitApp = { id: 'com.fitbit.FitbitMobile', name: null } as const;
+export const fitbitApp = { id: fitbitSourceAppId, name: null } as const;
 
 type Change = Readonly<{ sequence: number; type: HealthDataType; externalKey: string }>;
 

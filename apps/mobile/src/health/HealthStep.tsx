@@ -51,7 +51,7 @@ export function HealthStep({ complete }: OnboardingStepProps<'health'>) {
         <>
           <Explanation />
           {phase === 'installation_noetig' ? <Notice tone="hint" text={healthTexts.installationNeeded} /> : null}
-          {phase === 'fehlgeschlagen' ? <Notice tone="neutral" text={healthTexts.connectFailed} /> : null}
+          {phase === 'fehlgeschlagen' && health !== null ? <Notice tone="neutral" text={healthTexts.connectFailed(health.platform.origin)} /> : null}
           <Button
             label={healthTexts.connect}
             variant="primary"

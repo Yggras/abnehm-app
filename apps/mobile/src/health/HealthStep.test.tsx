@@ -153,7 +153,7 @@ describe('Verfügbarkeit', () => {
 
     await connect(step);
 
-    expect(screen.getByText('Das Verbinden hat gerade nicht geklappt. Versuch es noch einmal oder später unter Einstellungen › Gesundheitsdaten.')).toBeOnTheScreen();
+    expect(screen.getByText('Das Verbinden hat gerade nicht geklappt. Versuch es noch einmal oder später unter Einstellungen › Apple Health.')).toBeOnTheScreen();
     expect(step.onComplete).not.toHaveBeenCalled();
     expect(problemColors()).toEqual([]);
 

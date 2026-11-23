@@ -1,10 +1,15 @@
 import type { ImportOrigin } from '@abnehm/contracts/trackers';
 
+import { settingsTexts } from '../settings/texts';
+
 // Sichtbare Texte und zugängliche Namen rund um die Verbindung mit Apple Health bzw. Health Connect
 // (Spezifikation 3, Abschnitt 6, https://github.com/Yggras/abnehm-app/issues/86): Onboarding-Schritt `health`
 // (#189) und, wiederverwendet, die Einstellungsseite Health (#190). Erklärtext, „Verbinden“, „Noch keine
 // Trainings oder Gewichte gefunden“, „Fitbit-Daten fehlen?“ und die Menüwege der Anleitungen stehen dort
 // wörtlich; die übrigen Sätze sind eigene Formulierungen im Ton des Design-Systems.
+
+/** Name der Zeile in der Einstellungsübersicht je Herkunft. */
+const settingsRow: Record<ImportOrigin, string> = { apple_health: settingsTexts.health.ios, health_connect: settingsTexts.health.android };
 
 export const healthTexts = {
   explanation: 'Wir lesen nur Trainings und Gewicht. Wir schreiben nichts zurück.',
@@ -15,9 +20,13 @@ export const healthTexts = {
    * (https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started).
    */
   installationNeeded: 'Health Connect ist noch nicht installiert. Installiere es aus dem Play Store und tippe dann noch einmal auf „Verbinden“.',
-  /** Die Seite „Gesundheitsdaten“ (`settings` mit `section: "health"`) holt die Verbindung nach (#190). */
-  connectFailed: 'Das Verbinden hat gerade nicht geklappt. Versuch es noch einmal oder später unter Einstellungen › Gesundheitsdaten.',
-  sourceAppsTitle: 'Quell-Apps der letzten 30 Tage',
+  /**
+   * Die Seite `settings` mit `section: "health"` holt die Verbindung nach (#190). In der Übersicht heißt ihre
+   * Zeile wie die Plattform (`settingsTexts.health`, `SettingsOverview`).
+   */
+  connectFailed: (origin: ImportOrigin) =>
+    `Das Verbinden hat gerade nicht geklappt. Versuch es noch einmal oder später unter Einstellungen › ${settingsRow[origin]}.`,
+  sourceAppsTitle: (days: number) => `Quell-Apps der letzten ${days} Tage`,
   sourceAppsLoading: 'Quell-Apps werden geprüft',
   /** Neutral, weil iOS eine Verweigerung nicht erkennen lässt und es dann aussieht, als gäbe es keine Daten. */
   noData: 'Noch keine Trainings oder Gewichte gefunden',
@@ -38,7 +47,7 @@ export const healthTexts = {
     health_connect: 'Schalte in Google Health unter Connections › Partner apps › Sync your favorite health apps die Freigabe nach Health Connect ein.',
   } satisfies Record<ImportOrigin, string>,
   /** Trainings und Gewichte einer Quell-App, etwa „2 Trainings · 1 Gewicht“. */
-  originCounts(workouts: number, weights: number): string {
+  sourceAppCounts(workouts: number, weights: number): string {
     const parts = [];
     if (workouts > 0) parts.push(`${workouts} ${workouts === 1 ? 'Training' : 'Trainings'}`);
     if (weights > 0) parts.push(`${weights} ${weights === 1 ? 'Gewicht' : 'Gewichte'}`);

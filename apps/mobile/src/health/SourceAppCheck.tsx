@@ -16,27 +16,27 @@ import { healthTexts } from './texts';
 /** Zeitraum der Prüfung in Tagen. */
 const checkDays = 30;
 
-type Check = Readonly<{ type: 'laedt' }> | Readonly<{ type: 'fehlgeschlagen' }> | Readonly<{ type: 'geprueft'; origins: readonly HealthOrigin[] }>;
+type Check = Readonly<{ type: 'laedt' }> | Readonly<{ type: 'fehlgeschlagen' }> | Readonly<{ type: 'geprueft'; sourceApps: readonly HealthOrigin[] }>;
 
 /**
  * Gruppiert die Trainings und Gewichte der letzten 30 Tage nach Quell-App. Fehlt Google Health (Fitbit),
  * folgt die Anleitung als nicht blockierender Hinweis.
  */
 export function SourceAppCheck({ platform }: { platform: HealthPlatformAdapter }) {
-  const check = useRecentOrigins(platform);
+  const check = useRecentSourceApps(platform);
   return (
     <View style={styles.check}>
       <Text variant="headline" accessibilityRole="header">
-        {healthTexts.sourceAppsTitle}
+        {healthTexts.sourceAppsTitle(checkDays)}
       </Text>
       <CheckResult check={check} />
-      {check.type === 'geprueft' && !check.origins.some(({ sourceApp }) => sourceApp.id === fitbitSourceAppId) ? <FitbitGuide origin={platform.origin} /> : null}
+      {check.type === 'geprueft' && !check.sourceApps.some(({ sourceApp }) => sourceApp.id === fitbitSourceAppId) ? <FitbitGuide origin={platform.origin} /> : null}
     </View>
   );
 }
 
 /** Anleitung „Fitbit-Daten fehlen?“ für die Plattform der Herkunft: Apple Health bzw. Health Connect. */
-export function FitbitGuide({ origin }: { origin: ImportOrigin }) {
+function FitbitGuide({ origin }: { origin: ImportOrigin }) {
   return (
     <Card>
       <View style={styles.guide}>
@@ -60,12 +60,12 @@ function CheckResult({ check }: { check: Check }) {
     case 'fehlgeschlagen':
       return <Notice tone="neutral" text={healthTexts.checkFailed} />;
     case 'geprueft':
-      if (check.origins.length === 0) return <Notice tone="neutral" icon="pulse" text={healthTexts.noData} />;
+      if (check.sourceApps.length === 0) return <Notice tone="neutral" icon="pulse" text={healthTexts.noData} />;
       return (
         <ListGroup>
-          {check.origins.map(({ sourceApp, workouts, weights }) => {
+          {check.sourceApps.map(({ sourceApp, workouts, weights }) => {
             const name = sourceAppText(sourceApp.id, sourceApp.name) ?? sourceApp.id;
-            const counts = healthTexts.originCounts(workouts, weights);
+            const counts = healthTexts.sourceAppCounts(workouts, weights);
             return <ListRow key={sourceApp.id} title={name} subtitle={counts} accessibilityLabel={`${name}, ${counts}`} />;
           })}
         </ListGroup>
@@ -74,12 +74,12 @@ function CheckResult({ check }: { check: Check }) {
 }
 
 /** Liest die Quell-Apps einmal je Adapter; ein Fehler bleibt still und zeigt nur den neutralen Hinweis. */
-function useRecentOrigins(platform: HealthPlatformAdapter): Check {
+function useRecentSourceApps(platform: HealthPlatformAdapter): Check {
   const [check, setCheck] = useState<Readonly<{ platform: HealthPlatformAdapter; check: Check }> | null>(null);
   useEffect(() => {
     let current = true;
     platform.recentOrigins(checkDays).then(
-      (origins) => current && setCheck({ platform, check: { type: 'geprueft', origins } }),
+      (sourceApps) => current && setCheck({ platform, check: { type: 'geprueft', sourceApps } }),
       () => current && setCheck({ platform, check: { type: 'fehlgeschlagen' } }),
     );
     return () => {
