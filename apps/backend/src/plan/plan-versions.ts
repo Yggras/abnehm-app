@@ -26,10 +26,15 @@ export function planCommandTarget(kind: PlanVersionKind, businessKey: string): R
   return version === null ? {} : { id: version.id, claimedOwnerPersonId: version.personId };
 }
 
+/** Der Schlüssel eines Befehls dieser Art muss das `valid_from` der Nutzlast nennen, sonst `invalid_payload`. */
+export function requireVersionKey(kind: PlanVersionKind, businessKey: string, validFrom: LocalDate): void {
+  const key = planVersionOfKey(kind, businessKey);
+  if (key === null || key.validFrom !== validFrom) throw new CommandRejection('invalid_payload');
+}
+
 /**
- * Schreibt eine Fassung der handelnden Person: Schlüssel prüfen, Zeilen über `write` mit neuer
- * Serverversion schreiben, Änderungsprotokoll, Invalidierung der Partner-Zusammenfassungen und
- * kanonische Antwort. Die ID folgt aus Person und `valid_from`, sodass eine weitere Fassung desselben
+ * Schreibt eine Fassung der handelnden Person: Zeilen über `write` mit neuer Serverversion schreiben,
+ * Änderungsprotokoll, Invalidierung der Partner-Zusammenfassungen und kanonische Antwort. Die ID folgt aus Person und `valid_from`, sodass eine weitere Fassung desselben
  * Tags dieselbe Zeile ersetzt (Last-Write-Wins in Server-Eingangsreihenfolge).
  *
  * Wirksam ist eine Fassung, sobald für die Person ein Tagesziel mit lokalem Tag ≥ `valid_from`
@@ -43,14 +48,11 @@ export async function savePlanVersion(
     entity: ServerSyncEntity;
     personId: EntityId;
     validFrom: LocalDate;
-    businessKey: string;
     at: Date;
     write: (id: EntityId, serverVersion: bigint) => Promise<void>;
   }>,
 ): Promise<{ changes: CanonicalChange[]; idMappings: [] }> {
-  const { kind, entity, personId, validFrom, businessKey, at } = options;
-  const key = planVersionOfKey(kind, businessKey);
-  if (key === null || key.validFrom !== validFrom) throw new CommandRejection('invalid_payload');
+  const { kind, entity, personId, validFrom, at } = options;
   const id = planVersionId(kind, personId, validFrom);
   const stored = (await entity.read(tx, [id])).get(id);
   if (stored !== undefined && (await hasDailyGoalFrom(tx, personId, validFrom))) {

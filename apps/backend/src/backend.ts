@@ -40,6 +40,7 @@ import { createPartnerProjections } from './partner-projections/projections.ts';
 import type { AnyPartnerSummaryProjector, ReaderPort } from './partner-projections/projector.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
+import { acceptBudgetSuggestionCommand } from './plan/accept-budget-suggestion.ts';
 import { budgetSuggestionEntity } from './plan/budget-suggestion-entity.ts';
 import { createGoalVersionCommand, goalVersionEntity } from './plan/goal-versions.ts';
 import { postgresPlanReader } from './plan/plan-reader.ts';
@@ -137,12 +138,13 @@ export function createBackend({
   sync.registerPrePullStep('challenge_proposals', challenges.expireProposals);
   uncoupling.registerObserver('challenges', challenges.withdrawOnUncoupling);
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle; der Budgetvorschlag als
-  // Upsert innerhalb der eigenen Eigentumsgrenze (#150).
+  // Upsert innerhalb der eigenen Eigentumsgrenze (#150), angenommen nur über seinen Fachbefehl (#151).
   sync.registerEntity(goalVersionEntity);
   sync.registerEntity(weeklyPlanVersionEntity);
   sync.registerEntity(budgetSuggestionEntity);
   sync.registerCommand(createGoalVersionCommand);
   sync.registerCommand(createWeeklyPlanVersionCommand);
+  sync.registerCommand(acceptBudgetSuggestionCommand);
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);
