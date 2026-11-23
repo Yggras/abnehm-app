@@ -1,0 +1,21 @@
+# Teilablauf: öffnet von „Heute“ oder dem Protokoll aus den Hinzufügen-Bildschirm des Frühstücks und tippt
+# „Barcode scannen“ (#160). Jeder Link der Testfähigkeiten führt auf „/“ (`redirectSystemPath` in
+# src/test-capabilities/index.tsx); danach steht wieder „Heute“. Ein Tipp kurz nach dem Link oder dem Seed
+# kann ins Leere gehen; dann wiederholt der Teilablauf ihn.
+appId: ${APP_ID}
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Protokoll"
+      - extendedWaitUntil:
+          visible: "Frühstück hinzufügen"
+          timeout: 10000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Frühstück hinzufügen"
+      - extendedWaitUntil:
+          visible: "Barcode scannen"
+          timeout: 15000
+- tapOn: "Barcode scannen"

@@ -1,0 +1,153 @@
+# Gerätelauf Barcode-Scan (Spezifikation 2, Abschnitt 5; #160): Seed „solo“ öffnet das Protokoll. Hauptaufgabe:
+# ein verpacktes Produkt scannen und erfassen. Der iOS-Simulator hat keine Kamera; deshalb hinterlegt der Link
+# `produkt?scan=…` einen Barcode, den der Scanner beim Öffnen wie einen Kameratreffer übernimmt, und
+# `produkt?ergebnis=…` stellt den Fake der Produktquelle auf das gewünschte Ergebnis
+# (src/test-capabilities/food-products.ts). Der erste Scan zeigt Kamerafreigabe und Kameraansicht ohne
+# hinterlegten Barcode. Danach je ein Folgezustand: gefunden (Fake-Katalog), Haferdrink aus dem OFF-Cache des
+# Seeds ohne Netz, „Kein Netz – …“, Open Food Facts antwortet nicht (503), unbekannt und unvollständig.
+# Zum Schluss steht der Haferdrink in der Suche unter „gescannte Produkte“. Die Bildschirmfotos sind die
+# Vorlage der Impeccable-Kritik. Einzeln mit `scripts/e2e-run --ablauf barcode-scan`.
+appId: ${APP_ID}
+name: Verpacktes Produkt scannen und erfassen
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    # Die Kamerafreigabe bleibt offen, damit der erste Scan sie erfragt (Maestro erteilt sonst alle).
+    permissions:
+      camera: unset
+# Android: Das Zurücksetzen der Kamerafreigabe beim Start kann den ersten App-Prozess beenden; ein Link, der
+# dann ankommt, startet die App nur neu und geht verloren (beobachtet am 23.11.2026). Deshalb einmal wiederholen.
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          file: teilablaeufe/link.yaml
+          env:
+            LINK: seed?szenario=solo&ziel=/log
+      - extendedWaitUntil:
+          visible: "Frühstück hinzufügen"
+          timeout: 45000
+
+# Erster Scan: Kamerafreigabe bzw. Kameraansicht -----------------------------------------------------
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Allow|Erlauben|While using the app|Beim Verwenden der App erlauben"
+    timeout: 10000
+- takeScreenshot: barcode-1-freigabe
+- tapOn:
+    text: "Allow|Erlauben|OK|Beim Verwenden der App erlauben|While using the app|Nur dieses Mal|Only this time"
+    optional: true
+- takeScreenshot: barcode-2-scanner
+- tapOn: "Abbrechen"
+
+# found: Fake-Katalog, Naturjoghurt -> Mengenprüfung mit Quellenangabe, dann erfassen -------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=katalog&scan=4000000000013
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Daten von Open Food Facts.*"
+    timeout: 15000
+- takeScreenshot: barcode-3-gefunden
+- scrollUntilVisible:
+    element: "Hinzufügen"
+    direction: DOWN
+- takeScreenshot: barcode-4-gefunden-unten
+- tapOn: "Hinzufügen"
+- extendedWaitUntil:
+    visible: ".*Naturjoghurt.*"
+    timeout: 10000
+- takeScreenshot: barcode-5-erfasst
+
+# Haferdrink aus dem OFF-Cache, ohne Netz (ml, Portion 200 ml) --------------------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=offline&scan=4000000000044
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Daten von Open Food Facts.*"
+    timeout: 15000
+- takeScreenshot: barcode-6-cache-offline
+- tapOn: "Schließen"
+- tapOn: "Fertig"
+
+# offline_unknown: unbekannter Barcode ohne Netz ---------------------------------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=offline&scan=4000000000037
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Kein Netz – Produkt manuell anlegen oder später scannen"
+    timeout: 15000
+- takeScreenshot: barcode-7-kein-netz
+
+# unavailable: Open Food Facts antwortet mit 503 ---------------------------------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=http_503&scan=4000000000037
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Erneut versuchen"
+    timeout: 15000
+- takeScreenshot: barcode-8-nicht-verfuegbar
+
+# not_found: „Eigenes Lebensmittel anlegen“ mit Barcode ----------------------------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=nicht_gefunden&scan=4000000000037
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Open Food Facts kennt dieses Produkt noch nicht.*"
+    timeout: 15000
+- takeScreenshot: barcode-9-unbekannt
+
+# incomplete: „Eigenes Lebensmittel anlegen“ mit allen bekannten Werten ----------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=unvollstaendig&scan=4000000000020
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Bei diesem Produkt fehlen Werte.*"
+    timeout: 15000
+- takeScreenshot: barcode-10-unvollstaendig
+
+# Suche: gescannte Produkte zwischen eigenen Lebensmitteln und BLS ----------------------------------------
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: produkt?ergebnis=echt
+- tapOn: "Protokoll"
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Frühstück hinzufügen"
+      - extendedWaitUntil:
+          visible: "Lebensmittel suchen"
+          timeout: 15000
+- tapOn: "Lebensmittel suchen"
+- inputText: "Hafer"
+- extendedWaitUntil:
+    visible: ".*Haferdrink.*"
+    timeout: 10000
+- takeScreenshot: barcode-11-suche
+
+# Abgelehnte Kamerafreigabe: Weg zu den Systemeinstellungen ---------------------------------------------
+- launchApp:
+    stopApp: true
+    permissions:
+      camera: deny
+- extendedWaitUntil:
+    visible: "Protokoll"
+    timeout: 30000
+- runFlow: teilablaeufe/scanner-oeffnen.yaml
+- extendedWaitUntil:
+    visible: "Einstellungen öffnen"
+    timeout: 15000
+- takeScreenshot: barcode-12-abgelehnt
