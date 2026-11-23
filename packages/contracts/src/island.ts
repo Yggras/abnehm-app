@@ -208,6 +208,30 @@ export function upgradeObjectKey(commandId: EntityId): string {
   return `aufwerten:${commandId}`;
 }
 
+/**
+ * Nutzlast des Fachbefehls `contributeToProject` (Spezifikation 4, Abschnitte 2.5 und 8; #208): eigene Energie
+ * in den Anteil der aktuellen eigenen Rolle am aktiven Gemeinschaftsprojekt einzahlen. Projekteinzahlung und
+ * `project_contribution_debit` entstehen in einem Befehl. Die Rolle kommt aus der Sitzung, nie aus der
+ * Nutzlast; ein Anteil des Partners lässt sich so nicht wählen. Der Server zahlt höchstens bis zum Restbedarf
+ * des Anteils ein und antwortet mit dem tatsächlichen Betrag. Alle IDs vergibt das Gerät.
+ */
+export const ContributeToProject = z.strictObject({
+  /** ID des Spielbefehls; zugleich Buchungsschlüssel der `project_contribution_debit` (Spezifikation 0, Abschnitt 4). */
+  commandId: EntityId,
+  contributionId: EntityId,
+  projectId: EntityId,
+  /** Gewünschter Betrag; eingezahlt wird höchstens der Restbedarf des eigenen Anteils. */
+  amount: z.int().positive(),
+  /** Lokaler Tag der Ausgabe auf dem Gerät; Tag der Buchung. */
+  localDate: LocalDate,
+});
+export type ContributeToProject = z.infer<typeof ContributeToProject>;
+
+/** Fachlicher Schlüssel von `contributeToProject`: je Spielbefehl genau eine Einzahlung. */
+export function contributeToProjectKey(commandId: EntityId): string {
+  return `einzahlen:${commandId}`;
+}
+
 /** Ziel einer Platzierung: ein Inselfeld oder das persönliche Lager. */
 export const PlacementTarget = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('feld'), fieldId: EntityId }),

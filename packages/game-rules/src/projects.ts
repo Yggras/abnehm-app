@@ -30,6 +30,11 @@ export function commonStage(shares: readonly [Share, Share]): CommonStage {
   return 'gestartet';
 }
 
+/** Anlassschlüssel des Projektabschlusses (Spezifikation 4, Abschnitt 2.2): `projekt:<insel>:<nr>`. */
+export function projectOccasionKey(islandId: string, sequenceNumber: number): string {
+  return `projekt:${islandId}:${assertWholeNumber(sequenceNumber, 1, 'Projektnummer')}`;
+}
+
 /** Gemeinschaftsprojekt Nummer n: aus der festen Reihenfolge oder, danach, ein Ausbau. */
 export type ProjectSlot = Readonly<{
   sequenceNumber: number;

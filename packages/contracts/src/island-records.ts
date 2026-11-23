@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { CatalogKey, EntityId, Instant } from './base.ts';
 import { uuidV5 } from './ids.ts';
-import { ChallengeStatus, CommonStage, IslandEventKind } from './island.ts';
+import { ChallengeStatus, CommonStage, IslandEventKind, IslandRole } from './island.ts';
 import { SharedEventType } from './wir.ts';
 
 // Kanonische Datensätze der Inselinhalte im Sync (Spezifikation 0, Abschnitt 8 „Energie, Insel und
@@ -83,6 +83,22 @@ export const CommunityProjectRecord = z
 export type CommunityProjectRecord = z.infer<typeof CommunityProjectRecord>;
 
 /**
+ * Projekteinzahlung (Spezifikation 0, Abschnitt 8; #208): Projekt, Person mit ihrer Rolle zum Zeitpunkt der
+ * Einzahlung, Betrag und die zugehörige `project_contribution_debit`; unveränderlich. Sie gehört der Person
+ * und kommt nur zu ihr; der Partner sieht den gemeinsamen Stand nur als Stufe im Inselfortschritt.
+ */
+export const ProjectContributionRecord = z.strictObject({
+  communityProjectId: EntityId,
+  personId: EntityId,
+  role: IslandRole,
+  amount: z.int().positive(),
+  energyBookingId: EntityId,
+  commandId: EntityId,
+  createdAt: Instant,
+});
+export type ProjectContributionRecord = z.infer<typeof ProjectContributionRecord>;
+
+/**
  * Insel-Ereignis: die Arten aus Spezifikation 4, Abschnitt 9, und die gemeinsamen Ereignisse für „Neu
  * bei euch“ (`SharedEventType`), etwa „Momo ist geschlüpft“. Den Stand je Person führt `island_event_state`.
  */
@@ -154,7 +170,7 @@ const islandContentNamespace = 'a3c1f0e2-5b7d-4e9a-8c6f-1d2e3f4a5b6b';
  * (Feldschlüssel) oder Bauplanfreischaltung (Katalogschlüssel). Server und Seeds vergeben so dieselbe ID für eine
  * Freischaltung, ohne Rückfrage (#204).
  */
-export function islandContentId(entityType: 'area_unlock' | 'island_field' | 'blueprint_unlock', islandId: EntityId, key: string): EntityId {
+export function islandContentId(entityType: 'area_unlock' | 'island_field' | 'blueprint_unlock' | 'community_project', islandId: EntityId, key: string): EntityId {
   return EntityId.parse(uuidV5(islandContentNamespace, `${entityType}:${islandId}:${key}`));
 }
 

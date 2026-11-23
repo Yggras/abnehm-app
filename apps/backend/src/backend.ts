@@ -15,6 +15,7 @@ import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/comp
 import { energyBookingEntity } from './energy/bookings.ts';
 import { buildObjectCommand } from './island/build-object.ts';
 import { challengeSyncEntities, createChallenges } from './island/challenges.ts';
+import { contributeToProjectCommand } from './island/community-projects.ts';
 import { placeObjectCommand, upgradeObjectCommand } from './island/object-commands.ts';
 import { islandSyncEntities } from './island/island-entities.ts';
 import { generateIslandEvents, islandEventCommands } from './island/island-events.ts';
@@ -124,6 +125,8 @@ export function createBackend({
   sync.registerCommand(buildObjectCommand);
   sync.registerCommand(upgradeObjectCommand);
   sync.registerCommand(placeObjectCommand);
+  // Gemeinschaftsprojekte (#208): Einzahlen samt Projektabschluss im selben Befehl.
+  sync.registerCommand(contributeToProjectCommand);
   // Insel-Ereignisse (#202): der Ereignisgenerator vor jedem Pull, Ansehen und Abholen.
   for (const command of islandEventCommands) sync.registerCommand(command);
   sync.registerPrePullStep('island_events', generateIslandEvents);

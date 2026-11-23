@@ -4,6 +4,7 @@ import {
   ChallengeStatus,
   ClaimEventReward,
   CommonStage,
+  ContributeToProject,
   DecideChallengeProposal,
   DecideSharedAction,
   IslandEventKind,
@@ -26,7 +27,7 @@ import {
   WithdrawChallengeProposal,
 } from '../src/island.ts';
 import { fixtures } from './define.ts';
-import { anna, challenge, command, coupling, island, islandEventState, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
+import { anna, challenge, command, contribution, coupling, island, islandEventState, islandField, islandObject, now, philipp, project, sharedAction, timeZone, today } from './ids.ts';
 
 const progress = {
   islandId: island,
@@ -214,6 +215,18 @@ export const islandFixtures = {
       'über Stufe 3 hinaus': { commandId: command, islandObjectId: islandObject, toLevel: 4, localDate: today },
       'auf Stufe 1': { commandId: command, islandObjectId: islandObject, toLevel: 1, localDate: today },
       'ohne Zielstufe': { commandId: command, islandObjectId: islandObject, localDate: today },
+    },
+  }),
+  ContributeToProject: fixtures(ContributeToProject, {
+    valid: {
+      '5 Energie in den eigenen Anteil': { commandId: command, contributionId: contribution, projectId: project, amount: 5, localDate: today },
+    },
+    invalid: {
+      'Rolle aus dem Client': { commandId: command, contributionId: contribution, projectId: project, amount: 5, localDate: today, role: 'natur' },
+      'Person aus dem Client': { commandId: command, contributionId: contribution, projectId: project, amount: 5, localDate: today, personId: anna },
+      'Betrag 0': { commandId: command, contributionId: contribution, projectId: project, amount: 0, localDate: today },
+      'Bruchteil': { commandId: command, contributionId: contribution, projectId: project, amount: 1.5, localDate: today },
+      'ohne Projekt': { commandId: command, contributionId: contribution, amount: 5, localDate: today },
     },
   }),
   MarkEventsSeen: fixtures(MarkEventsSeen, {
