@@ -85,6 +85,8 @@ describe('„Verbinden“ bei verfügbarer Plattform', () => {
     expect(step.world.weights().map((row) => row.externalKey).sort()).toEqual(['gewicht-2-tage', 'gewicht-29-tage', 'gewicht-heute']);
     expect(step.world.sports().map((row) => row.externalKey)).toEqual(['training-heute']);
     expect(screen.getByText('Google Health (Fitbit)')).toBeOnTheScreen();
+    // Der Erklärtext gehört vor die Systemabfrage; danach bleibt „Weiter“ auch auf dem iPhone SE im Blick.
+    expect(screen.queryByText(explanation)).not.toBeOnTheScreen();
     expect(step.onComplete).not.toHaveBeenCalled();
   });
 

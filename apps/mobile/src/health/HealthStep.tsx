@@ -38,14 +38,18 @@ export function HealthStep({ complete }: OnboardingStepProps<'health'>) {
 
   return (
     <View style={styles.step}>
-      <Explanation />
       {phase === 'verbunden' && health !== null ? (
         <>
+          {/*
+            Ohne den Erklärblock, der vor die Systemabfrage gehört: Sonst lag „Weiter“ auf dem iPhone SE unter
+            dem sichtbaren Bereich, während „Überspringen“ des Rahmens unten stand (Impeccable-Prüfung, #189).
+          */}
           <SourceAppCheck platform={health.platform} />
           <Button label={healthTexts.next} variant="primary" block onPress={() => complete({ type: 'health_connected' })} />
         </>
       ) : (
         <>
+          <Explanation />
           {phase === 'installation_noetig' ? <Notice tone="hint" text={healthTexts.installationNeeded} /> : null}
           {phase === 'fehlgeschlagen' ? <Notice tone="neutral" text={healthTexts.connectFailed} /> : null}
           <Button
