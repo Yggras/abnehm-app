@@ -48,7 +48,7 @@ export function ProjectSheet({ project, onContribute }: ProjectSheetProps) {
         </View>
       </View>
       <Text variant="label" tone="inkMuted">
-        {projectTexts.howItWorks}
+        {projectTexts.howItWorks[project.kind]}
       </Text>
       {contribution.type === 'voll' ? (
         <Text variant="bodyStrong">{projectTexts.ownFull}</Text>

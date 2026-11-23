@@ -130,7 +130,11 @@ export const projectTexts = {
   ownFull: 'Dein Anteil ist voll',
   stage: (stage: CommonStage) => `Gemeinsam: ${projectTexts.stageNames[stage]}`,
   stageNames: { gestartet: 'gestartet', gut_unterwegs: 'gut unterwegs', fast_geschafft: 'fast geschafft', geschafft: 'geschafft' } satisfies Record<CommonStage, string>,
-  howItWorks: 'Jeder füllt seinen Anteil mit eigener Energie, ohne Frist. Sind beide Anteile voll, steht euer Wahrzeichen.',
+  /** Beim Ausbau steht das Wahrzeichen schon; es wächst (Gerätelauf #208). */
+  howItWorks: {
+    projekt: 'Jeder füllt seinen Anteil mit eigener Energie, ohne Frist. Sind beide Anteile voll, steht euer Wahrzeichen.',
+    ausbau: 'Jeder füllt seinen Anteil mit eigener Energie, ohne Frist. Sind beide Anteile voll, wird euer Wahrzeichen größer.',
+  } satisfies Record<'projekt' | 'ausbau', string>,
   amount: 'Betrag',
   amountValue: (amount: number) => `${amount} Energie`,
   contribute: 'Einzahlen',

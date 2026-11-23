@@ -85,6 +85,10 @@ name: Gemeinschaftsprojekt einzahlen und abschließen
 - takeScreenshot: projekt-5-insel-nach-einzahlen
 
 # Projektabschluss: Seed „projekt-abschluss“ -----------------------------------------------------------------
+# Neu starten: Der Teilablauf `link` wartet auf einen Bildschirmrahmen (`screen-scroll`), den die Insel nicht hat.
+- launchApp:
+    clearState: true
+    clearKeychain: true
 - runFlow:
     file: teilablaeufe/link.yaml
     env:
@@ -107,5 +111,6 @@ name: Gemeinschaftsprojekt einzahlen und abschließen
     visible: "Gartenhäuschen-Ausbau"
     timeout: 10000
 - assertVisible: "Ausbau eures Wahrzeichens"
+- assertVisible: ".*wird euer Wahrzeichen größer."
 - assertVisible: "Dein Anteil: 0 von 30"
 - takeScreenshot: projekt-7-ausbau
