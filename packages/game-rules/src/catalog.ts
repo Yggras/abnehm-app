@@ -113,6 +113,18 @@ export type ProjectTemplate = Readonly<{
 }>;
 
 /**
+ * Ausbau-Vorlage (Spezifikation 4, Abschnitt 8; #208): Nach dem letzten Gemeinschaftsprojekt folgen die
+ * Vorlagen der Reihe nach, immer wieder. Ein fertiger Ausbau vergrößert das Wahrzeichen des genannten
+ * Projekts sichtbar und braucht keinen eigenen Platz.
+ */
+export type ProjectExpansion = Readonly<{
+  key: string;
+  name: string;
+  /** Schlüssel des Gemeinschaftsprojekts, dessen Wahrzeichen wächst. */
+  project: string;
+}>;
+
+/**
  * Was eine Challenge-Vorlage je Person verlangt (Spezifikation 4, Abschnitt 10): eine feste Zahl
  * erfüllter Tagesziele oder, für einen Baustein, `ceil(Zähler / Nenner × geplante Tage)`.
  */
@@ -135,6 +147,7 @@ export type GameCatalog = Readonly<{
   visitorTemplates: readonly VisitorTemplate[];
   accessories: readonly Accessory[];
   projects: readonly ProjectTemplate[];
+  projectExpansions: readonly ProjectExpansion[];
   challengeTemplates: readonly ChallengeTemplate[];
 }>;
 
@@ -206,6 +219,7 @@ export type CatalogEntries = {
   besuchervorlage: VisitorTemplate;
   accessoire: Accessory;
   gemeinschaftsprojekt: ProjectTemplate & Readonly<{ sequenceNumber: number }>;
+  ausbauvorlage: ProjectExpansion;
   challenge_vorlage: ChallengeTemplate;
 };
 export type CatalogEntryKind = keyof CatalogEntries;
@@ -223,6 +237,7 @@ const keyedEntries: { [K in KeyedEntryKind]: (catalog: GameCatalog) => readonly 
   besuchervorlage: (catalog) => catalog.visitorTemplates,
   accessoire: (catalog) => catalog.accessories,
   gemeinschaftsprojekt: (catalog) => catalog.projects.map((project, index) => ({ ...project, sequenceNumber: index + 1 })),
+  ausbauvorlage: (catalog) => catalog.projectExpansions,
   challenge_vorlage: (catalog) => catalog.challengeTemplates,
 };
 

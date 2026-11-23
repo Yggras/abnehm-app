@@ -12,11 +12,11 @@ import {
   seedPassword,
   type SeedPart,
 } from '../seeds/index.ts';
-import { soloParts } from '../seeds/solo.ts';
+import { soloBarcodeProdukte, soloParts } from '../seeds/solo.ts';
 import { AreaKey, EntityId, LocalDate, ServerVersion } from '../src/base.ts';
 import { DailyGoalSnapshot } from '../src/daily-goals.ts';
 import { EnergyBooking } from '../src/energy.ts';
-import { foodFavoriteId } from '../src/nutrition.ts';
+import { foodFavoriteId, ownFoodBarcodeId } from '../src/nutrition.ts';
 import { EncouragementKey, PartnerSummaryEnvelope, partnerSummaryPeriodOf, revocationNoticeId } from '../src/partner.ts';
 import { CreateGoalVersion } from '../src/plan.ts';
 import { countedWaterMl, dayWeights, isWeighDay, showsTrend, trackerStatus, weekMinutes, weightChange, weightForecast, weightTrend } from '../src/tracker-rules.ts';
@@ -30,6 +30,8 @@ const solo = seedManifests.solo;
 const philipp = seedIds.person.philipp;
 /** Der Lebensmittelfavorit „Bircher-Müsli, selbst gemacht“ in `solo` (#158), ID aus Person und Referenz. */
 const bircherFavorite = foodFavoriteId(EntityId.parse(philipp), { type: 'eigen', key: EntityId.parse(seedIds.ownFood.philippBircher) });
+/** Die Korrektur des gescannten Skyrs in `solo` (#160), ID aus Person und Barcode. */
+const skyrCorrection = ownFoodBarcodeId(EntityId.parse(philipp), soloBarcodeProdukte.skyr);
 
 const orNull = (value: unknown) => (value === null || value === undefined ? null : String(value));
 
@@ -89,6 +91,7 @@ describe('Seed-Manifest', () => {
         expect.objectContaining({ entity_type: 'nutrition_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
       ...seedIds.sportEntry.philippVorwoche.map((id) =>
         expect.objectContaining({ entity_type: 'sport_entry', entity_id: id, owner_person_id: philipp, operation: 'upsert' })),
+      expect.objectContaining({ entity_type: 'own_food', entity_id: skyrCorrection, owner_person_id: philipp, operation: 'upsert' }),
     ]);
   });
 
@@ -125,8 +128,25 @@ describe('Seed-Manifest', () => {
     expect(ownFoods).toEqual([
       expect.objectContaining({ id: seedIds.ownFood.philippBircher, portions: [{ unit: 'portion', label: '1 Glas', baseAmount: 250_000 }], origin_type: null }),
       expect.objectContaining({ id: seedIds.ownFood.philippApfel, name: 'Apfel roh', origin_type: 'bls', origin_key: 'F110100' }),
+      expect.objectContaining({ id: skyrCorrection }),
     ]);
     expect(solo.initial.server.own_food).toEqual(ownFoods);
+  });
+
+  it('enthält gescannte Produkte: eine Barcode-Korrektur mit deterministischer ID und den lokalen OFF-Cache nur auf dem Gerät (#160)', () => {
+    const device = solo.initial.devices['philipp-iphone']!.rows;
+    expect(device.own_food).toContainEqual(
+      expect.objectContaining({ id: skyrCorrection, name: 'Skyr Natur', origin_type: 'off', origin_key: soloBarcodeProdukte.skyr }),
+    );
+    expect(device.off_cache).toEqual([
+      expect.objectContaining({ barcode: soloBarcodeProdukte.haferdrink, base_unit: 'ml', milli_kcal_per_100: 59_000 }),
+      expect.objectContaining({ barcode: soloBarcodeProdukte.skyr, milli_kcal_per_100: 66_000 }),
+      // Unvollständig: ohne kcal, älter als 30 Tage.
+      expect.objectContaining({ barcode: soloBarcodeProdukte.knaeckebrot, milli_kcal_per_100: null, fetched_at: '2026-09-01T10:00:00.000Z' }),
+    ]);
+    // Nie synchronisiert: Der Server kennt den Cache nicht, das Änderungsprotokoll nennt ihn nicht.
+    expect(solo.initial.server.off_cache).toBeUndefined();
+    expect(solo.initial.server.change_log?.some((entry) => entry.entity_type === 'off_cache')).toBe(false);
   });
 
   describe('Gewicht (#175)', () => {
@@ -291,7 +311,8 @@ describe('Seed-Manifest', () => {
     for (const table of ['water_entry', 'sport_entry', 'weight_entry']) expect(server[table]?.length).toBeGreaterThan(0);
     // Das iPhone spiegelt alle eigenen Zeilen.
     const device = solo.initial.devices['philipp-iphone']!.rows;
-    expect(Object.keys(device).sort()).toEqual(Object.keys(server).filter((table) => !['change_log', 'sync_clock'].includes(table)).sort());
+    // Dazu kommt der nur lokale OFF-Cache (#160).
+    expect(Object.keys(device).sort()).toEqual([...Object.keys(server).filter((table) => !['change_log', 'sync_clock'].includes(table)), 'off_cache'].sort());
   });
 
   it('lässt nur synthetische .test-Konten zu', () => {

@@ -42,7 +42,7 @@ export type FoodRefType = z.infer<typeof FoodRefType>;
 export const BlsKey = z.string().regex(/^[A-Z][0-9A-Z]{6}$/);
 
 /** Barcode als GTIN-8, -12, -13 oder -14 (https://www.gs1.org/standards/id-keys/gtin); UPC-E hat 8 Stellen. */
-const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
+export const Barcode = z.string().regex(/^(?:[0-9]{8}|[0-9]{12,14})$/);
 
 const BlsRef = z.strictObject({ type: z.literal(FoodRefType.enum.bls), key: BlsKey });
 const OffRef = z.strictObject({ type: z.literal(FoodRefType.enum.off), key: Barcode });
@@ -253,6 +253,18 @@ const foodFavoriteNamespace = '8e4b2c6a-1d3f-4a5e-9b7c-0f2e4d6a8c10';
  */
 export function foodFavoriteId(personId: EntityId, foodRef: FoodRef): EntityId {
   return EntityId.parse(uuidV5(foodFavoriteNamespace, `food_favorite:${personId}:${foodRefKey(foodRef)}`));
+}
+
+const ownFoodBarcodeNamespace = '3f6d9b2e-7a41-4c8d-a5e0-6b1f2c9d4e17';
+
+/**
+ * Deterministische ID eines eigenen Lebensmittels mit Barcode-Herkunft aus Person und Barcode
+ * (Spezifikation 2, Abschnitt 11; #160): Korrigieren zwei Geräte offline dasselbe Produkt, entsteht genau
+ * ein eigenes Lebensmittel, wie es der Index `own_food_barcode_uq` verlangt. Wirft bei einem Barcode,
+ * den die Lebensmittelreferenz nicht nimmt.
+ */
+export function ownFoodBarcodeId(personId: EntityId, barcode: string): EntityId {
+  return EntityId.parse(uuidV5(ownFoodBarcodeNamespace, `own_food:${personId}:${Barcode.parse(barcode)}`));
 }
 
 /** Einheit, in der die Person eine Menge eingibt und sieht. */

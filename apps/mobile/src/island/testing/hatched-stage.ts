@@ -45,6 +45,18 @@ export function hatchedStage(): Extract<IslandStage, { type: 'geschluepft' }> {
       appearance: appearanceAt(plan.progress.level),
       sharedEvents: [{ eventId: EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c04'), type: plan.event.type, occurredAt: at }],
       events: { open: [] },
+      project: {
+        projectId: EntityId.parse('5d1c7e3a-2b4f-4a8e-b6c1-3e9f0a7d5c03'),
+        kind: 'projekt',
+        templateKey: plan.project.templateKey,
+        name: 'Gartenhäuschen',
+        site: 'grundinsel:7:2',
+        ownRole: 'bauen',
+        own: { paid: 0, need: plan.project.buildNeed },
+        contribution: { type: 'keine_energie' },
+        stage: 'gestartet',
+      },
+      landmarks: [],
     },
   };
 }

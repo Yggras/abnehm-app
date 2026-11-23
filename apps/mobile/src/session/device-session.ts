@@ -13,11 +13,13 @@ import { energyBookingEntity } from '../energy';
 import { createHealthImport } from '../health';
 import { deviceHealthPlatform } from '../health/device-platform';
 import { appHealthImport } from '../health/app-health';
+import { HealthStep } from '../health/HealthStep';
 import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
 import { challengeLocalCommands, challengeSyncEntities } from '../island/challenges';
 import { createGameService } from '../island/game-service';
 import { islandEventCommands } from '../island/island-events';
+import { communityProjectCommands } from '../island/community-project';
 import { islandObjectCommands } from '../island/object-commands';
 import { islandSyncEntities } from '../island/island-entities';
 import { sharedActionCommands } from '../island/shared-action-commands';
@@ -36,6 +38,7 @@ import {
   nutritionEntryEntity,
   ownFoodEntity,
 } from '../nutrition';
+import { deviceFoodProductSource } from '../nutrition/device-food-products';
 import { createOnboarding, type Onboarding } from '../onboarding/onboarding';
 import { createNotifications, NotificationsStep, type AppNotifications, type NotificationPort } from '../notifications';
 import { expoNotificationPort } from '../notifications/expo-port';
@@ -103,6 +106,12 @@ const syncWriter = createSyncWriter({ registry: syncRegistry, clock: appClock, n
  */
 const devicePlatform = deviceHealthPlatform(appClock);
 const healthPlatform = testCapabilities?.adapters.healthPlatform(devicePlatform) ?? devicePlatform;
+/**
+ * Open Food Facts für den Barcode-Scan (Spezifikation 2, Abschnitt 3; #160). In Test-Artefakten übernimmt ab
+ * dem Link `produkt` der Fake der `FoodProductSource`.
+ */
+const deviceFoodProducts = deviceFoodProductSource(onError);
+const foodProducts = testCapabilities?.adapters.foodProducts(deviceFoodProducts) ?? deviceFoodProducts;
 /** Ob die App im Vordergrund ist, laut React Native; meldet jede Änderung. */
 function observeAppForeground(listener: (active: boolean) => void) {
   const subscription = AppState.addEventListener('change', (state) => listener(state === 'active'));
@@ -173,7 +182,10 @@ function deviceState() {
       const nutrition = createNutrition({ database, clock: appClock, writer: syncWriter, persistence, newId,
         photoImages: createHttpMealPhotoImages({ baseUrl, fetch: session.auth.fetch }),
         // In Test-Artefakten überlagert vom Transport-Fehlermodus wie beim Partnerbereich (#114).
-        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline });
+        observeOnline: adapters?.network(observeDeviceOnline) ?? observeDeviceOnline,
+        // Barcodes fragt die App direkt bei Open Food Facts ab, ohne Sitzung (#160); in Test-Artefakten ab dem
+        // Link `produkt` über den Fake.
+        foodProducts });
       // Tracker-Modul (Spezifikation 3): Quick-Command `water.quick_add`, die Beiträge `trackers.water`,
       // `trackers.sport` und `trackers.weight`, die Bildschirme des Bereichs (`appTrackers`) und die Lesemodelle
       // des Gewicht- und des Sport-Detailbildschirms (`appWeightDetail`, `appSportWeeks`).
@@ -204,7 +216,7 @@ function deviceState() {
       const engine = createSyncEngine({ database, registry: syncRegistry,
         transport: createHttpSyncTransport({ baseUrl, fetch: session.auth.fetch }), clock: appClock,
         installationId: installation, onCanonicalChanges: persistence.onCanonicalChanges,
-        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...islandEventCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
+        commands: createLocalCommandRegistry({ database, writer: syncWriter, commands: [...foundationLocalCommands, ...dailyGoalCommands, ...planCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...communityProjectCommands, ...islandEventCommands, confirmPhotoDraftCommand({ persistence }), sendEncouragementCommand] }),
       });
       activeEngine = engine;
       // Partnerbereich (Spezifikation 5): „Wir“ und die Partner-Karte lesen nur den widerrufbaren Partnercache.
@@ -342,6 +354,8 @@ export function deviceNotifications(): AppNotifications {
   return created;
 }
 
+/** Onboarding-Schritt 9 (Spezifikation 3): Verbinden mit Apple Health bzw. Health Connect und Prüfung der Quell-Apps (#189). */
+appOnboardingRegistry.register('tracker', 'health', HealthStep);
 /** Onboarding-Schritt 10 (Spezifikation 5): Erklärung und Systemdialog. */
 appOnboardingRegistry.register('partner', 'notifications', NotificationsStep);
 /** Onboarding-Schritt 11 (Spezifikation 5): Koppeln und danach die eigenen Freigaben (#129). */

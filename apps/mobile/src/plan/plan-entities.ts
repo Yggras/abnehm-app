@@ -1,9 +1,11 @@
 import { EntityId, Instant } from '@abnehm/contracts/base';
 import {
+  AcceptBudgetSuggestion,
   BudgetSuggestionRecord,
   BudgetSuggestionUpsert,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
+  goalVersionId,
   GoalVersionRecord,
   MaterializeDailyGoals,
   planVersionOfKey,
@@ -24,12 +26,13 @@ import {
   removeUnconfirmedWeeklyPlan,
   tombstoneWeeklyPlan,
 } from './plan-repository';
-import { readBudgetSuggestion, writeBudgetSuggestion } from './budget-suggestion-repository';
+import { readBudgetSuggestion, withStatus, writeBudgetSuggestion } from './budget-suggestion-repository';
 import { removeUnconfirmedDailyGoals } from './daily-goal-repository';
 
 // Ziel- und Wochenplanversion im App-Sync (Spezifikation 0, Abschnitt 10; Spezifikation 1, Abschnitt
-// 11). Beide entstehen nur über die Fachbefehle `createGoalVersion` und `createWeeklyPlanVersion`, ohne
-// generisches Upsert oder Löschen. Nach jeder Übernahme meldet die Engine ihre Gültigkeit an den
+// 11). Beide entstehen nur über Fachbefehle, ohne generisches Upsert oder Löschen: `createGoalVersion` und
+// `createWeeklyPlanVersion`, die Zielversion aus einem angenommenen Budgetvorschlag über
+// `acceptBudgetSuggestion` (#151). Nach jeder Übernahme meldet die Engine ihre Gültigkeit an den
 // Persistenzdienst; der meldet die Tage bis heute + 13 mit `planaenderung`.
 
 const validityOf = (kind: PlanVersionKind) => (tx: ReadContext, entityId: EntityId): readonly AffectedDay[] => {
@@ -118,6 +121,30 @@ export const planCommands: readonly LocalCommand[] = [
     reconcileRejected(tx, operation) {
       const version = planVersionOfKey('wochenplan', operation.businessKey);
       if (version !== null) removeUnconfirmedWeeklyPlan(tx, version.id);
+    },
+  },
+  {
+    type: 'acceptBudgetSuggestion',
+    payload: AcceptBudgetSuggestion,
+    referencePaths: [],
+    apply: onlyThePlanModule('acceptBudgetSuggestion'),
+    /**
+     * Ohne Annahme auf dem Server verschwindet die unbestätigte Zielversion ab morgen (#151). Den Status des
+     * Vorschlags gleicht die App so ab:
+     * - Nennt die Ablehnung den Vorschlag, übernimmt die Engine danach dessen kanonischen Stand, etwa `abgelehnt`
+     *   von einem anderen Gerät.
+     * - `operation_conflict`: Ein anderes Gerät hat denselben Vorschlag schon angenommen, mit anderer Fassung,
+     *   etwa an einem anderen Tag. Er bleibt `angenommen`; dessen Fassung bringt der nächste Pull.
+     * - Sonst hat der Server den Status nicht geändert: Der Vorschlag ist lokal wieder offen.
+     */
+    reconcileRejected(tx, operation, { error, canonical }) {
+      const { suggestionId, goalVersion } = AcceptBudgetSuggestion.parse(operation.payload);
+      const suggestion = readBudgetSuggestion(tx, suggestionId);
+      if (suggestion === undefined) return;
+      removeUnconfirmedGoalVersion(tx, goalVersionId(suggestion.record.personId, goalVersion.validFrom));
+      const namesSuggestion = canonical.type !== 'absent' && canonical.entityType === budgetSuggestionEntity.entityType && canonical.entityId === suggestionId;
+      if (namesSuggestion || error.code === 'operation_conflict' || suggestion.record.status !== 'angenommen') return;
+      writeBudgetSuggestion(tx, suggestionId, suggestion.record.personId, withStatus(suggestion.record, 'offen'), suggestion.record.updatedAt);
     },
   },
   {

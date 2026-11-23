@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { EntityId, Instant, LocalDate } from '@abnehm/contracts/base';
-import { budgetSuggestionId, BudgetSuggestionRecord, BudgetSuggestionUpsert } from '@abnehm/contracts/plan';
+import { budgetSuggestionId, BudgetSuggestionRecord, BudgetSuggestionUpsert, type BudgetSuggestionStatus } from '@abnehm/contracts/plan';
 import type { CanonicalChange } from '@abnehm/contracts/sync';
 
 import type { DbExecutor } from '../database.ts';
@@ -78,11 +78,24 @@ export async function supersedeOpenBudgetSuggestions(tx: DbExecutor, personId: E
   const open = await tx.select({ id: budgetSuggestion.id }).from(budgetSuggestion)
     .where(and(eq(budgetSuggestion.personId, personId), eq(budgetSuggestion.status, 'offen'), isNull(budgetSuggestion.deletedAt)));
   const changes: CanonicalChange[] = [];
-  for (const { id } of open) {
-    const serverVersion = await nextServerVersion(tx);
-    await tx.update(budgetSuggestion).set({ status: 'ueberholt', updatedAt: at, serverVersion }).where(eq(budgetSuggestion.id, id));
-    await recordChange(tx, { position: serverVersion, entityType: budgetSuggestionEntity.entityType, entityId: EntityId.parse(id), operation: 'upsert', ownerPersonId: personId, createdAt: at });
-    changes.push(await canonicalAfterWrite(tx, budgetSuggestionEntity, EntityId.parse(id)));
-  }
+  for (const { id } of open) changes.push(await setBudgetSuggestionStatus(tx, personId, EntityId.parse(id), 'ueberholt', at));
   return changes;
+}
+
+/**
+ * Setzt den Status eines Vorschlags der Person serverseitig, mit neuer Serverversion und Eintrag im
+ * Änderungsprotokoll, und liefert seinen kanonischen Stand. Nur Fachregeln des Servers rufen es auf:
+ * Überholen durch eine neue Zielversion und `acceptBudgetSuggestion`.
+ */
+export async function setBudgetSuggestionStatus(
+  tx: DbExecutor,
+  personId: EntityId,
+  id: EntityId,
+  status: Extract<BudgetSuggestionStatus, 'angenommen' | 'ueberholt'>,
+  at: Date,
+): Promise<CanonicalChange> {
+  const serverVersion = await nextServerVersion(tx);
+  await tx.update(budgetSuggestion).set({ status, updatedAt: at, serverVersion }).where(eq(budgetSuggestion.id, id));
+  await recordChange(tx, { position: serverVersion, entityType: budgetSuggestionEntity.entityType, entityId: id, operation: 'upsert', ownerPersonId: personId, createdAt: at });
+  return canonicalAfterWrite(tx, budgetSuggestionEntity, id);
 }

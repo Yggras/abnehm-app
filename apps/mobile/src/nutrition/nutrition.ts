@@ -18,17 +18,20 @@ import type { OnlineResult } from '../online/online-result';
 import { createUndoTokens, type UndoOutcome } from '../shell/undo-tokens';
 import type { SyncWriter } from '../sync';
 import { amountPrefill, type AmountPrefill } from './amount-prefill';
+import { createBarcodeResolver, type BarcodeResolution } from './barcode';
 import { createBlsCatalog } from './bls-catalog';
 import { createCurrentFoods, type CurrentFoods } from './current-foods';
 import { readDayLog, readEntryDetail, type DayLog, type EntryDetail } from './day-log';
 import { addEntry, deleteEntry, undoEntry, updateEntry, type EntryChange, type EntryUndo, type NewEntry } from './entries';
 import { latestAmountOf } from './entry-repository';
 import { favoriteFoods, isFoodFavorite, markFoodFavorite, refreshFoodFavorites, unmarkFoodFavorite, type FavoriteFood, type FavoriteTarget } from './food-favorites';
+import type { FoodProductSource } from './food-product-source';
 import { createFoodSearch, type FoodSearch } from './food-search';
 import { confirmPhotoDraft, deletePhoto, readMealPhotoDetail, setPhotoSharing, type MealPhotoDetail, type PhotoDraftConfirmation } from './meal-photos';
 import type { MealPhotoImage, MealPhotoImages } from './photo-images';
 import { overlaidOrigins, searchOwnFoods, type OwnFoodChoice } from './own-food-repository';
-import { deleteOwnFood, saveOwnFood, type OwnFoodBase } from './own-foods';
+import { searchCachedProducts } from './off-cache-repository';
+import { deleteOwnFood, isOwnFoodDeletable, saveOwnFood, type OwnFoodBase } from './own-foods';
 import { recentFoods, type QuickFoods } from './quick-foods';
 
 export type NutritionDependencies = Readonly<{
@@ -48,6 +51,11 @@ export type NutritionDependencies = Readonly<{
    * es nichts. Offline zeigt das Protokoll nur das Foto-/KI-Symbol (Spezifikation 2, Abschnitt 9).
    */
   observeOnline: (listener: (online: boolean) => void) => () => void;
+  /**
+   * Naht `FoodProductSource` (Spezifikation 2, Abschnitt 1): Open Food Facts direkt aus der App, in Test- und
+   * Development-Artefakten umschaltbar auf den Fake.
+   */
+  foodProducts: FoodProductSource;
 }>;
 
 
@@ -123,13 +131,29 @@ export type Nutrition = Readonly<{
   /**
    * Speichert ein eigenes Lebensmittel (Spezifikation 2, Abschnitt 3) in einer eigenen lokalen
    * Transaktion samt Outbox-Operation. `base` ist `null` für ein neues, ein eigenes Lebensmittel für
-   * genau dieses oder ein BLS-Lebensmittel, aus dem ein eigenes mit dieser Herkunftsreferenz wird; die externen
-   * Daten bleiben unverändert. Liefert Referenz und neue Fassung für künftige Einträge; gespeicherte
+   * genau dieses oder ein BLS- bzw. Barcode-Produkt, aus dem ein eigenes mit dieser Herkunftsreferenz wird; die
+   * externen Daten bleiben unverändert. Ein Barcode-Produkt erhält die deterministische ID aus Person und
+   * Barcode, ein zweites Korrigieren ändert dasselbe eigene Lebensmittel. Liefert Referenz und neue Fassung für künftige Einträge; gespeicherte
    * Einträge behalten ihren Snapshot. Wirft `InvalidNutritionInputError`, ohne etwas zu schreiben.
    */
   saveOwnFood(base: OwnFoodBase, values: FoodValues): OwnFoodChoice;
-  /** Löscht ein eigenes Lebensmittel (Tombstone); Einträge bleiben über ihren Snapshot nutzbar. */
+  /**
+   * Löscht ein eigenes Lebensmittel (Tombstone); Einträge bleiben über ihren Snapshot nutzbar. Wirft
+   * `InvalidNutritionInputError` für eines mit Barcode-Herkunft (`isOwnFoodDeletable`).
+   */
   deleteOwnFood(id: EntityId): void;
+  /**
+   * Ob „Löschen“ für dieses eigene Lebensmittel gilt: nicht gelöscht und ohne Barcode-Herkunft. Ein Produkt
+   * mit deterministischer ID ließe sich nach einem Tombstone nie wieder korrigieren (#160).
+   */
+  isOwnFoodDeletable(id: EntityId): boolean;
+  /**
+   * Barcode-Auflösung (Spezifikation 2, Abschnitt 5) in der Reihenfolge eigenes Lebensmittel mit diesem
+   * Barcode, OFF-Cache, OFF-API mit 8 s Zeitüberschreitung. Persistiert wird nur der Cache-Eintrag; ein Eintrag
+   * älter als 30 Tage wird im Hintergrund aktualisiert. Wirft `InvalidNutritionInputError` für einen Barcode,
+   * den die Lebensmittelreferenz nicht nimmt.
+   */
+  resolveBarcode(barcode: string): Promise<BarcodeResolution>;
   /**
    * Die lokale Lebensmittelsuche (Spezifikation 2, Abschnitt 4) über den geöffneten BLS-Katalog und
    * die Lebensmittel dieses Kontos; „Zuletzt verwendet“ gilt für die gewählte Mahlzeit. Jede Suche liest
@@ -170,6 +194,7 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
   const { database } = dependencies;
   const tokens = createUndoTokens();
   const currentFoods = new WeakMap<CatalogDatabase, CurrentFoods>();
+  const barcodes = createBarcodeResolver({ database, clock: dependencies.clock, source: dependencies.foodProducts });
   /** Meldung und Werte eines Befehls nach seiner Transaktion, samt Undo-Token. */
   const outcome = <K extends string, V>({ messageKey, values, undo }: Readonly<{ messageKey: K; values: V; undo: EntryUndo }>) => ({
     messageKey,
@@ -195,11 +220,14 @@ export function createNutrition(dependencies: NutritionDependencies): Nutrition 
       amountPrefill(snapshot, database.read((tx) => latestAmountOf(tx, EntityId.parse(requireOwnPerson(tx).id), foodRef))),
     saveOwnFood: (base, values) => database.transaction((tx) => saveOwnFood(tx, dependencies, base, values)),
     deleteOwnFood: (id) => database.transaction((tx) => deleteOwnFood(tx, dependencies, id)),
+    isOwnFoodDeletable: (id) => database.read((tx) => isOwnFoodDeletable(tx, id)),
+    resolveBarcode: (barcode) => barcodes.resolve(barcode),
     foodSearch: (catalog, meal) =>
       createFoodSearch({
         catalog,
         account: {
           search: (query, limit) => database.read((tx) => searchOwnFoods(tx, query, limit)),
+          searchProducts: (query, limit) => database.read((tx) => searchCachedProducts(tx, query, limit)),
           overlaidOrigins: () => database.read(overlaidOrigins),
           quickFoods: () => database.read((tx) => quickFoodsOf(tx, catalog, meal)) ?? { recent: [], favorites: [] },
         },

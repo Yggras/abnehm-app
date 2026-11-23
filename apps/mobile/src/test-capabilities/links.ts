@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { TimeZone } from '@abnehm/contracts/base';
 import type { NotificationPermission } from '@abnehm/contracts/notifications';
+import { Barcode } from '@abnehm/contracts/nutrition';
 import { SeedKey, SeedScenarioKey } from '@abnehm/contracts/seeds';
 import type { RouteTarget } from '@abnehm/contracts/routes';
 
@@ -10,6 +11,8 @@ import type { ClockAdjustment } from './clock';
 import { testHealthScenarios, type TestHealthScenario } from './health-scenarios';
 import { deviceSuitePhases, type DeviceSuitePhase } from './device-suite/suite';
 import { faultPlanSchema, type FaultPlan } from './faults';
+import { fakeProductModes } from '../nutrition/testing/fake-food-product-source';
+import type { TestFoodProductMode } from './food-products';
 import { momoGalleryViews, type MomoGalleryView } from './momo-gallery/views';
 import { permissionOfName, type NotificationAnswer } from './notifications';
 import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
@@ -38,6 +41,9 @@ import { runtimeProfileKeySchema, type RuntimeProfileKey } from './profiles';
 //   abnehmapp-dev://momo-galerie[?ansicht=heute|insel]
 //     öffnet die Momo-Galerie (#187): alle Stimmungen beider Formen mit Accessoires in 104 dp bzw. Momo im
 //     Insel-Canvas, verdeckt von einem Objekt davor.
+//   abnehmapp-dev://produkt?ergebnis=katalog|nicht_gefunden|unvollstaendig|http_429|http_503|zeitueberschreitung|offline|echt[&scan=4000000000013]
+//     stellt den Fake der Produktquelle (#160) und hinterlegt optional einen Barcode, den der nächste Scanner
+//     wie einen Kameratreffer übernimmt; `ergebnis=echt` fragt wieder Open Food Facts.
 //
 // Geparst wird von Hand: Die URL-Implementierung von React Native ist unvollständig.
 
@@ -51,11 +57,12 @@ export type TestLink =
   /** `permission: null` ist der echte Port des Systems. */
   | Readonly<{ type: 'mitteilungen'; permission: NotificationPermission | null; answer: NotificationAnswer }>
   | Readonly<{ type: 'momo-galerie'; view: MomoGalleryView }>
+  | Readonly<{ type: 'produkt'; mode?: TestFoodProductMode; scan?: string }>
   /** Ein Link einer Testfähigkeit mit ungültigen Parametern. */
   | Readonly<{ type: 'ungueltig'; capability: TestLinkPath }>;
 
 /** Pfade der Deep Links; der Release-Test gleicht sie mit der Registry ab (`test/test-capabilities.ts`). */
-export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health', mitteilungen: 'mitteilungen', 'momo-galerie': 'momo-galerie' } as const;
+export const testLinkPaths = { seed: 'seed', fehler: 'fehler', uhr: 'uhr', profil: 'profil', geraetetest: 'geraetetest', health: 'health', mitteilungen: 'mitteilungen', 'momo-galerie': 'momo-galerie', produkt: 'produkt' } as const;
 export type TestLinkPath = keyof typeof testLinkPaths;
 
 const clockParams = z
@@ -68,6 +75,12 @@ const profileParams = z.strictObject({ name: runtimeProfileKeySchema });
 
 const healthParams = z.strictObject({ szenario: z.enum(testHealthScenarios) });
 const galleryParams = z.strictObject({ ansicht: z.enum(momoGalleryViews).default('heute') });
+const productParams = z
+  .strictObject({
+    ergebnis: z.enum([...fakeProductModes, 'echt']).optional(),
+    scan: Barcode.optional(),
+  })
+  .refine((params) => params.ergebnis !== undefined || params.scan !== undefined);
 const notificationParams = z.strictObject({
   erlaubnis: z.enum(['system', 'unentschieden', 'erlaubt', 'verweigert']),
   antwort: z.enum(['erlaubt', 'verweigert']).default('erlaubt'),
@@ -122,6 +135,12 @@ export function parseTestLink(link: string): TestLink | null {
   if (path === testLinkPaths['momo-galerie']) {
     const gallery = galleryParams.safeParse(Object.fromEntries(params));
     return gallery.success ? { type: 'momo-galerie', view: gallery.data.ansicht } : { type: 'ungueltig', capability: 'momo-galerie' };
+  }
+  if (path === testLinkPaths.produkt) {
+    const product = productParams.safeParse(Object.fromEntries(params));
+    if (!product.success) return { type: 'ungueltig', capability: 'produkt' };
+    const { ergebnis, scan } = product.data;
+    return { type: 'produkt', ...(ergebnis === undefined ? {} : { mode: ergebnis }), ...(scan === undefined ? {} : { scan }) };
   }
   return null;
 }

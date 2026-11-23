@@ -12,7 +12,7 @@ import { sqliteOf } from '../../mobile/src/local-db/sqlite.ts';
 import { createBetterSqliteFiles } from '../../mobile/src/local-db/testing/better-sqlite.ts';
 import { createNutrition, foodFavoriteEntity, nutritionEntryEntity, ownFoodEntity, type QuickFoods } from '../../mobile/src/nutrition/index.ts';
 import { openTestCatalog } from '../../mobile/src/nutrition/testing/test-catalog.ts';
-import { withoutPhotos } from '../../mobile/src/nutrition/testing/without-photos.ts';
+import { withoutNetwork } from '../../mobile/src/nutrition/testing/without-network.ts';
 import { createHttpSyncTransport, createSyncEngine, createSyncRegistry, createSyncWriter, foundationSyncEntities } from '../../mobile/src/sync/index.ts';
 import { foodFavorite } from '../src/db/schema/index.ts';
 import { createTestBackend, testBaseUrl, type TestBackend } from './support/app.ts';
@@ -66,7 +66,7 @@ async function phone(backend: TestBackend, accountId: string, device: Device) {
     },
   });
   const engine = createSyncEngine({ database, registry, transport, clock, installationId: newId(), onCanonicalChanges: () => {} });
-  const nutrition = createNutrition({ ...withoutPhotos, database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
+  const nutrition = createNutrition({ ...withoutNetwork, database, clock, writer, newId, persistence: { reevaluateDailyGoals: () => {} } });
   return {
     nutrition,
     clock,

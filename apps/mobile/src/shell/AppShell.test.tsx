@@ -84,7 +84,8 @@ const targets: RouteTarget[] = [
   { type: 'capture.water' },
   { type: 'capture.sport', newEntry: true },
   { type: 'capture.weight', newEntry: true },
-  { type: 'momo', view: 'projekt' },
+  // Eine Ansicht ohne eigenes Sheet: Lager (#194) und Projekt (#208) öffnen ihr Sheet und verlassen danach die Route.
+  { type: 'momo', view: 'insel' },
   { type: 'challenge.propose' },
   { type: 'challenge.detail', challengeId: id },
   { type: 'partner', focus: 'received_encouragement' },

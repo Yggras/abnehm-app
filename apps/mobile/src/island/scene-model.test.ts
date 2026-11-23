@@ -28,6 +28,8 @@ const island: IslandSceneInput = {
   fog: [],
   objects: [],
   momo,
+  landmarks: [],
+  scaffold: null,
 };
 
 const request = (overrides: Partial<IslandSceneRequest> = {}): IslandSceneRequest => ({
@@ -231,7 +233,7 @@ describe('Gebietsfreischaltung (#204)', () => {
   const hatched = hatching(gameCatalog, { proposerPersonId: anna, proposerRole: 'natur', partnerPersonId: philipp }).fields;
   const unlocked = areaUnlockAt(gameCatalog, { level: 4, sides: sidesOf(gameCatalog, hatched)! })!;
   const sceneOf = (fields: typeof hatched, unlockedAreas: readonly string[], transformation: IslandSceneRequest['transformation'] = null) =>
-    islandScene(request({ island: { ...islandLayout(gameCatalog, { fields, unlockedAreas }), objects: [], momo }, transformation }));
+    islandScene(request({ island: { ...islandLayout(gameCatalog, { fields, unlockedAreas }), objects: [], momo, landmarks: [], scaffold: null }, transformation }));
 
   test('der Nebel ist weg, sobald ein Gebiet freigeschaltet ist; seine Felder gehören dann ihren Personen', () => {
     const before = sceneOf(hatched, []);
@@ -504,6 +506,42 @@ describe('Treffer-Umkehrung', () => {
 
     expect(scene.hitAt({ x: -40, y: 16 })).toBeNull();
     expect(scene.hitAt({ x: 32, y: 120 })).toBeNull();
+  });
+});
+
+describe('Gemeinschaftsprojekt (#208)', () => {
+  // Der Bauplatz liegt auf dem Strand-Feld (2, 1); seine Mitte bei Zoom 1 ist (32, 64).
+  const site = 'grundinsel:2:1';
+
+  test.each([
+    ['gestartet', 'geruest_gestartet'],
+    ['gut_unterwegs', 'geruest_gut_unterwegs'],
+    ['fast_geschafft', 'geruest_fast_geschafft'],
+  ] as const)('das Gerüst steht mittig auf dem Bauplatz und wächst mit der Stufe: %s', (stage, art) => {
+    const scene = islandScene(request({ island: { ...island, scaffold: { site, stage } } }));
+
+    expect(ofType(scene.items, 'geruest')).toEqual([{ layer: 'objekte', type: 'geruest', field: site, at: { x: 32, y: 64 }, art }]);
+  });
+
+  test('ein fertiges Wahrzeichen steht mit seiner Größe auf seinem Bauplatz; wie es wächst, zeichnet `landmarkDrawing`', () => {
+    const scene = islandScene(request({ island: { ...island, landmarks: [{ site, art: 'gartenhaeuschen', size: 4 }] } }));
+
+    expect(ofType(scene.items, 'wahrzeichen')).toEqual([{ layer: 'objekte', type: 'wahrzeichen', field: site, at: { x: 32, y: 64 }, art: 'gartenhaeuschen', size: 4 }]);
+  });
+
+  test('beim Ausbau steht das Gerüst um das vorhandene Wahrzeichen, davor gezeichnet; beides zwischen den Objekten nach Zeile + Spalte', () => {
+    const scene = islandScene(request({ island: { ...island, landmarks: [{ site, art: 'gartenhaeuschen', size: 1 }], scaffold: { site, stage: 'gestartet' } } }));
+    const standing = scene.items.filter((item) => item.layer === 'objekte').map((item) => item.type);
+
+    // Momo auf (1, 0) steht weiter hinten als der Bauplatz (2, 1).
+    expect(standing).toEqual(['momo', 'wahrzeichen', 'geruest']);
+  });
+
+  test('ohne Projekt gibt es weder Gerüst noch Wahrzeichen', () => {
+    const scene = islandScene(request());
+
+    expect(ofType(scene.items, 'geruest')).toEqual([]);
+    expect(ofType(scene.items, 'wahrzeichen')).toEqual([]);
   });
 });
 

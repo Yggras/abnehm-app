@@ -60,6 +60,8 @@ export function richIsland(): RichIsland {
       fog: [lockedPreview],
       objects: placed.map(([fieldKey, art, ownerPersonId], index) => ({ id: fixtureId(index + 1), fieldKey, art, ownerPersonId })),
       momo: MomoAppearance.parse({ stage: 'geschluepft', formKey: 'huepfer', moodKey: 'zufrieden', accessories: { kopf: null, hals: null } }),
+      landmarks: [],
+      scaffold: null,
     },
     halves: halvesFor(IslandProgress.parse({
       islandId: seedIds.island.philippAnna,

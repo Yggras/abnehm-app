@@ -9,9 +9,10 @@ import {
   IslandEventStateRecord,
   IslandFieldRecord,
   IslandObjectRecord,
+  ProjectContributionRecord,
 } from '@abnehm/contracts/island-records';
 
-import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandEventState, islandField, islandObject, islandProgress } from '../local-db/schema';
+import { areaUnlock, blueprintUnlock, communityProject, islandEvent, islandEventState, islandField, islandObject, islandProgress, projectContribution } from '../local-db/schema';
 import { sqliteOf } from '../local-db/sqlite';
 import { serverManagedEntity, sqliteEntity, type SyncEntityAdapter } from '../sync';
 
@@ -71,6 +72,8 @@ export const islandSyncEntities: readonly SyncEntityAdapter[] = [
   blueprintUnlockEntity,
   serverManagedEntity({ entityType: 'area_unlock', ...coupled, record: AreaUnlockRecord, table: areaUnlock }),
   serverManagedEntity({ entityType: 'community_project', ...coupled, record: CommunityProjectRecord, table: communityProject }),
+  // Eigene Projekteinzahlungen (#208): nur die eigenen kommen per Pull; lokal vorab legt sie `contributeToProject` an.
+  serverManagedEntity({ entityType: 'project_contribution', ownerField: 'personId', record: ProjectContributionRecord, table: projectContribution }),
   serverManagedEntity({ entityType: 'island_event', ...coupled, record: IslandEventRecord, table: islandEvent }),
   // Ereignisstand je Person (#202): nur der eigene kommt per Pull; ändern nur `markEventsSeen` und `claimEventReward`.
   serverManagedEntity({ entityType: 'island_event_state', ownerField: 'personId', record: IslandEventStateRecord, table: islandEventState }),

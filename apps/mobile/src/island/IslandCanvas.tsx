@@ -5,7 +5,7 @@ import { GestureDetector, useCompetingGestures, usePanGesture, usePinchGesture, 
 import { Easing, useAnimatedReaction, useDerivedValue, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { color, useReducedMotion, type ColorToken } from '../design';
-import { fogPath, LampGlow, LiftingFog, MomoOnIsland, MomoTransforming, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
+import { fogPath, LampGlow, LandmarkArt, LiftingFog, MomoOnIsland, MomoTransforming, ObjectArt, Particle, polygonPath, Wave } from './IslandArt';
 import type { IslandScene, Polygon, Rect, SceneHit, SceneItem } from './scene-model';
 import { useLoop, usePulse } from './use-loop';
 import { transformationMotion } from './transformation-motion';
@@ -214,6 +214,10 @@ function Item({ item, foliage, motion: { progress, pulse, reduceMotion } }: { it
     }
     case 'objekt':
       return <ObjectArt at={item.at} art={item.art} foliage={foliage} appearing={item.appearing} />;
+    case 'wahrzeichen':
+      return <LandmarkArt at={item.at} art={item.art} size={item.size} foliage={foliage} />;
+    case 'geruest':
+      return <ObjectArt at={item.at} art={item.art} foliage={foliage} />;
     case 'momo':
       return item.from === null ? (
         <MomoOnIsland at={item.at} appearance={item.appearance} reduceMotion={reduceMotion} />

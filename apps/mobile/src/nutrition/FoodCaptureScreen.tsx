@@ -16,7 +16,9 @@ import { AmountReview, type Selection } from './AmountReview';
 import { BlsCatalogProvider, useFoodSearch, useQuickFoods, useRecordFavoriteUse } from './BlsCatalogProvider';
 import type { FoodSearchHit } from './food-search';
 import type { Nutrition } from './nutrition';
-import { editableBaseOf, emptyOwnFoodDraft, ownFoodDraftOf, type OwnFoodDraft } from './own-food-input';
+import { BarcodeLookup, type BarcodeOutcome, type CreateReason } from './BarcodeLookup';
+import { BarcodeScanner } from './BarcodeScanner';
+import { emptyOwnFoodDraft, ownFoodDraftOf, ownFoodDraftOfProduct, type OwnFoodDraft } from './own-food-input';
 import type { OwnFoodBase } from './own-foods';
 import { OwnFoodForm } from './OwnFoodForm';
 import type { QuickFood, QuickFoods } from './quick-foods';
@@ -26,21 +28,32 @@ import { useLocalToday } from './use-day-log';
 // Hinzufügen-Bildschirm (Spezifikation 2, Abschnitt 6) für die Route `capture.food`: feste Plätze in
 // der Reihenfolge Suche, „Barcode scannen“, „Foto aufnehmen“, Mahlzeitenfavoriten, „Zuletzt verwendet“,
 // Lebensmittelfavoriten und „Eigenes Lebensmittel anlegen“. #155 füllt die Suche, #157 den letzten Platz
-// samt Formular, #158 „Zuletzt verwendet“ und die Lebensmittelfavoriten; die übrigen Plätze füllen ihre
-// Tickets (#159–#163). Ein Tipp auf „Zuletzt verwendet“ oder einen Favoriten führt immer in die Mengenprüfung,
+// samt Formular, #158 „Zuletzt verwendet“ und die Lebensmittelfavoriten, #160 „Barcode scannen“ samt Scanner und
+// Folgezuständen; die übrigen Plätze füllen ihre Tickets (#159, #163). Ein Tipp auf „Zuletzt verwendet“ oder einen Favoriten führt immer in die Mengenprüfung,
 // mit vorbelegter Menge. Vor jedem Speichern prüft die
-// Person Menge und Einheit im Sheet. Das Formular „Eigenes Lebensmittel“ ist ein Schritt dieses
-// Bildschirms, kein Sheet: Es braucht Tastatur und Platz, und Sheets liegen nie in Sheets.
+// Person Menge und Einheit im Sheet. Das Formular „Eigenes Lebensmittel“ und der Scanner sind Schritte dieses
+// Bildschirms, keine Sheets: Sie brauchen Tastatur, Kamera und Platz, und Sheets liegen nie in Sheets.
 
 /** Plätze, die spätere Tickets füllen, in fester Reihenfolge zwischen Suche und „Zuletzt verwendet“. */
-const laterSlots = ['barcode', 'foto', 'mahlzeitenfavoriten'] as const;
+const laterSlots = ['foto', 'mahlzeitenfavoriten'] as const;
 type LaterSlot = (typeof laterSlots)[number];
 
 const slotIcons: Readonly<Record<LaterSlot, IconName>> = {
-  barcode: 'barcode',
   foto: 'camera',
   mahlzeitenfavoriten: 'plate',
 };
+
+/** Hinweis über „Eigenes Lebensmittel anlegen“ nach einem Scan, je nach Grund (#160). */
+const createHints: Readonly<Record<Exclude<CreateReason, 'incomplete'>, string>> = {
+  invalid: nutritionTexts.barcode.invalidHint,
+  not_found: nutritionTexts.barcode.notFoundHint,
+  manual: nutritionTexts.barcode.manualHint,
+};
+
+function createHint(outcome: Extract<BarcodeOutcome, { type: 'create' }>): string {
+  if (outcome.reason !== 'incomplete') return createHints[outcome.reason];
+  return nutritionTexts.barcode.incompleteHint(outcome.missing.map((field) => nutritionTexts.ownFood[field]));
+}
 
 /** So viele Einträge zeigt jede Liste, danach „Alle anzeigen“ (Spezifikation 2, Abschnitt 6; Designwert, nicht belegt). */
 const listPreview = 5;
@@ -103,6 +116,8 @@ function AddSlots({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Selection | null>(null);
   const [form, setForm] = useState<FormStep | null>(null);
+  // Scanner und danach die Auflösung des gescannten Barcodes (#160).
+  const [scan, setScan] = useState<{ type: 'scanner' } | { type: 'lookup'; barcode: string } | null>(null);
   // Jede Änderung an einem eigenen Lebensmittel zählt hoch; danach liest die Suche neu.
   const [ownFoodChanges, setOwnFoodChanges] = useState(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `ownFoodChanges` löst das erneute Lesen aus.
@@ -158,19 +173,37 @@ function AddSlots({
   const create = (name = '') =>
     setForm({ base: null, initial: emptyOwnFoodDraft(name), title: nutritionTexts.ownFood.create, captureMethod: 'eigenes_lebensmittel' });
 
-  /** „Bearbeiten“ eines eigenen bzw. „Werte korrigieren“ eines BLS-Lebensmittels aus der Mengenprüfung. */
+  /** „Bearbeiten“ eines eigenen bzw. „Werte korrigieren“ eines BLS- oder Barcode-Produkts aus der Mengenprüfung. */
   const edit = (choice: Selection) => {
-    const base = editableBaseOf(choice.ref);
-    if (base === undefined) return;
-    const own = base.type === 'eigen';
+    const base = choice.ref;
     setSelected(null);
     setForm({
       base,
       initial: ownFoodDraftOf(choice.snapshot),
-      title: own ? nutritionTexts.ownFood.edit : nutritionTexts.ownFood.correct,
-      hint: own ? undefined : nutritionTexts.ownFood.correctHint,
+      title: base.type === 'eigen' ? nutritionTexts.ownFood.edit : nutritionTexts.ownFood.correct,
+      hint: base.type === 'eigen' ? undefined : nutritionTexts.ownFood.correctHint(base.type),
       captureMethod: choice.captureMethod,
       from: choice,
+    });
+  };
+
+  /**
+   * Folge einer Barcode-Auflösung (Spezifikation 2, Abschnitt 5): `found` öffnet die Mengenprüfung, sonst
+   * öffnet „Eigenes Lebensmittel anlegen“ mit dem Barcode als Herkunft und allen bekannten Werten. Ab dann gilt
+   * die Fassung der Person für diesen Barcode.
+   */
+  const scanned = (outcome: BarcodeOutcome) => {
+    setScan(null);
+    if (outcome.type === 'found') {
+      pick({ ...outcome.food, captureMethod: 'barcode' }, false);
+      return;
+    }
+    setForm({
+      base: { type: 'off', key: outcome.barcode },
+      initial: outcome.product === null ? emptyOwnFoodDraft() : ownFoodDraftOfProduct(outcome.product),
+      title: nutritionTexts.ownFood.create,
+      hint: createHint(outcome),
+      captureMethod: 'barcode',
     });
   };
 
@@ -194,7 +227,8 @@ function AddSlots({
         onSave={(values) => submit(form, values)}
         onCancel={() => setForm(null)}
         onDelete={
-          base?.type === 'eigen'
+          // Ein eigenes Lebensmittel mit Barcode-Herkunft lässt sich nur ändern (#160).
+          base?.type === 'eigen' && nutrition.isOwnFoodDeletable(base.key)
             ? () => {
                 // Scheitert das Löschen, bleibt das Formular offen.
                 if (!attempt(() => nutrition.deleteOwnFood(base.key)).done) return;
@@ -204,6 +238,14 @@ function AddSlots({
             : undefined
         }
       />
+    );
+  }
+
+  if (scan !== null) {
+    return scan.type === 'scanner' ? (
+      <BarcodeScanner onScanned={(barcode) => setScan({ type: 'lookup', barcode })} onCancel={() => setScan(null)} />
+    ) : (
+      <BarcodeLookup nutrition={nutrition} barcode={scan.barcode} onOutcome={scanned} onCancel={() => setScan(null)} />
     );
   }
 
@@ -227,7 +269,7 @@ function AddSlots({
           onCreate={create}
         />
       ) : (
-        <Slots meal={meal} quick={quick} onPick={pickQuick} onCreate={() => create()} />
+        <Slots meal={meal} quick={quick} onPick={pickQuick} onCreate={() => create()} onScan={() => setScan({ type: 'scanner' })} />
       )}
       <Sheet visible={selected !== null} onClose={() => setSelected(null)} height="full">
         {selected === null ? null : (
@@ -241,10 +283,8 @@ function AddSlots({
             onEdit={() => edit(selected)}
             onFailed={(error) => message.failed(error)}
             onConversion={(conversion) => {
-              const base = editableBaseOf(selected.ref);
-              if (base === undefined) return;
               const values = foodValuesOf(selected.snapshot);
-              saveOwnFood(base, { ...values, portions: [...values.portions, conversion] }, selected.captureMethod, conversion.unit);
+              saveOwnFood(selected.ref, { ...values, portions: [...values.portions, conversion] }, selected.captureMethod, conversion.unit);
             }}
           />
         )}
@@ -295,7 +335,7 @@ function SearchHits({
 }
 
 /**
- * Die Plätze unter der Suche: die noch fehlenden Plätze, „Zuletzt verwendet“, Lebensmittelfavoriten und
+ * Die Plätze unter der Suche: „Barcode scannen“, die noch fehlenden Plätze, „Zuletzt verwendet“, Lebensmittelfavoriten und
  * „Eigenes Lebensmittel anlegen“ als letzter. Plätze, die spätere Tickets füllen, zeigen Test-Artefakte als
  * „Kommt noch“, damit die Reihenfolge sichtbar bleibt; im Release ist ein fehlender Platz ein
  * Integrationsfehler wie ein fehlender Bildschirm.
@@ -305,17 +345,22 @@ function Slots({
   quick,
   onPick,
   onCreate,
+  onScan,
 }: {
   meal: MealKey;
   /** `null`, bis die erste Abfrage gelaufen ist. */
   quick: QuickFoods | null;
   onPick: (food: QuickFood, captureMethod: 'zuletzt' | 'lebensmittelfavorit') => void;
   onCreate: () => void;
+  onScan: () => void;
 }) {
   if (!isTestArtifact()) throw new Error(`Integrationsfehler: Auf dem Hinzufügen-Bildschirm fehlen die Plätze ${laterSlots.join(', ')}.`);
   return (
     <>
       <ListGroup>
+        <View testID="platz-barcode">
+          <ListRow icon="barcode" title={nutritionTexts.slots.barcode} onPress={onScan} />
+        </View>
         {laterSlots.map((slot) => (
           <View key={slot} testID={`platz-${slot}`}>
             <ListRow icon={slotIcons[slot]} title={nutritionTexts.slots[slot]} subtitle={nutritionTexts.slotInWork} disabled />

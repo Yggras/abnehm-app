@@ -216,9 +216,16 @@ describe('Beiträge gegen die Vertrags-Fixtures', () => {
         partnerDisplayName: 'Anna',
       },
     });
+    // Dazu das aktive Gemeinschaftsprojekt mit eigenem Stand und Bedarf, gemeinsam nur als Stufe (#208).
     expect(WirContributionsState.parse(contributions.at(-1))).toEqual({
       type: 'ready',
-      data: [expect.objectContaining({ type: 'shared_event', eventType: 'momo_geschluepft', messageKey: 'neu_bei_euch.momo_geschluepft', objectId: islandId })],
+      data: [
+        expect.objectContaining({
+          type: 'community_project', templateKey: 'gartenhaeuschen', ownRole: 'bauen', ownCount: 0, ownRequired: 20, stage: 'gestartet',
+          action: { actionId: 'wir.open_project', target: { type: 'momo', view: 'projekt' } },
+        }),
+        expect.objectContaining({ type: 'shared_event', eventType: 'momo_geschluepft', messageKey: 'neu_bei_euch.momo_geschluepft', objectId: islandId }),
+      ],
     });
   });
 });

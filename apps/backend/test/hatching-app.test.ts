@@ -64,6 +64,19 @@ describe('Schlüpfen App ↔ Backend', { timeout: 20_000 }, () => {
       expect(phone.wir()).toEqual({
         type: 'ready',
         data: [
+          // Seit #208 auch Projekt 1 mit eigenem Stand und Bedarf, gemeinsam nur als Stufe.
+          {
+            type: 'community_project',
+            id: island.project.projectId,
+            dataAsOf: worldStart.instant,
+            action: { actionId: 'wir.open_project', target: { type: 'momo', view: 'projekt' } },
+            projectId: island.project.projectId,
+            templateKey: 'gartenhaeuschen',
+            ownRole: island.ownRole,
+            ownCount: 0,
+            ownRequired: 20,
+            stage: 'gestartet',
+          },
           {
             type: 'shared_event',
             id: expect.any(String),

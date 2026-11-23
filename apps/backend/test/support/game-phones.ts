@@ -15,6 +15,7 @@ import { insertDailyGoalForTest } from '../../../mobile/src/daily-goals/testing/
 import { energyBookingEntity } from '../../../mobile/src/energy/index.ts';
 import { challengeLocalCommands, challengeSyncEntities } from '../../../mobile/src/island/challenges.ts';
 import { islandEventCommands } from '../../../mobile/src/island/island-events.ts';
+import { communityProjectCommands } from '../../../mobile/src/island/community-project.ts';
 import { islandObjectCommands } from '../../../mobile/src/island/object-commands.ts';
 import { createGameService, type GameService } from '../../../mobile/src/island/game-service.ts';
 import { islandSyncEntities } from '../../../mobile/src/island/island-entities.ts';
@@ -94,7 +95,7 @@ export async function gamePhone(backend: TestBackend, accountId: string, device:
     }),
     clock,
     installationId: newId(),
-    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...islandEventCommands] }),
+    commands: createLocalCommandRegistry({ database, writer, commands: [...foundationLocalCommands, ...sharedActionCommands, ...challengeLocalCommands, ...islandObjectCommands, ...communityProjectCommands, ...islandEventCommands] }),
   });
   const game: GameService = createGameService({ database, writer, clock, newId, ...quietGameDependencies, planReader });
   const latest = <T,>(subscribe: (listener: (value: T) => void) => () => void) => {

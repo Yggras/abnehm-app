@@ -14,6 +14,13 @@ export const healthKitPluginProps = {
   background: false,
 } as const;
 
+/** Kamera nur zum Barcode-Scan (#160): deutsche Nutzungsbeschreibung, kein Mikrofon. */
+export const cameraPluginProps = {
+  cameraPermission: 'Die App nutzt die Kamera, um den Barcode eines Lebensmittels zu scannen. Bilder werden nicht gespeichert.',
+  microphonePermission: false,
+  recordAudioAndroid: false,
+} as const;
+
 /**
  * `APP_VARIANT=development` erzeugt den Development Build (mit expo-dev-client), `APP_VARIANT=e2e`
  * den E2E-Build (#114), alles andere den Produktionsbuild. Der Standard ist bewusst die Produktion:
@@ -150,6 +157,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       // Hintergrund-Import (#197); bis dahin bleibt es aus (`background: false`, README von
       // @kingstinct/react-native-healthkit 16.2.0).
       ['@kingstinct/react-native-healthkit', healthKitPluginProps],
+      // Barcode-Scan (Spezifikation 2, Abschnitt 5; #160): Kamera mit deutscher Nutzungsbeschreibung, ohne
+      // Mikrofon. `false` entfernt die iOS-Beschreibung, `recordAudioAndroid: false` die Android-Berechtigung
+      // `RECORD_AUDIO` (https://docs.expo.dev/versions/v58.0.0/sdk/camera/#configuration-in-app-config).
+      ['expo-camera', cameraPluginProps],
     ],
     experiments: {
       reactCompiler: true,

@@ -15,6 +15,7 @@ import { dailyGoalCommands, dailyGoalCompletionEntity } from './daily-goals/comp
 import { energyBookingEntity } from './energy/bookings.ts';
 import { buildObjectCommand } from './island/build-object.ts';
 import { challengeSyncEntities, createChallenges } from './island/challenges.ts';
+import { contributeToProjectCommand } from './island/community-projects.ts';
 import { placeObjectCommand, upgradeObjectCommand } from './island/object-commands.ts';
 import { islandSyncEntities } from './island/island-entities.ts';
 import { generateIslandEvents, islandEventCommands } from './island/island-events.ts';
@@ -41,6 +42,7 @@ import { createPartnerProjections } from './partner-projections/projections.ts';
 import type { AnyPartnerSummaryProjector, ReaderPort } from './partner-projections/projector.ts';
 import { sharingSyncEntities } from './partner-projections/sharing-entities.ts';
 import { personTimeZoneCommand } from './person/time-zone.ts';
+import { acceptBudgetSuggestionCommand } from './plan/accept-budget-suggestion.ts';
 import { budgetSuggestionEntity } from './plan/budget-suggestion-entity.ts';
 import { createGoalVersionCommand, goalVersionEntity } from './plan/goal-versions.ts';
 import { postgresPlanReader } from './plan/plan-reader.ts';
@@ -125,6 +127,8 @@ export function createBackend({
   sync.registerCommand(buildObjectCommand);
   sync.registerCommand(upgradeObjectCommand);
   sync.registerCommand(placeObjectCommand);
+  // Gemeinschaftsprojekte (#208): Einzahlen samt Projektabschluss im selben Befehl.
+  sync.registerCommand(contributeToProjectCommand);
   // Insel-Ereignisse (#202): der Ereignisgenerator vor jedem Pull, Ansehen und Abholen.
   for (const command of islandEventCommands) sync.registerCommand(command);
   sync.registerPrePullStep('island_events', generateIslandEvents);
@@ -138,12 +142,13 @@ export function createBackend({
   sync.registerPrePullStep('challenge_proposals', challenges.expireProposals);
   uncoupling.registerObserver('challenges', challenges.withdrawOnUncoupling);
   // Ziele und Wochenplan (Spezifikation 1): Fassungen nur über ihre Fachbefehle; der Budgetvorschlag als
-  // Upsert innerhalb der eigenen Eigentumsgrenze (#150).
+  // Upsert innerhalb der eigenen Eigentumsgrenze (#150), angenommen nur über seinen Fachbefehl (#151).
   sync.registerEntity(goalVersionEntity);
   sync.registerEntity(weeklyPlanVersionEntity);
   sync.registerEntity(budgetSuggestionEntity);
   sync.registerCommand(createGoalVersionCommand);
   sync.registerCommand(createWeeklyPlanVersionCommand);
+  sync.registerCommand(acceptBudgetSuggestionCommand);
   sync.registerEntity(dailyGoalCompletionEntity);
   sync.registerEntity(energyBookingEntity);
   for (const command of dailyGoalCommands) sync.registerCommand(command);

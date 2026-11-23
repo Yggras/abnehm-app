@@ -9,7 +9,9 @@ import {
   type CaptureMethod,
   type DisplayUnit,
   type EntryTotals,
+  type FoodRefType,
   type NutritionSnapshot,
+  type OwnFoodOrigin,
   type SnapshotSource,
 } from '@abnehm/contracts/nutrition';
 
@@ -75,10 +77,15 @@ export function unitText(unit: DisplayUnit): string {
   return unitNames[unit](1_000);
 }
 
-/** Beschriftung eines Einheiten-Chips: g bzw. ml oder die Bezeichnung der Umrechnung, etwa „1 Becher“. */
+/**
+ * Beschriftung eines Einheiten-Chips: g bzw. ml oder die Bezeichnung der Umrechnung, etwa „1 Becher“. Eine
+ * Umrechnung ohne Bezeichnung, etwa die Portion aus Open Food Facts, nennt ihre Größe: „Portion (150 g)“ (#160).
+ */
 export function unitChipText(snapshot: NutritionSnapshot, unit: DisplayUnit): string {
   if (unit === 'g' || unit === 'ml') return unit;
-  return snapshot.portions.find((portion) => portion.unit === unit)?.label ?? unitNames[unit](1_000);
+  const portion = snapshot.portions.find((candidate) => candidate.unit === unit);
+  if (portion === undefined) return unitNames[unit](1_000);
+  return portion.label ?? `${unitNames[unit](1_000)} (${milliText(portion.baseAmount)} ${snapshot.baseUnit})`;
 }
 
 /** Makros in g: ganze g, unter 10 g mit einer Nachkommastelle. */
@@ -135,6 +142,9 @@ export function captureTargetText(meal: MealKey, localDate: LocalDate, today: Lo
 }
 
 export const markNames: Readonly<Record<SearchMark, string>> = { favorit: 'Favorit', zuletzt: 'Zuletzt', eigen: 'Eigen', produkt: 'Produkt', bls: 'BLS' };
+
+/** Die Daten einer externen Quelle, die eine Korrektur unverändert lässt (Spezifikation 2, Abschnitt 3). */
+const externalDataNames: Readonly<Record<OwnFoodOrigin['type'], string>> = { bls: 'BLS-Daten', off: 'Daten von Open Food Facts' };
 
 export const sourceNames: Readonly<Record<SnapshotSource, string>> = { bls: 'BLS', off: 'Open Food Facts', eigen: 'Eigenes Lebensmittel', ki: 'KI-Schätzung' };
 
@@ -262,7 +272,8 @@ export const nutritionTexts = {
     create: 'Eigenes Lebensmittel anlegen',
     edit: 'Eigenes Lebensmittel bearbeiten',
     correct: 'Werte korrigieren',
-    correctHint: 'Die BLS-Daten bleiben unverändert. Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.',
+    correctHint: (source: OwnFoodOrigin['type']) =>
+      `Die ${externalDataNames[source]} bleiben unverändert. ${source === 'bls' ? 'Deine Fassung ersetzt das Lebensmittel ab jetzt in der Suche.' : 'Deine Fassung gilt ab jetzt für diesen Barcode.'}`,
     name: 'Name',
     unit: 'Einheit',
     referenceAmount: 'Werte gelten für',
@@ -302,10 +313,37 @@ export const nutritionTexts = {
   addConversion: (missing: readonly ConversionUnit[]) => `${missing.map((unit) => conversionTexts[unit].name).join(' oder ')} eintragen`,
   conversion: {
     title: 'Umrechnung eintragen',
-    hint: (eigen: boolean) =>
-      eigen ? 'Die Umrechnung wird an deinem eigenen Lebensmittel gespeichert.' : 'Daraus entsteht ein eigenes Lebensmittel; die BLS-Daten bleiben unverändert.',
+    hint: (source: FoodRefType) =>
+      source === 'eigen'
+        ? 'Die Umrechnung wird an deinem eigenen Lebensmittel gespeichert.'
+        : `Daraus entsteht ein eigenes Lebensmittel; die ${externalDataNames[source]} bleiben unverändert.`,
     unitName: (unit: ConversionUnit) => conversionTexts[unit].name,
     back: 'Zurück',
+  },
+  /** Barcode-Scan und seine Folgezustände (Spezifikation 2, Abschnitt 5; #160). */
+  barcode: {
+    title: 'Barcode scannen',
+    hint: 'Halte den Barcode in den Rahmen. Der Scan startet von selbst.',
+    camera: 'Kamerabild zum Scannen',
+    permissionHint: 'Zum Scannen braucht die App die Kamera. Bilder werden nicht gespeichert.',
+    allowCamera: 'Kamera erlauben',
+    denied: 'Die Kamera ist für die App ausgeschaltet. Erlaube sie in den Einstellungen oder such das Lebensmittel.',
+    openSettings: 'Einstellungen öffnen',
+    cameraFailed: 'Die Kamera lässt sich gerade nicht starten. Such das Lebensmittel oder leg es selbst an.',
+    resolving: 'Produkt wird gesucht …',
+    barcode: (code: string) => `Barcode ${code}`,
+    /** Wortlaut aus Spezifikation 2, Abschnitt 5 (#35). */
+    offline: 'Kein Netz – Produkt manuell anlegen oder später scannen',
+    unavailable: 'Open Food Facts antwortet gerade nicht. Versuch es gleich noch einmal oder leg das Produkt selbst an.',
+    retry: 'Erneut versuchen',
+    createManually: 'Produkt manuell anlegen',
+    scanLater: 'Später scannen',
+    notFoundHint: 'Open Food Facts kennt dieses Produkt noch nicht. Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
+    /** Nennt die fehlenden Angaben, etwa „Bei diesem Produkt fehlt Energie.“, damit niemand das leere Feld suchen muss. */
+    incompleteHint: (missing: readonly string[]) =>
+      `Bei diesem Produkt ${missing.length === 1 ? 'fehlt' : 'fehlen'} ${missing.join(', ')}. Ergänze ${missing.length === 1 ? 'die Angabe' : 'sie'} vom Etikett; ab dann gilt deine Fassung für diesen Barcode.`,
+    invalidHint: 'Die Werte dieses Produkts passen nicht zusammen. Prüf sie am Etikett; ab dann gilt deine Fassung für diesen Barcode.',
+    manualHint: 'Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
   },
   /** Eigene Mahlzeitenfotos im Protokoll und in der Fotoansicht (Spezifikation 2, Abschnitt 9; #164). */
   photo: {

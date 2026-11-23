@@ -177,6 +177,8 @@ export const messageTexts: Readonly<Record<string, MessageTextEntry>> = {
   'freigaben.gilt_wenn_online': messageText(z.strictObject({}), () => ({ text: 'Gilt, sobald du wieder online bist' })),
   /** Spezifikation 1: „Ziele ändern“ hat eine Zielversion ab morgen angelegt (#147). */
   'ziele.ab_morgen_gespeichert': messageText(z.strictObject({}), () => ({ text: 'Ziele gespeichert · gelten ab morgen' })),
+  /** Spezifikation 1, Abschnitt 7: Budgetvorschlag angenommen; die Zielversion gilt ab morgen (#151). */
+  'ziele.budgetvorschlag_uebernommen': messageText(z.strictObject({}), () => ({ text: 'Budget übernommen · gilt ab morgen' })),
   /** Spezifikation 5: Benachrichtigungseinstellung gespeichert (#132). */
   'benachrichtigungen.gespeichert': messageText(z.strictObject({}), () => ({ text: 'Benachrichtigungen gespeichert' })),
   /** Spezifikation 5: Passwort geändert; das Backend hat dabei alle anderen Sitzungen widerrufen. */

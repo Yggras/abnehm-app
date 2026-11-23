@@ -1,6 +1,6 @@
 // Zentrale Registry der Testfähigkeiten (Spezifikation 0, Abschnitt 12; #112, #114). Sie führt jede
 // Fähigkeit, die es nur in Test- und Development-Artefakten geben darf: Seed, Testuhr, Serveruhr,
-// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite, Health-Attrappe und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
+// Fehler-Adapter, Transport-Fehlermodus, On-Device-Suite, Health-Attrappe, Fake der Produktquelle und ihr gemeinsames Gerüst. Test-Artefakte der App sind der
 // Development Build und der E2E-Build (`APP_VARIANT=e2e`, ein Release-Binary für Maestro).
 // `test/release-sperren.test.ts` prüft für jede registrierte Fähigkeit, dass weder das
 // Produktions-Image des Backends noch das Produktions-Bundle der App sie enthält (Gegenprobe: die
@@ -61,14 +61,14 @@ export const testCapabilities: readonly TestCapability[] = [
     // `solo-energie` und `rollenwahl-offen` (#180), `tage_ohne_app_oeffnung` und `zeitzonen_reisen`
     // (#131), `haelfte-voll` und `doppelausgabe` (#191), die Szenarien der Einstellungsseite „Ziele“ (#147) sowie
     // `feldkonflikt` (#194), `ereignisse-voll` (#202), `einladung-nach-entkopplung` (#120), `levelaufstieg-ausstehend` (#200), `formwechsel` (#204) sowie
-    // `challenge-vorgeschlagen`, `challenge-verfallen` und `challenge-passt-nicht` (#210) sowie
+    // `challenge-vorgeschlagen`, `challenge-verfallen` und `challenge-passt-nicht` (#210), `projekt-abschluss` (#208) sowie
     // `budgetvorschlag-senken` und `budgetvorschlag-anheben` (#150) sowie `onboarding-unterbrochen` und `zweites-geraet` (#146) prüft der Release-Test zusätzlich über ihre Schlüssel. `rollenwahl-offen` schreibt sich mit Bindestrich, weil `rollenwahl_offen` als Leer-Grund
     // von `momo.character` zu Recht im Produktions-Bundle steht.
     markers: [
       '/dev/seed', 'momo-insel-testpasswort', 'frisches_konto', 'solo-energie', 'rollenwahl-offen', 'tage_ohne_app_oeffnung', 'zeitzonen_reisen',
       'haelfte-voll', 'doppelausgabe', 'solo-haltemodus-schwanger', 'solo-haltemodus-essstoerung', 'solo-haltemodus-untergewicht', 'solo-budget-angehoben', 'solo-ziele-ab-morgen',
       'feldkonflikt', 'ereignisse-voll', 'einladung-nach-entkopplung', 'levelaufstieg-ausstehend', 'formwechsel',
-      'challenge-vorgeschlagen', 'challenge-verfallen', 'challenge-passt-nicht',
+      'challenge-vorgeschlagen', 'challenge-verfallen', 'challenge-passt-nicht', 'projekt-abschluss',
       'budgetvorschlag-senken', 'budgetvorschlag-anheben',
       'onboarding-unterbrochen', 'zweites-geraet',
     ],
@@ -152,6 +152,17 @@ export const testCapabilities: readonly TestCapability[] = [
     ],
     entries: { deepLinks: ['health'] },
     markers: ['health_attrappe'],
+  },
+  {
+    // #160: Fake der `FoodProductSource` mit `found`, `not_found`, `incomplete`, 429/503 und Zeitüberschreitung
+    // (Spezifikation 2, Abschnitt 13). Die Modultests nutzen ihn direkt, Development- und E2E-Build per Link
+    // `produkt`, der auch einen Barcode für den nächsten Scanner hinterlegt; im Produktionsbuild fragt die App
+    // nur Open Food Facts.
+    key: 'fake-produktquelle',
+    description: 'Fake der Produktquelle (Open Food Facts) samt Test-Scan, gestellt per Link `produkt?ergebnis=<modus>[&scan=<barcode>]`',
+    modules: ['apps/mobile/src/nutrition/testing/fake-food-product-source.ts', 'apps/mobile/src/test-capabilities/food-products.ts'],
+    entries: { deepLinks: ['produkt'] },
+    markers: ['fake_produktquelle'],
   },
   {
     // #125: speicherbasierter Fake des Mitteilungs-Ports (Spezifikation 5, Abschnitt 8). In Test-Artefakten

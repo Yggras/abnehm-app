@@ -1,4 +1,4 @@
-import type { Blueprint, ProjectTemplate } from '../src/catalog.ts';
+import type { Blueprint, ProjectExpansion, ProjectTemplate } from '../src/catalog.ts';
 import { stageArt } from './define.ts';
 
 // Inhalt zum Schlüpfen (Spezifikation 4, Abschnitt 5): je Rolle drei Start-Baupläne zu 1, 2 und 3
@@ -20,4 +20,14 @@ export const firstProject: ProjectTemplate = {
   name: 'Gartenhäuschen',
   landmark: 'gartenhaeuschen',
   site: 'grundinsel:7:2',
+};
+
+/**
+ * Erste Ausbau-Vorlage (#208, Nutzerentscheidung): Solange der Katalog nur Projekt 1 kennt, folgt danach der
+ * Ausbau des Gartenhäuschens. Die übrigen Projekte und Ausbau-Vorlagen samt Grafiken bringt #209.
+ */
+export const firstExpansion: ProjectExpansion = {
+  key: 'gartenhaeuschen_ausbau',
+  name: 'Gartenhäuschen-Ausbau',
+  project: 'gartenhaeuschen',
 };

@@ -10,11 +10,12 @@ import {
   IslandFieldRecord,
   IslandObjectOrigin,
   IslandObjectRecord,
+  ProjectContributionRecord,
   VisitorEventDetails,
   VisitorReward,
 } from '../src/island-records.ts';
 import { fixtures } from './define.ts';
-import { anna, challenge, coupling, island, islandEvent, islandField, now, philipp } from './ids.ts';
+import { anna, booking, challenge, command, coupling, island, islandEvent, islandField, now, philipp, project as projectId } from './ids.ts';
 
 const owned = { islandId: island, couplingId: coupling };
 
@@ -141,6 +142,20 @@ export const islandRecordFixtures = {
     invalid: {
       'fertig ohne Abschlusszeitpunkt': { ...project, status: 'fertig' },
       'aktiv mit Abschlusszeitpunkt': { ...project, completedAt: now },
+    },
+  }),
+  ProjectContributionRecord: fixtures(ProjectContributionRecord, {
+    valid: {
+      'Philipp zahlt 5 in den Bau-Anteil ein': {
+        communityProjectId: projectId, personId: philipp, role: 'bauen', amount: 5, energyBookingId: booking, commandId: command, createdAt: now,
+      },
+    },
+    invalid: {
+      'ohne Rolle': { communityProjectId: projectId, personId: philipp, amount: 5, energyBookingId: booking, commandId: command, createdAt: now },
+      'Betrag 0': { communityProjectId: projectId, personId: philipp, role: 'bauen', amount: 0, energyBookingId: booking, commandId: command, createdAt: now },
+      'Stufe des Projekts': {
+        communityProjectId: projectId, personId: philipp, role: 'natur', amount: 5, energyBookingId: booking, commandId: command, createdAt: now, stage: 'gestartet',
+      },
     },
   }),
   IslandEventRecord: fixtures(IslandEventRecord, {

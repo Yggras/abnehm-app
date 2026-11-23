@@ -1,7 +1,9 @@
 import { EntityId, LocalDate } from '../src/base.ts';
 import { dailyGoalId } from '../src/daily-goals.ts';
 import {
+  AcceptBudgetSuggestion,
   BudgetSource,
+  budgetSuggestionId,
   BudgetSuggestionDirection,
   BudgetSuggestionRecord,
   BudgetSuggestionStatus,
@@ -63,6 +65,10 @@ const budgetSuggestion = {
   status: 'offen',
 } as const;
 
+/** Annahme des Vorschlags zum Referenzfall: Budget 1.520 kcal ab morgen, alle übrigen Werte übernommen (#151). */
+const budgetSuggestionIdOf = budgetSuggestionId(EntityId.parse(philipp), LocalDate.parse(budgetSuggestion.periodTo));
+const acceptedGoalVersion = { ...referenceGoalVersion, validFrom: '2026-10-15', calorieBudgetMilliKcal: 1_520_000, budgetSource: 'budgetvorschlag' } as const;
+
 const goalIdOf = (slot: 1 | 2 | 3) => dailyGoalId(EntityId.parse(philipp), LocalDate.parse(today), slot);
 const snapshotBase = { personId: philipp, localDate: today, timeZone, dayEndsAt: todayEndsAt } as const;
 
@@ -108,6 +114,14 @@ export const planFixtures = {
       'ohne Eigentümer': { ...referenceGoalVersion, createdAt: now, updatedAt: now },
       'Tempo im Haltemodus': { ...forced, ...stored, pace: 'entspannt' },
       'Budget unter der Untergrenze': { ...referenceGoalVersion, ...stored, calorieBudgetMilliKcal: 1_400_000 },
+    },
+  }),
+  AcceptBudgetSuggestion: fixtures(AcceptBudgetSuggestion, {
+    valid: { 'Budget des Vorschlags ab morgen': { suggestionId: budgetSuggestionIdOf, goalVersion: acceptedGoalVersion } },
+    invalid: {
+      'andere Herkunft': { suggestionId: budgetSuggestionIdOf, goalVersion: { ...acceptedGoalVersion, budgetSource: 'manuell' } },
+      'Budget über dem Gesamtumsatz': { suggestionId: budgetSuggestionIdOf, goalVersion: { ...acceptedGoalVersion, calorieBudgetMilliKcal: 2_200_000 } },
+      'ohne Vorschlag': { goalVersion: acceptedGoalVersion },
     },
   }),
   BudgetSuggestionUpsert: fixtures(BudgetSuggestionUpsert, {

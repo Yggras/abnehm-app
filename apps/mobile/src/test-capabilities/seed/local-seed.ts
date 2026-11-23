@@ -6,7 +6,7 @@ import { canonicalRows, dependencyOrder, type SeedDeviceState, type SeedKey, typ
 
 import type { LocalDatabase } from '../../local-db';
 import * as schema from '../../local-db/schema';
-import { rebuildOwnFoodIndex } from '../../nutrition';
+import { rebuildOffCacheIndex, rebuildOwnFoodIndex } from '../../nutrition';
 import { sqliteOf } from '../../local-db/sqlite';
 import { readSyncState, restoreSyncState } from '../../sync';
 
@@ -44,6 +44,7 @@ export function seedLocalDatabase(database: LocalDatabase, manifest: SeedManifes
     }
     // Lokale Suchindizes sind keine Tabellen des Schemas; ihr Bereich baut sie aus den Zeilen neu auf.
     rebuildOwnFoodIndex(tx);
+    rebuildOffCacheIndex(tx);
     restoreSyncState(tx, { cursor: state.cursor, outbox: state.outbox }, Instant.parse(manifest.clock.instant));
   });
 }

@@ -1,7 +1,7 @@
 import type { SafetyTrigger } from '@abnehm/contracts/goal-calculator';
 import type { ActivityLevel } from '@abnehm/contracts/person';
 import type { Pace } from '@abnehm/contracts/ports';
-import type { BudgetSource } from '@abnehm/contracts/plan';
+import type { BudgetSource, BudgetSuggestionDirection } from '@abnehm/contracts/plan';
 
 import { kcalText } from '../nutrition/texts';
 import { activityLevelParts, onboardingTexts, safetyCheckTexts } from '../onboarding/texts';
@@ -112,6 +112,34 @@ export const goalTexts = {
     text: 'Du hast deine Ziele geändert, aber noch nicht übernommen.',
     discard: 'Verwerfen',
     stay: 'Weiter bearbeiten',
+  },
+} as const;
+
+/**
+ * Texte des Sheets `plan.budget_suggestion` (Spezifikation 1, Abschnitt 7; #151). Die Begründung vergleicht den
+ * Gewichtstrend der letzten drei Wochen neutral mit dem gewählten Tempo, ohne Bewertung oder Schuld. Die
+ * Differenz steht als Unterzeile beim Vorschlag. Der Hinweis auf den nächsten Vorschlag folgt der Sperre von
+ * 14 Tagen nach jeder Entscheidung (Abschnitt 7, Voraussetzungen).
+ */
+export const budgetSuggestionTexts = {
+  loading: 'Budgetvorschlag wird geladen',
+  previous: 'Bisheriges Budget',
+  suggested: 'Vorschlag ab morgen',
+  perDay: (kcal: number) => `${kcalText(kcal)} pro Tag`,
+  difference: (direction: BudgetSuggestionDirection, differenceKcal: number) =>
+    `${kcalText(differenceKcal)} ${direction === 'senken' ? 'weniger' : 'mehr'}`,
+  reason: (direction: BudgetSuggestionDirection, pace: Pace | null) =>
+    `In den letzten drei Wochen hast du laut Gewichtstrend ${direction === 'senken' ? 'weniger' : 'mehr'} abgenommen, als dein ${
+      pace === null ? 'gewähltes Tempo' : `Tempo „${paceNames[pace]}“ (${paceRates[pace]})`
+    } vorsieht. Mit dem neuen Budget kommst du näher an dieses Tempo.`,
+  onlyWithConfirmation: 'Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst. Einen neuen Vorschlag gibt es frühestens in zwei Wochen.',
+  accept: 'Übernehmen ab morgen',
+  decline: 'Nicht jetzt',
+  closed: {
+    angenommen: 'Diesen Vorschlag hast du übernommen.',
+    abgelehnt: 'Diesen Vorschlag hast du abgelehnt.',
+    ueberholt: 'Dieser Vorschlag gilt nicht mehr, weil sich deine Ziele inzwischen geändert haben.',
+    unbekannt: 'Diesen Vorschlag gibt es nicht mehr.',
   },
 } as const;
 

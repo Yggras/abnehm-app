@@ -1,0 +1,116 @@
+# Gerätelauf Gemeinschaftsprojekt (Spezifikation 4, Abschnitt 8; #208): Seed „gekoppelt“ → „Projekt“ in der Leiste →
+# 12 Energie einzahlen → den Rest einzahlen, bis „Dein Anteil ist voll“ → das Gerüst auf der Insel. Danach Seed
+# „projekt-abschluss“: Philipps Sync macht das Gartenhäuschen fertig, das Wahrzeichen steht, und der Ausbau beginnt.
+# Die Bildschirmfotos sind die Vorlage der Impeccable-Kritik (Hauptaufgabe „in den eigenen Projektanteil einzahlen
+# und den gemeinsamen Fortschritt sehen“).
+#
+# Im Seed `gekoppelt` hat Philipp (Bauen) Level 3 und 23 Energie; Projekt 1 ist das Gartenhäuschen mit je 20 Bedarf
+# (`packages/contracts/seeds/spielverlauf.ts`). Nicht im Standardumfang von `scripts/e2e-run`; Aufruf mit
+# `--ablauf projekt`.
+appId: ${APP_ID}
+name: Gemeinschaftsprojekt einzahlen und abschließen
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - setAirplaneMode: disabled
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=gekoppelt&ziel=/momo
+# „So wächst Momo“ erscheint beim ersten Öffnen nach dem Schlüpfen (siehe `bau-modus`).
+- extendedWaitUntil:
+    visible: "Verstanden|Momos Insel, Level 3.*"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Verstanden"
+    commands:
+      - tapOn: "Verstanden"
+- assertVisible: "Momos Insel, Level 3, 10 eigene Objekte"
+- takeScreenshot: projekt-1-insel-geruest
+
+# Projekt-Sheet: eigener Anteil exakt, gemeinsam nur die Stufe -----------------------------------------------
+- tapOn: "Projekt"
+- extendedWaitUntil:
+    visible: "Gartenhäuschen"
+    timeout: 10000
+- assertVisible: "Gemeinsam: gestartet"
+- assertVisible: "Dein Anteil: 0 von 20"
+- assertVisible: "Betrag: 20 Energie"
+- takeScreenshot: projekt-2-sheet
+
+# 12 einzahlen: acht Mal verringern ------------------------------------------------------------------------
+- repeat:
+    times: 8
+    commands:
+      - tapOn: "Betrag verringern"
+- assertVisible: "Betrag: 12 Energie"
+- tapOn: "12 Energie einzahlen"
+- extendedWaitUntil:
+    visible: "12 Energie eingezahlt"
+    timeout: 10000
+- assertVisible: "Dein Anteil: 12 von 20"
+- assertVisible: "Betrag: 8 Energie"
+- takeScreenshot: projekt-3-eingezahlt
+
+# Den Rest einzahlen: der Anteil ist voll ------------------------------------------------------------------
+- tapOn: "8 Energie einzahlen"
+- extendedWaitUntil:
+    visible: "Dein Anteil ist voll"
+    timeout: 10000
+- assertNotVisible: ".*Energie einzahlen"
+- takeScreenshot: projekt-4-voll
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 50%, 20%
+          end: 50%, 95%
+          duration: 400
+- extendedWaitUntil:
+    notVisible: "Dein Anteil ist voll"
+    timeout: 10000
+- assertVisible: "3 Energie"
+- takeScreenshot: projekt-5-insel-nach-einzahlen
+
+# Projektabschluss: Seed „projekt-abschluss“ -----------------------------------------------------------------
+# Neu starten: Der Teilablauf `link` wartet auf einen Bildschirmrahmen (`screen-scroll`), den die Insel nicht hat.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow:
+    file: teilablaeufe/link.yaml
+    env:
+      LINK: seed?szenario=projekt-abschluss&ziel=/momo
+- extendedWaitUntil:
+    visible: "Verstanden|Momos Insel, Level .*"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Verstanden"
+    commands:
+      - tapOn: "Verstanden"
+# Der Sync nach dem Seed schließt das Projekt ab; die Insel steigt dabei auf Level 2.
+- extendedWaitUntil:
+    visible: "Momos Insel, Level 2.*"
+    timeout: 30000
+- takeScreenshot: projekt-6-wahrzeichen
+- tapOn: "Projekt"
+- extendedWaitUntil:
+    visible: "Gartenhäuschen-Ausbau"
+    timeout: 10000
+- assertVisible: "Ausbau eures Wahrzeichens"
+- assertVisible: ".*wird euer Wahrzeichen größer."
+- assertVisible: "Dein Anteil: 0 von 30"
+- takeScreenshot: projekt-7-ausbau

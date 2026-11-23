@@ -29,6 +29,7 @@ export function fakeGameService(stage: IslandStage, reactions: readonly MomoReac
     build: refuse,
     upgrade: refuse,
     place: refuse,
+    contribute: refuse,
     markEventsSeen: refuse,
     claimEventReward: refuse,
     observeChallenges(listener) {

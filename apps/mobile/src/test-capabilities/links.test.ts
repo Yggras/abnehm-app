@@ -20,9 +20,33 @@ function inboxWith(options: Partial<TestInboxOptions> = {}) {
     notifications: createNotificationTestControl(),
     deviceSuite: async (phase) => passed(phase),
     health: { apply: () => Promise.resolve(null) },
+    foodProducts: { apply: () => undefined },
     ...options,
   });
 }
+
+describe('Link `produkt` (#160)', () => {
+  it('stellt den Fake der Produktquelle und hinterlegt optional einen Barcode für den nächsten Scanner', () => {
+    expect(parseTestLink('abnehmapp-dev://produkt?ergebnis=nicht_gefunden')).toEqual({ type: 'produkt', mode: 'nicht_gefunden' });
+    expect(parseTestLink('abnehmapp-e2e://produkt?ergebnis=katalog&scan=4000000000013')).toEqual({ type: 'produkt', mode: 'katalog', scan: '4000000000013' });
+    expect(parseTestLink('abnehmapp-dev://produkt?scan=40000000')).toEqual({ type: 'produkt', scan: '40000000' });
+    expect(parseTestLink('abnehmapp-dev://produkt?ergebnis=echt')).toEqual({ type: 'produkt', mode: 'echt' });
+  });
+
+  it('ohne Parameter, mit unbekanntem Ergebnis oder ungültigem Barcode ist er ungültig', () => {
+    for (const link of ['abnehmapp-dev://produkt', 'abnehmapp-dev://produkt?ergebnis=kaputt', 'abnehmapp-dev://produkt?scan=12345', 'abnehmapp-dev://produkt?ergebnis=katalog&x=1']) {
+      expect(parseTestLink(link)).toEqual({ type: 'ungueltig', capability: 'produkt' });
+    }
+  });
+
+  it('der Eingang stellt den Fake und meldet den Stand', () => {
+    const applied: unknown[] = [];
+    const inbox = inboxWith({ foodProducts: { apply: (change) => void applied.push(change) } });
+    inbox.receive({ type: 'produkt', mode: 'http_503', scan: '4000000000013' });
+    expect(applied).toEqual([{ mode: 'http_503', scan: '4000000000013' }]);
+    expect(inbox.status()).toEqual({ type: 'produkt_gestellt', mode: 'http_503', scan: '4000000000013' });
+  });
+});
 
 describe('Link `momo-galerie` (#187)', () => {
   it('öffnet die Galerie in der Ansicht „Heute“ oder „Insel“; andere Ansichten sind ungültig', () => {

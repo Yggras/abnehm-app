@@ -113,7 +113,7 @@ const schemaTables = (Object.values(schema) as unknown[])
   .sort();
 
 /** Lokale FTS5-Indizes außerhalb der Drizzle-Schemas: die eigenen Lebensmittel (Migration `0004_own_food_search`, #157). */
-const localSearchIndexes = ['own_food_search'];
+const localSearchIndexes = ['off_cache_search', 'own_food_search'];
 
 /** Löscht eine Datei der Suite und prüft, dass sie danach leer ist. */
 function clearFile(files: DeviceSuiteFiles, fileName: string) {

@@ -21,7 +21,7 @@ import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appNutrition, createNutrition, foodFavoriteEntity, nutritionEntryEntity, ownFoodEntity } from '.';
 import type * as TestCatalogModule from './testing/test-catalog';
-import { withoutPhotos } from './testing/without-photos';
+import { withoutNetwork } from './testing/without-network';
 
 // Nachweis für #155, #156, #157 und #158 am gerenderten Bildschirm: Protokoll und Hinzufügen-Bildschirm mit dem
 // echten Verzeichnis `src/app`, dem echten Ernährungsmodul über einer mit `solo` geseedeten SQLite-Datei
@@ -66,7 +66,7 @@ async function openAccount({ seeded = true }: { seeded?: boolean } = {}) {
   if (seeded) seedLocalDatabase(database, seedManifests.solo, 'philipp-iphone');
   else database.transaction((tx) => insertPersonForTest(tx, seedIds.person.philipp));
   const newId = () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
-  const nutrition = createNutrition({ ...withoutPhotos,
+  const nutrition = createNutrition({ ...withoutNetwork,
     database, clock, newId,
     writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, ownFoodEntity, foodFavoriteEntity]), clock, newId }),
     persistence: { reevaluateDailyGoals() {} },
@@ -337,7 +337,7 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     expect(within(form()).getByLabelText('Name')).toHaveProp('accessibilityHint', 'Fehler: Gib einen Namen ein, etwa „Bircher-Müsli“.');
     // „Speichern“ liegt unter den Feldern: Ein Satz darüber nennt die betroffenen Felder.
     expect(within(form()).getByText('Prüfe die markierten Felder: Name, Energie, Kohlenhydrate.')).toBeOnTheScreen();
-    expect(ownFoods()).toEqual([expect.objectContaining({ name: 'Bircher-Müsli, selbst gemacht' }), expect.objectContaining({ name: 'Apfel roh' })]);
+    expect(ownFoods()).toEqual([expect.objectContaining({ name: 'Bircher-Müsli, selbst gemacht' }), expect.objectContaining({ name: 'Apfel roh' }), expect.objectContaining({ name: 'Skyr Natur', originType: 'off' })]);
 
     await fill('Kohlenhydrate', '0');
     await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
@@ -353,8 +353,8 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     await fill('Bezeichnung für Portion', '1 Schüssel');
     await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
 
-    expect(ownFoods()).toHaveLength(3);
-    expect(ownFoods()[2]).toMatchObject({ name: 'Linsen-Dal', milliKcal: 120_000, proteinMg: 6_500, portions: [{ unit: 'portion', label: '1 Schüssel', baseAmount: 300_000 }], originType: null });
+    expect(ownFoods()).toHaveLength(4);
+    expect(ownFoods()[3]).toMatchObject({ name: 'Linsen-Dal', milliKcal: 120_000, proteinMg: 6_500, portions: [{ unit: 'portion', label: '1 Schüssel', baseAmount: 300_000 }], originType: null });
     // Danach direkt in die Mengenprüfung: vorbelegt ist die bekannte Portion.
     expect(within(sheet()).getByRole('header', { name: 'Linsen-Dal' })).toBeOnTheScreen();
     expect(within(sheet()).getByText('Eigenes Lebensmittel')).toBeOnTheScreen();
@@ -415,13 +415,13 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     await user.press(within(sheet()).getByRole('radio', { name: 'Portion' }));
     await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
     expect(within(sheet()).getByText('Gib ein, wie viel g 1 Portion hat, etwa 250.', { includeHiddenElements: true })).toBeOnTheScreen();
-    expect(ownFoods()).toHaveLength(2);
+    expect(ownFoods()).toHaveLength(3);
 
     await user.type(within(sheet()).getByLabelText('1 Portion hat'), '40');
     await user.type(within(sheet()).getByLabelText('Bezeichnung für Portion'), '1 Schale');
     await user.press(within(sheet()).getByRole('button', { name: 'Speichern' }));
 
-    expect(ownFoods()[2]).toMatchObject({ name: 'Hafer Flocken', milliKcal: 348_000, portions: [{ unit: 'portion', label: '1 Schale', baseAmount: 40_000 }], originType: 'bls', originKey: 'C133000' });
+    expect(ownFoods()[3]).toMatchObject({ name: 'Hafer Flocken', milliKcal: 348_000, portions: [{ unit: 'portion', label: '1 Schale', baseAmount: 40_000 }], originType: 'bls', originKey: 'C133000' });
     expect(within(sheet()).getByRole('radio', { name: '1 Schale' })).toBeChecked();
     expect(within(sheet()).getByLabelText('Menge')).toHaveDisplayValue('1');
     // 348 kcal je 100 g × 0,4 = 139,2 kcal.
@@ -448,7 +448,7 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     await fill('Energie', '372');
     await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
 
-    expect(ownFoods()[2]).toMatchObject({ name: 'Hafer Flocken', milliKcal: 372_000, originType: 'bls', originKey: 'C133000' });
+    expect(ownFoods()[3]).toMatchObject({ name: 'Hafer Flocken', milliKcal: 372_000, originType: 'bls', originKey: 'C133000' });
     // Die Vorbelegung gilt je Referenz: Die Korrektur hat noch keine Einträge und beginnt bei 100 g.
     expect(within(sheet()).getByText('372 kcal')).toBeOnTheScreen();
     expect(entries().find((entry) => entry.snapshotName === 'Hafer Flocken')).toMatchObject({ snapshotMilliKcal: 348_000, totalMilliKcal: 208_800 });
@@ -462,7 +462,7 @@ describe('Eigene Lebensmittel und Portionsumrechnungen (#157)', () => {
     await user.press(within(sheet()).getByRole('button', { name: 'Werte korrigieren' }));
     await user.press(within(form()).getByRole('button', { name: 'Speichern' }));
 
-    expect(ownFoods()).toHaveLength(2);
+    expect(ownFoods()).toHaveLength(3);
     expect(operations()).toEqual([]);
     // Zurück in der Mengenprüfung der unveränderten Quelle.
     expect(within(sheet()).getByText('Max Rubner-Institut (2025): Bundeslebensmittelschlüssel (BLS), Version 4.0')).toBeOnTheScreen();

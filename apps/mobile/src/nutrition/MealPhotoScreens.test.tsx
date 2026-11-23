@@ -17,7 +17,7 @@ import { createSyncRegistry, createSyncWriter } from '../sync';
 import { pendingOperations } from '../sync/outbox';
 import { seedLocalDatabase } from '../test-capabilities/seed/local-seed';
 import { appNutrition, createNutrition, mealPhotoEntity, nutritionEntryEntity, type MealPhotoImage } from '.';
-import { withoutPhotos } from './testing/without-photos';
+import { withoutNetwork } from './testing/without-network';
 
 // Nachweis für #164 am gerenderten Bildschirm: Protokoll mit Vorschau und Fotoansicht mit dem echten
 // Verzeichnis `src/app` und dem echten Ernährungsmodul über einer geseedeten SQLite-Datei. Den Bildabruf
@@ -80,7 +80,7 @@ async function openAccount(manifest: SeedManifest = seedManifests.gekoppelt) {
   seedLocalDatabase(database, manifest, 'philipp-iphone');
   const newId = () => EntityId.parse(`10000000-0000-4000-8000-${String(++ids).padStart(12, '0')}`);
   const source = photoSource();
-  const nutrition = createNutrition({ ...withoutPhotos,
+  const nutrition = createNutrition({ ...withoutNetwork,
     database, clock, newId,
     writer: createSyncWriter({ registry: createSyncRegistry([nutritionEntryEntity, mealPhotoEntity]), clock, newId }),
     persistence: { reevaluateDailyGoals() {} },

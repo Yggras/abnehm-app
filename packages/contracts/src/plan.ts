@@ -413,6 +413,35 @@ export function planVersionId(kind: PlanVersionKind, personId: EntityId, validFr
   return EntityId.parse(uuidV5(versionNamespaces[kind], `${kind}:${personId}:${validFrom}`));
 }
 
+/**
+ * Nutzlast von `acceptBudgetSuggestion` (Spezifikation 1, Abschnitt 7; #151): der angenommene Vorschlag und
+ * die vollständige Zielversion ab morgen, die sein Budget mit der Herkunft `budgetvorschlag` trägt. Sie ist
+ * stimmig wie bei `createGoalVersion`; das Budget liegt zwischen Untergrenze und Gesamtumsatz.
+ */
+export const AcceptBudgetSuggestion = z.strictObject({
+  suggestionId: EntityId,
+  goalVersion: CreateGoalVersion.refine((goal) => goal.budgetSource === 'budgetvorschlag', {
+    message: 'Herkunft ist der Budgetvorschlag',
+    path: ['budgetSource'],
+  }),
+});
+export type AcceptBudgetSuggestion = z.infer<typeof AcceptBudgetSuggestion>;
+
+const acceptKeyPrefix = 'budgetvorschlag:';
+
+/**
+ * Fachlicher Schlüssel von `acceptBudgetSuggestion`: genau einer je Vorschlag. Nimmt ein zweites Gerät
+ * denselben Vorschlag an, trifft es dieselbe Annahme, und es entsteht keine zweite Zielversion.
+ */
+export const acceptBudgetSuggestionKey = (suggestionId: EntityId) => `${acceptKeyPrefix}${suggestionId}`;
+
+/** Der Vorschlag eines Schlüssels von `acceptBudgetSuggestion`; `null` bei jeder anderen Form. */
+export function budgetSuggestionOfAcceptKey(key: string): EntityId | null {
+  if (!key.startsWith(acceptKeyPrefix)) return null;
+  const id = EntityId.safeParse(key.slice(acceptKeyPrefix.length));
+  return id.success ? id.data : null;
+}
+
 /** ID der Zielversion einer Person ab `validFrom`. */
 export const goalVersionId = (personId: EntityId, validFrom: LocalDate) => planVersionId('zielversion', personId, validFrom);
 

@@ -9,10 +9,9 @@ import { rankName } from './ranked-search';
 import { searchQuery, type SearchQuery } from './search-text';
 
 // Lokale Lebensmittelsuche des Moduls „Ernährung“ (Spezifikation 2, Abschnitt 4). Sie läuft bei jeder
-// Eingabe ab zwei Buchstaben oder Ziffern, ohne Netz. Die Treffer kommen in Gruppen in fester Rangfolge: Favoriten,
-// „Zuletzt verwendet“, eigene Lebensmittel, gescannte Produkte, BLS. Bisher gibt es die Gruppen Favoriten und
-// „Zuletzt verwendet“ der gewählten Mahlzeit (#158), eigene Lebensmittel (#157) und BLS; gescannte Produkte
-// ergänzt #160 in `groups`, ohne die Schnittstelle zu ändern. Jedes Lebensmittel erscheint nur einmal, in der
+// Eingabe ab zwei Buchstaben oder Ziffern, ohne Netz. Die Treffer kommen in Gruppen in fester Rangfolge: Favoriten
+// und „Zuletzt verwendet“ der gewählten Mahlzeit (#158), eigene Lebensmittel (#157), gescannte Produkte aus dem
+// OFF-Cache (#160) und BLS. Jedes Lebensmittel erscheint nur einmal, in der
 // ersten Gruppe, die es trifft. Ein eigenes Lebensmittel mit Herkunftsreferenz überdeckt seine Quelle: Sie
 // erscheint nur einmal, als eigenes Lebensmittel (Spezifikation 2, Abschnitt 3).
 
@@ -49,6 +48,8 @@ type SearchGroup = (query: SearchQuery, limit: number) => FoodSearchHit[];
 export type AccountFoods = Readonly<{
   /** Nicht gelöschte eigene Lebensmittel zur Anfrage, in Rangfolge, höchstens `limit`. */
   search(query: SearchQuery, limit: number): OwnFoodChoice[];
+  /** Vollständige gescannte Produkte des OFF-Caches zur Anfrage, in Rangfolge, höchstens `limit`. */
+  searchProducts(query: SearchQuery, limit: number): readonly { barcode: string; snapshot: NutritionSnapshot }[];
   /** Überdeckte Quellen: die Herkunftsreferenzen der nicht gelöschten eigenen Lebensmittel. */
   overlaidOrigins(): readonly OwnFoodOrigin[];
   /** Lebensmittelfavoriten und „Zuletzt verwendet“ der Mahlzeit, aufgelöst wie auf dem Hinzufügen-Bildschirm (#158). */
@@ -73,8 +74,15 @@ export function createFoodSearch(sources: { catalog: CatalogDatabase; account: A
     (query, limit) => quickGroup('zuletzt', quick().recent, query, limit),
     (query, limit) => account.search(query, limit).map(({ ref, snapshot }) => hit('eigen', ref, snapshot)),
     (query, limit) => {
-      // Überdeckte BLS-Lebensmittel fallen heraus; so viele mehr werden gelesen, damit `limit` reicht.
-      const overlaid = new Set(account.overlaidOrigins().flatMap((origin) => (origin.type === 'bls' ? [origin.key] : [])));
+      const overlaid = overlaidKeys('off');
+      return account
+        .searchProducts(query, limit + overlaid.size)
+        .filter(({ barcode }) => !overlaid.has(barcode))
+        .slice(0, limit)
+        .map(({ barcode, snapshot }) => hit('produkt', { type: 'off', key: barcode }, snapshot));
+    },
+    (query, limit) => {
+      const overlaid = overlaidKeys('bls');
       return bls
         .search(query, limit + overlaid.size)
         .filter(({ key }) => !overlaid.has(key))
@@ -82,6 +90,11 @@ export function createFoodSearch(sources: { catalog: CatalogDatabase; account: A
         .map(({ key, snapshot }) => hit('bls', { type: 'bls', key }, snapshot));
     },
   ];
+  /**
+   * Schlüssel der überdeckten Quellen einer Art. Sie fallen aus ihrer Gruppe heraus; so viele mehr werden
+   * gelesen, damit `limit` reicht.
+   */
+  const overlaidKeys = (type: OwnFoodOrigin['type']) => new Set(account.overlaidOrigins().flatMap((origin) => (origin.type === type ? [origin.key] : [])));
 
   return {
     search(input) {

@@ -4,15 +4,14 @@ import {
   OwnFoodUpsert,
   portionLabelMaxLength,
   type BaseUnit,
-  type FoodRef,
   type NutritionSnapshot,
   type FoodValues,
   type PortionConversion,
 } from '@abnehm/contracts/nutrition';
 
 import { parseDecimalMilli } from './amount-input';
+import type { OffProduct } from './food-product-source';
 import { conversionFields, type ConversionUnit, type OwnFoodField, type OwnFoodProblem } from './own-food-fields';
-import type { OwnFoodBase } from './own-foods';
 import { milliText } from './texts';
 
 // Formular „Eigenes Lebensmittel“ (Spezifikation 2, Abschnitte 2 und 3): Die Person tippt deutsche
@@ -44,23 +43,32 @@ export type OwnFoodCheck =
 
 const emptyPortion: PortionDraft = { amount: '', label: '' };
 
-/**
- * Was eine Änderung an diesem Lebensmittel speichern würde: das eigene Lebensmittel selbst oder die
- * BLS-Quelle, aus der ein eigenes Lebensmittel wird. `undefined` für ein Barcode-Produkt; dessen
- * Korrektur samt deterministischer ID liefert #160.
- */
-export function editableBaseOf(ref: FoodRef): Exclude<OwnFoodBase, null> | undefined {
-  return ref.type === 'off' ? undefined : ref;
-}
-
 /** Ein leeres Formular, etwa mit dem Suchtext als Name; Bezugsmenge 100 g. */
 export function emptyOwnFoodDraft(name = ''): OwnFoodDraft {
   return { name: name.trim(), baseUnit: 'g', referenceAmount: '100', kcal: '', protein: '', carbs: '', fat: '', stueck: emptyPortion, portion: emptyPortion };
 }
 
+/**
+ * Das Formular für ein unvollständiges Barcode-Produkt (Spezifikation 2, Abschnitt 5): alle bekannten Werte
+ * je 100 g bzw. 100 ml vorbelegt, fehlende bleiben leer, damit die Person sie vom Etikett ergänzt.
+ */
+export function ownFoodDraftOfProduct(product: OffProduct): OwnFoodDraft {
+  const known = (value: number | null) => (value === null ? '' : milliText(value));
+  const serving = product.portions.find((portion) => portion.unit === 'portion');
+  return {
+    ...emptyOwnFoodDraft(product.name ?? ''),
+    baseUnit: product.baseUnit,
+    kcal: known(product.milliKcalPer100),
+    protein: known(product.proteinMgPer100),
+    carbs: known(product.carbsMgPer100),
+    fat: known(product.fatMgPer100),
+    portion: serving === undefined ? emptyPortion : { amount: baseAmountText(product.baseUnit, serving.baseAmount), label: serving.label ?? '' },
+  };
+}
+
 /** Das Formular vorbelegt mit der aktuellen Fassung eines Lebensmittels, etwa zum Korrigieren. */
 export function ownFoodDraftOf(snapshot: NutritionSnapshot): OwnFoodDraft {
-  const base = (amount: number) => milliText(snapshot.baseUnit === 'g' ? amount : amount * 1_000);
+  const base = (amount: number) => baseAmountText(snapshot.baseUnit, amount);
   const portionOf = (unit: ConversionUnit): PortionDraft => {
     const conversion = snapshot.portions.find((candidate) => candidate.unit === unit);
     return conversion === undefined ? emptyPortion : { amount: base(conversion.baseAmount), label: conversion.label ?? '' };
@@ -137,6 +145,11 @@ export function checkPortionDraft(unit: ConversionUnit, baseUnit: BaseUnit, draf
   if ([...label].length > portionLabelMaxLength) problems.label = 'zu_lang';
   if (baseAmount === null || problems.label !== undefined) return { type: 'probleme', problems };
   return { type: 'umrechnung', conversion: { unit, label: label === '' ? null : label, baseAmount } };
+}
+
+/** Eine Basismenge (mg bzw. ml) als Formulartext in g bzw. ml. */
+function baseAmountText(baseUnit: BaseUnit, amount: number): string {
+  return milliText(baseUnit === 'g' ? amount : amount * 1_000);
 }
 
 /** Menge in g bzw. ml als Basismenge (mg bzw. ml): größer 0 und höchstens 5 kg bzw. 5 l, ml ganzzahlig. */
