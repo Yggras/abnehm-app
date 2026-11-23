@@ -34,8 +34,9 @@ export function requireVersionKey(kind: PlanVersionKind, businessKey: string, va
 
 /**
  * Schreibt eine Fassung der handelnden Person: Zeilen über `write` mit neuer Serverversion schreiben,
- * Änderungsprotokoll, Invalidierung der Partner-Zusammenfassungen und kanonische Antwort. Die ID folgt aus Person und `valid_from`, sodass eine weitere Fassung desselben
- * Tags dieselbe Zeile ersetzt (Last-Write-Wins in Server-Eingangsreihenfolge).
+ * Änderungsprotokoll, Invalidierung der Partner-Zusammenfassungen und kanonische Antwort. Die ID folgt
+ * aus Person und `valid_from`, sodass eine weitere Fassung desselben Tags dieselbe Zeile ersetzt
+ * (Last-Write-Wins in Server-Eingangsreihenfolge).
  *
  * Wirksam ist eine Fassung, sobald für die Person ein Tagesziel mit lokalem Tag ≥ `valid_from`
  * existiert (Spezifikation 1, Abschnitt 4). Ihr Ersetzen lehnt der Befehl dann dauerhaft mit

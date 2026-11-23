@@ -427,16 +427,18 @@ export const AcceptBudgetSuggestion = z.strictObject({
 });
 export type AcceptBudgetSuggestion = z.infer<typeof AcceptBudgetSuggestion>;
 
+const acceptKeyPrefix = 'budgetvorschlag:';
+
 /**
  * Fachlicher Schlüssel von `acceptBudgetSuggestion`: genau einer je Vorschlag. Nimmt ein zweites Gerät
  * denselben Vorschlag an, trifft es dieselbe Annahme, und es entsteht keine zweite Zielversion.
  */
-export const acceptBudgetSuggestionKey = (suggestionId: EntityId) => `budgetvorschlag:${suggestionId}`;
+export const acceptBudgetSuggestionKey = (suggestionId: EntityId) => `${acceptKeyPrefix}${suggestionId}`;
 
 /** Der Vorschlag eines Schlüssels von `acceptBudgetSuggestion`; `null` bei jeder anderen Form. */
 export function budgetSuggestionOfAcceptKey(key: string): EntityId | null {
-  const match = /^budgetvorschlag:(.+)$/.exec(key);
-  const id = EntityId.safeParse(match?.[1]);
+  if (!key.startsWith(acceptKeyPrefix)) return null;
+  const id = EntityId.safeParse(key.slice(acceptKeyPrefix.length));
   return id.success ? id.data : null;
 }
 

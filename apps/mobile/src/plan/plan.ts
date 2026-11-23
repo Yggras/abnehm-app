@@ -5,7 +5,6 @@ import type { ContractError } from '@abnehm/contracts/errors';
 import { calculateGoals, type GoalCalculatorResult, type GoalInputError } from '@abnehm/contracts/goal-calculator';
 import {
   AcceptBudgetSuggestion,
-  acceptBudgetSuggestionKey,
   CreateGoalVersion,
   CreateWeeklyPlanVersion,
   goalVersionId,
@@ -25,7 +24,7 @@ import { createBudgetSuggestions, type BudgetSuggestionCheck, type BudgetSuggest
 import { createDailyGoalMaterialization } from './daily-goals';
 import { calculatorInput, keptSuggestedBudget, previewGoals, type GoalDraft } from './goal-draft';
 import { goalSettingsSource, readGoalVersionsAround, upcomingGoalOf, type GoalSettingsState, type GoalVersionField } from './goal-settings';
-import { budgetSuggestionEntity, goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
+import { goalVersionEntity, weeklyPlanVersionEntity } from './plan-entities';
 import { hasGoalVersion, readGoalVersionOn, readWeeklyPlanOn, writeGoalVersion, writeWeeklyPlan, type GoalVersionValues, type StoredGoalVersion } from './plan-repository';
 import { createPlanToday, noBudgetNotices, type DailyGoalEvaluator, type PlanToday } from './today-contributions';
 import { freeWeeklyPlan, standardWeeklyPlan, type WeekChoice, type WeekChoiceError, type WeeklyPlanDayError, type WeeklyPlanInput } from './weekly-plan';
@@ -310,8 +309,8 @@ export function createPlan(dependencies: PlanDependencies): Plan {
     checkBudgetSuggestion: (readers) => budgetSuggestions.check(readers),
 
     budgetSuggestion(suggestionId) {
-      const days = readClock();
-      return database.read((tx) => budgetSuggestions.view(tx, EntityId.parse(requireOwnPerson(tx).id), suggestionId, days));
+      const { today } = readClock();
+      return database.read((tx) => budgetSuggestions.view(tx, EntityId.parse(requireOwnPerson(tx).id), suggestionId, today));
     },
 
     decideBudgetSuggestion(suggestionId, decision) {
@@ -329,9 +328,7 @@ export function createPlan(dependencies: PlanDependencies): Plan {
           budgetSuggestions.settle(tx, open, 'ueberholt', at);
           return { type: 'nicht_offen' };
         }
-        // Erst entscheiden, dann die Fassung schreiben: Sie überholt so nur andere offene Vorschläge.
-        budgetSuggestions.settle(tx, open, 'angenommen', at);
-        saveGoalVersion(tx, personId, goal, at, open.id);
+        budgetSuggestions.accept(tx, open, goal, at);
         persistence.reevaluateDailyGoals(tx, personId, planChangeDays(tomorrow, today), 'planaenderung');
         return { type: 'angenommen', validFrom: tomorrow, goalVersionId: goalVersionId(personId, tomorrow) };
       });
@@ -373,39 +370,21 @@ export function createPlan(dependencies: PlanDependencies): Plan {
    * Legt die Zielversion an oder ersetzt die desselben Tags. Gleicht sie der an ihrem `validFrom` ohnehin
    * gültigen Fassung, entsteht nichts, und das Ergebnis ist `false`. Eine neue Fassung setzt einen offenen
    * Budgetvorschlag in derselben Transaktion auf `ueberholt` (Spezifikation 1, Abschnitt 7).
-   *
-   * Mit `acceptedSuggestionId` stammt die Fassung aus dem Annehmen dieses Vorschlags und reist als
-   * `acceptBudgetSuggestion` statt als `createGoalVersion`; der Vorschlag ist dann schon entschieden.
    */
-  function saveGoalVersion(tx: TransactionContext, personId: EntityId, goal: CreateGoalVersion, at: Instant, acceptedSuggestionId?: EntityId): boolean {
+  function saveGoalVersion(tx: TransactionContext, personId: EntityId, goal: CreateGoalVersion, at: Instant): boolean {
     const inForce = readGoalVersionOn(tx, personId, goal.validFrom);
-    if (acceptedSuggestionId === undefined && inForce !== undefined && sameValues({ ...inForce.values, validFrom: goal.validFrom }, goal)) return false;
+    if (inForce !== undefined && sameValues({ ...inForce.values, validFrom: goal.validFrom }, goal)) return false;
     const id = goalVersionId(personId, goal.validFrom);
     writeGoalVersion(tx, id, personId, goal, at);
     budgetSuggestions.supersede(tx, personId, at);
-    const goalRef = { entityType: goalVersionEntity.entityType, entityId: id };
-    writer.command(
-      tx,
-      acceptedSuggestionId === undefined
-        ? {
-            type: 'createGoalVersion',
-            businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),
-            payload: goal,
-            knownServerVersion: inForce?.values.validFrom === goal.validFrom ? inForce.serverVersion : null,
-            affectedRefs: [goalRef],
-            referencePaths: [],
-          }
-        : {
-            // Ein Schlüssel je Vorschlag und keine Serverversion: Nimmt ein zweites Gerät denselben Vorschlag
-            // gleich an, ist das für den Server dieselbe Annahme.
-            type: 'acceptBudgetSuggestion',
-            businessKey: acceptBudgetSuggestionKey(acceptedSuggestionId),
-            payload: AcceptBudgetSuggestion.parse({ suggestionId: acceptedSuggestionId, goalVersion: goal }),
-            knownServerVersion: null,
-            affectedRefs: [goalRef, { entityType: budgetSuggestionEntity.entityType, entityId: acceptedSuggestionId }],
-            referencePaths: [],
-          },
-    );
+    writer.command(tx, {
+      type: 'createGoalVersion',
+      businessKey: planVersionKey('zielversion', personId, goal.validFrom, newId()),
+      payload: goal,
+      knownServerVersion: inForce?.values.validFrom === goal.validFrom ? inForce.serverVersion : null,
+      affectedRefs: [{ entityType: goalVersionEntity.entityType, entityId: id }],
+      referencePaths: [],
+    });
     return true;
   }
 

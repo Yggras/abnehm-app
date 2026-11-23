@@ -36,7 +36,8 @@ export function BudgetSuggestionScreen({ target }: RouteScreenProps<'plan.budget
 
 function Suggestion({ plan, suggestionId }: { plan: Plan; suggestionId: EntityId }) {
   const { showMessage } = useMessageHost();
-  // Nach einer Entscheidung, die nicht mehr möglich war, liest das Sheet den Stand neu.
+  // Gelesen wird beim Öffnen und nach einer Entscheidung, die nicht mehr möglich war. Überholt ein Pull den
+  // Vorschlag bei offenem Sheet, zeigt das Tippen den neuen Stand, ohne etwas zu ändern.
   const [view, setView] = useState<BudgetSuggestionView>(() => plan.budgetSuggestion(suggestionId));
 
   if (view.type !== 'offen') {
@@ -60,7 +61,7 @@ function Suggestion({ plan, suggestionId }: { plan: Plan; suggestionId: EntityId
         <ValueRow title={texts.suggested} value={texts.perDay(view.suggestedBudgetKcal)} />
       </ListGroup>
       <Text>{texts.reason(view.direction, view.pace)}</Text>
-      <Text>{texts.effect(view.direction, Math.abs(view.suggestedBudgetKcal - view.previousBudgetKcal))}</Text>
+      <Text>{texts.effect(view.direction, view.differenceKcal)}</Text>
       <Text tone="inkMuted">{texts.onlyWithConfirmation}</Text>
       <View style={styles.actions}>
         <Button label={texts.accept} block onPress={() => decide('annehmen')} />

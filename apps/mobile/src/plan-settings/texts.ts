@@ -125,9 +125,9 @@ export const budgetSuggestionTexts = {
   suggested: 'Vorschlag ab morgen',
   perDay: (kcal: number) => `${kcalText(kcal)} pro Tag`,
   reason: (direction: BudgetSuggestionDirection, pace: Pace | null) =>
-    `In den letzten drei Wochen hast du laut Gewichtstrend ${direction === 'senken' ? 'langsamer' : 'schneller'} abgenommen als mit deinem ${
-      pace === null ? 'gewählten Tempo' : `Tempo „${paceNames[pace]}“ (${paceRates[pace]})`
-    }.`,
+    `In den letzten drei Wochen hast du laut Gewichtstrend ${direction === 'senken' ? 'weniger' : 'mehr'} abgenommen, als dein ${
+      pace === null ? 'gewähltes Tempo' : `Tempo „${paceNames[pace]}“ (${paceRates[pace]})`
+    } vorsieht.`,
   effect: (direction: BudgetSuggestionDirection, differenceKcal: number) =>
     `Mit ${kcalText(differenceKcal)} ${direction === 'senken' ? 'weniger' : 'mehr'} am Tag kommst du näher an dieses Tempo.`,
   onlyWithConfirmation: 'Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst.',

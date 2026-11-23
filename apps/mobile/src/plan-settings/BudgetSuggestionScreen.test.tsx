@@ -68,7 +68,7 @@ describe('Anzeige', () => {
     expect(screen.getByLabelText('Bisheriges Budget: 1.620 kcal pro Tag')).toBeOnTheScreen();
     expect(screen.getByLabelText('Vorschlag ab morgen: 1.514 kcal pro Tag')).toBeOnTheScreen();
     expect(
-      screen.getByText('In den letzten drei Wochen hast du laut Gewichtstrend langsamer abgenommen als mit deinem Tempo „entspannt“ (etwa 0,5 kg pro Woche).'),
+      screen.getByText('In den letzten drei Wochen hast du laut Gewichtstrend weniger abgenommen, als dein Tempo „entspannt“ (etwa 0,5 kg pro Woche) vorsieht.'),
     ).toBeOnTheScreen();
     expect(screen.getByText('Mit 106 kcal weniger am Tag kommst du näher an dieses Tempo.')).toBeOnTheScreen();
     expect(screen.getByText('Dein Budget ändert sich nur, wenn du den Vorschlag übernimmst.')).toBeOnTheScreen();
@@ -81,7 +81,7 @@ describe('Anzeige', () => {
 
     expect(screen.getByLabelText('Vorschlag ab morgen: 1.770 kcal pro Tag')).toBeOnTheScreen();
     expect(
-      screen.getByText('In den letzten drei Wochen hast du laut Gewichtstrend schneller abgenommen als mit deinem Tempo „entspannt“ (etwa 0,5 kg pro Woche).'),
+      screen.getByText('In den letzten drei Wochen hast du laut Gewichtstrend mehr abgenommen, als dein Tempo „entspannt“ (etwa 0,5 kg pro Woche) vorsieht.'),
     ).toBeOnTheScreen();
     expect(screen.getByText('Mit 150 kcal mehr am Tag kommst du näher an dieses Tempo.')).toBeOnTheScreen();
   });
@@ -113,7 +113,7 @@ describe('Entscheidung', () => {
     await user.press(accept());
 
     expect(goalTomorrow()).toMatchObject({ validFrom: '2026-10-15', calorieBudgetMilliKcal: 1_514_000, budgetSource: 'budgetvorschlag' });
-    expect(status()).toEqual({ type: 'entschieden', status: 'angenommen' });
+    expect(status()).toEqual({ type: 'nicht_offen', status: 'angenommen' });
     expect(screen).toHavePathname('/');
     expect(screen.getByText('Budget übernommen · gilt ab morgen')).toBeOnTheScreen();
   });
@@ -123,7 +123,7 @@ describe('Entscheidung', () => {
 
     await user.press(decline());
 
-    expect(status()).toEqual({ type: 'entschieden', status: 'abgelehnt' });
+    expect(status()).toEqual({ type: 'nicht_offen', status: 'abgelehnt' });
     expect(goalTomorrow().validFrom).toBe('2026-10-14');
     expect(screen).toHavePathname('/');
   });

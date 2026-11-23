@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { EntityId, Instant, type ServerVersion } from '@abnehm/contracts/base';
-import { BudgetSuggestionRecord, type BudgetSuggestionStatus, type BudgetSuggestionUpsert } from '@abnehm/contracts/plan';
+import { BudgetSuggestionRecord, type BudgetSuggestionStatus, BudgetSuggestionUpsert } from '@abnehm/contracts/plan';
 
 import type { ReadContext, TransactionContext } from '../local-db';
 import { budgetSuggestion } from '../local-db/schema';
@@ -55,6 +55,12 @@ export function readLastDecisionAt(tx: ReadContext, personId: EntityId): Instant
     .limit(1)
     .get();
   return row === undefined ? undefined : Instant.parse(row.updatedAt);
+}
+
+/** Die Nutzlast eines gespeicherten Vorschlags mit einem anderen Status, etwa für den Upsert eines Statuswechsels. */
+export function withStatus(record: BudgetSuggestionRecord, status: BudgetSuggestionStatus): BudgetSuggestionUpsert {
+  const { personId: _personId, createdAt: _createdAt, updatedAt: _updatedAt, ...values } = record;
+  return BudgetSuggestionUpsert.parse({ ...values, status });
 }
 
 /** Legt einen neuen Vorschlag an oder überschreibt seine fachlichen Felder (Last-Write-Wins). */
