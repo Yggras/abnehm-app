@@ -166,6 +166,8 @@ describe('Barcode scannen (#160)', () => {
     expect(await amountReview('Naturjoghurt 3,5 %')).toBeOnTheScreen();
     expect(source.calls).toEqual([yoghurt]);
     expect(within(sheet()).getByText('Daten von Open Food Facts (openfoodfacts.org), ODbL')).toBeOnTheScreen();
+    // Die Portion aus Open Food Facts hat keine Bezeichnung; der Chip nennt ihre Größe.
+    expect(within(sheet()).getByRole('radio', { name: 'Portion (150 g)' })).toBeOnTheScreen();
 
     await user.press(within(sheet()).getByRole('button', { name: 'Hinzufügen' }));
     expect(entries().at(-1)).toMatchObject({ meal: 'abendessen', captureMethod: 'barcode', foodRefType: 'off', foodRefKey: yoghurt, snapshotSource: 'off' });
@@ -181,7 +183,7 @@ describe('Barcode scannen (#160)', () => {
     expect(source.calls).toEqual([]);
   });
 
-  it('abgelehnte Kamerafreigabe: Weg zu den Systemeinstellungen, ohne erneut zu fragen; „Abbrechen“ führt zurück', async () => {
+  it('abgelehnte Kamerafreigabe: Weg zu den Systemeinstellungen, ohne erneut zu fragen; „Später scannen“ führt zurück', async () => {
     mockCamera.answer = 'denied';
     await openCapture(createFakeFoodProductSource());
     await startScan();
@@ -190,11 +192,11 @@ describe('Barcode scannen (#160)', () => {
     await user.press(screen.getByRole('button', { name: 'Einstellungen öffnen' }));
     expect(settingsOpened()).toBe(before + 1);
 
-    await user.press(screen.getByRole('button', { name: 'Abbrechen' }));
+    await user.press(screen.getByRole('button', { name: 'Später scannen' }));
     await startScan();
     expect(await screen.findByRole('button', { name: 'Einstellungen öffnen' })).toBeOnTheScreen();
     expect(mockCamera.requests).toBe(1);
-    await user.press(screen.getByRole('button', { name: 'Abbrechen' }));
+    await user.press(screen.getByRole('button', { name: 'Später scannen' }));
     expect(screen.getByLabelText('Lebensmittel suchen')).toBeOnTheScreen();
   });
 
@@ -241,7 +243,7 @@ describe('Barcode scannen (#160)', () => {
     await screen.findByLabelText('Kamerabild zum Scannen');
     await scan(knaeckebrot);
 
-    expect(await screen.findByText('Bei diesem Produkt fehlen Werte. Ergänze sie vom Etikett; ab dann gilt deine Fassung für diesen Barcode.')).toBeOnTheScreen();
+    expect(await screen.findByText('Bei diesem Produkt fehlt Energie. Ergänze die Angabe vom Etikett; ab dann gilt deine Fassung für diesen Barcode.')).toBeOnTheScreen();
     expect(within(form()).getByLabelText('Name')).toHaveDisplayValue('Vollkornknäckebrot');
     expect(within(form()).getByLabelText('Energie')).toHaveDisplayValue('');
     expect(within(form()).getByLabelText('Eiweiß')).toHaveDisplayValue('10');
@@ -380,8 +382,8 @@ describe('Barcode: Zugänglichkeit (#160)', () => {
     await startScan();
     await screen.findByRole('button', { name: 'Einstellungen öffnen' });
     fits('Einstellungen öffnen');
-    fits('Abbrechen');
-    await user.press(screen.getByRole('button', { name: 'Abbrechen' }));
+    fits('Später scannen');
+    await user.press(screen.getByRole('button', { name: 'Später scannen' }));
 
     Object.assign(mockCamera, { status: 'granted', canAskAgain: true });
     await startScan();

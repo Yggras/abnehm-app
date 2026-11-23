@@ -22,10 +22,20 @@ const texts = nutritionTexts.barcode;
  */
 export type CreateReason = 'incomplete' | 'invalid' | 'not_found' | 'manual';
 
+/** Eine Angabe, die einem Produkt fehlen kann; die Schlüssel sind die Felder des Formulars. */
+export type MissingValue = 'name' | 'kcal' | 'protein' | 'carbs' | 'fat';
+
 /** Was der Hinzufügen-Bildschirm aus einer Auflösung macht, die nicht hier stehen bleibt. */
 export type BarcodeOutcome =
   | Readonly<{ type: 'found'; food: FoodChoice }>
-  | Readonly<{ type: 'create'; barcode: string; product: OffProduct | null; reason: CreateReason }>;
+  | Readonly<{
+      type: 'create';
+      barcode: string;
+      product: OffProduct | null;
+      reason: CreateReason;
+      /** Bei `incomplete` die fehlenden Angaben in Formularreihenfolge, sonst leer. */
+      missing: readonly MissingValue[];
+    }>;
 
 export function BarcodeLookup({
   nutrition,
@@ -51,7 +61,7 @@ export function BarcodeLookup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolution]);
 
-  const manual = <Button variant="secondary" icon="pencil" label={texts.createManually} block onPress={() => onOutcome({ type: 'create', barcode, product: null, reason: 'manual' })} />;
+  const manual = <Button variant="secondary" icon="pencil" label={texts.createManually} block onPress={() => onOutcome({ type: 'create', barcode, product: null, reason: 'manual', missing: [] })} />;
   const later = <Button variant="text" label={texts.scanLater} block onPress={onCancel} />;
   // Alles außer „sucht noch“ und einer Auflösung, die gleich weiterführt, bleibt hier stehen.
   const unanswered = resolution?.type === 'unavailable' || (state.type !== 'pending' && state.type !== 'ok');
@@ -96,12 +106,19 @@ function outcomeOf(resolution: BarcodeResolution): BarcodeOutcome | null {
       return { type: 'found', food: resolution.food };
     case 'incomplete': {
       const { product } = resolution;
-      // Sind Name, kcal und alle Makros da, verletzen die Werte nur die Regeln des Snapshots.
-      const complete = [product.name, product.milliKcalPer100, product.proteinMgPer100, product.carbsMgPer100, product.fatMgPer100].every((value) => value !== null);
-      return { type: 'create', barcode: resolution.barcode, product, reason: complete ? 'invalid' : 'incomplete' };
+      const values: readonly (readonly [MissingValue, unknown])[] = [
+        ['name', product.name],
+        ['kcal', product.milliKcalPer100],
+        ['protein', product.proteinMgPer100],
+        ['carbs', product.carbsMgPer100],
+        ['fat', product.fatMgPer100],
+      ];
+      const missing = values.filter(([, value]) => value === null).map(([field]) => field);
+      // Fehlt nichts, verletzen die Werte nur die Regeln des Snapshots.
+      return { type: 'create', barcode: resolution.barcode, product, reason: missing.length === 0 ? 'invalid' : 'incomplete', missing };
     }
     case 'not_found':
-      return { type: 'create', barcode: resolution.barcode, product: null, reason: 'not_found' };
+      return { type: 'create', barcode: resolution.barcode, product: null, reason: 'not_found', missing: [] };
     case 'offline_unknown':
     case 'unavailable':
       return null;

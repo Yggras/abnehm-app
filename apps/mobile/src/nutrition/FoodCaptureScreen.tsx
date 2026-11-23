@@ -44,12 +44,16 @@ const slotIcons: Readonly<Record<LaterSlot, IconName>> = {
 };
 
 /** Hinweis über „Eigenes Lebensmittel anlegen“ nach einem Scan, je nach Grund (#160). */
-const createHints: Readonly<Record<CreateReason, string>> = {
-  incomplete: nutritionTexts.barcode.incompleteHint,
+const createHints: Readonly<Record<Exclude<CreateReason, 'incomplete'>, string>> = {
   invalid: nutritionTexts.barcode.invalidHint,
   not_found: nutritionTexts.barcode.notFoundHint,
   manual: nutritionTexts.barcode.manualHint,
 };
+
+function createHint(outcome: Extract<BarcodeOutcome, { type: 'create' }>): string {
+  if (outcome.reason !== 'incomplete') return createHints[outcome.reason];
+  return nutritionTexts.barcode.incompleteHint(outcome.missing.map((field) => nutritionTexts.ownFood[field]));
+}
 
 /** So viele Einträge zeigt jede Liste, danach „Alle anzeigen“ (Spezifikation 2, Abschnitt 6; Designwert, nicht belegt). */
 const listPreview = 5;
@@ -198,7 +202,7 @@ function AddSlots({
       base: { type: 'off', key: outcome.barcode },
       initial: outcome.product === null ? emptyOwnFoodDraft() : ownFoodDraftOfProduct(outcome.product),
       title: nutritionTexts.ownFood.create,
-      hint: createHints[outcome.reason],
+      hint: createHint(outcome),
       captureMethod: 'barcode',
     });
   };

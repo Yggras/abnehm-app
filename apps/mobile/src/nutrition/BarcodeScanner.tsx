@@ -99,7 +99,8 @@ export function BarcodeScanner({ onScanned, onCancel }: { onScanned: (barcode: s
           />
         </View>
       )}
-      <Button variant="secondary" label={texts.cancel} block onPress={onCancel} />
+      {/* Derselbe Ausweg wie in den Folgezuständen: zurück zum Hinzufügen-Bildschirm. „Fertig“ schließt alles. */}
+      <Button variant="text" label={texts.scanLater} block onPress={onCancel} />
     </View>
   );
 }

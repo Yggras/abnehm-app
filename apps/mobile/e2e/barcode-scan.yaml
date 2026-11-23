@@ -39,7 +39,7 @@ name: Verpacktes Produkt scannen und erfassen
     text: "Allow|Erlauben|OK|Beim Verwenden der App erlauben|While using the app|Nur dieses Mal|Only this time"
     optional: true
 - takeScreenshot: barcode-2-scanner
-- tapOn: "Abbrechen"
+- tapOn: "Später scannen"
 
 # found: Fake-Katalog, Naturjoghurt -> Mengenprüfung mit Quellenangabe, dann erfassen -------------------
 - runFlow:
@@ -114,7 +114,7 @@ name: Verpacktes Produkt scannen und erfassen
       LINK: produkt?ergebnis=unvollstaendig&scan=4000000000020
 - runFlow: teilablaeufe/scanner-oeffnen.yaml
 - extendedWaitUntil:
-    visible: "Bei diesem Produkt fehlen Werte.*"
+    visible: "Bei diesem Produkt fehlt.*"
     timeout: 15000
 - takeScreenshot: barcode-10-unvollstaendig
 

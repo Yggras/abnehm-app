@@ -77,10 +77,15 @@ export function unitText(unit: DisplayUnit): string {
   return unitNames[unit](1_000);
 }
 
-/** Beschriftung eines Einheiten-Chips: g bzw. ml oder die Bezeichnung der Umrechnung, etwa „1 Becher“. */
+/**
+ * Beschriftung eines Einheiten-Chips: g bzw. ml oder die Bezeichnung der Umrechnung, etwa „1 Becher“. Eine
+ * Umrechnung ohne Bezeichnung, etwa die Portion aus Open Food Facts, nennt ihre Größe: „Portion (150 g)“ (#160).
+ */
 export function unitChipText(snapshot: NutritionSnapshot, unit: DisplayUnit): string {
   if (unit === 'g' || unit === 'ml') return unit;
-  return snapshot.portions.find((portion) => portion.unit === unit)?.label ?? unitNames[unit](1_000);
+  const portion = snapshot.portions.find((candidate) => candidate.unit === unit);
+  if (portion === undefined) return unitNames[unit](1_000);
+  return portion.label ?? `${unitNames[unit](1_000)} (${milliText(portion.baseAmount)} ${snapshot.baseUnit})`;
 }
 
 /** Makros in g: ganze g, unter 10 g mit einer Nachkommastelle. */
@@ -320,7 +325,6 @@ export const nutritionTexts = {
     title: 'Barcode scannen',
     hint: 'Halte den Barcode in den Rahmen. Der Scan startet von selbst.',
     camera: 'Kamerabild zum Scannen',
-    cancel: 'Abbrechen',
     permissionHint: 'Zum Scannen braucht die App die Kamera. Bilder werden nicht gespeichert.',
     allowCamera: 'Kamera erlauben',
     denied: 'Die Kamera ist für die App ausgeschaltet. Erlaube sie in den Einstellungen oder such das Lebensmittel.',
@@ -335,7 +339,9 @@ export const nutritionTexts = {
     createManually: 'Produkt manuell anlegen',
     scanLater: 'Später scannen',
     notFoundHint: 'Open Food Facts kennt dieses Produkt noch nicht. Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
-    incompleteHint: 'Bei diesem Produkt fehlen Werte. Ergänze sie vom Etikett; ab dann gilt deine Fassung für diesen Barcode.',
+    /** Nennt die fehlenden Angaben, etwa „Bei diesem Produkt fehlt Energie.“, damit niemand das leere Feld suchen muss. */
+    incompleteHint: (missing: readonly string[]) =>
+      `Bei diesem Produkt ${missing.length === 1 ? 'fehlt' : 'fehlen'} ${missing.join(', ')}. Ergänze ${missing.length === 1 ? 'die Angabe' : 'sie'} vom Etikett; ab dann gilt deine Fassung für diesen Barcode.`,
     invalidHint: 'Die Werte dieses Produkts passen nicht zusammen. Prüf sie am Etikett; ab dann gilt deine Fassung für diesen Barcode.',
     manualHint: 'Trag die Werte vom Etikett ein; ab dann gilt deine Fassung für diesen Barcode.',
   },
