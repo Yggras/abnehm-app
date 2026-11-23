@@ -13,6 +13,7 @@ import { energyBookingEntity } from '../energy';
 import { createHealthImport } from '../health';
 import { deviceHealthPlatform } from '../health/device-platform';
 import { appHealthImport } from '../health/app-health';
+import { HealthStep } from '../health/HealthStep';
 import { deviceHaptics } from '../haptics/device-haptics';
 import { appGameService } from '../island/app-game-service';
 import { challengeLocalCommands, challengeSyncEntities } from '../island/challenges';
@@ -340,6 +341,8 @@ export function deviceNotifications(): AppNotifications {
   return created;
 }
 
+/** Onboarding-Schritt 9 (Spezifikation 3): Verbinden mit Apple Health bzw. Health Connect und Prüfung der Quell-Apps (#189). */
+appOnboardingRegistry.register('tracker', 'health', HealthStep);
 /** Onboarding-Schritt 10 (Spezifikation 5): Erklärung und Systemdialog. */
 appOnboardingRegistry.register('partner', 'notifications', NotificationsStep);
 /** Onboarding-Schritt 11 (Spezifikation 5): Koppeln und danach die eigenen Freigaben (#129). */
